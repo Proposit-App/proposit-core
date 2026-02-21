@@ -415,3 +415,258 @@ describe("toArray behaviour (via removeExpression round-trips)", () => {
         expect(eng.removeExpression("expr-2")).toBeUndefined() // cascade-deleted
     })
 })
+
+// ---------------------------------------------------------------------------
+// Stress test
+// ---------------------------------------------------------------------------
+
+describe("stress test", () => {
+    interface StressConfig {
+        numVars?: number
+        numPremises?: number
+        minTerms?: number
+        maxTerms?: number
+    }
+
+    const DEFAULTS = {
+        numVars: 10,
+        numPremises: 20,
+        minTerms: 3,
+        maxTerms: 8,
+    } satisfies Required<StressConfig>
+
+    /**
+     * Mulberry32 PRNG — deterministic, uniform output in [0, 1).
+     * Using a seeded PRNG keeps the stress tests reproducible while still
+     * exercising a varied distribution of term counts and variable picks.
+     */
+    function prng(seed: number) {
+        let s = seed >>> 0
+        return (): number => {
+            s = (s + 0x6d2b79f5) >>> 0
+            let t = Math.imul(s ^ (s >>> 15), 1 | s)
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+            return ((t ^ (t >>> 14)) >>> 0) / 0x100000000
+        }
+    }
+
+    function buildStress(cfg: StressConfig = {}, seed = 42) {
+        const { numVars, numPremises, minTerms, maxTerms } = {
+            ...DEFAULTS,
+            ...cfg,
+        }
+        const rand = prng(seed)
+        const pick = (n: number) => Math.floor(rand() * n)
+        const bool = (p = 0.5) => rand() < p
+
+        const variables = Array.from({ length: numVars }, (_, i) =>
+            makeVar(`var-${i}`, `X${i}`)
+        )
+
+        const allExpressions: TPropositionalExpression[] = []
+        const premiseIds: string[] = []
+        const termIdsByPremise = new Map<string, string[]>()
+        const referencedVarIds = new Set<string>()
+
+        function pickVar() {
+            const v = variables[pick(numVars)]
+            referencedVarIds.add(v.id)
+            return v
+        }
+
+        /**
+         * Emit a variable expression, optionally wrapped in a "not" operator.
+         * Returns IDs of all expressions added.
+         */
+        function emitLeaf(
+            parentId: string,
+            position: number,
+            key: string,
+            negate: boolean
+        ): string[] {
+            const v = pickVar()
+            const vId = `${key}-v`
+            if (negate) {
+                const notId = `${key}-not`
+                allExpressions.push(
+                    makeOpExpr(notId, "not", { parentId, position })
+                )
+                allExpressions.push(
+                    makeVarExpr(vId, v.id, { parentId: notId, position: 0 })
+                )
+                return [notId, vId]
+            }
+            allExpressions.push(makeVarExpr(vId, v.id, { parentId, position }))
+            return [vId]
+        }
+
+        /**
+         * Emit an implies/iff sub-tree with two (possibly-negated) leaf children.
+         * Returns IDs of all expressions added.
+         */
+        function emitInference(
+            parentId: string,
+            position: number,
+            key: string
+        ): string[] {
+            const op = bool() ? ("implies" as const) : ("iff" as const)
+            const infId = `${key}-inf`
+            allExpressions.push(makeOpExpr(infId, op, { parentId, position }))
+            return [
+                infId,
+                ...emitLeaf(infId, 0, `${key}-inf-l`, bool(0.3)),
+                ...emitLeaf(infId, 1, `${key}-inf-r`, bool(0.3)),
+            ]
+        }
+
+        for (let p = 0; p < numPremises; p++) {
+            const numSlots = minTerms + pick(maxTerms - minTerms + 1)
+            const premiseId = `premise-${p}`
+            premiseIds.push(premiseId)
+
+            // Root operator: "and" or "or" chosen randomly.
+            const rootOp = bool() ? ("and" as const) : ("or" as const)
+            allExpressions.push(makeOpExpr(premiseId, rootOp))
+
+            // At most one slot per premise becomes an implies/iff sub-tree (50%
+            // chance that any inference slot exists at all).
+            const inferenceSlot = bool() ? pick(numSlots) : -1
+
+            const termIds: string[] = []
+            for (let t = 0; t < numSlots; t++) {
+                const key = `p${p}-s${t}`
+                const ids =
+                    t === inferenceSlot
+                        ? emitInference(premiseId, t, key)
+                        : emitLeaf(premiseId, t, key, bool(0.25))
+                termIds.push(...ids)
+            }
+            termIdsByPremise.set(premiseId, termIds)
+        }
+
+        const eng = new ArgumentEngine(ARG, variables, allExpressions)
+        return {
+            eng,
+            variables,
+            premiseIds,
+            termIdsByPremise,
+            referencedVarIds,
+            allExpressions,
+        }
+    }
+
+    it("builds with default config (10 vars, 20 premises, 3–8 terms)", () => {
+        expect(() => buildStress()).not.toThrow()
+    })
+
+    it("uses all five logical operators across premises", () => {
+        const { allExpressions } = buildStress()
+        const usedOps = new Set(
+            allExpressions
+                .filter((e) => e.type === "operator")
+                .map((e) => e.operator)
+        )
+        expect(usedOps).toContain("and")
+        expect(usedOps).toContain("or")
+        expect(usedOps).toContain("not")
+        expect(usedOps).toContain("implies")
+        expect(usedOps).toContain("iff")
+    })
+
+    it("builds with high load (100 vars, 200 premises, 5–20 terms)", () => {
+        expect(() => {
+            const { eng } = buildStress({
+                numVars: 100,
+                numPremises: 200,
+                minTerms: 5,
+                maxTerms: 20,
+            })
+            console.log(eng.toDisplayString())
+        }).not.toThrow()
+    })
+
+    it("removing a premise cascades to all of its terms", () => {
+        const { eng, premiseIds, termIdsByPremise } = buildStress()
+        const premiseId = premiseIds[0]
+        const termIds = termIdsByPremise.get(premiseId)!
+
+        expect(eng.removeExpression(premiseId)).toMatchObject({ id: premiseId })
+        for (const termId of termIds) {
+            expect(eng.removeExpression(termId)).toBeUndefined()
+        }
+    })
+
+    it("removing one premise does not affect a different premise", () => {
+        const { eng, premiseIds, termIdsByPremise } = buildStress()
+        const [first, second] = premiseIds
+
+        eng.removeExpression(first)
+
+        // Second premise root is still present.
+        expect(eng.removeExpression(second)).toMatchObject({ id: second })
+        // Its terms were cascade-deleted alongside the root.
+        for (const termId of termIdsByPremise.get(second)!) {
+            expect(eng.removeExpression(termId)).toBeUndefined()
+        }
+    })
+
+    it("referenced variables cannot be removed while premises exist", () => {
+        const { eng, variables, referencedVarIds } = buildStress()
+        const referenced = variables.filter((v) => referencedVarIds.has(v.id))
+        for (const variable of referenced) {
+            expect(() => eng.removeVariable(variable.id)).toThrowError(
+                /cannot be removed because it is referenced/
+            )
+        }
+    })
+
+    it("all variables become removable once every premise is removed", () => {
+        const { eng, variables, premiseIds } = buildStress()
+        for (const premiseId of premiseIds) {
+            eng.removeExpression(premiseId)
+        }
+        for (const variable of variables) {
+            expect(() => eng.removeVariable(variable.id)).not.toThrow()
+        }
+    })
+
+    it("all premises can be removed in reverse order without error", () => {
+        const { eng, premiseIds, termIdsByPremise } = buildStress()
+
+        for (const premiseId of [...premiseIds].reverse()) {
+            eng.removeExpression(premiseId)
+        }
+
+        // Every root and term should now be absent.
+        for (const premiseId of premiseIds) {
+            expect(eng.removeExpression(premiseId)).toBeUndefined()
+        }
+        for (const termIds of termIdsByPremise.values()) {
+            for (const termId of termIds) {
+                expect(eng.removeExpression(termId)).toBeUndefined()
+            }
+        }
+    })
+
+    it("re-adding premises after full teardown succeeds", () => {
+        const { eng, variables, premiseIds } = buildStress()
+
+        // Tear everything down.
+        for (const premiseId of premiseIds) {
+            eng.removeExpression(premiseId)
+        }
+
+        // Rebuild a fresh set of premises and confirm they load cleanly.
+        const op = makeOpExpr("new-premise-0", "and")
+        const term = makeVarExpr("new-term-0", variables[0].id, {
+            parentId: "new-premise-0",
+            position: 0,
+        })
+        eng.addExpression(op)
+        eng.addExpression(term)
+
+        expect(eng.removeExpression("new-premise-0")).toMatchObject({
+            id: "new-premise-0",
+        })
+    })
+})

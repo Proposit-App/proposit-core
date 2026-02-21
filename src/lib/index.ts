@@ -419,9 +419,9 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
         const children = this.expressions.getChildExpressions(expression.id)
         if (expression.operator === "not") {
             if (children.length === 0) {
-                return "NOT (?)"
+                return `${this.toDisplayOperator(expression.operator)} (?)`
             }
-            return `NOT (${this.toDisplayStringForExpression(children[0].id)})`
+            return `${this.toDisplayOperator(expression.operator)}(${this.toDisplayStringForExpression(children[0].id)})`
         }
 
         if (children.length === 0) {
@@ -439,15 +439,15 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
     private toDisplayOperator(operator: TLogicalOperatorType): string {
         switch (operator) {
             case "and":
-                return "AND"
+                return "∧"
             case "or":
-                return "OR"
+                return "∨"
             case "implies":
-                return "->"
+                return "→"
             case "iff":
-                return "<->"
+                return "↔"
             case "not":
-                return "NOT"
+                return "¬"
         }
     }
 
