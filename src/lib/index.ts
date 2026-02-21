@@ -107,6 +107,17 @@ class ExpressionManager implements IExpressionManager {
             )
         }
 
+        if (
+            expression.type === "operator" &&
+            (expression.operator === "implies" ||
+                expression.operator === "iff") &&
+            expression.parentId !== null
+        ) {
+            throw new Error(
+                `Operator expression "${expression.id}" with "${expression.operator}" must be a root expression (parentId must be null).`
+            )
+        }
+
         if (expression.parentId !== null) {
             const parent = this.expressions.get(expression.parentId)
             if (!parent) {

@@ -156,6 +156,37 @@ describe("addExpression", () => {
         )
     })
 
+    it("throws when implies operator is nested inside another expression", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeOpExpr("op-root", "and"))
+
+        expect(() =>
+            eng.addExpression(
+                makeOpExpr("op-inf", "implies", { parentId: "op-root" })
+            )
+        ).toThrowError(/with "implies" must be a root expression/)
+    })
+
+    it("throws when iff operator is nested inside another expression", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeOpExpr("op-root", "or"))
+
+        expect(() =>
+            eng.addExpression(
+                makeOpExpr("op-inf", "iff", { parentId: "op-root" })
+            )
+        ).toThrowError(/with "iff" must be a root expression/)
+    })
+
+    it("throws during construction when an implies op has a non-null parentId", () => {
+        const root = makeOpExpr("root", "and")
+        const nested = makeOpExpr("inf", "implies", { parentId: "root" })
+
+        expect(() => new ArgumentEngine(ARG, [], [root, nested])).toThrowError(
+            /with "implies" must be a root expression/
+        )
+    })
+
     describe("operator child limits", () => {
         it("allows exactly one child under 'not'", () => {
             const eng = engineWithVars()
@@ -459,9 +490,14 @@ describe("stress test", () => {
         const pick = (n: number) => Math.floor(rand() * n)
         const bool = (p = 0.5) => rand() < p
 
+        const eng = new ArgumentEngine(ARG)
+
         const variables = Array.from({ length: numVars }, (_, i) =>
             makeVar(`var-${i}`, `X${i}`)
         )
+        for (const variable of variables) {
+            eng.addVariable(variable)
+        }
 
         const allExpressions: TPropositionalExpression[] = []
         const premiseIds: string[] = []
@@ -472,6 +508,14 @@ describe("stress test", () => {
             const v = variables[pick(numVars)]
             referencedVarIds.add(v.id)
             return v
+        }
+
+        function emit(
+            expr: TPropositionalExpression
+        ): TPropositionalExpression {
+            eng.addExpression(expr)
+            allExpressions.push(expr)
+            return expr
         }
 
         /**
@@ -488,35 +532,40 @@ describe("stress test", () => {
             const vId = `${key}-v`
             if (negate) {
                 const notId = `${key}-not`
-                allExpressions.push(
-                    makeOpExpr(notId, "not", { parentId, position })
-                )
-                allExpressions.push(
-                    makeVarExpr(vId, v.id, { parentId: notId, position: 0 })
-                )
+                emit(makeOpExpr(notId, "not", { parentId, position }))
+                emit(makeVarExpr(vId, v.id, { parentId: notId, position: 0 }))
                 return [notId, vId]
             }
-            allExpressions.push(makeVarExpr(vId, v.id, { parentId, position }))
+            emit(makeVarExpr(vId, v.id, { parentId, position }))
             return [vId]
         }
 
         /**
-         * Emit an implies/iff sub-tree with two (possibly-negated) leaf children.
+         * Emit one side of an inference operator: either a direct (possibly-negated)
+         * leaf when numLeaves is 1, or an and/or cluster when numLeaves > 1.
          * Returns IDs of all expressions added.
          */
-        function emitInference(
+        function emitSide(
             parentId: string,
             position: number,
-            key: string
+            key: string,
+            numLeaves: number
         ): string[] {
-            const op = bool() ? ("implies" as const) : ("iff" as const)
-            const infId = `${key}-inf`
-            allExpressions.push(makeOpExpr(infId, op, { parentId, position }))
-            return [
-                infId,
-                ...emitLeaf(infId, 0, `${key}-inf-l`, bool(0.3)),
-                ...emitLeaf(infId, 1, `${key}-inf-r`, bool(0.3)),
-            ]
+            if (numLeaves === 1) {
+                return emitLeaf(parentId, position, `${key}-s0`, bool(0.25))
+            }
+            const clusterId = `${key}-cl`
+            emit(
+                makeOpExpr(clusterId, bool() ? "and" : "or", {
+                    parentId,
+                    position,
+                })
+            )
+            const ids = [clusterId]
+            for (let i = 0; i < numLeaves; i++) {
+                ids.push(...emitLeaf(clusterId, i, `${key}-s${i}`, bool(0.25)))
+            }
+            return ids
         }
 
         for (let p = 0; p < numPremises; p++) {
@@ -524,27 +573,33 @@ describe("stress test", () => {
             const premiseId = `premise-${p}`
             premiseIds.push(premiseId)
 
-            // Root operator: "and" or "or" chosen randomly.
-            const rootOp = bool() ? ("and" as const) : ("or" as const)
-            allExpressions.push(makeOpExpr(premiseId, rootOp))
-
-            // At most one slot per premise becomes an implies/iff sub-tree (50%
-            // chance that any inference slot exists at all).
-            const inferenceSlot = bool() ? pick(numSlots) : -1
-
             const termIds: string[] = []
-            for (let t = 0; t < numSlots; t++) {
-                const key = `p${p}-s${t}`
-                const ids =
-                    t === inferenceSlot
-                        ? emitInference(premiseId, t, key)
-                        : emitLeaf(premiseId, t, key, bool(0.25))
-                termIds.push(...ids)
+
+            if (bool()) {
+                // Inference premise: implies/iff is the root. Split numSlots
+                // between antecedent (position 0) and consequent (position 1),
+                // guaranteeing at least one leaf per side.
+                const infOp = bool() ? ("implies" as const) : ("iff" as const)
+                emit(makeOpExpr(premiseId, infOp))
+                const antLeaves = 1 + pick(numSlots - 1)
+                const conLeaves = numSlots - antLeaves
+                termIds.push(
+                    ...emitSide(premiseId, 0, `p${p}-ant`, antLeaves),
+                    ...emitSide(premiseId, 1, `p${p}-con`, conLeaves)
+                )
+            } else {
+                // Non-inference premise: and/or root with flat leaf children.
+                emit(makeOpExpr(premiseId, bool() ? "and" : "or"))
+                for (let t = 0; t < numSlots; t++) {
+                    termIds.push(
+                        ...emitLeaf(premiseId, t, `p${p}-s${t}`, bool(0.25))
+                    )
+                }
             }
+
             termIdsByPremise.set(premiseId, termIds)
         }
 
-        const eng = new ArgumentEngine(ARG, variables, allExpressions)
         return {
             eng,
             variables,
