@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import type {
     TArgument,
     TLogicalOperatorType,
@@ -18,12 +19,7 @@ function getOrCreate<K, V>(map: Map<K, V>, key: K, makeDefault: () => V): V {
     return value
 }
 
-interface IVariableManager {
-    addVariable(variable: TPropositionalVariable): void
-    removeVariable(variableId: string): TPropositionalVariable | undefined
-}
-
-class VariableManager implements IVariableManager {
+class VariableManager {
     private variables: Map<string, TPropositionalVariable>
     private variableSymbols: Set<string>
 
@@ -74,12 +70,7 @@ class VariableManager implements IVariableManager {
     }
 }
 
-interface IExpressionManager {
-    addExpression(expression: TPropositionalExpression): void
-    removeExpression(expressionId: string): TPropositionalExpression | undefined
-}
-
-class ExpressionManager implements IExpressionManager {
+class ExpressionManager {
     private expressions: Map<string, TPropositionalExpression>
     private childExpressionIdsByParentId: Map<string | null, Set<string>>
     private childPositionsByParentId: Map<string | null, Set<number>>
@@ -591,79 +582,37 @@ class ExpressionManager implements IExpressionManager {
     }
 }
 
-export class ArgumentEngine implements IVariableManager, IExpressionManager {
-    private argument: TArgument
+// ---------------------------------------------------------------------------
+// PremiseManager
+// ---------------------------------------------------------------------------
+
+export class PremiseManager {
+    private id: string
+    private title: string | undefined
+    private rootExpressionId: string | undefined
     private variables: VariableManager
     private expressions: ExpressionManager
-
     private expressionsByVariableId: DefaultMap<string, Set<string>>
-    private premisesCache: TPremise[] = []
+    private argument: TArgument
 
-    /**
-     * Creates a new `ArgumentEngine` bound to the given argument.
-     *
-     * All variables and expressions supplied here must carry the same
-     * `argumentId` and `argumentVersion` as `argument`.  Expressions may be
-     * listed in any order; parent–child relationships are resolved
-     * automatically.
-     *
-     * @param argument    - The argument this engine is scoped to.
-     * @param variables   - Initial propositional variables to load.
-     * @param expressions - Initial expressions to load.
-     */
-    constructor(
-        argument: TArgument,
-        variables: TPropositionalVariable[] = [],
-        expressions: TPropositionalExpression[] = []
-    ) {
-        this.argument = { ...argument }
-
-        for (const variable of variables) {
-            this.assertBelongsToArgument(
-                variable.argumentId,
-                variable.argumentVersion
-            )
-        }
-        for (const expression of expressions) {
-            this.assertBelongsToArgument(
-                expression.argumentId,
-                expression.argumentVersion
-            )
-        }
-
-        this.variables = new VariableManager(variables)
-        this.expressions = new ExpressionManager(expressions)
+    constructor(id: string, argument: TArgument, title?: string) {
+        this.id = id
+        this.argument = argument
+        this.title = title
+        this.rootExpressionId = undefined
+        this.variables = new VariableManager()
+        this.expressions = new ExpressionManager()
         this.expressionsByVariableId = new DefaultMap(() => new Set())
-
-        for (const expression of expressions) {
-            if (
-                expression.type === "variable" &&
-                !this.variables.hasVariable(expression.variableId)
-            ) {
-                throw new Error(
-                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
-                )
-            }
-        }
-
-        this.rebuildPremises()
     }
 
     /**
-     * Returns the argument this engine is scoped to.
-     */
-    public getArgument(): TArgument {
-        return this.argument
-    }
-
-    /**
-     * Registers a new propositional variable.
+     * Registers a propositional variable for use within this premise.
      *
-     * @throws If `variable.symbol` is already in use.
-     * @throws If `variable.id` already exists.
-     * @throws If the variable does not belong to this argument.
+     * @throws If `variable.symbol` is already in use within this premise.
+     * @throws If `variable.id` already exists within this premise.
+     * @throws If the variable does not belong to this premise's argument.
      */
-    public addVariable(variable: TPropositionalVariable) {
+    public addVariable(variable: TPropositionalVariable): void {
         this.assertBelongsToArgument(
             variable.argumentId,
             variable.argumentVersion
@@ -672,12 +621,15 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
     }
 
     /**
-     * Removes a variable by ID and returns it, or `undefined` if not found.
+     * Removes a variable from this premise's registry and returns it, or
+     * `undefined` if it was not found.
      *
-     * @throws If any expression still references this variable.
+     * @throws If any expression in this premise still references the variable.
      */
-    public removeVariable(variableId: string) {
-        if (this.expressions.hasVariableReference(variableId)) {
+    public removeVariable(
+        variableId: string
+    ): TPropositionalVariable | undefined {
+        if (this.expressionsByVariableId.get(variableId).size > 0) {
             throw new Error(
                 `Variable "${variableId}" cannot be removed because it is referenced by one or more expressions.`
             )
@@ -686,27 +638,26 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
     }
 
     /**
-     * Adds a new expression to the tree.
+     * Adds an expression to this premise's tree.
      *
-     * `implies` and `iff` operators must be root expressions
-     * (`parentId: null`).  The `not` operator may have at most one child;
-     * `implies` and `iff` may have at most two.  No two expressions under the
-     * same parent may share a position.
+     * If the expression has `parentId: null` it becomes the root; only one
+     * root is permitted per premise.  If `parentId` is non-null the parent
+     * must already exist within this premise.
      *
-     * @throws If the expression ID already exists.
-     * @throws If the expression declares itself as its own parent.
-     * @throws If an `implies`/`iff` operator is nested inside another expression.
-     * @throws If the referenced parent does not exist or is not an operator.
-     * @throws If a position conflict is detected under the parent.
-     * @throws If adding the expression would exceed the parent operator's child limit.
+     * All other structural rules (`implies`/`iff` root-only, child limits,
+     * position uniqueness) are enforced by the underlying `ExpressionManager`.
+     *
+     * @throws If the premise already has a root expression and this one is also a root.
+     * @throws If the expression's parent does not exist in this premise.
+     * @throws If the expression is a variable reference and the variable has not been registered.
      * @throws If the expression does not belong to this argument.
-     * @throws If the expression is a variable reference and the variable does not exist.
      */
-    public addExpression(expression: TPropositionalExpression) {
+    public addExpression(expression: TPropositionalExpression): void {
         this.assertBelongsToArgument(
             expression.argumentId,
             expression.argumentVersion
         )
+
         if (
             expression.type === "variable" &&
             !this.variables.hasVariable(expression.variableId)
@@ -715,77 +666,92 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
                 `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
             )
         }
+
+        if (expression.parentId === null) {
+            if (this.rootExpressionId !== undefined) {
+                throw new Error(
+                    `Premise "${this.id}" already has a root expression.`
+                )
+            }
+        } else {
+            if (!this.expressions.getExpression(expression.parentId)) {
+                throw new Error(
+                    `Parent expression "${expression.parentId}" does not exist in this premise.`
+                )
+            }
+        }
+
+        // Delegate structural validation (operator type checks, position
+        // uniqueness, child limits) to ExpressionManager.
         this.expressions.addExpression(expression)
+
+        if (expression.parentId === null) {
+            this.rootExpressionId = expression.id
+        }
         if (expression.type === "variable") {
             this.expressionsByVariableId
                 .get(expression.variableId)
                 .add(expression.id)
         }
-        this.rebuildPremises()
     }
 
     /**
      * Removes an expression and its entire descendant subtree, then collapses
-     * any ancestor operators left with fewer than two children:
+     * any ancestor operators with fewer than two children (same semantics as
+     * before).  Returns the removed root expression, or `undefined` if not
+     * found.
      *
-     * - An operator with **0** remaining children is deleted and the check
-     *   recurses upward.
-     * - An operator with **1** remaining child is deleted; that child is
-     *   promoted into the operator's former slot in the tree.
-     *
-     * Returns the removed root expression, or `undefined` if it was not found.
+     * `rootExpressionId` is recomputed after every removal because operator
+     * collapse can silently promote a new expression into the root slot.
      */
-    public removeExpression(expressionId: string) {
+    public removeExpression(
+        expressionId: string
+    ): TPropositionalExpression | undefined {
+        // Snapshot the subtree before deletion so we can clean up
+        // expressionsByVariableId for cascade-deleted descendants — they are
+        // not individually surfaced by ExpressionManager.removeExpression.
+        const subtree = this.collectSubtree(expressionId)
+
         const removed = this.expressions.removeExpression(expressionId)
-        if (removed?.type === "variable") {
-            this.expressionsByVariableId
-                .get(removed.variableId)
-                ?.delete(expressionId)
+
+        if (removed) {
+            for (const expr of subtree) {
+                if (expr.type === "variable") {
+                    this.expressionsByVariableId
+                        .get(expr.variableId)
+                        ?.delete(expr.id)
+                }
+            }
         }
-        this.rebuildPremises()
+
+        this.syncRootExpressionId()
         return removed
     }
 
     /**
-     * Splices a new expression between existing nodes in the tree.
+     * Splices a new expression between existing nodes in the tree.  The new
+     * expression inherits the tree slot of the anchor node
+     * (`leftNodeId ?? rightNodeId`).
      *
-     * The new expression inherits the tree slot (parent and position) of the
-     * **anchor** node (`leftNodeId ?? rightNodeId`):
+     * `rootExpressionId` is recomputed after every insertion because the
+     * anchor may have been the root.
      *
-     * - `leftNodeId`, when provided, becomes child at position 0.
-     * - `rightNodeId`, when provided, becomes child at position 1.
-     * - At least one of the two must be supplied.
+     * See `ArgumentEngine.insertExpression` for the full contract; the same
+     * rules apply here.
      *
-     * `implies` and `iff` operators may only be inserted at the root (the
-     * anchor must currently have `parentId: null`).  An existing `implies` or
-     * `iff` expression may not be used as a child node.  The `not` operator
-     * accepts at most one child — supply either `leftNodeId` or `rightNodeId`,
-     * not both.
-     *
-     * @param expression  - The new expression to insert.
-     * @param leftNodeId  - ID of the node to become the left child (position 0).
-     * @param rightNodeId - ID of the node to become the right child (position 1).
-     *
-     * @throws If neither `leftNodeId` nor `rightNodeId` is provided.
-     * @throws If the expression ID already exists.
-     * @throws If the expression declares itself as its own parent.
-     * @throws If `leftNodeId` and `rightNodeId` refer to the same node.
-     * @throws If a referenced node does not exist.
-     * @throws If `not` is given both a left and a right node.
-     * @throws If a referenced child is itself an `implies` or `iff` expression.
-     * @throws If an `implies`/`iff` expression is inserted at a non-root anchor.
      * @throws If the expression does not belong to this argument.
-     * @throws If the expression is a variable reference and the variable does not exist.
+     * @throws If the expression is a variable reference and the variable has not been registered.
      */
     public insertExpression(
         expression: TPropositionalExpression,
         leftNodeId?: string,
         rightNodeId?: string
-    ) {
+    ): void {
         this.assertBelongsToArgument(
             expression.argumentId,
             expression.argumentVersion
         )
+
         if (
             expression.type === "variable" &&
             !this.variables.hasVariable(expression.variableId)
@@ -794,25 +760,121 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
                 `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
             )
         }
+
         this.expressions.insertExpression(expression, leftNodeId, rightNodeId)
+
         if (expression.type === "variable") {
             this.expressionsByVariableId
                 .get(expression.variableId)
                 .add(expression.id)
         }
-        this.rebuildPremises()
+
+        this.syncRootExpressionId()
     }
 
     /**
-     * Returns a human-readable string of all root-level expressions, one per
-     * line, using standard logical notation (∧ ∨ ¬ → ↔).  Missing operands
-     * are rendered as `(?)`.
+     * Returns an expression by ID, or `undefined` if not found in this
+     * premise.
+     */
+    public getExpression(id: string): TPropositionalExpression | undefined {
+        return this.expressions.getExpression(id)
+    }
+
+    /**
+     * Returns a human-readable string of this premise's expression tree using
+     * standard logical notation (∧ ∨ ¬ → ↔).  Missing operands are rendered
+     * as `(?)`.  Returns an empty string when the premise has no expressions.
      */
     public toDisplayString(): string {
-        const rootExpressions = this.expressions.getChildExpressions(null)
-        return rootExpressions
-            .map((expression) => this.renderExpression(expression.id))
-            .join("\n")
+        if (this.rootExpressionId === undefined) {
+            return ""
+        }
+        return this.renderExpression(this.rootExpressionId)
+    }
+
+    /**
+     * Returns a serialisable snapshot of this premise conforming to
+     * `TPremise`.  `variables` contains only the variables that are actually
+     * referenced by expressions in this premise.  `type` is derived from the
+     * root expression: `"inference"` if the root is an `implies` or `iff`
+     * operator, `"constraint"` otherwise (including when the premise is empty).
+     */
+    public toData(): TPremise {
+        const expressions = this.expressions.toArray()
+
+        const referencedVariableIds = new Set<string>()
+        for (const expr of expressions) {
+            if (expr.type === "variable") {
+                referencedVariableIds.add(expr.variableId)
+            }
+        }
+        const variables = Array.from(referencedVariableIds)
+            .map((id) => this.variables.getVariable(id))
+            .filter((v): v is TPropositionalVariable => v !== undefined)
+
+        const root =
+            this.rootExpressionId !== undefined
+                ? this.expressions.getExpression(this.rootExpressionId)
+                : undefined
+
+        const type: "inference" | "constraint" =
+            root?.type === "operator" &&
+            (root.operator === "implies" || root.operator === "iff")
+                ? "inference"
+                : "constraint"
+
+        return {
+            id: this.id,
+            title: this.title,
+            rootExpressionId: this.rootExpressionId,
+            variables,
+            expressions,
+            type,
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Re-reads the single root from ExpressionManager after any operation
+     * that may have caused operator collapse to silently change the root.
+     */
+    private syncRootExpressionId(): void {
+        const roots = this.expressions.getChildExpressions(null)
+        this.rootExpressionId = roots[0]?.id
+    }
+
+    private collectSubtree(rootId: string): TPropositionalExpression[] {
+        const result: TPropositionalExpression[] = []
+        const stack = [rootId]
+        while (stack.length > 0) {
+            const id = stack.pop()!
+            const expr = this.expressions.getExpression(id)
+            if (!expr) continue
+            result.push(expr)
+            for (const child of this.expressions.getChildExpressions(id)) {
+                stack.push(child.id)
+            }
+        }
+        return result
+    }
+
+    private assertBelongsToArgument(
+        argumentId: string,
+        argumentVersion: number
+    ): void {
+        if (argumentId !== this.argument.id) {
+            throw new Error(
+                `Entity argumentId "${argumentId}" does not match engine argument ID "${this.argument.id}".`
+            )
+        }
+        if (argumentVersion !== this.argument.version) {
+            throw new Error(
+                `Entity argumentVersion "${argumentVersion}" does not match engine argument version "${this.argument.version}".`
+            )
+        }
     }
 
     private renderExpression(expressionId: string): string {
@@ -854,7 +916,6 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
         const renderedChildren = children.map((child) =>
             this.renderExpression(child.id)
         )
-
         return `(${renderedChildren.join(` ${this.operatorSymbol(expression.operator)} `)})`
     }
 
@@ -872,72 +933,33 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
                 return "¬"
         }
     }
+}
 
-    /**
-     * Returns all premises currently tracked in the argument. Each premise
-     * groups a root expression and its entire descendant subtree together with
-     * the variables those expressions reference.
-     *
-     * The result is pre-computed and updated automatically whenever the
-     * expression tree changes; calling this method is always O(1).
-     */
-    public getPremises(): TPremise[] {
-        return this.premisesCache
+export class ArgumentEngine {
+    private argument: TArgument
+    private premises: Map<string, PremiseManager>
+
+    constructor(argument: TArgument) {
+        this.argument = { ...argument }
+        this.premises = new Map()
     }
 
-    private rebuildPremises(): void {
-        const roots = this.expressions.getChildExpressions(null)
-        this.premisesCache = roots.map((root) => {
-            const expressions = this.collectSubtree(root.id)
-
-            const variableIds = new Set<string>()
-            for (const expr of expressions) {
-                if (expr.type === "variable") {
-                    variableIds.add(expr.variableId)
-                }
-            }
-            const variables = Array.from(variableIds)
-                .map((id) => this.variables.getVariable(id))
-                .filter((v): v is TPropositionalVariable => v !== undefined)
-
-            const type: "inference" | "constraint" =
-                root.type === "operator" &&
-                (root.operator === "implies" || root.operator === "iff")
-                    ? "inference"
-                    : "constraint"
-
-            return { type, variables, expressions }
-        })
+    public getArgument(): TArgument {
+        return this.argument
     }
 
-    private collectSubtree(rootId: string): TPropositionalExpression[] {
-        const result: TPropositionalExpression[] = []
-        const stack = [rootId]
-        while (stack.length > 0) {
-            const id = stack.pop()!
-            const expr = this.expressions.getExpression(id)
-            if (!expr) continue
-            result.push(expr)
-            for (const child of this.expressions.getChildExpressions(id)) {
-                stack.push(child.id)
-            }
-        }
-        return result
+    public createPremise(title?: string): PremiseManager {
+        const id = randomUUID()
+        const pm = new PremiseManager(id, this.argument, title)
+        this.premises.set(id, pm)
+        return pm
     }
 
-    private assertBelongsToArgument(
-        argumentId: string,
-        argumentVersion: number
-    ) {
-        if (argumentId !== this.argument.id) {
-            throw new Error(
-                `Entity argumentId "${argumentId}" does not match engine argument ID "${this.argument.id}".`
-            )
-        }
-        if (argumentVersion !== this.argument.version) {
-            throw new Error(
-                `Entity argumentVersion "${argumentVersion}" does not match engine argument version "${this.argument.version}".`
-            )
-        }
+    public removePremise(premiseId: string): void {
+        this.premises.delete(premiseId)
+    }
+
+    public getPremise(premiseId: string): PremiseManager | undefined {
+        return this.premises.get(premiseId)
     }
 }

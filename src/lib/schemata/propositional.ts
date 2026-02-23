@@ -95,6 +95,12 @@ export const PropositionalVariableSchema = Type.Object({
 export type TPropositionalVariable = Static<typeof PropositionalVariableSchema>
 
 export const PremiseSchema = Type.Object({
+    // Auto-generated UUID
+    id: UUID,
+    // If the premise has expressions in it, this is the ID of the root expression
+    // which must be a relation operator if the type is "inference", else. it can
+    // be any type of expression.
+    rootExpressionId: Type.Optional(UUID),
     variables: Type.Array(PropositionalVariableSchema, {
         description: "All variables referenced in this premise.",
     }),
@@ -112,6 +118,12 @@ export const PremiseSchema = Type.Object({
                 "A premise without an inference operator, it restricts the possible valuations of variables but is not part of the chain of logical reasoning.",
         }),
     ]),
+    title: Type.Optional(
+        Type.String({
+            description:
+                "An optional title for this premise, for display purposes.",
+        })
+    ),
 })
 
 export type TPremise = Static<typeof PremiseSchema>
