@@ -307,6 +307,181 @@ class ExpressionManager implements IExpressionManager {
             )
         }
     }
+
+    private reparent(
+        expressionId: string,
+        newParentId: string | null,
+        newPosition: number | null
+    ): void {
+        const expr = this.expressions.get(expressionId)!
+
+        // Detach from old parent
+        this.childExpressionIdsByParentId
+            .get(expr.parentId)
+            ?.delete(expressionId)
+        if (expr.position !== null) {
+            this.childPositionsByParentId
+                .get(expr.parentId)
+                ?.delete(expr.position)
+        }
+
+        // Replace stored value (expressions are immutable value types)
+        const updated = {
+            ...expr,
+            parentId: newParentId,
+            position: newPosition,
+        } as TPropositionalExpression
+        this.expressions.set(expressionId, updated)
+
+        // Attach to new parent
+        getOrCreate(
+            this.childExpressionIdsByParentId,
+            newParentId,
+            () => new Set()
+        ).add(expressionId)
+        if (newPosition !== null) {
+            getOrCreate(
+                this.childPositionsByParentId,
+                newParentId,
+                () => new Set()
+            ).add(newPosition)
+        }
+    }
+
+    public insertExpression(
+        expression: TPropositionalExpression,
+        leftNodeId?: string,
+        rightNodeId?: string
+    ): void {
+        // 1. At least one must be provided
+        if (leftNodeId === undefined && rightNodeId === undefined) {
+            throw new Error(
+                `insertExpression requires at least one of leftNodeId or rightNodeId.`
+            )
+        }
+
+        // 2. expression.id must not already exist
+        if (this.expressions.has(expression.id)) {
+            throw new Error(
+                `Expression with ID "${expression.id}" already exists.`
+            )
+        }
+
+        // 3. Self-parent check
+        if (expression.parentId === expression.id) {
+            throw new Error(
+                `Expression "${expression.id}" cannot be its own parent.`
+            )
+        }
+
+        // 4. leftNodeId and rightNodeId must differ when both provided
+        if (
+            leftNodeId !== undefined &&
+            rightNodeId !== undefined &&
+            leftNodeId === rightNodeId
+        ) {
+            throw new Error(`leftNodeId and rightNodeId must be different.`)
+        }
+
+        // 5. leftNodeId must exist if provided
+        const leftNode =
+            leftNodeId !== undefined
+                ? this.expressions.get(leftNodeId)
+                : undefined
+        if (leftNodeId !== undefined && !leftNode) {
+            throw new Error(`Expression "${leftNodeId}" does not exist.`)
+        }
+
+        // 6. rightNodeId must exist if provided
+        const rightNode =
+            rightNodeId !== undefined
+                ? this.expressions.get(rightNodeId)
+                : undefined
+        if (rightNodeId !== undefined && !rightNode) {
+            throw new Error(`Expression "${rightNodeId}" does not exist.`)
+        }
+
+        // 7. "not" cannot have two children
+        if (
+            expression.type === "operator" &&
+            expression.operator === "not" &&
+            leftNodeId !== undefined &&
+            rightNodeId !== undefined
+        ) {
+            throw new Error(
+                `Operator expression "${expression.id}" with "not" can only have one child.`
+            )
+        }
+
+        // 8. leftNode must not be an implies/iff expression
+        if (
+            leftNode &&
+            leftNode.type === "operator" &&
+            (leftNode.operator === "implies" || leftNode.operator === "iff")
+        ) {
+            throw new Error(
+                `Expression "${leftNodeId}" with "${leftNode.operator}" cannot be subordinated (it must remain a root expression).`
+            )
+        }
+
+        // 9. rightNode must not be an implies/iff expression
+        if (
+            rightNode &&
+            rightNode.type === "operator" &&
+            (rightNode.operator === "implies" || rightNode.operator === "iff")
+        ) {
+            throw new Error(
+                `Expression "${rightNodeId}" with "${rightNode.operator}" cannot be subordinated (it must remain a root expression).`
+            )
+        }
+
+        // Anchor is the node whose current slot the new expression will inherit
+        const anchor = (leftNode ?? rightNode)!
+        const anchorId = (leftNodeId ?? rightNodeId)!
+
+        // 10. If inserting implies/iff, anchor must be at root (parentId: null)
+        if (
+            expression.type === "operator" &&
+            (expression.operator === "implies" ||
+                expression.operator === "iff") &&
+            anchor.parentId !== null
+        ) {
+            throw new Error(
+                `Operator expression "${expression.id}" with "${expression.operator}" must be a root expression (parentId must be null).`
+            )
+        }
+
+        const anchorParentId = anchor.parentId
+        const anchorPosition = anchor.position
+
+        // Mutation order: reparent rightNode first (in case it is a descendant of leftNode)
+        if (rightNodeId !== undefined) {
+            this.reparent(rightNodeId, expression.id, 1)
+        }
+        if (leftNodeId !== undefined) {
+            this.reparent(leftNodeId, expression.id, 0)
+        }
+
+        // Store the new expression in the freed anchor slot
+        const stored = {
+            ...expression,
+            parentId: anchorParentId,
+            position: anchorPosition,
+        } as TPropositionalExpression
+        this.expressions.set(expression.id, stored)
+        getOrCreate(
+            this.childExpressionIdsByParentId,
+            anchorParentId,
+            () => new Set()
+        ).add(expression.id)
+        if (anchorPosition !== null) {
+            getOrCreate(
+                this.childPositionsByParentId,
+                anchorParentId,
+                () => new Set()
+            ).add(anchorPosition)
+        }
+    }
 }
 
 export class ArgumentEngine implements IVariableManager, IExpressionManager {
@@ -402,6 +577,31 @@ export class ArgumentEngine implements IVariableManager, IExpressionManager {
                 ?.delete(expressionId)
         }
         return expr
+    }
+
+    public insertExpression(
+        expression: TPropositionalExpression,
+        leftNodeId?: string,
+        rightNodeId?: string
+    ) {
+        this.assertBelongsToArgument(
+            expression.argumentId,
+            expression.argumentVersion
+        )
+        if (
+            expression.type === "variable" &&
+            !this.variables.hasVariable(expression.variableId)
+        ) {
+            throw new Error(
+                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+            )
+        }
+        this.expressions.insertExpression(expression, leftNodeId, rightNodeId)
+        if (expression.type === "variable") {
+            this.expressionsByVariableId
+                .get(expression.variableId)
+                .add(expression.id)
+        }
     }
 
     public toDisplayString(): string {

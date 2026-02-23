@@ -278,6 +278,145 @@ describe("addExpression", () => {
 })
 
 // ---------------------------------------------------------------------------
+// insertExpression
+// ---------------------------------------------------------------------------
+
+describe("insertExpression", () => {
+    it("inserts new expression into anchor's slot when only left node is provided", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeOpExpr("op-outer", "and"))
+        eng.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-outer",
+                position: 0,
+            })
+        )
+        // Insert op-inner wrapping expr-p; op-inner should inherit op-outer's slot 0
+        eng.insertExpression(makeOpExpr("op-inner", "or"), "expr-p")
+        // op-outer → op-inner (pos 0) → expr-p (pos 0)
+        expect(eng.toDisplayString()).toBe("((P))")
+    })
+
+    it("inserts new expression into anchor's slot when only right node is provided", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        // expr-p is root; op-or inherits that root slot, expr-p becomes position 1
+        eng.insertExpression(makeOpExpr("op-or", "or"), undefined, "expr-p")
+        // Position 1 should now be occupied
+        expect(() =>
+            eng.addExpression(
+                makeVarExpr("expr-q", VAR_Q.id, {
+                    parentId: "op-or",
+                    position: 1,
+                })
+            )
+        ).toThrowError(/Position 1 is already used/)
+        // Position 0 should be free
+        expect(() =>
+            eng.addExpression(
+                makeVarExpr("expr-q", VAR_Q.id, {
+                    parentId: "op-or",
+                    position: 0,
+                })
+            )
+        ).not.toThrow()
+    })
+
+    it("inserts binary expression with leftNode at position 0 and rightNode at position 1", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        eng.addExpression(makeVarExpr("expr-q", VAR_Q.id))
+        eng.insertExpression(makeOpExpr("op-and", "and"), "expr-p", "expr-q")
+        expect(eng.toDisplayString()).toBe("(P ∧ Q)")
+    })
+
+    it("inserts not expression as a unary wrapper around its single left child", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        eng.insertExpression(makeOpExpr("op-not", "not"), "expr-p")
+        expect(eng.toDisplayString()).toBe("¬(P)")
+    })
+
+    it("inserts implies expression when anchor is at root (parentId: null)", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        eng.addExpression(makeVarExpr("expr-q", VAR_Q.id))
+        eng.insertExpression(
+            makeOpExpr("op-implies", "implies"),
+            "expr-p",
+            "expr-q"
+        )
+        expect(eng.toDisplayString()).toBe("(P → Q)")
+    })
+
+    it("throws when neither leftNodeId nor rightNodeId is provided", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        expect(() =>
+            eng.insertExpression(
+                makeOpExpr("op-and", "and"),
+                undefined,
+                undefined
+            )
+        ).toThrowError(/at least one/)
+    })
+
+    it("throws when the expression ID already exists", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        eng.addExpression(makeOpExpr("op-and", "and"))
+        expect(() =>
+            eng.insertExpression(makeOpExpr("op-and", "and"), "expr-p")
+        ).toThrowError(/Expression with ID "op-and" already exists/)
+    })
+
+    it("throws when not operator is given both left and right nodes", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        eng.addExpression(makeVarExpr("expr-q", VAR_Q.id))
+        expect(() =>
+            eng.insertExpression(
+                makeOpExpr("op-not", "not"),
+                "expr-p",
+                "expr-q"
+            )
+        ).toThrowError(/"not" can only have one child/)
+    })
+
+    it("throws when leftNode is an implies expression", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeOpExpr("op-implies", "implies"))
+        expect(() =>
+            eng.insertExpression(makeOpExpr("op-and", "and"), "op-implies")
+        ).toThrowError(/"implies"/)
+    })
+
+    it("throws when inserting implies and anchor's parentId is not null", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeOpExpr("op-and", "and"))
+        eng.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 0 })
+        )
+        // expr-p has a non-null parentId → implies cannot land here
+        expect(() =>
+            eng.insertExpression(makeOpExpr("op-implies", "implies"), "expr-p")
+        ).toThrowError(/must be a root expression/)
+    })
+
+    it("throws when leftNodeId and rightNodeId are the same", () => {
+        const eng = engineWithVars()
+        eng.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        expect(() =>
+            eng.insertExpression(
+                makeOpExpr("op-and", "and"),
+                "expr-p",
+                "expr-p"
+            )
+        ).toThrowError(/leftNodeId and rightNodeId must be different/)
+    })
+})
+
+// ---------------------------------------------------------------------------
 // removeExpression
 // ---------------------------------------------------------------------------
 
@@ -630,13 +769,12 @@ describe("stress test", () => {
 
     it("builds with high load (100 vars, 200 premises, 5–20 terms)", () => {
         expect(() => {
-            const { eng } = buildStress({
+            buildStress({
                 numVars: 100,
                 numPremises: 200,
                 minTerms: 5,
                 maxTerms: 20,
             })
-            console.log(eng.toDisplayString())
         }).not.toThrow()
     })
 
