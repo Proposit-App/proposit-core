@@ -35,12 +35,10 @@ vi.mock("../src/lib/core/diff.js", () => ({
     diffArguments: mockDiffArguments,
 }))
 
-// Mock renderDiff and isDiffEmpty
+// Mock renderDiff
 const mockRenderDiff = vi.fn()
-const mockIsDiffEmpty = vi.fn()
 vi.mock("../src/cli/output/diffRenderer.js", () => ({
     renderDiff: mockRenderDiff,
-    isDiffEmpty: mockIsDiffEmpty,
 }))
 
 const { registerDiffCommand } = await import("../src/cli/commands/diff.js")
@@ -77,7 +75,6 @@ describe("registerDiffCommand", () => {
         mockResolveVersion.mockResolvedValue(1)
         mockHydrateEngine.mockResolvedValue({})
         mockDiffArguments.mockReturnValue(emptyDiff)
-        mockIsDiffEmpty.mockReturnValue(true)
 
         const program = makeProgram()
         await program.parseAsync([
@@ -92,13 +89,22 @@ describe("registerDiffCommand", () => {
         expect(mockResolveVersion).toHaveBeenCalledWith("myarg", "0")
         expect(mockResolveVersion).toHaveBeenCalledWith("myarg", "1")
         expect(mockHydrateEngine).toHaveBeenCalledTimes(2)
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            1,
+            "myarg",
+            expect.any(Number)
+        )
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            2,
+            "myarg",
+            expect.any(Number)
+        )
     })
 
     it("parses 4-arg full form (cross-argument)", async () => {
         mockResolveVersion.mockResolvedValue(0)
         mockHydrateEngine.mockResolvedValue({})
         mockDiffArguments.mockReturnValue(emptyDiff)
-        mockIsDiffEmpty.mockReturnValue(true)
 
         const program = makeProgram()
         await program.parseAsync([
@@ -113,6 +119,16 @@ describe("registerDiffCommand", () => {
 
         expect(mockResolveVersion).toHaveBeenCalledWith("argA", "0")
         expect(mockResolveVersion).toHaveBeenCalledWith("argB", "1")
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            1,
+            "argA",
+            expect.any(Number)
+        )
+        expect(mockHydrateEngine).toHaveBeenNthCalledWith(
+            2,
+            "argB",
+            expect.any(Number)
+        )
     })
 
     it("outputs JSON when --json is passed", async () => {
@@ -139,7 +155,6 @@ describe("registerDiffCommand", () => {
         mockResolveVersion.mockResolvedValue(0)
         mockHydrateEngine.mockResolvedValue({})
         mockDiffArguments.mockReturnValue(emptyDiff)
-        mockIsDiffEmpty.mockReturnValue(false)
 
         const program = makeProgram()
         await program.parseAsync([
@@ -158,6 +173,22 @@ describe("registerDiffCommand", () => {
         const program = makeProgram()
         await expect(
             program.parseAsync(["node", "proposit-core", "diff", "myarg", "0"])
+        ).rejects.toThrow()
+    })
+
+    it("exits with error for more than 4 positional args", async () => {
+        const program = makeProgram()
+        await expect(
+            program.parseAsync([
+                "node",
+                "proposit-core",
+                "diff",
+                "a",
+                "0",
+                "b",
+                "1",
+                "extra",
+            ])
         ).rejects.toThrow()
     })
 })

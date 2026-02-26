@@ -20,7 +20,7 @@ function parseDiffArgs(
     if (args.length === 4) {
         return [args[0], args[1], args[2], args[3]]
     }
-    errorExit(
+    return errorExit(
         "Usage: proposit-core diff <id> <verA> <verB>\n       proposit-core diff <idA> <verA> <idB> <verB>"
     )
 }
