@@ -4,6 +4,17 @@ import type {
 } from "../schemata/index.js"
 import { getOrCreate } from "../utils/collections.js"
 
+/**
+ * Low-level manager for a flat-stored expression tree.
+ *
+ * Expressions are immutable value objects stored in three maps: the main
+ * expression store, a parent-to-children ID index, and a parent-to-positions
+ * index. Structural invariants (child limits, root-only operators, position
+ * uniqueness) are enforced on every mutation.
+ *
+ * This class is an internal building block used by {@link PremiseManager}
+ * and is not part of the public API.
+ */
 export class ExpressionManager {
     private expressions: Map<string, TCorePropositionalExpression>
     private childExpressionIdsByParentId: Map<string | null, Set<string>>
@@ -17,10 +28,21 @@ export class ExpressionManager {
         this.loadInitialExpressions(initialExpressions)
     }
 
+    /** Returns all expressions as an unordered array. */
     public toArray(): TCorePropositionalExpression[] {
         return Array.from(this.expressions.values())
     }
 
+    /**
+     * Adds an expression to the tree.
+     *
+     * @throws If the expression ID already exists.
+     * @throws If the expression references itself as parent.
+     * @throws If `implies`/`iff` operators have a non-null parentId (they must be roots).
+     * @throws If the parent does not exist or is not an operator/formula.
+     * @throws If the parent's child limit would be exceeded.
+     * @throws If the position is already occupied under the parent.
+     */
     public addExpression(expression: TCorePropositionalExpression) {
         if (this.expressions.has(expression.id)) {
             throw new Error(
@@ -93,6 +115,15 @@ export class ExpressionManager {
         ).add(expression.id)
     }
 
+    /**
+     * Removes an expression and its entire descendant subtree.
+     *
+     * After removal, {@link collapseIfNeeded} runs on the parent:
+     * - 0 children remaining: the parent operator/formula is deleted (recurses to grandparent).
+     * - 1 child remaining: the parent is deleted and the surviving child is promoted into its slot.
+     *
+     * @returns The removed expression, or `undefined` if not found.
+     */
     public removeExpression(expressionId: string) {
         const target = this.expressions.get(expressionId)
         if (!target) {
@@ -228,6 +259,7 @@ export class ExpressionManager {
         }
     }
 
+    /** Returns `true` if any expression in the tree references the given variable ID. */
     public hasVariableReference(variableId: string): boolean {
         for (const expression of this.expressions.values()) {
             if (
@@ -240,12 +272,14 @@ export class ExpressionManager {
         return false
     }
 
+    /** Returns the expression with the given ID, or `undefined` if not found. */
     public getExpression(
         expressionId: string
     ): TCorePropositionalExpression | undefined {
         return this.expressions.get(expressionId)
     }
 
+    /** Returns the children of the given parent, sorted by position. */
     public getChildExpressions(
         parentId: string | null
     ): TCorePropositionalExpression[] {
@@ -372,6 +406,24 @@ export class ExpressionManager {
         }
     }
 
+    /**
+     * Inserts a new expression between existing nodes in the tree.
+     *
+     * The new expression inherits the tree slot of the anchor node
+     * (`leftNodeId ?? rightNodeId`). The anchor and optional second node
+     * become children of the new expression at positions 0 and 1.
+     *
+     * Right node is reparented before left node to handle the case where
+     * the right node is a descendant of the left node's subtree.
+     *
+     * @throws If neither leftNodeId nor rightNodeId is provided.
+     * @throws If the expression ID already exists.
+     * @throws If leftNodeId and rightNodeId are the same.
+     * @throws If either referenced node does not exist.
+     * @throws If a unary operator/formula is given two children.
+     * @throws If either child is an `implies`/`iff` operator (cannot be subordinated).
+     * @throws If an `implies`/`iff` expression would be inserted at a non-root position.
+     */
     public insertExpression(
         expression: TCorePropositionalExpression,
         leftNodeId?: string,
@@ -515,7 +567,3 @@ export class ExpressionManager {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// PremiseManager
-// ---------------------------------------------------------------------------
