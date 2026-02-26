@@ -1,5 +1,12 @@
 import type { TCorePropositionalVariable } from "../schemata/index.js"
 
+/**
+ * Registry for propositional variables within a single premise.
+ *
+ * Enforces uniqueness of both variable IDs and symbols. This class is an
+ * internal building block used by {@link PremiseManager} and is not part
+ * of the public API.
+ */
 export class VariableManager {
     private variables: Map<string, TCorePropositionalVariable>
     private variableSymbols: Set<string>
@@ -13,10 +20,17 @@ export class VariableManager {
         }
     }
 
+    /** Returns all registered variables as an array. */
     public toArray(): TCorePropositionalVariable[] {
         return Array.from(this.variables.values())
     }
 
+    /**
+     * Registers a variable.
+     *
+     * @throws If the symbol is already in use.
+     * @throws If the ID already exists.
+     */
     public addVariable(variable: TCorePropositionalVariable) {
         if (this.variableSymbols.has(variable.symbol)) {
             throw new Error(
@@ -31,6 +45,10 @@ export class VariableManager {
         this.variableSymbols.add(variable.symbol)
     }
 
+    /**
+     * Removes a variable by ID.
+     * @returns The removed variable, or `undefined` if not found.
+     */
     public removeVariable(variableId: string) {
         const variable = this.variables.get(variableId)
         if (!variable) {
@@ -42,16 +60,24 @@ export class VariableManager {
         return variable
     }
 
+    /** Returns `true` if a variable with the given ID is registered. */
     public hasVariable(variableId: string): boolean {
         return this.variables.has(variableId)
     }
 
+    /** Returns the variable with the given ID, or `undefined` if not found. */
     public getVariable(
         variableId: string
     ): TCorePropositionalVariable | undefined {
         return this.variables.get(variableId)
     }
 
+    /**
+     * Changes the symbol of an existing variable.
+     *
+     * @throws If the variable does not exist.
+     * @throws If the new symbol is already in use by a different variable.
+     */
     public renameVariable(variableId: string, newSymbol: string): void {
         const variable = this.variables.get(variableId)
         if (!variable) {
