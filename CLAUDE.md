@@ -1,5 +1,9 @@
 # proposit-core — Claude Code Guide
 
+## Generic instructions
+
+- Git commit messages should not include any co-authoring content
+
 ## Commands
 
 ```bash

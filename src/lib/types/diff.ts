@@ -27,8 +27,7 @@ export interface TCoreEntitySetDiff<T extends { id: string }> {
 }
 
 /** Premise diff includes nested expression diffs. */
-export interface TCorePremiseDiff
-    extends TCoreEntityFieldDiff<TCorePremise> {
+export interface TCorePremiseDiff extends TCoreEntityFieldDiff<TCorePremise> {
     expressions: TCoreEntitySetDiff<TCorePropositionalExpression>
 }
 

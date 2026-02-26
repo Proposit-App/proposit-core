@@ -17,6 +17,7 @@
 ### Task 1: Create diff type definitions
 
 **Files:**
+
 - Create: `src/lib/types/diff.ts`
 
 **Step 1: Write the type definitions file**
@@ -51,8 +52,7 @@ export interface TCoreEntitySetDiff<T extends { id: string }> {
 }
 
 /** Premise diff includes nested expression diffs. */
-export interface TCorePremiseDiff
-    extends TCoreEntityFieldDiff<TCorePremise> {
+export interface TCorePremiseDiff extends TCoreEntityFieldDiff<TCorePremise> {
     expressions: TCoreEntitySetDiff<TCorePropositionalExpression>
 }
 
@@ -109,6 +109,7 @@ git commit -m "Add diff type definitions"
 ### Task 2: Wire up exports
 
 **Files:**
+
 - Modify: `src/lib/index.ts`
 - Modify: `src/index.ts`
 
@@ -147,6 +148,7 @@ git commit -m "Re-export diff types from lib and package entry points"
 ### Task 3: Implement default comparators
 
 **Files:**
+
 - Create: `src/lib/core/diff.ts`
 
 **Step 1: Write the failing test — default comparators**
@@ -202,7 +204,12 @@ describe("diffArguments", () => {
     describe("defaultCompareArgument", () => {
         it("returns empty array when title and description match", () => {
             const a: TCoreArgument = { ...ARG, title: "T", description: "D" }
-            const b: TCoreArgument = { ...ARG, title: "T", description: "D", version: 2 }
+            const b: TCoreArgument = {
+                ...ARG,
+                title: "T",
+                description: "D",
+                version: 2,
+            }
             expect(defaultCompareArgument(a, b)).toEqual([])
         })
 
@@ -239,16 +246,40 @@ describe("diffArguments", () => {
 
     describe("defaultComparePremise", () => {
         it("detects title change", () => {
-            const before = { id: "p1", title: "Old", rootExpressionId: "r1", variables: [], expressions: [] }
-            const after = { id: "p1", title: "New", rootExpressionId: "r1", variables: [], expressions: [] }
+            const before = {
+                id: "p1",
+                title: "Old",
+                rootExpressionId: "r1",
+                variables: [],
+                expressions: [],
+            }
+            const after = {
+                id: "p1",
+                title: "New",
+                rootExpressionId: "r1",
+                variables: [],
+                expressions: [],
+            }
             expect(defaultComparePremise(before, after)).toEqual([
                 { field: "title", before: "Old", after: "New" },
             ])
         })
 
         it("detects rootExpressionId change", () => {
-            const before = { id: "p1", title: "T", rootExpressionId: "r1", variables: [], expressions: [] }
-            const after = { id: "p1", title: "T", rootExpressionId: "r2", variables: [], expressions: [] }
+            const before = {
+                id: "p1",
+                title: "T",
+                rootExpressionId: "r1",
+                variables: [],
+                expressions: [],
+            }
+            const after = {
+                id: "p1",
+                title: "T",
+                rootExpressionId: "r2",
+                variables: [],
+                expressions: [],
+            }
             expect(defaultComparePremise(before, after)).toEqual([
                 { field: "rootExpressionId", before: "r1", after: "r2" },
             ])
@@ -257,32 +288,56 @@ describe("diffArguments", () => {
 
     describe("defaultCompareExpression", () => {
         it("detects parentId change", () => {
-            const before = makeVarExpr("e1", "var-p", { parentId: "p1", position: 0 })
-            const after = makeVarExpr("e1", "var-p", { parentId: "p2", position: 0 })
+            const before = makeVarExpr("e1", "var-p", {
+                parentId: "p1",
+                position: 0,
+            })
+            const after = makeVarExpr("e1", "var-p", {
+                parentId: "p2",
+                position: 0,
+            })
             expect(defaultCompareExpression(before, after)).toEqual([
                 { field: "parentId", before: "p1", after: "p2" },
             ])
         })
 
         it("detects position change", () => {
-            const before = makeVarExpr("e1", "var-p", { parentId: "p1", position: 0 })
-            const after = makeVarExpr("e1", "var-p", { parentId: "p1", position: 1 })
+            const before = makeVarExpr("e1", "var-p", {
+                parentId: "p1",
+                position: 0,
+            })
+            const after = makeVarExpr("e1", "var-p", {
+                parentId: "p1",
+                position: 1,
+            })
             expect(defaultCompareExpression(before, after)).toEqual([
                 { field: "position", before: 0, after: 1 },
             ])
         })
 
         it("detects variableId change on variable expression", () => {
-            const before = makeVarExpr("e1", "var-p", { parentId: null, position: null })
-            const after = makeVarExpr("e1", "var-q", { parentId: null, position: null })
+            const before = makeVarExpr("e1", "var-p", {
+                parentId: null,
+                position: null,
+            })
+            const after = makeVarExpr("e1", "var-q", {
+                parentId: null,
+                position: null,
+            })
             expect(defaultCompareExpression(before, after)).toEqual([
                 { field: "variableId", before: "var-p", after: "var-q" },
             ])
         })
 
         it("detects operator change on operator expression", () => {
-            const before = makeOpExpr("e1", "and", { parentId: null, position: null })
-            const after = makeOpExpr("e1", "or", { parentId: null, position: null })
+            const before = makeOpExpr("e1", "and", {
+                parentId: null,
+                position: null,
+            })
+            const after = makeOpExpr("e1", "or", {
+                parentId: null,
+                position: null,
+            })
             expect(defaultCompareExpression(before, after)).toEqual([
                 { field: "operator", before: "and", after: "or" },
             ])
@@ -324,7 +379,11 @@ export function defaultCompareArgument(
 ): TCoreFieldChange[] {
     const changes: TCoreFieldChange[] = []
     if (before.title !== after.title) {
-        changes.push({ field: "title", before: before.title, after: after.title })
+        changes.push({
+            field: "title",
+            before: before.title,
+            after: after.title,
+        })
     }
     if (before.description !== after.description) {
         changes.push({
@@ -436,6 +495,7 @@ git commit -m "Add default comparators for argument diff"
 ### Task 4: Implement `diffArguments` function
 
 **Files:**
+
 - Modify: `src/lib/core/diff.ts`
 
 **Step 1: Write the failing test — identical engines produce empty diff**
@@ -443,24 +503,27 @@ git commit -m "Add default comparators for argument diff"
 Add inside the existing `describe("diffArguments")` block, after the comparator describe blocks:
 
 ```typescript
-    describe("diffArguments function", () => {
-        it("returns empty diff for identical engines", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
-            const diff = diffArguments(engineA, engineB)
+describe("diffArguments function", () => {
+    it("returns empty diff for identical engines", () => {
+        const { engine: engineA } = buildSimpleEngine(ARG)
+        const { engine: engineB } = buildSimpleEngine(ARG)
+        const diff = diffArguments(engineA, engineB)
 
-            expect(diff.argument.changes).toEqual([])
-            expect(diff.variables.added).toEqual([])
-            expect(diff.variables.removed).toEqual([])
-            expect(diff.variables.modified).toEqual([])
-            expect(diff.premises.added).toEqual([])
-            expect(diff.premises.removed).toEqual([])
-            expect(diff.premises.modified).toEqual([])
-            expect(diff.roles.conclusion).toEqual({ before: undefined, after: undefined })
-            expect(diff.roles.supportingAdded).toEqual([])
-            expect(diff.roles.supportingRemoved).toEqual([])
+        expect(diff.argument.changes).toEqual([])
+        expect(diff.variables.added).toEqual([])
+        expect(diff.variables.removed).toEqual([])
+        expect(diff.variables.modified).toEqual([])
+        expect(diff.premises.added).toEqual([])
+        expect(diff.premises.removed).toEqual([])
+        expect(diff.premises.modified).toEqual([])
+        expect(diff.roles.conclusion).toEqual({
+            before: undefined,
+            after: undefined,
         })
+        expect(diff.roles.supportingAdded).toEqual([])
+        expect(diff.roles.supportingRemoved).toEqual([])
     })
+})
 ```
 
 **Step 2: Run test to verify it fails**
@@ -659,7 +722,9 @@ export function diffArguments(
 
     const argumentChanges = compareArg(dataA.argument, dataB.argument)
 
-    const collectVariables = (engine: ArgumentEngine): TCorePropositionalVariable[] => {
+    const collectVariables = (
+        engine: ArgumentEngine
+    ): TCorePropositionalVariable[] => {
         const seen = new Set<string>()
         const vars: TCorePropositionalVariable[] = []
         for (const pm of engine.listPremises()) {
@@ -722,6 +787,7 @@ git commit -m "Implement diffArguments function with entity set diffing"
 ### Task 5: Add integration tests — added, removed, and modified entities
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts`
 
 **Step 1: Write tests for variable diff**
@@ -729,150 +795,183 @@ git commit -m "Implement diffArguments function with entity set diffing"
 Add inside the `describe("diffArguments function")` block:
 
 ```typescript
-        it("detects added and removed variables", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
+it("detects added and removed variables", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
 
-            // Add a new variable to engineB's premise
-            const varR = makeVar("var-r", "R")
-            engineB.getPremise("premise-1")!.addVariable(varR)
+    // Add a new variable to engineB's premise
+    const varR = makeVar("var-r", "R")
+    engineB.getPremise("premise-1")!.addVariable(varR)
 
-            // Remove var-q from engineA by building engineA without it
-            // Simpler: just test that engineB has an extra variable
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.variables.added).toEqual(
-                expect.arrayContaining([expect.objectContaining({ id: "var-r", symbol: "R" })])
-            )
+    // Remove var-q from engineA by building engineA without it
+    // Simpler: just test that engineB has an extra variable
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.variables.added).toEqual(
+        expect.arrayContaining([
+            expect.objectContaining({ id: "var-r", symbol: "R" }),
+        ])
+    )
+})
+
+it("detects modified variable (symbol change)", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const argB: TCoreArgument = { ...ARG }
+    const engineB = new ArgumentEngine(argB)
+    const pm = engineB.createPremiseWithId("premise-1", "First premise")
+    // Same variable ID, different symbol
+    pm.addVariable(makeVar("var-p", "X"))
+    pm.addVariable(makeVar("var-q", "Q"))
+    pm.addExpression(
+        makeOpExpr("expr-implies", "implies", {
+            parentId: null,
+            position: null,
         })
-
-        it("detects modified variable (symbol change)", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const argB: TCoreArgument = { ...ARG }
-            const engineB = new ArgumentEngine(argB)
-            const pm = engineB.createPremiseWithId("premise-1", "First premise")
-            // Same variable ID, different symbol
-            pm.addVariable(makeVar("var-p", "X"))
-            pm.addVariable(makeVar("var-q", "Q"))
-            pm.addExpression(makeOpExpr("expr-implies", "implies", { parentId: null, position: null }))
-            pm.addExpression(makeVarExpr("expr-p", "var-p", { parentId: "expr-implies", position: 0 }))
-            pm.addExpression(makeVarExpr("expr-q", "var-q", { parentId: "expr-implies", position: 1 }))
-            engineB.addSupportingPremise("premise-1")
-
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.variables.modified).toEqual([
-                expect.objectContaining({
-                    changes: [{ field: "symbol", before: "P", after: "X" }],
-                }),
-            ])
+    )
+    pm.addExpression(
+        makeVarExpr("expr-p", "var-p", {
+            parentId: "expr-implies",
+            position: 0,
         })
+    )
+    pm.addExpression(
+        makeVarExpr("expr-q", "var-q", {
+            parentId: "expr-implies",
+            position: 1,
+        })
+    )
+    engineB.addSupportingPremise("premise-1")
+
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.variables.modified).toEqual([
+        expect.objectContaining({
+            changes: [{ field: "symbol", before: "P", after: "X" }],
+        }),
+    ])
+})
 ```
 
 **Step 2: Write tests for premise diff**
 
 ```typescript
-        it("detects added premise", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
+it("detects added premise", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
 
-            const pm2 = engineB.createPremiseWithId("premise-2", "Second premise")
-            pm2.addVariable(makeVar("var-p", "P"))
-            pm2.addExpression(makeVarExpr("expr-p2", "var-p", { parentId: null, position: null }))
+    const pm2 = engineB.createPremiseWithId("premise-2", "Second premise")
+    pm2.addVariable(makeVar("var-p", "P"))
+    pm2.addExpression(
+        makeVarExpr("expr-p2", "var-p", { parentId: null, position: null })
+    )
 
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.premises.added).toHaveLength(1)
-            expect(diff.premises.added[0].id).toBe("premise-2")
-        })
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.premises.added).toHaveLength(1)
+    expect(diff.premises.added[0].id).toBe("premise-2")
+})
 
-        it("detects removed premise", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const engineB = new ArgumentEngine(ARG)
+it("detects removed premise", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const engineB = new ArgumentEngine(ARG)
 
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.premises.removed).toHaveLength(1)
-            expect(diff.premises.removed[0].id).toBe("premise-1")
-        })
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.premises.removed).toHaveLength(1)
+    expect(diff.premises.removed[0].id).toBe("premise-1")
+})
 
-        it("detects modified premise title", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
-            engineB.getPremise("premise-1")!.setTitle("Updated title")
+it("detects modified premise title", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
+    engineB.getPremise("premise-1")!.setTitle("Updated title")
 
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.premises.modified).toHaveLength(1)
-            expect(diff.premises.modified[0].changes).toEqual([
-                { field: "title", before: "First premise", after: "Updated title" },
-            ])
-        })
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.premises.modified).toHaveLength(1)
+    expect(diff.premises.modified[0].changes).toEqual([
+        { field: "title", before: "First premise", after: "Updated title" },
+    ])
+})
 ```
 
 **Step 3: Write tests for nested expression diff**
 
 ```typescript
-        it("detects modified expressions within a premise", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
+it("detects modified expressions within a premise", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
 
-            // Remove an expression and add a different one in engineB
-            const pmB = engineB.getPremise("premise-1")!
-            pmB.addVariable(makeVar("var-r", "R"))
-            pmB.removeExpression("expr-q")
-            pmB.addExpression(
-                makeVarExpr("expr-r", "var-r", { parentId: "expr-implies", position: 1 })
-            )
-
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.premises.modified).toHaveLength(1)
-            const premiseDiff = diff.premises.modified[0]
-            expect(premiseDiff.expressions.removed).toEqual(
-                expect.arrayContaining([expect.objectContaining({ id: "expr-q" })])
-            )
-            expect(premiseDiff.expressions.added).toEqual(
-                expect.arrayContaining([expect.objectContaining({ id: "expr-r" })])
-            )
+    // Remove an expression and add a different one in engineB
+    const pmB = engineB.getPremise("premise-1")!
+    pmB.addVariable(makeVar("var-r", "R"))
+    pmB.removeExpression("expr-q")
+    pmB.addExpression(
+        makeVarExpr("expr-r", "var-r", {
+            parentId: "expr-implies",
+            position: 1,
         })
+    )
+
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.premises.modified).toHaveLength(1)
+    const premiseDiff = diff.premises.modified[0]
+    expect(premiseDiff.expressions.removed).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "expr-q" })])
+    )
+    expect(premiseDiff.expressions.added).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "expr-r" })])
+    )
+})
 ```
 
 **Step 4: Write tests for role diff**
 
 ```typescript
-        it("detects conclusion change", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
+it("detects conclusion change", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
 
-            // engineA has no conclusion, engineB sets one
-            const pmConc = engineB.createPremiseWithId("premise-conc", "Conclusion")
-            pmConc.addVariable(makeVar("var-p", "P"))
-            pmConc.addExpression(
-                makeOpExpr("expr-impl-conc", "implies", { parentId: null, position: null })
-            )
-            pmConc.addExpression(
-                makeVarExpr("expr-p-conc", "var-p", { parentId: "expr-impl-conc", position: 0 })
-            )
-            pmConc.addExpression(
-                makeVarExpr("expr-q-conc", "var-q", { parentId: "expr-impl-conc", position: 1 })
-            )
-            engineB.setConclusionPremise("premise-conc")
-
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.roles.conclusion.before).toBeUndefined()
-            expect(diff.roles.conclusion.after).toBe("premise-conc")
+    // engineA has no conclusion, engineB sets one
+    const pmConc = engineB.createPremiseWithId("premise-conc", "Conclusion")
+    pmConc.addVariable(makeVar("var-p", "P"))
+    pmConc.addExpression(
+        makeOpExpr("expr-impl-conc", "implies", {
+            parentId: null,
+            position: null,
         })
-
-        it("detects supporting premise added and removed", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
-
-            // engineA has premise-1 as supporting; remove it in B and add premise-2
-            engineB.removeSupportingPremise("premise-1")
-            const pm2 = engineB.createPremiseWithId("premise-2")
-            pm2.addVariable(makeVar("var-p", "P"))
-            pm2.addExpression(makeVarExpr("expr-p2", "var-p", { parentId: null, position: null }))
-            engineB.addSupportingPremise("premise-2")
-
-            const diff = diffArguments(engineA, engineB)
-            expect(diff.roles.supportingAdded).toEqual(["premise-2"])
-            expect(diff.roles.supportingRemoved).toEqual(["premise-1"])
+    )
+    pmConc.addExpression(
+        makeVarExpr("expr-p-conc", "var-p", {
+            parentId: "expr-impl-conc",
+            position: 0,
         })
+    )
+    pmConc.addExpression(
+        makeVarExpr("expr-q-conc", "var-q", {
+            parentId: "expr-impl-conc",
+            position: 1,
+        })
+    )
+    engineB.setConclusionPremise("premise-conc")
+
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.roles.conclusion.before).toBeUndefined()
+    expect(diff.roles.conclusion.after).toBe("premise-conc")
+})
+
+it("detects supporting premise added and removed", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
+
+    // engineA has premise-1 as supporting; remove it in B and add premise-2
+    engineB.removeSupportingPremise("premise-1")
+    const pm2 = engineB.createPremiseWithId("premise-2")
+    pm2.addVariable(makeVar("var-p", "P"))
+    pm2.addExpression(
+        makeVarExpr("expr-p2", "var-p", { parentId: null, position: null })
+    )
+    engineB.addSupportingPremise("premise-2")
+
+    const diff = diffArguments(engineA, engineB)
+    expect(diff.roles.supportingAdded).toEqual(["premise-2"])
+    expect(diff.roles.supportingRemoved).toEqual(["premise-1"])
+})
 ```
 
 **Step 5: Run tests**
@@ -892,6 +991,7 @@ git commit -m "Add integration tests for diffArguments"
 ### Task 6: Add test for custom comparators
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts`
 
 **Step 1: Write custom comparator test**
@@ -899,40 +999,40 @@ git commit -m "Add integration tests for diffArguments"
 Add inside `describe("diffArguments function")`:
 
 ```typescript
-        it("uses custom comparator extending default", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
-            engineB.getPremise("premise-1")!.setTitle("Updated")
+it("uses custom comparator extending default", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
+    engineB.getPremise("premise-1")!.setTitle("Updated")
 
-            const diff = diffArguments(engineA, engineB, {
-                comparePremise: (before, after) => [
-                    ...defaultComparePremise(before, after),
-                    // Custom: always report a "custom" field
-                    { field: "customField", before: "a", after: "b" },
-                ],
-            })
+    const diff = diffArguments(engineA, engineB, {
+        comparePremise: (before, after) => [
+            ...defaultComparePremise(before, after),
+            // Custom: always report a "custom" field
+            { field: "customField", before: "a", after: "b" },
+        ],
+    })
 
-            expect(diff.premises.modified).toHaveLength(1)
-            expect(diff.premises.modified[0].changes).toEqual([
-                { field: "title", before: "First premise", after: "Updated" },
-                { field: "customField", before: "a", after: "b" },
-            ])
-        })
+    expect(diff.premises.modified).toHaveLength(1)
+    expect(diff.premises.modified[0].changes).toEqual([
+        { field: "title", before: "First premise", after: "Updated" },
+        { field: "customField", before: "a", after: "b" },
+    ])
+})
 
-        it("custom comparator replaces default entirely", () => {
-            const { engine: engineA } = buildSimpleEngine(ARG)
-            const { engine: engineB } = buildSimpleEngine(ARG)
-            engineB.getPremise("premise-1")!.setTitle("Updated")
+it("custom comparator replaces default entirely", () => {
+    const { engine: engineA } = buildSimpleEngine(ARG)
+    const { engine: engineB } = buildSimpleEngine(ARG)
+    engineB.getPremise("premise-1")!.setTitle("Updated")
 
-            // Custom comparator that ignores title changes
-            const diff = diffArguments(engineA, engineB, {
-                comparePremise: () => [],
-            })
+    // Custom comparator that ignores title changes
+    const diff = diffArguments(engineA, engineB, {
+        comparePremise: () => [],
+    })
 
-            // Premise is not in modified because comparator returned no changes
-            // (and no expression changes either since engines are otherwise identical)
-            expect(diff.premises.modified).toEqual([])
-        })
+    // Premise is not in modified because comparator returned no changes
+    // (and no expression changes either since engines are otherwise identical)
+    expect(diff.premises.modified).toEqual([])
+})
 ```
 
 **Step 2: Run tests**
@@ -952,6 +1052,7 @@ git commit -m "Add custom comparator tests for diffArguments"
 ### Task 7: Wire up exports and final checks
 
 **Files:**
+
 - Modify: `src/lib/index.ts`
 - Modify: `src/index.ts`
 
