@@ -88,40 +88,62 @@ export type TCorePropositionalExpression<
         TCorePropositionalExpressionTypes,
 > = Extract<TCorePropositionalExpressionCombined, { type: T }>
 
-export const CorePropositionalVariableSchema = Type.Object({
-    id: UUID,
-    argumentId: UUID,
-    argumentVersion: Type.Number(),
-    symbol: Type.String(),
-})
+export const CorePropositionalVariableSchema = Type.Object(
+    {
+        id: UUID,
+        argumentId: UUID,
+        argumentVersion: Type.Number(),
+        symbol: Type.String({
+            description:
+                'Human-readable symbol for this variable (e.g. "P", "Q").',
+        }),
+    },
+    {
+        description:
+            "A named propositional variable belonging to a specific argument version.",
+    }
+)
 
 export type TCorePropositionalVariable = Static<
     typeof CorePropositionalVariableSchema
 >
 
-export const CorePremiseMetaSchema = Type.Object({
-    // Auto-generated UUID
-    id: UUID,
-    title: Type.Optional(
-        Type.String({
-            description:
-                "An optional title for this premise, for display purposes.",
-        })
-    ),
-})
+export const CorePremiseMetaSchema = Type.Object(
+    {
+        id: UUID,
+        title: Type.Optional(
+            Type.String({
+                description:
+                    "An optional title for this premise, for display purposes.",
+            })
+        ),
+    },
+    {
+        description: "Identity and display metadata for a premise.",
+    }
+)
 export type TCorePremiseMeta = Static<typeof CorePremiseMetaSchema>
 
-export const CorePremiseDataSchema = Type.Object({
-    // If the premise has expressions in it, this is the ID of the root expression.
-    rootExpressionId: Type.Optional(UUID),
-    variables: Type.Array(UUID, {
-        description: "IDs of all variables referenced in this premise.",
-    }),
-    expressions: Type.Array(CorePropositionalExpressionSchema, {
-        description:
-            "All expressions that are part of this premise, including sub-expressions. The root of the premise will have a null parentId.",
-    }),
-})
+export const CorePremiseDataSchema = Type.Object(
+    {
+        rootExpressionId: Type.Optional(
+            Type.String({
+                description:
+                    "ID of the root expression, if the premise has expressions.",
+            })
+        ),
+        variables: Type.Array(UUID, {
+            description: "IDs of all variables referenced in this premise.",
+        }),
+        expressions: Type.Array(CorePropositionalExpressionSchema, {
+            description:
+                "All expressions in this premise. The root has a null parentId.",
+        }),
+    },
+    {
+        description: "Expression tree and variable references for a premise.",
+    }
+)
 export type TCorePremiseData = Static<typeof CorePremiseDataSchema>
 
 export const CorePremiseSchema = Type.Intersect([

@@ -64,8 +64,14 @@ export type TCoreArgumentVersionMeta = Static<
     typeof CoreArgumentVersionMetaSchema
 >
 
-export const CoreArgumentRoleStateSchema = Type.Object({
-    conclusionPremiseId: Type.Optional(UUID),
-    supportingPremiseIds: Type.Array(UUID),
-})
+export const CoreArgumentRoleStateSchema = Type.Object(
+    {
+        conclusionPremiseId: Type.Optional(UUID),
+        supportingPremiseIds: Type.Array(UUID),
+    },
+    {
+        description:
+            "Tracks which premises serve as the conclusion and which are supporting.",
+    }
+)
 export type TCoreArgumentRoleState = Static<typeof CoreArgumentRoleStateSchema>
