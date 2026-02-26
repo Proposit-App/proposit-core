@@ -10,6 +10,7 @@ import {
     defaultCompareVariable,
     defaultComparePremise,
     defaultCompareExpression,
+    diffArguments,
 } from "../src/lib/core/diff"
 
 // ---------------------------------------------------------------------------
@@ -2202,6 +2203,63 @@ describe("diffArguments", () => {
             expect(defaultCompareExpression(before, after)).toEqual([
                 { field: "operator", before: "and", after: "or" },
             ])
+        })
+    })
+
+    // Helper: create an engine with one premise containing P → Q
+    function buildSimpleEngine(arg: TCoreArgument): {
+        engine: ArgumentEngine
+        premiseId: string
+    } {
+        const engine = new ArgumentEngine(arg)
+        const varP = makeVar("var-p", "P")
+        const varQ = makeVar("var-q", "Q")
+
+        const pm = engine.createPremiseWithId("premise-1", "First premise")
+        pm.addVariable(varP)
+        pm.addVariable(varQ)
+        pm.addExpression(
+            makeOpExpr("expr-implies", "implies", {
+                parentId: null,
+                position: null,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", "var-p", {
+                parentId: "expr-implies",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", "var-q", {
+                parentId: "expr-implies",
+                position: 1,
+            })
+        )
+
+        engine.addSupportingPremise("premise-1")
+        return { engine, premiseId: "premise-1" }
+    }
+
+    describe("diffArguments function", () => {
+        it("returns empty diff for identical engines", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const { engine: engineB } = buildSimpleEngine(ARG)
+            const diff = diffArguments(engineA, engineB)
+
+            expect(diff.argument.changes).toEqual([])
+            expect(diff.variables.added).toEqual([])
+            expect(diff.variables.removed).toEqual([])
+            expect(diff.variables.modified).toEqual([])
+            expect(diff.premises.added).toEqual([])
+            expect(diff.premises.removed).toEqual([])
+            expect(diff.premises.modified).toEqual([])
+            expect(diff.roles.conclusion).toEqual({
+                before: undefined,
+                after: undefined,
+            })
+            expect(diff.roles.supportingAdded).toEqual([])
+            expect(diff.roles.supportingRemoved).toEqual([])
         })
     })
 })
