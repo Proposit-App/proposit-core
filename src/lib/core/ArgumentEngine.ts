@@ -20,6 +20,13 @@ import { getOrCreate, sortedUnique } from "../utils/collections.js"
 import { makeErrorIssue, makeValidationResult } from "./evaluation/shared.js"
 import { PremiseManager } from "./PremiseManager.js"
 
+/**
+ * Manages a propositional logic argument composed of premises, variable
+ * assignments, and logical roles (supporting premises and a conclusion).
+ *
+ * Provides premise CRUD, role management, evaluation of individual
+ * assignments, and exhaustive validity checking via truth-table enumeration.
+ */
 export class ArgumentEngine {
     private argument: TCoreArgument
     private premises: Map<string, PremiseManager>
@@ -33,10 +40,15 @@ export class ArgumentEngine {
         this.conclusionPremiseId = undefined
     }
 
+    /** Returns a shallow copy of the argument metadata. */
     public getArgument(): TCoreArgument {
         return { ...this.argument }
     }
 
+    /**
+     * Creates a new premise with an auto-generated UUID and registers it
+     * with this engine.
+     */
     public createPremise(title?: string): PremiseManager {
         const id = randomUUID()
         const pm = new PremiseManager(id, this.argument, title)
@@ -44,6 +56,12 @@ export class ArgumentEngine {
         return pm
     }
 
+    /**
+     * Creates a premise with a caller-supplied ID and registers it with
+     * this engine.
+     *
+     * @throws If a premise with the given ID already exists.
+     */
     public createPremiseWithId(id: string, title?: string): PremiseManager {
         if (this.premises.has(id)) {
             throw new Error(`Premise "${id}" already exists.`)
@@ -53,6 +71,10 @@ export class ArgumentEngine {
         return pm
     }
 
+    /**
+     * Removes a premise and clears any role assignments that reference it.
+     * No-op if the premise does not exist.
+     */
     public removePremise(premiseId: string): void {
         this.premises.delete(premiseId)
         this.supportingPremiseIds.delete(premiseId)
@@ -61,26 +83,31 @@ export class ArgumentEngine {
         }
     }
 
+    /** Returns the premise with the given ID, or `undefined` if not found. */
     public getPremise(premiseId: string): PremiseManager | undefined {
         return this.premises.get(premiseId)
     }
 
+    /** Returns `true` if a premise with the given ID exists. */
     public hasPremise(premiseId: string): boolean {
         return this.premises.has(premiseId)
     }
 
+    /** Returns all premise IDs in lexicographic order. */
     public listPremiseIds(): string[] {
         return Array.from(this.premises.keys()).sort((a, b) =>
             a.localeCompare(b)
         )
     }
 
+    /** Returns all premises in lexicographic ID order. */
     public listPremises(): PremiseManager[] {
         return this.listPremiseIds()
             .map((id) => this.premises.get(id))
             .filter((pm): pm is PremiseManager => pm !== undefined)
     }
 
+    /** Returns the current role assignments (conclusion and supporting premise IDs). */
     public getRoleState(): TCoreArgumentRoleState {
         return {
             supportingPremiseIds: sortedUnique(this.supportingPremiseIds),
@@ -88,6 +115,12 @@ export class ArgumentEngine {
         }
     }
 
+    /**
+     * Designates a premise as the argument's conclusion.
+     *
+     * @throws If the premise does not exist.
+     * @throws If the premise is already a supporting premise.
+     */
     public setConclusionPremise(premiseId: string): void {
         if (!this.hasPremise(premiseId)) {
             throw new Error(`Premise "${premiseId}" does not exist.`)
@@ -100,10 +133,12 @@ export class ArgumentEngine {
         this.conclusionPremiseId = premiseId
     }
 
+    /** Clears the conclusion designation. */
     public clearConclusionPremise(): void {
         this.conclusionPremiseId = undefined
     }
 
+    /** Returns the conclusion premise, or `undefined` if none is set. */
     public getConclusionPremise(): PremiseManager | undefined {
         if (this.conclusionPremiseId === undefined) {
             return undefined
@@ -111,6 +146,12 @@ export class ArgumentEngine {
         return this.premises.get(this.conclusionPremiseId)
     }
 
+    /**
+     * Adds a premise to the supporting role.
+     *
+     * @throws If the premise does not exist.
+     * @throws If the premise is the conclusion.
+     */
     public addSupportingPremise(premiseId: string): void {
         if (!this.hasPremise(premiseId)) {
             throw new Error(`Premise "${premiseId}" does not exist.`)
@@ -123,16 +164,19 @@ export class ArgumentEngine {
         this.supportingPremiseIds.add(premiseId)
     }
 
+    /** Removes a premise from the supporting role. No-op if not supporting. */
     public removeSupportingPremise(premiseId: string): void {
         this.supportingPremiseIds.delete(premiseId)
     }
 
+    /** Returns all supporting premises in lexicographic ID order. */
     public listSupportingPremises(): PremiseManager[] {
         return sortedUnique(this.supportingPremiseIds)
             .map((id) => this.premises.get(id))
             .filter((pm): pm is PremiseManager => pm !== undefined)
     }
 
+    /** Returns a serializable snapshot of the full engine state. */
     public toData(): TCoreArgumentEngineData {
         return {
             argument: { ...this.argument },
@@ -141,10 +185,15 @@ export class ArgumentEngine {
         }
     }
 
+    /** Alias for {@link toData}. */
     public exportState(): TCoreArgumentEngineData {
         return this.toData()
     }
 
+    /**
+     * Collects all variables referenced by expressions across all premises,
+     * indexed both by variable ID and by symbol.
+     */
     public collectReferencedVariables(): {
         variableIds: string[]
         byId: Record<string, { symbol: string; premiseIds: string[] }>
@@ -223,6 +272,12 @@ export class ArgumentEngine {
         }
     }
 
+    /**
+     * Validates that this argument is structurally ready for evaluation:
+     * a conclusion must be set, all role references must point to existing
+     * premises, variable ID/symbol mappings must be consistent, and every
+     * premise must be individually evaluable.
+     */
     public validateEvaluability(): TCoreValidationResult {
         const issues: TCoreValidationIssue[] = []
 
@@ -318,6 +373,16 @@ export class ArgumentEngine {
         return makeValidationResult(issues)
     }
 
+    /**
+     * Evaluates the argument under a single variable assignment.
+     *
+     * Determines whether the assignment is admissible (all constraints
+     * satisfied), whether all supporting premises hold, whether the
+     * conclusion holds, and whether the assignment is a counterexample.
+     *
+     * Returns `{ ok: false }` with validation details if the argument is
+     * not structurally evaluable.
+     */
     public evaluate(
         assignment: TCoreVariableAssignment,
         options?: TCoreArgumentEvaluationOptions
@@ -447,6 +512,16 @@ export class ArgumentEngine {
         }
     }
 
+    /**
+     * Enumerates all 2^n variable assignments and checks for counterexamples.
+     *
+     * A counterexample is an admissible assignment where all supporting
+     * premises are true but the conclusion is false. The argument is valid
+     * if no counterexamples exist.
+     *
+     * Supports early termination (`firstCounterexample` mode) and
+     * configurable limits on variables and assignments checked.
+     */
     public checkValidity(
         options?: TCoreValidityCheckOptions
     ): TCoreValidityCheckResult {
