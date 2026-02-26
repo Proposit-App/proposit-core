@@ -2261,5 +2261,248 @@ describe("diffArguments", () => {
             expect(diff.roles.supportingAdded).toEqual([])
             expect(diff.roles.supportingRemoved).toEqual([])
         })
+
+        it("detects added and removed variables", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const { engine: engineB } = buildSimpleEngine(ARG)
+
+            // Add a new variable to engineB's premise
+            const varR = makeVar("var-r", "R")
+            engineB.getPremise("premise-1")!.addVariable(varR)
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.variables.added).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ id: "var-r", symbol: "R" }),
+                ])
+            )
+        })
+
+        it("detects modified variable (symbol change)", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const argB: TCoreArgument = { ...ARG }
+            const engineB = new ArgumentEngine(argB)
+            const pm = engineB.createPremiseWithId("premise-1", "First premise")
+            // Same variable ID, different symbol
+            pm.addVariable(makeVar("var-p", "X"))
+            pm.addVariable(makeVar("var-q", "Q"))
+            pm.addExpression(
+                makeOpExpr("expr-implies", "implies", {
+                    parentId: null,
+                    position: null,
+                })
+            )
+            pm.addExpression(
+                makeVarExpr("expr-p", "var-p", {
+                    parentId: "expr-implies",
+                    position: 0,
+                })
+            )
+            pm.addExpression(
+                makeVarExpr("expr-q", "var-q", {
+                    parentId: "expr-implies",
+                    position: 1,
+                })
+            )
+            engineB.addSupportingPremise("premise-1")
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.variables.modified).toEqual([
+                expect.objectContaining({
+                    changes: [{ field: "symbol", before: "P", after: "X" }],
+                }),
+            ])
+        })
+
+        it("detects added premise", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const { engine: engineB } = buildSimpleEngine(ARG)
+
+            const pm2 = engineB.createPremiseWithId(
+                "premise-2",
+                "Second premise"
+            )
+            pm2.addVariable(makeVar("var-p", "P"))
+            pm2.addExpression(
+                makeVarExpr("expr-p2", "var-p", {
+                    parentId: null,
+                    position: null,
+                })
+            )
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.premises.added).toHaveLength(1)
+            expect(diff.premises.added[0].id).toBe("premise-2")
+        })
+
+        it("detects removed premise", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const engineB = new ArgumentEngine(ARG)
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.premises.removed).toHaveLength(1)
+            expect(diff.premises.removed[0].id).toBe("premise-1")
+        })
+
+        it("detects modified premise title", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const { engine: engineB } = buildSimpleEngine(ARG)
+            engineB.getPremise("premise-1")!.setTitle("Updated title")
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.premises.modified).toHaveLength(1)
+            expect(diff.premises.modified[0].changes).toEqual([
+                {
+                    field: "title",
+                    before: "First premise",
+                    after: "Updated title",
+                },
+            ])
+        })
+
+        it("detects modified expressions within a premise", () => {
+            // Build engineA with an 'and' root so removing one child doesn't collapse
+            const engineA = new ArgumentEngine(ARG)
+            const pmA = engineA.createPremiseWithId(
+                "premise-1",
+                "First premise"
+            )
+            pmA.addVariable(makeVar("var-p", "P"))
+            pmA.addVariable(makeVar("var-q", "Q"))
+            pmA.addExpression(
+                makeOpExpr("expr-and", "and", {
+                    parentId: null,
+                    position: null,
+                })
+            )
+            pmA.addExpression(
+                makeVarExpr("expr-p", "var-p", {
+                    parentId: "expr-and",
+                    position: 0,
+                })
+            )
+            pmA.addExpression(
+                makeVarExpr("expr-q", "var-q", {
+                    parentId: "expr-and",
+                    position: 1,
+                })
+            )
+            // Add a third child so removing one still leaves 2 (no collapse)
+            pmA.addVariable(makeVar("var-r", "R"))
+            pmA.addExpression(
+                makeVarExpr("expr-r", "var-r", {
+                    parentId: "expr-and",
+                    position: 2,
+                })
+            )
+
+            // Build engineB identically, then swap expr-r for expr-s
+            const engineB = new ArgumentEngine(ARG)
+            const pmB = engineB.createPremiseWithId(
+                "premise-1",
+                "First premise"
+            )
+            pmB.addVariable(makeVar("var-p", "P"))
+            pmB.addVariable(makeVar("var-q", "Q"))
+            pmB.addVariable(makeVar("var-r", "R"))
+            pmB.addExpression(
+                makeOpExpr("expr-and", "and", {
+                    parentId: null,
+                    position: null,
+                })
+            )
+            pmB.addExpression(
+                makeVarExpr("expr-p", "var-p", {
+                    parentId: "expr-and",
+                    position: 0,
+                })
+            )
+            pmB.addExpression(
+                makeVarExpr("expr-q", "var-q", {
+                    parentId: "expr-and",
+                    position: 1,
+                })
+            )
+            // Different expression at position 2
+            const varS = makeVar("var-s", "S")
+            pmB.addVariable(varS)
+            pmB.addExpression(
+                makeVarExpr("expr-s", "var-s", {
+                    parentId: "expr-and",
+                    position: 2,
+                })
+            )
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.premises.modified).toHaveLength(1)
+            const premiseDiff = diff.premises.modified[0]
+            expect(premiseDiff.expressions.removed).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ id: "expr-r" }),
+                ])
+            )
+            expect(premiseDiff.expressions.added).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ id: "expr-s" }),
+                ])
+            )
+        })
+
+        it("detects conclusion change", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const { engine: engineB } = buildSimpleEngine(ARG)
+
+            // engineA has no conclusion, engineB sets one
+            const pmConc = engineB.createPremiseWithId(
+                "premise-conc",
+                "Conclusion"
+            )
+            pmConc.addVariable(makeVar("var-p", "P"))
+            pmConc.addExpression(
+                makeOpExpr("expr-impl-conc", "implies", {
+                    parentId: null,
+                    position: null,
+                })
+            )
+            pmConc.addVariable(makeVar("var-q", "Q"))
+            pmConc.addExpression(
+                makeVarExpr("expr-p-conc", "var-p", {
+                    parentId: "expr-impl-conc",
+                    position: 0,
+                })
+            )
+            pmConc.addExpression(
+                makeVarExpr("expr-q-conc", "var-q", {
+                    parentId: "expr-impl-conc",
+                    position: 1,
+                })
+            )
+            engineB.setConclusionPremise("premise-conc")
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.roles.conclusion.before).toBeUndefined()
+            expect(diff.roles.conclusion.after).toBe("premise-conc")
+        })
+
+        it("detects supporting premise added and removed", () => {
+            const { engine: engineA } = buildSimpleEngine(ARG)
+            const { engine: engineB } = buildSimpleEngine(ARG)
+
+            // engineA has premise-1 as supporting; remove it in B and add premise-2
+            engineB.removeSupportingPremise("premise-1")
+            const pm2 = engineB.createPremiseWithId("premise-2")
+            pm2.addVariable(makeVar("var-p", "P"))
+            pm2.addExpression(
+                makeVarExpr("expr-p2", "var-p", {
+                    parentId: null,
+                    position: null,
+                })
+            )
+            engineB.addSupportingPremise("premise-2")
+
+            const diff = diffArguments(engineA, engineB)
+            expect(diff.roles.supportingAdded).toEqual(["premise-2"])
+            expect(diff.roles.supportingRemoved).toEqual(["premise-1"])
+        })
     })
 })
