@@ -17,6 +17,7 @@
 New describe block at the bottom of `test/ExpressionManager.test.ts` that verifies the engine preserves unknown fields on arguments, premises, variables, and expressions through round-trips.
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts` (append new describe block)
 
 **Step 1: Write the failing tests**
@@ -42,13 +43,18 @@ describe("field preservation — unknown fields survive round-trips", () => {
     it("preserves unknown fields on the argument through toData()", () => {
         const engine = new ArgumentEngine(ARG_WITH_EXTRAS as TCoreArgument)
         const data = engine.toData()
-        expect((data.argument as Record<string, unknown>).title).toBe("My Argument")
+        expect((data.argument as Record<string, unknown>).title).toBe(
+            "My Argument"
+        )
         expect((data.argument as Record<string, unknown>).customField).toBe(42)
     })
 
     it("preserves extras on premises through toData()", () => {
         const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
-        const pm = engine.createPremise({ title: "My Premise", priority: "high" })
+        const pm = engine.createPremise({
+            title: "My Premise",
+            priority: "high",
+        })
         const data = pm.toData()
         expect((data as Record<string, unknown>).title).toBe("My Premise")
         expect((data as Record<string, unknown>).priority).toBe("high")
@@ -58,7 +64,9 @@ describe("field preservation — unknown fields survive round-trips", () => {
         const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
         engine.createPremise({ title: "Premise One" })
         const data = engine.toData()
-        expect((data.premises[0] as Record<string, unknown>).title).toBe("Premise One")
+        expect((data.premises[0] as Record<string, unknown>).title).toBe(
+            "Premise One"
+        )
     })
 })
 ```
@@ -82,6 +90,7 @@ git commit -m "Add failing tests for unknown field preservation"
 Strip `CoreArgumentSchema` down to `{ id, version }`. Remove all intermediate argument schemas.
 
 **Files:**
+
 - Modify: `src/lib/schemata/argument.ts`
 
 **Step 1: Rewrite argument.ts**
@@ -131,6 +140,7 @@ Expected: FAIL with many errors from files that import removed types. That's exp
 Remove metadata from premises and variables. Flatten `CorePremiseSchema` into a single schema.
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts`
 
 **Step 1: Update propositional.ts**
@@ -180,7 +190,8 @@ export const CorePremiseSchema = Type.Object(
     },
     {
         additionalProperties: true,
-        description: "A premise containing an expression tree and variable references.",
+        description:
+            "A premise containing an expression tree and variable references.",
     }
 )
 export type TCorePremise = Static<typeof CorePremiseSchema>
@@ -191,6 +202,7 @@ export type TCorePremise = Static<typeof CorePremiseSchema>
 ### Task 4: Remove import schemas from core exports
 
 **Files:**
+
 - Modify: `src/lib/schemata/index.ts`
 - Modify: `src/lib/index.ts`
 - Modify: `src/index.ts`
@@ -198,6 +210,7 @@ export type TCorePremise = Static<typeof CorePremiseSchema>
 **Step 1: Remove import.ts re-export from schemata/index.ts**
 
 In `src/lib/schemata/index.ts`, remove the line:
+
 ```typescript
 export * from "./import.js"
 ```
@@ -205,6 +218,7 @@ export * from "./import.js"
 **Step 2: Remove importArgumentFromYaml from lib/index.ts**
 
 In `src/lib/index.ts`, remove:
+
 ```typescript
 export { importArgumentFromYaml } from "./core/import.js"
 ```
@@ -212,6 +226,7 @@ export { importArgumentFromYaml } from "./core/import.js"
 **Step 3: Remove importArgumentFromYaml and YAML schemas from src/index.ts**
 
 In `src/index.ts`, remove:
+
 ```typescript
 export { importArgumentFromYaml } from "./lib/core/import.js"
 ```
@@ -227,20 +242,25 @@ The barrel re-exports `export * from "./lib/schemata/index.js"` will automatical
 Replace the `metadata` field with an `extras` field for generic unknown-field preservation.
 
 **Files:**
+
 - Modify: `src/lib/core/PremiseManager.ts`
 
 **Step 1: Update constructor and fields**
 
 Replace:
+
 ```typescript
 private metadata: Record<string, string>
 ```
+
 with:
+
 ```typescript
 private extras: Record<string, unknown>
 ```
 
 Update constructor:
+
 ```typescript
 constructor(
     id: string,
@@ -259,6 +279,7 @@ constructor(
 Remove `getTitle()`, `setTitle()`, `getMetadata()`, `setMetadata()`.
 
 Add:
+
 ```typescript
 public getExtras(): Record<string, unknown> {
     return { ...this.extras }
@@ -329,6 +350,7 @@ public createPremiseWithId(
 The default comparators should only compare core structural fields now. Consumers wrap them to add their own field comparisons.
 
 **Files:**
+
 - Modify: `src/lib/core/diff.ts`
 
 **Step 1: Update defaultCompareArgument**
@@ -393,11 +415,13 @@ export function defaultComparePremise(
 The bulk of the work: update all test fixtures to use the new minimal shapes and adjust assertions.
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts`
 
 **Step 1: Update the global ARG fixture**
 
 Change:
+
 ```typescript
 const ARG: TCoreArgument = {
     id: "arg-1",
@@ -407,7 +431,9 @@ const ARG: TCoreArgument = {
     published: false,
 }
 ```
+
 to:
+
 ```typescript
 const ARG: TCoreArgument = {
     id: "arg-1",
@@ -433,22 +459,26 @@ function makeVar(...): TCorePropositionalVariable {
 **Step 3: Update createPremise calls**
 
 All calls like `eng.createPremise({ title: "test" })` should become either:
+
 - `eng.createPremise({ title: "test" })` — still works because extras accept `Record<string, unknown>`. The title is preserved as an extra.
 - `eng.createPremise()` — if the title was only there for readability and isn't asserted on.
 
 Review each call:
+
 - In `ArgumentEngine premise CRUD` tests: `createPremise({ title: "test" })` and assertions on `pm.toData().metadata.title` — change assertion to `(pm.toData() as any).title`.
-- In stress tests: `createPremise({ title: \`premise-${p}\` })` — can keep as extras or simplify to `createPremise()`.
+- In stress tests: `createPremise({ title: \`premise-${p}\` })`— can keep as extras or simplify to`createPremise()`.
 
 **Step 4: Update PremiseManager toData assertions**
 
 In `PremiseManager — toData` tests:
+
 - Remove assertions on `data.metadata.title`
 - Add assertion that extras are preserved if relevant
 
 **Step 5: Update diff test fixtures and assertions**
 
 In diff-related tests:
+
 - Change `metadata: { title: "Old" }` to extras at root level where needed for test setup
 - Change assertions from `{ field: "metadata.title", ... }` to testing consumer-provided comparators, or remove metadata diff assertions since default comparators no longer check metadata
 - `defaultCompareArgument` test: should return `[]` since core argument has no diffable fields beyond identity
@@ -458,6 +488,7 @@ In diff-related tests:
 **Step 6: Update the "metadata record" describe block**
 
 This block tests the Typebox schema shapes. It needs a complete rewrite since the metadata schemas no longer exist. Replace it with tests that verify:
+
 - `CoreArgumentSchema` accepts `{ id: "x", version: 0 }` with additional properties
 - `CorePropositionalVariableSchema` accepts `{ id, argumentId, argumentVersion, symbol }` with additional properties
 - `CorePremiseSchema` accepts the minimal shape with additional properties
@@ -485,6 +516,7 @@ git commit -m "Slim core schemas: remove metadata, preserve unknown fields"
 These tests reference `importArgumentFromYaml` which is being moved to the CLI. The import tests need to be restructured.
 
 **Files:**
+
 - Modify: `test/import.test.ts`
 - Modify: `test/examples.test.ts`
 
@@ -523,11 +555,13 @@ git commit -m "Update import and example tests for slimmed schemas"
 ### Task 9: Update diff renderer tests
 
 **Files:**
+
 - Modify: `test/diffRenderer.test.ts`
 
 **Step 1: Update makeArg helper**
 
 Change from:
+
 ```typescript
 function makeArg(overrides) {
     return {
@@ -540,7 +574,9 @@ function makeArg(overrides) {
     }
 }
 ```
+
 to:
+
 ```typescript
 function makeArg(overrides) {
     return {
@@ -583,6 +619,7 @@ git commit -m "Update diff renderer tests for slimmed schemas"
 Create CLI-level extended schemas and relocate `importArgumentFromYaml`.
 
 **Files:**
+
 - Create: `src/cli/schemata.ts`
 - Move: `src/lib/core/import.ts` → `src/cli/import.ts` (or rewrite import path)
 - Delete: `src/lib/schemata/import.ts`
@@ -591,15 +628,25 @@ Create CLI-level extended schemas and relocate `importArgumentFromYaml`.
 
 ```typescript
 import Type, { type Static } from "typebox"
-import { CoreArgumentSchema, CoreArgumentRoleStateSchema } from "../lib/schemata/index.js"
-import { CorePremiseSchema, CorePropositionalVariableSchema, UUID } from "../lib/schemata/index.js"
+import {
+    CoreArgumentSchema,
+    CoreArgumentRoleStateSchema,
+} from "../lib/schemata/index.js"
+import {
+    CorePremiseSchema,
+    CorePropositionalVariableSchema,
+    UUID,
+} from "../lib/schemata/index.js"
 
 export const CliArgumentMetaSchema = Type.Intersect([
     Type.Object({ id: UUID }),
-    Type.Object({
-        title: Type.String(),
-        description: Type.Optional(Type.String()),
-    }, { additionalProperties: Type.String() }),
+    Type.Object(
+        {
+            title: Type.String(),
+            description: Type.Optional(Type.String()),
+        },
+        { additionalProperties: Type.String() }
+    ),
 ])
 export type TCliArgumentMeta = Static<typeof CliArgumentMetaSchema>
 
@@ -609,7 +656,9 @@ export const CliArgumentVersionMetaSchema = Type.Object({
     published: Type.Boolean(),
     publishedAt: Type.Optional(Type.Number()),
 })
-export type TCliArgumentVersionMeta = Static<typeof CliArgumentVersionMetaSchema>
+export type TCliArgumentVersionMeta = Static<
+    typeof CliArgumentVersionMetaSchema
+>
 
 export const CliArgumentSchema = Type.Intersect([
     CoreArgumentSchema,
@@ -623,10 +672,13 @@ export const CliArgumentSchema = Type.Intersect([
 ])
 export type TCliArgument = Static<typeof CliArgumentSchema>
 
-export const CliPremiseMetaSchema = Type.Object({
-    id: UUID,
-    title: Type.Optional(Type.String()),
-}, { additionalProperties: Type.String() })
+export const CliPremiseMetaSchema = Type.Object(
+    {
+        id: UUID,
+        title: Type.Optional(Type.String()),
+    },
+    { additionalProperties: Type.String() }
+)
 export type TCliPremiseMeta = Static<typeof CliPremiseMetaSchema>
 
 export const CliVariableSchema = Type.Intersect([
@@ -668,6 +720,7 @@ git commit -m "Create CLI schemas and move import to CLI layer"
 Update CLI storage to use CLI schemas instead of removed core schemas.
 
 **Files:**
+
 - Modify: `src/cli/storage/arguments.ts`
 - Modify: `src/cli/storage/premises.ts`
 - Modify: `src/cli/storage/variables.ts`
@@ -714,6 +767,7 @@ git commit -m "Update CLI storage to use CLI schemas"
 CLI commands that reference `metadata.title`, `metadata.description`, etc. change to flat root-level field access.
 
 **Files:**
+
 - Modify: `src/cli/commands/arguments.ts`
 - Modify: `src/cli/commands/premises.ts`
 - Modify: `src/cli/commands/variables.ts`
@@ -744,10 +798,12 @@ CLI commands that reference `metadata.title`, `metadata.description`, etc. chang
 **Step 5: Update engine.ts (hydrateEngine/persistEngine)**
 
 Update `hydrateEngine`:
+
 - `const argument: TCoreArgument = { ...argMeta, ...versionMeta }` — this still works since CLI meta objects have flat fields that spread together. The engine receives a flat object with `{ id, title, description, version, createdAt, published, ... }` and preserves all fields.
 - `engine.createPremiseWithId(premiseId, meta.metadata)` → `engine.createPremiseWithId(premiseId, { title: meta.title })` (or spread all non-core fields from meta)
 
 Update `persistEngine`:
+
 - `const { id, metadata } = arg` → `const { id, version, ...extras } = arg`
 - `await writeArgumentMeta({ id, metadata })` → `await writeArgumentMeta({ id, title: extras.title, description: extras.description } as TCliArgumentMeta)` (or cast appropriately)
 

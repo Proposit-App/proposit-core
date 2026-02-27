@@ -11,14 +11,17 @@ The core library's schemas include metadata fields (title, description, createdA
 Strip schemas down to only fields the engine uses for logic:
 
 **Argument**: `{ id, version }`
+
 - Remove: `metadata` (title, description), `createdAt`, `published`, `publishedAt`
 - Remove intermediate schemas: `CoreArgumentMetadataSchema`, `CoreArgumentVersionedSchema`, `CoreArgumentMutableDataSchema`, `CoreArgumentVersionMetaSchema`
 
 **Premise**: `{ id, rootExpressionId, variables, expressions }`
+
 - Remove: `metadata` (title)
 - Remove intermediate schemas: `CorePremiseMetadataSchema`, `CorePremiseMetaSchema`
 
 **Variable**: `{ id, argumentId, argumentVersion, symbol }`
+
 - Remove: `metadata`
 - Remove: `CoreVariableMetadataSchema`
 
