@@ -1,13 +1,22 @@
+import fs from "node:fs/promises"
 import { ArgumentEngine } from "../lib/core/ArgumentEngine.js"
 import type { TCoreArgument } from "../lib/schemata/index.js"
-import { readArgumentMeta, readVersionMeta } from "./storage/arguments.js"
+import { getPremisesDir } from "./config.js"
+import {
+    readArgumentMeta,
+    readVersionMeta,
+    writeArgumentMeta,
+    writeVersionMeta,
+} from "./storage/arguments.js"
 import {
     listPremiseIds,
     readPremiseData,
     readPremiseMeta,
+    writePremiseData,
+    writePremiseMeta,
 } from "./storage/premises.js"
-import { readRoles } from "./storage/roles.js"
-import { readVariables } from "./storage/variables.js"
+import { readRoles, writeRoles } from "./storage/roles.js"
+import { readVariables, writeVariables } from "./storage/variables.js"
 
 /**
  * Builds a fully-hydrated ArgumentEngine from the on-disk state for the
@@ -86,4 +95,40 @@ export async function hydrateEngine(
     }
 
     return engine
+}
+
+/**
+ * Persists a fully-hydrated ArgumentEngine to disk, writing all metadata,
+ * variables, roles, and premise data. This is the logical inverse of
+ * `hydrateEngine()`.
+ */
+export async function persistEngine(engine: ArgumentEngine): Promise<void> {
+    const arg = engine.getArgument()
+    const { id, title, description } = arg
+
+    await writeArgumentMeta({ id, title, description })
+    await writeVersionMeta(id, {
+        version: arg.version,
+        createdAt: arg.createdAt,
+        published: arg.published,
+    })
+
+    const variables = engine.listPremises()[0]?.getVariables() ?? []
+    await writeVariables(id, arg.version, variables)
+
+    await writeRoles(id, arg.version, engine.getRoleState())
+
+    await fs.mkdir(getPremisesDir(id, arg.version), { recursive: true })
+    for (const pm of engine.listPremises()) {
+        const data = pm.toData()
+        await writePremiseMeta(id, arg.version, {
+            id: data.id,
+            title: data.title,
+        })
+        await writePremiseData(id, arg.version, data.id, {
+            rootExpressionId: data.rootExpressionId,
+            variables: data.variables,
+            expressions: data.expressions,
+        })
+    }
 }

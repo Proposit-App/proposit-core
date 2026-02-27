@@ -13,6 +13,7 @@
 ### Task 1: Update Argument Schema
 
 **Files:**
+
 - Modify: `src/lib/schemata/argument.ts:4-15`
 
 **Step 1: Write the failing test**
@@ -130,6 +131,7 @@ git commit -m "Add metadata record to argument schema"
 ### Task 2: Update Premise and Variable Schemas
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts:91-109,111-125`
 
 **Step 1: Write the failing test**
@@ -261,6 +263,7 @@ git commit -m "Add metadata record to premise and variable schemas"
 ### Task 3: Update YAML Import Schema
 
 **Files:**
+
 - Modify: `src/lib/schemata/import.ts`
 
 **Step 1: Update the schema**
@@ -276,7 +279,9 @@ export const CoreYamlPremiseMetadataSchema = Type.Object(
     },
     { additionalProperties: Type.String() }
 )
-export type TCoreYamlPremiseMetadata = Static<typeof CoreYamlPremiseMetadataSchema>
+export type TCoreYamlPremiseMetadata = Static<
+    typeof CoreYamlPremiseMetadataSchema
+>
 
 export const CoreYamlPremiseSchema = Type.Object({
     metadata: Type.Optional(CoreYamlPremiseMetadataSchema),
@@ -295,7 +300,9 @@ export const CoreYamlArgumentMetadataSchema = Type.Object(
     },
     { additionalProperties: Type.String() }
 )
-export type TCoreYamlArgumentMetadata = Static<typeof CoreYamlArgumentMetadataSchema>
+export type TCoreYamlArgumentMetadata = Static<
+    typeof CoreYamlArgumentMetadataSchema
+>
 
 export const CoreYamlArgumentSchema = Type.Object({
     metadata: CoreYamlArgumentMetadataSchema,
@@ -322,6 +329,7 @@ git commit -m "Add metadata record to YAML import schema"
 ### Task 4: Update PremiseManager and ArgumentEngine
 
 **Files:**
+
 - Modify: `src/lib/core/PremiseManager.ts:33,40,43,229-235,657-659`
 - Modify: `src/lib/core/ArgumentEngine.ts:58,60,71,75`
 
@@ -423,6 +431,7 @@ git commit -m "Update PremiseManager and ArgumentEngine to use metadata record"
 ### Task 5: Update Import Function and Diff Comparators
 
 **Files:**
+
 - Modify: `src/lib/core/import.ts:22-27,206-212,234-238,260`
 - Modify: `src/lib/core/diff.ts:20-41,59-80`
 
@@ -469,7 +478,9 @@ const argument = {
 Update premise creation (line 260):
 
 ```typescript
-const pm = engine.createPremise(premiseDef.metadata ? { ...premiseDef.metadata } : undefined)
+const pm = engine.createPremise(
+    premiseDef.metadata ? { ...premiseDef.metadata } : undefined
+)
 ```
 
 Update `validateRootOnly` call (line 212):
@@ -549,6 +560,7 @@ git commit -m "Update import function and diff comparators for metadata record"
 ### Task 6: Update CLI Engine and Storage
 
 **Files:**
+
 - Modify: `src/cli/engine.ts:53,107,109,124-127`
 - Modify: `src/cli/commands/arguments.ts:33-39,95-98,107`
 - Modify: `src/cli/commands/premises.ts:63-66,91,206-210,265`
@@ -598,7 +610,7 @@ description: meta.metadata.description,
 Line 107 — list text output:
 
 ```typescript
-`${meta.id} | ${meta.metadata.title} (created ${new Date(vMeta.createdAt).toLocaleString()})`
+;`${meta.id} | ${meta.metadata.title} (created ${new Date(vMeta.createdAt).toLocaleString()})`
 ```
 
 **Step 3: Update commands/premises.ts**
@@ -666,6 +678,7 @@ git commit -m "Update CLI layer for metadata record"
 ### Task 7: Update Variable Construction in Import
 
 **Files:**
+
 - Modify: `src/lib/core/import.ts:248-254`
 
 **Step 1: Add metadata field to variable construction**
@@ -699,6 +712,7 @@ git commit -m "Add metadata field to variable construction in import"
 ### Task 8: Update Example YAML Files
 
 **Files:**
+
 - Modify: `examples/arguments/monopoly-regulation.yaml`
 - Modify: `examples/arguments/education-reform.yaml`
 - Modify: `examples/arguments/exam-performance.yaml`
@@ -748,6 +762,7 @@ git commit -m "Update YAML examples to use metadata record structure"
 ### Task 9: Update All Tests
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts` — ARG helper (done in Task 1), lines 1257-1261, 1494-1497, 2391, 2552, 2576, and all `new PremiseManager(...)` calls with title arg
 - Modify: `test/import.test.ts` — all YAML strings and assertions referencing `.title`/`.description`
 - Modify: `test/examples.test.ts` — assertions referencing `.title`/`.description`/`.getTitle()`

@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Command } from "commander"
+import { importArgumentFromYaml } from "../../lib/core/import.js"
 import { getVersionDir } from "../config.js"
+import { persistEngine } from "../engine.js"
 import {
     errorExit,
     printJson,
@@ -45,6 +47,30 @@ export function registerArgumentCommands(program: Command): void {
             await fs.mkdir(getPremisesDir(id, 0), { recursive: true })
 
             printLine(id)
+        })
+
+    args.command("import <yaml_file>")
+        .description("Import an argument from a YAML file")
+        .action(async (yamlFile: string) => {
+            const filePath = path.resolve(yamlFile)
+            let content: string
+            try {
+                content = await fs.readFile(filePath, "utf-8")
+            } catch {
+                errorExit(`Cannot read file: ${filePath}`)
+            }
+
+            let engine: ReturnType<typeof importArgumentFromYaml>
+            try {
+                engine = importArgumentFromYaml(content)
+            } catch (error) {
+                errorExit(
+                    error instanceof Error ? error.message : String(error)
+                )
+            }
+
+            await persistEngine(engine)
+            printLine(engine.getArgument().id)
         })
 
     args.command("list")

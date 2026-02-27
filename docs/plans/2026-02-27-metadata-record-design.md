@@ -16,8 +16,8 @@ New metadata schema:
 
 ```typescript
 CoreArgumentMetadataSchema = Type.Object(
-  { title: Type.String(), description: Type.Optional(Type.String()) },
-  { additionalProperties: Type.String() }
+    { title: Type.String(), description: Type.Optional(Type.String()) },
+    { additionalProperties: Type.String() }
 )
 ```
 
@@ -31,8 +31,8 @@ New metadata schema:
 
 ```typescript
 CorePremiseMetadataSchema = Type.Object(
-  { title: Type.Optional(Type.String()) },
-  { additionalProperties: Type.String() }
+    { title: Type.Optional(Type.String()) },
+    { additionalProperties: Type.String() }
 )
 ```
 
@@ -56,11 +56,11 @@ CoreVariableMetadataSchema = Type.Record(Type.String(), Type.String())
 
 ## Per-Object Summary
 
-| Object   | Current fields                           | New structure                                     | Metadata base keys                          |
-|----------|------------------------------------------|---------------------------------------------------|---------------------------------------------|
-| Argument | `id, title, description`                 | `id, metadata`                                    | `title` (required), `description` (optional)|
-| Premise  | `id, title?`                             | `id, metadata`                                    | `title` (optional)                          |
-| Variable | `id, argumentId, argumentVersion, symbol`| `id, argumentId, argumentVersion, symbol, metadata`| none (open `Record<string, string>`)        |
+| Object   | Current fields                            | New structure                                       | Metadata base keys                           |
+| -------- | ----------------------------------------- | --------------------------------------------------- | -------------------------------------------- |
+| Argument | `id, title, description`                  | `id, metadata`                                      | `title` (required), `description` (optional) |
+| Premise  | `id, title?`                              | `id, metadata`                                      | `title` (optional)                           |
+| Variable | `id, argumentId, argumentVersion, symbol` | `id, argumentId, argumentVersion, symbol, metadata` | none (open `Record<string, string>`)         |
 
 ## Affected Layers
 
