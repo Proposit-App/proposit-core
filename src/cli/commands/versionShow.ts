@@ -22,8 +22,8 @@ export function registerVersionShowCommand(
                 printJson({ ...argMeta, ...vMeta })
             } else {
                 printLine(`id:          ${argMeta.id}`)
-                printLine(`title:       ${argMeta.title}`)
-                printLine(`description: ${argMeta.description}`)
+                printLine(`title:       ${argMeta.metadata.title}`)
+                printLine(`description: ${argMeta.metadata.description ?? ""}`)
                 printLine(`version:     ${vMeta.version}`)
                 printLine(
                     `created:     ${new Date(vMeta.createdAt).toLocaleString()}`
