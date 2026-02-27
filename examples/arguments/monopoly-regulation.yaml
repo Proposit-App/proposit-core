@@ -1,0 +1,17 @@
+title: "The Case for Monopoly Regulation"
+description: >
+    When a firm achieves market dominance in the absence of competition,
+    consumers are harmed through unfair pricing and reduced choice.
+    This harm justifies regulatory intervention.
+premises:
+    - title: "The firm has market dominance"
+      formula: "MarketDominance"
+    - title: "There is no meaningful competition"
+      formula: "¬Competition"
+    - title: "Market dominance without competition causes consumer harm"
+      formula: "MarketDominance ∧ ¬Competition → ConsumerHarm"
+    - title: "Consumer harm justifies regulatory intervention"
+      formula: "ConsumerHarm → RegulatoryIntervention"
+    - title: "Market dominance without competition justifies regulation"
+      role: "conclusion"
+      formula: "MarketDominance ∧ ¬Competition → RegulatoryIntervention"

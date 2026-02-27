@@ -1,0 +1,16 @@
+title: "Studying Guarantees Mastery"
+description: >
+    A seemingly reasonable but logically invalid argument: because studying
+    leads to passing an exam, passing must mean the material was mastered.
+    This is a non sequitur — the conclusion introduces a causal link
+    (passing implies mastery) that the premises never establish.
+premises:
+    - title: "The student studied hard"
+      formula: "StudiedHard"
+    - title: "Studying hard leads to being prepared"
+      formula: "StudiedHard → Prepared"
+    - title: "Being prepared leads to passing"
+      formula: "Prepared → PassedExam"
+    - title: "Passing the exam means the material was mastered"
+      role: "conclusion"
+      formula: "PassedExam → MasteredSubject"

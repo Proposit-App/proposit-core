@@ -1,0 +1,17 @@
+title: "Education Reform Through Funding"
+description: >
+    When schools face both a lack of funding and overcrowding, the resulting
+    teacher shortages and poor student outcomes create conditions that
+    demand systemic reform.
+premises:
+    - title: "Schools lack adequate funding and are overcrowded"
+      formula: "LackOfFunding ∧ Overcrowding"
+    - title: "Lack of funding leads to teacher shortages"
+      formula: "LackOfFunding → TeacherShortage"
+    - title: "Overcrowding combined with teacher shortages yields poor outcomes"
+      formula: "Overcrowding ∧ TeacherShortage → PoorOutcomes"
+    - title: "Poor outcomes demand reform"
+      formula: "PoorOutcomes → ReformNeeded"
+    - title: "Underfunded and overcrowded schools need reform"
+      role: "conclusion"
+      formula: "LackOfFunding ∧ Overcrowding → ReformNeeded"
