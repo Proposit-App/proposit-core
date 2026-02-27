@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { parseFormula } from "../src/lib/core/parser/formula"
 import type { FormulaAST } from "../src/lib/core/parser/formula"
+import { importArgumentFromYaml } from "../src/lib/core/import"
 
 // ---------------------------------------------------------------------------
 // parseFormula
@@ -316,5 +317,303 @@ describe("parseFormula", () => {
 
     it("throws on chained implications", () => {
         expect(() => parseFormula("P \u2192 Q \u2192 R")).toThrow()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// importArgumentFromYaml
+// ---------------------------------------------------------------------------
+
+describe("importArgumentFromYaml", () => {
+    // --- Basic import -------------------------------------------------------
+
+    it("imports a simple argument with one variable", () => {
+        const yaml = `
+title: Simple Argument
+description: A basic test
+premises:
+  - formula: "P \u2192 P"
+    role: conclusion
+  - formula: "P \u2192 P"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const arg = engine.getArgument()
+        expect(arg.title).toBe("Simple Argument")
+        expect(arg.description).toBe("A basic test")
+        expect(engine.listPremises().length).toBe(2)
+    })
+
+    it("extracts variables implicitly from formulas", () => {
+        const yaml = `
+title: Multi-variable
+premises:
+  - formula: "A \u2192 B"
+    role: conclusion
+  - formula: "A \u2227 C"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const vars = engine.collectReferencedVariables()
+        expect(vars.bySymbol.A).toBeDefined()
+        expect(vars.bySymbol.B).toBeDefined()
+        expect(vars.bySymbol.C).toBeDefined()
+    })
+
+    it("defaults description to empty string", () => {
+        const yaml = `
+title: No Description
+premises:
+  - formula: "P \u2192 P"
+    role: conclusion
+  - formula: "P \u2192 P"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        expect(engine.getArgument().description).toBe("")
+    })
+
+    it("defaults premises without role to supporting", () => {
+        const yaml = `
+title: Default Roles
+premises:
+  - formula: "P \u2192 Q"
+    role: conclusion
+  - formula: "P \u2192 Q"
+  - formula: "P \u2192 Q"
+`
+        const engine = importArgumentFromYaml(yaml)
+        expect(engine.listSupportingPremises().length).toBe(2)
+        expect(engine.getConclusionPremise()).toBeDefined()
+    })
+
+    it("sets conclusion and supporting roles correctly", () => {
+        const yaml = `
+title: Modus Ponens
+premises:
+  - title: If P then Q
+    formula: "P \u2192 Q"
+    role: supporting
+  - title: P is true
+    formula: "P \u2192 P"
+    role: supporting
+  - title: Therefore Q
+    formula: "P \u2192 Q"
+    role: conclusion
+`
+        const engine = importArgumentFromYaml(yaml)
+        const conclusion = engine.getConclusionPremise()
+        expect(conclusion).toBeDefined()
+        expect(conclusion!.getTitle()).toBe("Therefore Q")
+        expect(engine.listSupportingPremises().length).toBe(2)
+    })
+
+    // --- Expression tree building -------------------------------------------
+
+    it("builds correct expression tree for conjunction", () => {
+        const yaml = `
+title: Conjunction
+premises:
+  - formula: "P \u2227 Q"
+    role: conclusion
+  - formula: "P \u2227 Q"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const pm = engine.listPremises()[0]
+        expect(pm.toDisplayString()).toBe("(P \u2227 Q)")
+    })
+
+    it("builds correct expression tree for complex formula", () => {
+        const yaml = `
+title: Complex
+premises:
+  - formula: "(A \u2228 \u00ACB) \u2192 C"
+    role: conclusion
+  - formula: "(A \u2228 \u00ACB) \u2192 C"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const pm = engine.listPremises()[0]
+        expect(pm.toDisplayString()).toBe("((A \u2228 \u00AC(B)) \u2192 C)")
+    })
+
+    it("builds correct expression tree for three-way conjunction", () => {
+        const yaml = `
+title: Three-way
+premises:
+  - formula: "P \u2227 Q \u2227 R"
+    role: conclusion
+  - formula: "P \u2227 Q \u2227 R"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const pm = engine.listPremises()[0]
+        expect(pm.toDisplayString()).toBe("(P \u2227 Q \u2227 R)")
+    })
+
+    it("builds correct expression tree for biconditional", () => {
+        const yaml = `
+title: Biconditional
+premises:
+  - formula: "P \u2194 Q"
+    role: conclusion
+  - formula: "P \u2194 Q"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const pm = engine.listPremises()[0]
+        expect(pm.toDisplayString()).toBe("(P \u2194 Q)")
+    })
+
+    // --- Evaluation ---------------------------------------------------------
+
+    it("produces a valid evaluable argument", () => {
+        const yaml = `
+title: Evaluable
+premises:
+  - formula: "P \u2192 Q"
+    role: conclusion
+  - formula: "P \u2192 Q"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const validation = engine.validateEvaluability()
+        expect(validation.ok).toBe(true)
+    })
+
+    it("produces an argument that can check validity", () => {
+        const yaml = `
+title: Modus Ponens
+premises:
+  - formula: "P \u2192 Q"
+    role: supporting
+  - formula: "Q \u2192 Q"
+    role: conclusion
+`
+        const engine = importArgumentFromYaml(yaml)
+        const result = engine.checkValidity()
+        expect(result.ok).toBe(true)
+    })
+
+    // --- Cross-premise variables --------------------------------------------
+
+    it("shares variables across premises", () => {
+        const yaml = `
+title: Shared Vars
+premises:
+  - formula: "P \u2192 Q"
+    role: supporting
+  - formula: "P \u2192 Q"
+    role: conclusion
+`
+        const engine = importArgumentFromYaml(yaml)
+        const vars = engine.collectReferencedVariables()
+        expect(vars.bySymbol.P.premiseIds.length).toBe(2)
+    })
+
+    // --- Error cases --------------------------------------------------------
+
+    it("throws on invalid YAML", () => {
+        expect(() => importArgumentFromYaml(":::invalid")).toThrow()
+    })
+
+    it("throws on missing title", () => {
+        const yaml = `
+premises:
+  - formula: "P"
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow()
+    })
+
+    it("throws on missing premises", () => {
+        const yaml = `
+title: No premises
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow()
+    })
+
+    it("throws on empty premises array", () => {
+        const yaml = `
+title: Empty
+premises: []
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow()
+    })
+
+    it("throws on missing formula", () => {
+        const yaml = `
+title: No Formula
+premises:
+  - title: Missing formula
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow()
+    })
+
+    it("throws on multiple conclusions", () => {
+        const yaml = `
+title: Two Conclusions
+premises:
+  - formula: "P \u2192 Q"
+    role: conclusion
+  - formula: "Q \u2192 R"
+    role: conclusion
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow()
+    })
+
+    it("throws on invalid formula syntax", () => {
+        const yaml = `
+title: Bad Formula
+premises:
+  - formula: "P @@ Q"
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow()
+    })
+
+    it("throws on nested implication", () => {
+        const yaml = `
+title: Nested Implication
+premises:
+  - formula: "(P \u2192 Q) \u2227 R"
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow(/root/i)
+    })
+
+    // --- ASCII variants -----------------------------------------------------
+
+    it("uses ASCII formula variants correctly", () => {
+        const yaml = `
+title: ASCII
+premises:
+  - formula: "!P && Q || R -> S"
+    role: conclusion
+  - formula: "!P && Q || R -> S"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const pm = engine.listPremises()[0]
+        // !P && Q || R -> S  parses as  ((\u00ACP \u2227 Q) \u2228 R) \u2192 S
+        // Rendering: operator children are wrapped in parens, \u00AC wraps operand in parens
+        expect(pm.toDisplayString()).toBe(
+            "(((\u00AC(P) \u2227 Q) \u2228 R) \u2192 S)"
+        )
+    })
+
+    // --- Version metadata ---------------------------------------------------
+
+    it("sets argument version to 0 and published to false", () => {
+        const yaml = `
+title: Version Check
+premises:
+  - formula: "P \u2192 P"
+    role: conclusion
+  - formula: "P \u2192 P"
+    role: supporting
+`
+        const engine = importArgumentFromYaml(yaml)
+        const arg = engine.getArgument()
+        expect(arg.version).toBe(0)
+        expect(arg.published).toBe(false)
     })
 })
