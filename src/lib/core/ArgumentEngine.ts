@@ -55,9 +55,9 @@ export class ArgumentEngine {
      * Creates a new premise with an auto-generated UUID and registers it
      * with this engine.
      */
-    public createPremise(title?: string): PremiseManager {
+    public createPremise(metadata?: Record<string, string>): PremiseManager {
         const id = randomUUID()
-        const pm = new PremiseManager(id, this.argument, title)
+        const pm = new PremiseManager(id, this.argument, metadata)
         this.premises.set(id, pm)
         return pm
     }
@@ -68,11 +68,11 @@ export class ArgumentEngine {
      *
      * @throws If a premise with the given ID already exists.
      */
-    public createPremiseWithId(id: string, title?: string): PremiseManager {
+    public createPremiseWithId(id: string, metadata?: Record<string, string>): PremiseManager {
         if (this.premises.has(id)) {
             throw new Error(`Premise "${id}" already exists.`)
         }
-        const pm = new PremiseManager(id, this.argument, title)
+        const pm = new PremiseManager(id, this.argument, metadata)
         this.premises.set(id, pm)
         return pm
     }
