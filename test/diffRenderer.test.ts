@@ -21,8 +21,7 @@ beforeEach(() => {
 function makeArg(
     overrides: Partial<{
         id: string
-        title: string
-        description: string
+        metadata: { title: string; description?: string }
         version: number
         createdAt: number
         published: boolean
@@ -30,8 +29,7 @@ function makeArg(
 ) {
     return {
         id: "a",
-        title: "T",
-        description: "D",
+        metadata: { title: "T", description: "D" },
         version: 0,
         createdAt: 0,
         published: false,
@@ -67,9 +65,9 @@ describe("isDiffEmpty", () => {
     it("returns false when argument has changes", () => {
         const diff = emptyDiff({
             argument: {
-                before: makeArg({ title: "Old" }),
-                after: makeArg({ title: "New", version: 1, createdAt: 1 }),
-                changes: [{ field: "title", before: "Old", after: "New" }],
+                before: makeArg({ metadata: { title: "Old" } }),
+                after: makeArg({ metadata: { title: "New" }, version: 1, createdAt: 1 }),
+                changes: [{ field: "metadata.title", before: "Old", after: "New" }],
             },
         })
         expect(isDiffEmpty(diff)).toBe(false)
@@ -84,6 +82,7 @@ describe("isDiffEmpty", () => {
                         symbol: "p",
                         argumentId: "a",
                         argumentVersion: 1,
+                        metadata: {},
                     },
                 ],
                 removed: [],
@@ -114,20 +113,20 @@ describe("renderDiff", () => {
     it("renders argument field changes", () => {
         const diff = emptyDiff({
             argument: {
-                before: makeArg({ title: "Old Title" }),
+                before: makeArg({ metadata: { title: "Old Title" } }),
                 after: makeArg({
-                    title: "New Title",
+                    metadata: { title: "New Title" },
                     version: 1,
                     createdAt: 1,
                 }),
                 changes: [
-                    { field: "title", before: "Old Title", after: "New Title" },
+                    { field: "metadata.title", before: "Old Title", after: "New Title" },
                 ],
             },
         })
         renderDiff(diff)
         expect(printedLines).toContain("Argument:")
-        expect(printedLines).toContain('  title: "Old Title" → "New Title"')
+        expect(printedLines).toContain('  metadata.title: "Old Title" → "New Title"')
     })
 
     it("renders added, removed, and modified variables", () => {
@@ -139,6 +138,7 @@ describe("renderDiff", () => {
                         symbol: "r",
                         argumentId: "a",
                         argumentVersion: 1,
+                        metadata: {},
                     },
                 ],
                 removed: [
@@ -147,6 +147,7 @@ describe("renderDiff", () => {
                         symbol: "p",
                         argumentId: "a",
                         argumentVersion: 0,
+                        metadata: {},
                     },
                 ],
                 modified: [
@@ -156,12 +157,14 @@ describe("renderDiff", () => {
                             symbol: "q",
                             argumentId: "a",
                             argumentVersion: 0,
+                            metadata: {},
                         },
                         after: {
                             id: "v2",
                             symbol: "Q",
                             argumentId: "a",
                             argumentVersion: 1,
+                            metadata: {},
                         },
                         changes: [{ field: "symbol", before: "q", after: "Q" }],
                     },
@@ -182,7 +185,7 @@ describe("renderDiff", () => {
                 added: [
                     {
                         id: "p2",
-                        title: "New Premise",
+                        metadata: { title: "New Premise" },
                         variables: [],
                         expressions: [],
                     },
@@ -190,7 +193,7 @@ describe("renderDiff", () => {
                 removed: [
                     {
                         id: "p3",
-                        title: "Old Premise",
+                        metadata: { title: "Old Premise" },
                         variables: [],
                         expressions: [],
                     },
@@ -199,19 +202,19 @@ describe("renderDiff", () => {
                     {
                         before: {
                             id: "p1",
-                            title: "Before",
+                            metadata: { title: "Before" },
                             variables: [],
                             expressions: [],
                         },
                         after: {
                             id: "p1",
-                            title: "After",
+                            metadata: { title: "After" },
                             variables: [],
                             expressions: [],
                         },
                         changes: [
                             {
-                                field: "title",
+                                field: "metadata.title",
                                 before: "Before",
                                 after: "After",
                             },
@@ -240,7 +243,7 @@ describe("renderDiff", () => {
         expect(printedLines).toContain("  + p2 (added)")
         expect(printedLines).toContain("  - p3 (removed)")
         expect(printedLines).toContain("  ~ p1:")
-        expect(printedLines).toContain('    title: "Before" → "After"')
+        expect(printedLines).toContain('    metadata.title: "Before" → "After"')
         expect(printedLines).toContain("    Expressions:")
         expect(printedLines).toContain("      + e1 (added)")
     })
@@ -265,7 +268,7 @@ describe("renderDiff", () => {
             argument: {
                 before: makeArg(),
                 after: makeArg({ version: 1, createdAt: 1 }),
-                changes: [{ field: "title", before: "Old", after: "New" }],
+                changes: [{ field: "metadata.title", before: "Old", after: "New" }],
             },
         })
         renderDiff(diff)
