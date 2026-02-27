@@ -16,3 +16,6 @@ export {
     defaultComparePremise,
     defaultCompareExpression,
 } from "./lib/core/diff"
+export { importArgumentFromYaml } from "./lib/core/import"
+export { parseFormula } from "./lib/core/parser/formula"
+export type { FormulaAST } from "./lib/core/parser/formula"
