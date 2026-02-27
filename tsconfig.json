@@ -25,5 +25,5 @@
         "*.mjs",
         ".ltstash/predicate.ts"
     ],
-    "exclude": ["dist", "node_modules"]
+    "exclude": ["dist", "node_modules", "src/lib/core/parser/formula.js"]
 }

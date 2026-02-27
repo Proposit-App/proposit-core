@@ -1,3 +1,4 @@
 dist/
 coverage/
 .claude/
+src/lib/core/parser/formula.js

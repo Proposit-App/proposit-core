@@ -34,7 +34,8 @@
         "access": "public"
     },
     "scripts": {
-        "build": "pnpm tsc -p tsconfig.build.json",
+        "generate:parser": "peggy --format es -o src/lib/core/parser/formula.js src/lib/core/parser/formula.peggy",
+        "build": "pnpm run generate:parser && pnpm tsc -p tsconfig.build.json",
         "typecheck": "pnpm tsc -p tsconfig.json",
         "lint": "pnpm run prettify:check && pnpm eslint .",
         "prettify": "pnpm prettier -w .",
@@ -44,9 +45,11 @@
         "cli": "node dist/cli.js"
     },
     "devDependencies": {
+        "@types/js-yaml": "^4.0.9",
         "@types/node": "^25.2.3",
         "eslint": "^9.39.2",
         "globals": "^16.5.0",
+        "peggy": "^5.0.6",
         "prettier": "^3.8.1",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.55.0",
@@ -55,6 +58,7 @@
     "packageManager": "pnpm@10.23.0",
     "dependencies": {
         "commander": "^14.0.3",
+        "js-yaml": "^4.1.1",
         "typebox": "^1.1.0"
     }
 }
