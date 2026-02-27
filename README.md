@@ -691,5 +691,6 @@ pnpm cli -- --help   # run the CLI from the local build
 Releases are published to GitHub Packages automatically. To publish a new version:
 
 1. Bump `version` in `package.json`.
-2. Create a GitHub Release with a tag matching the version (e.g. `v0.2.0`).
-3. The [Publish workflow](.github/workflows/publish.yml) will build and publish the package.
+2. Create a GitHub Release with a tag matching the version (e.g. `v0.2.0`) via `pnpm version patch`
+3. The [Publish workflow](.github/workflows/publish.yml) will build and publish the package or run `pnpm publish --access public`
+4. Push new tags with `git push --follow-tags`
