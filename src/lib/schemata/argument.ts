@@ -1,11 +1,22 @@
 import Type, { type Static } from "typebox"
 import { UUID } from "./shared.js"
 
+export const CoreArgumentMetadataSchema = Type.Object(
+    {
+        title: Type.String(),
+        description: Type.Optional(Type.String()),
+    },
+    {
+        additionalProperties: Type.String(),
+        description: "User-facing descriptive metadata for an argument.",
+    }
+)
+export type TCoreArgumentMetadata = Static<typeof CoreArgumentMetadataSchema>
+
 export const CoreArgumentMetaSchema = Type.Object(
     {
         id: UUID,
-        title: Type.String(),
-        description: Type.String(),
+        metadata: CoreArgumentMetadataSchema,
     },
     {
         description:

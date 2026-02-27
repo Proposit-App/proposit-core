@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { ArgumentEngine, PremiseManager } from "../src/lib/index"
-import type {
-    TCoreArgument,
-    TCorePropositionalExpression,
-    TCorePropositionalVariable,
+import { Value } from "typebox/value"
+import {
+    CoreArgumentMetadataSchema,
+    type TCoreArgument,
+    type TCorePropositionalExpression,
+    type TCorePropositionalVariable,
 } from "../src/lib/schemata"
 import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
 import {
@@ -28,8 +30,7 @@ import {
 const ARG: TCoreArgument = {
     id: "arg-1",
     version: 1,
-    title: "Test Argument",
-    description: "",
+    metadata: { title: "Test Argument" },
     createdAt: Date.now(),
     published: false,
 }
@@ -3099,5 +3100,35 @@ describe("ArgumentEngine — three-valued evaluation", () => {
         expect(result.ok).toBe(true)
         expect(result.isCounterexample).toBe(null)
         expect(result.preservesTruthUnderAssignment).toBe(null)
+    })
+})
+
+describe("metadata record — argument schema", () => {
+    it("argument metadata has title and description under metadata field", () => {
+        const arg: TCoreArgument = {
+            id: "arg-1",
+            version: 1,
+            metadata: { title: "Test" },
+            createdAt: Date.now(),
+            published: false,
+        }
+        expect(arg.metadata.title).toBe("Test")
+        expect(arg.metadata.description).toBeUndefined()
+    })
+
+    it("argument metadata schema accepts additional string keys", () => {
+        const valid = Value.Check(CoreArgumentMetadataSchema, {
+            title: "Test",
+            custom: "value",
+        })
+        expect(valid).toBe(true)
+    })
+
+    it("argument metadata schema rejects additional non-string keys", () => {
+        const invalid = Value.Check(CoreArgumentMetadataSchema, {
+            title: "Test",
+            custom: 42,
+        })
+        expect(invalid).toBe(false)
     })
 })
