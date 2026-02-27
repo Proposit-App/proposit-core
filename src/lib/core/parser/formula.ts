@@ -1,5 +1,5 @@
 // @ts-expect-error — generated parser has no type declarations
-import { parse as pegParse } from "./formula.js"
+import { parse as pegParse } from "./formula-gen.js"
 
 export type FormulaAST =
     | { type: "variable"; name: string }

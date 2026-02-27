@@ -34,7 +34,7 @@
         "access": "public"
     },
     "scripts": {
-        "generate:parser": "peggy --format es -o src/lib/core/parser/formula.js src/lib/core/parser/formula.peggy",
+        "generate:parser": "peggy --format es -o src/lib/core/parser/formula-gen.js src/lib/core/parser/formula.peggy",
         "build": "pnpm run generate:parser && pnpm tsc -p tsconfig.build.json",
         "typecheck": "pnpm tsc -p tsconfig.json",
         "lint": "pnpm run prettify:check && pnpm eslint .",
