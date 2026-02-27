@@ -30,17 +30,21 @@ import { VariableManager } from "./VariableManager.js"
 
 export class PremiseManager {
     private id: string
-    private title: string | undefined
+    private metadata: Record<string, string>
     private rootExpressionId: string | undefined
     private variables: VariableManager
     private expressions: ExpressionManager
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TCoreArgument
 
-    constructor(id: string, argument: TCoreArgument, title?: string) {
+    constructor(
+        id: string,
+        argument: TCoreArgument,
+        metadata?: Record<string, string>
+    ) {
         this.id = id
         this.argument = argument
-        this.title = title
+        this.metadata = metadata ?? {}
         this.rootExpressionId = undefined
         this.variables = new VariableManager()
         this.expressions = new ExpressionManager()
@@ -227,11 +231,23 @@ export class PremiseManager {
     }
 
     public getTitle(): string | undefined {
-        return this.title
+        return this.metadata.title
     }
 
     public setTitle(title: string | undefined): void {
-        this.title = title
+        if (title === undefined) {
+            delete this.metadata.title
+        } else {
+            this.metadata.title = title
+        }
+    }
+
+    public getMetadata(): Record<string, string> {
+        return { ...this.metadata }
+    }
+
+    public setMetadata(metadata: Record<string, string>): void {
+        this.metadata = { ...metadata }
     }
 
     public getRootExpressionId(): string | undefined {
@@ -656,7 +672,7 @@ export class PremiseManager {
 
         return {
             id: this.id,
-            title: this.title,
+            metadata: { ...this.metadata },
             rootExpressionId: this.rootExpressionId,
             variables,
             expressions,

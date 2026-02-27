@@ -203,13 +203,13 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
         try {
             ast = parseFormula(premise.formula)
         } catch (error) {
-            const label = premise.title
-                ? `premise "${premise.title}" (index ${i})`
+            const label = premise.metadata?.title
+                ? `premise "${premise.metadata.title}" (index ${i})`
                 : `premise at index ${i}`
             const msg = error instanceof Error ? error.message : String(error)
             throw new Error(`Failed to parse formula for ${label}: ${msg}`)
         }
-        validateRootOnly(ast, true, i, premise.title)
+        validateRootOnly(ast, true, i, premise.metadata?.title)
         parsedFormulas.push(ast)
     }
 
@@ -234,8 +234,12 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
     const argument = {
         id: argumentId,
         version: 0,
-        title: input.title,
-        description: input.description ?? "",
+        metadata: {
+            title: input.metadata.title,
+            ...(input.metadata.description !== undefined
+                ? { description: input.metadata.description }
+                : {}),
+        },
         createdAt: Date.now(),
         published: false,
     }
@@ -250,6 +254,7 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
             argumentId,
             argumentVersion: 0,
             symbol: name,
+            metadata: {},
         }
         variablesByName.set(name, variable)
     }
@@ -257,7 +262,9 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
     // Create premises and build expression trees
     for (let i = 0; i < input.premises.length; i++) {
         const premiseDef = input.premises[i]
-        const pm = engine.createPremise(premiseDef.title)
+        const pm = engine.createPremise(
+            premiseDef.metadata ? { ...premiseDef.metadata } : undefined
+        )
 
         // Register all variables with this premise
         for (const variable of variablesByName.values()) {

@@ -45,8 +45,8 @@ describe("monopoly-regulation.yaml", () => {
 
     it("has the correct title and description", () => {
         const arg = engine.getArgument()
-        expect(arg.title).toBe("The Case for Monopoly Regulation")
-        expect(arg.description).toContain("market dominance")
+        expect(arg.metadata.title).toBe("The Case for Monopoly Regulation")
+        expect(arg.metadata.description).toContain("market dominance")
     })
 
     it("has 5 premises with 4 variables", () => {
@@ -110,7 +110,7 @@ describe("education-reform.yaml", () => {
     const engine = importArgumentFromYaml(loadExample("education-reform.yaml"))
 
     it("has the correct title", () => {
-        expect(engine.getArgument().title).toBe(
+        expect(engine.getArgument().metadata.title).toBe(
             "Education Reform Through Funding"
         )
     })
@@ -170,7 +170,9 @@ describe("exam-performance.yaml", () => {
     const engine = importArgumentFromYaml(loadExample("exam-performance.yaml"))
 
     it("has the correct title", () => {
-        expect(engine.getArgument().title).toBe("Studying Guarantees Mastery")
+        expect(engine.getArgument().metadata.title).toBe(
+            "Studying Guarantees Mastery"
+        )
     })
 
     it("has 4 premises with 4 variables", () => {
@@ -240,7 +242,7 @@ describe("free-speech-misinformation.yaml", () => {
     )
 
     it("has the correct title", () => {
-        expect(engine.getArgument().title).toBe(
+        expect(engine.getArgument().metadata.title).toBe(
             "Free Speech Undermines Public Safety"
         )
     })

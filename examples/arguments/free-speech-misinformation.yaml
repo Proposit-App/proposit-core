@@ -1,18 +1,24 @@
-title: "Free Speech Undermines Public Safety"
-description: >
-    A fallacious argument claiming that free speech necessarily undermines
-    public safety. While the premises correctly link free speech to the
-    spread of misinformation, they never establish that misinformation
-    actually compromises public safety — the conclusion is a non sequitur.
+metadata:
+    title: "Free Speech Undermines Public Safety"
+    description: >
+        A fallacious argument claiming that free speech necessarily undermines
+        public safety. While the premises correctly link free speech to the
+        spread of misinformation, they never establish that misinformation
+        actually compromises public safety — the conclusion is a non sequitur.
 premises:
-    - title: "Free speech is protected"
+    - metadata:
+          title: "Free speech is protected"
       formula: "FreeSpeech"
-    - title: "Free speech entails unrestricted expression"
+    - metadata:
+          title: "Free speech entails unrestricted expression"
       formula: "FreeSpeech → UnrestrictedExpression"
-    - title: "Unrestricted expression allows misinformation to spread"
+    - metadata:
+          title: "Unrestricted expression allows misinformation to spread"
       formula: "UnrestrictedExpression → MisinformationSpreads"
-    - title: "Public safety is a priority"
+    - metadata:
+          title: "Public safety is a priority"
       formula: "PublicSafety"
-    - title: "Free speech undermines public safety"
+    - metadata:
+          title: "Free speech undermines public safety"
       role: "conclusion"
       formula: "FreeSpeech → ¬PublicSafety"

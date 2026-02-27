@@ -17,30 +17,30 @@ import type {
 } from "../types/diff.js"
 import type { ArgumentEngine } from "./ArgumentEngine.js"
 
-/** Compares two argument metadata objects and returns field-level changes for `title` and `description`. */
+/** Compares two argument metadata objects and returns field-level changes for `metadata.title` and `metadata.description`. */
 export function defaultCompareArgument(
     before: TCoreArgument,
     after: TCoreArgument
 ): TCoreFieldChange[] {
     const changes: TCoreFieldChange[] = []
-    if (before.title !== after.title) {
+    if (before.metadata.title !== after.metadata.title) {
         changes.push({
-            field: "title",
-            before: before.title,
-            after: after.title,
+            field: "metadata.title",
+            before: before.metadata.title,
+            after: after.metadata.title,
         })
     }
-    if (before.description !== after.description) {
+    if (before.metadata.description !== after.metadata.description) {
         changes.push({
-            field: "description",
-            before: before.description,
-            after: after.description,
+            field: "metadata.description",
+            before: before.metadata.description,
+            after: after.metadata.description,
         })
     }
     return changes
 }
 
-/** Compares two variables and returns field-level changes for `symbol`. */
+/** Compares two variables and returns field-level changes for `symbol` and `metadata`. */
 export function defaultCompareVariable(
     before: TCorePropositionalVariable,
     after: TCorePropositionalVariable
@@ -53,20 +53,27 @@ export function defaultCompareVariable(
             after: after.symbol,
         })
     }
+    if (JSON.stringify(before.metadata) !== JSON.stringify(after.metadata)) {
+        changes.push({
+            field: "metadata",
+            before: before.metadata,
+            after: after.metadata,
+        })
+    }
     return changes
 }
 
-/** Compares two premises and returns field-level changes for `title` and `rootExpressionId`. */
+/** Compares two premises and returns field-level changes for `metadata.title` and `rootExpressionId`. */
 export function defaultComparePremise(
     before: TCorePremise,
     after: TCorePremise
 ): TCoreFieldChange[] {
     const changes: TCoreFieldChange[] = []
-    if (before.title !== after.title) {
+    if (before.metadata.title !== after.metadata.title) {
         changes.push({
-            field: "title",
-            before: before.title,
-            after: after.title,
+            field: "metadata.title",
+            before: before.metadata.title,
+            after: after.metadata.title,
         })
     }
     if (before.rootExpressionId !== after.rootExpressionId) {

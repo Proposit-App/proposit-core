@@ -329,8 +329,9 @@ describe("importArgumentFromYaml", () => {
 
     it("imports a simple argument with one variable", () => {
         const yaml = `
-title: Simple Argument
-description: A basic test
+metadata:
+  title: Simple Argument
+  description: A basic test
 premises:
   - formula: "P \u2192 P"
     role: conclusion
@@ -339,14 +340,15 @@ premises:
 `
         const engine = importArgumentFromYaml(yaml)
         const arg = engine.getArgument()
-        expect(arg.title).toBe("Simple Argument")
-        expect(arg.description).toBe("A basic test")
+        expect(arg.metadata.title).toBe("Simple Argument")
+        expect(arg.metadata.description).toBe("A basic test")
         expect(engine.listPremises().length).toBe(2)
     })
 
     it("extracts variables implicitly from formulas", () => {
         const yaml = `
-title: Multi-variable
+metadata:
+  title: Multi-variable
 premises:
   - formula: "A \u2192 B"
     role: conclusion
@@ -362,7 +364,8 @@ premises:
 
     it("defaults description to empty string", () => {
         const yaml = `
-title: No Description
+metadata:
+  title: No Description
 premises:
   - formula: "P \u2192 P"
     role: conclusion
@@ -370,12 +373,13 @@ premises:
     role: supporting
 `
         const engine = importArgumentFromYaml(yaml)
-        expect(engine.getArgument().description).toBe("")
+        expect(engine.getArgument().metadata.description).toBeUndefined()
     })
 
     it("defaults premises without role to supporting", () => {
         const yaml = `
-title: Default Roles
+metadata:
+  title: Default Roles
 premises:
   - formula: "P \u2192 Q"
     role: conclusion
@@ -389,15 +393,19 @@ premises:
 
     it("sets conclusion and supporting roles correctly", () => {
         const yaml = `
-title: Modus Ponens
+metadata:
+  title: Modus Ponens
 premises:
-  - title: If P then Q
+  - metadata:
+      title: If P then Q
     formula: "P \u2192 Q"
     role: supporting
-  - title: P is true
+  - metadata:
+      title: P is true
     formula: "P \u2192 P"
     role: supporting
-  - title: Therefore Q
+  - metadata:
+      title: Therefore Q
     formula: "P \u2192 Q"
     role: conclusion
 `
@@ -412,7 +420,8 @@ premises:
 
     it("builds correct expression tree for conjunction", () => {
         const yaml = `
-title: Conjunction
+metadata:
+  title: Conjunction
 premises:
   - formula: "P \u2227 Q"
     role: conclusion
@@ -426,7 +435,8 @@ premises:
 
     it("builds correct expression tree for complex formula", () => {
         const yaml = `
-title: Complex
+metadata:
+  title: Complex
 premises:
   - formula: "(A \u2228 \u00ACB) \u2192 C"
     role: conclusion
@@ -440,7 +450,8 @@ premises:
 
     it("builds correct expression tree for three-way conjunction", () => {
         const yaml = `
-title: Three-way
+metadata:
+  title: Three-way
 premises:
   - formula: "P \u2227 Q \u2227 R"
     role: conclusion
@@ -454,7 +465,8 @@ premises:
 
     it("builds correct expression tree for biconditional", () => {
         const yaml = `
-title: Biconditional
+metadata:
+  title: Biconditional
 premises:
   - formula: "P \u2194 Q"
     role: conclusion
@@ -470,7 +482,8 @@ premises:
 
     it("produces a valid evaluable argument", () => {
         const yaml = `
-title: Evaluable
+metadata:
+  title: Evaluable
 premises:
   - formula: "P \u2192 Q"
     role: conclusion
@@ -484,7 +497,8 @@ premises:
 
     it("produces an argument that can check validity", () => {
         const yaml = `
-title: Modus Ponens
+metadata:
+  title: Modus Ponens
 premises:
   - formula: "P \u2192 Q"
     role: supporting
@@ -500,7 +514,8 @@ premises:
 
     it("shares variables across premises", () => {
         const yaml = `
-title: Shared Vars
+metadata:
+  title: Shared Vars
 premises:
   - formula: "P \u2192 Q"
     role: supporting
@@ -528,14 +543,16 @@ premises:
 
     it("throws on missing premises", () => {
         const yaml = `
-title: No premises
+metadata:
+  title: No premises
 `
         expect(() => importArgumentFromYaml(yaml)).toThrow()
     })
 
     it("throws on empty premises array", () => {
         const yaml = `
-title: Empty
+metadata:
+  title: Empty
 premises: []
 `
         expect(() => importArgumentFromYaml(yaml)).toThrow()
@@ -543,16 +560,19 @@ premises: []
 
     it("throws on missing formula", () => {
         const yaml = `
-title: No Formula
+metadata:
+  title: No Formula
 premises:
-  - title: Missing formula
+  - metadata:
+      title: Missing formula
 `
         expect(() => importArgumentFromYaml(yaml)).toThrow()
     })
 
     it("throws on multiple conclusions", () => {
         const yaml = `
-title: Two Conclusions
+metadata:
+  title: Two Conclusions
 premises:
   - formula: "P \u2192 Q"
     role: conclusion
@@ -564,7 +584,8 @@ premises:
 
     it("throws on invalid formula syntax", () => {
         const yaml = `
-title: Bad Formula
+metadata:
+  title: Bad Formula
 premises:
   - formula: "P @@ Q"
 `
@@ -573,7 +594,8 @@ premises:
 
     it("throws on nested implication", () => {
         const yaml = `
-title: Nested Implication
+metadata:
+  title: Nested Implication
 premises:
   - formula: "(P \u2192 Q) \u2227 R"
 `
@@ -584,7 +606,8 @@ premises:
 
     it("uses ASCII formula variants correctly", () => {
         const yaml = `
-title: ASCII
+metadata:
+  title: ASCII
 premises:
   - formula: "!P && Q || R -> S"
     role: conclusion
@@ -604,7 +627,8 @@ premises:
 
     it("sets argument version to 0 and published to false", () => {
         const yaml = `
-title: Version Check
+metadata:
+  title: Version Check
 premises:
   - formula: "P \u2192 P"
     role: conclusion

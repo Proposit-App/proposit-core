@@ -70,6 +70,7 @@ export function registerVariableCommands(
                 argumentId,
                 argumentVersion: version,
                 symbol,
+                metadata: {},
             })
             await writeVariables(argumentId, version, variables)
             printLine(newId)
