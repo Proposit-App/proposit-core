@@ -39,7 +39,13 @@ const ARG: TCoreArgument = {
 }
 
 function makeVar(id: string, symbol: string): TCorePropositionalVariable {
-    return { id, argumentId: ARG.id, argumentVersion: ARG.version, symbol, metadata: {} }
+    return {
+        id,
+        argumentId: ARG.id,
+        argumentVersion: ARG.version,
+        symbol,
+        metadata: {},
+    }
 }
 
 function makeVarExpr(
@@ -2096,7 +2102,10 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
 describe("diffArguments", () => {
     describe("defaultCompareArgument", () => {
         it("returns empty array when title and description match", () => {
-            const a: TCoreArgument = { ...ARG, metadata: { title: "T", description: "D" } }
+            const a: TCoreArgument = {
+                ...ARG,
+                metadata: { title: "T", description: "D" },
+            }
             const b: TCoreArgument = {
                 ...ARG,
                 metadata: { title: "T", description: "D" },
@@ -2114,8 +2123,14 @@ describe("diffArguments", () => {
         })
 
         it("detects description change", () => {
-            const a: TCoreArgument = { ...ARG, metadata: { title: "Test Argument", description: "Old" } }
-            const b: TCoreArgument = { ...ARG, metadata: { title: "Test Argument", description: "New" } }
+            const a: TCoreArgument = {
+                ...ARG,
+                metadata: { title: "Test Argument", description: "Old" },
+            }
+            const b: TCoreArgument = {
+                ...ARG,
+                metadata: { title: "Test Argument", description: "New" },
+            }
             expect(defaultCompareArgument(a, b)).toEqual([
                 { field: "metadata.description", before: "Old", after: "New" },
             ])
@@ -2259,7 +2274,9 @@ describe("diffArguments", () => {
         const varP = makeVar("var-p", "P")
         const varQ = makeVar("var-q", "Q")
 
-        const pm = engine.createPremiseWithId("premise-1", { title: "First premise" })
+        const pm = engine.createPremiseWithId("premise-1", {
+            title: "First premise",
+        })
         pm.addVariable(varP)
         pm.addVariable(varQ)
         pm.addExpression(
@@ -2326,7 +2343,9 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const argB: TCoreArgument = { ...ARG }
             const engineB = new ArgumentEngine(argB)
-            const pm = engineB.createPremiseWithId("premise-1", { title: "First premise" })
+            const pm = engineB.createPremiseWithId("premise-1", {
+                title: "First premise",
+            })
             // Same variable ID, different symbol
             pm.addVariable(makeVar("var-p", "X"))
             pm.addVariable(makeVar("var-q", "Q"))
@@ -2362,10 +2381,9 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const { engine: engineB } = buildSimpleEngine(ARG)
 
-            const pm2 = engineB.createPremiseWithId(
-                "premise-2",
-                { title: "Second premise" }
-            )
+            const pm2 = engineB.createPremiseWithId("premise-2", {
+                title: "Second premise",
+            })
             pm2.addVariable(makeVar("var-p", "P"))
             pm2.addExpression(
                 makeVarExpr("expr-p2", "var-p", {
@@ -2407,10 +2425,9 @@ describe("diffArguments", () => {
         it("detects modified expressions within a premise", () => {
             // Build engineA with an 'and' root so removing one child doesn't collapse
             const engineA = new ArgumentEngine(ARG)
-            const pmA = engineA.createPremiseWithId(
-                "premise-1",
-                { title: "First premise" }
-            )
+            const pmA = engineA.createPremiseWithId("premise-1", {
+                title: "First premise",
+            })
             pmA.addVariable(makeVar("var-p", "P"))
             pmA.addVariable(makeVar("var-q", "Q"))
             pmA.addExpression(
@@ -2442,10 +2459,9 @@ describe("diffArguments", () => {
 
             // Build engineB identically, then swap expr-r for expr-s
             const engineB = new ArgumentEngine(ARG)
-            const pmB = engineB.createPremiseWithId(
-                "premise-1",
-                { title: "First premise" }
-            )
+            const pmB = engineB.createPremiseWithId("premise-1", {
+                title: "First premise",
+            })
             pmB.addVariable(makeVar("var-p", "P"))
             pmB.addVariable(makeVar("var-q", "Q"))
             pmB.addVariable(makeVar("var-r", "R"))
@@ -2497,10 +2513,9 @@ describe("diffArguments", () => {
             const { engine: engineB } = buildSimpleEngine(ARG)
 
             // engineA has no conclusion, engineB sets one
-            const pmConc = engineB.createPremiseWithId(
-                "premise-conc",
-                { title: "Conclusion" }
-            )
+            const pmConc = engineB.createPremiseWithId("premise-conc", {
+                title: "Conclusion",
+            })
             pmConc.addVariable(makeVar("var-p", "P"))
             pmConc.addExpression(
                 makeOpExpr("expr-impl-conc", "implies", {

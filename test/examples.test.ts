@@ -170,7 +170,9 @@ describe("exam-performance.yaml", () => {
     const engine = importArgumentFromYaml(loadExample("exam-performance.yaml"))
 
     it("has the correct title", () => {
-        expect(engine.getArgument().metadata.title).toBe("Studying Guarantees Mastery")
+        expect(engine.getArgument().metadata.title).toBe(
+            "Studying Guarantees Mastery"
+        )
     })
 
     it("has 4 premises with 4 variables", () => {

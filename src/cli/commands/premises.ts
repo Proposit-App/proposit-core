@@ -240,7 +240,9 @@ export function registerPremiseCommands(
                         ? "inference"
                         : "constraint"
                 printLine(`id:           ${meta.id}`)
-                printLine(`title:        ${meta.metadata.title ?? "(untitled)"}`)
+                printLine(
+                    `title:        ${meta.metadata.title ?? "(untitled)"}`
+                )
                 printLine(`type:         ${premiseType}`)
                 printLine(`root expr id: ${data.rootExpressionId ?? "(none)"}`)
                 printLine(`variables:    ${data.variables.length}`)

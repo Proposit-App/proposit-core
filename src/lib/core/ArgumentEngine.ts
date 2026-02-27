@@ -68,7 +68,10 @@ export class ArgumentEngine {
      *
      * @throws If a premise with the given ID already exists.
      */
-    public createPremiseWithId(id: string, metadata?: Record<string, string>): PremiseManager {
+    public createPremiseWithId(
+        id: string,
+        metadata?: Record<string, string>
+    ): PremiseManager {
         if (this.premises.has(id)) {
             throw new Error(`Premise "${id}" already exists.`)
         }

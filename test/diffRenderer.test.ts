@@ -66,8 +66,14 @@ describe("isDiffEmpty", () => {
         const diff = emptyDiff({
             argument: {
                 before: makeArg({ metadata: { title: "Old" } }),
-                after: makeArg({ metadata: { title: "New" }, version: 1, createdAt: 1 }),
-                changes: [{ field: "metadata.title", before: "Old", after: "New" }],
+                after: makeArg({
+                    metadata: { title: "New" },
+                    version: 1,
+                    createdAt: 1,
+                }),
+                changes: [
+                    { field: "metadata.title", before: "Old", after: "New" },
+                ],
             },
         })
         expect(isDiffEmpty(diff)).toBe(false)
@@ -120,13 +126,19 @@ describe("renderDiff", () => {
                     createdAt: 1,
                 }),
                 changes: [
-                    { field: "metadata.title", before: "Old Title", after: "New Title" },
+                    {
+                        field: "metadata.title",
+                        before: "Old Title",
+                        after: "New Title",
+                    },
                 ],
             },
         })
         renderDiff(diff)
         expect(printedLines).toContain("Argument:")
-        expect(printedLines).toContain('  metadata.title: "Old Title" → "New Title"')
+        expect(printedLines).toContain(
+            '  metadata.title: "Old Title" → "New Title"'
+        )
     })
 
     it("renders added, removed, and modified variables", () => {
@@ -268,7 +280,9 @@ describe("renderDiff", () => {
             argument: {
                 before: makeArg(),
                 after: makeArg({ version: 1, createdAt: 1 }),
-                changes: [{ field: "metadata.title", before: "Old", after: "New" }],
+                changes: [
+                    { field: "metadata.title", before: "Old", after: "New" },
+                ],
             },
         })
         renderDiff(diff)

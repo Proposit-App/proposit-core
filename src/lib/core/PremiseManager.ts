@@ -37,7 +37,11 @@ export class PremiseManager {
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TCoreArgument
 
-    constructor(id: string, argument: TCoreArgument, metadata?: Record<string, string>) {
+    constructor(
+        id: string,
+        argument: TCoreArgument,
+        metadata?: Record<string, string>
+    ) {
         this.id = id
         this.argument = argument
         this.metadata = metadata ?? {}
