@@ -6,7 +6,6 @@ import type {
     TCorePremiseSide,
     TCorePremiseRelationResult,
     TCorePremiseRelationshipAnalysis,
-    TCorePremiseRelationshipType,
     TCoreVariableRelationship,
 } from "../types/relationships.js"
 
@@ -158,7 +157,6 @@ function bfsToTarget(
     const queue: Array<{
         premiseId: string
         polarityMatch: boolean
-        depth: number
         entryVariables: VariableEdge[]
     }> = []
 
@@ -184,14 +182,13 @@ function bfsToTarget(
             queue.push({
                 premiseId: edge.targetPremiseId,
                 polarityMatch: allMatch,
-                depth: 1,
                 entryVariables: edge.variables,
             })
         }
     }
 
     while (queue.length > 0) {
-        const { premiseId, polarityMatch, depth, entryVariables } =
+        const { premiseId, polarityMatch, entryVariables } =
             queue.shift()!
         const edges = graph.get(premiseId) ?? []
 
@@ -227,7 +224,6 @@ function bfsToTarget(
                 queue.push({
                     premiseId: edge.targetPremiseId,
                     polarityMatch: nextMatch,
-                    depth: depth + 1,
                     entryVariables,
                 })
             }
