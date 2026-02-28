@@ -39,14 +39,21 @@ src/
     types/
       evaluation.ts     # All evaluation types: TTrivalentValue, TVariableAssignment,
                         #   TExpressionAssignment, TArgumentEvaluationResult, TValidityCheckResult, etc.
+      diff.ts           # Diff types: TCoreArgumentDiff, TCoreFieldChange, TCoreEntitySetDiff, TCoreDiffOptions, etc.
+      relationships.ts  # Relationship types: TCorePremiseRelationshipAnalysis, TCorePremiseProfile,
+                        #   TCoreVariableAppearance, TCorePremiseRelationResult, etc.
     core/
       ArgumentEngine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity
       PremiseManager.ts    # PremiseManager — variables, expressions, evaluate, toDisplayString, toData, isInference, isConstraint
       ExpressionManager.ts # Low-level expression tree (addExpression, removeExpression, insertExpression)
       VariableManager.ts   # Low-level variable registry
+      diff.ts              # diffArguments + default comparators (standalone function, pluggable)
+      relationships.ts     # analyzePremiseRelationships + buildPremiseProfile (standalone functions)
       evaluation/
         shared.ts          # makeValidationResult, makeErrorIssue, implicationValue, buildDirectionalVacuity,
                            #   kleeneNot, kleeneAnd, kleeneOr, kleeneImplies, kleeneIff
+      parser/
+        formula.ts         # parseFormula — parses logical formula strings into FormulaAST
   cli/
     config.ts             # Path helpers: getStateDir, getArgumentDir, getVersionDir, getPremisesDir, getPremiseDir
     engine.ts             # hydrateEngine(argumentId, version) → ArgumentEngine (reads disk, BFS expression load)
@@ -73,7 +80,7 @@ src/
                           #   validate-assignments, delete, evaluate, check-validity, validate-argument, refs, export
 
 test/
-  ExpressionManager.test.ts   # Full test suite (203 tests, Vitest)
+  ExpressionManager.test.ts   # Full test suite (313 tests, Vitest)
 ```
 
 ## Class hierarchy
@@ -214,6 +221,23 @@ Key evaluation types (all in `src/lib/types/evaluation.ts`):
 - `TArgumentEvaluationResult` — full evaluation output for one assignment.
 - `TValidityCheckResult` — truth-table search summary with counterexamples and truncation info.
 
+Key diff types (all in `src/lib/types/diff.ts`):
+
+- `TCoreFieldChange` — single field-level change (`{ field, before, after }`).
+- `TCoreEntityFieldDiff<T>` — field-level diff for a single matched entity.
+- `TCoreEntitySetDiff<T>` — set-level diff (added/removed/modified).
+- `TCorePremiseDiff` — premise diff with nested expression diffs.
+- `TCoreArgumentDiff` — top-level diff result from `diffArguments`.
+- `TCoreDiffOptions` — per-entity comparator overrides for `diffArguments`.
+
+Key relationship types (all in `src/lib/types/relationships.ts`):
+
+- `TCoreVariableAppearance` — variable's side (`antecedent`/`consequent`) and polarity (`positive`/`negative`).
+- `TCorePremiseProfile` — all variable appearances in a premise.
+- `TCorePremiseRelationshipType` — `"supporting" | "contradicting" | "restricting" | "downstream" | "unrelated"`.
+- `TCorePremiseRelationResult` — per-premise relationship classification with variable details and transitivity flag.
+- `TCorePremiseRelationshipAnalysis` — top-level result from `analyzePremiseRelationships`.
+
 Schemata use [Typebox](https://github.com/sinclairzx81/typebox) for runtime-validatable schemas alongside TypeScript types.
 
 ## Testing
@@ -240,9 +264,16 @@ Current describe blocks (in order):
 - `PremiseManager — validation and evaluation`
 - `ArgumentEngine — roles and evaluation`
 - `ArgumentEngine — complex argument scenarios across multiple evaluations`
-- `Kleene three-valued logic helpers`
+- `diffArguments` (with sub-describes for each default comparator and the main function)
+- `Kleene three-valued logic helpers` (with sub-describes for each helper)
 - `PremiseManager — three-valued evaluation`
 - `ArgumentEngine — three-valued evaluation`
+- `schema shapes with additionalProperties`
+- `field preservation — unknown fields survive round-trips`
+- `buildPremiseProfile`
+- `analyzePremiseRelationships — direct relationships`
+- `analyzePremiseRelationships — transitive relationships`
+- `analyzePremiseRelationships — precedence and edge cases`
 
 When adding a test for a new feature, add a new `describe` block at the bottom.
 

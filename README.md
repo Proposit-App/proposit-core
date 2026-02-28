@@ -178,8 +178,13 @@ eng.setConclusionPremise(conclusion.getId())
 
 ### Evaluating an argument
 
+Assignments use `TCoreExpressionAssignment`, which carries both variable truth values (three-valued: `true`, `false`, or `null` for unknown) and a list of rejected expression IDs:
+
 ```typescript
-const result = eng.evaluate({ "var-p": true, "var-q": true })
+const result = eng.evaluate({
+    variables: { "var-p": true, "var-q": true },
+    rejectedExpressionIds: [],
+})
 if (result.ok) {
     console.log(result.conclusionTrue) // true
     console.log(result.allSupportingPremisesTrue) // true
@@ -354,7 +359,7 @@ Checks whether the argument is structurally ready to evaluate. Returns `{ ok, is
 
 #### `evaluate(assignment, options?)` → `TArgumentEvaluationResult`
 
-Evaluates all relevant premises under the given variable assignment (`Record<string, boolean>`). Returns per-premise truth values, counterexample status, and an admissibility flag.
+Evaluates all relevant premises under the given expression assignment (`TCoreExpressionAssignment`). The assignment contains `variables` (a `Record<string, boolean | null>`) and `rejectedExpressionIds` (expression IDs that evaluate to `false` with children skipped). Returns per-premise truth values, counterexample status, and an admissibility flag.
 
 Options:
 
@@ -492,6 +497,73 @@ Returns the expression tree rendered with standard logical notation (¬ ∧ ∨ 
 #### `toData()` → `TPremise`
 
 Returns a serialisable snapshot of this premise (`{ id, title, type, rootExpressionId, variables, expressions }`).
+
+---
+
+### Standalone Functions
+
+#### `diffArguments(engineA, engineB, options?)` → `TCoreArgumentDiff`
+
+Compares two `ArgumentEngine` instances and returns a structured diff covering argument metadata, variables, premises (with nested expression diffs), and role changes. Each entity category reports added, removed, and modified items with field-level change details.
+
+Options allow plugging custom comparators per entity type via `TCoreDiffOptions`:
+
+```typescript
+import { diffArguments, defaultCompareVariable } from "@polintpro/proposit-core"
+
+const diff = diffArguments(engineA, engineB, {
+    compareVariable: (before, after) => {
+        // Wrap the default comparator with custom logic
+        return defaultCompareVariable(before, after)
+    },
+})
+```
+
+Default comparators are also exported: `defaultCompareArgument`, `defaultCompareVariable`, `defaultComparePremise`, `defaultCompareExpression`.
+
+---
+
+#### `analyzePremiseRelationships(engine, focusedPremiseId)` → `TCorePremiseRelationshipAnalysis`
+
+Analyzes how every other premise in the argument relates to a focused premise, classifying each as:
+
+| Category        | Meaning                                                                  |
+| --------------- | ------------------------------------------------------------------------ |
+| `supporting`    | Consequent feeds into the focused premise's antecedent (helps it fire)   |
+| `contradicting` | Infers values that negate the focused premise's antecedent or consequent |
+| `restricting`   | Constrains shared variables without clear support or contradiction       |
+| `downstream`    | Takes the focused premise's consequent as input (inference flows away)   |
+| `unrelated`     | No variable overlap, even transitively                                   |
+
+Each result includes per-variable relationship details and a `transitive` flag.
+
+```typescript
+import { analyzePremiseRelationships } from "@polintpro/proposit-core"
+
+const analysis = analyzePremiseRelationships(engine, conclusionPremiseId)
+for (const r of analysis.premises) {
+    console.log(`${r.premiseId}: ${r.relationship}`)
+}
+```
+
+---
+
+#### `buildPremiseProfile(premise)` → `TCorePremiseProfile`
+
+Builds a profile of a premise's variable appearances, recording each variable's side (`antecedent` or `consequent`) and polarity (`positive` or `negative`, determined by negation depth). Used internally by `analyzePremiseRelationships` but also exported for direct use.
+
+---
+
+#### `parseFormula(input)` → `FormulaAST`
+
+Parses a logical formula string into an AST. Supports standard logical notation with operators `not`/`¬`, `and`/`∧`, `or`/`∨`, `implies`/`→`, `iff`/`↔`, and parentheses for grouping.
+
+```typescript
+import { parseFormula } from "@polintpro/proposit-core"
+import type { FormulaAST } from "@polintpro/proposit-core"
+
+const ast: FormulaAST = parseFormula("(P and Q) implies R")
+```
 
 ---
 
@@ -657,6 +729,8 @@ proposit-core <id> <ver> analysis list [--json]
 proposit-core <id> <ver> analysis show [--file <filename>] [--json]
 proposit-core <id> <ver> analysis set <symbol> <true|false> [--file <filename>]
 proposit-core <id> <ver> analysis reset [--file <filename>] [--value <true|false>]
+proposit-core <id> <ver> analysis reject <expression_id> [--file <filename>]
+proposit-core <id> <ver> analysis accept <expression_id> [--file <filename>]
 proposit-core <id> <ver> analysis validate-assignments [--file <filename>] [--json]
 proposit-core <id> <ver> analysis delete [--file <filename>] [--confirm]
 proposit-core <id> <ver> analysis evaluate [--file <filename>] [options]
@@ -668,6 +742,8 @@ proposit-core <id> <ver> analysis export [--json]
 
 `--file` defaults to `analysis.json` throughout. Key subcommands:
 
+- **`reject`** — marks an expression as rejected (it will evaluate to `false` and its children are skipped).
+- **`accept`** — removes an expression from the rejected list (restores normal computation).
 - **`evaluate`** — resolves symbol→ID, evaluates the argument, reports admissibility, counterexample status, and whether the conclusion is true.
 - **`check-validity`** — runs the full truth-table search (`--mode first-counterexample|exhaustive`).
 - **`validate-argument`** — checks structural readiness (conclusion set, inference premises, etc.).

@@ -269,6 +269,23 @@ proposit-core $ARG_ID latest analysis reset --value false
 proposit-core $ARG_ID latest analysis validate-assignments
 ```
 
+### Reject and accept expressions
+
+Mark an expression as rejected (evaluates to `false`, children skipped) or restore it:
+
+```bash
+# Reject an expression (e.g. the root of premise 1)
+proposit-core $ARG_ID latest analysis reject $ROOT1
+proposit-core $ARG_ID latest analysis show
+
+# Accept it again (restore normal computation)
+proposit-core $ARG_ID latest analysis accept $ROOT1
+
+# Reject/accept on a specific analysis file
+proposit-core $ARG_ID latest analysis reject $ROOT1 --file scenario-b.json
+proposit-core $ARG_ID latest analysis accept $ROOT1 --file scenario-b.json
+```
+
 ### Evaluate a specific assignment
 
 Runs the argument engine on the assignments in the analysis file:
