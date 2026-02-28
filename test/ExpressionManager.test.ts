@@ -24,6 +24,7 @@ import {
     kleeneImplies,
     kleeneIff,
 } from "../src/lib/core/evaluation/shared"
+import { buildPremiseProfile } from "../src/lib/core/relationships"
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -3219,5 +3220,196 @@ describe("field preservation — unknown fields survive round-trips", () => {
         expect(data.id).not.toBe("should-be-overridden")
         expect(data.id).toBe(pm.getId())
         expect(data.rootExpressionId).toBeUndefined()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// analyzePremiseRelationships
+// ---------------------------------------------------------------------------
+
+describe("buildPremiseProfile", () => {
+    const VAR_A = makeVar("var-a", "A")
+    const VAR_B = makeVar("var-b", "B")
+    const VAR_C = makeVar("var-c", "C")
+    const VAR_F = makeVar("var-f", "F")
+
+    it("profiles an implies premise with simple antecedent and consequent", () => {
+        // A → B
+        const eng = new ArgumentEngine(ARG)
+        const pm = eng.createPremise()
+        pm.addVariable(VAR_A)
+        pm.addVariable(VAR_B)
+        pm.addExpression(makeOpExpr("impl", "implies"))
+        pm.addExpression(
+            makeVarExpr("ve-a", VAR_A.id, { parentId: "impl", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-b", VAR_B.id, { parentId: "impl", position: 1 })
+        )
+
+        const profile = buildPremiseProfile(pm)
+        expect(profile.isInference).toBe(true)
+        expect(profile.appearances).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_A.id, side: "antecedent", polarity: "positive" },
+                { variableId: VAR_B.id, side: "consequent", polarity: "positive" },
+            ])
+        )
+        expect(profile.appearances).toHaveLength(2)
+    })
+
+    it("profiles negation as negative polarity", () => {
+        // F → ¬A
+        const eng = new ArgumentEngine(ARG)
+        const pm = eng.createPremise()
+        pm.addVariable(VAR_F)
+        pm.addVariable(VAR_A)
+        pm.addExpression(makeOpExpr("impl", "implies"))
+        pm.addExpression(
+            makeVarExpr("ve-f", VAR_F.id, { parentId: "impl", position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr("not-1", "not", { parentId: "impl", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-a", VAR_A.id, { parentId: "not-1", position: 0 })
+        )
+
+        const profile = buildPremiseProfile(pm)
+        expect(profile.appearances).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_F.id, side: "antecedent", polarity: "positive" },
+                { variableId: VAR_A.id, side: "consequent", polarity: "negative" },
+            ])
+        )
+    })
+
+    it("profiles double negation as positive polarity", () => {
+        // ¬(¬A ∧ B) → C
+        const eng = new ArgumentEngine(ARG)
+        const pm = eng.createPremise()
+        pm.addVariable(VAR_A)
+        pm.addVariable(VAR_B)
+        pm.addVariable(VAR_C)
+        pm.addExpression(makeOpExpr("impl", "implies"))
+        pm.addExpression(
+            makeOpExpr("not-outer", "not", { parentId: "impl", position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr("and-1", "and", { parentId: "not-outer", position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr("not-inner", "not", { parentId: "and-1", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-a", VAR_A.id, { parentId: "not-inner", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-b", VAR_B.id, { parentId: "and-1", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-c", VAR_C.id, { parentId: "impl", position: 1 })
+        )
+
+        const profile = buildPremiseProfile(pm)
+        expect(profile.appearances).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_A.id, side: "antecedent", polarity: "positive" },
+                { variableId: VAR_B.id, side: "antecedent", polarity: "negative" },
+                { variableId: VAR_C.id, side: "consequent", polarity: "positive" },
+            ])
+        )
+        expect(profile.appearances).toHaveLength(3)
+    })
+
+    it("profiles compound antecedent and consequent", () => {
+        // (A ∧ B) → (B ∧ C)
+        const eng = new ArgumentEngine(ARG)
+        const pm = eng.createPremise()
+        pm.addVariable(VAR_A)
+        pm.addVariable(VAR_B)
+        pm.addVariable(VAR_C)
+        pm.addExpression(makeOpExpr("impl", "implies"))
+        pm.addExpression(
+            makeOpExpr("and-l", "and", { parentId: "impl", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-a", VAR_A.id, { parentId: "and-l", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-b1", VAR_B.id, { parentId: "and-l", position: 1 })
+        )
+        pm.addExpression(
+            makeOpExpr("and-r", "and", { parentId: "impl", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-b2", VAR_B.id, { parentId: "and-r", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-c", VAR_C.id, { parentId: "and-r", position: 1 })
+        )
+
+        const profile = buildPremiseProfile(pm)
+        expect(profile.appearances).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_A.id, side: "antecedent", polarity: "positive" },
+                { variableId: VAR_B.id, side: "antecedent", polarity: "positive" },
+                { variableId: VAR_B.id, side: "consequent", polarity: "positive" },
+                { variableId: VAR_C.id, side: "consequent", polarity: "positive" },
+            ])
+        )
+        expect(profile.appearances).toHaveLength(4)
+    })
+
+    it("profiles iff as left=antecedent, right=consequent", () => {
+        // A ↔ B
+        const eng = new ArgumentEngine(ARG)
+        const pm = eng.createPremise()
+        pm.addVariable(VAR_A)
+        pm.addVariable(VAR_B)
+        pm.addExpression(makeOpExpr("iff-1", "iff"))
+        pm.addExpression(
+            makeVarExpr("ve-a", VAR_A.id, { parentId: "iff-1", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-b", VAR_B.id, { parentId: "iff-1", position: 1 })
+        )
+
+        const profile = buildPremiseProfile(pm)
+        expect(profile.isInference).toBe(true)
+        expect(profile.appearances).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_A.id, side: "antecedent", polarity: "positive" },
+                { variableId: VAR_B.id, side: "consequent", polarity: "positive" },
+            ])
+        )
+    })
+
+    it("profiles a constraint premise as non-inference with no appearances", () => {
+        // A ∧ B (constraint)
+        const eng = new ArgumentEngine(ARG)
+        const pm = eng.createPremise()
+        pm.addVariable(VAR_A)
+        pm.addVariable(VAR_B)
+        pm.addExpression(makeOpExpr("and-1", "and"))
+        pm.addExpression(
+            makeVarExpr("ve-a", VAR_A.id, { parentId: "and-1", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("ve-b", VAR_B.id, { parentId: "and-1", position: 1 })
+        )
+
+        const profile = buildPremiseProfile(pm)
+        expect(profile.isInference).toBe(false)
+        expect(profile.appearances).toEqual([])
+    })
+
+    it("profiles an empty premise as non-inference with no appearances", () => {
+        const eng = new ArgumentEngine(ARG)
+        const pm = eng.createPremise()
+
+        const profile = buildPremiseProfile(pm)
+        expect(profile.isInference).toBe(false)
+        expect(profile.appearances).toEqual([])
     })
 })
