@@ -24,7 +24,10 @@ import {
     kleeneImplies,
     kleeneIff,
 } from "../src/lib/core/evaluation/shared"
-import { buildPremiseProfile } from "../src/lib/core/relationships"
+import {
+    buildPremiseProfile,
+    analyzePremiseRelationships,
+} from "../src/lib/core/relationships"
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -3411,5 +3414,211 @@ describe("buildPremiseProfile", () => {
         const profile = buildPremiseProfile(pm)
         expect(profile.isInference).toBe(false)
         expect(profile.appearances).toEqual([])
+    })
+})
+
+describe("analyzePremiseRelationships — direct relationships", () => {
+    const VAR_A = makeVar("var-a", "A")
+    const VAR_B = makeVar("var-b", "B")
+    const VAR_C = makeVar("var-c", "C")
+    const VAR_D = makeVar("var-d", "D")
+    const VAR_E = makeVar("var-e", "E")
+    const VAR_F = makeVar("var-f", "F")
+
+    /** Build an implies premise: left → right (single variables). */
+    function buildImplies(
+        eng: ArgumentEngine,
+        premiseId: string,
+        leftVar: TCorePropositionalVariable,
+        rightVar: TCorePropositionalVariable
+    ): PremiseManager {
+        const pm = eng.createPremiseWithId(premiseId)
+        pm.addVariable(leftVar)
+        if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
+        pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
+        pm.addExpression(
+            makeVarExpr(`${premiseId}-ve-l`, leftVar.id, {
+                parentId: `${premiseId}-impl`,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${premiseId}-ve-r`, rightVar.id, {
+                parentId: `${premiseId}-impl`,
+                position: 1,
+            })
+        )
+        return pm
+    }
+
+    it("classifies a premise whose consequent feeds the focused antecedent as supporting", () => {
+        // P1: A → B, P2 (focused): B → C
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_A, VAR_B)
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+
+        const result = analyzePremiseRelationships(eng, "p2")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("supporting")
+        expect(p1Result.transitive).toBe(false)
+        expect(p1Result.variableDetails).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_B.id, relationship: "supporting" },
+            ])
+        )
+    })
+
+    it("classifies a premise with negated consequent as contradicting", () => {
+        // P1: A → ¬B, P2 (focused): B → C
+        const eng = new ArgumentEngine(ARG)
+        const p1 = eng.createPremiseWithId("p1")
+        p1.addVariable(VAR_A)
+        p1.addVariable(VAR_B)
+        p1.addExpression(makeOpExpr("p1-impl", "implies"))
+        p1.addExpression(
+            makeVarExpr("p1-ve-a", VAR_A.id, {
+                parentId: "p1-impl",
+                position: 0,
+            })
+        )
+        p1.addExpression(
+            makeOpExpr("p1-not", "not", {
+                parentId: "p1-impl",
+                position: 1,
+            })
+        )
+        p1.addExpression(
+            makeVarExpr("p1-ve-b", VAR_B.id, {
+                parentId: "p1-not",
+                position: 0,
+            })
+        )
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+
+        const result = analyzePremiseRelationships(eng, "p2")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("contradicting")
+        expect(p1Result.variableDetails).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_B.id, relationship: "contradicting" },
+            ])
+        )
+    })
+
+    it("classifies a premise with variable in both ante and conseq as restricting", () => {
+        // P1: B → (B ∧ C), P2 (focused): B → D
+        const eng = new ArgumentEngine(ARG)
+        const p1 = eng.createPremiseWithId("p1")
+        p1.addVariable(VAR_B)
+        p1.addVariable(VAR_C)
+        p1.addExpression(makeOpExpr("p1-impl", "implies"))
+        p1.addExpression(
+            makeVarExpr("p1-ve-b1", VAR_B.id, {
+                parentId: "p1-impl",
+                position: 0,
+            })
+        )
+        p1.addExpression(
+            makeOpExpr("p1-and", "and", {
+                parentId: "p1-impl",
+                position: 1,
+            })
+        )
+        p1.addExpression(
+            makeVarExpr("p1-ve-b2", VAR_B.id, {
+                parentId: "p1-and",
+                position: 0,
+            })
+        )
+        p1.addExpression(
+            makeVarExpr("p1-ve-c", VAR_C.id, {
+                parentId: "p1-and",
+                position: 1,
+            })
+        )
+        buildImplies(eng, "p2", VAR_B, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p2")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("restricting")
+        expect(p1Result.variableDetails).toEqual(
+            expect.arrayContaining([
+                { variableId: VAR_B.id, relationship: "restricting" },
+            ])
+        )
+    })
+
+    it("classifies a constraint premise sharing variables as restricting", () => {
+        // P1: A ∧ B (constraint), P2 (focused): B → C
+        const eng = new ArgumentEngine(ARG)
+        const p1 = eng.createPremiseWithId("p1")
+        p1.addVariable(VAR_A)
+        p1.addVariable(VAR_B)
+        p1.addExpression(makeOpExpr("p1-and", "and"))
+        p1.addExpression(
+            makeVarExpr("p1-ve-a", VAR_A.id, {
+                parentId: "p1-and",
+                position: 0,
+            })
+        )
+        p1.addExpression(
+            makeVarExpr("p1-ve-b", VAR_B.id, {
+                parentId: "p1-and",
+                position: 1,
+            })
+        )
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+
+        const result = analyzePremiseRelationships(eng, "p2")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("restricting")
+    })
+
+    it("classifies a premise taking the focused consequent as downstream", () => {
+        // P1 (focused): A → B, P2: B → C
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_A, VAR_B)
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+
+        const result = analyzePremiseRelationships(eng, "p1")
+        const p2Result = result.premises.find((p) => p.premiseId === "p2")!
+        expect(p2Result.relationship).toBe("downstream")
+        expect(p2Result.transitive).toBe(false)
+    })
+
+    it("classifies a premise with no shared variables as unrelated", () => {
+        // P1: A → B, P2 (focused): C → D
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_A, VAR_B)
+        buildImplies(eng, "p2", VAR_C, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p2")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("unrelated")
+        expect(p1Result.variableDetails).toEqual([])
+    })
+
+    it("excludes the focused premise from results", () => {
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_A, VAR_B)
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+
+        const result = analyzePremiseRelationships(eng, "p2")
+        expect(result.premises.find((p) => p.premiseId === "p2")).toBeUndefined()
+    })
+
+    it("throws when focused premise does not exist", () => {
+        const eng = new ArgumentEngine(ARG)
+        expect(() =>
+            analyzePremiseRelationships(eng, "nonexistent")
+        ).toThrow()
+    })
+
+    it("returns empty premises array when argument has only the focused premise", () => {
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_A, VAR_B)
+
+        const result = analyzePremiseRelationships(eng, "p1")
+        expect(result.premises).toEqual([])
     })
 })
