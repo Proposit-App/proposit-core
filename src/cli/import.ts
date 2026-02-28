@@ -238,7 +238,7 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
         ...(input.metadata.description !== undefined
             ? { description: input.metadata.description }
             : {}),
-        createdAt: Date.now(),
+        createdAt: new Date(),
         published: false,
     }
 

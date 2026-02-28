@@ -34,7 +34,7 @@ export function registerArgumentCommands(program: Command): void {
         .description("Create a new argument")
         .action(async (title: string, description: string) => {
             const id = randomUUID()
-            const createdAt = Date.now()
+            const createdAt = new Date()
 
             await writeArgumentMeta({ id, title, description })
             await writeVersionMeta(id, {
@@ -88,7 +88,10 @@ export function registerArgumentCommands(program: Command): void {
                 })
             )
             // Sort newest first by createdAt
-            items.sort((a, b) => b.vMeta.createdAt - a.vMeta.createdAt)
+            items.sort(
+                (a, b) =>
+                    b.vMeta.createdAt.getTime() - a.vMeta.createdAt.getTime()
+            )
 
             if (opts.json) {
                 printJson(
@@ -104,7 +107,7 @@ export function registerArgumentCommands(program: Command): void {
             } else {
                 for (const { meta, vMeta } of items) {
                     printLine(
-                        `${meta.id} | ${meta.title} (created ${new Date(vMeta.createdAt).toLocaleString()})`
+                        `${meta.id} | ${meta.title} (created ${vMeta.createdAt.toLocaleString()})`
                     )
                 }
             }
@@ -160,7 +163,7 @@ export function registerArgumentCommands(program: Command): void {
             await writeVersionMeta(argumentId, {
                 ...vMeta,
                 published: true,
-                publishedAt: Date.now(),
+                publishedAt: new Date(),
             })
 
             // Copy to new version
@@ -170,7 +173,7 @@ export function registerArgumentCommands(program: Command): void {
             // Overwrite new version's meta
             await writeVersionMeta(argumentId, {
                 version: newV,
-                createdAt: Date.now(),
+                createdAt: new Date(),
                 published: false,
             })
 

@@ -25,13 +25,11 @@ export function registerVersionShowCommand(
                 printLine(`title:       ${argMeta.title}`)
                 printLine(`description: ${argMeta.description ?? ""}`)
                 printLine(`version:     ${vMeta.version}`)
-                printLine(
-                    `created:     ${new Date(vMeta.createdAt).toLocaleString()}`
-                )
+                printLine(`created:     ${vMeta.createdAt.toLocaleString()}`)
                 printLine(`published:   ${vMeta.published}`)
                 if (vMeta.publishedAt !== undefined) {
                     printLine(
-                        `publishedAt: ${new Date(vMeta.publishedAt).toLocaleString()}`
+                        `publishedAt: ${vMeta.publishedAt.toLocaleString()}`
                     )
                 }
             }

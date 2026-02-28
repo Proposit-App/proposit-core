@@ -1,7 +1,7 @@
 import Type, { type Static } from "typebox"
 import { CoreArgumentSchema } from "../lib/schemata/argument.js"
 import { CorePropositionalExpressionSchema } from "../lib/schemata/propositional.js"
-import { UUID } from "../lib/schemata/shared.js"
+import { EncodableDate, UUID } from "../lib/schemata/shared.js"
 
 // ---------------------------------------------------------------------------
 // Argument meta (stored in arguments/<id>/meta.json)
@@ -23,9 +23,9 @@ export type TCliArgumentMeta = Static<typeof CliArgumentMetaSchema>
 // ---------------------------------------------------------------------------
 export const CliArgumentVersionMetaSchema = Type.Object({
     version: Type.Number(),
-    createdAt: Type.Number(),
+    createdAt: EncodableDate,
     published: Type.Boolean(),
-    publishedAt: Type.Optional(Type.Number()),
+    publishedAt: Type.Optional(EncodableDate),
 })
 export type TCliArgumentVersionMeta = Static<
     typeof CliArgumentVersionMetaSchema
@@ -39,9 +39,9 @@ export const CliArgumentSchema = Type.Intersect([
     Type.Object({
         title: Type.String(),
         description: Type.Optional(Type.String()),
-        createdAt: Type.Number(),
+        createdAt: EncodableDate,
         published: Type.Boolean(),
-        publishedAt: Type.Optional(Type.Number()),
+        publishedAt: Type.Optional(EncodableDate),
     }),
 ])
 export type TCliArgument = Static<typeof CliArgumentSchema>
