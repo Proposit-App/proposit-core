@@ -3622,3 +3622,201 @@ describe("analyzePremiseRelationships — direct relationships", () => {
         expect(result.premises).toEqual([])
     })
 })
+
+describe("analyzePremiseRelationships — transitive relationships", () => {
+    const VAR_A = makeVar("var-a", "A")
+    const VAR_B = makeVar("var-b", "B")
+    const VAR_C = makeVar("var-c", "C")
+    const VAR_D = makeVar("var-d", "D")
+    const VAR_E = makeVar("var-e", "E")
+    const VAR_F = makeVar("var-f", "F")
+
+    function buildImplies(
+        eng: ArgumentEngine,
+        premiseId: string,
+        leftVar: TCorePropositionalVariable,
+        rightVar: TCorePropositionalVariable
+    ): PremiseManager {
+        const pm = eng.createPremiseWithId(premiseId)
+        pm.addVariable(leftVar)
+        if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
+        pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
+        pm.addExpression(
+            makeVarExpr(`${premiseId}-ve-l`, leftVar.id, {
+                parentId: `${premiseId}-impl`,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${premiseId}-ve-r`, rightVar.id, {
+                parentId: `${premiseId}-impl`,
+                position: 1,
+            })
+        )
+        return pm
+    }
+
+    it("classifies transitive support through a chain", () => {
+        // P1: A → B, P2: B → C, P3 (focused): C → D
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_A, VAR_B)
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+        buildImplies(eng, "p3", VAR_C, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p3")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("supporting")
+        expect(p1Result.transitive).toBe(true)
+
+        const p2Result = result.premises.find((p) => p.premiseId === "p2")!
+        expect(p2Result.relationship).toBe("supporting")
+        expect(p2Result.transitive).toBe(false)
+    })
+
+    it("unrelated premise remains unrelated even when other premises form a chain", () => {
+        // P1: E → F (unrelated), P2: B → C, P3 (focused): C → D
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_E, VAR_F)
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+        buildImplies(eng, "p3", VAR_C, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p3")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("unrelated")
+    })
+
+    it("classifies transitive downstream", () => {
+        // P1 (focused): A → B, P2: B → C, P3: C → D
+        const eng = new ArgumentEngine(ARG)
+        buildImplies(eng, "p1", VAR_A, VAR_B)
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+        buildImplies(eng, "p3", VAR_C, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p1")
+        const p3Result = result.premises.find((p) => p.premiseId === "p3")!
+        expect(p3Result.relationship).toBe("downstream")
+        expect(p3Result.transitive).toBe(true)
+    })
+
+    it("propagates contradicting polarity through a chain", () => {
+        // P1: A → ¬B, P2: B → C, P3 (focused): C → D
+        // P1 contradicts P2's antecedent, so P1 is transitively contradicting P3
+        const eng = new ArgumentEngine(ARG)
+        const p1 = eng.createPremiseWithId("p1")
+        p1.addVariable(VAR_A)
+        p1.addVariable(VAR_B)
+        p1.addExpression(makeOpExpr("p1-impl", "implies"))
+        p1.addExpression(
+            makeVarExpr("p1-ve-a", VAR_A.id, {
+                parentId: "p1-impl",
+                position: 0,
+            })
+        )
+        p1.addExpression(
+            makeOpExpr("p1-not", "not", {
+                parentId: "p1-impl",
+                position: 1,
+            })
+        )
+        p1.addExpression(
+            makeVarExpr("p1-ve-b", VAR_B.id, {
+                parentId: "p1-not",
+                position: 0,
+            })
+        )
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+        buildImplies(eng, "p3", VAR_C, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p3")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("contradicting")
+        expect(p1Result.transitive).toBe(true)
+    })
+
+    it("double negation through chain cancels to supporting", () => {
+        // P1: A → ¬B, P2: ¬B → C, P3 (focused): C → D
+        // P1's conseq is B(negative), P2's ante is B(negative) → polarity match → supporting
+        const eng = new ArgumentEngine(ARG)
+        const p1 = eng.createPremiseWithId("p1")
+        p1.addVariable(VAR_A)
+        p1.addVariable(VAR_B)
+        p1.addExpression(makeOpExpr("p1-impl", "implies"))
+        p1.addExpression(
+            makeVarExpr("p1-ve-a", VAR_A.id, {
+                parentId: "p1-impl",
+                position: 0,
+            })
+        )
+        p1.addExpression(
+            makeOpExpr("p1-not", "not", {
+                parentId: "p1-impl",
+                position: 1,
+            })
+        )
+        p1.addExpression(
+            makeVarExpr("p1-ve-b", VAR_B.id, {
+                parentId: "p1-not",
+                position: 0,
+            })
+        )
+
+        const p2 = eng.createPremiseWithId("p2")
+        p2.addVariable(VAR_B)
+        p2.addVariable(VAR_C)
+        p2.addExpression(makeOpExpr("p2-impl", "implies"))
+        p2.addExpression(
+            makeOpExpr("p2-not", "not", {
+                parentId: "p2-impl",
+                position: 0,
+            })
+        )
+        p2.addExpression(
+            makeVarExpr("p2-ve-b", VAR_B.id, {
+                parentId: "p2-not",
+                position: 0,
+            })
+        )
+        p2.addExpression(
+            makeVarExpr("p2-ve-c", VAR_C.id, {
+                parentId: "p2-impl",
+                position: 1,
+            })
+        )
+
+        buildImplies(eng, "p3", VAR_C, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p3")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("supporting")
+        expect(p1Result.transitive).toBe(true)
+    })
+
+    it("constraint premise connected transitively is restricting", () => {
+        // P1: A ∧ B (constraint), P2: B → C, P3 (focused): C → D
+        // P1 shares B with P2 which supports P3 → P1 restricts P3 transitively
+        const eng = new ArgumentEngine(ARG)
+        const p1 = eng.createPremiseWithId("p1")
+        p1.addVariable(VAR_A)
+        p1.addVariable(VAR_B)
+        p1.addExpression(makeOpExpr("p1-and", "and"))
+        p1.addExpression(
+            makeVarExpr("p1-ve-a", VAR_A.id, {
+                parentId: "p1-and",
+                position: 0,
+            })
+        )
+        p1.addExpression(
+            makeVarExpr("p1-ve-b", VAR_B.id, {
+                parentId: "p1-and",
+                position: 1,
+            })
+        )
+        buildImplies(eng, "p2", VAR_B, VAR_C)
+        buildImplies(eng, "p3", VAR_C, VAR_D)
+
+        const result = analyzePremiseRelationships(eng, "p3")
+        const p1Result = result.premises.find((p) => p.premiseId === "p1")!
+        expect(p1Result.relationship).toBe("restricting")
+        expect(p1Result.transitive).toBe(true)
+    })
+})
