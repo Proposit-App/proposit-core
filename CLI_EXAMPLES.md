@@ -1,6 +1,6 @@
 # CLI Examples
 
-A complete walkthrough of the `proposit-core` CLI, from creating an argument to checking its validity. All commands can be copied and pasted into your terminal.
+A complete walkthrough of the `proposit-core` CLI, from creating an argument to checking its validity.
 
 ## Prerequisites
 
@@ -13,11 +13,13 @@ pnpm run build
 Then run commands using either form:
 
 ```bash
-pnpm cli -- <args>      # run from the local build
+pnpm cli <args>                  # run from the local build
 proposit-core <args>             # if installed globally
 ```
 
-The examples below use `proposit-core` for brevity. Substitute `pnpm cli --` when running from source.
+The examples below use `proposit-core` for brevity. Substitute `pnpm cli` when running from source.
+
+Throughout these examples, angle-bracket placeholders like `<argument-id>` represent UUIDs returned by previous commands. Replace them with the actual values from your session.
 
 ---
 
@@ -33,13 +35,11 @@ proposit-core version
 
 ### Create
 
-`arguments create` returns the new argument's UUID on stdout, which you can capture directly:
+`arguments create` returns the new argument's UUID on stdout:
 
 ```bash
-ARG_ID=$(proposit-core arguments create "Hypothetical Syllogism" \
-  "If P→Q and Q→R then P→R")
-
-echo "Created: $ARG_ID"
+proposit-core arguments create "Hypothetical Syllogism" "If P→Q and Q→R then P→R"
+# → <argument-id>
 ```
 
 ### List
@@ -52,8 +52,8 @@ proposit-core arguments list --json
 ### Inspect a version
 
 ```bash
-proposit-core $ARG_ID latest show
-proposit-core $ARG_ID latest show --json
+proposit-core <argument-id> latest show
+proposit-core <argument-id> latest show --json
 ```
 
 ---
@@ -63,26 +63,29 @@ proposit-core $ARG_ID latest show --json
 Register propositional variables for the argument. Each `variables create` call returns the new variable's UUID:
 
 ```bash
-P_ID=$(proposit-core $ARG_ID latest variables create P)
-Q_ID=$(proposit-core $ARG_ID latest variables create Q)
-R_ID=$(proposit-core $ARG_ID latest variables create R)
+proposit-core <argument-id> latest variables create P
+# → <p-id>
 
-echo "P=$P_ID  Q=$Q_ID  R=$R_ID"
+proposit-core <argument-id> latest variables create Q
+# → <q-id>
+
+proposit-core <argument-id> latest variables create R
+# → <r-id>
 ```
 
 List and inspect:
 
 ```bash
-proposit-core $ARG_ID latest variables list
-proposit-core $ARG_ID latest variables list --json
-proposit-core $ARG_ID latest variables show $P_ID
+proposit-core <argument-id> latest variables list
+proposit-core <argument-id> latest variables list --json
+proposit-core <argument-id> latest variables show <p-id>
 ```
 
 Rename a variable:
 
 ```bash
-proposit-core $ARG_ID latest variables update $P_ID --symbol "P_new"
-proposit-core $ARG_ID latest variables update $P_ID --symbol P     # rename back
+proposit-core <argument-id> latest variables update <p-id> --symbol "P_new"
+proposit-core <argument-id> latest variables update <p-id> --symbol P     # rename back
 ```
 
 ---
@@ -92,18 +95,21 @@ proposit-core $ARG_ID latest variables update $P_ID --symbol P     # rename back
 Create empty premise shells (they hold expression trees, which you add next):
 
 ```bash
-P1_ID=$(proposit-core $ARG_ID latest premises create --title "P implies Q")
-P2_ID=$(proposit-core $ARG_ID latest premises create --title "Q implies R")
-P3_ID=$(proposit-core $ARG_ID latest premises create --title "P implies R")
+proposit-core <argument-id> latest premises create --title "P implies Q"
+# → <premise1-id>
 
-echo "Premises: $P1_ID  $P2_ID  $P3_ID"
+proposit-core <argument-id> latest premises create --title "Q implies R"
+# → <premise2-id>
+
+proposit-core <argument-id> latest premises create --title "P implies R"
+# → <premise3-id>
 ```
 
 List all premises:
 
 ```bash
-proposit-core $ARG_ID latest premises list
-proposit-core $ARG_ID latest premises list --json
+proposit-core <argument-id> latest premises list
+proposit-core <argument-id> latest premises list --json
 ```
 
 ---
@@ -124,88 +130,91 @@ implies  (root, parentId=null)
 
 ```bash
 # Root: implies operator
-ROOT1=$(proposit-core $ARG_ID latest expressions create $P1_ID \
-  --type operator --operator implies)
+proposit-core <argument-id> latest expressions create <premise1-id> \
+  --type operator --operator implies
+# → <root1-id>
 
 # Left antecedent: variable P at position 0
-proposit-core $ARG_ID latest expressions create $P1_ID \
-  --type variable --variable-id $P_ID \
-  --parent-id $ROOT1 --position 0
+proposit-core <argument-id> latest expressions create <premise1-id> \
+  --type variable --variable-id <p-id> \
+  --parent-id <root1-id> --position 0
 
 # Right consequent: variable Q at position 1
-proposit-core $ARG_ID latest expressions create $P1_ID \
-  --type variable --variable-id $Q_ID \
-  --parent-id $ROOT1 --position 1
+proposit-core <argument-id> latest expressions create <premise1-id> \
+  --type variable --variable-id <q-id> \
+  --parent-id <root1-id> --position 1
 
 # Verify
-proposit-core $ARG_ID latest premises render $P1_ID
-# → P → Q
+proposit-core <argument-id> latest premises render <premise1-id>
+# → (P → Q)
 ```
 
 ### Premise 2: Q → R
 
 ```bash
-ROOT2=$(proposit-core $ARG_ID latest expressions create $P2_ID \
-  --type operator --operator implies)
+proposit-core <argument-id> latest expressions create <premise2-id> \
+  --type operator --operator implies
+# → <root2-id>
 
-proposit-core $ARG_ID latest expressions create $P2_ID \
-  --type variable --variable-id $Q_ID \
-  --parent-id $ROOT2 --position 0
+proposit-core <argument-id> latest expressions create <premise2-id> \
+  --type variable --variable-id <q-id> \
+  --parent-id <root2-id> --position 0
 
-proposit-core $ARG_ID latest expressions create $P2_ID \
-  --type variable --variable-id $R_ID \
-  --parent-id $ROOT2 --position 1
+proposit-core <argument-id> latest expressions create <premise2-id> \
+  --type variable --variable-id <r-id> \
+  --parent-id <root2-id> --position 1
 
-proposit-core $ARG_ID latest premises render $P2_ID
-# → Q → R
+proposit-core <argument-id> latest premises render <premise2-id>
+# → (Q → R)
 ```
 
 ### Premise 3: P → R (the conclusion)
 
 ```bash
-ROOT3=$(proposit-core $ARG_ID latest expressions create $P3_ID \
-  --type operator --operator implies)
+proposit-core <argument-id> latest expressions create <premise3-id> \
+  --type operator --operator implies
+# → <root3-id>
 
-proposit-core $ARG_ID latest expressions create $P3_ID \
-  --type variable --variable-id $P_ID \
-  --parent-id $ROOT3 --position 0
+proposit-core <argument-id> latest expressions create <premise3-id> \
+  --type variable --variable-id <p-id> \
+  --parent-id <root3-id> --position 0
 
-proposit-core $ARG_ID latest expressions create $P3_ID \
-  --type variable --variable-id $R_ID \
-  --parent-id $ROOT3 --position 1
+proposit-core <argument-id> latest expressions create <premise3-id> \
+  --type variable --variable-id <r-id> \
+  --parent-id <root3-id> --position 1
 
-proposit-core $ARG_ID latest premises render $P3_ID
-# → P → R
+proposit-core <argument-id> latest premises render <premise3-id>
+# → (P → R)
 ```
 
 ### Inspect expressions
 
 ```bash
-proposit-core $ARG_ID latest expressions list $P1_ID
-proposit-core $ARG_ID latest expressions list $P1_ID --json
-proposit-core $ARG_ID latest expressions show $P1_ID $ROOT1
+proposit-core <argument-id> latest expressions list <premise1-id>
+proposit-core <argument-id> latest expressions list <premise1-id> --json
+proposit-core <argument-id> latest expressions show <premise1-id> <root1-id>
 ```
 
 ---
 
 ## 6. Roles
 
-Assign premises to logical roles. P1 and P2 are supporting premises; P3 is the conclusion:
+Assign premises to logical roles. Premises 1 and 2 are supporting premises; premise 3 is the conclusion:
 
 ```bash
-proposit-core $ARG_ID latest roles add-support $P1_ID
-proposit-core $ARG_ID latest roles add-support $P2_ID
-proposit-core $ARG_ID latest roles set-conclusion $P3_ID
+proposit-core <argument-id> latest roles add-support <premise1-id>
+proposit-core <argument-id> latest roles add-support <premise2-id>
+proposit-core <argument-id> latest roles set-conclusion <premise3-id>
 
-proposit-core $ARG_ID latest roles show
-proposit-core $ARG_ID latest roles show --json
+proposit-core <argument-id> latest roles show
+proposit-core <argument-id> latest roles show --json
 ```
 
 To undo role assignments:
 
 ```bash
-proposit-core $ARG_ID latest roles remove-support $P1_ID
-proposit-core $ARG_ID latest roles clear-conclusion
+proposit-core <argument-id> latest roles remove-support <premise1-id>
+proposit-core <argument-id> latest roles clear-conclusion
 ```
 
 ---
@@ -215,10 +224,10 @@ proposit-core $ARG_ID latest roles clear-conclusion
 Print all premises in one shot, with the conclusion marked by an asterisk:
 
 ```bash
-proposit-core $ARG_ID latest render
-# → <P3_ID>*: (P → R)
-# → <P1_ID>: (P → Q)
-# → <P2_ID>: (Q → R)
+proposit-core <argument-id> latest render
+# → <premise3-id>*: (P → R)
+# → <premise1-id>: (P → Q)
+# → <premise2-id>: (Q → R)
 ```
 
 Each line follows the pattern `<premise_id>[*]: <display_string>`. The asterisk appears only on the premise with the conclusion role.
@@ -232,41 +241,41 @@ Each line follows the pattern `<premise_id>[*]: <display_string>`. The asterisk 
 Checks that the argument is well-formed and evaluable before running analysis:
 
 ```bash
-proposit-core $ARG_ID latest analysis validate-argument
-proposit-core $ARG_ID latest analysis validate-argument --json
+proposit-core <argument-id> latest analysis validate-argument
+proposit-core <argument-id> latest analysis validate-argument --json
 ```
 
 ### Create an analysis file
 
-Creates `analysis.json` with all variables defaulting to `true`:
+Creates `analysis.json` with all variables defaulting to `unset`:
 
 ```bash
-proposit-core $ARG_ID latest analysis create
+proposit-core <argument-id> latest analysis create
 ```
 
 Or specify a default value and/or a custom filename:
 
 ```bash
-proposit-core $ARG_ID latest analysis create --default false
-proposit-core $ARG_ID latest analysis create scenario-b.json
+proposit-core <argument-id> latest analysis create --default false
+proposit-core <argument-id> latest analysis create scenario-b.json
 ```
 
 ### View and modify assignments
 
 ```bash
-proposit-core $ARG_ID latest analysis show
-proposit-core $ARG_ID latest analysis show --json
+proposit-core <argument-id> latest analysis show
+proposit-core <argument-id> latest analysis show --json
 
 # Assign specific truth values
-proposit-core $ARG_ID latest analysis set P true
-proposit-core $ARG_ID latest analysis set Q true
-proposit-core $ARG_ID latest analysis set R true
+proposit-core <argument-id> latest analysis set P true
+proposit-core <argument-id> latest analysis set Q true
+proposit-core <argument-id> latest analysis set R true
 
 # Reset all to false
-proposit-core $ARG_ID latest analysis reset --value false
+proposit-core <argument-id> latest analysis reset --value false
 
 # Validate that the file matches the argument version
-proposit-core $ARG_ID latest analysis validate-assignments
+proposit-core <argument-id> latest analysis validate-assignments
 ```
 
 ### Reject and accept expressions
@@ -275,15 +284,15 @@ Mark an expression as rejected (evaluates to `false`, children skipped) or resto
 
 ```bash
 # Reject an expression (e.g. the root of premise 1)
-proposit-core $ARG_ID latest analysis reject $ROOT1
-proposit-core $ARG_ID latest analysis show
+proposit-core <argument-id> latest analysis reject <root1-id>
+proposit-core <argument-id> latest analysis show
 
 # Accept it again (restore normal computation)
-proposit-core $ARG_ID latest analysis accept $ROOT1
+proposit-core <argument-id> latest analysis accept <root1-id>
 
 # Reject/accept on a specific analysis file
-proposit-core $ARG_ID latest analysis reject $ROOT1 --file scenario-b.json
-proposit-core $ARG_ID latest analysis accept $ROOT1 --file scenario-b.json
+proposit-core <argument-id> latest analysis reject <root1-id> --file scenario-b.json
+proposit-core <argument-id> latest analysis accept <root1-id> --file scenario-b.json
 ```
 
 ### Evaluate a specific assignment
@@ -291,8 +300,8 @@ proposit-core $ARG_ID latest analysis accept $ROOT1 --file scenario-b.json
 Runs the argument engine on the assignments in the analysis file:
 
 ```bash
-proposit-core $ARG_ID latest analysis evaluate
-proposit-core $ARG_ID latest analysis evaluate --json
+proposit-core <argument-id> latest analysis evaluate
+proposit-core <argument-id> latest analysis evaluate --json
 ```
 
 ### Check validity (truth-table search)
@@ -300,9 +309,9 @@ proposit-core $ARG_ID latest analysis evaluate --json
 Enumerates all 2³ = 8 assignments and searches for counterexamples:
 
 ```bash
-proposit-core $ARG_ID latest analysis check-validity
-proposit-core $ARG_ID latest analysis check-validity --mode exhaustive
-proposit-core $ARG_ID latest analysis check-validity --json
+proposit-core <argument-id> latest analysis check-validity
+proposit-core <argument-id> latest analysis check-validity --mode exhaustive
+proposit-core <argument-id> latest analysis check-validity --json
 ```
 
 The hypothetical syllogism argument is **valid** — no admissible assignment satisfies both supporting premises while falsifying the conclusion.
@@ -311,27 +320,27 @@ The hypothetical syllogism argument is **valid** — no admissible assignment sa
 
 ```bash
 # Create a second analysis file to explore a specific assignment
-proposit-core $ARG_ID latest analysis create counterexample-attempt.json
+proposit-core <argument-id> latest analysis create counterexample-attempt.json
 
-proposit-core $ARG_ID latest analysis set P true  --file counterexample-attempt.json
-proposit-core $ARG_ID latest analysis set Q false --file counterexample-attempt.json
-proposit-core $ARG_ID latest analysis set R false --file counterexample-attempt.json
+proposit-core <argument-id> latest analysis set P true  --file counterexample-attempt.json
+proposit-core <argument-id> latest analysis set Q false --file counterexample-attempt.json
+proposit-core <argument-id> latest analysis set R false --file counterexample-attempt.json
 
-proposit-core $ARG_ID latest analysis evaluate    --file counterexample-attempt.json
-proposit-core $ARG_ID latest analysis list
+proposit-core <argument-id> latest analysis evaluate    --file counterexample-attempt.json
+proposit-core <argument-id> latest analysis list
 ```
 
 ### Inspect variable references across all premises
 
 ```bash
-proposit-core $ARG_ID latest analysis refs
-proposit-core $ARG_ID latest analysis refs --json
+proposit-core <argument-id> latest analysis refs
+proposit-core <argument-id> latest analysis refs --json
 ```
 
 ### Export the full engine state
 
 ```bash
-proposit-core $ARG_ID latest analysis export
+proposit-core <argument-id> latest analysis export
 ```
 
 ---
@@ -341,12 +350,12 @@ proposit-core $ARG_ID latest analysis export
 Publishing locks the current version and prepares a new draft:
 
 ```bash
-proposit-core arguments publish $ARG_ID
+proposit-core arguments publish <argument-id>
 # Version 0 published, draft version 1 prepared
 
-proposit-core $ARG_ID 0 show        # published version (read-only)
-proposit-core $ARG_ID 1 show        # new draft
-proposit-core $ARG_ID latest show   # same as version 1 (current latest)
+proposit-core <argument-id> 0 show        # published version (read-only)
+proposit-core <argument-id> 1 show        # new draft
+proposit-core <argument-id> latest show   # same as version 1 (current latest)
 ```
 
 Any mutation command on a published version will exit with an error. All further edits happen on the new draft.
@@ -357,16 +366,16 @@ Any mutation command on a published version will exit with an error. All further
 
 ```bash
 # Delete a single premise (prompts for confirmation)
-proposit-core $ARG_ID latest premises delete $P1_ID
+proposit-core <argument-id> latest premises delete <premise1-id>
 
 # Skip the confirmation prompt
-proposit-core $ARG_ID latest premises delete $P1_ID --confirm
+proposit-core <argument-id> latest premises delete <premise1-id> --confirm
 
 # Delete the argument's latest unpublished version
-proposit-core arguments delete $ARG_ID
+proposit-core arguments delete <argument-id>
 
 # Delete all versions of an argument without a prompt
-proposit-core arguments delete $ARG_ID --all --confirm
+proposit-core arguments delete <argument-id> --all --confirm
 ```
 
 ---
@@ -382,62 +391,62 @@ All version-scoped commands (`<id> <version> <command>`) accept three forms:
 | `0`, `1`, `2`, … | Exact version number      |
 
 ```bash
-proposit-core $ARG_ID latest          show
-proposit-core $ARG_ID last-published  show
-proposit-core $ARG_ID 0               show
+proposit-core <argument-id> latest          show
+proposit-core <argument-id> last-published  show
+proposit-core <argument-id> 0               show
 ```
 
 ---
 
 ## Complete script
 
-The full session above as a single runnable script:
+The full session above as a single runnable script (uses shell variables to pass IDs between commands):
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
 # ── Argument ──────────────────────────────────────────────────────────────────
-ARG_ID=$(proposit-core arguments create "Hypothetical Syllogism" \
+ARG=$(proposit-core arguments create "Hypothetical Syllogism" \
   "If P→Q and Q→R then P→R")
-echo "ARG_ID=$ARG_ID"
+echo "ARG=$ARG"
 
 # ── Variables ─────────────────────────────────────────────────────────────────
-P_ID=$(proposit-core $ARG_ID latest variables create P)
-Q_ID=$(proposit-core $ARG_ID latest variables create Q)
-R_ID=$(proposit-core $ARG_ID latest variables create R)
+P=$(proposit-core $ARG latest variables create P)
+Q=$(proposit-core $ARG latest variables create Q)
+R=$(proposit-core $ARG latest variables create R)
 
 # ── Premises ──────────────────────────────────────────────────────────────────
-P1_ID=$(proposit-core $ARG_ID latest premises create --title "P implies Q")
-P2_ID=$(proposit-core $ARG_ID latest premises create --title "Q implies R")
-P3_ID=$(proposit-core $ARG_ID latest premises create --title "P implies R")
+P1=$(proposit-core $ARG latest premises create --title "P implies Q")
+P2=$(proposit-core $ARG latest premises create --title "Q implies R")
+P3=$(proposit-core $ARG latest premises create --title "P implies R")
 
 # ── Expressions: P → Q ────────────────────────────────────────────────────────
-ROOT1=$(proposit-core $ARG_ID latest expressions create $P1_ID --type operator --operator implies)
-proposit-core $ARG_ID latest expressions create $P1_ID --type variable --variable-id $P_ID --parent-id $ROOT1 --position 0
-proposit-core $ARG_ID latest expressions create $P1_ID --type variable --variable-id $Q_ID --parent-id $ROOT1 --position 1
+ROOT1=$(proposit-core $ARG latest expressions create $P1 --type operator --operator implies)
+proposit-core $ARG latest expressions create $P1 --type variable --variable-id $P --parent-id $ROOT1 --position 0
+proposit-core $ARG latest expressions create $P1 --type variable --variable-id $Q --parent-id $ROOT1 --position 1
 
 # ── Expressions: Q → R ────────────────────────────────────────────────────────
-ROOT2=$(proposit-core $ARG_ID latest expressions create $P2_ID --type operator --operator implies)
-proposit-core $ARG_ID latest expressions create $P2_ID --type variable --variable-id $Q_ID --parent-id $ROOT2 --position 0
-proposit-core $ARG_ID latest expressions create $P2_ID --type variable --variable-id $R_ID --parent-id $ROOT2 --position 1
+ROOT2=$(proposit-core $ARG latest expressions create $P2 --type operator --operator implies)
+proposit-core $ARG latest expressions create $P2 --type variable --variable-id $Q --parent-id $ROOT2 --position 0
+proposit-core $ARG latest expressions create $P2 --type variable --variable-id $R --parent-id $ROOT2 --position 1
 
 # ── Expressions: P → R ────────────────────────────────────────────────────────
-ROOT3=$(proposit-core $ARG_ID latest expressions create $P3_ID --type operator --operator implies)
-proposit-core $ARG_ID latest expressions create $P3_ID --type variable --variable-id $P_ID --parent-id $ROOT3 --position 0
-proposit-core $ARG_ID latest expressions create $P3_ID --type variable --variable-id $R_ID --parent-id $ROOT3 --position 1
+ROOT3=$(proposit-core $ARG latest expressions create $P3 --type operator --operator implies)
+proposit-core $ARG latest expressions create $P3 --type variable --variable-id $P --parent-id $ROOT3 --position 0
+proposit-core $ARG latest expressions create $P3 --type variable --variable-id $R --parent-id $ROOT3 --position 1
 
 # ── Roles ─────────────────────────────────────────────────────────────────────
-proposit-core $ARG_ID latest roles add-support $P1_ID
-proposit-core $ARG_ID latest roles add-support $P2_ID
-proposit-core $ARG_ID latest roles set-conclusion $P3_ID
+proposit-core $ARG latest roles add-support $P1
+proposit-core $ARG latest roles add-support $P2
+proposit-core $ARG latest roles set-conclusion $P3
 
 # ── Render ────────────────────────────────────────────────────────────────────
-proposit-core $ARG_ID latest render
+proposit-core $ARG latest render
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
-proposit-core $ARG_ID latest analysis validate-argument
-proposit-core $ARG_ID latest analysis create
-proposit-core $ARG_ID latest analysis evaluate --json
-proposit-core $ARG_ID latest analysis check-validity
+proposit-core $ARG latest analysis validate-argument
+proposit-core $ARG latest analysis create
+proposit-core $ARG latest analysis evaluate --json
+proposit-core $ARG latest analysis check-validity
 ```
