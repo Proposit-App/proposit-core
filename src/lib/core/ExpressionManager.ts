@@ -3,6 +3,19 @@ import type {
     TCorePropositionalExpression,
 } from "../schemata/index.js"
 import { getOrCreate } from "../utils/collections.js"
+import {
+    POSITION_INITIAL,
+    POSITION_MAX,
+    POSITION_MIN,
+    midpoint,
+} from "../utils/position.js"
+
+export type TExpressionWithoutPosition =
+    TCorePropositionalExpression extends infer U
+        ? U extends TCorePropositionalExpression
+            ? Omit<U, "position">
+            : never
+        : never
 
 /**
  * Low-level manager for a flat-stored expression tree.
@@ -111,6 +124,76 @@ export class ExpressionManager {
             expression.parentId,
             () => new Set()
         ).add(expression.id)
+    }
+
+    /**
+     * Adds an expression as the last child of the given parent.
+     *
+     * If the parent has no children, the expression gets `POSITION_INITIAL`.
+     * Otherwise it gets a midpoint between the last child's position and
+     * `POSITION_MAX`.
+     */
+    public appendExpression(
+        parentId: string | null,
+        expression: TExpressionWithoutPosition
+    ): void {
+        const children = this.getChildExpressions(parentId)
+        const position =
+            children.length === 0
+                ? POSITION_INITIAL
+                : midpoint(
+                      children[children.length - 1].position,
+                      POSITION_MAX
+                  )
+        this.addExpression({
+            ...expression,
+            parentId,
+            position,
+        } as TCorePropositionalExpression)
+    }
+
+    /**
+     * Adds an expression immediately before or after an existing sibling.
+     *
+     * @throws If the sibling does not exist.
+     */
+    public addExpressionRelative(
+        siblingId: string,
+        relativePosition: "before" | "after",
+        expression: TExpressionWithoutPosition
+    ): void {
+        const sibling = this.expressions.get(siblingId)
+        if (!sibling) {
+            throw new Error(`Expression "${siblingId}" not found.`)
+        }
+
+        const children = this.getChildExpressions(sibling.parentId)
+        const siblingIndex = children.findIndex((c) => c.id === siblingId)
+
+        let position: number
+        if (relativePosition === "before") {
+            const prev =
+                siblingIndex > 0 ? children[siblingIndex - 1] : undefined
+            position = midpoint(
+                prev?.position ?? POSITION_MIN,
+                sibling.position
+            )
+        } else {
+            const next =
+                siblingIndex < children.length - 1
+                    ? children[siblingIndex + 1]
+                    : undefined
+            position = midpoint(
+                sibling.position,
+                next?.position ?? POSITION_MAX
+            )
+        }
+
+        this.addExpression({
+            ...expression,
+            parentId: sibling.parentId,
+            position,
+        } as TCorePropositionalExpression)
     }
 
     /**
