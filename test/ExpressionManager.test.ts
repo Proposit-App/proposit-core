@@ -4175,7 +4175,7 @@ describe("position utilities", () => {
     })
 })
 
-describe("appendExpression and addExpressionRelative", () => {
+describe("PremiseManager — appendExpression and addExpressionRelative", () => {
     it("appendExpression assigns POSITION_INITIAL to first child", () => {
         const pm = premiseWithVars()
         pm.appendExpression(null, {

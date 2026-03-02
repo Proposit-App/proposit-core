@@ -10,6 +10,7 @@ import {
     midpoint,
 } from "../utils/position.js"
 
+// Distribute Omit across the union to preserve discriminated-union narrowing.
 export type TExpressionWithoutPosition =
     TCorePropositionalExpression extends infer U
         ? U extends TCorePropositionalExpression
