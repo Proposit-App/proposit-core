@@ -93,19 +93,17 @@ export class ExpressionManager {
             }
         }
 
-        if (expression.position !== null) {
-            const occupiedPositions = getOrCreate(
-                this.childPositionsByParentId,
-                expression.parentId,
-                () => new Set()
+        const occupiedPositions = getOrCreate(
+            this.childPositionsByParentId,
+            expression.parentId,
+            () => new Set()
+        )
+        if (occupiedPositions.has(expression.position)) {
+            throw new Error(
+                `Position ${expression.position} is already used under parent "${expression.parentId}".`
             )
-            if (occupiedPositions.has(expression.position)) {
-                throw new Error(
-                    `Position ${expression.position} is already used under parent "${expression.parentId}".`
-                )
-            }
-            occupiedPositions.add(expression.position)
         }
+        occupiedPositions.add(expression.position)
 
         this.expressions.set(expression.id, expression)
         getOrCreate(
@@ -161,11 +159,9 @@ export class ExpressionManager {
                 .get(expression.parentId)
                 ?.delete(id)
 
-            if (expression.position !== null) {
-                this.childPositionsByParentId
-                    .get(expression.parentId)
-                    ?.delete(expression.position)
-            }
+            this.childPositionsByParentId
+                .get(expression.parentId)
+                ?.delete(expression.position)
 
             this.childExpressionIdsByParentId.delete(id)
             this.childPositionsByParentId.delete(id)
@@ -190,11 +186,9 @@ export class ExpressionManager {
                 this.childExpressionIdsByParentId
                     .get(grandparentId)
                     ?.delete(operatorId)
-                if (operator.position !== null) {
-                    this.childPositionsByParentId
-                        .get(grandparentId)
-                        ?.delete(operator.position)
-                }
+                this.childPositionsByParentId
+                    .get(grandparentId)
+                    ?.delete(operator.position)
                 this.childExpressionIdsByParentId.delete(operatorId)
                 this.childPositionsByParentId.delete(operatorId)
                 this.collapseIfNeeded(grandparentId)
@@ -214,11 +208,9 @@ export class ExpressionManager {
             this.childExpressionIdsByParentId
                 .get(grandparentId)
                 ?.delete(operatorId)
-            if (grandparentPosition !== null) {
-                this.childPositionsByParentId
-                    .get(grandparentId)
-                    ?.delete(grandparentPosition)
-            }
+            this.childPositionsByParentId
+                .get(grandparentId)
+                ?.delete(grandparentPosition)
             this.childExpressionIdsByParentId.delete(operatorId)
             this.childPositionsByParentId.delete(operatorId)
 
@@ -296,18 +288,7 @@ export class ExpressionManager {
             }
         }
 
-        return children.sort((a, b) => {
-            if (a.position === null && b.position === null) {
-                return a.id.localeCompare(b.id)
-            }
-            if (a.position === null) {
-                return 1
-            }
-            if (b.position === null) {
-                return -1
-            }
-            return a.position - b.position
-        })
+        return children.sort((a, b) => a.position - b.position)
     }
 
     private loadInitialExpressions(
@@ -369,7 +350,7 @@ export class ExpressionManager {
     private reparent(
         expressionId: string,
         newParentId: string | null,
-        newPosition: number | null
+        newPosition: number
     ): void {
         const expression = this.expressions.get(expressionId)!
 
@@ -377,11 +358,9 @@ export class ExpressionManager {
         this.childExpressionIdsByParentId
             .get(expression.parentId)
             ?.delete(expressionId)
-        if (expression.position !== null) {
-            this.childPositionsByParentId
-                .get(expression.parentId)
-                ?.delete(expression.position)
-        }
+        this.childPositionsByParentId
+            .get(expression.parentId)
+            ?.delete(expression.position)
 
         // Replace the stored value (expressions are immutable value objects).
         const updated = {
@@ -397,13 +376,11 @@ export class ExpressionManager {
             newParentId,
             () => new Set()
         ).add(expressionId)
-        if (newPosition !== null) {
-            getOrCreate(
-                this.childPositionsByParentId,
-                newParentId,
-                () => new Set()
-            ).add(newPosition)
-        }
+        getOrCreate(
+            this.childPositionsByParentId,
+            newParentId,
+            () => new Set()
+        ).add(newPosition)
     }
 
     /**
@@ -558,12 +535,10 @@ export class ExpressionManager {
             anchorParentId,
             () => new Set()
         ).add(expression.id)
-        if (anchorPosition !== null) {
-            getOrCreate(
-                this.childPositionsByParentId,
-                anchorParentId,
-                () => new Set()
-            ).add(anchorPosition)
-        }
+        getOrCreate(
+            this.childPositionsByParentId,
+            anchorParentId,
+            () => new Set()
+        ).add(anchorPosition)
     }
 }
