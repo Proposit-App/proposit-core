@@ -4174,3 +4174,164 @@ describe("position utilities", () => {
         expect(midpoint(50, 50)).toBe(50)
     })
 })
+
+describe("appendExpression and addExpressionRelative", () => {
+    it("appendExpression assigns POSITION_INITIAL to first child", () => {
+        const pm = premiseWithVars()
+        pm.appendExpression(null, {
+            id: "root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "operator",
+            operator: "and",
+            parentId: null,
+        })
+        const root = pm.getExpression("root")!
+        expect(root.position).toBe(POSITION_INITIAL)
+    })
+
+    it("appendExpression appends after last child", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(
+            makeOpExpr("root", "and", {
+                parentId: null,
+                position: POSITION_INITIAL,
+            })
+        )
+        pm.appendExpression("root", {
+            id: "c1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-p",
+            parentId: "root",
+        })
+        pm.appendExpression("root", {
+            id: "c2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-q",
+            parentId: "root",
+        })
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(2)
+        expect(children[0].id).toBe("c1")
+        expect(children[1].id).toBe("c2")
+        expect(children[0].position).toBeLessThan(children[1].position)
+    })
+
+    it("addExpressionRelative before inserts before sibling", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(
+            makeOpExpr("root", "and", {
+                parentId: null,
+                position: POSITION_INITIAL,
+            })
+        )
+        pm.appendExpression("root", {
+            id: "c1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-p",
+            parentId: "root",
+        })
+        pm.addExpressionRelative("c1", "before", {
+            id: "c0",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-q",
+            parentId: "root",
+        })
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(2)
+        expect(children[0].id).toBe("c0")
+        expect(children[1].id).toBe("c1")
+    })
+
+    it("addExpressionRelative after inserts after sibling", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(
+            makeOpExpr("root", "and", {
+                parentId: null,
+                position: POSITION_INITIAL,
+            })
+        )
+        pm.appendExpression("root", {
+            id: "c1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-p",
+            parentId: "root",
+        })
+        pm.appendExpression("root", {
+            id: "c3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-r",
+            parentId: "root",
+        })
+        pm.addExpressionRelative("c1", "after", {
+            id: "c2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-q",
+            parentId: "root",
+        })
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(3)
+        expect(children[0].id).toBe("c1")
+        expect(children[1].id).toBe("c2")
+        expect(children[2].id).toBe("c3")
+    })
+
+    it("addExpressionRelative after last child appends", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(
+            makeOpExpr("root", "and", {
+                parentId: null,
+                position: POSITION_INITIAL,
+            })
+        )
+        pm.appendExpression("root", {
+            id: "c1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-p",
+            parentId: "root",
+        })
+        pm.addExpressionRelative("c1", "after", {
+            id: "c2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            type: "variable",
+            variableId: "var-q",
+            parentId: "root",
+        })
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(2)
+        expect(children[0].id).toBe("c1")
+        expect(children[1].id).toBe("c2")
+        expect(children[0].position).toBeLessThan(children[1].position)
+    })
+
+    it("addExpressionRelative throws if sibling not found", () => {
+        const pm = premiseWithVars()
+        expect(() =>
+            pm.addExpressionRelative("nonexistent", "before", {
+                id: "c1",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                type: "variable",
+                variableId: "var-p",
+                parentId: null,
+            })
+        ).toThrow(/not found/)
+    })
+})

@@ -25,6 +25,7 @@ import {
     makeErrorIssue,
     makeValidationResult,
 } from "./evaluation/shared.js"
+import type { TExpressionWithoutPosition } from "./ExpressionManager.js"
 import { ExpressionManager } from "./ExpressionManager.js"
 import { VariableManager } from "./VariableManager.js"
 
@@ -134,6 +135,106 @@ export class PremiseManager {
         if (expression.parentId === null) {
             this.rootExpressionId = expression.id
         }
+        if (expression.type === "variable") {
+            this.expressionsByVariableId
+                .get(expression.variableId)
+                .add(expression.id)
+        }
+    }
+
+    /**
+     * Adds an expression as the last child of the given parent, with
+     * position computed automatically.
+     *
+     * If `parentId` is `null`, the expression becomes the root.
+     *
+     * @throws If the premise already has a root and parentId is null.
+     * @throws If the expression does not belong to this argument.
+     * @throws If the expression is a variable reference and the variable has not been registered.
+     */
+    public appendExpression(
+        parentId: string | null,
+        expression: TExpressionWithoutPosition
+    ): void {
+        this.assertBelongsToArgument(
+            expression.argumentId,
+            expression.argumentVersion
+        )
+
+        if (
+            expression.type === "variable" &&
+            !this.variables.hasVariable(expression.variableId)
+        ) {
+            throw new Error(
+                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+            )
+        }
+
+        if (parentId === null) {
+            if (this.rootExpressionId !== undefined) {
+                throw new Error(
+                    `Premise "${this.id}" already has a root expression.`
+                )
+            }
+        } else {
+            if (!this.expressions.getExpression(parentId)) {
+                throw new Error(
+                    `Parent expression "${parentId}" does not exist in this premise.`
+                )
+            }
+        }
+
+        this.expressions.appendExpression(parentId, expression)
+
+        if (parentId === null) {
+            this.syncRootExpressionId()
+        }
+        if (expression.type === "variable") {
+            this.expressionsByVariableId
+                .get(expression.variableId)
+                .add(expression.id)
+        }
+    }
+
+    /**
+     * Adds an expression immediately before or after an existing sibling,
+     * with position computed automatically.
+     *
+     * @throws If the sibling does not exist in this premise.
+     * @throws If the expression does not belong to this argument.
+     * @throws If the expression is a variable reference and the variable has not been registered.
+     */
+    public addExpressionRelative(
+        siblingId: string,
+        relativePosition: "before" | "after",
+        expression: TExpressionWithoutPosition
+    ): void {
+        this.assertBelongsToArgument(
+            expression.argumentId,
+            expression.argumentVersion
+        )
+
+        if (
+            expression.type === "variable" &&
+            !this.variables.hasVariable(expression.variableId)
+        ) {
+            throw new Error(
+                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+            )
+        }
+
+        if (!this.expressions.getExpression(siblingId)) {
+            throw new Error(
+                `Expression "${siblingId}" not found in this premise.`
+            )
+        }
+
+        this.expressions.addExpressionRelative(
+            siblingId,
+            relativePosition,
+            expression
+        )
+
         if (expression.type === "variable") {
             this.expressionsByVariableId
                 .get(expression.variableId)
