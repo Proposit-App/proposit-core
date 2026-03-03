@@ -4,9 +4,6 @@ import type {
     TCorePremise,
 } from "../schemata/index.js"
 
-/** Role that a premise plays in an argument. */
-export type TCorePremiseRole = "supporting" | "conclusion"
-
 export type { TCoreArgumentRoleState }
 
 export interface TCoreArgumentEngineData {

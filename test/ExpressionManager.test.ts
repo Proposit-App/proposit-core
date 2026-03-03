@@ -4411,7 +4411,6 @@ describe("ChangeCollector", () => {
         const collector = new ChangeCollector()
         const roles = {
             conclusionPremiseId: "p1",
-            supportingPremiseIds: ["p2"],
         }
         collector.setRoles(roles)
         const cs = collector.toChangeset()
