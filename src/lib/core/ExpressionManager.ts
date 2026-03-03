@@ -2,6 +2,7 @@ import type {
     TCoreLogicalOperatorType,
     TCorePropositionalExpression,
 } from "../schemata/index.js"
+import type { ChangeCollector } from "./ChangeCollector.js"
 import { getOrCreate } from "../utils/collections.js"
 import {
     POSITION_INITIAL,
@@ -33,6 +34,11 @@ export class ExpressionManager {
     private expressions: Map<string, TCorePropositionalExpression>
     private childExpressionIdsByParentId: Map<string | null, Set<string>>
     private childPositionsByParentId: Map<string | null, Set<number>>
+    private collector: ChangeCollector | null = null
+
+    setCollector(collector: ChangeCollector | null): void {
+        this.collector = collector
+    }
 
     constructor(initialExpressions: TCorePropositionalExpression[] = []) {
         this.expressions = new Map()
@@ -120,6 +126,7 @@ export class ExpressionManager {
         occupiedPositions.add(expression.position)
 
         this.expressions.set(expression.id, expression)
+        this.collector?.addedExpression({ ...expression })
         getOrCreate(
             this.childExpressionIdsByParentId,
             expression.parentId,
@@ -235,6 +242,7 @@ export class ExpressionManager {
                 continue
             }
 
+            this.collector?.removedExpression({ ...expression })
             this.expressions.delete(id)
             this.childExpressionIdsByParentId
                 .get(expression.parentId)
@@ -263,6 +271,7 @@ export class ExpressionManager {
             const children = this.getChildExpressions(operatorId)
             if (children.length === 0) {
                 const grandparentId = operator.parentId
+                this.collector?.removedExpression({ ...operator })
                 this.expressions.delete(operatorId)
                 this.childExpressionIdsByParentId
                     .get(grandparentId)
@@ -285,6 +294,7 @@ export class ExpressionManager {
             const grandparentId = operator.parentId
             const grandparentPosition = operator.position
 
+            this.collector?.removedExpression({ ...operator })
             this.expressions.delete(operatorId)
             this.childExpressionIdsByParentId
                 .get(grandparentId)
@@ -308,6 +318,7 @@ export class ExpressionManager {
                 position: grandparentPosition,
             } as TCorePropositionalExpression
             this.expressions.set(child.id, promoted)
+            this.collector?.modifiedExpression({ ...promoted })
 
             // Replace the operator with the promoted child in the grandparent's child-id set.
             this.childExpressionIdsByParentId
@@ -326,6 +337,7 @@ export class ExpressionManager {
             // Remove the operator's own tracking entries.
             this.childExpressionIdsByParentId.delete(operatorId)
             this.childPositionsByParentId.delete(operatorId)
+            this.collector?.removedExpression({ ...operator })
             this.expressions.delete(operatorId)
 
             // The grandparent's child count is unchanged; no further recursion needed.
@@ -450,6 +462,7 @@ export class ExpressionManager {
             position: newPosition,
         } as TCorePropositionalExpression
         this.expressions.set(expressionId, updated)
+        this.collector?.modifiedExpression({ ...updated })
 
         // Attach to new parent.
         getOrCreate(
@@ -611,6 +624,7 @@ export class ExpressionManager {
             position: anchorPosition,
         } as TCorePropositionalExpression
         this.expressions.set(expression.id, stored)
+        this.collector?.addedExpression({ ...stored })
         getOrCreate(
             this.childExpressionIdsByParentId,
             anchorParentId,
