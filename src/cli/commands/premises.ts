@@ -167,14 +167,12 @@ export function registerPremiseCommands(
 
             // Clean up roles
             const roles = await readRoles(argumentId, version)
-            const updated = { ...roles }
             if (roles.conclusionPremiseId === premiseId) {
-                updated.conclusionPremiseId = undefined
+                await writeRoles(argumentId, version, {
+                    ...roles,
+                    conclusionPremiseId: undefined,
+                })
             }
-            updated.supportingPremiseIds = roles.supportingPremiseIds.filter(
-                (id) => id !== premiseId
-            )
-            await writeRoles(argumentId, version, updated)
 
             await deletePremiseDir(argumentId, version, premiseId)
             printLine("success")

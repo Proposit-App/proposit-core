@@ -71,8 +71,7 @@ export class ChangeCollector {
         const cs: TCoreChangeset = {}
         if (!isEntityChangesEmpty(this.expressions))
             cs.expressions = this.expressions
-        if (!isEntityChangesEmpty(this.variables))
-            cs.variables = this.variables
+        if (!isEntityChangesEmpty(this.variables)) cs.variables = this.variables
         if (!isEntityChangesEmpty(this.premises)) cs.premises = this.premises
         if (this.roles !== undefined) cs.roles = this.roles
         if (this.argument !== undefined) cs.argument = this.argument

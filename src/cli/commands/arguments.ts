@@ -43,7 +43,7 @@ export function registerArgumentCommands(program: Command): void {
                 published: false,
             })
             await writeVariables(id, 0, [])
-            await writeRoles(id, 0, { supportingPremiseIds: [] })
+            await writeRoles(id, 0, {})
             await fs.mkdir(getPremisesDir(id, 0), { recursive: true })
 
             printLine(id)

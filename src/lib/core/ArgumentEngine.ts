@@ -153,8 +153,7 @@ export class ArgumentEngine {
      */
     public listSupportingPremises(): PremiseManager[] {
         return this.listPremises().filter(
-            (pm) =>
-                pm.isInference() && pm.getId() !== this.conclusionPremiseId
+            (pm) => pm.isInference() && pm.getId() !== this.conclusionPremiseId
         )
     }
 
