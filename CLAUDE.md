@@ -29,6 +29,7 @@ src/
     utils.ts            # DefaultMap utility (with optional LRU limit)
     utils/
       collections.ts    # getOrCreate, sortedCopyById, sortedUnique
+      position.ts       # POSITION_MIN, POSITION_MAX, POSITION_INITIAL, midpoint
     schemata/
       index.ts          # Re-exports all schemata
       argument.ts       # TArgument, TArgumentMeta, TArgumentVersionMeta, TArgumentRoleState schemas + types
@@ -45,7 +46,7 @@ src/
     core/
       ArgumentEngine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity
       PremiseManager.ts    # PremiseManager — variables, expressions, evaluate, toDisplayString, toData, isInference, isConstraint
-      ExpressionManager.ts # Low-level expression tree (addExpression, removeExpression, insertExpression)
+      ExpressionManager.ts # Low-level expression tree (addExpression, appendExpression, addExpressionRelative, removeExpression, insertExpression)
       VariableManager.ts   # Low-level variable registry
       diff.ts              # diffArguments + default comparators (standalone function, pluggable)
       relationships.ts     # analyzePremiseRelationships + buildPremiseProfile (standalone functions)
@@ -80,7 +81,7 @@ src/
                           #   validate-assignments, delete, evaluate, check-validity, validate-argument, refs, export
 
 test/
-  ExpressionManager.test.ts   # Full test suite (313 tests, Vitest)
+  ExpressionManager.test.ts   # Full test suite (325 tests, Vitest)
 ```
 
 ## Class hierarchy
@@ -146,6 +147,29 @@ Expressions form a rooted tree stored flat in three maps inside `ExpressionManag
 - `childPositionsByParentId: Map<string | null, Set<number>>` — tracks which positions are occupied under each parent.
 
 Expressions are **immutable value objects** — to "move" one, delete and re-insert or use `reparent()`.
+
+### Midpoint-based positions
+
+Every expression has a non-nullable numeric `position` (schema: `Type.Number({ minimum: 0 })`). Only relative ordering matters — literal values are opaque to callers.
+
+Position computation uses midpoint bisection from `utils/position.ts`:
+
+| Scenario                       | Position                                  |
+| ------------------------------ | ----------------------------------------- |
+| First child (no siblings)      | `POSITION_INITIAL`                        |
+| Append (after last sibling)    | `midpoint(last.position, POSITION_MAX)`   |
+| Prepend (before first sibling) | `midpoint(POSITION_MIN, first.position)`  |
+| Between two siblings           | `midpoint(left.position, right.position)` |
+
+The midpoint function uses `a + (b - a) / 2` (overflow-safe). ~52 bisections at the same insertion point before losing floating-point precision.
+
+**Intent-based insertion API:**
+
+- `appendExpression(parentId, expression)` — appends as last child, position computed automatically.
+- `addExpressionRelative(siblingId, "before" | "after", expression)` — inserts relative to an existing sibling.
+- `addExpression(expression)` — low-level escape hatch with explicit position.
+
+Both `ExpressionManager` and `PremiseManager` expose all three methods. The input type for `appendExpression` and `addExpressionRelative` is `TExpressionWithoutPosition` — a distributive Omit that preserves discriminated-union narrowing.
 
 ### Root-only operators
 
@@ -238,6 +262,12 @@ Key relationship types (all in `src/lib/types/relationships.ts`):
 - `TCorePremiseRelationResult` — per-premise relationship classification with variable details and transitivity flag.
 - `TCorePremiseRelationshipAnalysis` — top-level result from `analyzePremiseRelationships`.
 
+Position types (in `src/lib/core/ExpressionManager.ts` and `src/lib/utils/position.ts`):
+
+- `TExpressionWithoutPosition` — `TPropositionalExpression` with `position` omitted via distributive conditional type. Preserves discriminated-union narrowing. Used as input for `appendExpression` and `addExpressionRelative`.
+- `POSITION_MIN` / `POSITION_MAX` / `POSITION_INITIAL` — constants for midpoint computation.
+- `midpoint(a, b)` — overflow-safe midpoint helper (`a + (b - a) / 2`).
+
 Schemata use [Typebox](https://github.com/sinclairzx81/typebox) for runtime-validatable schemas alongside TypeScript types.
 
 ## Testing
@@ -274,6 +304,8 @@ Current describe blocks (in order):
 - `analyzePremiseRelationships — direct relationships`
 - `analyzePremiseRelationships — transitive relationships`
 - `analyzePremiseRelationships — precedence and edge cases`
+- `position utilities`
+- `PremiseManager — appendExpression and addExpressionRelative`
 
 When adding a test for a new feature, add a new `describe` block at the bottom.
 

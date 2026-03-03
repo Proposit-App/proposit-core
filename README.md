@@ -60,20 +60,20 @@ A premise that is neither supporting nor the conclusion and whose type is `"cons
 
 Each expression carries:
 
-| Field             | Type             | Description                                          |
-| ----------------- | ---------------- | ---------------------------------------------------- |
-| `id`              | `string`         | Unique identifier.                                   |
-| `argumentId`      | `string`         | Must match the engine's argument.                    |
-| `argumentVersion` | `number`         | Must match the engine's argument version.            |
-| `parentId`        | `string \| null` | ID of the parent operator, or `null` for root nodes. |
-| `position`        | `number \| null` | Ordered index among siblings under the same parent.  |
+| Field             | Type             | Description                                                |
+| ----------------- | ---------------- | ---------------------------------------------------------- |
+| `id`              | `string`         | Unique identifier.                                         |
+| `argumentId`      | `string`         | Must match the engine's argument.                          |
+| `argumentVersion` | `number`         | Must match the engine's argument version.                  |
+| `parentId`        | `string \| null` | ID of the parent operator, or `null` for root nodes.       |
+| `position`        | `number`         | Numeric position among siblings (midpoint-based ordering). |
 
 ## Usage
 
 ### Creating an engine and premises
 
 ```typescript
-import { ArgumentEngine } from "@polintpro/proposit-core"
+import { ArgumentEngine, POSITION_INITIAL } from "@polintpro/proposit-core"
 import type {
     TArgument,
     TPropositionalVariable,
@@ -120,7 +120,7 @@ premise1.addExpression({
     type: "operator",
     operator: "implies",
     parentId: null,
-    position: null,
+    position: POSITION_INITIAL,
 })
 premise1.addExpression({
     id: "expr-p1",
@@ -152,7 +152,7 @@ premise2.addExpression({
     type: "variable",
     variableId: "var-p",
     parentId: null,
-    position: null,
+    position: POSITION_INITIAL,
 })
 
 // Conclusion: Q
@@ -164,7 +164,7 @@ conclusion.addExpression({
     type: "variable",
     variableId: "var-q",
     parentId: null,
-    position: null,
+    position: POSITION_INITIAL,
 })
 ```
 
@@ -222,7 +222,7 @@ premise1.addExpression({
     type: "variable",
     variableId: "var-r",
     parentId: null,
-    position: null,
+    position: POSITION_INITIAL,
 })
 premise1.insertExpression(
     {
@@ -232,7 +232,7 @@ premise1.insertExpression(
         type: "operator",
         operator: "and",
         parentId: null, // overwritten by insertExpression
-        position: null,
+        position: POSITION_INITIAL,
     },
     "expr-p1", // becomes child at position 0
     "expr-r" // becomes child at position 1
@@ -406,7 +406,19 @@ Removes and returns a variable. Throws if any expression still references it.
 
 #### `addExpression(expression)`
 
-Adds an expression to the tree. Validates argument membership, variable references, root uniqueness, and structural constraints (operator type, child limits, position uniqueness).
+Adds an expression to the tree with an explicit numeric position. Validates argument membership, variable references, root uniqueness, and structural constraints (operator type, child limits, position uniqueness). This is the low-level escape hatch — prefer `appendExpression` or `addExpressionRelative` for most use cases.
+
+---
+
+#### `appendExpression(parentId, expression)`
+
+Appends an expression as the last child of `parentId` (or as a root if `parentId` is `null`). Position is computed automatically: `POSITION_INITIAL` for the first child, or the midpoint between the last child's position and `POSITION_MAX` for subsequent children. The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
+
+---
+
+#### `addExpressionRelative(siblingId, relativePosition, expression)`
+
+Inserts an expression before or after an existing sibling. `relativePosition` is `"before"` or `"after"`. Position is computed as the midpoint between the sibling and its neighbor (or `POSITION_MIN`/`POSITION_MAX` at the boundaries). The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
 
 ---
 
@@ -567,6 +579,29 @@ const ast: FormulaAST = parseFormula("(P and Q) implies R")
 
 ---
 
+### Position Utilities
+
+Constants and a helper for midpoint-based position computation, exported from `utils/position.ts`:
+
+| Export             | Value / Signature                       | Description                              |
+| ------------------ | --------------------------------------- | ---------------------------------------- |
+| `POSITION_MIN`     | `0`                                     | Lower bound for positions.               |
+| `POSITION_MAX`     | `Number.MAX_SAFE_INTEGER`               | Upper bound for positions.               |
+| `POSITION_INITIAL` | `Math.floor(Number.MAX_SAFE_INTEGER/2)` | Default position for first children.     |
+| `midpoint(a, b)`   | `a + (b - a) / 2`                       | Overflow-safe midpoint of two positions. |
+
+~52 bisections at the same insertion point before losing floating-point precision.
+
+---
+
+### Types
+
+#### `TExpressionWithoutPosition`
+
+A version of `TPropositionalExpression` with the `position` field omitted. Uses a distributive conditional type to preserve discriminated-union narrowing across the `variable`/`operator`/`formula` variants. Used as the input type for `appendExpression` and `addExpressionRelative`.
+
+---
+
 ## CLI
 
 The package ships a command-line interface for managing arguments stored on disk.
@@ -713,9 +748,13 @@ Common options for `create` and `insert`:
 | `--type <type>`      | `variable`, `operator`, or `formula` (required)                        |
 | `--id <id>`          | Explicit expression ID (default: generated UUID)                       |
 | `--parent-id <id>`   | Parent expression ID (omit for root)                                   |
-| `--position <n>`     | Position among siblings                                                |
+| `--position <n>`     | Explicit numeric position (low-level escape hatch)                     |
+| `--before <id>`      | Insert before this sibling (computes position automatically)           |
+| `--after <id>`       | Insert after this sibling (computes position automatically)            |
 | `--variable-id <id>` | Variable ID (required for `type=variable`)                             |
 | `--operator <op>`    | `not`, `and`, `or`, `implies`, or `iff` (required for `type=operator`) |
+
+When none of `--position`, `--before`, or `--after` is specified, the expression is appended as the last child of the parent. `--before`/`--after` cannot be combined with `--position`.
 
 `insert` additionally accepts `--left-node-id` and `--right-node-id` to splice the new expression between existing nodes.
 

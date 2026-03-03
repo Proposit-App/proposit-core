@@ -126,10 +126,12 @@ implies  (root, parentId=null)
 
 `expressions create` returns the new expression's UUID.
 
+When no `--position`, `--before`, or `--after` is specified, the expression is appended as the last child. For binary operators like `implies`, children at position 0 and 1 represent the antecedent and consequent respectively.
+
 ### Premise 1: P → Q
 
 ```bash
-# Root: implies operator
+# Root: implies operator (appended as root — no parent specified)
 proposit-core <argument-id> latest expressions create <premise1-id> \
   --type operator --operator implies
 # → <root1-id>
@@ -185,6 +187,34 @@ proposit-core <argument-id> latest expressions create <premise3-id> \
 
 proposit-core <argument-id> latest premises render <premise3-id>
 # → (P → R)
+```
+
+### Relative positioning
+
+For non-binary operators (e.g. `and`, `or`), use `--before` and `--after` to insert children relative to existing siblings instead of specifying explicit positions:
+
+```bash
+# Append first child (auto-positioned)
+proposit-core <argument-id> latest expressions create <premise-id> \
+  --type variable --variable-id <p-id> \
+  --parent-id <and-op-id>
+# → <expr-p-id>
+
+# Append second child (auto-positioned after first)
+proposit-core <argument-id> latest expressions create <premise-id> \
+  --type variable --variable-id <q-id> \
+  --parent-id <and-op-id>
+# → <expr-q-id>
+
+# Insert a third child before P
+proposit-core <argument-id> latest expressions create <premise-id> \
+  --type variable --variable-id <r-id> \
+  --before <expr-p-id>
+
+# Insert a fourth child after Q
+proposit-core <argument-id> latest expressions create <premise-id> \
+  --type variable --variable-id <s-id> \
+  --after <expr-q-id>
 ```
 
 ### Inspect expressions
