@@ -8,7 +8,9 @@ import {
     type TCoreArgument,
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
+    type TCorePremise,
 } from "../src/lib/schemata"
+import { ChangeCollector } from "../src/lib/core/ChangeCollector"
 import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
 import {
     POSITION_MIN,
@@ -4333,5 +4335,97 @@ describe("PremiseManager — appendExpression and addExpressionRelative", () => 
                 parentId: null,
             })
         ).toThrow(/not found/)
+    })
+})
+
+describe("ChangeCollector", () => {
+    it("starts with an empty changeset", () => {
+        const collector = new ChangeCollector()
+        const cs = collector.toChangeset()
+        expect(cs).toEqual({})
+    })
+
+    it("collects added expressions", () => {
+        const collector = new ChangeCollector()
+        const expr = {
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            parentId: null,
+            position: 0,
+        } as TCorePropositionalExpression
+        collector.addedExpression(expr)
+        const cs = collector.toChangeset()
+        expect(cs.expressions?.added).toEqual([expr])
+        expect(cs.expressions?.modified).toEqual([])
+        expect(cs.expressions?.removed).toEqual([])
+    })
+
+    it("collects modified and removed expressions", () => {
+        const collector = new ChangeCollector()
+        const modified = {
+            id: "e1",
+            type: "variable",
+        } as TCorePropositionalExpression
+        const removed = {
+            id: "e2",
+            type: "operator",
+        } as TCorePropositionalExpression
+        collector.modifiedExpression(modified)
+        collector.removedExpression(removed)
+        const cs = collector.toChangeset()
+        expect(cs.expressions?.added).toEqual([])
+        expect(cs.expressions?.modified).toEqual([modified])
+        expect(cs.expressions?.removed).toEqual([removed])
+    })
+
+    it("collects variable changes", () => {
+        const collector = new ChangeCollector()
+        const v = {
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+        } as TCorePropositionalVariable
+        collector.addedVariable(v)
+        const cs = collector.toChangeset()
+        expect(cs.variables?.added).toEqual([v])
+        expect(cs.expressions).toBeUndefined()
+    })
+
+    it("collects premise changes", () => {
+        const collector = new ChangeCollector()
+        const p = {
+            id: "p1",
+            variables: [],
+            expressions: [],
+        } as TCorePremise
+        collector.addedPremise(p)
+        const cs = collector.toChangeset()
+        expect(cs.premises?.added).toEqual([p])
+    })
+
+    it("records role state changes", () => {
+        const collector = new ChangeCollector()
+        const roles = {
+            conclusionPremiseId: "p1",
+            supportingPremiseIds: ["p2"],
+        }
+        collector.setRoles(roles)
+        const cs = collector.toChangeset()
+        expect(cs.roles).toEqual(roles)
+    })
+
+    it("omits unchanged categories from changeset", () => {
+        const collector = new ChangeCollector()
+        const expr = { id: "e1" } as TCorePropositionalExpression
+        collector.addedExpression(expr)
+        const cs = collector.toChangeset()
+        expect(cs.variables).toBeUndefined()
+        expect(cs.premises).toBeUndefined()
+        expect(cs.roles).toBeUndefined()
+        expect(cs.argument).toBeUndefined()
     })
 })
