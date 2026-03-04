@@ -2371,8 +2371,8 @@ describe("diffArguments", () => {
             expect(diff.premises.removed).toEqual([])
             expect(diff.premises.modified).toEqual([])
             expect(diff.roles.conclusion).toEqual({
-                before: undefined,
-                after: undefined,
+                before: "premise-1",
+                after: "premise-1",
             })
         })
 
@@ -2588,7 +2588,7 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const { engine: engineB } = buildSimpleEngine(ARG)
 
-            // engineA has no conclusion, engineB sets one
+            // Both engines auto-set premise-1 as conclusion; engineB changes to premise-conc
             const { result: pmConc } = engineB.createPremiseWithId(
                 "premise-conc",
                 {
@@ -2616,7 +2616,7 @@ describe("diffArguments", () => {
             engineB.setConclusionPremise("premise-conc")
 
             const diff = diffArguments(engineA, engineB)
-            expect(diff.roles.conclusion.before).toBeUndefined()
+            expect(diff.roles.conclusion.before).toBe("premise-1")
             expect(diff.roles.conclusion.after).toBe("premise-conc")
         })
 
@@ -2624,12 +2624,33 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const { engine: engineB } = buildSimpleEngine(ARG)
 
-            // engineA has no conclusion, engineB sets premise-1 as conclusion
-            engineB.setConclusionPremise("premise-1")
+            // Both engines auto-set premise-1 as conclusion; add a second premise to engineB and set it as conclusion
+            const { result: pm2 } = engineB.createPremiseWithId("premise-2", {
+                title: "Second premise",
+            })
+            pm2.addExpression(
+                makeOpExpr("expr-impl-2", "implies", {
+                    parentId: null,
+                    position: POSITION_INITIAL,
+                })
+            )
+            pm2.addExpression(
+                makeVarExpr("expr-p-2", "var-p", {
+                    parentId: "expr-impl-2",
+                    position: 0,
+                })
+            )
+            pm2.addExpression(
+                makeVarExpr("expr-q-2", "var-q", {
+                    parentId: "expr-impl-2",
+                    position: 1,
+                })
+            )
+            engineB.setConclusionPremise("premise-2")
 
             const diff = diffArguments(engineA, engineB)
-            expect(diff.roles.conclusion.before).toBeUndefined()
-            expect(diff.roles.conclusion.after).toBe("premise-1")
+            expect(diff.roles.conclusion.before).toBe("premise-1")
+            expect(diff.roles.conclusion.after).toBe("premise-2")
         })
 
         it("uses custom comparator extending default", () => {
@@ -5086,9 +5107,12 @@ describe("checksum utilities", () => {
 
         it("checksum changes when conclusion is set", () => {
             const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-            const { result: pm } = eng.createPremise()
+            // First premise is auto-set as conclusion
+            eng.createPremise()
+            const { result: pm2 } = eng.createPremise()
             const before = eng.checksum()
-            eng.setConclusionPremise(pm.getId())
+            // Switch conclusion to second premise — checksum should change
+            eng.setConclusionPremise(pm2.getId())
             const after = eng.checksum()
             expect(before).not.toBe(after)
         })
