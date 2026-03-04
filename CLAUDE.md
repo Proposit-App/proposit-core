@@ -3,6 +3,11 @@
 ## Generic instructions
 
 - Git commit messages should not include any co-authoring content
+- When changes modify the public interface (library API, CLI commands, types, or behavior), update all relevant documentation before finishing:
+    1. **README.md** — API reference, CLI usage, and concepts sections
+    2. **CLAUDE.md** — architecture, types, and design decisions sections
+    3. **CLI_EXAMPLES.md** — walkthrough examples and the complete script
+    4. **scripts/smoke-test.sh** — add coverage for new commands, flags, or behaviors
 
 ## Commands
 
@@ -14,6 +19,7 @@ pnpm run test        # vitest run
 pnpm run build       # tsc -p tsconfig.build.json → dist/
 pnpm run check       # all of the above in sequence
 pnpm cli -- --help   # run the local proposit-core CLI from the local build
+bash scripts/smoke-test.sh  # CLI smoke test (requires build first)
 ```
 
 Run `pnpm eslint . --fix` to auto-fix lint errors before checking manually.

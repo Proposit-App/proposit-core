@@ -863,6 +863,14 @@ pnpm run check       # all of the above in sequence
 pnpm cli -- --help   # run the CLI from the local build
 ```
 
+A CLI smoke test exercises every command against an isolated temp directory:
+
+```bash
+pnpm run build && bash scripts/smoke-test.sh
+```
+
+See [CLI_EXAMPLES.md](CLI_EXAMPLES.md) for a full walkthrough.
+
 ## Publishing
 
 Releases are published to GitHub Packages automatically. To publish a new version:

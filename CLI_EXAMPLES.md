@@ -425,6 +425,19 @@ proposit-core <argument-id> 0               show
 
 ---
 
+## Smoke test
+
+A comprehensive smoke test script exercises every CLI command (including import, diff, insert, formula, cascade delete, and more) against an isolated temporary state directory:
+
+```bash
+pnpm run build
+bash scripts/smoke-test.sh
+```
+
+The script uses `PROPOSIT_HOME` pointed at a `mktemp` directory so it never touches real data, and the directory is cleaned up on exit.
+
+---
+
 ## Complete script
 
 The full session above as a single runnable script (uses shell variables to pass IDs between commands):
