@@ -100,6 +100,12 @@ export class ArgumentEngine {
         const collector = new ChangeCollector()
         collector.addedPremise(pm.toData())
         this.markDirty()
+
+        if (this.conclusionPremiseId === undefined) {
+            this.conclusionPremiseId = id
+            collector.setRoles(this.getRoleState())
+        }
+
         return {
             result: pm,
             changes: collector.toChangeset() as TCoreChangeset,
