@@ -11,6 +11,7 @@ import {
     type TCorePremise,
 } from "../src/lib/schemata"
 import { ChangeCollector } from "../src/lib/core/ChangeCollector"
+import { VariableManager } from "../src/lib/core/VariableManager"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
@@ -121,16 +122,17 @@ const VAR_R = makeVar("var-r", "R")
 /** Create a premise (via ArgumentEngine) with P, Q, R pre-loaded. */
 function premiseWithVars(): PremiseManager {
     const eng = new ArgumentEngine(ARG)
+    eng.addVariable(VAR_P)
+    eng.addVariable(VAR_Q)
+    eng.addVariable(VAR_R)
     const { result: pm } = eng.createPremise()
-    pm.addVariable(VAR_P)
-    pm.addVariable(VAR_Q)
-    pm.addVariable(VAR_R)
     return pm
 }
 
 /** Create a PremiseManager directly with a deterministic ID (for toData tests). */
 function makePremise(extras?: Record<string, unknown>): PremiseManager {
-    return new PremiseManager("premise-1", ARG, extras)
+    const vm = new VariableManager()
+    return new PremiseManager("premise-1", ARG, vm, extras)
 }
 
 // ---------------------------------------------------------------------------
@@ -785,27 +787,41 @@ describe("removeExpression — operator collapse", () => {
 
 describe("removeVariable", () => {
     it("succeeds when no expression references the variable", () => {
-        const premise = premiseWithVars()
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(VAR_R)
+        eng.createPremise()
         // No expressions added — removeVariable should succeed
-        expect(() => premise.removeVariable(VAR_P.id)).not.toThrow()
+        expect(() => eng.removeVariable(VAR_P.id)).not.toThrow()
     })
 
-    it("throws when a variable expression references the variable", () => {
-        const premise = premiseWithVars()
-        premise.addExpression(makeVarExpr("expr-1", VAR_P.id))
+    it("cascade-deletes expressions when a referenced variable is removed", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(VAR_R)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("expr-1", VAR_P.id))
 
-        expect(() => premise.removeVariable(VAR_P.id)).toThrowError(
-            /Variable "var-p" cannot be removed because it is referenced/
-        )
+        const { result } = eng.removeVariable(VAR_P.id)
+        expect(result).toBeDefined()
+        expect(result!.id).toBe(VAR_P.id)
+        // Expression should also be gone
+        expect(pm.getExpression("expr-1")).toBeUndefined()
     })
 
-    it("succeeds after the referencing expression is removed", () => {
-        const premise = premiseWithVars()
-        premise.addExpression(makeVarExpr("expr-1", VAR_P.id))
-        premise.removeExpression("expr-1")
+    it("succeeds after the referencing expression is manually removed", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(VAR_R)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("expr-1", VAR_P.id))
+        pm.removeExpression("expr-1")
 
         // Variable should now be removable
-        expect(() => premise.removeVariable(VAR_P.id)).not.toThrow()
+        expect(() => eng.removeVariable(VAR_P.id)).not.toThrow()
     })
 })
 
@@ -973,9 +989,10 @@ describe("stress test", () => {
             return ids
         }
 
+        for (const v of variables) eng.addVariable(v)
+
         for (let p = 0; p < numPremises; p++) {
             const { result: pm } = eng.createPremise({ title: `premise-${p}` })
-            for (const v of variables) pm.addVariable(v)
             premiseManagers.push(pm)
 
             const numSlots = minTerms + pick(maxTerms - minTerms + 1)
@@ -1076,26 +1093,30 @@ describe("stress test", () => {
         }
     })
 
-    it("referenced variables cannot be removed while expressions exist", () => {
-        const { premiseManagers } = buildStress()
+    it("removing a variable cascade-deletes referencing expressions across premises", () => {
+        const { eng, variables, premiseManagers } = buildStress()
+        // Pick a variable that is referenced somewhere
+        const referencedVar = variables[0]
+        const hadExpressions = premiseManagers.some((pm) =>
+            pm.toData().variables.includes(referencedVar.id)
+        )
+        expect(hadExpressions).toBe(true)
+
+        // Cascade removal should succeed
+        const { result } = eng.removeVariable(referencedVar.id)
+        expect(result).toBeDefined()
+        expect(result!.id).toBe(referencedVar.id)
+
+        // No premise should reference the variable anymore
         for (const pm of premiseManagers) {
-            for (const v of pm.toData().variables) {
-                expect(() => pm.removeVariable(v)).toThrowError(
-                    /cannot be removed because it is referenced/
-                )
-            }
+            expect(pm.toData().variables).not.toContain(referencedVar.id)
         }
     })
 
-    it("all variables become removable once every premise is cleared", () => {
-        const { premiseManagers, variables } = buildStress()
-        for (const pm of premiseManagers) {
-            pm.removeExpression(pm.toData().rootExpressionId!)
-        }
-        for (const pm of premiseManagers) {
-            for (const v of variables) {
-                expect(() => pm.removeVariable(v.id)).not.toThrow()
-            }
+    it("all variables become removable via engine", () => {
+        const { eng, variables } = buildStress()
+        for (const v of variables) {
+            expect(() => eng.removeVariable(v.id)).not.toThrow()
         }
     })
 
@@ -1112,14 +1133,14 @@ describe("stress test", () => {
     })
 
     it("re-adding a premise after full teardown succeeds", () => {
-        const { eng, variables, premiseManagers } = buildStress()
+        const { eng, premiseManagers } = buildStress()
 
         for (const pm of premiseManagers) {
             pm.removeExpression(pm.toData().rootExpressionId!)
         }
 
         const { result: newPm } = eng.createPremise({ title: "rebuilt" })
-        newPm.addVariable(variables[0])
+        // Variables are already registered at engine level
         newPm.addExpression(makeOpExpr("new-root", "and"))
         expect(newPm.toData().rootExpressionId).toBe("new-root")
     })
@@ -1348,10 +1369,10 @@ describe("ArgumentEngine premise CRUD", () => {
 
     it("multiple premises coexist independently", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: pm1 } = eng.createPremise({ title: "first" })
         const { result: pm2 } = eng.createPremise({ title: "second" })
-        pm1.addVariable(VAR_P)
-        pm2.addVariable(VAR_Q)
         pm1.addExpression(makeVarExpr("expr-p", VAR_P.id))
         pm2.addExpression(makeVarExpr("expr-q", VAR_Q.id))
         expect(pm1.toData().expressions).toHaveLength(1)
@@ -1365,53 +1386,62 @@ describe("ArgumentEngine premise CRUD", () => {
 // PremiseManager
 // ---------------------------------------------------------------------------
 
-describe("PremiseManager — addVariable / removeVariable", () => {
-    it("registers a variable and allows it to be referenced", () => {
-        const pm = makePremise()
-        pm.addVariable(VAR_P)
+describe("ArgumentEngine — addVariable / removeVariable", () => {
+    it("registers a variable and allows it to be referenced in a premise", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
         expect(pm.getExpression("expr-p")).toMatchObject({ id: "expr-p" })
     })
 
     it("throws when adding a duplicate variable symbol", () => {
-        const pm = makePremise()
-        pm.addVariable(VAR_P)
-        expect(() => pm.addVariable(makeVar("var-p2", "P"))).toThrowError(
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        expect(() => eng.addVariable(makeVar("var-p2", "P"))).toThrowError(
             /already exists/
         )
     })
 
     it("removes an unreferenced variable", () => {
-        const pm = makePremise()
-        pm.addVariable(VAR_P)
-        expect(pm.removeVariable(VAR_P.id).result).toMatchObject({
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        expect(eng.removeVariable(VAR_P.id).result).toMatchObject({
             id: VAR_P.id,
         })
     })
 
-    it("throws when removing a variable that is still referenced", () => {
-        const pm = premiseWithVars()
+    it("cascade-deletes expressions when removing a referenced variable", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
-        expect(() => pm.removeVariable(VAR_P.id)).toThrowError(
-            /cannot be removed because it is referenced/
-        )
+
+        const { result, changes } = eng.removeVariable(VAR_P.id)
+        expect(result).toMatchObject({ id: VAR_P.id })
+        // The expression referencing VAR_P should have been cascade-deleted
+        expect(pm.getExpression("expr-p")).toBeUndefined()
+        expect(changes.expressions?.removed).toHaveLength(1)
+        expect(changes.expressions?.removed[0].id).toBe("expr-p")
     })
 
     it("throws when adding an expression that references an unregistered variable", () => {
-        const pm = makePremise()
+        const eng = new ArgumentEngine(ARG)
+        const { result: pm } = eng.createPremise()
         expect(() =>
             pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
         ).toThrowError(/references non-existent variable/)
     })
 
     it("throws when the variable does not belong to this argument", () => {
-        const pm = makePremise()
+        const eng = new ArgumentEngine(ARG)
         const foreignVar = {
             ...makeVar("var-f", "F"),
             argumentId: "other-arg",
             argumentVersion: 99,
         }
-        expect(() => pm.addVariable(foreignVar)).toThrowError(/does not match/)
+        expect(() => eng.addVariable(foreignVar)).toThrowError(/does not match/)
     })
 })
 
@@ -1479,15 +1509,17 @@ describe("PremiseManager — addExpression / removeExpression / insertExpression
         expect(pm.getExpression("expr-q")).toBeUndefined()
     })
 
-    it("removeExpression cleans up variable references so the variable becomes removable", () => {
+    it("removeExpression cleans up variable references in expressionsByVariableId", () => {
         const pm = premiseWithVars()
         pm.addExpression(makeOpExpr("op-not", "not"))
         pm.addExpression(
             makeVarExpr("expr-p", VAR_P.id, { parentId: "op-not" })
         )
-        // Removing the root cascades to expr-p; variable P must now be removable.
+        // Removing the root cascades to expr-p; the variable tracking should be cleaned up.
         pm.removeExpression("op-not")
-        expect(() => pm.removeVariable(VAR_P.id)).not.toThrow()
+        // deleteExpressionsUsingVariable should be a no-op since all refs are already gone
+        const { result } = pm.deleteExpressionsUsingVariable(VAR_P.id)
+        expect(result).toEqual([])
     })
 
     it("insertExpression wraps a node and toDisplayString reflects it", () => {
@@ -1559,7 +1591,9 @@ describe("PremiseManager — toDisplayString", () => {
 
 describe("PremiseManager — toData", () => {
     it("returns correct id and extras", () => {
-        const pm = new PremiseManager("my-id", ARG, { title: "My Premise" })
+        const pm = new PremiseManager("my-id", ARG, new VariableManager(), {
+            title: "My Premise",
+        })
         const data = pm.toData()
         expect(data.id).toBe("my-id")
         expect((data as Record<string, unknown>).title).toBe("My Premise")
@@ -1716,20 +1750,14 @@ describe("PremiseManager — validation and evaluation", () => {
 
 describe("ArgumentEngine — roles and evaluation", () => {
     function buildPremiseP(pm: PremiseManager) {
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
     }
 
     function buildPremiseQ(pm: PremiseManager) {
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         pm.addExpression(makeVarExpr(`${pm.getId()}-q`, VAR_Q.id))
     }
 
     function buildPremiseImplies(pm: PremiseManager) {
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         const rootId = `${pm.getId()}-impl`
         pm.addExpression(makeOpExpr(rootId, "implies"))
         pm.addExpression(
@@ -1748,6 +1776,8 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("supports role APIs and removes roles when a premise is deleted", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "support" })
         const { result: conclusion } = eng.createPremise({
             title: "conclusion",
@@ -1769,30 +1799,21 @@ describe("ArgumentEngine — roles and evaluation", () => {
         expect(eng.getRoleState().conclusionPremiseId).toBeUndefined()
     })
 
-    it("detects cross-premise symbol ambiguity", () => {
+    it("prevents duplicate variable symbols at the engine level", () => {
         const eng = new ArgumentEngine(ARG)
-        const { result: p1 } = eng.createPremise({ title: "p1" })
-        const { result: p2 } = eng.createPremise({ title: "p2" })
 
         const varA = makeVar("var-a", "X")
         const varB = makeVar("var-b", "X")
 
-        p1.addVariable(varA)
-        p1.addExpression(makeVarExpr("expr-a", varA.id))
-        p2.addVariable(varB)
-        p2.addExpression(makeVarExpr("expr-b", varB.id))
-
-        eng.setConclusionPremise(p2.getId())
-
-        const validation = eng.validateEvaluability()
-        expect(validation.ok).toBe(false)
-        expect(validation.issues.map((i) => i.code)).toContain(
-            "ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS"
-        )
+        eng.addVariable(varA)
+        // Shared VariableManager enforces unique symbols
+        expect(() => eng.addVariable(varB)).toThrowError(/already exists/)
     })
 
     it("evaluates an assignment and identifies inadmissible non-counterexamples", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
         const { result: conclusion } = eng.createPremise({ title: "Q" })
         const { result: constraint } = eng.createPremise({ title: "P" })
@@ -1816,6 +1837,8 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("finds a counterexample for an invalid argument", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
         const { result: conclusion } = eng.createPremise({ title: "Q" })
         buildPremiseImplies(support)
@@ -1838,6 +1861,8 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("proves modus ponens form valid", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: support1 } = eng.createPremise({ title: "P->Q" })
         const { result: support2 } = eng.createPremise({ title: "P" })
         const { result: conclusion } = eng.createPremise({ title: "Q" })
@@ -1859,10 +1884,16 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
 describe("ArgumentEngine — complex argument scenarios across multiple evaluations", () => {
     function addVars(
-        pm: PremiseManager,
+        eng: ArgumentEngine,
         ...vars: TCorePropositionalVariable[]
     ) {
-        for (const v of vars) pm.addVariable(v)
+        for (const v of vars) {
+            try {
+                eng.addVariable(v)
+            } catch {
+                // Variable may already be registered; ignore duplicates
+            }
+        }
     }
 
     function buildVarRoot(
@@ -1960,13 +1991,10 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
 
     it("affirming the consequent shows multiple evaluation outcomes and a single counterexample", () => {
         const eng = new ArgumentEngine(ARG)
+        addVars(eng, VAR_P, VAR_Q)
         const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
         const { result: qPremise } = eng.createPremise({ title: "Q" })
         const { result: pConclusion } = eng.createPremise({ title: "P" })
-
-        addVars(pImpliesQ, VAR_P, VAR_Q)
-        addVars(qPremise, VAR_P, VAR_Q)
-        addVars(pConclusion, VAR_P, VAR_Q)
 
         buildBinaryRoot(
             pImpliesQ,
@@ -2045,11 +2073,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
         const { result: rConclusion } = eng.createPremise({ title: "R" })
         const { result: constraintNotR } = eng.createPremise({ title: "not R" })
 
-        addVars(pImpliesQ, VAR_P, VAR_Q, VAR_R)
-        addVars(qImpliesR, VAR_P, VAR_Q, VAR_R)
-        addVars(pPremise, VAR_P, VAR_Q, VAR_R)
-        addVars(rConclusion, VAR_P, VAR_Q, VAR_R)
-        addVars(constraintNotR, VAR_P, VAR_Q, VAR_R)
+        addVars(eng, VAR_P, VAR_Q, VAR_R)
 
         buildBinaryRoot(
             pImpliesQ,
@@ -2115,9 +2139,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
         const { result: pPremise } = eng.createPremise({ title: "P" })
         const { result: qConclusion } = eng.createPremise({ title: "Q" })
 
-        addVars(pImpliesQ, VAR_P, VAR_Q)
-        addVars(pPremise, VAR_P, VAR_Q)
-        addVars(qConclusion, VAR_P, VAR_Q)
+        addVars(eng, VAR_P, VAR_Q)
 
         buildBinaryRoot(
             pImpliesQ,
@@ -2298,12 +2320,12 @@ describe("diffArguments", () => {
         const engine = new ArgumentEngine(arg)
         const varP = makeVar("var-p", "P")
         const varQ = makeVar("var-q", "Q")
+        engine.addVariable(varP)
+        engine.addVariable(varQ)
 
         const { result: pm } = engine.createPremiseWithId("premise-1", {
             title: "First premise",
         })
-        pm.addVariable(varP)
-        pm.addVariable(varQ)
         pm.addExpression(
             makeOpExpr("expr-implies", "implies", {
                 parentId: null,
@@ -2350,9 +2372,9 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const { engine: engineB } = buildSimpleEngine(ARG)
 
-            // Add a new variable to engineB's premise
+            // Add a new variable to engineB
             const varR = makeVar("var-r", "R")
-            engineB.getPremise("premise-1")!.addVariable(varR)
+            engineB.addVariable(varR)
 
             const diff = diffArguments(engineA, engineB)
             expect(diff.variables.added).toEqual(
@@ -2366,12 +2388,12 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const argB: TCoreArgument = { ...ARG }
             const engineB = new ArgumentEngine(argB)
+            // Same variable ID, different symbol
+            engineB.addVariable(makeVar("var-p", "X"))
+            engineB.addVariable(makeVar("var-q", "Q"))
             const { result: pm } = engineB.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
-            // Same variable ID, different symbol
-            pm.addVariable(makeVar("var-p", "X"))
-            pm.addVariable(makeVar("var-q", "Q"))
             pm.addExpression(
                 makeOpExpr("expr-implies", "implies", {
                     parentId: null,
@@ -2407,7 +2429,6 @@ describe("diffArguments", () => {
             const { result: pm2 } = engineB.createPremiseWithId("premise-2", {
                 title: "Second premise",
             })
-            pm2.addVariable(makeVar("var-p", "P"))
             pm2.addExpression(
                 makeVarExpr("expr-p2", "var-p", {
                     parentId: null,
@@ -2432,11 +2453,11 @@ describe("diffArguments", () => {
         it("detects modified premise (rootExpressionId change)", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const engineB = new ArgumentEngine(ARG)
+            engineB.addVariable(makeVar("var-p", "P"))
+            engineB.addVariable(makeVar("var-q", "Q"))
             const { result: pm } = engineB.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
-            pm.addVariable(makeVar("var-p", "P"))
-            pm.addVariable(makeVar("var-q", "Q"))
             // Different root expression to trigger a rootExpressionId change
             pm.addExpression(
                 makeOpExpr("expr-iff", "iff", {
@@ -2472,11 +2493,11 @@ describe("diffArguments", () => {
         it("detects modified expressions within a premise", () => {
             // Build engineA with an 'and' root so removing one child doesn't collapse
             const engineA = new ArgumentEngine(ARG)
+            engineA.addVariable(makeVar("var-p", "P"))
+            engineA.addVariable(makeVar("var-q", "Q"))
             const { result: pmA } = engineA.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
-            pmA.addVariable(makeVar("var-p", "P"))
-            pmA.addVariable(makeVar("var-q", "Q"))
             pmA.addExpression(
                 makeOpExpr("expr-and", "and", {
                     parentId: null,
@@ -2496,7 +2517,7 @@ describe("diffArguments", () => {
                 })
             )
             // Add a third child so removing one still leaves 2 (no collapse)
-            pmA.addVariable(makeVar("var-r", "R"))
+            engineA.addVariable(makeVar("var-r", "R"))
             pmA.addExpression(
                 makeVarExpr("expr-r", "var-r", {
                     parentId: "expr-and",
@@ -2506,12 +2527,12 @@ describe("diffArguments", () => {
 
             // Build engineB identically, then swap expr-r for expr-s
             const engineB = new ArgumentEngine(ARG)
+            engineB.addVariable(makeVar("var-p", "P"))
+            engineB.addVariable(makeVar("var-q", "Q"))
+            engineB.addVariable(makeVar("var-r", "R"))
             const { result: pmB } = engineB.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
-            pmB.addVariable(makeVar("var-p", "P"))
-            pmB.addVariable(makeVar("var-q", "Q"))
-            pmB.addVariable(makeVar("var-r", "R"))
             pmB.addExpression(
                 makeOpExpr("expr-and", "and", {
                     parentId: null,
@@ -2532,7 +2553,7 @@ describe("diffArguments", () => {
             )
             // Different expression at position 2
             const varS = makeVar("var-s", "S")
-            pmB.addVariable(varS)
+            engineB.addVariable(varS)
             pmB.addExpression(
                 makeVarExpr("expr-s", "var-s", {
                     parentId: "expr-and",
@@ -2566,14 +2587,12 @@ describe("diffArguments", () => {
                     title: "Conclusion",
                 }
             )
-            pmConc.addVariable(makeVar("var-p", "P"))
             pmConc.addExpression(
                 makeOpExpr("expr-impl-conc", "implies", {
                     parentId: null,
                     position: POSITION_INITIAL,
                 })
             )
-            pmConc.addVariable(makeVar("var-q", "Q"))
             pmConc.addExpression(
                 makeVarExpr("expr-p-conc", "var-p", {
                     parentId: "expr-impl-conc",
@@ -2839,8 +2858,8 @@ describe("Kleene three-valued logic helpers", () => {
 describe("PremiseManager — three-valued evaluation", () => {
     it("evaluates unset variables as null", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
         // Single variable expression as root
         pm.addExpression(makeVarExpr("e-p", "var-p"))
 
@@ -2855,8 +2874,8 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("missing variables default to null", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
         pm.addExpression(makeVarExpr("e-p", "var-p"))
 
         const assignment: TCoreExpressionAssignment = {
@@ -2870,9 +2889,9 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("propagates null through AND (Kleene)", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         // (P and Q) as root
         pm.addExpression(makeOpExpr("and-root", "and"))
         pm.addExpression(
@@ -2899,9 +2918,9 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("propagates null through OR (Kleene)", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         pm.addExpression(makeOpExpr("or-root", "or"))
         pm.addExpression(
             makeVarExpr("e-p", "var-p", { parentId: "or-root", position: 0 })
@@ -2927,9 +2946,9 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("propagates null through implies (Kleene)", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         pm.addExpression(makeOpExpr("imp-root", "implies"))
         pm.addExpression(
             makeVarExpr("e-p", "var-p", { parentId: "imp-root", position: 0 })
@@ -2962,9 +2981,9 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected operator evaluates to false and skips children", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         // (P and Q)
         pm.addExpression(makeOpExpr("and-root", "and"))
         pm.addExpression(
@@ -2986,8 +3005,8 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected formula evaluates to false", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
         // (P) as root formula wrapping variable
         pm.addExpression(makeFormulaExpr("f-root"))
         pm.addExpression(
@@ -3005,10 +3024,10 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected nested operator forces false while parent computes normally", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(VAR_R)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
-        pm.addVariable(VAR_R)
         // (P and Q) or R
         pm.addExpression(makeOpExpr("or-root", "or"))
         pm.addExpression(
@@ -3045,9 +3064,9 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected inference root evaluates to false with no inference diagnostic", () => {
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_P)
-        pm.addVariable(VAR_Q)
         // P implies Q
         pm.addExpression(makeOpExpr("imp", "implies"))
         pm.addExpression(
@@ -3078,12 +3097,14 @@ describe("ArgumentEngine — three-valued evaluation", () => {
     function buildSimpleArgument() {
         // A implies B (conclusion), C implies A (supporting), D (constraint)
         const engine = new ArgumentEngine(ARG)
+        engine.addVariable(VAR_A)
+        engine.addVariable(VAR_B)
+        engine.addVariable(VAR_C)
+        engine.addVariable(VAR_D)
 
         const { result: conclusion } = engine.createPremise({
             title: "conclusion",
         })
-        conclusion.addVariable(VAR_A)
-        conclusion.addVariable(VAR_B)
         conclusion.addExpression(makeOpExpr("c-imp", "implies"))
         conclusion.addExpression(
             makeVarExpr("c-a", VAR_A.id, { parentId: "c-imp", position: 0 })
@@ -3095,8 +3116,6 @@ describe("ArgumentEngine — three-valued evaluation", () => {
         const { result: supporting } = engine.createPremise({
             title: "supporting",
         })
-        supporting.addVariable(VAR_C)
-        supporting.addVariable(VAR_A)
         supporting.addExpression(makeOpExpr("s-imp", "implies"))
         supporting.addExpression(
             makeVarExpr("s-c", VAR_C.id, { parentId: "s-imp", position: 0 })
@@ -3108,7 +3127,6 @@ describe("ArgumentEngine — three-valued evaluation", () => {
         const { result: constraint } = engine.createPremise({
             title: "constraint",
         })
-        constraint.addVariable(VAR_D)
         constraint.addExpression(makeVarExpr("d-var", VAR_D.id))
 
         engine.setConclusionPremise(conclusion.getId())
@@ -3298,9 +3316,9 @@ describe("buildPremiseProfile", () => {
     it("profiles an implies premise with simple antecedent and consequent", () => {
         // A → B
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_A)
+        eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_A)
-        pm.addVariable(VAR_B)
         pm.addExpression(makeOpExpr("impl", "implies"))
         pm.addExpression(
             makeVarExpr("ve-a", VAR_A.id, { parentId: "impl", position: 0 })
@@ -3331,9 +3349,9 @@ describe("buildPremiseProfile", () => {
     it("profiles negation as negative polarity", () => {
         // F → ¬A
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_F)
+        eng.addVariable(VAR_A)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_F)
-        pm.addVariable(VAR_A)
         pm.addExpression(makeOpExpr("impl", "implies"))
         pm.addExpression(
             makeVarExpr("ve-f", VAR_F.id, { parentId: "impl", position: 0 })
@@ -3365,10 +3383,10 @@ describe("buildPremiseProfile", () => {
     it("profiles double negation as positive polarity", () => {
         // ¬(¬A ∧ B) → C
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_A)
+        eng.addVariable(VAR_B)
+        eng.addVariable(VAR_C)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_A)
-        pm.addVariable(VAR_B)
-        pm.addVariable(VAR_C)
         pm.addExpression(makeOpExpr("impl", "implies"))
         pm.addExpression(
             makeOpExpr("not-outer", "not", { parentId: "impl", position: 0 })
@@ -3418,10 +3436,10 @@ describe("buildPremiseProfile", () => {
     it("profiles compound antecedent and consequent", () => {
         // (A ∧ B) → (B ∧ C)
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_A)
+        eng.addVariable(VAR_B)
+        eng.addVariable(VAR_C)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_A)
-        pm.addVariable(VAR_B)
-        pm.addVariable(VAR_C)
         pm.addExpression(makeOpExpr("impl", "implies"))
         pm.addExpression(
             makeOpExpr("and-l", "and", { parentId: "impl", position: 0 })
@@ -3473,9 +3491,9 @@ describe("buildPremiseProfile", () => {
     it("profiles iff as left=antecedent, right=consequent", () => {
         // A ↔ B
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_A)
+        eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_A)
-        pm.addVariable(VAR_B)
         pm.addExpression(makeOpExpr("iff-1", "iff"))
         pm.addExpression(
             makeVarExpr("ve-a", VAR_A.id, { parentId: "iff-1", position: 0 })
@@ -3505,9 +3523,9 @@ describe("buildPremiseProfile", () => {
     it("profiles a constraint premise as non-inference with no appearances", () => {
         // A ∧ B (constraint)
         const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_A)
+        eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
-        pm.addVariable(VAR_A)
-        pm.addVariable(VAR_B)
         pm.addExpression(makeOpExpr("and-1", "and"))
         pm.addExpression(
             makeVarExpr("ve-a", VAR_A.id, { parentId: "and-1", position: 0 })
@@ -3544,9 +3562,19 @@ describe("analyzePremiseRelationships — direct relationships", () => {
         leftVar: TCorePropositionalVariable,
         rightVar: TCorePropositionalVariable
     ): PremiseManager {
+        try {
+            eng.addVariable(leftVar)
+        } catch {
+            /* already registered */
+        }
+        if (leftVar.id !== rightVar.id) {
+            try {
+                eng.addVariable(rightVar)
+            } catch {
+                /* already registered */
+            }
+        }
         const { result: pm } = eng.createPremiseWithId(premiseId)
-        pm.addVariable(leftVar)
-        if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
         pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
         pm.addExpression(
             makeVarExpr(`${premiseId}-ve-l`, leftVar.id, {
@@ -3583,9 +3611,17 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     it("classifies a premise with negated consequent as contradicting", () => {
         // P1: A → ¬B, P2 (focused): B → C
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_A)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_A)
-        p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
         p1.addExpression(
             makeVarExpr("p1-ve-a", VAR_A.id, {
@@ -3620,9 +3656,17 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     it("classifies a premise with variable in both ante and conseq as restricting", () => {
         // P1: B → (B ∧ C), P2 (focused): B → D
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_C)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_B)
-        p1.addVariable(VAR_C)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
         p1.addExpression(
             makeVarExpr("p1-ve-b1", VAR_B.id, {
@@ -3663,9 +3707,17 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     it("classifies a constraint premise sharing variables as restricting", () => {
         // P1: A ∧ B (constraint), P2 (focused): B → C
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_A)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_A)
-        p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-and", "and"))
         p1.addExpression(
             makeVarExpr("p1-ve-a", VAR_A.id, {
@@ -3749,9 +3801,19 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         leftVar: TCorePropositionalVariable,
         rightVar: TCorePropositionalVariable
     ): PremiseManager {
+        try {
+            eng.addVariable(leftVar)
+        } catch {
+            /* already registered */
+        }
+        if (leftVar.id !== rightVar.id) {
+            try {
+                eng.addVariable(rightVar)
+            } catch {
+                /* already registered */
+            }
+        }
         const { result: pm } = eng.createPremiseWithId(premiseId)
-        pm.addVariable(leftVar)
-        if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
         pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
         pm.addExpression(
             makeVarExpr(`${premiseId}-ve-l`, leftVar.id, {
@@ -3814,9 +3876,17 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         // P1: A → ¬B, P2: B → C, P3 (focused): C → D
         // P1 contradicts P2's antecedent, so P1 is transitively contradicting P3
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_A)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_A)
-        p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
         p1.addExpression(
             makeVarExpr("p1-ve-a", VAR_A.id, {
@@ -3849,9 +3919,22 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         // P1: A → ¬B, P2: ¬B → C, P3 (focused): C → D
         // P1's conseq is B(negative), P2's ante is B(negative) → polarity match → supporting
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_A)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_C)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_A)
-        p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
         p1.addExpression(
             makeVarExpr("p1-ve-a", VAR_A.id, {
@@ -3873,8 +3956,6 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         )
 
         const { result: p2 } = eng.createPremiseWithId("p2")
-        p2.addVariable(VAR_B)
-        p2.addVariable(VAR_C)
         p2.addExpression(makeOpExpr("p2-impl", "implies"))
         p2.addExpression(
             makeOpExpr("p2-not", "not", {
@@ -3907,9 +3988,17 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         // P1: A ∧ B (constraint), P2: B → C, P3 (focused): C → D
         // P1 shares B with P2 which supports P3 → P1 restricts P3 transitively
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_A)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_A)
-        p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-and", "and"))
         p1.addExpression(
             makeVarExpr("p1-ve-a", VAR_A.id, {
@@ -3945,9 +4034,19 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         leftVar: TCorePropositionalVariable,
         rightVar: TCorePropositionalVariable
     ): PremiseManager {
+        try {
+            eng.addVariable(leftVar)
+        } catch {
+            /* already registered */
+        }
+        if (leftVar.id !== rightVar.id) {
+            try {
+                eng.addVariable(rightVar)
+            } catch {
+                /* already registered */
+            }
+        }
         const { result: pm } = eng.createPremiseWithId(premiseId)
-        pm.addVariable(leftVar)
-        if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
         pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
         pm.addExpression(
             makeVarExpr(`${premiseId}-ve-l`, leftVar.id, {
@@ -3969,10 +4068,27 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // B: contradicting (¬B in conseq, B in ante), C: supporting (C in conseq, C in ante)
         // Precedence: contradicting wins
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_A)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_C)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_D)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_A)
-        p1.addVariable(VAR_B)
-        p1.addVariable(VAR_C)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
         p1.addExpression(
             makeVarExpr("p1-ve-a", VAR_A.id, {
@@ -4006,9 +4122,6 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         )
 
         const { result: p2 } = eng.createPremiseWithId("p2")
-        p2.addVariable(VAR_B)
-        p2.addVariable(VAR_C)
-        p2.addVariable(VAR_D)
         p2.addExpression(makeOpExpr("p2-impl", "implies"))
         p2.addExpression(
             makeOpExpr("p2-and", "and", {
@@ -4046,9 +4159,22 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // C: supporting (in conseq of P1, in ante of P2)
         // Precedence: restricting wins
         const eng = new ArgumentEngine(ARG)
+        try {
+            eng.addVariable(VAR_B)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_C)
+        } catch {
+            /* already registered */
+        }
+        try {
+            eng.addVariable(VAR_D)
+        } catch {
+            /* already registered */
+        }
         const { result: p1 } = eng.createPremiseWithId("p1")
-        p1.addVariable(VAR_B)
-        p1.addVariable(VAR_C)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
         p1.addExpression(
             makeVarExpr("p1-ve-b1", VAR_B.id, {
@@ -4076,9 +4202,6 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         )
 
         const { result: p2 } = eng.createPremiseWithId("p2")
-        p2.addVariable(VAR_B)
-        p2.addVariable(VAR_C)
-        p2.addVariable(VAR_D)
         p2.addExpression(makeOpExpr("p2-impl", "implies"))
         p2.addExpression(
             makeOpExpr("p2-and", "and", {
@@ -4115,8 +4238,6 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         const eng = new ArgumentEngine(ARG)
         buildImplies(eng, "p1", VAR_A, VAR_B)
         const { result: p2 } = eng.createPremiseWithId("p2")
-        p2.addVariable(VAR_A)
-        p2.addVariable(VAR_B)
         p2.addExpression(makeOpExpr("p2-and", "and"))
         p2.addExpression(
             makeVarExpr("p2-ve-a", VAR_A.id, {
@@ -4451,7 +4572,6 @@ describe("ChangeCollector", () => {
 describe("PremiseManager — mutation changesets", () => {
     function setup() {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
         const v1 = {
             id: "v1",
             symbol: "P",
@@ -4464,8 +4584,9 @@ describe("PremiseManager — mutation changesets", () => {
             argumentId: "arg1",
             argumentVersion: 0,
         }
-        pm.addVariable(v1)
-        pm.addVariable(v2)
+        eng.addVariable(v1)
+        eng.addVariable(v2)
+        const { result: pm } = eng.createPremise()
         return { eng, pm, v1, v2 }
     }
 
@@ -4672,14 +4793,13 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("addVariable returns the variable in result and changes", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
         const v = {
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         }
-        const { result, changes } = pm.addVariable(v)
+        const { result, changes } = eng.addVariable(v)
         expect(result.id).toBe("v1")
         expect(result.symbol).toBe("P")
         expect(changes.variables?.added).toHaveLength(1)
@@ -4688,15 +4808,14 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("removeVariable returns removed variable in result and changes", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
         const v = {
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         }
-        pm.addVariable(v)
-        const { result, changes } = pm.removeVariable("v1")
+        eng.addVariable(v)
+        const { result, changes } = eng.removeVariable("v1")
         expect(result?.id).toBe("v1")
         expect(changes.variables?.removed).toHaveLength(1)
         expect(changes.variables?.removed[0].id).toBe("v1")
@@ -4704,8 +4823,7 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("removeVariable for non-existent variable returns undefined with empty changes", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        const { result, changes } = pm.removeVariable("nonexistent")
+        const { result, changes } = eng.removeVariable("nonexistent")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
@@ -4884,14 +5002,14 @@ describe("checksum utilities", () => {
 
         it("checksum changes when an expression is added", () => {
             const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-            const { result: pm } = eng.createPremise()
             const v = {
                 id: "v1",
                 symbol: "P",
                 argumentId: "arg1",
                 argumentVersion: 0,
             }
-            pm.addVariable(v)
+            eng.addVariable(v)
+            const { result: pm } = eng.createPremise()
             const before = pm.checksum()
             pm.addExpression({
                 id: "e1",
@@ -4910,7 +5028,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine({ id: "arg1", version: 0 })
             const { result: pm } = eng.createPremise()
             const before = pm.checksum()
-            pm.addVariable({
+            eng.addVariable({
                 id: "v1",
                 symbol: "P",
                 argumentId: "arg1",
@@ -4922,16 +5040,15 @@ describe("checksum utilities", () => {
 
         it("identical premises built the same way produce same checksum", () => {
             const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-            const { result: pm1 } = eng.createPremiseWithId("p1")
-            const { result: pm2 } = eng.createPremiseWithId("p2")
             const v1 = {
                 id: "v1",
                 symbol: "P",
                 argumentId: "arg1",
                 argumentVersion: 0,
             }
-            pm1.addVariable(v1)
-            pm2.addVariable(v1)
+            eng.addVariable(v1)
+            const { result: pm1 } = eng.createPremiseWithId("p1")
+            const { result: pm2 } = eng.createPremiseWithId("p2")
             // Different premise IDs mean different checksums (id is part of checksum)
             expect(pm1.checksum()).not.toBe(pm2.checksum())
         })
@@ -4978,14 +5095,14 @@ describe("checksum utilities", () => {
 describe("entity checksum fields", () => {
     function setupPremise() {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
         const v = {
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         }
-        pm.addVariable(v)
+        eng.addVariable(v)
+        const { result: pm } = eng.createPremise()
         pm.addExpression({
             id: "e1",
             type: "variable",
@@ -5025,19 +5142,19 @@ describe("entity checksum fields", () => {
 
     it("getChildExpressions returns expressions with checksums", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        pm.addVariable({
+        eng.addVariable({
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         })
-        pm.addVariable({
+        eng.addVariable({
             id: "v2",
             symbol: "Q",
             argumentId: "arg1",
             argumentVersion: 0,
         })
+        const { result: pm } = eng.createPremise()
         pm.addExpression({
             id: "op",
             type: "operator",
@@ -5097,13 +5214,13 @@ describe("entity checksum fields", () => {
 
     it("changeset expressions from addExpression include checksums", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        pm.addVariable({
+        eng.addVariable({
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         })
+        const { result: pm } = eng.createPremise()
         const { changes } = pm.addExpression({
             id: "e1",
             type: "variable",
@@ -5128,8 +5245,7 @@ describe("entity checksum fields", () => {
 
     it("changeset variables from addVariable include checksums", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        const { changes } = pm.addVariable({
+        const { changes } = eng.addVariable({
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
@@ -5141,27 +5257,26 @@ describe("entity checksum fields", () => {
 
     it("changeset variables from removeVariable include checksums", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        pm.addVariable({
+        eng.addVariable({
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         })
-        const { changes } = pm.removeVariable("v1")
+        const { changes } = eng.removeVariable("v1")
         expect(changes.variables?.removed).toHaveLength(1)
         expect(changes.variables?.removed[0].checksum).toMatch(/^[0-9a-f]{8}$/)
     })
 
     it("addExpression result includes checksum", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        pm.addVariable({
+        eng.addVariable({
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         })
+        const { result: pm } = eng.createPremise()
         const { result } = pm.addExpression({
             id: "e1",
             type: "variable",
@@ -5176,8 +5291,7 @@ describe("entity checksum fields", () => {
 
     it("addVariable result includes checksum", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        const { result } = pm.addVariable({
+        const { result } = eng.addVariable({
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
@@ -5213,19 +5327,19 @@ describe("entity checksum fields", () => {
 
     it("changeset modified expressions include checksums after collapse", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const { result: pm } = eng.createPremise()
-        pm.addVariable({
+        eng.addVariable({
             id: "v1",
             symbol: "P",
             argumentId: "arg1",
             argumentVersion: 0,
         })
-        pm.addVariable({
+        eng.addVariable({
             id: "v2",
             symbol: "Q",
             argumentId: "arg1",
             argumentVersion: 0,
         })
+        const { result: pm } = eng.createPremise()
         pm.addExpression({
             id: "op",
             type: "operator",
