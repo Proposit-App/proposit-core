@@ -36,6 +36,11 @@ import {
     buildPremiseProfile,
     analyzePremiseRelationships,
 } from "../src/lib/core/relationships"
+import {
+    computeHash,
+    canonicalSerialize,
+    entityChecksum,
+} from "../src/lib/core/checksum"
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -4772,5 +4777,95 @@ describe("ArgumentEngine — mutation changesets", () => {
         const { result, changes } = eng.clearConclusionPremise()
         expect(result.conclusionPremiseId).toBeUndefined()
         expect(changes.roles).toBeDefined()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// checksum utilities
+// ---------------------------------------------------------------------------
+
+describe("checksum utilities", () => {
+    describe("computeHash", () => {
+        it("produces consistent hash for same input", () => {
+            expect(computeHash("hello")).toBe(computeHash("hello"))
+        })
+
+        it("produces different hash for different input", () => {
+            expect(computeHash("a")).not.toBe(computeHash("b"))
+        })
+
+        it("returns 8-character hex string", () => {
+            const hash = computeHash("test")
+            expect(hash).toMatch(/^[0-9a-f]{8}$/)
+        })
+    })
+
+    describe("canonicalSerialize", () => {
+        it("sorts object keys", () => {
+            const a = canonicalSerialize({ b: 2, a: 1 })
+            const b = canonicalSerialize({ a: 1, b: 2 })
+            expect(a).toBe(b)
+        })
+
+        it("handles nested objects", () => {
+            const a = canonicalSerialize({ z: { b: 2, a: 1 }, a: 0 })
+            const b = canonicalSerialize({ a: 0, z: { a: 1, b: 2 } })
+            expect(a).toBe(b)
+        })
+
+        it("handles arrays (preserves order)", () => {
+            const a = canonicalSerialize([3, 1, 2])
+            expect(a).toBe("[3,1,2]")
+        })
+
+        it("handles null and primitives", () => {
+            expect(canonicalSerialize(null)).toBe("null")
+            expect(canonicalSerialize(42)).toBe("42")
+            expect(canonicalSerialize("hello")).toBe('"hello"')
+        })
+    })
+
+    describe("entityChecksum", () => {
+        it("uses only specified fields", () => {
+            const cs1 = entityChecksum(
+                { id: "1", symbol: "P", extra: "ignored" },
+                ["id", "symbol"]
+            )
+            const cs2 = entityChecksum(
+                { id: "1", symbol: "P", extra: "different" },
+                ["id", "symbol"]
+            )
+            expect(cs1).toBe(cs2)
+        })
+
+        it("differs when included fields differ", () => {
+            const cs1 = entityChecksum({ id: "1", symbol: "P" }, [
+                "id",
+                "symbol",
+            ])
+            const cs2 = entityChecksum({ id: "1", symbol: "Q" }, [
+                "id",
+                "symbol",
+            ])
+            expect(cs1).not.toBe(cs2)
+        })
+
+        it("field order does not affect checksum", () => {
+            const cs1 = entityChecksum({ id: "1", symbol: "P" }, [
+                "symbol",
+                "id",
+            ])
+            const cs2 = entityChecksum({ id: "1", symbol: "P" }, [
+                "id",
+                "symbol",
+            ])
+            expect(cs1).toBe(cs2)
+        })
+
+        it("skips fields not present on entity", () => {
+            const cs1 = entityChecksum({ id: "1" }, ["id", "missing"])
+            const cs2 = entityChecksum({ id: "1" }, ["id"])
+            expect(cs1).toBe(cs2)
+        })
     })
 })
