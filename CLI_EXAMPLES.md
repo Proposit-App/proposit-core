@@ -229,21 +229,18 @@ proposit-core <argument-id> latest expressions show <premise1-id> <root1-id>
 
 ## 6. Roles
 
-Assign premises to logical roles. Premises 1 and 2 are supporting premises; premise 3 is the conclusion:
+Assign the conclusion role. Supporting premises are derived automatically — any inference premise (root is `implies` or `iff`) that is not the conclusion is considered supporting.
 
 ```bash
-proposit-core <argument-id> latest roles add-support <premise1-id>
-proposit-core <argument-id> latest roles add-support <premise2-id>
 proposit-core <argument-id> latest roles set-conclusion <premise3-id>
 
 proposit-core <argument-id> latest roles show
 proposit-core <argument-id> latest roles show --json
 ```
 
-To undo role assignments:
+To clear the conclusion assignment:
 
 ```bash
-proposit-core <argument-id> latest roles remove-support <premise1-id>
 proposit-core <argument-id> latest roles clear-conclusion
 ```
 
@@ -467,8 +464,8 @@ proposit-core $ARG latest expressions create $P3 --type variable --variable-id $
 proposit-core $ARG latest expressions create $P3 --type variable --variable-id $R --parent-id $ROOT3 --position 1
 
 # ── Roles ─────────────────────────────────────────────────────────────────────
-proposit-core $ARG latest roles add-support $P1
-proposit-core $ARG latest roles add-support $P2
+# Supporting premises are derived automatically from expression type —
+# only the conclusion needs explicit assignment.
 proposit-core $ARG latest roles set-conclusion $P3
 
 # ── Render ────────────────────────────────────────────────────────────────────

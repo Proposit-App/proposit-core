@@ -27,6 +27,7 @@ src/
   lib/
     index.ts            # Re-exports core classes and evaluation types
     utils.ts            # DefaultMap utility (with optional LRU limit)
+    consts.ts            # DEFAULT_CHECKSUM_CONFIG, createChecksumConfig
     utils/
       collections.ts    # getOrCreate, sortedCopyById, sortedUnique
       position.ts       # POSITION_MIN, POSITION_MAX, POSITION_INITIAL, midpoint
@@ -92,12 +93,12 @@ test/
 
 ```
 ArgumentEngine
-  └─ PremiseManager (one per premise)
-       ├─ VariableManager (variable registry)
+  ├─ VariableManager (shared, owned by engine)
+  └─ PremiseManager (one per premise, receives shared VariableManager)
        └─ ExpressionManager (expression tree)
 ```
 
-`ArgumentEngine` manages a collection of premises and their logical roles (supporting vs. conclusion). The constructor accepts an optional `options` parameter: `{ checksumConfig?: TCoreChecksumConfig }`. Each `PremiseManager` owns the variables and expression tree for one premise and can evaluate or serialize itself independently. `ExpressionManager` and `VariableManager` are internal building blocks not exposed in the public API.
+`ArgumentEngine` manages a collection of premises and their logical roles (supporting vs. conclusion). The constructor accepts an optional `options` parameter: `{ checksumConfig?: TCoreChecksumConfig }`. The engine owns a single shared `VariableManager` instance and passes it by reference to every `PremiseManager` it creates. `ArgumentEngine` provides `addVariable()`, `updateVariable()`, and `removeVariable()` (with cascade deletion of referencing expressions across all premises). Each `PremiseManager` owns the expression tree for one premise and can evaluate or serialize itself independently. `ExpressionManager` and `VariableManager` are internal building blocks not exposed in the public API.
 
 ## CLI state storage layout
 
@@ -220,7 +221,7 @@ The evaluation system uses **Kleene three-valued logic** (`true`, `false`, `null
 1. Reads argument meta, version meta, variables, roles, and all premise meta+data in parallel.
 2. Constructs a `TArgument` from the merged meta objects.
 3. Calls `engine.createPremiseWithId(id, title)` for each premise.
-4. Registers all argument variables with every `PremiseManager`.
+4. Registers all argument variables with the engine via `engine.addVariable()`.
 5. Adds expressions in BFS order (roots first, then children of already-added nodes) to satisfy `addExpression`'s parent-existence requirement.
 6. Sets the conclusion role last (supporting premises are derived automatically from expression type).
 
@@ -245,13 +246,21 @@ Supporting premises are **no longer explicitly managed**. The methods `addSuppor
 
 `TCoreArgumentRoleState` now contains only `{ conclusionPremiseId?: string }` — the `supportingPremiseIds` field has been removed. `listSupportingPremises()` derives the list dynamically from the current set of premises and the conclusion assignment.
 
+### Variable management
+
+Variables are argument-scoped and managed by `ArgumentEngine` via `addVariable()`, `updateVariable()`, and `removeVariable()`. The engine owns a single `VariableManager` instance, passed by reference to every `PremiseManager` it creates. All premises share the same variable registry.
+
+`removeVariable()` cascades across all premises: for each premise, `deleteExpressionsUsingVariable()` removes every expression referencing the variable (including subtrees), with operator collapse running after each removal. The combined changeset includes all removed expressions and the removed variable.
+
+`PremiseManager` no longer exposes `addVariable()` or `removeVariable()`. It retains read-only access via `getVariables()` (which returns all argument-level variables) and `getReferencedVariableIds()` (which returns only the variable IDs used in its expression tree).
+
 ### Checksum system
 
 Per-entity checksums provide a lightweight way to detect changes without deep comparison. Key points:
 
 - All entity types (`TPropositionalExpression`, `TPropositionalVariable`, `TCorePremise`, `TCoreArgument`) carry an optional `checksum?: string` field.
 - `PremiseManager.checksum()` and `ArgumentEngine.checksum()` compute checksums lazily — dirty flags track when recomputation is needed.
-- `TCoreChecksumConfig` controls which fields are hashed per entity type. Defaults are provided for each.
+- `TCoreChecksumConfig` controls which fields are hashed per entity type using `Set<string>` fields. `DEFAULT_CHECKSUM_CONFIG` and `createChecksumConfig()` are exported from `src/lib/consts.ts`.
 - The `ArgumentEngine` constructor accepts `options?: { checksumConfig?: TCoreChecksumConfig }`.
 - Standalone utilities: `computeHash(input)`, `canonicalSerialize(obj, fields)`, `entityChecksum(entity, fields)` in `core/checksum.ts`.
 - Checksums are populated in entity getters (e.g. `toData()`) and in changeset outputs.
@@ -285,7 +294,7 @@ Key mutation types (all in `src/lib/types/mutation.ts`):
 
 Key checksum types (in `src/lib/types/checksum.ts`):
 
-- `TCoreChecksumConfig` — configurable fields for each entity type (`expressionFields`, `variableFields`, `premiseFields`, `argumentFields`, `roleFields`).
+- `TCoreChecksumConfig` — configurable `Set<string>` fields for each entity type (`expressionFields`, `variableFields`, `premiseFields`, `argumentFields`, `roleFields`).
 
 All entity types carry an optional `checksum?: string` field populated by getters and changesets.
 
@@ -354,6 +363,8 @@ Current describe blocks (in order):
 - `PremiseManager — mutation changesets`
 - `ArgumentEngine — mutation changesets`
 - `checksum utilities` (with sub-describes for `computeHash`, `canonicalSerialize`, `entityChecksum`, `PremiseManager — checksum`, `ArgumentEngine — checksum`)
+- `ArgumentEngine — variable management`
+- `PremiseManager — deleteExpressionsUsingVariable`
 
 When adding a test for a new feature, add a new `describe` block at the bottom.
 

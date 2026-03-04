@@ -5691,7 +5691,7 @@ describe("PremiseManager — deleteExpressionsUsingVariable", () => {
             makeVarExpr("e-p2", VAR_P.id, { parentId: "op-and", position: 2 })
         )
 
-        const { result, changes } = pm.deleteExpressionsUsingVariable(VAR_P.id)
+        const { result } = pm.deleteExpressionsUsingVariable(VAR_P.id)
 
         // Both P expressions removed (and operator collapses too)
         expect(result.length).toBeGreaterThanOrEqual(2)

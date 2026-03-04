@@ -27,7 +27,7 @@ An argument is composed of one or more **premises**, each managed by a `PremiseM
 
 ### Variables
 
-A **propositional variable** (e.g. `P`, `Q`, `Rain`) is a named atomic proposition. Variables are registered with a `PremiseManager` before they can be referenced by expressions in that premise. Each variable must have a unique `id` and a unique `symbol` within the premise.
+A **propositional variable** (e.g. `P`, `Q`, `Rain`) is a named atomic proposition. Variables are registered with the `ArgumentEngine` via `addVariable()` and are shared across all premises. Each variable must have a unique `id` and a unique `symbol` within the argument.
 
 ### Expressions
 
@@ -110,9 +110,11 @@ const varQ: TPropositionalVariable = {
     symbol: "Q",
 }
 
+// Register variables once on the engine — they are shared across all premises
+eng.addVariable(varP)
+eng.addVariable(varQ)
+
 // Premise 1: P → Q
-premise1.addVariable(varP)
-premise1.addVariable(varQ)
 premise1.addExpression({
     id: "op-implies",
     argumentId: "arg-1",
@@ -144,7 +146,6 @@ premise1.addExpression({
 console.log(premise1.toDisplayString()) // (P → Q)
 
 // Premise 2: P
-premise2.addVariable(varP)
 premise2.addExpression({
     id: "expr-p2",
     argumentId: "arg-1",
@@ -156,7 +157,6 @@ premise2.addExpression({
 })
 
 // Conclusion: Q
-conclusion.addVariable(varQ)
 conclusion.addExpression({
     id: "expr-q2",
     argumentId: "arg-1",
@@ -236,7 +236,7 @@ const varR: TPropositionalVariable = {
     argumentVersion: 1,
     symbol: "R",
 }
-premise1.addVariable(varR)
+eng.addVariable(varR)
 premise1.addExpression({
     id: "expr-r",
     argumentId: "arg-1",
@@ -325,6 +325,30 @@ Returns all premise IDs sorted alphabetically.
 
 ---
 
+#### `addVariable(variable)` → `TCoreMutationResult<TPropositionalVariable>`
+
+Registers a variable for use across all premises. Throws if the `id` or `symbol` already exists, or if `argumentId`/`argumentVersion` don't match the engine's argument.
+
+---
+
+#### `updateVariable(variableId, { symbol? })` → `TCoreMutationResult<TPropositionalVariable>`
+
+Updates variable fields. Returns a mutation result with the modified variable.
+
+---
+
+#### `removeVariable(variableId)` → `TCoreMutationResult<TPropositionalVariable>`
+
+Removes the variable and cascade-deletes all expressions referencing it across every premise (including subtree deletion and operator collapse). Returns a mutation result with the removed variable.
+
+---
+
+#### `getVariables()` → `TPropositionalVariable[]`
+
+Returns all registered variables sorted by ID, with checksums.
+
+---
+
 #### `setConclusionPremise(premiseId)` → `TCoreMutationResult<TCoreArgumentRoleState>`
 
 Designates a premise as the conclusion. Throws if the premise does not exist.
@@ -402,15 +426,21 @@ Returns a serialisable snapshot of the engine state (`{ argument, premises, role
 
 ### `PremiseManager`
 
-#### `addVariable(variable)` → `TCoreMutationResult<TPropositionalVariable>`
+#### `deleteExpressionsUsingVariable(variableId)` → `TCoreMutationResult<TPropositionalExpression[]>`
 
-Registers a variable for use in this premise. Throws if the `id` or `symbol` is already in use, or if the variable does not belong to this argument.
+Removes all expressions referencing the given variable, with subtree deletion and operator collapse. Returns a mutation result with the removed expressions.
 
 ---
 
-#### `removeVariable(variableId)` → `TCoreMutationResult<TPropositionalVariable | undefined>`
+#### `getReferencedVariableIds()` → `Set<string>`
 
-Removes and returns a variable. Throws if any expression still references it.
+Returns the set of variable IDs actually used in this premise's expression tree.
+
+---
+
+#### `getVariables()` → `TPropositionalVariable[]`
+
+Returns all argument-level variables (shared across premises via the engine's `VariableManager`) sorted by ID, with checksums.
 
 ---
 
@@ -453,12 +483,6 @@ Returns an expression by ID.
 #### `getExpressions()` → `TPropositionalExpression[]`
 
 Returns all expressions sorted by ID.
-
----
-
-#### `getVariables()` → `TPropositionalVariable[]`
-
-Returns all registered variables sorted by ID.
 
 ---
 
@@ -585,6 +609,30 @@ import { parseFormula } from "@polintpro/proposit-core"
 import type { FormulaAST } from "@polintpro/proposit-core"
 
 const ast: FormulaAST = parseFormula("(P and Q) implies R")
+```
+
+---
+
+#### `DEFAULT_CHECKSUM_CONFIG`
+
+Readonly default checksum configuration with `Set<string>` fields for each entity type (`expressionFields`, `variableFields`, `premiseFields`, `argumentFields`, `roleFields`). Used by `ArgumentEngine` and `PremiseManager` when no custom config is provided.
+
+---
+
+#### `createChecksumConfig(additional)` → `TCoreChecksumConfig`
+
+Merges additional fields into the defaults via set union. The `additional` parameter has the same shape as `TCoreChecksumConfig` — any omitted fields inherit the defaults from `DEFAULT_CHECKSUM_CONFIG`.
+
+```typescript
+import {
+    createChecksumConfig,
+    DEFAULT_CHECKSUM_CONFIG,
+} from "@polintpro/proposit-core"
+
+// Add a custom field to expression checksums while keeping all defaults
+const config = createChecksumConfig({
+    expressionFields: new Set(["myCustomField"]),
+})
 ```
 
 ---
@@ -726,7 +774,7 @@ proposit-core <id> <ver> variables list-unused [--json]
 proposit-core <id> <ver> variables delete-unused [--confirm] [--json]
 ```
 
-`create` prints the new variable's UUID. `delete` fails if any expression references the variable. `delete-unused` removes variables not referenced by any expression in any premise.
+`create` prints the new variable's UUID. `delete` cascade-deletes all expressions referencing the variable across every premise (including subtree deletion and operator collapse). `delete-unused` removes variables not referenced by any expression in any premise.
 
 #### premises
 
