@@ -550,6 +550,13 @@ export class ExpressionManager {
             throw new Error(`Expression "${rightNodeId}" does not exist.`)
         }
 
+        // 7a. A variable expression cannot have children.
+        if (expression.type === "variable") {
+            throw new Error(
+                `Variable expression "${expression.id}" cannot have children.`
+            )
+        }
+
         // 7. The "not" operator is unary and cannot take two children.
         if (
             expression.type === "operator" &&

@@ -5738,3 +5738,54 @@ describe("PremiseManager — deleteExpressionsUsingVariable", () => {
         expect(pm.getExpressions()).toHaveLength(0)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Variable expressions cannot have children
+// ---------------------------------------------------------------------------
+
+describe("variable expressions cannot have children", () => {
+    it("addExpression rejects a child whose parent is a variable expression", () => {
+        const premise = premiseWithVars()
+        premise.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        expect(() =>
+            premise.addExpression(
+                makeVarExpr("expr-q", VAR_Q.id, { parentId: "expr-p" })
+            )
+        ).toThrowError(/is not an operator expression/)
+    })
+
+    it("insertExpression rejects inserting a variable expression (which would gain children)", () => {
+        const premise = premiseWithVars()
+        premise.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        expect(() =>
+            premise.insertExpression(
+                makeVarExpr("wrap-var", VAR_Q.id),
+                "expr-p"
+            )
+        ).toThrowError(/variable.*cannot have children/i)
+    })
+
+    it("insertExpression rejects a variable expression wrapping two nodes", () => {
+        const premise = premiseWithVars()
+        premise.addExpression(makeOpExpr("op-and", "and"))
+        premise.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+        premise.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+        expect(() =>
+            premise.insertExpression(
+                makeVarExpr("wrap-var", VAR_R.id),
+                "expr-p",
+                "expr-q"
+            )
+        ).toThrowError(/variable.*cannot have children/i)
+    })
+})
