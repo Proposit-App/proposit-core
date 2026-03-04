@@ -54,7 +54,7 @@ The five supported operators and their arities are:
 To evaluate or check an argument, premises must be assigned roles:
 
 - **Conclusion** — the single premise whose truth is being argued for. Set with `ArgumentEngine.setConclusionPremise()`.
-- **Supporting** — premises whose combined truth is supposed to entail the conclusion. Added with `ArgumentEngine.addSupportingPremise()`.
+- **Supporting** — any inference premise (root is `implies` or `iff`) that is not the conclusion is automatically considered supporting. There is no explicit method to add or remove supporting premises.
 
 A premise that is neither supporting nor the conclusion and whose type is `"constraint"` is automatically used to filter admissible variable assignments during validity checking.
 
@@ -89,9 +89,9 @@ const argument: TArgument = {
 
 const eng = new ArgumentEngine(argument)
 
-const premise1 = eng.createPremise("P implies Q")
-const premise2 = eng.createPremise("P")
-const conclusion = eng.createPremise("Q")
+const { result: premise1 } = eng.createPremise("P implies Q")
+const { result: premise2 } = eng.createPremise("P")
+const { result: conclusion } = eng.createPremise("Q")
 ```
 
 ### Adding variables and expressions
@@ -171,9 +171,31 @@ conclusion.addExpression({
 ### Setting roles
 
 ```typescript
-eng.addSupportingPremise(premise1.getId())
-eng.addSupportingPremise(premise2.getId())
+// Supporting premises are derived automatically — any inference premise
+// (root is implies/iff) that isn't the conclusion is automatically supporting.
+// Only the conclusion needs to be set explicitly:
 eng.setConclusionPremise(conclusion.getId())
+```
+
+### Mutation results
+
+All mutating methods on `PremiseManager` and `ArgumentEngine` return `TCoreMutationResult<T>`, which wraps the direct result with an entity-typed changeset:
+
+```typescript
+const { result: pm, changes } = eng.createPremise("My premise")
+// pm is a PremiseManager
+// changes.premises?.added contains the new premise data
+
+const { result: expr, changes: exprChanges } = pm.addExpression({
+    id: "expr-1",
+    argumentId: "arg-1",
+    argumentVersion: 1,
+    type: "variable",
+    variableId: "var-p",
+    parentId: null,
+    position: POSITION_INITIAL,
+})
+// exprChanges.expressions?.added contains the new expression
 ```
 
 ### Evaluating an argument
@@ -261,21 +283,21 @@ console.log(premise1.toDisplayString()) // (P → Q)
 
 ### `ArgumentEngine`
 
-#### `new ArgumentEngine(argument)`
+#### `new ArgumentEngine(argument, options?)`
 
-Creates an engine scoped to `argument` (`{ id, version, title, description }`).
-
----
-
-#### `createPremise(title?)` → `PremiseManager`
-
-Creates a new `PremiseManager`, registers it with the engine, and returns it.
+Creates an engine scoped to `argument` (`{ id, version, title, description }`). Accepts an optional `options` parameter with `{ checksumConfig?: TCoreChecksumConfig }` to configure which fields are included in entity checksums.
 
 ---
 
-#### `removePremise(premiseId)`
+#### `createPremise(title?)` → `TCoreMutationResult<PremiseManager>`
 
-Removes a premise and clears its role assignments.
+Creates a new `PremiseManager`, registers it with the engine, and returns it wrapped in a mutation result with the changeset.
+
+---
+
+#### `removePremise(premiseId)` → `TCoreMutationResult<TCorePremise>`
+
+Removes a premise and clears its role assignments. Returns the removed premise data.
 
 ---
 
@@ -303,13 +325,13 @@ Returns all premise IDs sorted alphabetically.
 
 ---
 
-#### `setConclusionPremise(premiseId)`
+#### `setConclusionPremise(premiseId)` → `TCoreMutationResult<TCoreArgumentRoleState>`
 
-Designates a premise as the conclusion. Throws if the premise does not exist or is already a supporting premise.
+Designates a premise as the conclusion. Throws if the premise does not exist.
 
 ---
 
-#### `clearConclusionPremise()`
+#### `clearConclusionPremise()` → `TCoreMutationResult<TCoreArgumentRoleState>`
 
 Removes the conclusion role assignment.
 
@@ -321,27 +343,15 @@ Returns the conclusion `PremiseManager`, if one has been set.
 
 ---
 
-#### `addSupportingPremise(premiseId)`
-
-Adds a premise to the set of supporting premises. Throws if it is already the conclusion.
-
----
-
-#### `removeSupportingPremise(premiseId)`
-
-Removes a premise from the supporting set.
-
----
-
 #### `listSupportingPremises()` → `PremiseManager[]`
 
-Returns all supporting premises sorted by ID.
+Returns all supporting premises (derived automatically: inference premises that are not the conclusion), sorted by ID.
 
 ---
 
-#### `getRoleState()` → `TArgumentRoleState`
+#### `getRoleState()` → `TCoreArgumentRoleState`
 
-Returns `{ supportingPremiseIds, conclusionPremiseId }`.
+Returns `{ conclusionPremiseId? }`. Supporting premises are derived from expression type, not stored in role state.
 
 ---
 
@@ -392,43 +402,43 @@ Returns a serialisable snapshot of the engine state (`{ argument, premises, role
 
 ### `PremiseManager`
 
-#### `addVariable(variable)`
+#### `addVariable(variable)` → `TCoreMutationResult<TPropositionalVariable>`
 
 Registers a variable for use in this premise. Throws if the `id` or `symbol` is already in use, or if the variable does not belong to this argument.
 
 ---
 
-#### `removeVariable(variableId)` → `TPropositionalVariable | undefined`
+#### `removeVariable(variableId)` → `TCoreMutationResult<TPropositionalVariable | undefined>`
 
 Removes and returns a variable. Throws if any expression still references it.
 
 ---
 
-#### `addExpression(expression)`
+#### `addExpression(expression)` → `TCoreMutationResult<TPropositionalExpression>`
 
 Adds an expression to the tree with an explicit numeric position. Validates argument membership, variable references, root uniqueness, and structural constraints (operator type, child limits, position uniqueness). This is the low-level escape hatch — prefer `appendExpression` or `addExpressionRelative` for most use cases.
 
 ---
 
-#### `appendExpression(parentId, expression)`
+#### `appendExpression(parentId, expression)` → `TCoreMutationResult<TPropositionalExpression>`
 
 Appends an expression as the last child of `parentId` (or as a root if `parentId` is `null`). Position is computed automatically: `POSITION_INITIAL` for the first child, or the midpoint between the last child's position and `POSITION_MAX` for subsequent children. The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
 
 ---
 
-#### `addExpressionRelative(siblingId, relativePosition, expression)`
+#### `addExpressionRelative(siblingId, relativePosition, expression)` → `TCoreMutationResult<TPropositionalExpression>`
 
 Inserts an expression before or after an existing sibling. `relativePosition` is `"before"` or `"after"`. Position is computed as the midpoint between the sibling and its neighbor (or `POSITION_MIN`/`POSITION_MAX` at the boundaries). The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
 
 ---
 
-#### `removeExpression(expressionId)` → `TPropositionalExpression | undefined`
+#### `removeExpression(expressionId)` → `TCoreMutationResult<TPropositionalExpression | undefined>`
 
 Removes an expression and its subtree, then collapses degenerate ancestor operators. Returns the removed root expression, or `undefined` if not found.
 
 ---
 
-#### `insertExpression(expression, leftNodeId?, rightNodeId?)`
+#### `insertExpression(expression, leftNodeId?, rightNodeId?)` → `TCoreMutationResult<TPropositionalExpression>`
 
 Splices `expression` into the tree. At least one of `leftNodeId` / `rightNodeId` must be provided. `leftNodeId` becomes position 0 and `rightNodeId` position 1 under the new expression.
 
@@ -638,7 +648,7 @@ $PROPOSIT_HOME/
       <version>/         # one directory per version (0, 1, 2, …)
         meta.json        # version, createdAt, published, publishedAt?
         variables.json   # array of TPropositionalVariable
-        roles.json       # { conclusionPremiseId?, supportingPremiseIds }
+        roles.json       # { conclusionPremiseId? }
         premises/
           <premise-id>/
             meta.json    # id, title?
@@ -700,9 +710,9 @@ Prints every premise in the argument, one per line, in the format `<premise_id>:
 proposit-core <id> <ver> roles show [--json]
 proposit-core <id> <ver> roles set-conclusion <premise_id>
 proposit-core <id> <ver> roles clear-conclusion
-proposit-core <id> <ver> roles add-support <premise_id>
-proposit-core <id> <ver> roles remove-support <premise_id>
 ```
+
+Supporting premises are derived automatically from expression type (inference premises that are not the conclusion).
 
 #### variables
 

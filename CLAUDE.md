@@ -32,7 +32,7 @@ src/
       position.ts       # POSITION_MIN, POSITION_MAX, POSITION_INITIAL, midpoint
     schemata/
       index.ts          # Re-exports all schemata
-      argument.ts       # TArgument, TArgumentMeta, TArgumentVersionMeta, TArgumentRoleState schemas + types
+      argument.ts       # TArgument, TArgumentMeta, TArgumentVersionMeta, TCoreArgumentRoleState schemas + types
       analysis.ts       # TAnalysisFile schema + type
       propositional.ts  # TPropositionalVariable, TPropositionalExpression (variable/operator/formula),
                         #   TPremise, TLogicalOperatorType
@@ -41,13 +41,17 @@ src/
       evaluation.ts     # All evaluation types: TTrivalentValue, TVariableAssignment,
                         #   TExpressionAssignment, TArgumentEvaluationResult, TValidityCheckResult, etc.
       diff.ts           # Diff types: TCoreArgumentDiff, TCoreFieldChange, TCoreEntitySetDiff, TCoreDiffOptions, etc.
+      mutation.ts       # TCoreEntityChanges, TCoreChangeset, TCoreMutationResult
+      checksum.ts       # TCoreChecksumConfig
       relationships.ts  # Relationship types: TCorePremiseRelationshipAnalysis, TCorePremiseProfile,
                         #   TCoreVariableAppearance, TCorePremiseRelationResult, etc.
     core/
-      ArgumentEngine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity
-      PremiseManager.ts    # PremiseManager — variables, expressions, evaluate, toDisplayString, toData, isInference, isConstraint
+      ArgumentEngine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity, checksum
+      PremiseManager.ts    # PremiseManager — variables, expressions, evaluate, toDisplayString, toData, isInference, isConstraint, checksum
       ExpressionManager.ts # Low-level expression tree (addExpression, appendExpression, addExpressionRelative, removeExpression, insertExpression)
       VariableManager.ts   # Low-level variable registry
+      ChangeCollector.ts   # Internal change collector (not exported) — accumulates entity changes during mutations
+      checksum.ts          # computeHash, canonicalSerialize, entityChecksum (standalone utilities)
       diff.ts              # diffArguments + default comparators (standalone function, pluggable)
       relationships.ts     # analyzePremiseRelationships + buildPremiseProfile (standalone functions)
       evaluation/
@@ -73,7 +77,7 @@ src/
       arguments.ts        # arguments: create, list, delete, publish
       versionShow.ts      # <id> <ver> show
       render.ts           # <id> <ver> render
-      roles.ts            # <id> <ver> roles: show, set-conclusion, clear-conclusion, add-support, remove-support
+      roles.ts            # <id> <ver> roles: show, set-conclusion, clear-conclusion
       variables.ts        # <id> <ver> variables: create, list, show, update, delete, list-unused, delete-unused
       premises.ts         # <id> <ver> premises: create, list, show, update, delete, render
       expressions.ts      # <id> <ver> expressions: create, insert, delete, list, show
@@ -93,7 +97,7 @@ ArgumentEngine
        └─ ExpressionManager (expression tree)
 ```
 
-`ArgumentEngine` manages a collection of premises and their logical roles (supporting vs. conclusion). Each `PremiseManager` owns the variables and expression tree for one premise and can evaluate or serialize itself independently. `ExpressionManager` and `VariableManager` are internal building blocks not exposed in the public API.
+`ArgumentEngine` manages a collection of premises and their logical roles (supporting vs. conclusion). The constructor accepts an optional `options` parameter: `{ checksumConfig?: TCoreChecksumConfig }`. Each `PremiseManager` owns the variables and expression tree for one premise and can evaluate or serialize itself independently. `ExpressionManager` and `VariableManager` are internal building blocks not exposed in the public API.
 
 ## CLI state storage layout
 
@@ -105,7 +109,7 @@ $PROPOSIT_HOME/   (default: ~/.proposit-core)
       <version>/           # one directory per version (0, 1, 2, …)
         meta.json          # ArgumentVersionMetaSchema: version, createdAt, published, publishedAt?
         variables.json     # TPropositionalVariable[]
-        roles.json         # ArgumentRoleStateSchema: { conclusionPremiseId?, supportingPremiseIds }
+        roles.json         # CoreArgumentRoleStateSchema: { conclusionPremiseId? }
         premises/
           <premise-id>/
             meta.json      # PremiseMetaSchema: id, title?
@@ -218,11 +222,39 @@ The evaluation system uses **Kleene three-valued logic** (`true`, `false`, `null
 3. Calls `engine.createPremiseWithId(id, title)` for each premise.
 4. Registers all argument variables with every `PremiseManager`.
 5. Adds expressions in BFS order (roots first, then children of already-added nodes) to satisfy `addExpression`'s parent-existence requirement.
-6. Sets conclusion and supporting roles last.
+6. Sets the conclusion role last (supporting premises are derived automatically from expression type).
 
 ### Publish semantics
 
 `arguments publish <id>` marks the current latest version `published: true, publishedAt: Date.now()`, copies its directory to `version + 1`, and writes a fresh unpublished meta for the new version. All mutating CLI commands call `assertNotPublished` and exit 1 if the version is already published.
+
+### Mutation changesets
+
+Every mutating method on `PremiseManager` and `ArgumentEngine` returns `TCoreMutationResult<T>` instead of its bare return type. The wrapper contains:
+
+- `result: T` — the direct answer (e.g. the removed expression, the new role state).
+- `changes: TCoreChangeset` — an entity-typed changeset listing all side effects of the mutation.
+
+`TCoreChangeset` has optional fields for `expressions`, `variables`, `premises`, `roles`, and `argument`. Each entity field is a `TCoreEntityChanges<T>` with `added`, `modified`, and `removed` arrays. The `roles` field is the new `TCoreArgumentRoleState` (present only when roles changed). The `argument` field is the new `TCoreArgument` (present only when argument metadata changed).
+
+Internally, `ChangeCollector` (not exported) accumulates changes during a mutation and produces the changeset via `toChangeset()`.
+
+### Derived supporting premises
+
+Supporting premises are **no longer explicitly managed**. The methods `addSupportingPremise()` and `removeSupportingPremise()` have been removed from `ArgumentEngine`. Instead, any inference premise (root is `implies` or `iff`) that is not the conclusion is automatically considered supporting.
+
+`TCoreArgumentRoleState` now contains only `{ conclusionPremiseId?: string }` — the `supportingPremiseIds` field has been removed. `listSupportingPremises()` derives the list dynamically from the current set of premises and the conclusion assignment.
+
+### Checksum system
+
+Per-entity checksums provide a lightweight way to detect changes without deep comparison. Key points:
+
+- All entity types (`TPropositionalExpression`, `TPropositionalVariable`, `TCorePremise`, `TCoreArgument`) carry an optional `checksum?: string` field.
+- `PremiseManager.checksum()` and `ArgumentEngine.checksum()` compute checksums lazily — dirty flags track when recomputation is needed.
+- `TCoreChecksumConfig` controls which fields are hashed per entity type. Defaults are provided for each.
+- The `ArgumentEngine` constructor accepts `options?: { checksumConfig?: TCoreChecksumConfig }`.
+- Standalone utilities: `computeHash(input)`, `canonicalSerialize(obj, fields)`, `entityChecksum(entity, fields)` in `core/checksum.ts`.
+- Checksums are populated in entity getters (e.g. `toData()`) and in changeset outputs.
 
 ## Types
 
@@ -244,6 +276,18 @@ Key evaluation types (all in `src/lib/types/evaluation.ts`):
 - `TPremiseEvaluationResult` — per-expression truth values, root value, inference diagnostics.
 - `TArgumentEvaluationResult` — full evaluation output for one assignment.
 - `TValidityCheckResult` — truth-table search summary with counterexamples and truncation info.
+
+Key mutation types (all in `src/lib/types/mutation.ts`):
+
+- `TCoreMutationResult<T>` — `{ result: T, changes: TCoreChangeset }` wrapper returned by all mutating methods.
+- `TCoreChangeset` — optional fields for `expressions`, `variables`, `premises` (each `TCoreEntityChanges<T>`), plus `roles` (`TCoreArgumentRoleState`) and `argument` (`TCoreArgument`).
+- `TCoreEntityChanges<T>` — `{ added: T[], modified: T[], removed: T[] }` tracking entity-level side effects.
+
+Key checksum types (in `src/lib/types/checksum.ts`):
+
+- `TCoreChecksumConfig` — configurable fields for each entity type (`expressionFields`, `variableFields`, `premiseFields`, `argumentFields`, `roleFields`).
+
+All entity types carry an optional `checksum?: string` field populated by getters and changesets.
 
 Key diff types (all in `src/lib/types/diff.ts`):
 
@@ -306,6 +350,10 @@ Current describe blocks (in order):
 - `analyzePremiseRelationships — precedence and edge cases`
 - `position utilities`
 - `PremiseManager — appendExpression and addExpressionRelative`
+- `ChangeCollector`
+- `PremiseManager — mutation changesets`
+- `ArgumentEngine — mutation changesets`
+- `checksum utilities` (with sub-describes for `computeHash`, `canonicalSerialize`, `entityChecksum`, `PremiseManager — checksum`, `ArgumentEngine — checksum`)
 
 When adding a test for a new feature, add a new `describe` block at the bottom.
 
