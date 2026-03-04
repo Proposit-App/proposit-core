@@ -13,6 +13,7 @@
 ### Task 1: Checksum config — change TCoreChecksumConfig to use Set\<string\>
 
 **Files:**
+
 - Modify: `src/lib/types/checksum.ts`
 - Modify: `src/lib/core/checksum.ts:36-47` (entityChecksum)
 
@@ -71,8 +72,9 @@ Refactor TCoreChecksumConfig fields from string[] to Set<string>
 ### Task 2: Create DEFAULT_CHECKSUM_CONFIG and createChecksumConfig
 
 **Files:**
+
 - Create: `src/lib/consts.ts`
-- Modify: `src/lib/core/PremiseManager.ts:36-52` (remove DEFAULT_*_FIELDS)
+- Modify: `src/lib/core/PremiseManager.ts:36-52` (remove DEFAULT\_\*\_FIELDS)
 - Modify: `src/lib/core/PremiseManager.ts:482,496,938,952,998-1039` (use DEFAULT_CHECKSUM_CONFIG)
 - Modify: `src/lib/core/ArgumentEngine.ts:237,245` (use DEFAULT_CHECKSUM_CONFIG)
 - Modify: `src/lib/index.ts` (add exports)
@@ -151,17 +153,20 @@ import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 ```
 
 In `computeChecksum()` (~lines 237, 245):
+
 - Replace `config?.argumentFields ?? ["id", "version"]` with `config?.argumentFields ?? DEFAULT_CHECKSUM_CONFIG.argumentFields!`
 - Replace `config?.roleFields ?? ["conclusionPremiseId"]` with `config?.roleFields ?? DEFAULT_CHECKSUM_CONFIG.roleFields!`
 
 **Step 4: Export from barrel files**
 
 In `src/lib/index.ts`, add:
+
 ```typescript
 export { DEFAULT_CHECKSUM_CONFIG, createChecksumConfig } from "./consts.js"
 ```
 
 In `src/index.ts`, add:
+
 ```typescript
 export { DEFAULT_CHECKSUM_CONFIG, createChecksumConfig } from "./lib/consts.js"
 ```
@@ -182,6 +187,7 @@ Add DEFAULT_CHECKSUM_CONFIG and createChecksumConfig, remove inline defaults
 ### Task 3: Write tests for checksum config changes
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts` (add tests at end)
 
 **Step 1: Write tests for createChecksumConfig**
@@ -258,6 +264,7 @@ Add tests for createChecksumConfig
 ### Task 4: Update VariableManager — add updateVariable method
 
 **Files:**
+
 - Modify: `src/lib/core/VariableManager.ts`
 
 **Step 1: Write failing test**
@@ -335,6 +342,7 @@ Add updateVariable to VariableManager
 This is the core task. ArgumentEngine gets `addVariable`, `updateVariable`, `removeVariable`, and owns the shared VariableManager.
 
 **Files:**
+
 - Modify: `src/lib/core/ArgumentEngine.ts`
 - Modify: `src/lib/core/PremiseManager.ts`
 
@@ -590,6 +598,7 @@ Move variable CRUD to ArgumentEngine, add deleteExpressionsUsingVariable
 All tests that call `pm.addVariable()` must be changed to `eng.addVariable()`. Tests that call `pm.removeVariable()` must use `eng.removeVariable()`. The `premiseWithVars()` and `makePremise()` helpers need updating too.
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts`
 
 **Step 1: Update test helpers**
@@ -672,6 +681,7 @@ For the `addVars` helper (~line 1857-1862), change to use engine:
 ```
 
 For individual tests that do `pm.addVariable(VAR_P)`:
+
 - Change to `eng.addVariable(VAR_P)` where `eng` is the ArgumentEngine.
 - Some tests create premises directly via `new PremiseManager(...)` with no engine — these need a VariableManager passed in, and variable registration done on that VariableManager (or use an engine instead).
 
@@ -699,6 +709,7 @@ Update tests for argument-level variable management
 ### Task 7: Write new tests for variable cascade deletion and engine-level variable methods
 
 **Files:**
+
 - Modify: `test/ExpressionManager.test.ts`
 
 **Step 1: Write tests for ArgumentEngine variable CRUD**
@@ -775,9 +786,9 @@ describe("ArgumentEngine — variable management", () => {
         const eng = new ArgumentEngine(ARG)
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
-        expect(() =>
-            eng.updateVariable(VAR_P.id, { symbol: "Q" })
-        ).toThrow(/already in use/)
+        expect(() => eng.updateVariable(VAR_P.id, { symbol: "Q" })).toThrow(
+            /already in use/
+        )
     })
 
     it("updateVariable returns changeset with modified variable", () => {
@@ -934,9 +945,7 @@ describe("PremiseManager — deleteExpressionsUsingVariable", () => {
         const { result: pm } = eng.createPremise()
         // Build: not(P)
         pm.addExpression(makeOpExpr("op-not", "not"))
-        pm.addExpression(
-            makeVarExpr("e-p", VAR_P.id, { parentId: "op-not" })
-        )
+        pm.addExpression(makeVarExpr("e-p", VAR_P.id, { parentId: "op-not" }))
         // Removing P: e-p is deleted, op-not collapses (0 children → deleted)
         const { result } = pm.deleteExpressionsUsingVariable(VAR_P.id)
         expect(result).toHaveLength(1)
@@ -961,6 +970,7 @@ Add tests for ArgumentEngine variable management and cascade deletion
 ### Task 8: Update CLI — hydration and variable commands
 
 **Files:**
+
 - Modify: `src/cli/engine.ts:59-61` (hydration)
 - Modify: `src/cli/commands/variables.ts`
 
@@ -1152,6 +1162,7 @@ Update CLI to use ArgumentEngine variable management
 ### Task 9: Update documentation — CLAUDE.md
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 **Step 1: Update class hierarchy**
@@ -1176,6 +1187,7 @@ consts.ts            # DEFAULT_CHECKSUM_CONFIG, createChecksumConfig
 **Step 3: Update key design decisions**
 
 Add a "Variable management" subsection explaining:
+
 - Variables are argument-scoped, managed by `ArgumentEngine.addVariable/updateVariable/removeVariable`
 - `VariableManager` owned by `ArgumentEngine`, shared by reference with all `PremiseManager` instances
 - `removeVariable` cascades to `PremiseManager.deleteExpressionsUsingVariable()` in every premise
@@ -1198,6 +1210,7 @@ Update CLAUDE.md for variable management uplift
 ### Task 10: Update documentation — README.md
 
 **Files:**
+
 - Modify: `README.md`
 
 **Step 1: Update Variables concept section**
@@ -1223,6 +1236,7 @@ Add `DEFAULT_CHECKSUM_CONFIG` and `createChecksumConfig` to Standalone Functions
 **Step 4: Update CLI variables section**
 
 Update the `delete` command description:
+
 > `delete` cascade-deletes all expressions referencing the variable across all premises.
 
 **Step 5: Commit**
@@ -1236,13 +1250,14 @@ Update README.md for variable management uplift
 ### Task 11: Update documentation — CLI_EXAMPLES.md
 
 **Files:**
+
 - Modify: `CLI_EXAMPLES.md`
 
 **Step 1: Fix stale role commands**
 
 Remove lines referencing `roles add-support` and `roles remove-support` (~lines 235-236, 246-248). Replace the roles section (section 6) with:
 
-```markdown
+````markdown
 ## 6. Roles
 
 Set the conclusion premise. Supporting premises are derived automatically — any inference premise (root is `implies` or `iff`) that isn't the conclusion is considered supporting.
@@ -1252,12 +1267,14 @@ proposit-core <argument-id> latest roles set-conclusion <premise3-id>
 proposit-core <argument-id> latest roles show
 proposit-core <argument-id> latest roles show --json
 ```
+````
 
 To undo:
 
 ```bash
 proposit-core <argument-id> latest roles clear-conclusion
 ```
+
 ```
 
 **Step 2: Update the complete script**
@@ -1267,7 +1284,9 @@ Remove `roles add-support` lines from the complete script (~lines 470-471). Only
 **Step 3: Commit**
 
 ```
+
 Fix stale role commands and update CLI_EXAMPLES.md
+
 ```
 
 ---
@@ -1286,5 +1305,9 @@ Run: `pnpm run prettify && pnpm eslint . --fix`
 **Step 3: Final commit if lint fixes were needed**
 
 ```
+
 Fix lint issues
+
+```
+
 ```

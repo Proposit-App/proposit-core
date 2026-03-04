@@ -44,9 +44,9 @@ When `ArgumentEngine.removeVariable(variableId)` is called:
 1. For each premise in the engine, call `premise.deleteExpressionsUsingVariable(variableId)`.
 2. Each call finds variable expressions referencing that variable ID via the `expressionsByVariableId` map.
 3. For each such expression, `removeExpression()` is called, which:
-   - Deletes the expression and its entire subtree
-   - Runs `collapseIfNeeded()` on the parent (operator collapse)
-   - Cleans up `expressionsByVariableId` entries for all removed expressions
+    - Deletes the expression and its entire subtree
+    - Runs `collapseIfNeeded()` on the parent (operator collapse)
+    - Cleans up `expressionsByVariableId` entries for all removed expressions
 4. After all premises are cleaned, the variable is removed from the shared `VariableManager`.
 5. The combined changeset includes all removed expressions and variables.
 
