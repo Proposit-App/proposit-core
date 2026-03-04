@@ -52,7 +52,10 @@ export async function hydrateEngine(
         ])
 
         const { id: _id, ...premiseExtras } = meta
-        const pm = engine.createPremiseWithId(premiseId, premiseExtras)
+        const { result: pm } = engine.createPremiseWithId(
+            premiseId,
+            premiseExtras
+        )
 
         for (const variable of allVariables) {
             pm.addVariable({ ...variable, argumentVersion: version })

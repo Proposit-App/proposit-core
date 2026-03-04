@@ -260,7 +260,7 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
     // Create premises and build expression trees
     for (let i = 0; i < input.premises.length; i++) {
         const premiseDef = input.premises[i]
-        const pm = engine.createPremise(
+        const { result: pm } = engine.createPremise(
             premiseDef.metadata ? { ...premiseDef.metadata } : undefined
         )
 

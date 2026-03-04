@@ -112,7 +112,7 @@ const VAR_R = makeVar("var-r", "R")
 /** Create a premise (via ArgumentEngine) with P, Q, R pre-loaded. */
 function premiseWithVars(): PremiseManager {
     const eng = new ArgumentEngine(ARG)
-    const pm = eng.createPremise()
+    const { result: pm } = eng.createPremise()
     pm.addVariable(VAR_P)
     pm.addVariable(VAR_Q)
     pm.addVariable(VAR_R)
@@ -965,7 +965,7 @@ describe("stress test", () => {
         }
 
         for (let p = 0; p < numPremises; p++) {
-            const pm = eng.createPremise({ title: `premise-${p}` })
+            const { result: pm } = eng.createPremise({ title: `premise-${p}` })
             for (const v of variables) pm.addVariable(v)
             premiseManagers.push(pm)
 
@@ -1109,7 +1109,7 @@ describe("stress test", () => {
             pm.removeExpression(pm.toData().rootExpressionId!)
         }
 
-        const newPm = eng.createPremise({ title: "rebuilt" })
+        const { result: newPm } = eng.createPremise({ title: "rebuilt" })
         newPm.addVariable(variables[0])
         newPm.addExpression(makeOpExpr("new-root", "and"))
         expect(newPm.toData().rootExpressionId).toBe("new-root")
@@ -1311,7 +1311,7 @@ describe("formula", () => {
 describe("ArgumentEngine premise CRUD", () => {
     it("createPremise returns a PremiseManager with a generated ID", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise({ title: "test" })
+        const { result: pm } = eng.createPremise({ title: "test" })
         expect(pm.toData().id).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
         )
@@ -1320,7 +1320,7 @@ describe("ArgumentEngine premise CRUD", () => {
 
     it("getPremise(id) returns the same instance", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         expect(eng.getPremise(pm.toData().id)).toBe(pm)
     })
 
@@ -1331,7 +1331,7 @@ describe("ArgumentEngine premise CRUD", () => {
 
     it("removePremise causes getPremise to return undefined", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         const { id } = pm.toData()
         eng.removePremise(id)
         expect(eng.getPremise(id)).toBeUndefined()
@@ -1339,8 +1339,8 @@ describe("ArgumentEngine premise CRUD", () => {
 
     it("multiple premises coexist independently", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm1 = eng.createPremise({ title: "first" })
-        const pm2 = eng.createPremise({ title: "second" })
+        const { result: pm1 } = eng.createPremise({ title: "first" })
+        const { result: pm2 } = eng.createPremise({ title: "second" })
         pm1.addVariable(VAR_P)
         pm2.addVariable(VAR_Q)
         pm1.addExpression(makeVarExpr("expr-p", VAR_P.id))
@@ -1739,8 +1739,10 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("supports role APIs and removes roles when a premise is deleted", () => {
         const eng = new ArgumentEngine(ARG)
-        const support = eng.createPremise({ title: "support" })
-        const conclusion = eng.createPremise({ title: "conclusion" })
+        const { result: support } = eng.createPremise({ title: "support" })
+        const { result: conclusion } = eng.createPremise({
+            title: "conclusion",
+        })
         buildPremiseImplies(support)
         buildPremiseImplies(conclusion)
 
@@ -1760,8 +1762,8 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("detects cross-premise symbol ambiguity", () => {
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremise({ title: "p1" })
-        const p2 = eng.createPremise({ title: "p2" })
+        const { result: p1 } = eng.createPremise({ title: "p1" })
+        const { result: p2 } = eng.createPremise({ title: "p2" })
 
         const varA = makeVar("var-a", "X")
         const varB = makeVar("var-b", "X")
@@ -1782,9 +1784,9 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("evaluates an assignment and identifies inadmissible non-counterexamples", () => {
         const eng = new ArgumentEngine(ARG)
-        const support = eng.createPremise({ title: "P->Q" })
-        const conclusion = eng.createPremise({ title: "Q" })
-        const constraint = eng.createPremise({ title: "P" })
+        const { result: support } = eng.createPremise({ title: "P->Q" })
+        const { result: conclusion } = eng.createPremise({ title: "Q" })
+        const { result: constraint } = eng.createPremise({ title: "P" })
 
         buildPremiseImplies(support)
         buildPremiseQ(conclusion)
@@ -1805,8 +1807,8 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("finds a counterexample for an invalid argument", () => {
         const eng = new ArgumentEngine(ARG)
-        const support = eng.createPremise({ title: "P->Q" })
-        const conclusion = eng.createPremise({ title: "Q" })
+        const { result: support } = eng.createPremise({ title: "P->Q" })
+        const { result: conclusion } = eng.createPremise({ title: "Q" })
         buildPremiseImplies(support)
         buildPremiseQ(conclusion)
 
@@ -1827,9 +1829,9 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
     it("proves modus ponens form valid", () => {
         const eng = new ArgumentEngine(ARG)
-        const support1 = eng.createPremise({ title: "P->Q" })
-        const support2 = eng.createPremise({ title: "P" })
-        const conclusion = eng.createPremise({ title: "Q" })
+        const { result: support1 } = eng.createPremise({ title: "P->Q" })
+        const { result: support2 } = eng.createPremise({ title: "P" })
+        const { result: conclusion } = eng.createPremise({ title: "Q" })
         buildPremiseImplies(support1)
         buildPremiseP(support2)
         buildPremiseQ(conclusion)
@@ -1949,9 +1951,9 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
 
     it("affirming the consequent shows multiple evaluation outcomes and a single counterexample", () => {
         const eng = new ArgumentEngine(ARG)
-        const pImpliesQ = eng.createPremise({ title: "P -> Q" })
-        const qPremise = eng.createPremise({ title: "Q" })
-        const pConclusion = eng.createPremise({ title: "P" })
+        const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
+        const { result: qPremise } = eng.createPremise({ title: "Q" })
+        const { result: pConclusion } = eng.createPremise({ title: "P" })
 
         addVars(pImpliesQ, VAR_P, VAR_Q)
         addVars(qPremise, VAR_P, VAR_Q)
@@ -2028,11 +2030,11 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
 
     it("a constrained transitive argument mixes admissible/inadmissible assignments and remains valid", () => {
         const eng = new ArgumentEngine(ARG)
-        const pImpliesQ = eng.createPremise({ title: "P -> Q" })
-        const qImpliesR = eng.createPremise({ title: "Q -> R" })
-        const pPremise = eng.createPremise({ title: "P" })
-        const rConclusion = eng.createPremise({ title: "R" })
-        const constraintNotR = eng.createPremise({ title: "not R" })
+        const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
+        const { result: qImpliesR } = eng.createPremise({ title: "Q -> R" })
+        const { result: pPremise } = eng.createPremise({ title: "P" })
+        const { result: rConclusion } = eng.createPremise({ title: "R" })
+        const { result: constraintNotR } = eng.createPremise({ title: "not R" })
 
         addVars(pImpliesQ, VAR_P, VAR_Q, VAR_R)
         addVars(qImpliesR, VAR_P, VAR_Q, VAR_R)
@@ -2100,9 +2102,9 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
 
     it("distinguishes valid+sound from valid+unsound using a designated actual assignment", () => {
         const eng = new ArgumentEngine(ARG)
-        const pImpliesQ = eng.createPremise({ title: "P -> Q" })
-        const pPremise = eng.createPremise({ title: "P" })
-        const qConclusion = eng.createPremise({ title: "Q" })
+        const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
+        const { result: pPremise } = eng.createPremise({ title: "P" })
+        const { result: qConclusion } = eng.createPremise({ title: "Q" })
 
         addVars(pImpliesQ, VAR_P, VAR_Q)
         addVars(pPremise, VAR_P, VAR_Q)
@@ -2288,7 +2290,7 @@ describe("diffArguments", () => {
         const varP = makeVar("var-p", "P")
         const varQ = makeVar("var-q", "Q")
 
-        const pm = engine.createPremiseWithId("premise-1", {
+        const { result: pm } = engine.createPremiseWithId("premise-1", {
             title: "First premise",
         })
         pm.addVariable(varP)
@@ -2355,7 +2357,7 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const argB: TCoreArgument = { ...ARG }
             const engineB = new ArgumentEngine(argB)
-            const pm = engineB.createPremiseWithId("premise-1", {
+            const { result: pm } = engineB.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
             // Same variable ID, different symbol
@@ -2393,7 +2395,7 @@ describe("diffArguments", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const { engine: engineB } = buildSimpleEngine(ARG)
 
-            const pm2 = engineB.createPremiseWithId("premise-2", {
+            const { result: pm2 } = engineB.createPremiseWithId("premise-2", {
                 title: "Second premise",
             })
             pm2.addVariable(makeVar("var-p", "P"))
@@ -2421,7 +2423,7 @@ describe("diffArguments", () => {
         it("detects modified premise (rootExpressionId change)", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const engineB = new ArgumentEngine(ARG)
-            const pm = engineB.createPremiseWithId("premise-1", {
+            const { result: pm } = engineB.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
             pm.addVariable(makeVar("var-p", "P"))
@@ -2461,7 +2463,7 @@ describe("diffArguments", () => {
         it("detects modified expressions within a premise", () => {
             // Build engineA with an 'and' root so removing one child doesn't collapse
             const engineA = new ArgumentEngine(ARG)
-            const pmA = engineA.createPremiseWithId("premise-1", {
+            const { result: pmA } = engineA.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
             pmA.addVariable(makeVar("var-p", "P"))
@@ -2495,7 +2497,7 @@ describe("diffArguments", () => {
 
             // Build engineB identically, then swap expr-r for expr-s
             const engineB = new ArgumentEngine(ARG)
-            const pmB = engineB.createPremiseWithId("premise-1", {
+            const { result: pmB } = engineB.createPremiseWithId("premise-1", {
                 title: "First premise",
             })
             pmB.addVariable(makeVar("var-p", "P"))
@@ -2549,9 +2551,12 @@ describe("diffArguments", () => {
             const { engine: engineB } = buildSimpleEngine(ARG)
 
             // engineA has no conclusion, engineB sets one
-            const pmConc = engineB.createPremiseWithId("premise-conc", {
-                title: "Conclusion",
-            })
+            const { result: pmConc } = engineB.createPremiseWithId(
+                "premise-conc",
+                {
+                    title: "Conclusion",
+                }
+            )
             pmConc.addVariable(makeVar("var-p", "P"))
             pmConc.addExpression(
                 makeOpExpr("expr-impl-conc", "implies", {
@@ -2825,7 +2830,7 @@ describe("Kleene three-valued logic helpers", () => {
 describe("PremiseManager — three-valued evaluation", () => {
     it("evaluates unset variables as null", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         // Single variable expression as root
         pm.addExpression(makeVarExpr("e-p", "var-p"))
@@ -2841,7 +2846,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("missing variables default to null", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         pm.addExpression(makeVarExpr("e-p", "var-p"))
 
@@ -2856,7 +2861,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("propagates null through AND (Kleene)", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         pm.addVariable(VAR_Q)
         // (P and Q) as root
@@ -2885,7 +2890,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("propagates null through OR (Kleene)", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         pm.addVariable(VAR_Q)
         pm.addExpression(makeOpExpr("or-root", "or"))
@@ -2913,7 +2918,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("propagates null through implies (Kleene)", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         pm.addVariable(VAR_Q)
         pm.addExpression(makeOpExpr("imp-root", "implies"))
@@ -2948,7 +2953,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected operator evaluates to false and skips children", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         pm.addVariable(VAR_Q)
         // (P and Q)
@@ -2972,7 +2977,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected formula evaluates to false", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         // (P) as root formula wrapping variable
         pm.addExpression(makeFormulaExpr("f-root"))
@@ -2991,7 +2996,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected nested operator forces false while parent computes normally", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         pm.addVariable(VAR_Q)
         pm.addVariable(VAR_R)
@@ -3031,7 +3036,7 @@ describe("PremiseManager — three-valued evaluation", () => {
 
     it("rejected inference root evaluates to false with no inference diagnostic", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_P)
         pm.addVariable(VAR_Q)
         // P implies Q
@@ -3065,7 +3070,9 @@ describe("ArgumentEngine — three-valued evaluation", () => {
         // A implies B (conclusion), C implies A (supporting), D (constraint)
         const engine = new ArgumentEngine(ARG)
 
-        const conclusion = engine.createPremise({ title: "conclusion" })
+        const { result: conclusion } = engine.createPremise({
+            title: "conclusion",
+        })
         conclusion.addVariable(VAR_A)
         conclusion.addVariable(VAR_B)
         conclusion.addExpression(makeOpExpr("c-imp", "implies"))
@@ -3076,7 +3083,9 @@ describe("ArgumentEngine — three-valued evaluation", () => {
             makeVarExpr("c-b", VAR_B.id, { parentId: "c-imp", position: 1 })
         )
 
-        const supporting = engine.createPremise({ title: "supporting" })
+        const { result: supporting } = engine.createPremise({
+            title: "supporting",
+        })
         supporting.addVariable(VAR_C)
         supporting.addVariable(VAR_A)
         supporting.addExpression(makeOpExpr("s-imp", "implies"))
@@ -3087,7 +3096,9 @@ describe("ArgumentEngine — three-valued evaluation", () => {
             makeVarExpr("s-a", VAR_A.id, { parentId: "s-imp", position: 1 })
         )
 
-        const constraint = engine.createPremise({ title: "constraint" })
+        const { result: constraint } = engine.createPremise({
+            title: "constraint",
+        })
         constraint.addVariable(VAR_D)
         constraint.addExpression(makeVarExpr("d-var", VAR_D.id))
 
@@ -3226,7 +3237,7 @@ describe("field preservation — unknown fields survive round-trips", () => {
 
     it("preserves extras on premises through toData()", () => {
         const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
-        const pm = engine.createPremise({
+        const { result: pm } = engine.createPremise({
             title: "My Premise",
             priority: "high",
         })
@@ -3246,7 +3257,7 @@ describe("field preservation — unknown fields survive round-trips", () => {
 
     it("setExtras replaces all extras, not merges", () => {
         const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
-        const pm = engine.createPremise({ a: "1", b: "2" })
+        const { result: pm } = engine.createPremise({ a: "1", b: "2" })
         pm.setExtras({ c: "3" })
         expect(pm.getExtras()).toEqual({ c: "3" })
         expect(pm.getExtras()).not.toHaveProperty("a")
@@ -3254,7 +3265,7 @@ describe("field preservation — unknown fields survive round-trips", () => {
 
     it("structural fields in toData() cannot be shadowed by extras", () => {
         const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
-        const pm = engine.createPremise({
+        const { result: pm } = engine.createPremise({
             id: "should-be-overridden",
             rootExpressionId: "fake",
         })
@@ -3278,7 +3289,7 @@ describe("buildPremiseProfile", () => {
     it("profiles an implies premise with simple antecedent and consequent", () => {
         // A → B
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_A)
         pm.addVariable(VAR_B)
         pm.addExpression(makeOpExpr("impl", "implies"))
@@ -3311,7 +3322,7 @@ describe("buildPremiseProfile", () => {
     it("profiles negation as negative polarity", () => {
         // F → ¬A
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_F)
         pm.addVariable(VAR_A)
         pm.addExpression(makeOpExpr("impl", "implies"))
@@ -3345,7 +3356,7 @@ describe("buildPremiseProfile", () => {
     it("profiles double negation as positive polarity", () => {
         // ¬(¬A ∧ B) → C
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_A)
         pm.addVariable(VAR_B)
         pm.addVariable(VAR_C)
@@ -3398,7 +3409,7 @@ describe("buildPremiseProfile", () => {
     it("profiles compound antecedent and consequent", () => {
         // (A ∧ B) → (B ∧ C)
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_A)
         pm.addVariable(VAR_B)
         pm.addVariable(VAR_C)
@@ -3453,7 +3464,7 @@ describe("buildPremiseProfile", () => {
     it("profiles iff as left=antecedent, right=consequent", () => {
         // A ↔ B
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_A)
         pm.addVariable(VAR_B)
         pm.addExpression(makeOpExpr("iff-1", "iff"))
@@ -3485,7 +3496,7 @@ describe("buildPremiseProfile", () => {
     it("profiles a constraint premise as non-inference with no appearances", () => {
         // A ∧ B (constraint)
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         pm.addVariable(VAR_A)
         pm.addVariable(VAR_B)
         pm.addExpression(makeOpExpr("and-1", "and"))
@@ -3503,7 +3514,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles an empty premise as non-inference with no appearances", () => {
         const eng = new ArgumentEngine(ARG)
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
 
         const profile = buildPremiseProfile(pm)
         expect(profile.isInference).toBe(false)
@@ -3524,7 +3535,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
         leftVar: TCorePropositionalVariable,
         rightVar: TCorePropositionalVariable
     ): PremiseManager {
-        const pm = eng.createPremiseWithId(premiseId)
+        const { result: pm } = eng.createPremiseWithId(premiseId)
         pm.addVariable(leftVar)
         if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
         pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
@@ -3563,7 +3574,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     it("classifies a premise with negated consequent as contradicting", () => {
         // P1: A → ¬B, P2 (focused): B → C
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_A)
         p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
@@ -3600,7 +3611,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     it("classifies a premise with variable in both ante and conseq as restricting", () => {
         // P1: B → (B ∧ C), P2 (focused): B → D
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_B)
         p1.addVariable(VAR_C)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
@@ -3643,7 +3654,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     it("classifies a constraint premise sharing variables as restricting", () => {
         // P1: A ∧ B (constraint), P2 (focused): B → C
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_A)
         p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-and", "and"))
@@ -3729,7 +3740,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         leftVar: TCorePropositionalVariable,
         rightVar: TCorePropositionalVariable
     ): PremiseManager {
-        const pm = eng.createPremiseWithId(premiseId)
+        const { result: pm } = eng.createPremiseWithId(premiseId)
         pm.addVariable(leftVar)
         if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
         pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
@@ -3794,7 +3805,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         // P1: A → ¬B, P2: B → C, P3 (focused): C → D
         // P1 contradicts P2's antecedent, so P1 is transitively contradicting P3
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_A)
         p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
@@ -3829,7 +3840,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         // P1: A → ¬B, P2: ¬B → C, P3 (focused): C → D
         // P1's conseq is B(negative), P2's ante is B(negative) → polarity match → supporting
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_A)
         p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
@@ -3852,7 +3863,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
             })
         )
 
-        const p2 = eng.createPremiseWithId("p2")
+        const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addVariable(VAR_B)
         p2.addVariable(VAR_C)
         p2.addExpression(makeOpExpr("p2-impl", "implies"))
@@ -3887,7 +3898,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
         // P1: A ∧ B (constraint), P2: B → C, P3 (focused): C → D
         // P1 shares B with P2 which supports P3 → P1 restricts P3 transitively
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_A)
         p1.addVariable(VAR_B)
         p1.addExpression(makeOpExpr("p1-and", "and"))
@@ -3925,7 +3936,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         leftVar: TCorePropositionalVariable,
         rightVar: TCorePropositionalVariable
     ): PremiseManager {
-        const pm = eng.createPremiseWithId(premiseId)
+        const { result: pm } = eng.createPremiseWithId(premiseId)
         pm.addVariable(leftVar)
         if (leftVar.id !== rightVar.id) pm.addVariable(rightVar)
         pm.addExpression(makeOpExpr(`${premiseId}-impl`, "implies"))
@@ -3949,7 +3960,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // B: contradicting (¬B in conseq, B in ante), C: supporting (C in conseq, C in ante)
         // Precedence: contradicting wins
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_A)
         p1.addVariable(VAR_B)
         p1.addVariable(VAR_C)
@@ -3985,7 +3996,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
             })
         )
 
-        const p2 = eng.createPremiseWithId("p2")
+        const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addVariable(VAR_B)
         p2.addVariable(VAR_C)
         p2.addVariable(VAR_D)
@@ -4026,7 +4037,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // C: supporting (in conseq of P1, in ante of P2)
         // Precedence: restricting wins
         const eng = new ArgumentEngine(ARG)
-        const p1 = eng.createPremiseWithId("p1")
+        const { result: p1 } = eng.createPremiseWithId("p1")
         p1.addVariable(VAR_B)
         p1.addVariable(VAR_C)
         p1.addExpression(makeOpExpr("p1-impl", "implies"))
@@ -4055,7 +4066,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
             })
         )
 
-        const p2 = eng.createPremiseWithId("p2")
+        const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addVariable(VAR_B)
         p2.addVariable(VAR_C)
         p2.addVariable(VAR_D)
@@ -4094,7 +4105,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // P1: A → B, P2 (focused): A ∧ B (constraint)
         const eng = new ArgumentEngine(ARG)
         buildImplies(eng, "p1", VAR_A, VAR_B)
-        const p2 = eng.createPremiseWithId("p2")
+        const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addVariable(VAR_A)
         p2.addVariable(VAR_B)
         p2.addExpression(makeOpExpr("p2-and", "and"))
@@ -4431,7 +4442,7 @@ describe("ChangeCollector", () => {
 describe("PremiseManager — mutation changesets", () => {
     function setup() {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         const v1 = {
             id: "v1",
             symbol: "P",
@@ -4652,7 +4663,7 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("addVariable returns the variable in result and changes", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         const v = {
             id: "v1",
             symbol: "P",
@@ -4668,7 +4679,7 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("removeVariable returns removed variable in result and changes", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         const v = {
             id: "v1",
             symbol: "P",
@@ -4684,7 +4695,7 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("removeVariable for non-existent variable returns undefined with empty changes", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         const { result, changes } = pm.removeVariable("nonexistent")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
@@ -4692,9 +4703,74 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("setExtras returns new extras with empty changes", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
-        const pm = eng.createPremise()
+        const { result: pm } = eng.createPremise()
         const { result, changes } = pm.setExtras({ title: "Test" })
         expect(result).toEqual({ title: "Test" })
         expect(changes).toEqual({})
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ArgumentEngine — mutation changesets
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine — mutation changesets", () => {
+    it("createPremise returns PremiseManager and records added premise", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm, changes } = eng.createPremise()
+        expect(pm).toBeInstanceOf(PremiseManager)
+        expect(changes.premises?.added).toHaveLength(1)
+        expect(changes.premises?.added[0].id).toBe(pm.getId())
+    })
+
+    it("createPremiseWithId returns PremiseManager with specified ID", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm, changes } = eng.createPremiseWithId("my-premise")
+        expect(pm.getId()).toBe("my-premise")
+        expect(changes.premises?.added).toHaveLength(1)
+        expect(changes.premises?.added[0].id).toBe("my-premise")
+    })
+
+    it("removePremise returns premise data and records removal", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        eng.createPremise()
+        const premiseId = eng.listPremiseIds()[0]
+        const { result, changes } = eng.removePremise(premiseId)
+        expect(result?.id).toBe(premiseId)
+        expect(changes.premises?.removed).toHaveLength(1)
+        expect(changes.premises?.removed[0].id).toBe(premiseId)
+    })
+
+    it("removePremise that was conclusion also records role change", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        eng.setConclusionPremise(pm.getId())
+        const { changes } = eng.removePremise(pm.getId())
+        expect(changes.roles).toBeDefined()
+        expect(changes.roles?.conclusionPremiseId).toBeUndefined()
+    })
+
+    it("removePremise for non-existent ID returns undefined", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result, changes } = eng.removePremise("nope")
+        expect(result).toBeUndefined()
+        expect(changes).toEqual({})
+    })
+
+    it("setConclusionPremise returns new role state", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        const { result, changes } = eng.setConclusionPremise(pm.getId())
+        expect(result.conclusionPremiseId).toBe(pm.getId())
+        expect(changes.roles?.conclusionPremiseId).toBe(pm.getId())
+    })
+
+    it("clearConclusionPremise returns empty role state", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        eng.setConclusionPremise(pm.getId())
+        const { result, changes } = eng.clearConclusionPremise()
+        expect(result.conclusionPremiseId).toBeUndefined()
+        expect(changes.roles).toBeDefined()
     })
 })

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type {
     TCoreArgument,
+    TCorePremise,
     TCorePropositionalExpression,
 } from "../schemata/index.js"
 import type {
@@ -17,7 +18,9 @@ import type {
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
 } from "../types/evaluation.js"
+import type { TCoreMutationResult } from "../types/mutation.js"
 import { getOrCreate, sortedUnique } from "../utils/collections.js"
+import { ChangeCollector } from "./ChangeCollector.js"
 import {
     kleeneAnd,
     kleeneNot,
@@ -53,11 +56,10 @@ export class ArgumentEngine {
      * Creates a new premise with an auto-generated UUID and registers it
      * with this engine.
      */
-    public createPremise(extras?: Record<string, unknown>): PremiseManager {
-        const id = randomUUID()
-        const pm = new PremiseManager(id, this.argument, extras)
-        this.premises.set(id, pm)
-        return pm
+    public createPremise(
+        extras?: Record<string, unknown>
+    ): TCoreMutationResult<PremiseManager> {
+        return this.createPremiseWithId(randomUUID(), extras)
     }
 
     /**
@@ -69,24 +71,35 @@ export class ArgumentEngine {
     public createPremiseWithId(
         id: string,
         extras?: Record<string, unknown>
-    ): PremiseManager {
+    ): TCoreMutationResult<PremiseManager> {
         if (this.premises.has(id)) {
             throw new Error(`Premise "${id}" already exists.`)
         }
         const pm = new PremiseManager(id, this.argument, extras)
         this.premises.set(id, pm)
-        return pm
+        const collector = new ChangeCollector()
+        collector.addedPremise(pm.toData())
+        return { result: pm, changes: collector.toChangeset() }
     }
 
     /**
      * Removes a premise and clears any role assignments that reference it.
-     * No-op if the premise does not exist.
+     * Returns the removed premise data, or `undefined` if not found.
      */
-    public removePremise(premiseId: string): void {
+    public removePremise(
+        premiseId: string
+    ): TCoreMutationResult<TCorePremise | undefined> {
+        const pm = this.premises.get(premiseId)
+        if (!pm) return { result: undefined, changes: {} }
+        const data = pm.toData()
         this.premises.delete(premiseId)
+        const collector = new ChangeCollector()
+        collector.removedPremise(data)
         if (this.conclusionPremiseId === premiseId) {
             this.conclusionPremiseId = undefined
+            collector.setRoles(this.getRoleState())
         }
+        return { result: data, changes: collector.toChangeset() }
     }
 
     /** Returns the premise with the given ID, or `undefined` if not found. */
@@ -127,16 +140,27 @@ export class ArgumentEngine {
      *
      * @throws If the premise does not exist.
      */
-    public setConclusionPremise(premiseId: string): void {
-        if (!this.hasPremise(premiseId)) {
+    public setConclusionPremise(
+        premiseId: string
+    ): TCoreMutationResult<TCoreArgumentRoleState> {
+        const premise = this.premises.get(premiseId)
+        if (!premise) {
             throw new Error(`Premise "${premiseId}" does not exist.`)
         }
         this.conclusionPremiseId = premiseId
+        const roles = this.getRoleState()
+        const collector = new ChangeCollector()
+        collector.setRoles(roles)
+        return { result: roles, changes: collector.toChangeset() }
     }
 
     /** Clears the conclusion designation. */
-    public clearConclusionPremise(): void {
+    public clearConclusionPremise(): TCoreMutationResult<TCoreArgumentRoleState> {
         this.conclusionPremiseId = undefined
+        const roles = this.getRoleState()
+        const collector = new ChangeCollector()
+        collector.setRoles(roles)
+        return { result: roles, changes: collector.toChangeset() }
     }
 
     /** Returns the conclusion premise, or `undefined` if none is set. */
