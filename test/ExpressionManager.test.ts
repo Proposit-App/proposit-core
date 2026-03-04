@@ -5789,3 +5789,57 @@ describe("variable expressions cannot have children", () => {
         ).toThrowError(/variable.*cannot have children/i)
     })
 })
+
+// ---------------------------------------------------------------------------
+// ArgumentEngine — auto-conclusion on first premise
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine — auto-conclusion on first premise", () => {
+    it("first createPremise auto-sets conclusion", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm, changes } = eng.createPremise()
+        expect(eng.getRoleState().conclusionPremiseId).toBe(pm.getId())
+        expect(changes.roles?.conclusionPremiseId).toBe(pm.getId())
+    })
+
+    it("first createPremiseWithId auto-sets conclusion", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm, changes } = eng.createPremiseWithId("my-premise")
+        expect(eng.getRoleState().conclusionPremiseId).toBe("my-premise")
+        expect(changes.roles?.conclusionPremiseId).toBe("my-premise")
+    })
+
+    it("second createPremise does not change conclusion", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: first } = eng.createPremise()
+        const { changes } = eng.createPremise()
+        expect(eng.getRoleState().conclusionPremiseId).toBe(first.getId())
+        expect(changes.roles).toBeUndefined()
+    })
+
+    it("createPremise after clearConclusionPremise auto-sets again", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        eng.createPremise()
+        eng.clearConclusionPremise()
+        const { result: pm2, changes } = eng.createPremise()
+        expect(eng.getRoleState().conclusionPremiseId).toBe(pm2.getId())
+        expect(changes.roles?.conclusionPremiseId).toBe(pm2.getId())
+    })
+
+    it("createPremise after removing conclusion premise auto-sets again", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: first } = eng.createPremise()
+        eng.removePremise(first.getId())
+        const { result: second, changes } = eng.createPremise()
+        expect(eng.getRoleState().conclusionPremiseId).toBe(second.getId())
+        expect(changes.roles?.conclusionPremiseId).toBe(second.getId())
+    })
+
+    it("setConclusionPremise overrides auto-assignment", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: first } = eng.createPremise()
+        const { result: second } = eng.createPremise()
+        eng.setConclusionPremise(second.getId())
+        expect(eng.getRoleState().conclusionPremiseId).toBe(second.getId())
+    })
+})
