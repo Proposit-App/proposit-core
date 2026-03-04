@@ -95,4 +95,25 @@ export class VariableManager {
         this.variableSymbols.add(newSymbol)
         this.variables.set(variableId, { ...variable, symbol: newSymbol })
     }
+
+    /**
+     * Updates fields on an existing variable.
+     * Currently supports `symbol` updates.
+     *
+     * @throws If the new symbol is already in use by a different variable.
+     * @returns The updated variable, or `undefined` if not found.
+     */
+    public updateVariable(
+        variableId: string,
+        updates: { symbol?: string }
+    ): TCorePropositionalVariable | undefined {
+        const variable = this.variables.get(variableId)
+        if (!variable) return undefined
+
+        if (updates.symbol !== undefined) {
+            this.renameVariable(variableId, updates.symbol)
+        }
+
+        return this.variables.get(variableId)
+    }
 }
