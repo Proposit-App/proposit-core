@@ -446,6 +446,12 @@ export class PremiseManager {
         return this.attachExpressionChecksum(expr)
     }
 
+    /**
+     * Returns all argument-level variables (from the shared VariableManager)
+     * sorted by ID, with checksums attached. Since the VariableManager is
+     * shared across all premises, this returns every registered variable —
+     * not just those referenced by expressions in this premise.
+     */
     public getVariables(): TCorePropositionalVariable[] {
         const fields =
             this.checksumConfig?.variableFields ??
@@ -1018,12 +1024,8 @@ export class PremiseManager {
         return computeHash(parts.join(":"))
     }
 
-    private markDirty(): void {
-        this.checksumDirty = true
-    }
-
     /** Invalidate the cached checksum so the next call recomputes it. */
-    public invalidateChecksum(): void {
+    public markDirty(): void {
         this.checksumDirty = true
     }
 

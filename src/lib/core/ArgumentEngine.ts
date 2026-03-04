@@ -377,7 +377,7 @@ export class ArgumentEngine {
     /** Invalidate all premise checksums (e.g. after variable changes). */
     private markAllPremisesDirty(): void {
         for (const pm of this.listPremises()) {
-            pm.invalidateChecksum()
+            pm.markDirty()
         }
     }
 

@@ -1,11 +1,12 @@
 import type { TCorePropositionalVariable } from "../schemata/index.js"
 
 /**
- * Registry for propositional variables within a single premise.
+ * Registry for propositional variables within an argument, shared across
+ * all premises.
  *
  * Enforces uniqueness of both variable IDs and symbols. This class is an
- * internal building block used by {@link PremiseManager} and is not part
- * of the public API.
+ * internal building block owned by {@link ArgumentEngine} and passed by
+ * reference to each {@link PremiseManager}. It is not part of the public API.
  */
 export class VariableManager {
     private variables: Map<string, TCorePropositionalVariable>
