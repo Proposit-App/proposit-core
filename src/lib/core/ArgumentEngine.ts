@@ -18,9 +18,11 @@ import type {
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
 } from "../types/evaluation.js"
+import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TCoreMutationResult } from "../types/mutation.js"
 import { getOrCreate, sortedUnique } from "../utils/collections.js"
 import { ChangeCollector } from "./ChangeCollector.js"
+import { computeHash, entityChecksum } from "./checksum.js"
 import {
     kleeneAnd,
     kleeneNot,
@@ -40,11 +42,18 @@ export class ArgumentEngine {
     private argument: TCoreArgument
     private premises: Map<string, PremiseManager>
     private conclusionPremiseId: string | undefined
+    private checksumConfig?: TCoreChecksumConfig
+    private checksumDirty = true
+    private cachedChecksum: string | undefined
 
-    constructor(argument: TCoreArgument) {
+    constructor(
+        argument: TCoreArgument,
+        options?: { checksumConfig?: TCoreChecksumConfig }
+    ) {
         this.argument = { ...argument }
         this.premises = new Map()
         this.conclusionPremiseId = undefined
+        this.checksumConfig = options?.checksumConfig
     }
 
     /** Returns a shallow copy of the argument metadata. */
@@ -75,10 +84,16 @@ export class ArgumentEngine {
         if (this.premises.has(id)) {
             throw new Error(`Premise "${id}" already exists.`)
         }
-        const pm = new PremiseManager(id, this.argument, extras)
+        const pm = new PremiseManager(
+            id,
+            this.argument,
+            extras,
+            this.checksumConfig
+        )
         this.premises.set(id, pm)
         const collector = new ChangeCollector()
         collector.addedPremise(pm.toData())
+        this.markDirty()
         return { result: pm, changes: collector.toChangeset() }
     }
 
@@ -99,6 +114,7 @@ export class ArgumentEngine {
             this.conclusionPremiseId = undefined
             collector.setRoles(this.getRoleState())
         }
+        this.markDirty()
         return { result: data, changes: collector.toChangeset() }
     }
 
@@ -151,6 +167,7 @@ export class ArgumentEngine {
         const roles = this.getRoleState()
         const collector = new ChangeCollector()
         collector.setRoles(roles)
+        this.markDirty()
         return { result: roles, changes: collector.toChangeset() }
     }
 
@@ -160,6 +177,7 @@ export class ArgumentEngine {
         const roles = this.getRoleState()
         const collector = new ChangeCollector()
         collector.setRoles(roles)
+        this.markDirty()
         return { result: roles, changes: collector.toChangeset() }
     }
 
@@ -193,6 +211,51 @@ export class ArgumentEngine {
     /** Alias for {@link toData}. */
     public exportState(): TCoreArgumentEngineData {
         return this.toData()
+    }
+
+    /**
+     * Returns an argument-level checksum combining argument metadata, role
+     * state, and all premise checksums. Computed lazily -- only recalculated
+     * when the engine's own state has changed.
+     */
+    public checksum(): string {
+        if (this.checksumDirty || this.cachedChecksum === undefined) {
+            this.cachedChecksum = this.computeChecksum()
+            this.checksumDirty = false
+        }
+        return this.cachedChecksum
+    }
+
+    private computeChecksum(): string {
+        const config = this.checksumConfig
+        const parts: string[] = []
+
+        // Argument metadata
+        parts.push(
+            entityChecksum(
+                this.argument as unknown as Record<string, unknown>,
+                config?.argumentFields ?? ["id", "version"]
+            )
+        )
+
+        // Role state
+        parts.push(
+            entityChecksum(
+                this.getRoleState() as unknown as Record<string, unknown>,
+                config?.roleFields ?? ["conclusionPremiseId"]
+            )
+        )
+
+        // Premise checksums (sorted by ID for determinism)
+        for (const pm of this.listPremises()) {
+            parts.push(pm.checksum())
+        }
+
+        return computeHash(parts.join(":"))
+    }
+
+    private markDirty(): void {
+        this.checksumDirty = true
     }
 
     /**

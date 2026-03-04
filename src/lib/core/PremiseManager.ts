@@ -26,7 +26,9 @@ import {
     makeErrorIssue,
     makeValidationResult,
 } from "./evaluation/shared.js"
+import type { TCoreChecksumConfig } from "../types/checksum.js"
 import { ChangeCollector } from "./ChangeCollector.js"
+import { computeHash, entityChecksum } from "./checksum.js"
 import type { TExpressionWithoutPosition } from "./ExpressionManager.js"
 import { ExpressionManager } from "./ExpressionManager.js"
 import { VariableManager } from "./VariableManager.js"
@@ -39,15 +41,20 @@ export class PremiseManager {
     private expressions: ExpressionManager
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TCoreArgument
+    private checksumConfig?: TCoreChecksumConfig
+    private checksumDirty = true
+    private cachedChecksum: string | undefined
 
     constructor(
         id: string,
         argument: TCoreArgument,
-        extras?: Record<string, unknown>
+        extras?: Record<string, unknown>,
+        checksumConfig?: TCoreChecksumConfig
     ) {
         this.id = id
         this.argument = argument
         this.extras = extras ?? {}
+        this.checksumConfig = checksumConfig
         this.rootExpressionId = undefined
         this.variables = new VariableManager()
         this.expressions = new ExpressionManager()
@@ -71,6 +78,7 @@ export class PremiseManager {
         this.variables.addVariable(variable)
         const collector = new ChangeCollector()
         collector.addedVariable({ ...variable })
+        this.markDirty()
         return { result: { ...variable }, changes: collector.toChangeset() }
     }
 
@@ -90,7 +98,10 @@ export class PremiseManager {
         }
         const removed = this.variables.removeVariable(variableId)
         const collector = new ChangeCollector()
-        if (removed) collector.removedVariable({ ...removed })
+        if (removed) {
+            collector.removedVariable({ ...removed })
+            this.markDirty()
+        }
         return {
             result: removed ? { ...removed } : undefined,
             changes: collector.toChangeset(),
@@ -159,6 +170,7 @@ export class PremiseManager {
                     .add(expression.id)
             }
 
+            this.markDirty()
             return {
                 result: { ...expression },
                 changes: collector.toChangeset(),
@@ -224,6 +236,7 @@ export class PremiseManager {
                     .add(expression.id)
             }
 
+            this.markDirty()
             const stored = this.expressions.getExpression(expression.id)!
             return { result: { ...stored }, changes: collector.toChangeset() }
         } finally {
@@ -279,6 +292,7 @@ export class PremiseManager {
                     .add(expression.id)
             }
 
+            this.markDirty()
             const stored = this.expressions.getExpression(expression.id)!
             return { result: { ...stored }, changes: collector.toChangeset() }
         } finally {
@@ -324,6 +338,7 @@ export class PremiseManager {
             }
 
             this.syncRootExpressionId()
+            this.markDirty()
             return { result: { ...snapshot }, changes: collector.toChangeset() }
         } finally {
             this.expressions.setCollector(null)
@@ -379,6 +394,7 @@ export class PremiseManager {
             }
 
             this.syncRootExpressionId()
+            this.markDirty()
 
             const stored = this.expressions.getExpression(expression.id)!
             return { result: { ...stored }, changes: collector.toChangeset() }
@@ -407,6 +423,7 @@ export class PremiseManager {
         extras: Record<string, unknown>
     ): TCoreMutationResult<Record<string, unknown>> {
         this.extras = { ...extras }
+        this.markDirty()
         return { result: { ...this.extras }, changes: {} }
     }
 
@@ -839,9 +856,77 @@ export class PremiseManager {
         } as TCorePremise
     }
 
+    /**
+     * Returns a premise-level checksum combining all entity checksums.
+     * Computed lazily -- only recalculated when state has changed.
+     */
+    public checksum(): string {
+        if (this.checksumDirty || this.cachedChecksum === undefined) {
+            this.cachedChecksum = this.computeChecksum()
+            this.checksumDirty = false
+        }
+        return this.cachedChecksum
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    private computeChecksum(): string {
+        const config = this.checksumConfig
+        const parts: string[] = []
+
+        // Premise metadata
+        parts.push(
+            entityChecksum(
+                {
+                    id: this.id,
+                    rootExpressionId: this.rootExpressionId,
+                } as Record<string, unknown>,
+                config?.premiseFields ?? ["id", "rootExpressionId"]
+            )
+        )
+
+        // Variable checksums (sorted by ID for determinism)
+        for (const v of this.getVariables()) {
+            parts.push(
+                entityChecksum(
+                    v as unknown as Record<string, unknown>,
+                    config?.variableFields ?? [
+                        "id",
+                        "symbol",
+                        "argumentId",
+                        "argumentVersion",
+                    ]
+                )
+            )
+        }
+
+        // Expression checksums (sorted by ID for determinism)
+        for (const e of this.getExpressions()) {
+            parts.push(
+                entityChecksum(
+                    e as unknown as Record<string, unknown>,
+                    config?.expressionFields ?? [
+                        "id",
+                        "type",
+                        "parentId",
+                        "position",
+                        "argumentId",
+                        "argumentVersion",
+                        "variableId",
+                        "operator",
+                    ]
+                )
+            )
+        }
+
+        return computeHash(parts.join(":"))
+    }
+
+    private markDirty(): void {
+        this.checksumDirty = true
+    }
 
     /**
      * Re-reads the single root from ExpressionManager after any operation

@@ -4868,4 +4868,101 @@ describe("checksum utilities", () => {
             expect(cs1).toBe(cs2)
         })
     })
+
+    describe("PremiseManager — checksum", () => {
+        it("returns consistent checksum for same state", () => {
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+            const { result: pm } = eng.createPremise()
+            const cs1 = pm.checksum()
+            const cs2 = pm.checksum()
+            expect(cs1).toBe(cs2)
+        })
+
+        it("checksum changes when an expression is added", () => {
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+            const { result: pm } = eng.createPremise()
+            const v = {
+                id: "v1",
+                symbol: "P",
+                argumentId: "arg1",
+                argumentVersion: 0,
+            }
+            pm.addVariable(v)
+            const before = pm.checksum()
+            pm.addExpression({
+                id: "e1",
+                type: "variable",
+                variableId: "v1",
+                argumentId: "arg1",
+                argumentVersion: 0,
+                parentId: null,
+                position: 1,
+            })
+            const after = pm.checksum()
+            expect(before).not.toBe(after)
+        })
+
+        it("checksum changes when a variable is added", () => {
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+            const { result: pm } = eng.createPremise()
+            const before = pm.checksum()
+            pm.addVariable({
+                id: "v1",
+                symbol: "P",
+                argumentId: "arg1",
+                argumentVersion: 0,
+            })
+            const after = pm.checksum()
+            expect(before).not.toBe(after)
+        })
+
+        it("identical premises built the same way produce same checksum", () => {
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+            const { result: pm1 } = eng.createPremiseWithId("p1")
+            const { result: pm2 } = eng.createPremiseWithId("p2")
+            const v1 = {
+                id: "v1",
+                symbol: "P",
+                argumentId: "arg1",
+                argumentVersion: 0,
+            }
+            pm1.addVariable(v1)
+            pm2.addVariable(v1)
+            // Different premise IDs mean different checksums (id is part of checksum)
+            expect(pm1.checksum()).not.toBe(pm2.checksum())
+        })
+    })
+
+    describe("ArgumentEngine — checksum", () => {
+        it("returns consistent checksum for same state", () => {
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+            expect(eng.checksum()).toBe(eng.checksum())
+        })
+
+        it("checksum changes when a premise is added", () => {
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+            const before = eng.checksum()
+            eng.createPremise()
+            const after = eng.checksum()
+            expect(before).not.toBe(after)
+        })
+
+        it("checksum changes when conclusion is set", () => {
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+            const { result: pm } = eng.createPremise()
+            const before = eng.checksum()
+            eng.setConclusionPremise(pm.getId())
+            const after = eng.checksum()
+            expect(before).not.toBe(after)
+        })
+
+        it("accepts custom checksum config", () => {
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                { checksumConfig: { argumentFields: ["id"] } }
+            )
+            const cs = eng.checksum()
+            expect(cs).toMatch(/^[0-9a-f]{8}$/)
+        })
+    })
 })
