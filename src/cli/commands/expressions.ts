@@ -319,7 +319,7 @@ export function registerExpressionCommands(
             const pm = engine.getPremise(premiseId)
             if (!pm) errorExit(`Premise "${premiseId}" not found in engine.`)
 
-            const { result: removed } = pm.removeExpression(expressionId)
+            const { result: removed } = pm.removeExpression(expressionId, true)
             if (!removed) errorExit(`Expression "${expressionId}" not found.`)
 
             await writePremiseData(argumentId, version, premiseId, pm.toData())

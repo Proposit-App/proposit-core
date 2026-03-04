@@ -338,20 +338,42 @@ export class ExpressionManager {
     }
 
     /**
-     * Removes an expression and its entire descendant subtree.
+     * Removes an expression from the tree.
      *
-     * After removal, {@link collapseIfNeeded} runs on the parent:
-     * - 0 children remaining: the parent operator/formula is deleted (recurses to grandparent).
-     * - 1 child remaining: the parent is deleted and the surviving child is promoted into its slot.
+     * When `deleteSubtree` is `true`, the expression and its entire descendant
+     * subtree are removed, then {@link collapseIfNeeded} runs on the parent.
      *
+     * When `deleteSubtree` is `false`, the expression is removed but its single
+     * child (if any) is promoted into the removed expression's slot.  If the
+     * expression has more than one child, an error is thrown.  Leaf removal
+     * (0 children) still triggers {@link collapseIfNeeded} on the parent.
+     * Promotion does **not** trigger collapse.
+     *
+     * @throws If `deleteSubtree` is `false` and the expression has multiple children.
+     * @throws If `deleteSubtree` is `false` and the single child is a root-only
+     *   operator (`implies`/`iff`) that would be placed in a non-root position.
      * @returns The removed expression, or `undefined` if not found.
      */
-    public removeExpression(expressionId: string) {
+    public removeExpression(
+        expressionId: string,
+        deleteSubtree: boolean
+    ): TExpressionInput | undefined {
         const target = this.expressions.get(expressionId)
         if (!target) {
             return undefined
         }
 
+        if (deleteSubtree) {
+            return this.removeSubtree(expressionId, target)
+        } else {
+            return this.removeAndPromote(expressionId, target)
+        }
+    }
+
+    private removeSubtree(
+        expressionId: string,
+        target: TExpressionInput
+    ): TExpressionInput {
         const parentId = target.parentId
 
         const toRemove = new Set<string>()
@@ -393,6 +415,87 @@ export class ExpressionManager {
         }
 
         this.collapseIfNeeded(parentId)
+
+        return target
+    }
+
+    private removeAndPromote(
+        expressionId: string,
+        target: TExpressionInput
+    ): TExpressionInput {
+        const children = this.getChildExpressions(expressionId)
+
+        if (children.length > 1) {
+            throw new Error(
+                `Cannot promote: expression "${expressionId}" has multiple children (${children.length}). Use deleteSubtree: true or remove children first.`
+            )
+        }
+
+        if (children.length === 0) {
+            // Leaf removal — same as removing a single node, then collapse parent.
+            const parentId = target.parentId
+
+            this.collector?.removedExpression({ ...target })
+            this.expressions.delete(expressionId)
+            this.childExpressionIdsByParentId
+                .get(parentId)
+                ?.delete(expressionId)
+            this.childPositionsByParentId.get(parentId)?.delete(target.position)
+            this.childExpressionIdsByParentId.delete(expressionId)
+            this.childPositionsByParentId.delete(expressionId)
+
+            this.collapseIfNeeded(parentId)
+
+            return target
+        }
+
+        // Exactly 1 child — promote it into the target's slot.
+        const child = children[0]
+
+        // Validate: root-only operators cannot be promoted into a non-root position.
+        if (
+            child.type === "operator" &&
+            (child.operator === "implies" || child.operator === "iff") &&
+            target.parentId !== null
+        ) {
+            throw new Error(
+                `Cannot promote: child "${child.id}" is a root-only operator ("${child.operator}") and would be placed in a non-root position.`
+            )
+        }
+
+        // Promote child into the target's slot.
+        const promoted = {
+            ...child,
+            parentId: target.parentId,
+            position: target.position,
+        } as TExpressionInput
+        this.expressions.set(child.id, promoted)
+
+        // Update parent's child-id set: remove target, add promoted child.
+        this.childExpressionIdsByParentId
+            .get(target.parentId)
+            ?.delete(expressionId)
+        getOrCreate(
+            this.childExpressionIdsByParentId,
+            target.parentId,
+            () => new Set()
+        ).add(child.id)
+
+        // The parent's position set is unchanged: target.position was already
+        // tracked and continues to be occupied by the promoted child.
+
+        // Clean up target's own tracking entries.
+        this.childExpressionIdsByParentId.delete(expressionId)
+        this.childPositionsByParentId.delete(expressionId)
+
+        // Notify collector.
+        this.collector?.removedExpression({ ...target })
+        this.collector?.modifiedExpression({ ...promoted })
+
+        // Remove target from expressions map.
+        this.expressions.delete(expressionId)
+
+        // No collapseIfNeeded after promotion.
 
         return target
     }

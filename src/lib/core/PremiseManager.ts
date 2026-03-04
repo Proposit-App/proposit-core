@@ -93,7 +93,7 @@ export class PremiseManager {
             // prior subtree deletion or operator collapse in this loop.
             if (!this.expressions.getExpression(exprId)) continue
 
-            const { result, changes } = this.removeExpression(exprId)
+            const { result, changes } = this.removeExpression(exprId, true)
             if (result) removed.push(result)
             if (changes.expressions) {
                 for (const e of changes.expressions.removed) {
@@ -393,7 +393,8 @@ export class PremiseManager {
      * collapse can silently promote a new expression into the root slot.
      */
     public removeExpression(
-        expressionId: string
+        expressionId: string,
+        deleteSubtree: boolean
     ): TCoreMutationResult<TCorePropositionalExpression | undefined> {
         // Snapshot the expression before removal (for result).
         const snapshot = this.expressions.getExpression(expressionId)
@@ -408,19 +409,31 @@ export class PremiseManager {
                 }
             }
 
-            // Snapshot the subtree before deletion so we can clean up
-            // expressionsByVariableId for cascade-deleted descendants — they are
-            // not individually surfaced by ExpressionManager.removeExpression.
-            const subtree = this.collectSubtree(expressionId)
+            if (deleteSubtree) {
+                // Snapshot the subtree before deletion so we can clean up
+                // expressionsByVariableId for cascade-deleted descendants — they are
+                // not individually surfaced by ExpressionManager.removeExpression.
+                const subtree = this.collectSubtree(expressionId)
 
-            this.expressions.removeExpression(expressionId)
+                this.expressions.removeExpression(expressionId, true)
 
-            for (const expr of subtree) {
-                if (expr.type === "variable") {
-                    this.expressionsByVariableId
-                        .get(expr.variableId)
-                        ?.delete(expr.id)
+                for (const expr of subtree) {
+                    if (expr.type === "variable") {
+                        this.expressionsByVariableId
+                            .get(expr.variableId)
+                            ?.delete(expr.id)
+                    }
                 }
+            } else {
+                // Only clean up expressionsByVariableId for the removed
+                // expression itself — children survive promotion.
+                if (snapshot.type === "variable") {
+                    this.expressionsByVariableId
+                        .get(snapshot.variableId)
+                        ?.delete(snapshot.id)
+                }
+
+                this.expressions.removeExpression(expressionId, false)
             }
 
             this.syncRootExpressionId()

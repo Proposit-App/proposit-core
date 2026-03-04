@@ -146,7 +146,7 @@ describe("addExpression", () => {
         const premise = premiseWithVars()
         const expr = makeVarExpr("expr-1", VAR_P.id)
         premise.addExpression(expr)
-        expect(premise.removeExpression("expr-1").result).toMatchObject({
+        expect(premise.removeExpression("expr-1", true).result).toMatchObject({
             id: "expr-1",
         })
     })
@@ -155,7 +155,7 @@ describe("addExpression", () => {
         const premise = premiseWithVars()
         const op = makeOpExpr("op-1", "and")
         premise.addExpression(op)
-        expect(premise.removeExpression("op-1").result).toMatchObject({
+        expect(premise.removeExpression("op-1", true).result).toMatchObject({
             id: "op-1",
         })
     })
@@ -169,7 +169,7 @@ describe("addExpression", () => {
         premise.addExpression(child)
 
         // child still present: removing op cascades to child, returning root
-        expect(premise.removeExpression("op-1").result).toMatchObject({
+        expect(premise.removeExpression("op-1", true).result).toMatchObject({
             id: "op-1",
         })
     })
@@ -553,7 +553,9 @@ describe("insertExpression", () => {
 describe("removeExpression", () => {
     it("returns undefined when the expression does not exist", () => {
         const premise = premiseWithVars()
-        expect(premise.removeExpression("nonexistent").result).toBeUndefined()
+        expect(
+            premise.removeExpression("nonexistent", true).result
+        ).toBeUndefined()
     })
 
     it("removes and returns a root expression", () => {
@@ -561,10 +563,10 @@ describe("removeExpression", () => {
         const expr = makeVarExpr("expr-1", VAR_P.id)
         premise.addExpression(expr)
 
-        const { result: removed } = premise.removeExpression("expr-1")
+        const { result: removed } = premise.removeExpression("expr-1", true)
         expect(removed).toMatchObject({ id: "expr-1", type: "variable" })
         // Confirm it is gone
-        expect(premise.removeExpression("expr-1").result).toBeUndefined()
+        expect(premise.removeExpression("expr-1", true).result).toBeUndefined()
     })
 
     it("cascades to direct children", () => {
@@ -583,11 +585,11 @@ describe("removeExpression", () => {
             })
         )
 
-        premise.removeExpression("op-1")
+        premise.removeExpression("op-1", true)
 
         // Children should be gone
-        expect(premise.removeExpression("expr-1").result).toBeUndefined()
-        expect(premise.removeExpression("expr-2").result).toBeUndefined()
+        expect(premise.removeExpression("expr-1", true).result).toBeUndefined()
+        expect(premise.removeExpression("expr-2", true).result).toBeUndefined()
     })
 
     it("cascades recursively through nested descendants", () => {
@@ -601,10 +603,14 @@ describe("removeExpression", () => {
             makeVarExpr("expr-leaf", VAR_P.id, { parentId: "op-inner" })
         )
 
-        premise.removeExpression("op-root")
+        premise.removeExpression("op-root", true)
 
-        expect(premise.removeExpression("op-inner").result).toBeUndefined()
-        expect(premise.removeExpression("expr-leaf").result).toBeUndefined()
+        expect(
+            premise.removeExpression("op-inner", true).result
+        ).toBeUndefined()
+        expect(
+            premise.removeExpression("expr-leaf", true).result
+        ).toBeUndefined()
     })
 
     it("frees the position so it can be reused after removal", () => {
@@ -620,7 +626,7 @@ describe("removeExpression", () => {
         premise.addExpression(
             makeVarExpr("expr-3", VAR_R.id, { parentId: "op-1", position: 2 })
         )
-        premise.removeExpression("expr-1")
+        premise.removeExpression("expr-1", true)
 
         // Position 0 should be available again
         expect(() =>
@@ -641,7 +647,7 @@ describe("removeExpression", () => {
             makeVarExpr("expr-1", VAR_P.id, { parentId: "op-1" })
         )
 
-        const { result: removed } = premise.removeExpression("op-1")
+        const { result: removed } = premise.removeExpression("op-1", true)
         expect(removed).toMatchObject({ id: "op-1", type: "operator" })
     })
 })
@@ -658,10 +664,10 @@ describe("removeExpression — operator collapse", () => {
             makeVarExpr("expr-p", VAR_P.id, { parentId: "op-not" })
         )
 
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
         // op-not had 0 children remaining and must have been auto-deleted
-        expect(premise.removeExpression("op-not").result).toBeUndefined()
+        expect(premise.removeExpression("op-not", true).result).toBeUndefined()
         expect(premise.toDisplayString()).toBe("")
     })
 
@@ -676,10 +682,10 @@ describe("removeExpression — operator collapse", () => {
             makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 1 })
         )
 
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
         // op-and had 1 child left → it is removed, expr-q is promoted to root
-        expect(premise.removeExpression("op-and").result).toBeUndefined()
+        expect(premise.removeExpression("op-and", true).result).toBeUndefined()
         // expr-q is now the root
         expect(premise.toDisplayString()).toBe("Q")
     })
@@ -703,10 +709,14 @@ describe("removeExpression — operator collapse", () => {
 
         // Remove expr-p → op-inner (0 children) is deleted
         // → op-outer now has 1 child (expr-q) → op-outer is deleted, expr-q promoted to root
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
-        expect(premise.removeExpression("op-inner").result).toBeUndefined()
-        expect(premise.removeExpression("op-outer").result).toBeUndefined()
+        expect(
+            premise.removeExpression("op-inner", true).result
+        ).toBeUndefined()
+        expect(
+            premise.removeExpression("op-outer", true).result
+        ).toBeUndefined()
         expect(premise.toDisplayString()).toBe("Q")
     })
 
@@ -733,9 +743,9 @@ describe("removeExpression — operator collapse", () => {
         // Remove expr-p → op-and has 1 child (expr-q)
         // op-and is removed; expr-q is promoted into op-and's slot under op-root (pos 0)
         // op-root now has 2 children: expr-q (pos 0) and expr-r (pos 1) — no further collapse
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
-        expect(premise.removeExpression("op-and").result).toBeUndefined()
+        expect(premise.removeExpression("op-and", true).result).toBeUndefined()
         // op-root still exists with expr-q and expr-r as children
         expect(premise.toDisplayString()).toBe("(Q ∨ R)")
     })
@@ -753,7 +763,7 @@ describe("removeExpression — operator collapse", () => {
             makeVarExpr("expr-r", VAR_R.id, { parentId: "op-and", position: 2 })
         )
 
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
         // op-and still has expr-q and expr-r — must survive
         expect(premise.toDisplayString()).toBe("(Q ∧ R)")
@@ -775,10 +785,12 @@ describe("removeExpression — operator collapse", () => {
             })
         )
 
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
         // op-implies is removed; expr-q (the consequent) is promoted to root
-        expect(premise.removeExpression("op-implies").result).toBeUndefined()
+        expect(
+            premise.removeExpression("op-implies", true).result
+        ).toBeUndefined()
         expect(premise.toDisplayString()).toBe("Q")
     })
 })
@@ -820,7 +832,7 @@ describe("removeVariable", () => {
         eng.addVariable(VAR_R)
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("expr-1", VAR_P.id))
-        pm.removeExpression("expr-1")
+        pm.removeExpression("expr-1", true)
 
         // Variable should now be removable
         expect(() => eng.removeVariable(VAR_P.id)).not.toThrow()
@@ -1075,9 +1087,11 @@ describe("stress test", () => {
         const rootId = pm.toData().rootExpressionId!
         const termIds = termIdsByPremise.get(pm)!
 
-        expect(pm.removeExpression(rootId).result).toMatchObject({ id: rootId })
+        expect(pm.removeExpression(rootId, true).result).toMatchObject({
+            id: rootId,
+        })
         for (const termId of termIds) {
-            expect(pm.removeExpression(termId).result).toBeUndefined()
+            expect(pm.removeExpression(termId, true).result).toBeUndefined()
         }
     })
 
@@ -1086,12 +1100,14 @@ describe("stress test", () => {
         const [pm1, pm2] = premiseManagers
         const root2 = pm2.toData().rootExpressionId!
 
-        pm1.removeExpression(pm1.toData().rootExpressionId!)
+        pm1.removeExpression(pm1.toData().rootExpressionId!, true)
 
         // Second premise root is still present
-        expect(pm2.removeExpression(root2).result).toMatchObject({ id: root2 })
+        expect(pm2.removeExpression(root2, true).result).toMatchObject({
+            id: root2,
+        })
         for (const termId of termIdsByPremise.get(pm2)!) {
-            expect(pm2.removeExpression(termId).result).toBeUndefined()
+            expect(pm2.removeExpression(termId, true).result).toBeUndefined()
         }
     })
 
@@ -1126,7 +1142,7 @@ describe("stress test", () => {
         const { premiseManagers } = buildStress()
 
         for (const pm of [...premiseManagers].reverse()) {
-            pm.removeExpression(pm.toData().rootExpressionId!)
+            pm.removeExpression(pm.toData().rootExpressionId!, true)
         }
 
         for (const pm of premiseManagers) {
@@ -1138,7 +1154,7 @@ describe("stress test", () => {
         const { eng, premiseManagers } = buildStress()
 
         for (const pm of premiseManagers) {
-            pm.removeExpression(pm.toData().rootExpressionId!)
+            pm.removeExpression(pm.toData().rootExpressionId!, true)
         }
 
         const { result: newPm } = eng.createPremise({ title: "rebuilt" })
@@ -1182,7 +1198,7 @@ describe("formula", () => {
     it("adds a root formula expression", () => {
         const premise = premiseWithVars()
         premise.addExpression(makeFormulaExpr("f-1"))
-        expect(premise.removeExpression("f-1").result).toMatchObject({
+        expect(premise.removeExpression("f-1", true).result).toMatchObject({
             id: "f-1",
             type: "formula",
         })
@@ -1258,10 +1274,10 @@ describe("formula", () => {
             makeVarExpr("expr-p", VAR_P.id, { parentId: "f-1" })
         )
 
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
         // Formula had 0 children remaining and must have been auto-deleted.
-        expect(premise.removeExpression("f-1").result).toBeUndefined()
+        expect(premise.removeExpression("f-1", true).result).toBeUndefined()
         expect(premise.toDisplayString()).toBe("")
     })
 
@@ -1288,11 +1304,11 @@ describe("formula", () => {
         // Remove expr-p → f-inner collapses (0 children)
         // → f-outer collapses (0 children)
         // → op-and has 1 child left (expr-q) → op-and collapses, expr-q promoted to root
-        premise.removeExpression("expr-p")
+        premise.removeExpression("expr-p", true)
 
-        expect(premise.removeExpression("f-inner").result).toBeUndefined()
-        expect(premise.removeExpression("f-outer").result).toBeUndefined()
-        expect(premise.removeExpression("op-and").result).toBeUndefined()
+        expect(premise.removeExpression("f-inner", true).result).toBeUndefined()
+        expect(premise.removeExpression("f-outer", true).result).toBeUndefined()
+        expect(premise.removeExpression("op-and", true).result).toBeUndefined()
         expect(premise.toDisplayString()).toBe("Q")
     })
 
@@ -1475,7 +1491,7 @@ describe("PremiseManager — single-root enforcement", () => {
     it("allows a new root after the old root is removed (premise emptied)", () => {
         const pm = premiseWithVars()
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
-        pm.removeExpression("expr-p")
+        pm.removeExpression("expr-p", true)
         expect(() =>
             pm.addExpression(makeVarExpr("expr-q", VAR_Q.id))
         ).not.toThrow()
@@ -1505,7 +1521,7 @@ describe("PremiseManager — addExpression / removeExpression / insertExpression
         pm.addExpression(
             makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 1 })
         )
-        pm.removeExpression("op-and")
+        pm.removeExpression("op-and", true)
         expect(pm.getExpression("op-and")).toBeUndefined()
         expect(pm.getExpression("expr-p")).toBeUndefined()
         expect(pm.getExpression("expr-q")).toBeUndefined()
@@ -1518,7 +1534,7 @@ describe("PremiseManager — addExpression / removeExpression / insertExpression
             makeVarExpr("expr-p", VAR_P.id, { parentId: "op-not" })
         )
         // Removing the root cascades to expr-p; the variable tracking should be cleaned up.
-        pm.removeExpression("op-not")
+        pm.removeExpression("op-not", true)
         // deleteExpressionsUsingVariable should be a no-op since all refs are already gone
         const { result } = pm.deleteExpressionsUsingVariable(VAR_P.id)
         expect(result).toEqual([])
@@ -1542,7 +1558,7 @@ describe("PremiseManager — addExpression / removeExpression / insertExpression
         )
         // Removing expr-p leaves op-and with 1 child; op-and is collapsed and
         // expr-q is promoted to root.
-        pm.removeExpression("expr-p")
+        pm.removeExpression("expr-p", true)
         expect(pm.toData().rootExpressionId).toBe("expr-q")
         expect(pm.toDisplayString()).toBe("Q")
     })
@@ -4677,7 +4693,7 @@ describe("PremiseManager — mutation changesets", () => {
             position: 2,
         })
         // Remove e1 -> operator collapses (1 child), e2 gets promoted
-        const { result, changes } = pm.removeExpression("e1")
+        const { result, changes } = pm.removeExpression("e1", true)
         expect(result?.id).toBe("e1")
         // e1 removed, operator removed (collapse)
         const removedIds = changes.expressions!.removed.map((e) => e.id).sort()
@@ -4823,7 +4839,7 @@ describe("PremiseManager — mutation changesets", () => {
 
     it("removeExpression for non-existent ID returns undefined result and empty changes", () => {
         const { pm } = setup()
-        const { result, changes } = pm.removeExpression("nonexistent")
+        const { result, changes } = pm.removeExpression("nonexistent", true)
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
@@ -5276,7 +5292,7 @@ describe("entity checksum fields", () => {
 
     it("changeset expressions from removeExpression include checksums", () => {
         const { pm } = setupPremise()
-        const { changes } = pm.removeExpression("e1")
+        const { changes } = pm.removeExpression("e1", true)
         expect(changes.expressions?.removed).toHaveLength(1)
         expect(changes.expressions?.removed[0].checksum).toMatch(
             /^[0-9a-f]{8}$/
@@ -5408,7 +5424,7 @@ describe("entity checksum fields", () => {
             position: 2,
         })
         // Remove e1 -> operator collapses, e2 gets modified (reparented)
-        const { changes } = pm.removeExpression("e1")
+        const { changes } = pm.removeExpression("e1", true)
         expect(changes.expressions!.modified).toHaveLength(1)
         expect(changes.expressions!.modified[0].checksum).toMatch(
             /^[0-9a-f]{8}$/
@@ -6244,5 +6260,245 @@ describe("PremiseManager — updateExpression", () => {
         expect(changes.expressions?.modified[0].checksum).toMatch(
             /^[0-9a-f]{8}$/
         )
+    })
+})
+
+// ---------------------------------------------------------------------------
+// removeExpression — deleteSubtree parameter
+// ---------------------------------------------------------------------------
+
+describe("removeExpression — deleteSubtree parameter", () => {
+    function setup() {
+        const eng = new ArgumentEngine({ id: ARG.id, version: ARG.version })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        return { eng, pm }
+    }
+
+    it("deleteSubtree: true — same as original behavior (collapse promotes sibling)", () => {
+        const { pm } = setup()
+        // Tree: and(P, Q)
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 2 })
+        )
+
+        // Remove P with deleteSubtree: true — collapse promotes Q to root
+        pm.removeExpression("expr-p", true)
+
+        const data = pm.toData()
+        expect(data.rootExpressionId).toBe("expr-q")
+        expect(data.expressions).toHaveLength(1)
+        expect(data.expressions[0].id).toBe("expr-q")
+        expect(data.expressions[0].parentId).toBeNull()
+    })
+
+    it("deleteSubtree: false — promotes single child (operator)", () => {
+        const { pm } = setup()
+        // Tree: and(or(P, Q))
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeOpExpr("op-or", "or", { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-or", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-or", position: 2 })
+        )
+
+        // Remove and with deleteSubtree: false — or promoted to root
+        pm.removeExpression("op-and", false)
+
+        const data = pm.toData()
+        expect(data.rootExpressionId).toBe("op-or")
+        expect(data.expressions).toHaveLength(3)
+        const orExpr = data.expressions.find((e) => e.id === "op-or")!
+        expect(orExpr.parentId).toBeNull()
+        // Children of or are intact
+        const pExpr = data.expressions.find((e) => e.id === "expr-p")!
+        const qExpr = data.expressions.find((e) => e.id === "expr-q")!
+        expect(pExpr.parentId).toBe("op-or")
+        expect(qExpr.parentId).toBe("op-or")
+    })
+
+    it("deleteSubtree: false — promotes single child (leaf)", () => {
+        const { pm } = setup()
+        // Tree: not(P)
+        pm.addExpression(
+            makeOpExpr("op-not", "not", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-not", position: 1 })
+        )
+
+        // Remove not with deleteSubtree: false — P promoted to root
+        pm.removeExpression("op-not", false)
+
+        const data = pm.toData()
+        expect(data.rootExpressionId).toBe("expr-p")
+        expect(data.expressions).toHaveLength(1)
+        expect(data.expressions[0].id).toBe("expr-p")
+        expect(data.expressions[0].parentId).toBeNull()
+    })
+
+    it("deleteSubtree: false — errors on multiple children", () => {
+        const { pm } = setup()
+        // Tree: and(P, Q)
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 2 })
+        )
+
+        // Removing and with deleteSubtree: false throws — has 2 children
+        expect(() => pm.removeExpression("op-and", false)).toThrow(
+            /multiple children/
+        )
+
+        // Tree is unchanged
+        const data = pm.toData()
+        expect(data.expressions).toHaveLength(3)
+        expect(data.rootExpressionId).toBe("op-and")
+    })
+
+    it("deleteSubtree: false — leaf node with collapse on parent", () => {
+        const { pm } = setup()
+        // Tree: and(P, Q)
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 2 })
+        )
+
+        // Remove leaf P with deleteSubtree: false — collapse promotes Q to root
+        pm.removeExpression("expr-p", false)
+
+        const data = pm.toData()
+        expect(data.rootExpressionId).toBe("expr-q")
+        expect(data.expressions).toHaveLength(1)
+        expect(data.expressions[0].id).toBe("expr-q")
+        expect(data.expressions[0].parentId).toBeNull()
+    })
+
+    it("deleteSubtree: false — promotes child into non-root slot", () => {
+        const { pm } = setup()
+        // Tree: and(not(or(P, Q)))
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeOpExpr("op-not", "not", { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeOpExpr("op-or", "or", { parentId: "op-not", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-or", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-or", position: 2 })
+        )
+
+        // Remove not with deleteSubtree: false — or promoted into not's slot under and
+        pm.removeExpression("op-not", false)
+
+        const data = pm.toData()
+        expect(data.rootExpressionId).toBe("op-and")
+        expect(data.expressions).toHaveLength(4) // and, or, P, Q
+        const orExpr = data.expressions.find((e) => e.id === "op-or")!
+        expect(orExpr.parentId).toBe("op-and")
+        const pExpr = data.expressions.find((e) => e.id === "expr-p")!
+        expect(pExpr.parentId).toBe("op-or")
+        const qExpr = data.expressions.find((e) => e.id === "expr-q")!
+        expect(qExpr.parentId).toBe("op-or")
+    })
+
+    it("deleteSubtree: false — changeset records removed and modified", () => {
+        const { pm } = setup()
+        // Tree: not(P)
+        pm.addExpression(
+            makeOpExpr("op-not", "not", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-not", position: 1 })
+        )
+
+        // Remove not with deleteSubtree: false
+        const { result, changes } = pm.removeExpression("op-not", false)
+
+        expect(result?.id).toBe("op-not")
+        // Changeset: 1 removed (not) + 1 modified (P promoted)
+        expect(changes.expressions!.removed).toHaveLength(1)
+        expect(changes.expressions!.removed[0].id).toBe("op-not")
+        expect(changes.expressions!.modified).toHaveLength(1)
+        expect(changes.expressions!.modified[0].id).toBe("expr-p")
+        expect(changes.expressions!.modified[0].parentId).toBeNull()
+    })
+
+    it("deleteSubtree: false — no collapse runs after promotion", () => {
+        const { pm } = setup()
+        // Tree: and(not(P))
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeOpExpr("op-not", "not", { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-not", position: 1 })
+        )
+
+        // Remove and with deleteSubtree: false — not promoted to root, tree intact as not(P)
+        pm.removeExpression("op-and", false)
+
+        const data = pm.toData()
+        expect(data.rootExpressionId).toBe("op-not")
+        expect(data.expressions).toHaveLength(2)
+        const notExpr = data.expressions.find((e) => e.id === "op-not")!
+        expect(notExpr.parentId).toBeNull()
+        const pExpr = data.expressions.find((e) => e.id === "expr-p")!
+        expect(pExpr.parentId).toBe("op-not")
+    })
+
+    it("deleteSubtree: false — expressionsByVariableId cleaned for removed expr only", () => {
+        const { pm } = setup()
+        // Tree: formula(P)
+        pm.addExpression(
+            makeFormulaExpr("f-1", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, { parentId: "f-1", position: 1 })
+        )
+
+        // Remove formula with deleteSubtree: false — P promoted
+        pm.removeExpression("f-1", false)
+
+        const data = pm.toData()
+        expect(data.rootExpressionId).toBe("expr-p")
+        expect(data.expressions).toHaveLength(1)
+
+        // Verify variable cascade still works on P
+        // (P should still be tracked in expressionsByVariableId)
+        pm.deleteExpressionsUsingVariable(VAR_P.id)
+        const dataAfter = pm.toData()
+        expect(dataAfter.expressions).toHaveLength(0)
+        expect(dataAfter.rootExpressionId).toBeUndefined()
     })
 })
