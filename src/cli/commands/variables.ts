@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { Command } from "commander"
+import { hydrateEngine, persistEngine } from "../engine.js"
 import {
     errorExit,
     printJson,
@@ -7,8 +8,6 @@ import {
     requireConfirmation,
 } from "../output.js"
 import { readVersionMeta } from "../storage/arguments.js"
-import { listPremiseIds, readPremiseData } from "../storage/premises.js"
-import { readVariables, writeVariables } from "../storage/variables.js"
 
 async function assertNotPublished(
     argumentId: string,
@@ -20,22 +19,6 @@ async function assertNotPublished(
             `Version ${version} of argument "${argumentId}" is published and cannot be modified.`
         )
     }
-}
-
-/** Collect the set of variable IDs referenced by any expression in any premise. */
-async function referencedVariableIds(
-    argumentId: string,
-    version: number
-): Promise<Set<string>> {
-    const premiseIds = await listPremiseIds(argumentId, version)
-    const referenced = new Set<string>()
-    for (const premiseId of premiseIds) {
-        const data = await readPremiseData(argumentId, version, premiseId)
-        for (const id of data.variables) {
-            referenced.add(id)
-        }
-    }
-    return referenced
 }
 
 export function registerVariableCommands(
@@ -55,23 +38,23 @@ export function registerVariableCommands(
         )
         .action(async (symbol: string, opts: { id?: string }) => {
             await assertNotPublished(argumentId, version)
-            const variables = await readVariables(argumentId, version)
+            const engine = await hydrateEngine(argumentId, version)
 
-            if (variables.some((v) => v.symbol === symbol)) {
-                errorExit(`Symbol "${symbol}" is already in use.`)
-            }
             const newId = opts.id ?? randomUUID()
-            if (variables.some((v) => v.id === newId)) {
-                errorExit(`Variable ID "${newId}" already exists.`)
-            }
-
-            variables.push({
+            const variable = {
                 id: newId,
                 argumentId,
                 argumentVersion: version,
                 symbol,
-            })
-            await writeVariables(argumentId, version, variables)
+            }
+
+            try {
+                engine.addVariable(variable)
+            } catch (err) {
+                errorExit(err instanceof Error ? err.message : String(err))
+            }
+
+            await persistEngine(engine)
             printLine(newId)
         })
 
@@ -79,14 +62,13 @@ export function registerVariableCommands(
         .description("List all variables")
         .option("--json", "Output as JSON")
         .action(async (opts: { json?: boolean }) => {
-            const variables = await readVariables(argumentId, version)
-            const sorted = [...variables].sort((a, b) =>
-                a.id.localeCompare(b.id)
-            )
+            const engine = await hydrateEngine(argumentId, version)
+            const variables = engine.getVariables()
+
             if (opts.json) {
-                printJson(sorted)
+                printJson(variables)
             } else {
-                for (const v of sorted) {
+                for (const v of variables) {
                     printLine(`${v.id} | ${v.symbol}`)
                 }
             }
@@ -96,8 +78,10 @@ export function registerVariableCommands(
         .description("Show a single variable")
         .option("--json", "Output as JSON")
         .action(async (variableId: string, opts: { json?: boolean }) => {
-            const variables = await readVariables(argumentId, version)
-            const variable = variables.find((v) => v.id === variableId)
+            const engine = await hydrateEngine(argumentId, version)
+            const variable = engine
+                .getVariables()
+                .find((v) => v.id === variableId)
             if (!variable) errorExit(`Variable "${variableId}" not found.`)
             if (opts.json) {
                 printJson(variable)
@@ -111,61 +95,40 @@ export function registerVariableCommands(
         .option("--symbol <new_symbol>", "New symbol")
         .action(async (variableId: string, opts: { symbol?: string }) => {
             await assertNotPublished(argumentId, version)
-            const variables = await readVariables(argumentId, version)
-            const idx = variables.findIndex((v) => v.id === variableId)
-            if (idx === -1) errorExit(`Variable "${variableId}" not found.`)
+            const engine = await hydrateEngine(argumentId, version)
 
-            if (opts.symbol !== undefined) {
-                if (
-                    variables.some(
-                        (v) => v.symbol === opts.symbol && v.id !== variableId
-                    )
-                ) {
-                    errorExit(`Symbol "${opts.symbol}" is already in use.`)
-                }
-                variables[idx] = { ...variables[idx], symbol: opts.symbol }
+            if (!engine.getVariables().some((v) => v.id === variableId)) {
+                errorExit(`Variable "${variableId}" not found.`)
             }
 
-            await writeVariables(argumentId, version, variables)
+            if (opts.symbol !== undefined) {
+                try {
+                    engine.updateVariable(variableId, {
+                        symbol: opts.symbol,
+                    })
+                } catch (err) {
+                    errorExit(err instanceof Error ? err.message : String(err))
+                }
+            }
+
+            await persistEngine(engine)
             printLine("success")
         })
 
     vars.command("delete <variable_id>")
         .description(
-            "Remove a variable (fails if any expression references it)"
+            "Remove a variable (cascade-deletes referencing expressions)"
         )
         .action(async (variableId: string) => {
             await assertNotPublished(argumentId, version)
-            const variables = await readVariables(argumentId, version)
-            if (!variables.some((v) => v.id === variableId)) {
+            const engine = await hydrateEngine(argumentId, version)
+
+            if (!engine.getVariables().some((v) => v.id === variableId)) {
                 errorExit(`Variable "${variableId}" not found.`)
             }
 
-            // Check references
-            const premiseIds = await listPremiseIds(argumentId, version)
-            for (const premiseId of premiseIds) {
-                const data = await readPremiseData(
-                    argumentId,
-                    version,
-                    premiseId
-                )
-                for (const expr of data.expressions) {
-                    if (
-                        expr.type === "variable" &&
-                        expr.variableId === variableId
-                    ) {
-                        errorExit(
-                            `Variable "${variableId}" is referenced by expression "${expr.id}" in premise "${premiseId}".`
-                        )
-                    }
-                }
-            }
-
-            await writeVariables(
-                argumentId,
-                version,
-                variables.filter((v) => v.id !== variableId)
-            )
+            engine.removeVariable(variableId)
+            await persistEngine(engine)
             printLine("success")
         })
 
@@ -173,11 +136,11 @@ export function registerVariableCommands(
         .description("List variables not referenced by any expression")
         .option("--json", "Output as JSON")
         .action(async (opts: { json?: boolean }) => {
-            const variables = await readVariables(argumentId, version)
-            const referenced = await referencedVariableIds(argumentId, version)
-            const unused = variables
-                .filter((v) => !referenced.has(v.id))
-                .sort((a, b) => a.id.localeCompare(b.id))
+            const engine = await hydrateEngine(argumentId, version)
+            const variables = engine.getVariables()
+            const referenced = engine.collectReferencedVariables()
+            const referencedIds = new Set(referenced.variableIds)
+            const unused = variables.filter((v) => !referencedIds.has(v.id))
 
             if (opts.json) {
                 printJson(unused)
@@ -194,9 +157,11 @@ export function registerVariableCommands(
         .option("--json", "Output as JSON")
         .action(async (opts: { confirm?: boolean; json?: boolean }) => {
             await assertNotPublished(argumentId, version)
-            const variables = await readVariables(argumentId, version)
-            const referenced = await referencedVariableIds(argumentId, version)
-            const unused = variables.filter((v) => !referenced.has(v.id))
+            const engine = await hydrateEngine(argumentId, version)
+            const variables = engine.getVariables()
+            const referenced = engine.collectReferencedVariables()
+            const referencedIds = new Set(referenced.variableIds)
+            const unused = variables.filter((v) => !referencedIds.has(v.id))
 
             if (unused.length === 0) {
                 if (opts.json) {
@@ -213,12 +178,10 @@ export function registerVariableCommands(
                 )
             }
 
-            const unusedIds = new Set(unused.map((v) => v.id))
-            await writeVariables(
-                argumentId,
-                version,
-                variables.filter((v) => !unusedIds.has(v.id))
-            )
+            for (const v of unused) {
+                engine.removeVariable(v.id)
+            }
+            await persistEngine(engine)
 
             if (opts.json) {
                 printJson({
