@@ -4966,3 +4966,294 @@ describe("checksum utilities", () => {
         })
     })
 })
+
+// ---------------------------------------------------------------------------
+// Entity checksum fields
+// ---------------------------------------------------------------------------
+
+describe("entity checksum fields", () => {
+    function setupPremise() {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        const v = {
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        }
+        pm.addVariable(v)
+        pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: null,
+            position: 1,
+        })
+        return { eng, pm }
+    }
+
+    it("getExpressions returns expressions with checksums", () => {
+        const { pm } = setupPremise()
+        const exprs = pm.getExpressions()
+        expect(exprs).toHaveLength(1)
+        expect(exprs[0].checksum).toBeDefined()
+        expect(typeof exprs[0].checksum).toBe("string")
+        expect(exprs[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("getExpression returns expression with checksum", () => {
+        const { pm } = setupPremise()
+        const expr = pm.getExpression("e1")
+        expect(expr).toBeDefined()
+        expect(expr!.checksum).toBeDefined()
+        expect(expr!.checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("getRootExpression returns expression with checksum", () => {
+        const { pm } = setupPremise()
+        const root = pm.getRootExpression()
+        expect(root).toBeDefined()
+        expect(root!.checksum).toBeDefined()
+        expect(root!.checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("getChildExpressions returns expressions with checksums", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        pm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        pm.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        pm.addExpression({
+            id: "op",
+            type: "operator",
+            operator: "and",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: null,
+            position: 1,
+        })
+        pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: "op",
+            position: 1,
+        })
+        pm.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: "op",
+            position: 2,
+        })
+        const children = pm.getChildExpressions("op")
+        expect(children).toHaveLength(2)
+        expect(children[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+        expect(children[1].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("getVariables returns variables with checksums", () => {
+        const { pm } = setupPremise()
+        const vars = pm.getVariables()
+        expect(vars).toHaveLength(1)
+        expect(vars[0].checksum).toBeDefined()
+        expect(typeof vars[0].checksum).toBe("string")
+        expect(vars[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("toData includes premise-level checksum", () => {
+        const { pm } = setupPremise()
+        const data = pm.toData()
+        expect(data.checksum).toBeDefined()
+        expect(typeof data.checksum).toBe("string")
+        expect(data.checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("toData expressions include entity checksums", () => {
+        const { pm } = setupPremise()
+        const data = pm.toData()
+        expect(data.expressions).toHaveLength(1)
+        expect(data.expressions[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("changeset expressions from addExpression include checksums", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        pm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        const { changes } = pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: null,
+            position: 1,
+        })
+        expect(changes.expressions?.added).toHaveLength(1)
+        expect(changes.expressions?.added[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("changeset expressions from removeExpression include checksums", () => {
+        const { pm } = setupPremise()
+        const { changes } = pm.removeExpression("e1")
+        expect(changes.expressions?.removed).toHaveLength(1)
+        expect(changes.expressions?.removed[0].checksum).toMatch(
+            /^[0-9a-f]{8}$/
+        )
+    })
+
+    it("changeset variables from addVariable include checksums", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        const { changes } = pm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        expect(changes.variables?.added).toHaveLength(1)
+        expect(changes.variables?.added[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("changeset variables from removeVariable include checksums", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        pm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        const { changes } = pm.removeVariable("v1")
+        expect(changes.variables?.removed).toHaveLength(1)
+        expect(changes.variables?.removed[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("addExpression result includes checksum", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        pm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        const { result } = pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: null,
+            position: 1,
+        })
+        expect(result.checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("addVariable result includes checksum", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        const { result } = pm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        expect(result.checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("ArgumentEngine toData includes argument-level checksum", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        eng.createPremise()
+        const data = eng.toData()
+        expect(data.argument.checksum).toBeDefined()
+        expect(data.argument.checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("ArgumentEngine toData premises include premise-level checksums", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        eng.createPremise()
+        const data = eng.toData()
+        expect(data.premises).toHaveLength(1)
+        expect(data.premises[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("expression checksum is consistent across getters", () => {
+        const { pm } = setupPremise()
+        const fromGetExpressions = pm.getExpressions()[0].checksum
+        const fromGetExpression = pm.getExpression("e1")!.checksum
+        const fromGetRoot = pm.getRootExpression()!.checksum
+        expect(fromGetExpressions).toBe(fromGetExpression)
+        expect(fromGetExpressions).toBe(fromGetRoot)
+    })
+
+    it("changeset modified expressions include checksums after collapse", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const { result: pm } = eng.createPremise()
+        pm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        pm.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        })
+        pm.addExpression({
+            id: "op",
+            type: "operator",
+            operator: "and",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: null,
+            position: 1,
+        })
+        pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: "op",
+            position: 1,
+        })
+        pm.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "arg1",
+            argumentVersion: 0,
+            parentId: "op",
+            position: 2,
+        })
+        // Remove e1 -> operator collapses, e2 gets modified (reparented)
+        const { changes } = pm.removeExpression("e1")
+        expect(changes.expressions!.modified).toHaveLength(1)
+        expect(changes.expressions!.modified[0].checksum).toMatch(
+            /^[0-9a-f]{8}$/
+        )
+    })
+})

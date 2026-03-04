@@ -15,7 +15,7 @@ import type {
     TCoreValidationIssue,
     TCoreValidationResult,
 } from "../types/evaluation.js"
-import type { TCoreMutationResult } from "../types/mutation.js"
+import type { TCoreChangeset, TCoreMutationResult } from "../types/mutation.js"
 import {
     buildDirectionalVacuity,
     kleeneAnd,
@@ -32,6 +32,24 @@ import { computeHash, entityChecksum } from "./checksum.js"
 import type { TExpressionWithoutPosition } from "./ExpressionManager.js"
 import { ExpressionManager } from "./ExpressionManager.js"
 import { VariableManager } from "./VariableManager.js"
+
+const DEFAULT_EXPRESSION_FIELDS = [
+    "id",
+    "type",
+    "parentId",
+    "position",
+    "argumentId",
+    "argumentVersion",
+    "variableId",
+    "operator",
+]
+
+const DEFAULT_VARIABLE_FIELDS = [
+    "id",
+    "symbol",
+    "argumentId",
+    "argumentVersion",
+]
 
 export class PremiseManager {
     private id: string
@@ -79,7 +97,10 @@ export class PremiseManager {
         const collector = new ChangeCollector()
         collector.addedVariable({ ...variable })
         this.markDirty()
-        return { result: { ...variable }, changes: collector.toChangeset() }
+        return {
+            result: this.attachVariableChecksum({ ...variable }),
+            changes: this.attachChangesetChecksums(collector.toChangeset()),
+        }
     }
 
     /**
@@ -103,8 +124,10 @@ export class PremiseManager {
             this.markDirty()
         }
         return {
-            result: removed ? { ...removed } : undefined,
-            changes: collector.toChangeset(),
+            result: removed
+                ? this.attachVariableChecksum({ ...removed })
+                : undefined,
+            changes: this.attachChangesetChecksums(collector.toChangeset()),
         }
     }
 
@@ -172,8 +195,8 @@ export class PremiseManager {
 
             this.markDirty()
             return {
-                result: { ...expression },
-                changes: collector.toChangeset(),
+                result: this.attachExpressionChecksum({ ...expression }),
+                changes: this.attachChangesetChecksums(collector.toChangeset()),
             }
         } finally {
             this.expressions.setCollector(null)
@@ -238,7 +261,10 @@ export class PremiseManager {
 
             this.markDirty()
             const stored = this.expressions.getExpression(expression.id)!
-            return { result: { ...stored }, changes: collector.toChangeset() }
+            return {
+                result: this.attachExpressionChecksum({ ...stored }),
+                changes: this.attachChangesetChecksums(collector.toChangeset()),
+            }
         } finally {
             this.expressions.setCollector(null)
         }
@@ -294,7 +320,10 @@ export class PremiseManager {
 
             this.markDirty()
             const stored = this.expressions.getExpression(expression.id)!
-            return { result: { ...stored }, changes: collector.toChangeset() }
+            return {
+                result: this.attachExpressionChecksum({ ...stored }),
+                changes: this.attachChangesetChecksums(collector.toChangeset()),
+            }
         } finally {
             this.expressions.setCollector(null)
         }
@@ -339,7 +368,10 @@ export class PremiseManager {
 
             this.syncRootExpressionId()
             this.markDirty()
-            return { result: { ...snapshot }, changes: collector.toChangeset() }
+            return {
+                result: this.attachExpressionChecksum({ ...snapshot }),
+                changes: this.attachChangesetChecksums(collector.toChangeset()),
+            }
         } finally {
             this.expressions.setCollector(null)
         }
@@ -397,7 +429,10 @@ export class PremiseManager {
             this.markDirty()
 
             const stored = this.expressions.getExpression(expression.id)!
-            return { result: { ...stored }, changes: collector.toChangeset() }
+            return {
+                result: this.attachExpressionChecksum({ ...stored }),
+                changes: this.attachChangesetChecksums(collector.toChangeset()),
+            }
         } finally {
             this.expressions.setCollector(null)
         }
@@ -408,7 +443,9 @@ export class PremiseManager {
      * premise.
      */
     public getExpression(id: string): TCorePropositionalExpression | undefined {
-        return this.expressions.getExpression(id)
+        const expr = this.expressions.getExpression(id)
+        if (!expr) return undefined
+        return this.attachExpressionChecksum(expr)
     }
 
     public getId(): string {
@@ -436,23 +473,44 @@ export class PremiseManager {
             return undefined
         }
         const expr = this.expressions.getExpression(this.rootExpressionId)
-        return expr ? { ...expr } : undefined
+        if (!expr) return undefined
+        return this.attachExpressionChecksum(expr)
     }
 
     public getVariables(): TCorePropositionalVariable[] {
-        return sortedCopyById(this.variables.toArray())
+        const fields =
+            this.checksumConfig?.variableFields ?? DEFAULT_VARIABLE_FIELDS
+        return sortedCopyById(
+            this.variables.toArray().map((v) => ({
+                ...v,
+                checksum: entityChecksum(
+                    v as unknown as Record<string, unknown>,
+                    fields
+                ),
+            }))
+        )
     }
 
     public getExpressions(): TCorePropositionalExpression[] {
-        return sortedCopyById(this.expressions.toArray())
+        const fields =
+            this.checksumConfig?.expressionFields ?? DEFAULT_EXPRESSION_FIELDS
+        return sortedCopyById(
+            this.expressions.toArray().map((e) => ({
+                ...e,
+                checksum: entityChecksum(
+                    e as unknown as Record<string, unknown>,
+                    fields
+                ),
+            }))
+        )
     }
 
     public getChildExpressions(
         parentId: string | null
     ): TCorePropositionalExpression[] {
-        return this.expressions.getChildExpressions(parentId).map((expr) => ({
-            ...expr,
-        }))
+        return this.expressions
+            .getChildExpressions(parentId)
+            .map((expr) => this.attachExpressionChecksum(expr))
     }
 
     /**
@@ -853,6 +911,7 @@ export class PremiseManager {
             rootExpressionId: this.rootExpressionId,
             variables,
             expressions,
+            checksum: this.checksum(),
         } as TCorePremise
     }
 
@@ -871,6 +930,65 @@ export class PremiseManager {
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    private attachExpressionChecksum(
+        expr: TCorePropositionalExpression
+    ): TCorePropositionalExpression {
+        const fields =
+            this.checksumConfig?.expressionFields ?? DEFAULT_EXPRESSION_FIELDS
+        return {
+            ...expr,
+            checksum: entityChecksum(
+                expr as unknown as Record<string, unknown>,
+                fields
+            ),
+        }
+    }
+
+    private attachVariableChecksum(
+        v: TCorePropositionalVariable
+    ): TCorePropositionalVariable {
+        const fields =
+            this.checksumConfig?.variableFields ?? DEFAULT_VARIABLE_FIELDS
+        return {
+            ...v,
+            checksum: entityChecksum(
+                v as unknown as Record<string, unknown>,
+                fields
+            ),
+        }
+    }
+
+    private attachChangesetChecksums(changes: TCoreChangeset): TCoreChangeset {
+        const result: TCoreChangeset = { ...changes }
+        if (result.expressions) {
+            result.expressions = {
+                added: result.expressions.added.map((e) =>
+                    this.attachExpressionChecksum(e)
+                ),
+                modified: result.expressions.modified.map((e) =>
+                    this.attachExpressionChecksum(e)
+                ),
+                removed: result.expressions.removed.map((e) =>
+                    this.attachExpressionChecksum(e)
+                ),
+            }
+        }
+        if (result.variables) {
+            result.variables = {
+                added: result.variables.added.map((v) =>
+                    this.attachVariableChecksum(v)
+                ),
+                modified: result.variables.modified.map((v) =>
+                    this.attachVariableChecksum(v)
+                ),
+                removed: result.variables.removed.map((v) =>
+                    this.attachVariableChecksum(v)
+                ),
+            }
+        }
+        return result
+    }
 
     private computeChecksum(): string {
         const config = this.checksumConfig

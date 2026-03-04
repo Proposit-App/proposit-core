@@ -202,7 +202,7 @@ export class ArgumentEngine {
     /** Returns a serializable snapshot of the full engine state. */
     public toData(): TCoreArgumentEngineData {
         return {
-            argument: { ...this.argument },
+            argument: { ...this.argument, checksum: this.checksum() },
             premises: this.listPremises().map((pm) => pm.toData()),
             roles: this.getRoleState(),
         }

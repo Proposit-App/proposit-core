@@ -28,6 +28,12 @@ const BasePropositionalExpressionSchema = Type.Object({
         description:
             "The ordering of this expression among its siblings under the same parent. Must be unique within (parentId, argumentId, argumentVersion).",
     }),
+
+    checksum: Type.Optional(
+        Type.String({
+            description: "Entity-level checksum for sync detection.",
+        })
+    ),
 })
 
 export const CorePropositionalVariableExpressionSchema = Type.Interface(
@@ -95,6 +101,11 @@ export const CorePropositionalVariableSchema = Type.Object(
             description:
                 'Human-readable symbol for this variable (e.g. "P", "Q").',
         }),
+        checksum: Type.Optional(
+            Type.String({
+                description: "Entity-level checksum for sync detection.",
+            })
+        ),
     },
     {
         additionalProperties: true,
@@ -123,6 +134,11 @@ export const CorePremiseSchema = Type.Object(
             description:
                 "All expressions in this premise. The root has a null parentId.",
         }),
+        checksum: Type.Optional(
+            Type.String({
+                description: "Premise-level checksum for sync detection.",
+            })
+        ),
     },
     {
         additionalProperties: true,

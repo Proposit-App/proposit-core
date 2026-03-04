@@ -5,6 +5,11 @@ export const CoreArgumentSchema = Type.Object(
     {
         id: UUID,
         version: Type.Number(),
+        checksum: Type.Optional(
+            Type.String({
+                description: "Argument-level checksum for sync detection.",
+            })
+        ),
     },
     {
         additionalProperties: true,
