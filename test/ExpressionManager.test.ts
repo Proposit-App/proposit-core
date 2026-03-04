@@ -5418,3 +5418,307 @@ describe("createChecksumConfig", () => {
         )
     })
 })
+
+// ---------------------------------------------------------------------------
+// ArgumentEngine — variable management
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine — variable management", () => {
+    it("addVariable registers a variable accessible from all premises", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result: pm1 } = eng.createPremise()
+        const { result: pm2 } = eng.createPremise()
+
+        // Both premises can add expressions referencing VAR_P
+        pm1.addExpression(
+            makeVarExpr("e-p1", VAR_P.id, { parentId: null, position: 1 })
+        )
+        pm2.addExpression(
+            makeVarExpr("e-p2", VAR_P.id, { parentId: null, position: 1 })
+        )
+
+        expect(pm1.getVariables()).toHaveLength(1)
+        expect(pm2.getVariables()).toHaveLength(1)
+    })
+
+    it("addVariable throws for duplicate symbol", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        expect(() =>
+            eng.addVariable({
+                id: "var-other",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                symbol: "P",
+            })
+        ).toThrow(/already exists/)
+    })
+
+    it("addVariable throws for duplicate id", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        expect(() => eng.addVariable(VAR_P)).toThrow(/already exists/)
+    })
+
+    it("addVariable throws for wrong argumentId", () => {
+        const eng = new ArgumentEngine(ARG)
+        expect(() =>
+            eng.addVariable({
+                id: "var-x",
+                argumentId: "other",
+                argumentVersion: ARG.version,
+                symbol: "X",
+            })
+        ).toThrow(/does not match/)
+    })
+
+    it("addVariable throws for wrong argumentVersion", () => {
+        const eng = new ArgumentEngine(ARG)
+        expect(() =>
+            eng.addVariable({
+                id: "var-x",
+                argumentId: ARG.id,
+                argumentVersion: 99,
+                symbol: "X",
+            })
+        ).toThrow(/does not match/)
+    })
+
+    it("addVariable returns mutation result with changeset", () => {
+        const eng = new ArgumentEngine(ARG)
+        const { result, changes } = eng.addVariable(VAR_P)
+        expect(result.id).toBe(VAR_P.id)
+        expect(result.checksum).toBeDefined()
+        expect(changes.variables?.added).toHaveLength(1)
+    })
+
+    it("updateVariable renames a symbol", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result } = eng.updateVariable(VAR_P.id, { symbol: "P_new" })
+        expect(result?.symbol).toBe("P_new")
+
+        const { result: pm } = eng.createPremise()
+        expect(pm.getVariables()[0].symbol).toBe("P_new")
+    })
+
+    it("updateVariable returns undefined for non-existent variable", () => {
+        const eng = new ArgumentEngine(ARG)
+        const { result } = eng.updateVariable("nope", { symbol: "X" })
+        expect(result).toBeUndefined()
+    })
+
+    it("updateVariable throws for conflicting symbol", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        expect(() => eng.updateVariable(VAR_P.id, { symbol: "Q" })).toThrow(
+            /already in use/
+        )
+    })
+
+    it("updateVariable returns changeset with modified variable", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { changes } = eng.updateVariable(VAR_P.id, { symbol: "X" })
+        expect(changes.variables?.modified).toHaveLength(1)
+        expect(changes.variables?.modified[0].symbol).toBe("X")
+    })
+
+    it("getVariables returns all variables with checksums", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const vars = eng.getVariables()
+        expect(vars).toHaveLength(2)
+        expect(vars[0].checksum).toBeDefined()
+        expect(vars[1].checksum).toBeDefined()
+    })
+
+    it("removeVariable with no references removes cleanly", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result, changes } = eng.removeVariable(VAR_P.id)
+        expect(result?.id).toBe(VAR_P.id)
+        expect(changes.variables?.removed).toHaveLength(1)
+        expect(eng.getVariables()).toHaveLength(0)
+    })
+
+    it("removeVariable returns undefined for non-existent variable", () => {
+        const eng = new ArgumentEngine(ARG)
+        const { result, changes } = eng.removeVariable("nonexistent")
+        expect(result).toBeUndefined()
+        expect(changes).toEqual({})
+    })
+
+    it("removeVariable cascade-deletes referencing expressions in one premise", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+
+        // Add two root-level expressions (only one root allowed, so use an and operator)
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-p", VAR_P.id, { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", VAR_Q.id, { parentId: "op-and", position: 2 })
+        )
+
+        const { changes } = eng.removeVariable(VAR_P.id)
+        // e-p gone, operator collapsed (1 child remaining → Q promoted)
+        expect(pm.getExpression("e-p")).toBeUndefined()
+        expect(pm.getExpression("e-q")).toBeDefined()
+        expect(changes.expressions?.removed.length).toBeGreaterThan(0)
+    })
+
+    it("removeVariable cascade-deletes across multiple premises", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result: pm1 } = eng.createPremise()
+        const { result: pm2 } = eng.createPremise()
+
+        pm1.addExpression(
+            makeVarExpr("e-p1", VAR_P.id, { parentId: null, position: 1 })
+        )
+        pm2.addExpression(
+            makeVarExpr("e-p2", VAR_P.id, { parentId: null, position: 1 })
+        )
+
+        eng.removeVariable(VAR_P.id)
+
+        expect(pm1.getExpression("e-p1")).toBeUndefined()
+        expect(pm2.getExpression("e-p2")).toBeUndefined()
+    })
+
+    it("removeVariable triggers operator collapse", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+
+        // Build (P ∧ Q)
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-p", VAR_P.id, { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", VAR_Q.id, { parentId: "op-and", position: 2 })
+        )
+
+        eng.removeVariable(VAR_P.id)
+
+        // op-and gone (collapsed: 1 child remaining), Q promoted to root
+        expect(pm.getExpression("op-and")).toBeUndefined()
+        expect(pm.getRootExpression()?.id).toBe("e-q")
+    })
+
+    it("removeVariable deletes subtrees when removing from implies", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+
+        // Build P → Q
+        pm.addExpression(
+            makeOpExpr("op-impl", "implies", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-p", VAR_P.id, { parentId: "op-impl", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", VAR_Q.id, { parentId: "op-impl", position: 2 })
+        )
+
+        eng.removeVariable(VAR_P.id)
+
+        // implies collapses (1 child remaining), Q survives as root
+        expect(pm.getExpression("op-impl")).toBeUndefined()
+        expect(pm.getExpression("e-p")).toBeUndefined()
+        expect(pm.getRootExpression()?.id).toBe("e-q")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// PremiseManager — deleteExpressionsUsingVariable
+// ---------------------------------------------------------------------------
+
+describe("PremiseManager — deleteExpressionsUsingVariable", () => {
+    it("returns empty result when variable has no expressions", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
+
+        const { result, changes } = pm.deleteExpressionsUsingVariable(VAR_P.id)
+        expect(result).toHaveLength(0)
+        expect(changes).toEqual({})
+    })
+
+    it("deletes a single variable expression", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
+
+        pm.addExpression(
+            makeVarExpr("e-p", VAR_P.id, { parentId: null, position: 1 })
+        )
+
+        const { result, changes } = pm.deleteExpressionsUsingVariable(VAR_P.id)
+        expect(result).toHaveLength(1)
+        expect(pm.getExpression("e-p")).toBeUndefined()
+        expect(changes.expressions?.removed.length).toBeGreaterThan(0)
+    })
+
+    it("deletes multiple expressions referencing the same variable", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
+
+        // Build (P ∧ P)
+        pm.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-p1", VAR_P.id, { parentId: "op-and", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-p2", VAR_P.id, { parentId: "op-and", position: 2 })
+        )
+
+        const { result, changes } = pm.deleteExpressionsUsingVariable(VAR_P.id)
+
+        // Both P expressions removed (and operator collapses too)
+        expect(result.length).toBeGreaterThanOrEqual(2)
+        expect(pm.getExpression("e-p1")).toBeUndefined()
+        expect(pm.getExpression("e-p2")).toBeUndefined()
+        expect(pm.getExpression("op-and")).toBeUndefined()
+    })
+
+    it("handles already-removed expressions from subtree cascade", () => {
+        const eng = new ArgumentEngine(ARG)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
+
+        // Build not(P)
+        pm.addExpression(
+            makeOpExpr("op-not", "not", { parentId: null, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("e-p", VAR_P.id, { parentId: "op-not", position: 1 })
+        )
+
+        const { result } = pm.deleteExpressionsUsingVariable(VAR_P.id)
+
+        // P is directly removed, not collapses (0 children)
+        expect(result).toHaveLength(1)
+        expect(pm.getExpression("e-p")).toBeUndefined()
+        expect(pm.getExpression("op-not")).toBeUndefined()
+        expect(pm.getExpressions()).toHaveLength(0)
+    })
+})
