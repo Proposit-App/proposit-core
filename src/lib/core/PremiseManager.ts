@@ -61,12 +61,17 @@ export class PremiseManager {
      * @throws If `variable.id` already exists within this premise.
      * @throws If the variable does not belong to this premise's argument.
      */
-    public addVariable(variable: TCorePropositionalVariable): void {
+    public addVariable(
+        variable: TCorePropositionalVariable
+    ): TCoreMutationResult<TCorePropositionalVariable> {
         this.assertBelongsToArgument(
             variable.argumentId,
             variable.argumentVersion
         )
         this.variables.addVariable(variable)
+        const collector = new ChangeCollector()
+        collector.addedVariable({ ...variable })
+        return { result: { ...variable }, changes: collector.toChangeset() }
     }
 
     /**
@@ -77,13 +82,19 @@ export class PremiseManager {
      */
     public removeVariable(
         variableId: string
-    ): TCorePropositionalVariable | undefined {
+    ): TCoreMutationResult<TCorePropositionalVariable | undefined> {
         if (this.expressionsByVariableId.get(variableId).size > 0) {
             throw new Error(
                 `Variable "${variableId}" cannot be removed because it is referenced by one or more expressions.`
             )
         }
-        return this.variables.removeVariable(variableId)
+        const removed = this.variables.removeVariable(variableId)
+        const collector = new ChangeCollector()
+        if (removed) collector.removedVariable({ ...removed })
+        return {
+            result: removed ? { ...removed } : undefined,
+            changes: collector.toChangeset(),
+        }
     }
 
     /**
@@ -392,8 +403,11 @@ export class PremiseManager {
         return { ...this.extras }
     }
 
-    public setExtras(extras: Record<string, unknown>): void {
+    public setExtras(
+        extras: Record<string, unknown>
+    ): TCoreMutationResult<Record<string, unknown>> {
         this.extras = { ...extras }
+        return { result: { ...this.extras }, changes: {} }
     }
 
     public getRootExpressionId(): string | undefined {

@@ -1375,7 +1375,9 @@ describe("PremiseManager — addVariable / removeVariable", () => {
     it("removes an unreferenced variable", () => {
         const pm = makePremise()
         pm.addVariable(VAR_P)
-        expect(pm.removeVariable(VAR_P.id)).toMatchObject({ id: VAR_P.id })
+        expect(pm.removeVariable(VAR_P.id).result).toMatchObject({
+            id: VAR_P.id,
+        })
     })
 
     it("throws when removing a variable that is still referenced", () => {
@@ -4645,6 +4647,54 @@ describe("PremiseManager — mutation changesets", () => {
         const { pm } = setup()
         const { result, changes } = pm.removeExpression("nonexistent")
         expect(result).toBeUndefined()
+        expect(changes).toEqual({})
+    })
+
+    it("addVariable returns the variable in result and changes", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const pm = eng.createPremise()
+        const v = {
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        }
+        const { result, changes } = pm.addVariable(v)
+        expect(result.id).toBe("v1")
+        expect(result.symbol).toBe("P")
+        expect(changes.variables?.added).toHaveLength(1)
+        expect(changes.variables?.added[0].id).toBe("v1")
+    })
+
+    it("removeVariable returns removed variable in result and changes", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const pm = eng.createPremise()
+        const v = {
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg1",
+            argumentVersion: 0,
+        }
+        pm.addVariable(v)
+        const { result, changes } = pm.removeVariable("v1")
+        expect(result?.id).toBe("v1")
+        expect(changes.variables?.removed).toHaveLength(1)
+        expect(changes.variables?.removed[0].id).toBe("v1")
+    })
+
+    it("removeVariable for non-existent variable returns undefined with empty changes", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const pm = eng.createPremise()
+        const { result, changes } = pm.removeVariable("nonexistent")
+        expect(result).toBeUndefined()
+        expect(changes).toEqual({})
+    })
+
+    it("setExtras returns new extras with empty changes", () => {
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 })
+        const pm = eng.createPremise()
+        const { result, changes } = pm.setExtras({ title: "Test" })
+        expect(result).toEqual({ title: "Test" })
         expect(changes).toEqual({})
     })
 })
