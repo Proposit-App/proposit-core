@@ -4,3 +4,4 @@ coverage/
 *.tsbuildinfo
 .ltstash/
 .worktrees/
+.release_notes.md
