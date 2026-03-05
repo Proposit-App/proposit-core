@@ -24,7 +24,8 @@
         "proposit-core": "./dist/cli.js"
     },
     "files": [
-        "dist"
+        "dist",
+        "skills"
     ],
     "repository": {
         "type": "git",
