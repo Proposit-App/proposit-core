@@ -6611,3 +6611,37 @@ describe("PremiseManager — generic type parameters", () => {
         expect(data.color).toBe("blue")
     })
 })
+
+describe("ArgumentEngine — generic type parameters", () => {
+    it("preserves extended argument type", () => {
+        type ExtArg = TCoreArgument & { projectId: string }
+        const arg: Omit<ExtArg, "checksum"> = {
+            id: "a1",
+            version: 0,
+            projectId: "proj-1",
+        }
+        const engine = new ArgumentEngine<ExtArg>(arg)
+        const retrieved = engine.getArgument()
+        expect(retrieved.projectId).toBe("proj-1")
+        expect(typeof retrieved.checksum).toBe("string")
+    })
+
+    it("preserves extended variable type through addVariable", () => {
+        type ExtVar = TCorePropositionalVariable & { color: string }
+        const engine = new ArgumentEngine<
+            TCoreArgument,
+            TCorePremise,
+            TCorePropositionalExpression,
+            ExtVar
+        >({ id: "a1", version: 0 })
+        const { result } = engine.addVariable({
+            id: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "P",
+            color: "red",
+        })
+        expect(result.color).toBe("red")
+        expect(typeof result.checksum).toBe("string")
+    })
+})

@@ -4,6 +4,7 @@ import type {
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
+    TOptionalChecksum,
 } from "../schemata/index.js"
 import type {
     TCoreArgumentEngineData,
@@ -41,29 +42,34 @@ import { VariableManager } from "./VariableManager.js"
  * Provides premise CRUD, role management, evaluation of individual
  * assignments, and exhaustive validity checking via truth-table enumeration.
  */
-export class ArgumentEngine {
-    private argument: Omit<TCoreArgument, "checksum">
-    private premises: Map<string, PremiseManager>
-    private variables: VariableManager
+export class ArgumentEngine<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+> {
+    private argument: TOptionalChecksum<TArg>
+    private premises: Map<string, PremiseManager<TArg, TPremise, TExpr, TVar>>
+    private variables: VariableManager<TVar>
     private conclusionPremiseId: string | undefined
     private checksumConfig?: TCoreChecksumConfig
     private checksumDirty = true
     private cachedChecksum: string | undefined
 
     constructor(
-        argument: Omit<TCoreArgument, "checksum">,
+        argument: TOptionalChecksum<TArg>,
         options?: { checksumConfig?: TCoreChecksumConfig }
     ) {
         this.argument = { ...argument }
         this.premises = new Map()
-        this.variables = new VariableManager()
+        this.variables = new VariableManager<TVar>()
         this.conclusionPremiseId = undefined
         this.checksumConfig = options?.checksumConfig
     }
 
     /** Returns a shallow copy of the argument metadata with checksum attached. */
-    public getArgument(): TCoreArgument {
-        return { ...this.argument, checksum: this.checksum() }
+    public getArgument(): TArg {
+        return { ...this.argument, checksum: this.checksum() } as TArg
     }
 
     /**
@@ -72,7 +78,13 @@ export class ArgumentEngine {
      */
     public createPremise(
         extras?: Record<string, unknown>
-    ): TCoreMutationResult<PremiseManager> {
+    ): TCoreMutationResult<
+        PremiseManager<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
         return this.createPremiseWithId(randomUUID(), extras)
     }
 
@@ -85,11 +97,17 @@ export class ArgumentEngine {
     public createPremiseWithId(
         id: string,
         extras?: Record<string, unknown>
-    ): TCoreMutationResult<PremiseManager> {
+    ): TCoreMutationResult<
+        PremiseManager<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
         if (this.premises.has(id)) {
             throw new Error(`Premise "${id}" already exists.`)
         }
-        const pm = new PremiseManager(
+        const pm = new PremiseManager<TArg, TPremise, TExpr, TVar>(
             id,
             this.argument,
             this.variables,
@@ -97,7 +115,7 @@ export class ArgumentEngine {
             this.checksumConfig
         )
         this.premises.set(id, pm)
-        const collector = new ChangeCollector()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.addedPremise(pm.toData())
         this.markDirty()
 
@@ -118,12 +136,12 @@ export class ArgumentEngine {
      */
     public removePremise(
         premiseId: string
-    ): TCoreMutationResult<TCorePremise | undefined> {
+    ): TCoreMutationResult<TPremise | undefined, TExpr, TVar, TPremise, TArg> {
         const pm = this.premises.get(premiseId)
         if (!pm) return { result: undefined, changes: {} }
         const data = pm.toData()
         this.premises.delete(premiseId)
-        const collector = new ChangeCollector()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.removedPremise(data)
         if (this.conclusionPremiseId === premiseId) {
             this.conclusionPremiseId = undefined
@@ -137,7 +155,9 @@ export class ArgumentEngine {
     }
 
     /** Returns the premise with the given ID, or `undefined` if not found. */
-    public getPremise(premiseId: string): PremiseManager | undefined {
+    public getPremise(
+        premiseId: string
+    ): PremiseManager<TArg, TPremise, TExpr, TVar> | undefined {
         return this.premises.get(premiseId)
     }
 
@@ -154,10 +174,13 @@ export class ArgumentEngine {
     }
 
     /** Returns all premises in lexicographic ID order. */
-    public listPremises(): PremiseManager[] {
+    public listPremises(): PremiseManager<TArg, TPremise, TExpr, TVar>[] {
         return this.listPremiseIds()
             .map((id) => this.premises.get(id))
-            .filter((pm): pm is PremiseManager => pm !== undefined)
+            .filter(
+                (pm): pm is PremiseManager<TArg, TPremise, TExpr, TVar> =>
+                    pm !== undefined
+            )
     }
 
     /**
@@ -168,8 +191,8 @@ export class ArgumentEngine {
      * @throws If the variable does not belong to this argument.
      */
     public addVariable(
-        variable: Omit<TCorePropositionalVariable, "checksum">
-    ): TCoreMutationResult<TCorePropositionalVariable> {
+        variable: TOptionalChecksum<TVar>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
         if (variable.argumentId !== this.argument.id) {
             throw new Error(
                 `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
@@ -182,7 +205,7 @@ export class ArgumentEngine {
         }
         const withChecksum = this.attachVariableChecksum({ ...variable })
         this.variables.addVariable(withChecksum)
-        const collector = new ChangeCollector()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.addedVariable(withChecksum)
         this.markDirty()
         this.markAllPremisesDirty()
@@ -201,9 +224,9 @@ export class ArgumentEngine {
     public updateVariable(
         variableId: string,
         updates: { symbol?: string }
-    ): TCoreMutationResult<TCorePropositionalVariable | undefined> {
+    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg> {
         const updated = this.variables.updateVariable(variableId, updates)
-        const collector = new ChangeCollector()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         if (updated) {
             const withChecksum = this.attachVariableChecksum({ ...updated })
             // Re-store with updated checksum so VariableManager always holds
@@ -230,13 +253,13 @@ export class ArgumentEngine {
      */
     public removeVariable(
         variableId: string
-    ): TCoreMutationResult<TCorePropositionalVariable | undefined> {
+    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg> {
         const variable = this.variables.getVariable(variableId)
         if (!variable) {
             return { result: undefined, changes: {} }
         }
 
-        const collector = new ChangeCollector()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
 
         // Cascade: delete referencing expressions in every premise
         for (const pm of this.listPremises()) {
@@ -259,7 +282,7 @@ export class ArgumentEngine {
     }
 
     /** Returns all registered variables sorted by ID. */
-    public getVariables(): TCorePropositionalVariable[] {
+    public getVariables(): TVar[] {
         return this.variables.toArray()
     }
 
@@ -279,14 +302,20 @@ export class ArgumentEngine {
      */
     public setConclusionPremise(
         premiseId: string
-    ): TCoreMutationResult<TCoreArgumentRoleState> {
+    ): TCoreMutationResult<
+        TCoreArgumentRoleState,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
         const premise = this.premises.get(premiseId)
         if (!premise) {
             throw new Error(`Premise "${premiseId}" does not exist.`)
         }
         this.conclusionPremiseId = premiseId
         const roles = this.getRoleState()
-        const collector = new ChangeCollector()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.setRoles(roles)
         this.markDirty()
         return {
@@ -296,10 +325,16 @@ export class ArgumentEngine {
     }
 
     /** Clears the conclusion designation. */
-    public clearConclusionPremise(): TCoreMutationResult<TCoreArgumentRoleState> {
+    public clearConclusionPremise(): TCoreMutationResult<
+        TCoreArgumentRoleState,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
         this.conclusionPremiseId = undefined
         const roles = this.getRoleState()
-        const collector = new ChangeCollector()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.setRoles(roles)
         this.markDirty()
         return {
@@ -309,7 +344,9 @@ export class ArgumentEngine {
     }
 
     /** Returns the conclusion premise, or `undefined` if none is set. */
-    public getConclusionPremise(): PremiseManager | undefined {
+    public getConclusionPremise():
+        | PremiseManager<TArg, TPremise, TExpr, TVar>
+        | undefined {
         if (this.conclusionPremiseId === undefined) {
             return undefined
         }
@@ -320,7 +357,12 @@ export class ArgumentEngine {
      * Returns all supporting premises (derived: inference premises that are
      * not the conclusion) in lexicographic ID order.
      */
-    public listSupportingPremises(): PremiseManager[] {
+    public listSupportingPremises(): PremiseManager<
+        TArg,
+        TPremise,
+        TExpr,
+        TVar
+    >[] {
         return this.listPremises().filter(
             (pm) => pm.isInference() && pm.getId() !== this.conclusionPremiseId
         )
@@ -393,9 +435,7 @@ export class ArgumentEngine {
         }
     }
 
-    private attachVariableChecksum(
-        v: Omit<TCorePropositionalVariable, "checksum">
-    ): TCorePropositionalVariable {
+    private attachVariableChecksum(v: TOptionalChecksum<TVar>): TVar {
         const fields =
             this.checksumConfig?.variableFields ??
             DEFAULT_CHECKSUM_CONFIG.variableFields!
@@ -405,7 +445,7 @@ export class ArgumentEngine {
                 v as unknown as Record<string, unknown>,
                 fields
             ),
-        }
+        } as TVar
     }
 
     /**
@@ -628,13 +668,13 @@ export class ArgumentEngine {
                 allRelevantPremises.flatMap((pm) =>
                     pm
                         .getExpressions()
-                        .filter(
-                            (
-                                expr
-                            ): expr is TCorePropositionalExpression<"variable"> =>
-                                expr.type === "variable"
+                        .filter((expr) => expr.type === "variable")
+                        .map(
+                            (expr) =>
+                                (
+                                    expr as TCorePropositionalExpression<"variable">
+                                ).variableId
                         )
-                        .map((expr) => expr.variableId)
                 )
             ),
         ].sort()
@@ -778,13 +818,13 @@ export class ArgumentEngine {
                 ].flatMap((pm) =>
                     pm
                         .getExpressions()
-                        .filter(
-                            (
-                                expr
-                            ): expr is TCorePropositionalExpression<"variable"> =>
-                                expr.type === "variable"
+                        .filter((expr) => expr.type === "variable")
+                        .map(
+                            (expr) =>
+                                (
+                                    expr as TCorePropositionalExpression<"variable">
+                                ).variableId
                         )
-                        .map((expr) => expr.variableId)
                 )
             ),
         ].sort()
