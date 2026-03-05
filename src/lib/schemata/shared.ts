@@ -81,3 +81,7 @@ export const Nullable = <T extends TSchema>(
 }
 export const UUID = Type.String() // `${string}-${string}-${string}-${string}-${string}`
 export type UUID = Static<typeof UUID>
+
+/** Makes the `checksum` field optional on a type that has one. */
+export type TOptionalChecksum<T extends { checksum?: unknown }> =
+    Omit<T, "checksum"> & Partial<Pick<T, "checksum">>
