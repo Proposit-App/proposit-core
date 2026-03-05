@@ -147,6 +147,9 @@ export async function persistEngine(engine: ArgumentEngine): Promise<void> {
         const data = pm.toPremiseData()
         const {
             id: premiseId,
+            argumentId: _a,
+            argumentVersion: _av,
+            checksum: _c,
             rootExpressionId: _r,
             variables: _v,
             expressions: _e,

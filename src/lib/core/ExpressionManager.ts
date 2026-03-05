@@ -943,7 +943,8 @@ export class ExpressionManager<
 
     /** Creates a new ExpressionManager from a previously captured snapshot. */
     public static fromSnapshot<
-        TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+        TExpr extends TCorePropositionalExpression =
+            TCorePropositionalExpression,
     >(snapshot: TExpressionManagerSnapshot<TExpr>): ExpressionManager<TExpr> {
         const em = new ExpressionManager<TExpr>(snapshot.config)
         em.loadInitialExpressions(

@@ -13,7 +13,12 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "operator",
     ]),
     variableFields: new Set(["id", "symbol", "argumentId", "argumentVersion"]),
-    premiseFields: new Set(["id", "argumentId", "argumentVersion", "rootExpressionId"]),
+    premiseFields: new Set([
+        "id",
+        "argumentId",
+        "argumentVersion",
+        "rootExpressionId",
+    ]),
     argumentFields: new Set(["id", "version"]),
     roleFields: new Set(["conclusionPremiseId"]),
 }

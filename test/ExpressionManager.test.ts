@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import { ArgumentEngine, PremiseEngine } from "../src/lib/index"
-import type { TArgumentEngineSnapshot } from "../src/lib/core/ArgumentEngine"
 import { Value } from "typebox/value"
 import {
     CoreArgumentSchema,
@@ -14,16 +13,13 @@ import {
 } from "../src/lib/schemata"
 import { ChangeCollector } from "../src/lib/core/ChangeCollector"
 import { VariableManager } from "../src/lib/core/VariableManager"
-import type { TVariableManagerSnapshot } from "../src/lib/core/VariableManager"
 import { ExpressionManager } from "../src/lib/core/ExpressionManager"
-import type {
-    TExpressionInput,
-    TExpressionManagerSnapshot,
-} from "../src/lib/core/ExpressionManager"
+import type { TExpressionInput } from "../src/lib/core/ExpressionManager"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
 } from "../src/lib/consts"
+import type { TOptionalChecksum } from "../src/lib/schemata/shared"
 import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
 import type { TCoreChangeset } from "../src/lib/types/mutation"
 import {
@@ -1397,7 +1393,9 @@ describe("ArgumentEngine premise CRUD", () => {
         expect(pm.toPremiseData().id).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
         )
-        expect((pm.toPremiseData() as Record<string, unknown>).title).toBe("test")
+        expect((pm.toPremiseData() as Record<string, unknown>).title).toBe(
+            "test"
+        )
     })
 
     it("getPremise(id) returns the same instance", () => {
@@ -7553,7 +7551,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 argumentVersion: 1,
             },
         ]
-        const premises = [
+        const premises: TOptionalChecksum<TCorePremise>[] = [
             {
                 id: "p1",
                 argumentId: "arg-1",
@@ -7568,7 +7566,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 variables: [],
                 expressions: [],
             },
-        ] as any[]
+        ]
         const expressions = [
             {
                 id: "e1",
@@ -7615,8 +7613,10 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                     id: "p1",
                     argumentId: "arg-1",
                     argumentVersion: 1,
+                    variables: [],
+                    expressions: [],
                 },
-            ] as any[],
+            ] as TOptionalChecksum<TCorePremise>[],
             [],
             {}
         )
@@ -7633,7 +7633,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 argumentVersion: 1,
             },
         ]
-        const premises = [
+        const premises: TOptionalChecksum<TCorePremise>[] = [
             {
                 id: "p1",
                 argumentId: "arg-1",
@@ -7648,7 +7648,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 variables: [],
                 expressions: [],
             },
-        ] as any[]
+        ]
         const expressions = [
             {
                 id: "e1",
@@ -7698,7 +7698,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 argumentVersion: 1,
             },
         ]
-        const premises = [
+        const premises: TOptionalChecksum<TCorePremise>[] = [
             {
                 id: "p1",
                 argumentId: "arg-1",
@@ -7706,7 +7706,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 variables: [],
                 expressions: [],
             },
-        ] as any[]
+        ]
         // Expressions out of order — child before parent
         const expressions = [
             {

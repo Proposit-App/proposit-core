@@ -332,7 +332,12 @@ export function registerExpressionCommands(
             const { result: removed } = pm.removeExpression(expressionId, true)
             if (!removed) errorExit(`Expression "${expressionId}" not found.`)
 
-            await writePremiseData(argumentId, version, premiseId, pm.toPremiseData())
+            await writePremiseData(
+                argumentId,
+                version,
+                premiseId,
+                pm.toPremiseData()
+            )
             printLine("success")
         })
 

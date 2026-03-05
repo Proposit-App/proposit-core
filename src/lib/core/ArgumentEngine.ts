@@ -541,10 +541,7 @@ export class ArgumentEngine<
             // Cast to base type to access .id and .parentId on the distributive conditional type
             type BaseInput = TExpressionInput<TCorePropositionalExpression>
             const pending = new Map(
-                premiseExprs.map((e) => [
-                    (e as unknown as BaseInput).id,
-                    e,
-                ])
+                premiseExprs.map((e) => [(e as unknown as BaseInput).id, e])
             )
             let progressed = true
             while (pending.size > 0 && progressed) {
