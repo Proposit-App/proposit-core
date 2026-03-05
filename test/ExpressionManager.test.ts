@@ -19,6 +19,7 @@ import {
     createChecksumConfig,
 } from "../src/lib/consts"
 import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
+import type { TCoreChangeset } from "../src/lib/types/mutation"
 import {
     POSITION_MIN,
     POSITION_MAX,
@@ -6529,5 +6530,34 @@ describe("VariableManager — generic type parameter", () => {
 
         const removed = vm.removeVariable("v1")!
         expect(removed.color).toBe("red")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// mutation types — generic changesets
+// ---------------------------------------------------------------------------
+
+describe("mutation types — generic changesets", () => {
+    it("TCoreChangeset accepts extended entity types", () => {
+        type ExtVar = TCorePropositionalVariable & { color: string }
+
+        const changeset: TCoreChangeset<TCorePropositionalExpression, ExtVar> =
+            {
+                variables: {
+                    added: [
+                        {
+                            id: "v1",
+                            argumentId: "a1",
+                            argumentVersion: 0,
+                            symbol: "P",
+                            checksum: "abc",
+                            color: "red",
+                        },
+                    ],
+                    modified: [],
+                    removed: [],
+                },
+            }
+        expect(changeset.variables!.added[0].color).toBe("red")
     })
 })

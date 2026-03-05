@@ -21,19 +21,25 @@ export interface TCoreEntityChanges<T> {
  * Entity-typed changeset produced by every mutating operation.
  * Only categories that were actually affected are present.
  */
-export interface TCoreChangeset {
-    expressions?: TCoreEntityChanges<TCorePropositionalExpression>
-    variables?: TCoreEntityChanges<TCorePropositionalVariable>
-    premises?: TCoreEntityChanges<TCorePremise>
+export interface TCoreChangeset<
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TPremise extends TCorePremise = TCorePremise,
+    TArg extends TCoreArgument = TCoreArgument,
+> {
+    expressions?: TCoreEntityChanges<TExpr>
+    variables?: TCoreEntityChanges<TVar>
+    premises?: TCoreEntityChanges<TPremise>
     /** New role state, present only when roles changed. */
     roles?: TCoreArgumentRoleState
     /** New argument metadata, present only when argument changed. */
-    argument?: TCoreArgument
+    argument?: TArg
 }
 
 /**
  * Internal changeset type used by ChangeCollector before checksums are
  * attached. Expression and variable entities lack the `checksum` field.
+ * @deprecated Will be removed once ChangeCollector is made generic.
  */
 export interface TCoreRawChangeset {
     expressions?: TCoreEntityChanges<TExpressionInput>
@@ -48,7 +54,13 @@ export interface TCoreRawChangeset {
  * `result` is the direct answer (e.g. the removed expression).
  * `changes` is the full set of DB-level side effects.
  */
-export interface TCoreMutationResult<T> {
+export interface TCoreMutationResult<
+    T,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TPremise extends TCorePremise = TCorePremise,
+    TArg extends TCoreArgument = TCoreArgument,
+> {
     result: T
-    changes: TCoreChangeset
+    changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
 }
