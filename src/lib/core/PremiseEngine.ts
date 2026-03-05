@@ -34,11 +34,21 @@ import { ChangeCollector } from "./ChangeCollector.js"
 import { canonicalSerialize, computeHash, entityChecksum } from "./checksum.js"
 import type {
     TExpressionInput,
+    TExpressionManagerSnapshot,
     TExpressionWithoutPosition,
     TExpressionUpdate,
 } from "./ExpressionManager.js"
 import { ExpressionManager } from "./ExpressionManager.js"
 import { VariableManager } from "./VariableManager.js"
+
+export type TPremiseEngineSnapshot<
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+> = {
+    premise: TOptionalChecksum<TPremise>
+    expressions: TExpressionManagerSnapshot<TExpr>
+    config?: TLogicEngineOptions
+}
 
 export class PremiseEngine<
     TArg extends TCoreArgument = TCoreArgument,
@@ -1153,6 +1163,60 @@ export class PremiseEngine<
                 return "↔"
             case "not":
                 return "¬"
+        }
+    }
+
+    /** Returns a serializable snapshot of the premise's owned state. */
+    public snapshot(): TPremiseEngineSnapshot<TPremise, TExpr> {
+        const exprSnapshot = this.expressions.snapshot()
+        return {
+            premise: {
+                ...this.premise,
+                rootExpressionId: this.rootExpressionId,
+            } as TOptionalChecksum<TPremise>,
+            expressions: exprSnapshot,
+            config: {
+                checksumConfig: this.checksumConfig,
+                positionConfig: exprSnapshot.config?.positionConfig,
+            },
+        }
+    }
+
+    /** Creates a new PremiseEngine from a previously captured snapshot. */
+    public static fromSnapshot<
+        TArg extends TCoreArgument = TCoreArgument,
+        TPremise extends TCorePremise = TCorePremise,
+        TExpr extends TCorePropositionalExpression =
+            TCorePropositionalExpression,
+        TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    >(
+        snapshot: TPremiseEngineSnapshot<TPremise, TExpr>,
+        argument: TOptionalChecksum<TArg>,
+        variables: VariableManager<TVar>
+    ): PremiseEngine<TArg, TPremise, TExpr, TVar> {
+        const pe = new PremiseEngine<TArg, TPremise, TExpr, TVar>(
+            snapshot.premise,
+            { argument, variables },
+            snapshot.config
+        )
+        // Restore expressions from the snapshot
+        pe.expressions = ExpressionManager.fromSnapshot<TExpr>(
+            snapshot.expressions
+        )
+        // Restore rootExpressionId from premise data
+        pe.rootExpressionId = (snapshot.premise as Record<string, unknown>)
+            .rootExpressionId as string | undefined
+        // Rebuild the expressionsByVariableId index
+        pe.rebuildVariableIndex()
+        return pe
+    }
+
+    private rebuildVariableIndex(): void {
+        this.expressionsByVariableId = new DefaultMap(() => new Set())
+        for (const expr of this.expressions.toArray()) {
+            if (expr.type === "variable") {
+                this.expressionsByVariableId.get(expr.variableId).add(expr.id)
+            }
         }
     }
 }

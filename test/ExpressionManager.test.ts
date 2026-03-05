@@ -7144,3 +7144,251 @@ describe("VariableManager — snapshot and fromSnapshot", () => {
         expect(vm.hasVariable("v1")).toBe(true)
     })
 })
+
+describe("PremiseEngine — snapshot and fromSnapshot", () => {
+    const ARG = { id: "arg-1", version: 1 }
+
+    it("round-trips an empty premise", () => {
+        const vm = new VariableManager()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TCorePremise,
+            { argument: ARG as TCoreArgument, variables: vm }
+        )
+        const snap = pe.snapshot()
+        const restored = PremiseEngine.fromSnapshot(
+            snap,
+            ARG as TCoreArgument,
+            vm
+        )
+        expect(restored.getId()).toBe("p1")
+        expect(restored.getExpressions()).toEqual([])
+    })
+
+    it("round-trips a premise with expressions", () => {
+        const eng = new ArgumentEngine(ARG as TCoreArgument)
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        const { result: pe } = eng.createPremise()
+        pe.appendExpression(null, {
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
+            parentId: null,
+        })
+        const snap = pe.snapshot()
+        // Create a fresh VariableManager with same variables for restore
+        const vm2 = new VariableManager()
+        vm2.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            checksum: "x",
+        })
+        const restored = PremiseEngine.fromSnapshot(
+            snap,
+            ARG as TCoreArgument,
+            vm2
+        )
+        expect(restored.getExpressions().length).toBe(1)
+        expect(restored.toDisplayString()).toBe(pe.toDisplayString())
+    })
+
+    it("snapshot excludes variables and argument", () => {
+        const vm = new VariableManager()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TCorePremise,
+            { argument: ARG as TCoreArgument, variables: vm }
+        )
+        const snap = pe.snapshot()
+        expect(snap).not.toHaveProperty("variables")
+        expect(snap).not.toHaveProperty("argument")
+        expect(snap).toHaveProperty("premise")
+        expect(snap).toHaveProperty("expressions")
+        expect(snap).toHaveProperty("config")
+    })
+
+    it("restored premise is independent from original", () => {
+        const eng = new ArgumentEngine(ARG as TCoreArgument)
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        const { result: pe } = eng.createPremise()
+        pe.addExpression({
+            id: "op1",
+            type: "operator",
+            operator: "and",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
+            parentId: null,
+            position: 0,
+        })
+        pe.appendExpression("op1", {
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
+            parentId: "op1",
+        })
+        const snap = pe.snapshot()
+        const vm2 = new VariableManager()
+        vm2.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            checksum: "x",
+        })
+        const restored = PremiseEngine.fromSnapshot(
+            snap,
+            ARG as TCoreArgument,
+            vm2
+        )
+
+        // Mutate restored — add a second child to the operator
+        restored.appendExpression("op1", {
+            id: "e2",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: restored.getId(),
+            parentId: "op1",
+        })
+        expect(restored.getExpressions().length).toBe(3)
+        expect(pe.getExpressions().length).toBe(2)
+    })
+
+    it("restores rootExpressionId correctly", () => {
+        const eng = new ArgumentEngine(ARG as TCoreArgument)
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        const { result: pe } = eng.createPremise()
+        pe.appendExpression(null, {
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
+            parentId: null,
+        })
+        const snap = pe.snapshot()
+        const vm2 = new VariableManager()
+        vm2.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            checksum: "x",
+        })
+        const restored = PremiseEngine.fromSnapshot(
+            snap,
+            ARG as TCoreArgument,
+            vm2
+        )
+        // The root expression ID should be preserved
+        const data = restored.toData()
+        expect(data.rootExpressionId).toBe("e1")
+    })
+
+    it("rebuilds expressionsByVariableId index on restore", () => {
+        const eng = new ArgumentEngine(ARG as TCoreArgument)
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        eng.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        const { result: pe } = eng.createPremise()
+        pe.addExpression({
+            id: "op1",
+            type: "operator",
+            operator: "and",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
+            parentId: null,
+            position: 0,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
+            parentId: "op1",
+            position: 0,
+        })
+        pe.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
+            parentId: "op1",
+            position: 1,
+        })
+
+        const snap = pe.snapshot()
+        const vm2 = new VariableManager()
+        vm2.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            checksum: "x",
+        })
+        vm2.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            checksum: "x",
+        })
+        const restored = PremiseEngine.fromSnapshot(
+            snap,
+            ARG as TCoreArgument,
+            vm2
+        )
+
+        // deleteExpressionsUsingVariable relies on the index; if the index
+        // was not rebuilt this would be a no-op.
+        const { result: removed } =
+            restored.deleteExpressionsUsingVariable("v1")
+        expect(removed.length).toBeGreaterThan(0)
+    })
+})
