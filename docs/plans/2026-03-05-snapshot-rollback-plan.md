@@ -21,6 +21,7 @@ Tasks must be done in order. Each task builds on the previous. The plan is struc
 This is a pure rename with no behavioral changes. Do it first to avoid merge conflicts with later tasks.
 
 **Files:**
+
 - Modify: `src/lib/core/PremiseManager.ts` (rename class, keep filename for now)
 - Modify: `src/lib/core/ArgumentEngine.ts` (update references)
 - Modify: `src/lib/core/diff.ts` (update references)
@@ -62,6 +63,7 @@ Every file that imports `PremiseManager` needs to import `PremiseEngine` instead
 Rename `src/lib/core/PremiseManager.ts` to `src/lib/core/PremiseEngine.ts`. Update all import paths that reference `./PremiseManager.js` to `./PremiseEngine.js`.
 
 Files with import paths to update:
+
 - `src/lib/core/ArgumentEngine.ts`
 - `src/lib/index.ts`
 - `src/cli/engine.ts`
@@ -87,6 +89,7 @@ git add -A && git commit -m "refactor: rename PremiseManager to PremiseEngine"
 ### Task 2: Rename TArgumentEngineOptions to TLogicEngineOptions
 
 **Files:**
+
 - Modify: `src/lib/core/ArgumentEngine.ts` (rename type, update usage)
 - Modify: `src/index.ts` (update re-export)
 - Modify: `test/ExpressionManager.test.ts` (if referenced)
@@ -129,6 +132,7 @@ git add -A && git commit -m "refactor: rename TArgumentEngineOptions to TLogicEn
 ### Task 3: Add premiseId to expression schema and argumentId/argumentVersion to premise schema
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts` (add fields)
 - Modify: `src/lib/consts.ts` (add `premiseId` to DEFAULT_CHECKSUM_CONFIG.expressionFields, add `argumentId`/`argumentVersion` to premiseFields)
 - Modify: `test/ExpressionManager.test.ts` (update all expression and premise fixtures)
@@ -142,7 +146,7 @@ const BasePropositionalExpressionSchema = Type.Object({
     id: UUID,
     argumentId: UUID,
     argumentVersion: Type.Number(),
-    premiseId: UUID,  // NEW
+    premiseId: UUID, // NEW
     parentId: Nullable(UUID, {
         description:
             "The ID of the parent operator expression, or null if this is a top-level expression.",
@@ -163,7 +167,7 @@ const BasePropositionalExpressionSchema = Type.Object({
 export const CorePremiseSchema = Type.Object(
     {
         id: UUID,
-        argumentId: UUID,          // NEW
+        argumentId: UUID, // NEW
         argumentVersion: Type.Number(), // NEW
         rootExpressionId: Type.Optional(
             Type.String({
@@ -200,7 +204,7 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "id",
         "type",
         "parentId",
-        "premiseId",          // NEW
+        "premiseId", // NEW
         "position",
         "argumentId",
         "argumentVersion",
@@ -210,8 +214,8 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
     variableFields: new Set(["id", "symbol", "argumentId", "argumentVersion"]),
     premiseFields: new Set([
         "id",
-        "argumentId",        // NEW
-        "argumentVersion",   // NEW
+        "argumentId", // NEW
+        "argumentVersion", // NEW
         "rootExpressionId",
     ]),
     argumentFields: new Set(["id", "version"]),
@@ -228,6 +232,7 @@ Search for all expression objects in the test that have `argumentId` and `argume
 Similarly, any test that directly constructs `TCorePremise` objects (e.g. in diff tests or schema shape tests) needs `argumentId` and `argumentVersion`.
 
 This is a large mechanical change. Use find-and-replace patterns:
+
 - For expressions: add `premiseId: "premise-1"` (or the appropriate premise ID) after `argumentVersion: 1,` lines
 - For premises: add `argumentId: "arg-1", argumentVersion: 1,` after `id:` lines
 
@@ -262,6 +267,7 @@ git add -A && git commit -m "feat: add premiseId to expressions, argumentId/Vers
 Currently ExpressionManager takes `positionConfig?: TCorePositionConfig` and VariableManager takes no config. Change both to accept `TLogicEngineOptions`.
 
 **Files:**
+
 - Modify: `src/lib/core/ExpressionManager.ts`
 - Modify: `src/lib/core/VariableManager.ts`
 - Modify: `src/lib/core/PremiseEngine.ts` (update how it constructs ExpressionManager)
@@ -341,6 +347,7 @@ git add -A && git commit -m "refactor: pass TLogicEngineOptions to all managers"
 Change PremiseEngine to accept `premise: TOptionalChecksum<TPremise>` instead of `(id, argument, variables, extras?, checksumConfig?, positionConfig?)`.
 
 **Files:**
+
 - Modify: `src/lib/core/PremiseEngine.ts`
 - Modify: `src/lib/core/ArgumentEngine.ts` (update `createPremiseWithId`)
 - Modify: `src/cli/commands/premises.ts` (update direct construction)
@@ -414,7 +421,12 @@ public createPremiseWithId(
 const pm = new PremiseManager(pid, argument, vm, premiseExtras)
 // After:
 const pe = new PremiseEngine(
-    { id: pid, argumentId: argument.id, argumentVersion: version, ...premiseExtras } as TCorePremise,
+    {
+        id: pid,
+        argumentId: argument.id,
+        argumentVersion: version,
+        ...premiseExtras,
+    } as TCorePremise,
     { argument, variables: vm }
 )
 ```
@@ -425,7 +437,12 @@ All `new PremiseManager("id", ARG, vm, extras?)` calls become:
 
 ```typescript
 new PremiseEngine(
-    { id: "id", argumentId: ARG.id, argumentVersion: ARG.version, ...extras } as TCorePremise,
+    {
+        id: "id",
+        argumentId: ARG.id,
+        argumentVersion: ARG.version,
+        ...extras,
+    } as TCorePremise,
     { argument: ARG, variables: vm }
 )
 ```
@@ -449,6 +466,7 @@ git add -A && git commit -m "refactor: restructure PremiseEngine constructor to 
 Currently ExpressionManager stores expressions without checksums (`TExpressionInput<TExpr>`) and PremiseEngine attaches them lazily. Change ExpressionManager to store expressions **with** checksums (as full `TExpr`), computing the checksum on add/update.
 
 **Files:**
+
 - Modify: `src/lib/core/ExpressionManager.ts`
 - Modify: `src/lib/core/PremiseEngine.ts` (remove `attachExpressionChecksum`, `attachChangesetChecksums`)
 - Modify: `test/ExpressionManager.test.ts`
@@ -530,6 +548,7 @@ git add -A && git commit -m "refactor: store expressions with checksums in Expre
 Replace the ad-hoc checksum computation in ArgumentEngine and PremiseEngine with a `Record<string, string>` (entity_id -> entity_checksum) approach.
 
 **Files:**
+
 - Modify: `src/lib/core/PremiseEngine.ts` (new cumulative checksum)
 - Modify: `src/lib/core/ArgumentEngine.ts` (new cumulative checksum)
 - Modify: `test/ExpressionManager.test.ts` (update checksum tests if values change)
@@ -612,6 +631,7 @@ git add -A && git commit -m "refactor: cumulative checksums using entity ID->che
 ### Task 8: Add snapshot() and fromSnapshot() to ExpressionManager and VariableManager
 
 **Files:**
+
 - Modify: `src/lib/core/ExpressionManager.ts`
 - Modify: `src/lib/core/VariableManager.ts`
 - Modify: `test/ExpressionManager.test.ts` (new describe blocks)
@@ -734,9 +754,16 @@ describe("ExpressionManager — snapshot and fromSnapshot", () => {
 
     it("round-trips a manager with expressions", () => {
         const em = new ExpressionManager()
-        em.addExpression({ id: "e1", type: "variable", variableId: "v1",
-            argumentId: "arg-1", argumentVersion: 1, premiseId: "p1",
-            parentId: null, position: 0 })
+        em.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: "p1",
+            parentId: null,
+            position: 0,
+        })
         const snap = em.snapshot()
         const restored = ExpressionManager.fromSnapshot(snap)
         expect(restored.toArray()).toEqual(em.toArray())
@@ -764,8 +791,13 @@ describe("VariableManager — snapshot and fromSnapshot", () => {
 
     it("round-trips a manager with variables", () => {
         const vm = new VariableManager()
-        vm.addVariable({ id: "v1", symbol: "P", argumentId: "arg-1",
-            argumentVersion: 1, checksum: "abc" })
+        vm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            checksum: "abc",
+        })
         const snap = vm.snapshot()
         const restored = VariableManager.fromSnapshot(snap)
         expect(restored.toArray()).toEqual(vm.toArray())
@@ -790,6 +822,7 @@ git add -A && git commit -m "feat: add snapshot/fromSnapshot to ExpressionManage
 ### Task 9: Add snapshot() and fromSnapshot() to PremiseEngine
 
 **Files:**
+
 - Modify: `src/lib/core/PremiseEngine.ts`
 - Modify: `test/ExpressionManager.test.ts`
 
@@ -867,7 +900,11 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     it("round-trips an empty premise", () => {
         const vm = new VariableManager()
         const pe = new PremiseEngine(
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 } as TCorePremise,
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TCorePremise,
             { argument: ARG, variables: vm }
         )
         const snap = pe.snapshot()
@@ -878,16 +915,31 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
 
     it("round-trips a premise with expressions", () => {
         const eng = new ArgumentEngine(ARG)
-        eng.addVariable({ id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1 })
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
         const { result: pe } = eng.createPremise()
         pe.appendExpression(null, {
-            id: "e1", type: "variable", variableId: "v1",
-            argumentId: "arg-1", argumentVersion: 1, premiseId: pe.getId(),
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
             parentId: null,
         })
         const snap = pe.snapshot()
         const vm = new VariableManager()
-        vm.addVariable({ id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1, checksum: "x" })
+        vm.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            checksum: "x",
+        })
         const restored = PremiseEngine.fromSnapshot(snap, ARG, vm)
         expect(restored.getExpressions().length).toBe(1)
         expect(restored.toDisplayString()).toBe(pe.toDisplayString())
@@ -896,7 +948,11 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     it("snapshot excludes variables and argument (owned by engine)", () => {
         const vm = new VariableManager()
         const pe = new PremiseEngine(
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 } as TCorePremise,
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TCorePremise,
             { argument: ARG, variables: vm }
         )
         const snap = pe.snapshot()
@@ -923,6 +979,7 @@ git add -A && git commit -m "feat: add snapshot/fromSnapshot to PremiseEngine"
 ### Task 10: Add snapshot(), fromSnapshot(), and rollback() to ArgumentEngine
 
 **Files:**
+
 - Modify: `src/lib/core/ArgumentEngine.ts`
 - Modify: `test/ExpressionManager.test.ts`
 
@@ -1057,11 +1114,20 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
 
     it("round-trips an engine with premises and variables", () => {
         const eng = new ArgumentEngine(ARG)
-        eng.addVariable({ id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1 })
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
         const { result: pe } = eng.createPremise()
         pe.appendExpression(null, {
-            id: "e1", type: "variable", variableId: "v1",
-            argumentId: "arg-1", argumentVersion: 1, premiseId: pe.getId(),
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: pe.getId(),
             parentId: null,
         })
         const snap = eng.snapshot()
@@ -1072,10 +1138,20 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
 
     it("rollback restores previous state", () => {
         const eng = new ArgumentEngine(ARG)
-        eng.addVariable({ id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1 })
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
         const snap = eng.snapshot()
         // Mutate
-        eng.addVariable({ id: "v2", symbol: "Q", argumentId: "arg-1", argumentVersion: 1 })
+        eng.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
         eng.createPremise()
         expect(eng.getVariables().length).toBe(2)
         expect(eng.listPremiseIds().length).toBe(1)
@@ -1123,6 +1199,7 @@ git add -A && git commit -m "feat: add snapshot/fromSnapshot/rollback to Argumen
 ### Task 11: Add ArgumentEngine.fromData() for bulk loading
 
 **Files:**
+
 - Modify: `src/lib/core/ArgumentEngine.ts`
 - Modify: `test/ExpressionManager.test.ts`
 
@@ -1221,16 +1298,36 @@ describe("ArgumentEngine — fromData bulk loading", () => {
             { id: "p2", argumentId: "arg-1", argumentVersion: 1 },
         ]
         const expressions = [
-            { id: "e1", type: "variable" as const, variableId: "v1",
-              argumentId: "arg-1", argumentVersion: 1, premiseId: "p1",
-              parentId: null, position: 0 },
-            { id: "e2", type: "variable" as const, variableId: "v2",
-              argumentId: "arg-1", argumentVersion: 1, premiseId: "p2",
-              parentId: null, position: 0 },
+            {
+                id: "e1",
+                type: "variable" as const,
+                variableId: "v1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p1",
+                parentId: null,
+                position: 0,
+            },
+            {
+                id: "e2",
+                type: "variable" as const,
+                variableId: "v2",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p2",
+                parentId: null,
+                position: 0,
+            },
         ]
         const roles = { conclusionPremiseId: "p2" }
 
-        const engine = ArgumentEngine.fromData(arg, variables, premises, expressions, roles)
+        const engine = ArgumentEngine.fromData(
+            arg,
+            variables,
+            premises,
+            expressions,
+            roles
+        )
         expect(engine.getVariables().length).toBe(2)
         expect(engine.listPremiseIds()).toEqual(["p1", "p2"])
         expect(engine.getRoleState().conclusionPremiseId).toBe("p2")
@@ -1239,7 +1336,13 @@ describe("ArgumentEngine — fromData bulk loading", () => {
 
     it("handles premises with no expressions", () => {
         const arg = { id: "arg-1", version: 1 }
-        const engine = ArgumentEngine.fromData(arg, [], [{ id: "p1", argumentId: "arg-1", argumentVersion: 1 }], [], {})
+        const engine = ArgumentEngine.fromData(
+            arg,
+            [],
+            [{ id: "p1", argumentId: "arg-1", argumentVersion: 1 }],
+            [],
+            {}
+        )
         expect(engine.listPremiseIds()).toEqual(["p1"])
     })
 
@@ -1253,21 +1356,46 @@ describe("ArgumentEngine — fromData bulk loading", () => {
             { id: "p2", argumentId: "arg-1", argumentVersion: 1 },
         ]
         const expressions = [
-            { id: "e1", type: "variable" as const, variableId: "v1",
-              argumentId: "arg-1", argumentVersion: 1, premiseId: "p1",
-              parentId: null, position: 0 },
-            { id: "e2", type: "variable" as const, variableId: "v1",
-              argumentId: "arg-1", argumentVersion: 1, premiseId: "p2",
-              parentId: null, position: 0 },
+            {
+                id: "e1",
+                type: "variable" as const,
+                variableId: "v1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p1",
+                parentId: null,
+                position: 0,
+            },
+            {
+                id: "e2",
+                type: "variable" as const,
+                variableId: "v1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p2",
+                parentId: null,
+                position: 0,
+            },
         ]
-        const engine = ArgumentEngine.fromData(arg, variables, premises, expressions, {})
+        const engine = ArgumentEngine.fromData(
+            arg,
+            variables,
+            premises,
+            expressions,
+            {}
+        )
         expect(engine.getPremise("p1")?.getExpressions().length).toBe(1)
         expect(engine.getPremise("p2")?.getExpressions().length).toBe(1)
     })
 
     it("infers generic types from parameters", () => {
         type MyArg = TCoreArgument & { customField: string }
-        const arg: MyArg = { id: "arg-1", version: 1, checksum: "x", customField: "hello" }
+        const arg: MyArg = {
+            id: "arg-1",
+            version: 1,
+            checksum: "x",
+            customField: "hello",
+        }
         const engine = ArgumentEngine.fromData(arg, [], [], [], {})
         // TypeScript should infer ArgumentEngine<MyArg, ...>
         const result = engine.getArgument()
@@ -1293,6 +1421,7 @@ git add -A && git commit -m "feat: add ArgumentEngine.fromData for bulk loading 
 ### Task 12: Add toDisplayString() to ArgumentEngine
 
 **Files:**
+
 - Modify: `src/lib/core/ArgumentEngine.ts`
 - Modify: `test/ExpressionManager.test.ts`
 
@@ -1342,30 +1471,56 @@ describe("ArgumentEngine — toDisplayString", () => {
 
     it("labels premise roles correctly", () => {
         const eng = new ArgumentEngine(ARG)
-        eng.addVariable({ id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1 })
-        eng.addVariable({ id: "v2", symbol: "Q", argumentId: "arg-1", argumentVersion: 1 })
+        eng.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        eng.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
 
         // Create conclusion (inference: P => Q)
         const { result: p1 } = eng.createPremise()
         p1.appendExpression(null, {
-            id: "op1", type: "operator", operator: "implies",
-            argumentId: "arg-1", argumentVersion: 1, premiseId: p1.getId(),
+            id: "op1",
+            type: "operator",
+            operator: "implies",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: p1.getId(),
             parentId: null,
         })
         p1.appendExpression("op1", {
-            id: "e1", type: "variable", variableId: "v1",
-            argumentId: "arg-1", argumentVersion: 1, premiseId: p1.getId(),
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: p1.getId(),
         })
         p1.appendExpression("op1", {
-            id: "e2", type: "variable", variableId: "v2",
-            argumentId: "arg-1", argumentVersion: 1, premiseId: p1.getId(),
+            id: "e2",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: p1.getId(),
         })
 
         // Create constraint (just P)
         const { result: p2 } = eng.createPremise()
         p2.appendExpression(null, {
-            id: "e3", type: "variable", variableId: "v1",
-            argumentId: "arg-1", argumentVersion: 1, premiseId: p2.getId(),
+            id: "e3",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: p2.getId(),
             parentId: null,
         })
 
@@ -1393,6 +1548,7 @@ git add -A && git commit -m "feat: add toDisplayString to ArgumentEngine"
 ### Task 13: Update diff module for PremiseEngine and snapshot
 
 **Files:**
+
 - Modify: `src/lib/core/diff.ts` (update for PremiseEngine, replace toData calls)
 - Modify: `test/ExpressionManager.test.ts` (update diff tests if needed)
 
@@ -1409,7 +1565,10 @@ const premisesB = engineB.listPremises().map((pm) => pm.toData())
 // After:
 const premisesA = engineA.listPremises().map((pe) => {
     const snap = pe.snapshot()
-    return { ...snap.premise, expressions: snap.expressions.expressions } as TPremise
+    return {
+        ...snap.premise,
+        expressions: snap.expressions.expressions,
+    } as TPremise
 })
 ```
 
@@ -1434,6 +1593,7 @@ git add -A && git commit -m "refactor: update diff module for PremiseEngine and 
 ### Task 14: Update CLI for all changes
 
 **Files:**
+
 - Modify: `src/cli/engine.ts` (update hydrateEngine and persistEngine)
 - Modify: `src/cli/commands/premises.ts` (update PremiseManager -> PremiseEngine)
 - Modify: `src/cli/commands/expressions.ts` (update toData -> snapshot)
@@ -1477,6 +1637,7 @@ git add -A && git commit -m "refactor: update CLI for PremiseEngine rename and s
 ### Task 15: Update exports and re-export snapshot types
 
 **Files:**
+
 - Modify: `src/lib/index.ts`
 - Modify: `src/index.ts`
 - Modify: `src/lib/types/evaluation.ts` (remove TCoreArgumentEngineData if fully replaced)
@@ -1484,6 +1645,7 @@ git add -A && git commit -m "refactor: update CLI for PremiseEngine rename and s
 **Step 1: Export new snapshot types**
 
 Add exports for:
+
 - `TExpressionManagerSnapshot` from `ExpressionManager.ts`
 - `TVariableManagerSnapshot` from `VariableManager.ts`
 - `TPremiseEngineSnapshot` from `PremiseEngine.ts`
@@ -1542,6 +1704,7 @@ git add -A && git commit -m "chore: lint and format fixes"
 ### Task 17: Update documentation and generate release notes
 
 **Files:**
+
 - Modify: `README.md` — update API reference for renamed classes/types, new snapshot/rollback API, fromData, toDisplayString, removed toData/exportState
 - Modify: `CLAUDE.md` — update architecture section, class hierarchy, types section, key design decisions (snapshot types, cumulative checksums, constructor parameter groups, schema changes)
 - Modify: `CLI_EXAMPLES.md` — update any references to toData/exportState/PremiseManager
@@ -1580,61 +1743,73 @@ git add -A && git commit -m "chore: lint and format fixes"
 
 Create `release_notes.md` at the project root with the following structure:
 
-```markdown
+````markdown
 # Release Notes — proposit-core vX.Y.Z
 
 ## Breaking Changes
 
 ### Class renamed: PremiseManager -> PremiseEngine
+
 All imports of `PremiseManager` must be updated to `PremiseEngine`. The class is functionally identical but renamed for consistency — it operates on a single premise (like `ArgumentEngine` operates on a single argument), not a collection.
 
 ### Type renamed: TArgumentEngineOptions -> TLogicEngineOptions
+
 Identical shape, new name. Now used across all classes in the hierarchy.
 
 ### Removed: toData(), exportState(), TCoreArgumentEngineData
+
 Replaced by `snapshot()` which returns a hierarchical `TArgumentEngineSnapshot` (or `TPremiseEngineSnapshot` at the premise level). The snapshot captures owned state + config. See migration guide below.
 
 ### Constructor changes
+
 - **PremiseEngine** now takes `(premise: TOptionalChecksum<TPremise>, deps: { argument, variables }, config?)` instead of `(id, argument, variables, extras?, checksumConfig?, positionConfig?)`.
 - **ExpressionManager** constructor no longer accepts initial expressions. Use `fromSnapshot()` or individual `addExpression()` calls.
 - **VariableManager** constructor no longer accepts initial variables. Use `fromSnapshot()` or individual `addVariable()` calls.
 
 ### Schema changes
+
 - **Expressions** now have a required `premiseId: string` field
 - **Premises** now have required `argumentId: string` and `argumentVersion: number` fields
 - Existing serialized data missing these fields will need migration
 
 ### Checksum values changed
+
 Checksum computation now uses cumulative `{entity_id: entity_checksum}` maps instead of concatenated strings. All checksum values will differ from previous versions. Expression checksums now include `premiseId`. Premise checksums now include `argumentId` and `argumentVersion`.
 
 ## New Features
 
 ### Snapshot/Restore
+
 - `engine.snapshot()` — captures full engine state as a plain object
 - `ArgumentEngine.fromSnapshot(snapshot)` — reconstructs engine from snapshot
 - `engine.rollback(snapshot)` — restores engine state in place
 - Each class in the hierarchy (`ExpressionManager`, `VariableManager`, `PremiseEngine`, `ArgumentEngine`) has its own `snapshot()` and `static fromSnapshot()`
 
 ### Bulk loading
+
 - `ArgumentEngine.fromData(argument, variables[], premises[], expressions[], roles, config?)` — loads from flat arrays (DB-friendly). Groups expressions by `premiseId`. Generic types inferred from parameters.
 
 ### ArgumentEngine.toDisplayString()
+
 Renders the full argument as a multi-line string with role labels (Conclusion, Supporting, Constraint).
 
 ## Migration Guide
 
 ### toData() -> snapshot()
+
 ```typescript
 // Before
-const data = engine.toData()  // TCoreArgumentEngineData
-const premiseData = premise.toData()  // TCorePremise
+const data = engine.toData() // TCoreArgumentEngineData
+const premiseData = premise.toData() // TCorePremise
 
 // After
-const snap = engine.snapshot()  // TArgumentEngineSnapshot
-const premiseSnap = premise.snapshot()  // TPremiseEngineSnapshot
+const snap = engine.snapshot() // TArgumentEngineSnapshot
+const premiseSnap = premise.snapshot() // TPremiseEngineSnapshot
 ```
+````
 
 ### PremiseManager -> PremiseEngine
+
 ```typescript
 // Before
 import { PremiseManager } from "proposit-core"
@@ -1643,31 +1818,51 @@ const pm = new PremiseManager(id, argument, variables, extras)
 // After
 import { PremiseEngine } from "proposit-core"
 const pe = new PremiseEngine(
-    { id, argumentId: argument.id, argumentVersion: argument.version, ...extras },
+    {
+        id,
+        argumentId: argument.id,
+        argumentVersion: argument.version,
+        ...extras,
+    },
     { argument, variables },
     config
 )
 ```
 
 ### Expression objects
+
 ```typescript
 // Before
-const expr = { id: "e1", type: "variable", variableId: "v1",
-    argumentId: "arg-1", argumentVersion: 1,
-    parentId: null, position: 0 }
+const expr = {
+    id: "e1",
+    type: "variable",
+    variableId: "v1",
+    argumentId: "arg-1",
+    argumentVersion: 1,
+    parentId: null,
+    position: 0,
+}
 
 // After (add premiseId)
-const expr = { id: "e1", type: "variable", variableId: "v1",
-    argumentId: "arg-1", argumentVersion: 1, premiseId: "p1",
-    parentId: null, position: 0 }
+const expr = {
+    id: "e1",
+    type: "variable",
+    variableId: "v1",
+    argumentId: "arg-1",
+    argumentVersion: 1,
+    premiseId: "p1",
+    parentId: null,
+    position: 0,
+}
 ```
-```
+
+````
 
 **Step 6: Run full check one final time**
 
 ```bash
 pnpm run check
-```
+````
 
 **Step 7: Commit**
 

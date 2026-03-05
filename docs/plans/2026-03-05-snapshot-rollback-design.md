@@ -63,7 +63,7 @@ Each snapshot captures only what the class **owns**, plus its config. Dependenci
 
 ```typescript
 type TExpressionManagerSnapshot<TExpr> = {
-    expressions: TExpr[]  // with checksums
+    expressions: TExpr[] // with checksums
     config?: TLogicEngineOptions
 }
 
@@ -167,19 +167,19 @@ ArgumentEngine<TArg, TPremise, TExpr, TVar>
 
 ## Snapshot ownership
 
-| Class             | Snapshot includes                                     | Snapshot excludes                    |
-|-------------------|-------------------------------------------------------|--------------------------------------|
-| ExpressionManager | expressions (with checksums), config                  | --                                   |
-| VariableManager   | variables, config                                     | --                                   |
-| PremiseEngine     | premise metadata, expression snapshot, config          | argument, variables (owned by engine)|
-| ArgumentEngine    | argument, variable snapshot, premise snapshots,        | --                                   |
-|                   | conclusionPremiseId, config                           |                                      |
+| Class             | Snapshot includes                               | Snapshot excludes                     |
+| ----------------- | ----------------------------------------------- | ------------------------------------- |
+| ExpressionManager | expressions (with checksums), config            | --                                    |
+| VariableManager   | variables, config                               | --                                    |
+| PremiseEngine     | premise metadata, expression snapshot, config   | argument, variables (owned by engine) |
+| ArgumentEngine    | argument, variable snapshot, premise snapshots, | --                                    |
+|                   | conclusionPremiseId, config                     |                                       |
 
 ## Constructor parameter groups
 
-| Class             | Entity data                           | Dependencies                        | Config              |
-|-------------------|---------------------------------------|-------------------------------------|---------------------|
-| ExpressionManager | --                                    | --                                  | TLogicEngineOptions |
-| VariableManager   | --                                    | --                                  | TLogicEngineOptions |
+| Class             | Entity data                           | Dependencies                         | Config              |
+| ----------------- | ------------------------------------- | ------------------------------------ | ------------------- |
+| ExpressionManager | --                                    | --                                   | TLogicEngineOptions |
+| VariableManager   | --                                    | --                                   | TLogicEngineOptions |
 | PremiseEngine     | premise: TOptionalChecksum\<TPremise> | argument, variables: VariableManager | TLogicEngineOptions |
-| ArgumentEngine    | argument: TOptionalChecksum\<TArg>   | -- (owns its children)              | TLogicEngineOptions |
+| ArgumentEngine    | argument: TOptionalChecksum\<TArg>    | -- (owns its children)               | TLogicEngineOptions |
