@@ -15,5 +15,5 @@ export const DEFAULT_POSITION_CONFIG: TCorePositionConfig = {
 }
 
 export function midpoint(a: number, b: number): number {
-    return a + (b - a) / 2
+    return Math.trunc(a + (b - a) / 2)
 }
