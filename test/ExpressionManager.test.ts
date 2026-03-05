@@ -27,6 +27,7 @@ import {
     POSITION_INITIAL,
     DEFAULT_POSITION_CONFIG,
     midpoint,
+    type TCorePositionConfig,
 } from "../src/lib/utils/position"
 import {
     defaultCompareArgument,
@@ -6704,5 +6705,77 @@ describe("configurable position range", () => {
             variableId: "v1",
         }
         expect(Value.Check(CorePropositionalExpressionSchema, expr)).toBe(true)
+    })
+
+    it("ExpressionManager uses custom positionConfig in appendExpression", () => {
+        const config: TCorePositionConfig = { min: 100, max: 300, initial: 200 }
+        const em = new ExpressionManager([], config)
+
+        em.appendExpression(null, {
+            id: "root",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "operator",
+            operator: "and",
+            parentId: null,
+        })
+        const root = em.getExpression("root")!
+        expect(root.position).toBe(200) // initial
+
+        em.appendExpression("root", {
+            id: "c1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "variable",
+            variableId: "v1",
+            parentId: "root",
+        })
+        const c1 = em.getExpression("c1")!
+        expect(c1.position).toBe(200) // first child gets initial
+
+        em.appendExpression("root", {
+            id: "c2",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "variable",
+            variableId: "v2",
+            parentId: "root",
+        })
+        const c2 = em.getExpression("c2")!
+        expect(c2.position).toBe(midpoint(200, 300)) // midpoint(c1.pos, max)
+    })
+
+    it("ExpressionManager uses custom positionConfig in addExpressionRelative before", () => {
+        const config: TCorePositionConfig = { min: 100, max: 300, initial: 200 }
+        const em = new ExpressionManager([], config)
+
+        em.addExpression({
+            id: "root",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 200,
+        })
+        em.appendExpression("root", {
+            id: "c1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "variable",
+            variableId: "v1",
+            parentId: "root",
+        })
+
+        em.addExpressionRelative("c1", "before", {
+            id: "c0",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "variable",
+            variableId: "v2",
+            parentId: "root",
+        })
+        const c0 = em.getExpression("c0")!
+        expect(c0.position).toBe(midpoint(100, 200)) // midpoint(min, c1.pos)
     })
 })

@@ -5,9 +5,8 @@ import type {
 import type { ChangeCollector } from "./ChangeCollector.js"
 import { getOrCreate } from "../utils/collections.js"
 import {
-    POSITION_INITIAL,
-    POSITION_MAX,
-    POSITION_MIN,
+    DEFAULT_POSITION_CONFIG,
+    type TCorePositionConfig,
     midpoint,
 } from "../utils/position.js"
 
@@ -59,16 +58,21 @@ export class ExpressionManager<
     private expressions: Map<string, TExpressionInput<TExpr>>
     private childExpressionIdsByParentId: Map<string | null, Set<string>>
     private childPositionsByParentId: Map<string | null, Set<number>>
+    private positionConfig: TCorePositionConfig
     private collector: ChangeCollector | null = null
 
     setCollector(collector: ChangeCollector | null): void {
         this.collector = collector
     }
 
-    constructor(initialExpressions: TExpressionInput<TExpr>[] = []) {
+    constructor(
+        initialExpressions: TExpressionInput<TExpr>[] = [],
+        positionConfig?: TCorePositionConfig
+    ) {
         this.expressions = new Map()
         this.childExpressionIdsByParentId = new Map()
         this.childPositionsByParentId = new Map()
+        this.positionConfig = positionConfig ?? DEFAULT_POSITION_CONFIG
 
         this.loadInitialExpressions(initialExpressions)
     }
@@ -177,8 +181,11 @@ export class ExpressionManager<
         const children = this.getChildExpressions(parentId)
         const position =
             children.length === 0
-                ? POSITION_INITIAL
-                : midpoint(children[children.length - 1].position, POSITION_MAX)
+                ? this.positionConfig.initial
+                : midpoint(
+                      children[children.length - 1].position,
+                      this.positionConfig.max
+                  )
         this.addExpression({
             ...expression,
             parentId,
@@ -209,13 +216,13 @@ export class ExpressionManager<
             const prevPosition =
                 siblingIndex > 0
                     ? children[siblingIndex - 1].position
-                    : POSITION_MIN
+                    : this.positionConfig.min
             position = midpoint(prevPosition, sibling.position)
         } else {
             const nextPosition =
                 siblingIndex < children.length - 1
                     ? children[siblingIndex + 1].position
-                    : POSITION_MAX
+                    : this.positionConfig.max
             position = midpoint(sibling.position, nextPosition)
         }
 
