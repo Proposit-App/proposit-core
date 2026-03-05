@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { ArgumentEngine, PremiseEngine } from "../src/lib/index"
+import type { TArgumentEngineSnapshot } from "../src/lib/core/ArgumentEngine"
 import { Value } from "typebox/value"
 import {
     CoreArgumentSchema,
@@ -3352,15 +3353,15 @@ describe("field preservation — unknown fields survive round-trips", () => {
         expect((result as Record<string, unknown>).customField).toBe(42)
     })
 
-    it("preserves unknown fields on the argument through toData()", () => {
+    it("preserves unknown fields on the argument through snapshot()", () => {
         const engine = new ArgumentEngine(
             ARG_WITH_EXTRAS as Omit<TCoreArgument, "checksum">
         )
-        const data = engine.toData()
-        expect((data.argument as Record<string, unknown>).title).toBe(
+        const snap = engine.snapshot()
+        expect((snap.argument as Record<string, unknown>).title).toBe(
             "My Argument"
         )
-        expect((data.argument as Record<string, unknown>).customField).toBe(42)
+        expect((snap.argument as Record<string, unknown>).customField).toBe(42)
     })
 
     it("preserves extras on premises through toData()", () => {
@@ -3374,13 +3375,13 @@ describe("field preservation — unknown fields survive round-trips", () => {
         expect((data as Record<string, unknown>).priority).toBe("high")
     })
 
-    it("preserves extras on premises through engine.toData()", () => {
+    it("preserves extras on premises through engine.snapshot()", () => {
         const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
         engine.createPremise({ title: "Premise One" })
-        const data = engine.toData()
-        expect((data.premises[0] as Record<string, unknown>).title).toBe(
-            "Premise One"
-        )
+        const snap = engine.snapshot()
+        expect(
+            (snap.premises[0].premise as Record<string, unknown>).title
+        ).toBe("Premise One")
     })
 
     it("setExtras replaces all extras, not merges", () => {
@@ -5445,20 +5446,20 @@ describe("entity checksum fields", () => {
         expect(result.checksum).toMatch(/^[0-9a-f]{8}$/)
     })
 
-    it("ArgumentEngine toData includes argument-level checksum", () => {
+    it("ArgumentEngine getArgument includes argument-level checksum", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
         eng.createPremise()
-        const data = eng.toData()
-        expect(data.argument.checksum).toBeDefined()
-        expect(data.argument.checksum).toMatch(/^[0-9a-f]{8}$/)
+        const arg = eng.getArgument()
+        expect(arg.checksum).toBeDefined()
+        expect(arg.checksum).toMatch(/^[0-9a-f]{8}$/)
     })
 
-    it("ArgumentEngine toData premises include premise-level checksums", () => {
+    it("ArgumentEngine premise checksums via listPremises", () => {
         const eng = new ArgumentEngine({ id: "arg1", version: 0 })
         eng.createPremise()
-        const data = eng.toData()
-        expect(data.premises).toHaveLength(1)
-        expect(data.premises[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+        const premises = eng.listPremises()
+        expect(premises).toHaveLength(1)
+        expect(premises[0].checksum()).toMatch(/^[0-9a-f]{8}$/)
     })
 
     it("expression checksum is consistent across getters", () => {
@@ -7390,5 +7391,147 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
         const { result: removed } =
             restored.deleteExpressionsUsingVariable("v1")
         expect(removed.length).toBeGreaterThan(0)
+    })
+})
+
+describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
+    const ARG = { id: "arg-1", version: 1 }
+
+    function makeVariable(
+        id: string,
+        symbol: string
+    ): Omit<TCorePropositionalVariable, "checksum"> {
+        return { id, symbol, argumentId: "arg-1", argumentVersion: 1 }
+    }
+
+    it("round-trips an empty engine", () => {
+        const engine = new ArgumentEngine(ARG)
+        const snap = engine.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(snap)
+        expect(restored.getArgument().id).toBe("arg-1")
+        expect(restored.listPremiseIds()).toEqual([])
+        expect(restored.getVariables()).toEqual([])
+        expect(restored.getRoleState()).toEqual({})
+    })
+
+    it("round-trips engine with premises and variables", () => {
+        const engine = new ArgumentEngine(ARG)
+        engine.addVariable(makeVariable("v1", "P"))
+        engine.addVariable(makeVariable("v2", "Q"))
+        const { result: pm } = engine.createPremiseWithId("p1")
+        pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            parentId: null,
+            position: 0,
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: "p1",
+        })
+
+        const snap = engine.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(snap)
+
+        expect(restored.listPremiseIds()).toEqual(["p1"])
+        expect(restored.getVariables()).toHaveLength(2)
+        const restoredPm = restored.getPremise("p1")!
+        expect(restoredPm.getExpressions()).toHaveLength(1)
+        expect(restoredPm.getExpressions()[0].id).toBe("e1")
+    })
+
+    it("preserves conclusion role through round-trip", () => {
+        const engine = new ArgumentEngine(ARG)
+        engine.createPremiseWithId("p1")
+        engine.createPremiseWithId("p2")
+        engine.setConclusionPremise("p2")
+
+        const snap = engine.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(snap)
+
+        expect(restored.getRoleState().conclusionPremiseId).toBe("p2")
+    })
+
+    it("snapshot includes config", () => {
+        const config = {
+            checksumConfig: DEFAULT_CHECKSUM_CONFIG,
+            positionConfig: DEFAULT_POSITION_CONFIG,
+        }
+        const engine = new ArgumentEngine(ARG, config)
+        const snap = engine.snapshot()
+        expect(snap.config).toBeDefined()
+        expect(snap.config!.positionConfig).toEqual(DEFAULT_POSITION_CONFIG)
+    })
+
+    it("fromSnapshot produces independent copy", () => {
+        const engine = new ArgumentEngine(ARG)
+        engine.addVariable(makeVariable("v1", "P"))
+        engine.createPremiseWithId("p1")
+
+        const snap = engine.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(snap)
+
+        // Mutate restored, original should be unaffected
+        restored.createPremiseWithId("p2")
+        expect(engine.listPremiseIds()).toEqual(["p1"])
+        expect(restored.listPremiseIds()).toEqual(["p1", "p2"])
+    })
+
+    it("rollback restores previous state", () => {
+        const engine = new ArgumentEngine(ARG)
+        engine.addVariable(makeVariable("v1", "P"))
+        engine.createPremiseWithId("p1")
+
+        const snap = engine.snapshot()
+
+        // Mutate the engine
+        engine.addVariable(makeVariable("v2", "Q"))
+        engine.createPremiseWithId("p2")
+
+        expect(engine.listPremiseIds()).toEqual(["p1", "p2"])
+        expect(engine.getVariables()).toHaveLength(2)
+
+        // Rollback
+        engine.rollback(snap)
+
+        expect(engine.listPremiseIds()).toEqual(["p1"])
+        expect(engine.getVariables()).toHaveLength(1)
+        expect(engine.getVariables()[0].symbol).toBe("P")
+    })
+
+    it("rollback after multiple mutations restores correct state", () => {
+        const engine = new ArgumentEngine(ARG)
+        engine.addVariable(makeVariable("v1", "P"))
+        const { result: pm } = engine.createPremiseWithId("p1")
+        pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            parentId: null,
+            position: 0,
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            premiseId: "p1",
+        })
+        engine.setConclusionPremise("p1")
+
+        const snap = engine.snapshot()
+
+        // Multiple mutations
+        engine.createPremiseWithId("p2")
+        engine.addVariable(makeVariable("v2", "Q"))
+        engine.setConclusionPremise("p2")
+        engine.removeVariable("v1")
+
+        // Rollback to original
+        engine.rollback(snap)
+
+        expect(engine.listPremiseIds()).toEqual(["p1"])
+        expect(engine.getVariables()).toHaveLength(1)
+        expect(engine.getVariables()[0].id).toBe("v1")
+        expect(engine.getRoleState().conclusionPremiseId).toBe("p1")
+        const restoredPm = engine.getPremise("p1")!
+        expect(restoredPm.getExpressions()).toHaveLength(1)
+        expect(restoredPm.getExpressions()[0].id).toBe("e1")
     })
 })

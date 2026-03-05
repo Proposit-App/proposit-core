@@ -580,6 +580,6 @@ export function registerAnalysisCommands(
         .option("--json", "Output as JSON")
         .action(async (_opts: { json?: boolean }) => {
             const engine = await hydrateEngine(argumentId, version)
-            printJson(engine.exportState())
+            printJson(engine.snapshot())
         })
 }

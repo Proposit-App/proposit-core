@@ -7,7 +7,6 @@ import type {
     TOptionalChecksum,
 } from "../schemata/index.js"
 import type {
-    TCoreArgumentEngineData,
     TCoreArgumentEvaluationOptions,
     TCoreArgumentEvaluationResult,
     TCoreArgumentRoleState,
@@ -34,11 +33,26 @@ import {
     makeValidationResult,
 } from "./evaluation/shared.js"
 import { PremiseEngine } from "./PremiseEngine.js"
+import type { TPremiseEngineSnapshot } from "./PremiseEngine.js"
 import { VariableManager } from "./VariableManager.js"
+import type { TVariableManagerSnapshot } from "./VariableManager.js"
 
 export type TLogicEngineOptions = {
     checksumConfig?: TCoreChecksumConfig
     positionConfig?: TCorePositionConfig
+}
+
+export type TArgumentEngineSnapshot<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+> = {
+    argument: TOptionalChecksum<TArg>
+    variables: TVariableManagerSnapshot<TVar>
+    premises: TPremiseEngineSnapshot<TPremise, TExpr>[]
+    conclusionPremiseId?: string
+    config?: TLogicEngineOptions
 }
 
 /**
@@ -387,17 +401,75 @@ export class ArgumentEngine<
     }
 
     /** Returns a serializable snapshot of the full engine state. */
-    public toData(): TCoreArgumentEngineData {
+    public snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar> {
         return {
-            argument: { ...this.argument, checksum: this.checksum() },
-            premises: this.listPremises().map((pm) => pm.toData()),
-            roles: this.getRoleState(),
+            argument: { ...this.argument },
+            variables: this.variables.snapshot(),
+            premises: this.listPremises().map((pe) => pe.snapshot()),
+            ...(this.conclusionPremiseId !== undefined
+                ? { conclusionPremiseId: this.conclusionPremiseId }
+                : {}),
+            config: {
+                checksumConfig: this.checksumConfig,
+                positionConfig: this.positionConfig,
+            },
         }
     }
 
-    /** Alias for {@link toData}. */
-    public exportState(): TCoreArgumentEngineData {
-        return this.toData()
+    /** Creates a new ArgumentEngine from a previously captured snapshot. */
+    public static fromSnapshot<
+        TArg extends TCoreArgument = TCoreArgument,
+        TPremise extends TCorePremise = TCorePremise,
+        TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+        TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    >(
+        snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar> {
+        const engine = new ArgumentEngine<TArg, TPremise, TExpr, TVar>(
+            snapshot.argument,
+            snapshot.config
+        )
+        // Restore variables
+        for (const v of snapshot.variables.variables) {
+            engine.addVariable(v)
+        }
+        // Restore premises using PremiseEngine.fromSnapshot
+        for (const premiseSnap of snapshot.premises) {
+            const pe = PremiseEngine.fromSnapshot<
+                TArg,
+                TPremise,
+                TExpr,
+                TVar
+            >(premiseSnap, snapshot.argument, engine.variables)
+            engine.premises.set(pe.getId(), pe)
+        }
+        // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
+        engine.conclusionPremiseId = snapshot.conclusionPremiseId
+        return engine
+    }
+
+    /** Restores the engine to a previously captured snapshot state. */
+    public rollback(
+        snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
+    ): void {
+        this.argument = { ...snapshot.argument }
+        this.checksumConfig = snapshot.config?.checksumConfig
+        this.positionConfig = snapshot.config?.positionConfig
+        this.variables = VariableManager.fromSnapshot<TVar>(
+            snapshot.variables
+        )
+        this.premises = new Map()
+        for (const premiseSnap of snapshot.premises) {
+            const pe = PremiseEngine.fromSnapshot<
+                TArg,
+                TPremise,
+                TExpr,
+                TVar
+            >(premiseSnap, this.argument, this.variables)
+            this.premises.set(pe.getId(), pe)
+        }
+        this.conclusionPremiseId = snapshot.conclusionPremiseId
+        this.markDirty()
     }
 
     /**
@@ -424,7 +496,7 @@ export class ArgumentEngine<
         )
 
         // Role state checksum (use fixed key since roles have no ID)
-        checksumMap["__roles__"] = entityChecksum(
+        checksumMap.__roles__ = entityChecksum(
             this.getRoleState() as unknown as Record<string, unknown>,
             config?.roleFields ?? DEFAULT_CHECKSUM_CONFIG.roleFields!
         )
