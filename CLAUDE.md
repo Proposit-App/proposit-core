@@ -3,11 +3,6 @@
 ## Generic instructions
 
 - Git commit messages should not include any co-authoring content
-- When changes modify the public interface (library API, CLI commands, types, or behavior), update all relevant documentation before finishing:
-    1. **README.md** — API reference, CLI usage, and concepts sections
-    2. **CLAUDE.md** — architecture, types, and design decisions sections
-    3. **CLI_EXAMPLES.md** — walkthrough examples and the complete script
-    4. **scripts/smoke-test.sh** — add coverage for new commands, flags, or behaviors
 
 ## Commands
 
@@ -457,3 +452,10 @@ The project uses `moduleResolution: "bundler"` in `tsconfig.json`, which allows 
 This matters because `src/lib/utils/` (a directory) and `src/lib/utils.ts` (a file) both compile to `dist/lib/`, and Node.js ESM resolves the directory first if no extension is given.
 
 If you add a new file in `src/cli/` or `src/lib/`, ensure all its relative imports include `.js`.
+
+## Documentation Sync
+
+- `README.md` [Public-API] — API reference, CLI usage, and concepts sections
+- `CLAUDE.md` [Public-API] — Architecture, types, and design decisions sections
+- `CLI_EXAMPLES.md` [Public-CLI-API] — Walkthrough examples and the complete script
+- `scripts/smoke-test.sh` [Public-CLI-API] — Add coverage for new commands, flags, or behaviors
