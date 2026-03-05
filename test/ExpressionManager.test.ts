@@ -24,6 +24,7 @@ import {
     POSITION_MIN,
     POSITION_MAX,
     POSITION_INITIAL,
+    DEFAULT_POSITION_CONFIG,
     midpoint,
 } from "../src/lib/utils/position"
 import {
@@ -4338,16 +4339,16 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
 })
 
 describe("position utilities", () => {
-    it("POSITION_INITIAL is midpoint of range", () => {
-        expect(POSITION_INITIAL).toBe(Math.floor(Number.MAX_SAFE_INTEGER / 2))
+    it("POSITION_INITIAL is 0", () => {
+        expect(POSITION_INITIAL).toBe(0)
     })
 
-    it("POSITION_MIN is 0", () => {
-        expect(POSITION_MIN).toBe(0)
+    it("POSITION_MIN is -(2^31-1)", () => {
+        expect(POSITION_MIN).toBe(-2147483647)
     })
 
-    it("POSITION_MAX is MAX_SAFE_INTEGER", () => {
-        expect(POSITION_MAX).toBe(Number.MAX_SAFE_INTEGER)
+    it("POSITION_MAX is 2^31-1", () => {
+        expect(POSITION_MAX).toBe(2147483647)
     })
 
     it("midpoint computes average of two numbers", () => {
@@ -6666,5 +6667,27 @@ describe("diffArguments — generic type parameters", () => {
         const diff = diffArguments(engineA, engineB)
         expect(diff.argument.before.projectId).toBe("proj-1")
         expect(diff.argument.after.projectId).toBe("proj-1")
+    })
+})
+
+describe("configurable position range", () => {
+    it("DEFAULT_POSITION_CONFIG has signed int32 range", () => {
+        expect(DEFAULT_POSITION_CONFIG).toEqual({
+            min: -2147483647,
+            max: 2147483647,
+            initial: 0,
+        })
+    })
+
+    it("POSITION_MIN is -(2^31-1)", () => {
+        expect(POSITION_MIN).toBe(-2147483647)
+    })
+
+    it("POSITION_MAX is 2^31-1", () => {
+        expect(POSITION_MAX).toBe(2147483647)
+    })
+
+    it("POSITION_INITIAL is 0", () => {
+        expect(POSITION_INITIAL).toBe(0)
     })
 })
