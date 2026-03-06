@@ -349,6 +349,77 @@ Returns all registered variables sorted by ID, with checksums.
 
 ---
 
+#### `getVariable(variableId)` → `TPropositionalVariable | undefined`
+
+Returns a variable by ID in O(1) time, or `undefined` if not found.
+
+---
+
+#### `hasVariable(variableId)` → `boolean`
+
+Returns `true` if a variable with the given ID exists. O(1).
+
+---
+
+#### `getVariableBySymbol(symbol)` → `TPropositionalVariable | undefined`
+
+Returns the variable with the given symbol in O(1) time, or `undefined` if no variable has that symbol.
+
+---
+
+#### `buildVariableIndex(keyFn)` → `Map<K, TVar>`
+
+Builds a `Map` keyed by a caller-supplied function over all variables. Useful for indexing by extension fields (e.g. `statementId`). The caller should cache the result — this is O(n) per call.
+
+```typescript
+// Example: index variables by a custom extension field
+const byStatementId = engine.buildVariableIndex((v) => v.statementId)
+```
+
+---
+
+#### `getExpression(expressionId)` → `TPropositionalExpression | undefined`
+
+Returns an expression by ID from any premise in O(1) time. Uses the shared expression index internally.
+
+---
+
+#### `hasExpression(expressionId)` → `boolean`
+
+Returns `true` if an expression with the given ID exists in any premise. O(1).
+
+---
+
+#### `getExpressionPremiseId(expressionId)` → `string | undefined`
+
+Returns the ID of the premise containing the given expression, or `undefined`. O(1).
+
+---
+
+#### `findPremiseByExpressionId(expressionId)` → `PremiseEngine | undefined`
+
+Returns the `PremiseEngine` instance that contains the given expression, or `undefined`. O(1).
+
+---
+
+#### `getAllExpressions()` → `TPropositionalExpression[]`
+
+Returns all expressions across all premises, sorted by ID.
+
+---
+
+#### `getExpressionsByVariableId(variableId)` → `TPropositionalExpression[]`
+
+Returns all expressions that reference the given variable ID, across all premises.
+
+---
+
+#### `listRootExpressions()` → `TPropositionalExpression[]`
+
+Returns the root expression from each premise that has one.
+
+---
+
 #### `setConclusionPremise(premiseId)` → `TCoreMutationResult<TCoreArgumentRoleState>`
 
 Designates a premise as the conclusion. Throws if the premise does not exist.
@@ -576,9 +647,9 @@ Returns a snapshot of the premise's owned state (premise metadata, expression sn
 
 ---
 
-#### `static fromSnapshot(snapshot, argument, variables)` → `PremiseEngine`
+#### `static fromSnapshot(snapshot, argument, variables, expressionIndex?)` → `PremiseEngine`
 
-Reconstructs a `PremiseEngine` from a snapshot, with the argument and `VariableManager` passed as dependencies.
+Reconstructs a `PremiseEngine` from a snapshot, with the argument and `VariableManager` passed as dependencies. An optional `expressionIndex` map (expressionId → premiseId) is populated with the restored expressions.
 
 ---
 

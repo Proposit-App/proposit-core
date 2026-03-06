@@ -48,10 +48,10 @@ src/
       relationships.ts  # Relationship types: TCorePremiseRelationshipAnalysis, TCorePremiseProfile,
                         #   TCoreVariableAppearance, TCorePremiseRelationResult, etc.
     core/
-      ArgumentEngine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity, checksum, snapshot, fromSnapshot, rollback, fromData, toDisplayString
+      ArgumentEngine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity, checksum, snapshot, fromSnapshot, rollback, fromData, toDisplayString, lookup methods (getVariable, getExpression, findPremiseByExpressionId, etc.)
       PremiseEngine.ts     # PremiseEngine — variables, expressions, evaluate, toDisplayString, toPremiseData, snapshot, isInference, isConstraint, checksum
       ExpressionManager.ts # Low-level expression tree (addExpression, appendExpression, addExpressionRelative, updateExpression, removeExpression, insertExpression)
-      VariableManager.ts   # Low-level variable registry
+      VariableManager.ts   # Low-level variable registry (with symbol→id reverse lookup via getVariableBySymbol)
       ChangeCollector.ts   # Internal change collector (not exported) — accumulates entity changes during mutations
       checksum.ts          # computeHash, canonicalSerialize, entityChecksum (standalone utilities)
       diff.ts              # diffArguments + default comparators (standalone function, pluggable)
@@ -87,7 +87,7 @@ src/
                           #   validate-assignments, delete, evaluate, check-validity, validate-argument, refs, export
 
 test/
-  ExpressionManager.test.ts   # Full test suite (459 tests, Vitest)
+  ExpressionManager.test.ts   # Full test suite (538 tests, Vitest)
 ```
 
 ## Class hierarchy
@@ -99,11 +99,13 @@ ArgumentEngine<TArg, TPremise, TExpr, TVar>
        └─ ExpressionManager<TExpr> (expression tree)
 ```
 
-All classes accept `TLogicEngineOptions` as their config parameter. `PremiseEngine` constructor takes `(premise, deps: { argument, variables }, config?)` — the premise entity as first arg, dependencies second, config third.
+All classes accept `TLogicEngineOptions` as their config parameter. `PremiseEngine` constructor takes `(premise, deps: { argument, variables, expressionIndex? }, config?)` — the premise entity as first arg, dependencies second, config third. The optional `expressionIndex` is a shared `Map<string, string>` (expressionId → premiseId) owned by `ArgumentEngine` and kept in sync by `PremiseEngine` after every mutation.
 
 All type parameters have `extends BaseType = BaseType` defaults, so existing code using these classes without type arguments works unchanged. Extended entity types survive all mutations via spread-based reconstruction; `as T` assertions are used at ~15 internal reconstruction points where TypeScript cannot prove that `Omit<T, K> & Pick<Base, K>` equals `T` for generic `T extends Base`.
 
-`ArgumentEngine` manages a collection of premises and their logical roles (supporting vs. conclusion). The constructor accepts an optional `config?: TLogicEngineOptions` parameter containing `checksumConfig?: TCoreChecksumConfig` and `positionConfig?: TCorePositionConfig`. `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes (renamed from `TArgumentEngineOptions`). The engine owns a single shared `VariableManager` instance and passes it by reference to every `PremiseEngine` it creates. `ArgumentEngine` provides `addVariable()`, `updateVariable()`, and `removeVariable()` (with cascade deletion of referencing expressions across all premises). Each `PremiseEngine` owns the expression tree for one premise and can evaluate or serialize itself independently. `ExpressionManager` and `VariableManager` are internal building blocks not exposed in the public API.
+`ArgumentEngine` manages a collection of premises and their logical roles (supporting vs. conclusion). The constructor accepts an optional `config?: TLogicEngineOptions` parameter containing `checksumConfig?: TCoreChecksumConfig` and `positionConfig?: TCorePositionConfig`. `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes (renamed from `TArgumentEngineOptions`). The engine owns a single shared `VariableManager` instance and a shared expression index (`Map<string, string>`, expressionId → premiseId), both passed by reference to every `PremiseEngine` it creates. `ArgumentEngine` provides `addVariable()`, `updateVariable()`, and `removeVariable()` (with cascade deletion of referencing expressions across all premises). Each `PremiseEngine` owns the expression tree for one premise and can evaluate or serialize itself independently. `ExpressionManager` and `VariableManager` are internal building blocks not exposed in the public API.
+
+`ArgumentEngine` exposes O(1) lookup methods for variables and expressions: `getVariable(id)`, `hasVariable(id)`, `getVariableBySymbol(symbol)`, `getExpression(id)`, `hasExpression(id)`, `getExpressionPremiseId(id)`, `findPremiseByExpressionId(id)`. It also provides `buildVariableIndex(keyFn)` for building custom-keyed maps over variables (e.g. indexing by extension fields), `getAllExpressions()`, `getExpressionsByVariableId(variableId)`, and `listRootExpressions()`. The expression index is maintained eagerly by `PremiseEngine` via `syncExpressionIndex()` after every mutation, and rebuilt during `fromSnapshot()`, `fromData()`, and `rollback()`.
 
 When the first premise is added to an `ArgumentEngine` (via `createPremise` or `createPremiseWithId`), it is automatically designated as the conclusion premise if no conclusion is currently set. This auto-assignment is reflected in the mutation changeset. Explicit `setConclusionPremise()` overrides the auto-assignment. Removing or clearing the conclusion re-enables auto-assignment for the next premise created.
 
@@ -291,7 +293,7 @@ All classes support hierarchical snapshot/restore. Each class snapshots only wha
 - `PremiseEngine.snapshot()` → `TPremiseEngineSnapshot` (premise metadata, expression snapshot, config — excludes argument/variables)
 - `ArgumentEngine.snapshot()` → `TArgumentEngineSnapshot` (argument, variable snapshot, premise snapshots, conclusionPremiseId, config)
 
-Each class has a `static fromSnapshot()` that reconstructs an instance. `PremiseEngine.fromSnapshot()` accepts argument and `VariableManager` as dependencies. `ArgumentEngine.fromSnapshot()` reconstructs all children from the nested snapshots.
+Each class has a `static fromSnapshot()` that reconstructs an instance. `PremiseEngine.fromSnapshot()` accepts argument, `VariableManager`, and an optional `expressionIndex` map as dependencies. `ArgumentEngine.fromSnapshot()` reconstructs all children from the nested snapshots and passes the shared expression index to each `PremiseEngine`.
 
 `ArgumentEngine.rollback(snapshot)` restores state in place (preserving the instance reference).
 
@@ -434,6 +436,9 @@ Current describe blocks (in order):
 - `ArgumentEngine — snapshot/fromSnapshot/rollback`
 - `ArgumentEngine — fromData`
 - `ArgumentEngine — toDisplayString`
+- `VariableManager — getVariableBySymbol`
+- `PremiseEngine — shared expression index`
+- `ArgumentEngine — lookup methods`
 
 When adding a test for a new feature, add a new `describe` block at the bottom.
 
