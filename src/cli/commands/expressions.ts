@@ -192,7 +192,14 @@ export function registerExpressionCommands(
                     argumentId,
                     version,
                     premiseId,
-                    pm.toPremiseData()
+                    {
+                        rootExpressionId:
+                            pm.toPremiseData().rootExpressionId,
+                        variables: [
+                            ...pm.getReferencedVariableIds(),
+                        ].sort(),
+                        expressions: pm.getExpressions(),
+                    }
                 )
                 printLine(id)
             }
@@ -310,7 +317,14 @@ export function registerExpressionCommands(
                     argumentId,
                     version,
                     premiseId,
-                    pm.toPremiseData()
+                    {
+                        rootExpressionId:
+                            pm.toPremiseData().rootExpressionId,
+                        variables: [
+                            ...pm.getReferencedVariableIds(),
+                        ].sort(),
+                        expressions: pm.getExpressions(),
+                    }
                 )
                 printLine(id)
             }
@@ -336,7 +350,14 @@ export function registerExpressionCommands(
                 argumentId,
                 version,
                 premiseId,
-                pm.toPremiseData()
+                {
+                    rootExpressionId:
+                        pm.toPremiseData().rootExpressionId,
+                    variables: [
+                        ...pm.getReferencedVariableIds(),
+                    ].sort(),
+                    expressions: pm.getExpressions(),
+                }
             )
             printLine("success")
         })
