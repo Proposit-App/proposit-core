@@ -8192,3 +8192,275 @@ describe("PremiseEngine — shared expression index", () => {
         expect(newIndex.get("e1")).toBe("p1")
     })
 })
+
+describe("ArgumentEngine — lookup methods", () => {
+    function setupEngine() {
+        const arg = { id: "arg-1", version: 0 }
+        const engine = new ArgumentEngine(arg)
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+        })
+        const { result: p1 } = engine.createPremiseWithId("p1")
+        const { result: p2 } = engine.createPremiseWithId("p2")
+
+        p1.addExpression({
+            id: "e1",
+            type: "variable" as const,
+            variableId: "v1",
+            parentId: null,
+            position: 0,
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p1",
+        })
+
+        p2.addExpression({
+            id: "op1",
+            type: "operator" as const,
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p2",
+        } as TExpressionInput)
+        p2.addExpression({
+            id: "e2",
+            type: "variable" as const,
+            variableId: "v1",
+            parentId: "op1",
+            position: 0,
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p2",
+        })
+        p2.addExpression({
+            id: "e3",
+            type: "variable" as const,
+            variableId: "v2",
+            parentId: "op1",
+            position: 1,
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p2",
+        })
+
+        return { engine, p1, p2 }
+    }
+
+    describe("getVariable", () => {
+        it("returns the variable by ID", () => {
+            const { engine } = setupEngine()
+            expect(engine.getVariable("v1")?.symbol).toBe("P")
+        })
+
+        it("returns undefined for unknown ID", () => {
+            const { engine } = setupEngine()
+            expect(engine.getVariable("unknown")).toBeUndefined()
+        })
+    })
+
+    describe("hasVariable", () => {
+        it("returns true for existing variable", () => {
+            const { engine } = setupEngine()
+            expect(engine.hasVariable("v1")).toBe(true)
+        })
+
+        it("returns false for unknown variable", () => {
+            const { engine } = setupEngine()
+            expect(engine.hasVariable("unknown")).toBe(false)
+        })
+    })
+
+    describe("getVariableBySymbol", () => {
+        it("returns the variable by symbol", () => {
+            const { engine } = setupEngine()
+            expect(engine.getVariableBySymbol("P")?.id).toBe("v1")
+        })
+
+        it("returns undefined for unknown symbol", () => {
+            const { engine } = setupEngine()
+            expect(engine.getVariableBySymbol("Z")).toBeUndefined()
+        })
+
+        it("reflects updates after updateVariable", () => {
+            const { engine } = setupEngine()
+            engine.updateVariable("v1", { symbol: "R" })
+            expect(engine.getVariableBySymbol("P")).toBeUndefined()
+            expect(engine.getVariableBySymbol("R")?.id).toBe("v1")
+        })
+    })
+
+    describe("buildVariableIndex", () => {
+        it("builds a custom-keyed map from variables", () => {
+            const { engine } = setupEngine()
+            const bySymbol = engine.buildVariableIndex((v) => v.symbol)
+            expect(bySymbol.get("P")?.id).toBe("v1")
+            expect(bySymbol.get("Q")?.id).toBe("v2")
+            expect(bySymbol.size).toBe(2)
+        })
+    })
+
+    describe("getExpression", () => {
+        it("returns an expression from any premise by ID", () => {
+            const { engine } = setupEngine()
+            const e1 = engine.getExpression("e1")
+            expect(e1?.id).toBe("e1")
+            const e3 = engine.getExpression("e3")
+            expect(e3?.id).toBe("e3")
+        })
+
+        it("returns undefined for unknown ID", () => {
+            const { engine } = setupEngine()
+            expect(engine.getExpression("unknown")).toBeUndefined()
+        })
+    })
+
+    describe("hasExpression", () => {
+        it("returns true for existing expression", () => {
+            const { engine } = setupEngine()
+            expect(engine.hasExpression("e1")).toBe(true)
+        })
+
+        it("returns false for unknown expression", () => {
+            const { engine } = setupEngine()
+            expect(engine.hasExpression("unknown")).toBe(false)
+        })
+    })
+
+    describe("getExpressionPremiseId", () => {
+        it("returns the premiseId for an expression", () => {
+            const { engine } = setupEngine()
+            expect(engine.getExpressionPremiseId("e1")).toBe("p1")
+            expect(engine.getExpressionPremiseId("e3")).toBe("p2")
+        })
+
+        it("returns undefined for unknown expression", () => {
+            const { engine } = setupEngine()
+            expect(engine.getExpressionPremiseId("unknown")).toBeUndefined()
+        })
+    })
+
+    describe("findPremiseByExpressionId", () => {
+        it("returns the PremiseEngine containing the expression", () => {
+            const { engine } = setupEngine()
+            const pe = engine.findPremiseByExpressionId("e3")
+            expect(pe?.getId()).toBe("p2")
+        })
+
+        it("returns undefined for unknown expression", () => {
+            const { engine } = setupEngine()
+            expect(engine.findPremiseByExpressionId("unknown")).toBeUndefined()
+        })
+    })
+
+    describe("getAllExpressions", () => {
+        it("returns all expressions across all premises sorted by ID", () => {
+            const { engine } = setupEngine()
+            const all = engine.getAllExpressions()
+            const ids = all.map((e) => e.id).sort()
+            expect(ids).toEqual(["e1", "e2", "e3", "op1"])
+        })
+    })
+
+    describe("getExpressionsByVariableId", () => {
+        it("returns expressions referencing the variable across premises", () => {
+            const { engine } = setupEngine()
+            const exprs = engine.getExpressionsByVariableId("v1")
+            const ids = exprs.map((e) => e.id).sort()
+            expect(ids).toEqual(["e1", "e2"])
+        })
+
+        it("returns empty array for unreferenced variable", () => {
+            const { engine } = setupEngine()
+            expect(engine.getExpressionsByVariableId("unknown")).toEqual([])
+        })
+    })
+
+    describe("listRootExpressions", () => {
+        it("returns root expressions from all premises", () => {
+            const { engine } = setupEngine()
+            const roots = engine.listRootExpressions()
+            const ids = roots.map((e) => e.id).sort()
+            expect(ids).toEqual(["e1", "op1"])
+        })
+    })
+
+    describe("expression index stays in sync after mutations", () => {
+        it("tracks expression removal via PremiseEngine", () => {
+            const { engine, p2 } = setupEngine()
+            p2.removeExpression("e2", true)
+            expect(engine.hasExpression("e2")).toBe(false)
+            expect(engine.hasExpression("e3")).toBe(true)
+        })
+
+        it("tracks premise removal via ArgumentEngine", () => {
+            const { engine } = setupEngine()
+            engine.removePremise("p1")
+            expect(engine.hasExpression("e1")).toBe(false)
+        })
+
+        it("tracks cascade variable removal", () => {
+            const { engine } = setupEngine()
+            engine.removeVariable("v1")
+            expect(engine.hasExpression("e1")).toBe(false)
+            expect(engine.hasExpression("e2")).toBe(false)
+        })
+
+        it("survives snapshot round-trip", () => {
+            const { engine } = setupEngine()
+            const snap = engine.snapshot()
+            const restored = ArgumentEngine.fromSnapshot(snap)
+            expect(restored.getExpression("e1")?.id).toBe("e1")
+            expect(restored.getExpressionPremiseId("e3")).toBe("p2")
+        })
+
+        it("survives fromData round-trip", () => {
+            const { engine } = setupEngine()
+            const vars = engine.getVariables()
+            const premises = engine.listPremises().map((pe) => pe.toPremiseData())
+            const expressions = engine.getAllExpressions()
+            const roles = engine.getRoleState()
+            const restored = ArgumentEngine.fromData(
+                engine.getArgument(),
+                vars,
+                premises,
+                expressions,
+                roles
+            )
+            expect(restored.getExpression("e1")?.id).toBe("e1")
+            expect(restored.getExpressionPremiseId("e3")).toBe("p2")
+        })
+
+        it("survives rollback", () => {
+            const { engine, p1 } = setupEngine()
+            const snap = engine.snapshot()
+            // e1 is the root (type variable, parentId null) — can't add children to a variable.
+            // Instead, remove the root and add an operator with children.
+            p1.removeExpression("e1", true)
+            p1.addExpression({
+                id: "op99",
+                type: "operator" as const,
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: "arg-1",
+                argumentVersion: 0,
+                premiseId: "p1",
+            } as TExpressionInput)
+            expect(engine.hasExpression("op99")).toBe(true)
+            engine.rollback(snap)
+            expect(engine.hasExpression("op99")).toBe(false)
+            expect(engine.hasExpression("e1")).toBe(true)
+        })
+    })
+})

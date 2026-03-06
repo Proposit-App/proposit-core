@@ -77,6 +77,7 @@ export class ArgumentEngine<
     private positionConfig?: TCorePositionConfig
     private checksumDirty = true
     private cachedChecksum: string | undefined
+    private expressionIndex: Map<string, string>
 
     constructor(
         argument: TOptionalChecksum<TArg>,
@@ -88,6 +89,7 @@ export class ArgumentEngine<
             checksumConfig: this.checksumConfig,
             positionConfig: this.positionConfig,
         })
+        this.expressionIndex = new Map()
         this.conclusionPremiseId = undefined
         this.checksumConfig = options?.checksumConfig
         this.positionConfig = options?.positionConfig
@@ -168,7 +170,7 @@ export class ArgumentEngine<
         } as TOptionalChecksum<TPremise>
         const pm = new PremiseEngine<TArg, TPremise, TExpr, TVar>(
             premiseData,
-            { argument: this.argument, variables: this.variables },
+            { argument: this.argument, variables: this.variables, expressionIndex: this.expressionIndex },
             {
                 checksumConfig: this.checksumConfig,
                 positionConfig: this.positionConfig,
@@ -200,6 +202,10 @@ export class ArgumentEngine<
         const pm = this.premises.get(premiseId)
         if (!pm) return { result: undefined, changes: {} }
         const data = pm.toPremiseData()
+        // Clean up expression index for removed premise's expressions
+        for (const expr of pm.getExpressions()) {
+            this.expressionIndex.delete(expr.id)
+        }
         this.premises.delete(premiseId)
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.removedPremise(data)
@@ -346,6 +352,97 @@ export class ArgumentEngine<
         return this.variables.toArray()
     }
 
+    /** Returns the variable with the given ID, or `undefined` if not found. */
+    public getVariable(variableId: string): TVar | undefined {
+        return this.variables.getVariable(variableId)
+    }
+
+    /** Returns `true` if a variable with the given ID exists. */
+    public hasVariable(variableId: string): boolean {
+        return this.variables.hasVariable(variableId)
+    }
+
+    /** Returns the variable with the given symbol, or `undefined` if not found. */
+    public getVariableBySymbol(symbol: string): TVar | undefined {
+        return this.variables.getVariableBySymbol(symbol)
+    }
+
+    /**
+     * Builds a Map keyed by a caller-supplied function over all variables.
+     * Useful for indexing by extension fields (e.g. statementId).
+     * The caller should cache the result — this is O(n) per call.
+     */
+    public buildVariableIndex<K>(keyFn: (v: TVar) => K): Map<K, TVar> {
+        const map = new Map<K, TVar>()
+        for (const v of this.variables.toArray()) {
+            map.set(keyFn(v), v)
+        }
+        return map
+    }
+
+    /** Returns an expression by ID from any premise, or `undefined` if not found. */
+    public getExpression(expressionId: string): TExpr | undefined {
+        const premiseId = this.expressionIndex.get(expressionId)
+        if (premiseId === undefined) return undefined
+        return this.premises.get(premiseId)?.getExpression(expressionId)
+    }
+
+    /** Returns `true` if an expression with the given ID exists in any premise. */
+    public hasExpression(expressionId: string): boolean {
+        return this.expressionIndex.has(expressionId)
+    }
+
+    /** Returns the premise ID that contains the given expression, or `undefined`. */
+    public getExpressionPremiseId(expressionId: string): string | undefined {
+        return this.expressionIndex.get(expressionId)
+    }
+
+    /** Returns the PremiseEngine containing the given expression, or `undefined`. */
+    public findPremiseByExpressionId(
+        expressionId: string
+    ): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined {
+        const premiseId = this.expressionIndex.get(expressionId)
+        if (premiseId === undefined) return undefined
+        return this.premises.get(premiseId)
+    }
+
+    /** Returns all expressions across all premises, sorted by ID. */
+    public getAllExpressions(): TExpr[] {
+        const all: TExpr[] = []
+        for (const pe of this.listPremises()) {
+            all.push(...pe.getExpressions())
+        }
+        return all.sort((a, b) => a.id.localeCompare(b.id))
+    }
+
+    /**
+     * Returns all expressions that reference the given variable ID,
+     * across all premises.
+     */
+    public getExpressionsByVariableId(variableId: string): TExpr[] {
+        const result: TExpr[] = []
+        for (const pe of this.listPremises()) {
+            const refIds = pe.getReferencedVariableIds()
+            if (!refIds.has(variableId)) continue
+            for (const expr of pe.getExpressions()) {
+                if (expr.type === "variable" && expr.variableId === variableId) {
+                    result.push(expr)
+                }
+            }
+        }
+        return result
+    }
+
+    /** Returns the root expression from each premise that has one. */
+    public listRootExpressions(): TExpr[] {
+        const roots: TExpr[] = []
+        for (const pe of this.listPremises()) {
+            const root = pe.getRootExpression()
+            if (root) roots.push(root)
+        }
+        return roots
+    }
+
     /** Returns the current role assignments (conclusion premise ID only; supporting is derived). */
     public getRoleState(): TCoreArgumentRoleState {
         return {
@@ -467,7 +564,8 @@ export class ArgumentEngine<
             const pe = PremiseEngine.fromSnapshot<TArg, TPremise, TExpr, TVar>(
                 premiseSnap,
                 snapshot.argument,
-                engine.variables
+                engine.variables,
+                engine.expressionIndex
             )
             engine.premises.set(pe.getId(), pe)
         }
@@ -583,11 +681,13 @@ export class ArgumentEngine<
         this.positionConfig = snapshot.config?.positionConfig
         this.variables = VariableManager.fromSnapshot<TVar>(snapshot.variables)
         this.premises = new Map()
+        this.expressionIndex = new Map()
         for (const premiseSnap of snapshot.premises) {
             const pe = PremiseEngine.fromSnapshot<TArg, TPremise, TExpr, TVar>(
                 premiseSnap,
                 this.argument,
-                this.variables
+                this.variables,
+                this.expressionIndex
             )
             this.premises.set(pe.getId(), pe)
         }
