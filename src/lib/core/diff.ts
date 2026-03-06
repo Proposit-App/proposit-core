@@ -148,6 +148,8 @@ function diffPremiseSet<
 >(
     beforePremises: TPremise[],
     afterPremises: TPremise[],
+    beforeExpressions: Map<string, TExpr[]>,
+    afterExpressions: Map<string, TExpr[]>,
     comparePremise: TCoreFieldComparator<TPremise>,
     compareExpression: TCoreFieldComparator<TExpr>
 ): TCorePremiseSetDiff<TPremise, TExpr> {
@@ -166,8 +168,8 @@ function diffPremiseSet<
         }
         const premiseChanges = comparePremise(beforePremise, afterPremise)
         const expressionsDiff = diffEntitySet(
-            beforePremise.expressions as TExpr[],
-            afterPremise.expressions as TExpr[],
+            beforeExpressions.get(id) ?? [],
+            afterExpressions.get(id) ?? [],
             compareExpression
         )
         const hasExpressionChanges =
@@ -244,8 +246,16 @@ export function diffArguments<
 ): TCoreArgumentDiff<TArg, TVar, TPremise, TExpr> {
     const argA = engineA.getArgument()
     const argB = engineB.getArgument()
-    const premisesA = engineA.listPremises().map((pe) => pe.toPremiseData())
-    const premisesB = engineB.listPremises().map((pe) => pe.toPremiseData())
+    const premiseEnginesA = engineA.listPremises()
+    const premiseEnginesB = engineB.listPremises()
+    const premisesA = premiseEnginesA.map((pe) => pe.toPremiseData())
+    const premisesB = premiseEnginesB.map((pe) => pe.toPremiseData())
+    const expressionsA = new Map(
+        premiseEnginesA.map((pe) => [pe.getId(), pe.getExpressions()])
+    )
+    const expressionsB = new Map(
+        premiseEnginesB.map((pe) => [pe.getId(), pe.getExpressions()])
+    )
     const rolesA = engineA.getRoleState()
     const rolesB = engineB.getRoleState()
 
@@ -278,6 +288,8 @@ export function diffArguments<
         premises: diffPremiseSet(
             premisesA,
             premisesB,
+            expressionsA,
+            expressionsB,
             comparePrem,
             compareExpr
         ),

@@ -125,13 +125,6 @@ export const CorePremiseSchema = Type.Object(
                     "ID of the root expression, if the premise has expressions.",
             })
         ),
-        variables: Type.Array(UUID, {
-            description: "IDs of all variables referenced in this premise.",
-        }),
-        expressions: Type.Array(CorePropositionalExpressionSchema, {
-            description:
-                "All expressions in this premise. The root has a null parentId.",
-        }),
         checksum: Type.String({
             description: "Premise-level checksum for sync detection.",
         }),
@@ -139,7 +132,7 @@ export const CorePremiseSchema = Type.Object(
     {
         additionalProperties: true,
         description:
-            "A premise containing an expression tree and variable references.",
+            "A premise entity with identity and metadata. Expressions and variables are managed by PremiseEngine.",
     }
 )
 

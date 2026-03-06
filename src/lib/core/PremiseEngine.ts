@@ -548,8 +548,6 @@ export class PremiseEngine<
             argumentId: _argumentId,
             argumentVersion: _argumentVersion,
             rootExpressionId: _rootExpressionId,
-            variables: _variables,
-            expressions: _expressions,
             checksum: _checksum,
             ...extras
         } = this.premise as Record<string, unknown>
@@ -1015,15 +1013,12 @@ export class PremiseEngine<
 
     /**
      * Returns a serializable TPremise representation of this premise.
-     * Builds the premise data from the snapshot, including expressions,
-     * referenced variable IDs, and checksum.
+     * Builds the premise data from the snapshot with a fresh checksum.
      */
     public toPremiseData(): TPremise {
         const snap = this.snapshot()
         return {
             ...snap.premise,
-            expressions: snap.expressions.expressions,
-            variables: [...this.getReferencedVariableIds()].sort(),
             checksum: this.checksum(),
         } as TPremise
     }

@@ -631,8 +631,6 @@ export class ArgumentEngine<
                 argumentId: _argumentId,
                 argumentVersion: _argumentVersion,
                 rootExpressionId: _rootExpressionId,
-                variables: _vars,
-                expressions: _exprs,
                 checksum: _checksum,
                 ...extras
             } = premise as unknown as Record<string, unknown>

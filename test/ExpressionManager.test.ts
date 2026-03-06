@@ -913,8 +913,8 @@ describe("toArray behaviour (via toData().expressions)", () => {
         )
 
         const ids = premise
-            .toPremiseData()
-            .expressions.map((e) => e.id)
+            .getExpressions()
+            .map((e) => e.id)
             .sort()
         expect(ids).toEqual(["expr-1", "expr-2", "op-1"].sort())
     })
@@ -1149,7 +1149,7 @@ describe("stress test", () => {
         // Pick a variable that is referenced somewhere
         const referencedVar = variables[0]
         const hadExpressions = premiseManagers.some((pm) =>
-            pm.toPremiseData().variables.includes(referencedVar.id)
+            pm.getReferencedVariableIds().has(referencedVar.id)
         )
         expect(hadExpressions).toBe(true)
 
@@ -1160,7 +1160,9 @@ describe("stress test", () => {
 
         // No premise should reference the variable anymore
         for (const pm of premiseManagers) {
-            expect(pm.toPremiseData().variables).not.toContain(referencedVar.id)
+            expect(pm.getReferencedVariableIds().has(referencedVar.id)).toBe(
+                false
+            )
         }
     })
 
@@ -1200,7 +1202,7 @@ describe("stress test", () => {
         const { premiseManagers, allExpressions } = buildStress()
         const counts = new Map<string, number>()
         for (const pm of premiseManagers) {
-            for (const expr of pm.toPremiseData().expressions) {
+            for (const expr of pm.getExpressions()) {
                 counts.set(expr.id, (counts.get(expr.id) ?? 0) + 1)
             }
         }
@@ -1213,7 +1215,7 @@ describe("stress test", () => {
         const { premiseManagers, referencedVarIds } = buildStress()
         const variableIdsInPremises = new Set<string>()
         for (const pm of premiseManagers) {
-            for (const v of pm.toPremiseData().variables) {
+            for (const v of pm.getReferencedVariableIds()) {
                 variableIdsInPremises.add(v)
             }
         }
@@ -1428,8 +1430,8 @@ describe("ArgumentEngine premise CRUD", () => {
         const { result: pm2 } = eng.createPremise({ title: "second" })
         pm1.addExpression(makeVarExpr("expr-p", VAR_P.id))
         pm2.addExpression(makeVarExpr("expr-q", VAR_Q.id))
-        expect(pm1.toPremiseData().expressions).toHaveLength(1)
-        expect(pm2.toPremiseData().expressions).toHaveLength(1)
+        expect(pm1.getExpressions()).toHaveLength(1)
+        expect(pm2.getExpressions()).toHaveLength(1)
         expect(pm1.getExpression("expr-q")).toBeUndefined()
         expect(pm2.getExpression("expr-p")).toBeUndefined()
     })
@@ -1712,15 +1714,15 @@ describe("PremiseEngine — toData", () => {
         pm.addExpression(
             makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 2 })
         )
-        const { variables } = pm.toPremiseData()
+        const variables = pm.getReferencedVariableIds()
         expect([...variables].sort()).toEqual([VAR_P.id, VAR_Q.id].sort())
     })
 
     it("variables does not include registered-but-unreferenced variables", () => {
         const pm = premiseWithVars() // P, Q, R all registered
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id)) // only P referenced
-        const { variables } = pm.toPremiseData()
-        expect(variables).toEqual([VAR_P.id])
+        const variables = pm.getReferencedVariableIds()
+        expect([...variables]).toEqual([VAR_P.id])
     })
 
     it("expressions contains all nodes in the tree", () => {
@@ -1733,8 +1735,8 @@ describe("PremiseEngine — toData", () => {
             makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 1 })
         )
         const ids = pm
-            .toPremiseData()
-            .expressions.map((e) => e.id)
+            .getExpressions()
+            .map((e) => e.id)
             .sort()
         expect(ids).toEqual(["expr-p", "expr-q", "op-and"].sort())
     })
@@ -5352,9 +5354,9 @@ describe("entity checksum fields", () => {
 
     it("toData expressions include entity checksums", () => {
         const { pm } = setupPremise()
-        const data = pm.toPremiseData()
-        expect(data.expressions).toHaveLength(1)
-        expect(data.expressions[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].checksum).toMatch(/^[0-9a-f]{8}$/)
     })
 
     it("changeset expressions from addExpression include checksums", () => {
@@ -6386,11 +6388,11 @@ describe("removeExpression — deleteSubtree parameter", () => {
         // Remove P with deleteSubtree: true — collapse promotes Q to root
         pm.removeExpression("expr-p", true)
 
-        const data = pm.toPremiseData()
-        expect(data.rootExpressionId).toBe("expr-q")
-        expect(data.expressions).toHaveLength(1)
-        expect(data.expressions[0].id).toBe("expr-q")
-        expect(data.expressions[0].parentId).toBeNull()
+        expect(pm.toPremiseData().rootExpressionId).toBe("expr-q")
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].id).toBe("expr-q")
+        expect(expressions[0].parentId).toBeNull()
     })
 
     it("deleteSubtree: false — promotes single child (operator)", () => {
@@ -6412,14 +6414,14 @@ describe("removeExpression — deleteSubtree parameter", () => {
         // Remove and with deleteSubtree: false — or promoted to root
         pm.removeExpression("op-and", false)
 
-        const data = pm.toPremiseData()
-        expect(data.rootExpressionId).toBe("op-or")
-        expect(data.expressions).toHaveLength(3)
-        const orExpr = data.expressions.find((e) => e.id === "op-or")!
+        expect(pm.toPremiseData().rootExpressionId).toBe("op-or")
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(3)
+        const orExpr = expressions.find((e) => e.id === "op-or")!
         expect(orExpr.parentId).toBeNull()
         // Children of or are intact
-        const pExpr = data.expressions.find((e) => e.id === "expr-p")!
-        const qExpr = data.expressions.find((e) => e.id === "expr-q")!
+        const pExpr = expressions.find((e) => e.id === "expr-p")!
+        const qExpr = expressions.find((e) => e.id === "expr-q")!
         expect(pExpr.parentId).toBe("op-or")
         expect(qExpr.parentId).toBe("op-or")
     })
@@ -6437,11 +6439,11 @@ describe("removeExpression — deleteSubtree parameter", () => {
         // Remove not with deleteSubtree: false — P promoted to root
         pm.removeExpression("op-not", false)
 
-        const data = pm.toPremiseData()
-        expect(data.rootExpressionId).toBe("expr-p")
-        expect(data.expressions).toHaveLength(1)
-        expect(data.expressions[0].id).toBe("expr-p")
-        expect(data.expressions[0].parentId).toBeNull()
+        expect(pm.toPremiseData().rootExpressionId).toBe("expr-p")
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].id).toBe("expr-p")
+        expect(expressions[0].parentId).toBeNull()
     })
 
     it("deleteSubtree: false — errors on multiple children", () => {
@@ -6463,9 +6465,8 @@ describe("removeExpression — deleteSubtree parameter", () => {
         )
 
         // Tree is unchanged
-        const data = pm.toPremiseData()
-        expect(data.expressions).toHaveLength(3)
-        expect(data.rootExpressionId).toBe("op-and")
+        expect(pm.getExpressions()).toHaveLength(3)
+        expect(pm.toPremiseData().rootExpressionId).toBe("op-and")
     })
 
     it("deleteSubtree: false — leaf node with collapse on parent", () => {
@@ -6484,11 +6485,11 @@ describe("removeExpression — deleteSubtree parameter", () => {
         // Remove leaf P with deleteSubtree: false — collapse promotes Q to root
         pm.removeExpression("expr-p", false)
 
-        const data = pm.toPremiseData()
-        expect(data.rootExpressionId).toBe("expr-q")
-        expect(data.expressions).toHaveLength(1)
-        expect(data.expressions[0].id).toBe("expr-q")
-        expect(data.expressions[0].parentId).toBeNull()
+        expect(pm.toPremiseData().rootExpressionId).toBe("expr-q")
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].id).toBe("expr-q")
+        expect(expressions[0].parentId).toBeNull()
     })
 
     it("deleteSubtree: false — promotes child into non-root slot", () => {
@@ -6513,14 +6514,14 @@ describe("removeExpression — deleteSubtree parameter", () => {
         // Remove not with deleteSubtree: false — or promoted into not's slot under and
         pm.removeExpression("op-not", false)
 
-        const data = pm.toPremiseData()
-        expect(data.rootExpressionId).toBe("op-and")
-        expect(data.expressions).toHaveLength(4) // and, or, P, Q
-        const orExpr = data.expressions.find((e) => e.id === "op-or")!
+        expect(pm.toPremiseData().rootExpressionId).toBe("op-and")
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(4) // and, or, P, Q
+        const orExpr = expressions.find((e) => e.id === "op-or")!
         expect(orExpr.parentId).toBe("op-and")
-        const pExpr = data.expressions.find((e) => e.id === "expr-p")!
+        const pExpr = expressions.find((e) => e.id === "expr-p")!
         expect(pExpr.parentId).toBe("op-or")
-        const qExpr = data.expressions.find((e) => e.id === "expr-q")!
+        const qExpr = expressions.find((e) => e.id === "expr-q")!
         expect(qExpr.parentId).toBe("op-or")
     })
 
@@ -6562,12 +6563,12 @@ describe("removeExpression — deleteSubtree parameter", () => {
         // Remove and with deleteSubtree: false — not promoted to root, tree intact as not(P)
         pm.removeExpression("op-and", false)
 
-        const data = pm.toPremiseData()
-        expect(data.rootExpressionId).toBe("op-not")
-        expect(data.expressions).toHaveLength(2)
-        const notExpr = data.expressions.find((e) => e.id === "op-not")!
+        expect(pm.toPremiseData().rootExpressionId).toBe("op-not")
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(2)
+        const notExpr = expressions.find((e) => e.id === "op-not")!
         expect(notExpr.parentId).toBeNull()
-        const pExpr = data.expressions.find((e) => e.id === "expr-p")!
+        const pExpr = expressions.find((e) => e.id === "expr-p")!
         expect(pExpr.parentId).toBe("op-not")
     })
 
@@ -6584,16 +6585,14 @@ describe("removeExpression — deleteSubtree parameter", () => {
         // Remove formula with deleteSubtree: false — P promoted
         pm.removeExpression("f-1", false)
 
-        const data = pm.toPremiseData()
-        expect(data.rootExpressionId).toBe("expr-p")
-        expect(data.expressions).toHaveLength(1)
+        expect(pm.toPremiseData().rootExpressionId).toBe("expr-p")
+        expect(pm.getExpressions()).toHaveLength(1)
 
         // Verify variable cascade still works on P
         // (P should still be tracked in expressionsByVariableId)
         pm.deleteExpressionsUsingVariable(VAR_P.id)
-        const dataAfter = pm.toPremiseData()
-        expect(dataAfter.expressions).toHaveLength(0)
-        expect(dataAfter.rootExpressionId).toBeUndefined()
+        expect(pm.getExpressions()).toHaveLength(0)
+        expect(pm.toPremiseData().rootExpressionId).toBeUndefined()
     })
 })
 
@@ -7559,15 +7558,11 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
-                variables: [],
-                expressions: [],
             },
             {
                 id: "p2",
                 argumentId: "arg-1",
                 argumentVersion: 1,
-                variables: [],
-                expressions: [],
             },
         ]
         const expressions = [
@@ -7616,8 +7611,6 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                     id: "p1",
                     argumentId: "arg-1",
                     argumentVersion: 1,
-                    variables: [],
-                    expressions: [],
                 },
             ] as TOptionalChecksum<TCorePremise>[],
             [],
@@ -7641,15 +7634,11 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
-                variables: [],
-                expressions: [],
             },
             {
                 id: "p2",
                 argumentId: "arg-1",
                 argumentVersion: 1,
-                variables: [],
-                expressions: [],
             },
         ]
         const expressions = [
@@ -7706,8 +7695,6 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
-                variables: [],
-                expressions: [],
             },
         ]
         // Expressions out of order — child before parent

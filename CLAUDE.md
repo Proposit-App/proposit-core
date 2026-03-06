@@ -301,7 +301,7 @@ Each class has a `static fromSnapshot()` that reconstructs an instance. `Premise
 
 `ArgumentEngine.toDisplayString()` renders the full argument with role labels (`[Conclusion]`, `[Supporting]`, `[Constraint]`).
 
-`PremiseEngine.toPremiseData()` replaces the former `toData()` — returns a `TPremise` object from snapshot data.
+`PremiseEngine.toPremiseData()` returns a `TPremise` object (premise metadata + checksum). Does not include expressions or variables — use `getExpressions()` and `getReferencedVariableIds()` for those.
 
 ### Schema additions
 

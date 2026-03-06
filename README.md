@@ -637,7 +637,7 @@ Returns the expression tree rendered with standard logical notation (¬ ∧ ∨ 
 
 #### `toPremiseData()` → `TPremise`
 
-Returns a serialisable premise object (`{ id, argumentId, argumentVersion, title, rootExpressionId, variables, expressions }`) with checksums.
+Returns a serialisable premise object (`{ id, argumentId, argumentVersion, rootExpressionId, checksum }` plus any extension fields). Does not include expressions or variables — use `getExpressions()` and `getReferencedVariableIds()` for those.
 
 ---
 
