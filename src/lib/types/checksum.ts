@@ -4,7 +4,7 @@ export interface TCoreChecksumConfig {
     expressionFields?: Set<string>
     /** Fields to hash for variable entities. Defaults to all variable fields. */
     variableFields?: Set<string>
-    /** Fields to hash for premise metadata. Defaults to ["id", "rootExpressionId"]. */
+    /** Fields to hash for premise metadata. Defaults to ["id", "argumentId", "argumentVersion"]. */
     premiseFields?: Set<string>
     /** Fields to hash for argument metadata. Defaults to ["id", "version"]. */
     argumentFields?: Set<string>

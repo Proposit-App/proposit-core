@@ -1003,12 +1003,13 @@ export class PremiseEngine<
 
     /**
      * Returns a serializable TPremise representation of this premise.
-     * Builds the premise data from the snapshot with a fresh checksum.
+     * Contains only premise identity/metadata and checksum — use
+     * getRootExpressionId(), getExpressions(), getReferencedVariableIds()
+     * for runtime state.
      */
     public toPremiseData(): TPremise {
-        const snap = this.snapshot()
         return {
-            ...snap.premise,
+            ...this.premise,
             checksum: this.checksum(),
         } as TPremise
     }
