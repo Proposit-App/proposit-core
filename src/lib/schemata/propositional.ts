@@ -132,7 +132,7 @@ export const CorePremiseSchema = Type.Object(
     {
         additionalProperties: true,
         description:
-            "A premise containing an expression tree and variable references.",
+            "A premise entity with identity and metadata. Expressions and variables are managed by PremiseEngine.",
     }
 )
 
