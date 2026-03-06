@@ -14,7 +14,10 @@ import {
 import { ChangeCollector } from "../src/lib/core/ChangeCollector"
 import { VariableManager } from "../src/lib/core/VariableManager"
 import { ExpressionManager } from "../src/lib/core/ExpressionManager"
-import type { TExpressionInput } from "../src/lib/core/ExpressionManager"
+import type {
+    TExpressionInput,
+    TExpressionWithoutPosition,
+} from "../src/lib/core/ExpressionManager"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
@@ -7941,5 +7944,251 @@ describe("VariableManager — getVariableBySymbol", () => {
         const restored = VariableManager.fromSnapshot(vm.snapshot())
         expect(restored.getVariableBySymbol("P")?.id).toBe("v1")
         expect(restored.getVariableBySymbol("Q")?.id).toBe("v2")
+    })
+})
+
+describe("PremiseEngine — shared expression index", () => {
+    const arg = { id: "arg-1", version: 0 }
+    const makeVariable = (id: string, symbol: string) => ({
+        id,
+        symbol,
+        argumentId: "arg-1",
+        argumentVersion: 0,
+        checksum: "x",
+    })
+    const makeVarExpr = (
+        id: string,
+        parentId: string | null,
+        premiseId: string,
+        overrides: Record<string, unknown> = {}
+    ) => ({
+        id,
+        type: "variable" as const,
+        variableId: "v1",
+        parentId,
+        position: 0,
+        argumentId: "arg-1",
+        argumentVersion: 0,
+        premiseId,
+        ...overrides,
+    })
+
+    it("populates the shared index on addExpression", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        const index = new Map<string, string>()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            {
+                argument: arg as TCoreArgument,
+                variables: vm,
+                expressionIndex: index,
+            }
+        )
+        pe.addExpression(makeVarExpr("e1", null, "p1"))
+        expect(index.get("e1")).toBe("p1")
+    })
+
+    it("removes entries from the shared index on removeExpression", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        const index = new Map<string, string>()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            {
+                argument: arg as TCoreArgument,
+                variables: vm,
+                expressionIndex: index,
+            }
+        )
+        pe.addExpression(makeVarExpr("e1", null, "p1"))
+        pe.removeExpression("e1", true)
+        expect(index.has("e1")).toBe(false)
+    })
+
+    it("removes subtree entries from the shared index", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        const index = new Map<string, string>()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            {
+                argument: arg as TCoreArgument,
+                variables: vm,
+                expressionIndex: index,
+            }
+        )
+        pe.addExpression({
+            id: "op1",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p1",
+        } as TExpressionInput)
+        pe.addExpression(makeVarExpr("e1", "op1", "p1", { position: 0 }))
+        pe.addExpression(
+            makeVarExpr("e2", "op1", "p1", { position: 1, id: "e2" })
+        )
+        pe.removeExpression("op1", true)
+        expect(index.has("op1")).toBe(false)
+        expect(index.has("e1")).toBe(false)
+        expect(index.has("e2")).toBe(false)
+    })
+
+    it("populates the shared index on appendExpression", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        const index = new Map<string, string>()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            {
+                argument: arg as TCoreArgument,
+                variables: vm,
+                expressionIndex: index,
+            }
+        )
+        pe.appendExpression(null, {
+            id: "e1",
+            type: "variable" as const,
+            variableId: "v1",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p1",
+        } as TExpressionWithoutPosition)
+        expect(index.get("e1")).toBe("p1")
+    })
+
+    it("populates the shared index on insertExpression", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        const index = new Map<string, string>()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            {
+                argument: arg as TCoreArgument,
+                variables: vm,
+                expressionIndex: index,
+            }
+        )
+        pe.addExpression(makeVarExpr("e1", null, "p1"))
+        pe.insertExpression(
+            {
+                id: "op1",
+                type: "operator",
+                operator: "not",
+                parentId: null,
+                position: 0,
+                argumentId: "arg-1",
+                argumentVersion: 0,
+                premiseId: "p1",
+            } as TExpressionInput,
+            "e1"
+        )
+        expect(index.get("op1")).toBe("p1")
+        expect(index.get("e1")).toBe("p1")
+    })
+
+    it("works correctly when no shared index is provided", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            { argument: arg as TCoreArgument, variables: vm }
+        )
+        pe.addExpression(makeVarExpr("e1", null, "p1"))
+        pe.removeExpression("e1", true)
+    })
+
+    it("removes entries on deleteExpressionsUsingVariable", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        vm.addVariable(makeVariable("v2", "Q"))
+        const index = new Map<string, string>()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            {
+                argument: arg as TCoreArgument,
+                variables: vm,
+                expressionIndex: index,
+            }
+        )
+        pe.addExpression({
+            id: "op1",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p1",
+        } as TExpressionInput)
+        pe.addExpression(makeVarExpr("e1", "op1", "p1", { position: 0 }))
+        pe.addExpression({
+            id: "e2",
+            type: "variable" as const,
+            variableId: "v2",
+            parentId: "op1",
+            position: 1,
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId: "p1",
+        })
+        pe.deleteExpressionsUsingVariable("v1")
+        expect(index.has("e1")).toBe(false)
+    })
+
+    it("populates the shared index via fromSnapshot", () => {
+        const vm = new VariableManager()
+        vm.addVariable(makeVariable("v1", "P"))
+        const index = new Map<string, string>()
+        const pe = new PremiseEngine(
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+            } as TCorePremise,
+            {
+                argument: arg as TCoreArgument,
+                variables: vm,
+                expressionIndex: index,
+            }
+        )
+        pe.addExpression(makeVarExpr("e1", null, "p1"))
+        const snap = pe.snapshot()
+
+        const newIndex = new Map<string, string>()
+        PremiseEngine.fromSnapshot(snap, arg as TCoreArgument, vm, newIndex)
+        expect(newIndex.get("e1")).toBe("p1")
     })
 })

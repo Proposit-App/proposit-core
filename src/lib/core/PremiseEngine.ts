@@ -16,7 +16,7 @@ import type {
     TCoreValidationIssue,
     TCoreValidationResult,
 } from "../types/evaluation.js"
-import type { TCoreMutationResult } from "../types/mutation.js"
+import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
 import {
     buildDirectionalVacuity,
     kleeneAnd,
@@ -65,12 +65,14 @@ export class PremiseEngine<
     private checksumConfig?: TCoreChecksumConfig
     private checksumDirty = true
     private cachedChecksum: string | undefined
+    private expressionIndex?: Map<string, string>
 
     constructor(
         premise: TOptionalChecksum<TPremise>,
         deps: {
             argument: TOptionalChecksum<TArg>
             variables: VariableManager<TVar>
+            expressionIndex?: Map<string, string>
         },
         config?: TLogicEngineOptions
     ) {
@@ -81,6 +83,7 @@ export class PremiseEngine<
         this.variables = deps.variables
         this.expressions = new ExpressionManager<TExpr>(config)
         this.expressionsByVariableId = new DefaultMap(() => new Set())
+        this.expressionIndex = deps.expressionIndex
     }
 
     /**
@@ -116,9 +119,11 @@ export class PremiseEngine<
 
         // Expressions in the collector already have checksums attached
         // (from ExpressionManager which stores expressions with checksums).
+        const changes = collector.toChangeset()
+        this.syncExpressionIndex(changes)
         return {
             result: removed,
-            changes: collector.toChangeset(),
+            changes,
         }
     }
 
@@ -185,9 +190,11 @@ export class PremiseEngine<
             }
 
             this.markDirty()
+            const changes = collector.toChangeset()
+            this.syncExpressionIndex(changes)
             return {
                 result: this.expressions.getExpression(expression.id)!,
-                changes: collector.toChangeset(),
+                changes,
             }
         } finally {
             this.expressions.setCollector(null)
@@ -251,9 +258,11 @@ export class PremiseEngine<
             }
 
             this.markDirty()
+            const changes = collector.toChangeset()
+            this.syncExpressionIndex(changes)
             return {
                 result: this.expressions.getExpression(expression.id)!,
-                changes: collector.toChangeset(),
+                changes,
             }
         } finally {
             this.expressions.setCollector(null)
@@ -309,9 +318,11 @@ export class PremiseEngine<
             }
 
             this.markDirty()
+            const changes = collector.toChangeset()
+            this.syncExpressionIndex(changes)
             return {
                 result: this.expressions.getExpression(expression.id)!,
-                changes: collector.toChangeset(),
+                changes,
             }
         } finally {
             this.expressions.setCollector(null)
@@ -381,6 +392,7 @@ export class PremiseEngine<
                 this.markDirty()
             }
 
+            this.syncExpressionIndex(changeset)
             return {
                 result: updated,
                 changes: changeset,
@@ -445,9 +457,11 @@ export class PremiseEngine<
 
             this.syncRootExpressionId()
             this.markDirty()
+            const changes = collector.toChangeset()
+            this.syncExpressionIndex(changes)
             return {
                 result: snapshot,
-                changes: collector.toChangeset(),
+                changes,
             }
         } finally {
             this.expressions.setCollector(null)
@@ -505,9 +519,11 @@ export class PremiseEngine<
             this.syncRootExpressionId()
             this.markDirty()
 
+            const changes = collector.toChangeset()
+            this.syncExpressionIndex(changes)
             return {
                 result: this.expressions.getExpression(expression.id)!,
-                changes: collector.toChangeset(),
+                changes,
             }
         } finally {
             this.expressions.setCollector(null)
@@ -1179,11 +1195,12 @@ export class PremiseEngine<
     >(
         snapshot: TPremiseEngineSnapshot<TPremise, TExpr>,
         argument: TOptionalChecksum<TArg>,
-        variables: VariableManager<TVar>
+        variables: VariableManager<TVar>,
+        expressionIndex?: Map<string, string>
     ): PremiseEngine<TArg, TPremise, TExpr, TVar> {
         const pe = new PremiseEngine<TArg, TPremise, TExpr, TVar>(
             snapshot.premise,
-            { argument, variables },
+            { argument, variables, expressionIndex },
             snapshot.config
         )
         // Restore expressions from the snapshot
@@ -1195,7 +1212,25 @@ export class PremiseEngine<
             .rootExpressionId as string | undefined
         // Rebuild the expressionsByVariableId index
         pe.rebuildVariableIndex()
+        // Populate the shared expression index if provided
+        if (expressionIndex) {
+            for (const expr of pe.expressions.toArray()) {
+                expressionIndex.set(expr.id, pe.getId())
+            }
+        }
         return pe
+    }
+
+    private syncExpressionIndex(
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    ): void {
+        if (!this.expressionIndex || !changes.expressions) return
+        for (const expr of changes.expressions.added) {
+            this.expressionIndex.set(expr.id, this.premise.id)
+        }
+        for (const expr of changes.expressions.removed) {
+            this.expressionIndex.delete(expr.id)
+        }
     }
 
     private rebuildVariableIndex(): void {
