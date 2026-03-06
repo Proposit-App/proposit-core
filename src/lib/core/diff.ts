@@ -251,10 +251,10 @@ export function diffArguments<
     const premisesA = premiseEnginesA.map((pe) => pe.toPremiseData())
     const premisesB = premiseEnginesB.map((pe) => pe.toPremiseData())
     const expressionsA = new Map(
-        premiseEnginesA.map((pe) => [pe.getId(), pe.getExpressions() as TExpr[]])
+        premiseEnginesA.map((pe) => [pe.getId(), pe.getExpressions()])
     )
     const expressionsB = new Map(
-        premiseEnginesB.map((pe) => [pe.getId(), pe.getExpressions() as TExpr[]])
+        premiseEnginesB.map((pe) => [pe.getId(), pe.getExpressions()])
     )
     const rolesA = engineA.getRoleState()
     const rolesB = engineB.getRoleState()

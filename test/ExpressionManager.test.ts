@@ -1160,7 +1160,9 @@ describe("stress test", () => {
 
         // No premise should reference the variable anymore
         for (const pm of premiseManagers) {
-            expect(pm.getReferencedVariableIds().has(referencedVar.id)).toBe(false)
+            expect(pm.getReferencedVariableIds().has(referencedVar.id)).toBe(
+                false
+            )
         }
     })
 
