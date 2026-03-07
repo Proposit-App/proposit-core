@@ -224,6 +224,79 @@ if (validity.ok) {
 }
 ```
 
+### Using with React
+
+`ArgumentEngine` implements the `useSyncExternalStore` contract, so it works as a React external store with no additional dependencies:
+
+```tsx
+import { useSyncExternalStore } from "react"
+import { ArgumentEngine } from "@polintpro/proposit-core"
+
+// Create the engine outside of React (or in a ref/context)
+const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
+
+function ArgumentView() {
+    // Subscribe to the full snapshot
+    const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
+
+    return (
+        <div>
+            <h2>Variables</h2>
+            <ul>
+                {Object.values(snapshot.variables).map((v) => (
+                    <li key={v.id}>{v.symbol}</li>
+                ))}
+            </ul>
+            <h2>Premises</h2>
+            {Object.entries(snapshot.premises).map(([id, p]) => (
+                <div key={id}>
+                    Premise {id} — {Object.keys(p.expressions).length} expressions
+                </div>
+            ))}
+        </div>
+    )
+}
+```
+
+For fine-grained reactivity, select a specific slice — React skips re-rendering if the reference is unchanged thanks to structural sharing:
+
+```tsx
+function ExpressionView({ premiseId, expressionId }: {
+    premiseId: string
+    expressionId: string
+}) {
+    // Only re-renders when THIS expression changes
+    const expression = useSyncExternalStore(
+        engine.subscribe,
+        () => engine.getSnapshot().premises[premiseId]?.expressions[expressionId]
+    )
+
+    if (!expression) return null
+    return <span>{expression.type === "variable" ? expression.variableId : expression.operator}</span>
+}
+```
+
+Mutations go through the engine as usual — subscribers are notified automatically:
+
+```tsx
+function AddVariableButton() {
+    return (
+        <button onClick={() => {
+            engine.addVariable({
+                id: crypto.randomUUID(),
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                symbol: "R",
+            })
+        }}>
+            Add variable R
+        </button>
+    )
+}
+```
+
+---
+
 ### Inserting an expression into the tree
 
 `insertExpression` splices a new node between existing nodes. The new expression inherits the **anchor** node's current slot in the tree (`leftNodeId ?? rightNodeId`).
@@ -486,6 +559,18 @@ Options:
 - `maxAssignmentsChecked` — safety limit on the number of assignments evaluated.
 - `includeCounterexampleEvaluations` (default `false`) — attach full evaluation payloads to counterexamples.
 - `validateFirst` (default `true`) — run validation before the search.
+
+---
+
+#### `subscribe(listener)` → `() => void`
+
+Registers a listener that is called synchronously after every mutation (including mutations through child `PremiseEngine` instances). Returns an unsubscribe function. Compatible with React's `useSyncExternalStore`.
+
+---
+
+#### `getSnapshot()` → `TReactiveSnapshot`
+
+Returns a `TReactiveSnapshot` with structurally-shared sub-objects. Unchanged slices keep the same object reference between calls, enabling fine-grained React selectors via `useSyncExternalStore`. The snapshot is lazily rebuilt only when dirty regions exist.
 
 ---
 
@@ -786,6 +871,10 @@ Hierarchical snapshot types for capturing and restoring engine state:
 | `TVariableManagerSnapshot`   | `variables`, `config`                                                                   |
 | `TPremiseEngineSnapshot`     | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                |
 | `TArgumentEngineSnapshot`    | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config` |
+| `TReactiveSnapshot`          | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles` |
+| `TReactivePremiseSnapshot`   | `premise`, `expressions` (Record by ID), `rootExpressionId` |
+
+`TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
 Each snapshot captures only what the class **owns**. Dependencies (e.g., variables for a premise) are excluded and must be passed separately during restoration via `fromSnapshot()`.
 
