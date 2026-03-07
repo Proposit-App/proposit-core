@@ -18,15 +18,17 @@ import type {
 } from "../types/evaluation.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
 import {
-    buildDirectionalVacuity,
     kleeneAnd,
     kleeneIff,
     kleeneImplies,
     kleeneNot,
     kleeneOr,
+} from "./evaluation/kleene.js"
+import {
+    buildDirectionalVacuity,
     makeErrorIssue,
     makeValidationResult,
-} from "./evaluation/shared.js"
+} from "./evaluation/validation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TLogicEngineOptions } from "./ArgumentEngine.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"

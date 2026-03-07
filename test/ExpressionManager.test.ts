@@ -46,7 +46,7 @@ import {
     kleeneOr,
     kleeneImplies,
     kleeneIff,
-} from "../src/lib/core/evaluation/shared"
+} from "../src/lib/core/evaluation/kleene"
 import {
     buildPremiseProfile,
     analyzePremiseRelationships,

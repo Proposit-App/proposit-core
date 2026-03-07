@@ -26,12 +26,11 @@ import type { TCoreMutationResult } from "../types/mutation.js"
 import { getOrCreate, sortedUnique } from "../utils/collections.js"
 import { ChangeCollector } from "./ChangeCollector.js"
 import { canonicalSerialize, computeHash, entityChecksum } from "./checksum.js"
+import { kleeneAnd, kleeneNot } from "./evaluation/kleene.js"
 import {
-    kleeneAnd,
-    kleeneNot,
     makeErrorIssue,
     makeValidationResult,
-} from "./evaluation/shared.js"
+} from "./evaluation/validation.js"
 import type { TExpressionInput } from "./ExpressionManager.js"
 import { PremiseEngine } from "./PremiseEngine.js"
 import type { TPremiseEngineSnapshot } from "./PremiseEngine.js"
