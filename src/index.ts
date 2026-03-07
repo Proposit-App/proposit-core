@@ -6,48 +6,4 @@
  * the primary API, along with all type schemata and the {@link diffArguments}
  * utility.
  */
-export { ArgumentEngine, PremiseEngine } from "./lib/index.js"
-export type {
-    TLogicEngineOptions,
-    TArgumentEngineSnapshot,
-    TPremiseEngineSnapshot,
-    TExpressionManagerSnapshot,
-    TVariableManagerSnapshot,
-} from "./lib/index.js"
-export * from "./lib/schemata/index.js"
-export * from "./lib/types/diff.js"
-export * from "./lib/types/mutation.js"
-export * from "./lib/types/checksum.js"
-export {
-    computeHash,
-    canonicalSerialize,
-    entityChecksum,
-} from "./lib/core/checksum.js"
-export {
-    diffArguments,
-    defaultCompareArgument,
-    defaultCompareVariable,
-    defaultComparePremise,
-    defaultCompareExpression,
-} from "./lib/core/diff.js"
-export * from "./lib/types/relationships.js"
-export {
-    analyzePremiseRelationships,
-    buildPremiseProfile,
-} from "./lib/core/relationships.js"
-export { DEFAULT_CHECKSUM_CONFIG, createChecksumConfig } from "./lib/consts.js"
-export { parseFormula } from "./lib/core/parser/formula.js"
-export type { FormulaAST } from "./lib/core/parser/formula.js"
-export type {
-    TExpressionInput,
-    TExpressionWithoutPosition,
-    TExpressionUpdate,
-} from "./lib/core/expressionManager.js"
-export {
-    POSITION_MIN,
-    POSITION_MAX,
-    POSITION_INITIAL,
-    DEFAULT_POSITION_CONFIG,
-    midpoint,
-} from "./lib/utils/position.js"
-export type { TCorePositionConfig } from "./lib/utils/position.js"
+export * from "./lib/index.js"

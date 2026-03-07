@@ -1,7 +1,8 @@
 /**
  * Library barrel export. Re-exports core classes, evaluation types, diff
- * types, and the diff function.
+ * types, schemata, and the diff function.
  */
+export * from "./schemata/index.js"
 export { ArgumentEngine } from "./core/argumentEngine.js"
 export type {
     TLogicEngineOptions,
