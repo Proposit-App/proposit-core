@@ -43,7 +43,8 @@
         "prettify:check": "pnpm prettier --check .",
         "test": "pnpm vitest run",
         "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
-        "cli": "node dist/cli.js"
+        "cli": "node dist/cli.js",
+        "prepublishOnly": "pnpm run check"
     },
     "devDependencies": {
         "@types/js-yaml": "^4.0.9",
