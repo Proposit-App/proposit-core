@@ -69,6 +69,7 @@ export class PremiseEngine<
     private checksumDirty = true
     private cachedChecksum: string | undefined
     private expressionIndex?: Map<string, string>
+    private onMutate?: () => void
 
     constructor(
         premise: TOptionalChecksum<TPremise>,
@@ -89,6 +90,10 @@ export class PremiseEngine<
         this.expressionIndex = deps.expressionIndex
     }
 
+    public setOnMutate(callback: (() => void) | undefined): void {
+        this.onMutate = callback
+    }
+
     /**
      * Deletes all expressions that reference the given variable ID,
      * including their subtrees. Operator collapse runs after each removal.
@@ -104,29 +109,44 @@ export class PremiseEngine<
 
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
 
-        // Copy the set since removeExpression mutates expressionsByVariableId
-        const removed: TExpr[] = []
-        for (const exprId of [...expressionIds]) {
-            // The expression may already have been removed as part of a
-            // prior subtree deletion or operator collapse in this loop.
-            if (!this.expressions.getExpression(exprId)) continue
+        // Suppress onMutate during the loop to avoid redundant notifications
+        const savedOnMutate = this.onMutate
+        this.onMutate = undefined
+        try {
+            // Copy the set since removeExpression mutates expressionsByVariableId
+            const removed: TExpr[] = []
+            for (const exprId of [...expressionIds]) {
+                // The expression may already have been removed as part of a
+                // prior subtree deletion or operator collapse in this loop.
+                if (!this.expressions.getExpression(exprId)) continue
 
-            const { result, changes } = this.removeExpression(exprId, true)
-            if (result) removed.push(result)
-            if (changes.expressions) {
-                for (const e of changes.expressions.removed) {
-                    collector.removedExpression(e)
+                const { result, changes } = this.removeExpression(exprId, true)
+                if (result) removed.push(result)
+                if (changes.expressions) {
+                    for (const e of changes.expressions.removed) {
+                        collector.removedExpression(e)
+                    }
                 }
             }
-        }
 
-        // Expressions in the collector already have checksums attached
-        // (from ExpressionManager which stores expressions with checksums).
-        const changes = collector.toChangeset()
-        this.syncExpressionIndex(changes)
-        return {
-            result: removed,
-            changes,
+            // Expressions in the collector already have checksums attached
+            // (from ExpressionManager which stores expressions with checksums).
+            const changes = collector.toChangeset()
+            this.syncExpressionIndex(changes)
+
+            // Restore and fire once if something was removed
+            this.onMutate = savedOnMutate
+            if (removed.length > 0) {
+                this.onMutate?.()
+            }
+
+            return {
+                result: removed,
+                changes,
+            }
+        } catch (e) {
+            this.onMutate = savedOnMutate
+            throw e
         }
     }
 
@@ -195,6 +215,7 @@ export class PremiseEngine<
             this.markDirty()
             const changes = collector.toChangeset()
             this.syncExpressionIndex(changes)
+            this.onMutate?.()
             return {
                 result: this.expressions.getExpression(expression.id)!,
                 changes,
@@ -263,6 +284,7 @@ export class PremiseEngine<
             this.markDirty()
             const changes = collector.toChangeset()
             this.syncExpressionIndex(changes)
+            this.onMutate?.()
             return {
                 result: this.expressions.getExpression(expression.id)!,
                 changes,
@@ -323,6 +345,7 @@ export class PremiseEngine<
             this.markDirty()
             const changes = collector.toChangeset()
             this.syncExpressionIndex(changes)
+            this.onMutate?.()
             return {
                 result: this.expressions.getExpression(expression.id)!,
                 changes,
@@ -393,6 +416,7 @@ export class PremiseEngine<
             const changeset = collector.toChangeset()
             if (changeset.expressions !== undefined) {
                 this.markDirty()
+                this.onMutate?.()
             }
 
             this.syncExpressionIndex(changeset)
@@ -462,6 +486,7 @@ export class PremiseEngine<
             this.markDirty()
             const changes = collector.toChangeset()
             this.syncExpressionIndex(changes)
+            this.onMutate?.()
             return {
                 result: snapshot,
                 changes,
@@ -524,6 +549,7 @@ export class PremiseEngine<
 
             const changes = collector.toChangeset()
             this.syncExpressionIndex(changes)
+            this.onMutate?.()
             return {
                 result: this.expressions.getExpression(expression.id)!,
                 changes,
@@ -576,6 +602,7 @@ export class PremiseEngine<
             ...(checksum !== undefined ? { checksum } : {}),
         } as TOptionalChecksum<TPremise>
         this.markDirty()
+        this.onMutate?.()
         return { result: this.getExtras(), changes: {} }
     }
 

@@ -22,7 +22,8 @@ import type {
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
-import type { TCoreMutationResult } from "../types/mutation.js"
+import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
+import type { TReactiveSnapshot, TReactivePremiseSnapshot } from "../types/reactive.js"
 import { getOrCreate, sortedUnique } from "../utils/collections.js"
 import { ChangeCollector } from "./changeCollector.js"
 import { canonicalSerialize, computeHash, entityChecksum } from "./checksum.js"
@@ -77,6 +78,15 @@ export class ArgumentEngine<
     private checksumDirty = true
     private cachedChecksum: string | undefined
     private expressionIndex: Map<string, string>
+    private listeners: Set<() => void> = new Set()
+    private reactiveDirty = {
+        argument: true,
+        variables: true,
+        roles: true,
+        premiseIds: new Set<string>(),
+        allPremises: true,
+    }
+    private cachedReactiveSnapshot: TReactiveSnapshot<TArg, TPremise, TExpr, TVar> | undefined
 
     constructor(
         argument: TOptionalChecksum<TArg>,
@@ -92,6 +102,145 @@ export class ArgumentEngine<
         this.conclusionPremiseId = undefined
         this.checksumConfig = options?.checksumConfig
         this.positionConfig = options?.positionConfig
+    }
+
+    /**
+     * Registers a listener that is called after every mutation.
+     * Returns an unsubscribe function.
+     */
+    public subscribe = (listener: () => void): (() => void) => {
+        this.listeners.add(listener)
+        return () => { this.listeners.delete(listener) }
+    }
+
+    private notifySubscribers(): void {
+        for (const listener of this.listeners) {
+            listener()
+        }
+    }
+
+    public getSnapshot = (): TReactiveSnapshot<TArg, TPremise, TExpr, TVar> => {
+        const dirty = this.reactiveDirty
+        const prev = this.cachedReactiveSnapshot
+
+        if (prev && !dirty.argument && !dirty.variables && !dirty.roles && dirty.premiseIds.size === 0 && !dirty.allPremises) {
+            return prev
+        }
+
+        const argument = dirty.argument || !prev
+            ? this.getArgument()
+            : prev.argument
+
+        const variables = dirty.variables || !prev
+            ? this.buildVariablesRecord()
+            : prev.variables
+
+        const roles = dirty.roles || !prev
+            ? { ...this.getRoleState() }
+            : prev.roles
+
+        let premises: Record<string, TReactivePremiseSnapshot<TPremise, TExpr>>
+        if (dirty.allPremises || !prev) {
+            premises = this.buildAllPremisesRecord()
+        } else {
+            premises = { ...prev.premises }
+            // Remove premises that no longer exist
+            for (const id of Object.keys(premises)) {
+                if (!this.premises.has(id)) {
+                    delete premises[id]
+                }
+            }
+            // Rebuild dirty premises
+            for (const id of dirty.premiseIds) {
+                const pm = this.premises.get(id)
+                if (pm) {
+                    premises[id] = this.buildPremiseRecord(pm)
+                } else {
+                    delete premises[id]
+                }
+            }
+            // Add any new premises not yet in snapshot
+            for (const [id, pm] of this.premises) {
+                if (!(id in premises)) {
+                    premises[id] = this.buildPremiseRecord(pm)
+                }
+            }
+        }
+
+        const snapshot: TReactiveSnapshot<TArg, TPremise, TExpr, TVar> = {
+            argument,
+            variables,
+            premises,
+            roles,
+        }
+
+        this.cachedReactiveSnapshot = snapshot
+        this.reactiveDirty = {
+            argument: false,
+            variables: false,
+            roles: false,
+            premiseIds: new Set(),
+            allPremises: false,
+        }
+
+        return snapshot
+    }
+
+    private buildVariablesRecord(): Record<string, TVar> {
+        const result: Record<string, TVar> = {}
+        for (const v of this.variables.toArray()) {
+            result[v.id] = v
+        }
+        return result
+    }
+
+    private buildAllPremisesRecord(): Record<string, TReactivePremiseSnapshot<TPremise, TExpr>> {
+        const result: Record<string, TReactivePremiseSnapshot<TPremise, TExpr>> = {}
+        for (const [id, pm] of this.premises) {
+            result[id] = this.buildPremiseRecord(pm)
+        }
+        return result
+    }
+
+    private buildPremiseRecord(
+        pm: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): TReactivePremiseSnapshot<TPremise, TExpr> {
+        const expressions: Record<string, TExpr> = {}
+        for (const expr of pm.getExpressions()) {
+            expressions[expr.id] = expr
+        }
+        return {
+            premise: pm.toPremiseData(),
+            expressions,
+            rootExpressionId: pm.getRootExpressionId(),
+        }
+    }
+
+    private markReactiveDirty(changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>): void {
+        if (changes.argument) {
+            this.reactiveDirty.argument = true
+        }
+        if (changes.variables) {
+            this.reactiveDirty.variables = true
+        }
+        if (changes.roles) {
+            this.reactiveDirty.roles = true
+        }
+        if (changes.expressions) {
+            const allExprs = [
+                ...changes.expressions.added,
+                ...changes.expressions.modified,
+                ...changes.expressions.removed,
+            ]
+            for (const expr of allExprs) {
+                this.reactiveDirty.premiseIds.add((expr as unknown as { premiseId: string }).premiseId)
+            }
+        }
+        if (changes.premises) {
+            for (const p of [...changes.premises.added, ...changes.premises.modified, ...changes.premises.removed]) {
+                this.reactiveDirty.premiseIds.add(p.id)
+            }
+        }
     }
 
     /** Returns a shallow copy of the argument metadata with checksum attached. */
@@ -180,6 +329,10 @@ export class ArgumentEngine<
             }
         )
         this.premises.set(id, pm)
+        pm.setOnMutate(() => {
+            this.reactiveDirty.premiseIds.add(id)
+            this.notifySubscribers()
+        })
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.addedPremise(pm.toPremiseData())
         this.markDirty()
@@ -189,9 +342,12 @@ export class ArgumentEngine<
             collector.setRoles(this.getRoleState())
         }
 
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
         return {
             result: pm,
-            changes: collector.toChangeset(),
+            changes,
         }
     }
 
@@ -217,9 +373,12 @@ export class ArgumentEngine<
             collector.setRoles(this.getRoleState())
         }
         this.markDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
         return {
             result: data,
-            changes: collector.toChangeset(),
+            changes,
         }
     }
 
@@ -278,9 +437,12 @@ export class ArgumentEngine<
         collector.addedVariable(withChecksum)
         this.markDirty()
         this.markAllPremisesDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
         return {
             result: withChecksum,
-            changes: collector.toChangeset(),
+            changes,
         }
     }
 
@@ -305,9 +467,12 @@ export class ArgumentEngine<
             collector.modifiedVariable(withChecksum)
             this.markDirty()
             this.markAllPremisesDirty()
+            const changes = collector.toChangeset()
+            this.markReactiveDirty(changes)
+            this.notifySubscribers()
             return {
                 result: withChecksum,
-                changes: collector.toChangeset(),
+                changes,
             }
         }
         return {
@@ -344,9 +509,12 @@ export class ArgumentEngine<
         collector.removedVariable(variable)
         this.markDirty()
         this.markAllPremisesDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
         return {
             result: variable,
-            changes: collector.toChangeset(),
+            changes,
         }
     }
 
@@ -481,9 +649,12 @@ export class ArgumentEngine<
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.setRoles(roles)
         this.markDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
         return {
             result: roles,
-            changes: collector.toChangeset(),
+            changes,
         }
     }
 
@@ -500,9 +671,12 @@ export class ArgumentEngine<
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.setRoles(roles)
         this.markDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
         return {
             result: roles,
-            changes: collector.toChangeset(),
+            changes,
         }
     }
 
@@ -574,6 +748,11 @@ export class ArgumentEngine<
                 engine.expressionIndex
             )
             engine.premises.set(pe.getId(), pe)
+            const premiseId = pe.getId()
+            pe.setOnMutate(() => {
+                engine.reactiveDirty.premiseIds.add(premiseId)
+                engine.notifySubscribers()
+            })
         }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
         engine.conclusionPremiseId = snapshot.conclusionPremiseId
@@ -695,7 +874,22 @@ export class ArgumentEngine<
             this.premises.set(pe.getId(), pe)
         }
         this.conclusionPremiseId = snapshot.conclusionPremiseId
+        for (const pe of this.premises.values()) {
+            const premiseId = pe.getId()
+            pe.setOnMutate(() => {
+                this.reactiveDirty.premiseIds.add(premiseId)
+                this.notifySubscribers()
+            })
+        }
         this.markDirty()
+        this.reactiveDirty = {
+            argument: true,
+            variables: true,
+            roles: true,
+            premiseIds: new Set(),
+            allPremises: true,
+        }
+        this.notifySubscribers()
     }
 
     /**
