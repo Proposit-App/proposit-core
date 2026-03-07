@@ -6,7 +6,7 @@ import type {
     TCorePropositionalVariable,
     TOptionalChecksum,
 } from "../schemata/index.js"
-import { DefaultMap } from "../utils.js"
+import { DefaultMap } from "../utils/defaultMap.js"
 import { sortedCopyById, sortedUnique } from "../utils/collections.js"
 import type {
     TCoreExpressionAssignment,
