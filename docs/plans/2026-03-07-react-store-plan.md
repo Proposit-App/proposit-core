@@ -13,6 +13,7 @@
 ### Task 1: Add `TReactiveSnapshot` type
 
 **Files:**
+
 - Create: `src/lib/types/reactive.ts`
 - Modify: `src/lib/index.ts`
 
@@ -74,6 +75,7 @@ feat: add TReactiveSnapshot type
 ### Task 2: Add `onMutate` callback to `PremiseEngine`
 
 **Files:**
+
 - Modify: `src/lib/core/premiseEngine.ts`
 - Test: `test/core.test.ts`
 
@@ -89,7 +91,9 @@ describe("PremiseEngine onMutate callback", () => {
         const { result: premise } = engine.createPremise()
 
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
 
         premise.addExpression({
             id: "expr-1",
@@ -122,7 +126,9 @@ describe("PremiseEngine onMutate callback", () => {
         })
 
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         premise.removeExpression("expr-1", true)
 
         expect(callCount).toBe(1)
@@ -145,7 +151,9 @@ describe("PremiseEngine onMutate callback", () => {
         })
 
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         premise.updateExpression("expr-1", { operator: "or" })
 
         expect(callCount).toBe(1)
@@ -157,7 +165,9 @@ describe("PremiseEngine onMutate callback", () => {
         const { result: premise } = engine.createPremise()
 
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
 
         premise.appendExpression(null, {
             id: "expr-1",
@@ -204,7 +214,9 @@ describe("PremiseEngine onMutate callback", () => {
         })
 
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
 
         premise.insertExpression(
             {
@@ -229,7 +241,9 @@ describe("PremiseEngine onMutate callback", () => {
         const { result: premise } = engine.createPremise()
 
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         premise.deleteExpressionsUsingVariable("nonexistent")
 
         expect(callCount).toBe(0)
@@ -295,6 +309,7 @@ feat: add onMutate callback to PremiseEngine
 ### Task 3: Add subscribe/notify to `ArgumentEngine`
 
 **Files:**
+
 - Modify: `src/lib/core/argumentEngine.ts`
 - Test: `test/core.test.ts`
 
@@ -307,7 +322,9 @@ describe("ArgumentEngine subscribe", () => {
     it("notifies subscriber when a premise is created", () => {
         const engine = new ArgumentEngine(makeArgument())
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.createPremise()
         expect(notified).toBe(true)
     })
@@ -316,7 +333,9 @@ describe("ArgumentEngine subscribe", () => {
         const engine = new ArgumentEngine(makeArgument())
         const { result: premise } = engine.createPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removePremise(premise.getId())
         expect(notified).toBe(true)
     })
@@ -325,7 +344,9 @@ describe("ArgumentEngine subscribe", () => {
         const arg = makeArgument()
         const engine = new ArgumentEngine(arg)
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.addVariable({
             id: "v1",
             argumentId: arg.id,
@@ -345,7 +366,9 @@ describe("ArgumentEngine subscribe", () => {
             symbol: "P",
         })
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.updateVariable("v1", { symbol: "Q" })
         expect(notified).toBe(true)
     })
@@ -360,7 +383,9 @@ describe("ArgumentEngine subscribe", () => {
             symbol: "P",
         })
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removeVariable("v1")
         expect(notified).toBe(true)
     })
@@ -370,7 +395,9 @@ describe("ArgumentEngine subscribe", () => {
         const { result: premise } = engine.createPremise()
         engine.clearConclusionPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.setConclusionPremise(premise.getId())
         expect(notified).toBe(true)
     })
@@ -379,7 +406,9 @@ describe("ArgumentEngine subscribe", () => {
         const engine = new ArgumentEngine(makeArgument())
         engine.createPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.clearConclusionPremise()
         expect(notified).toBe(true)
     })
@@ -389,7 +418,9 @@ describe("ArgumentEngine subscribe", () => {
         const snap = engine.snapshot()
         engine.createPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.rollback(snap)
         expect(notified).toBe(true)
     })
@@ -397,7 +428,9 @@ describe("ArgumentEngine subscribe", () => {
     it("unsubscribe stops notifications", () => {
         const engine = new ArgumentEngine(makeArgument())
         let count = 0
-        const unsub = engine.subscribe(() => { count++ })
+        const unsub = engine.subscribe(() => {
+            count++
+        })
         engine.createPremise()
         expect(count).toBe(1)
         unsub()
@@ -410,7 +443,9 @@ describe("ArgumentEngine subscribe", () => {
         const engine = new ArgumentEngine(arg)
         const { result: premise } = engine.createPremise()
         let count = 0
-        engine.subscribe(() => { count++ })
+        engine.subscribe(() => {
+            count++
+        })
 
         premise.addExpression({
             id: "expr-1",
@@ -429,7 +464,9 @@ describe("ArgumentEngine subscribe", () => {
     it("does not notify when removePremise finds nothing", () => {
         const engine = new ArgumentEngine(makeArgument())
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removePremise("nonexistent")
         expect(notified).toBe(false)
     })
@@ -437,7 +474,9 @@ describe("ArgumentEngine subscribe", () => {
     it("does not notify when removeVariable finds nothing", () => {
         const engine = new ArgumentEngine(makeArgument())
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removeVariable("nonexistent")
         expect(notified).toBe(false)
     })
@@ -475,7 +514,9 @@ private notifySubscribers(): void {
 Then wire `onMutate` into premise creation. In `createPremiseWithId` (line ~170), after creating the `PremiseEngine`, wire the callback:
 
 ```ts
-pm.setOnMutate(() => { this.notifySubscribers() })
+pm.setOnMutate(() => {
+    this.notifySubscribers()
+})
 ```
 
 Add `this.notifySubscribers()` at the end of each `ArgumentEngine` mutation method (just before `return`):
@@ -493,7 +534,9 @@ For `rollback`, also re-wire `onMutate` on all reconstructed premises:
 
 ```ts
 for (const pe of this.premises.values()) {
-    pe.setOnMutate(() => { this.notifySubscribers() })
+    pe.setOnMutate(() => {
+        this.notifySubscribers()
+    })
 }
 ```
 
@@ -520,6 +563,7 @@ feat: add subscribe/notify to ArgumentEngine
 ### Task 4: Add dirty tracking and `getSnapshot()` with structural sharing
 
 **Files:**
+
 - Modify: `src/lib/core/argumentEngine.ts`
 - Test: `test/core.test.ts`
 
@@ -556,7 +600,9 @@ describe("ArgumentEngine getSnapshot", () => {
         expect(snap.variables["v1"]).toBeDefined()
         expect(snap.variables["v1"].symbol).toBe("P")
         expect(snap.premises[premise.getId()]).toBeDefined()
-        expect(snap.premises[premise.getId()].expressions["expr-1"]).toBeDefined()
+        expect(
+            snap.premises[premise.getId()].expressions["expr-1"]
+        ).toBeDefined()
         expect(snap.premises[premise.getId()].rootExpressionId).toBe("expr-1")
         expect(snap.roles).toBeDefined()
     })
@@ -689,7 +735,10 @@ Expected: FAIL — `engine.getSnapshot` is not a function
 In `src/lib/core/argumentEngine.ts`, add the import for the reactive type:
 
 ```ts
-import type { TReactiveSnapshot, TReactivePremiseSnapshot } from "../types/reactive.js"
+import type {
+    TReactiveSnapshot,
+    TReactivePremiseSnapshot,
+} from "../types/reactive.js"
 ```
 
 Add private fields (after `listeners`):
@@ -893,6 +942,7 @@ feat: add getSnapshot with structural sharing to ArgumentEngine
 ### Task 5: Export `subscribe` and `getSnapshot` from barrel, verify full integration
 
 **Files:**
+
 - Modify: `src/lib/index.ts` (already done in Task 1 for types)
 - Test: `test/core.test.ts`
 
@@ -951,7 +1001,9 @@ describe("ArgumentEngine reactive store integration", () => {
         const final = engine.getSnapshot()
         expect(final.variables["v1"]).toBeDefined()
         expect(Object.keys(final.premises).length).toBe(1)
-        expect(final.premises[premise.getId()].expressions["expr-root"]).toBeDefined()
+        expect(
+            final.premises[premise.getId()].expressions["expr-root"]
+        ).toBeDefined()
 
         unsub()
     })

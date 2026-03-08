@@ -8456,8 +8456,12 @@ describe("PremiseEngine onMutate callback", () => {
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
-        premise.addExpression(makeOpExpr("op-1", "and", { premiseId: premise.getId() }))
+        premise.setOnMutate(() => {
+            callCount++
+        })
+        premise.addExpression(
+            makeOpExpr("op-1", "and", { premiseId: premise.getId() })
+        )
         expect(callCount).toBe(1)
     })
 
@@ -8465,9 +8469,13 @@ describe("PremiseEngine onMutate callback", () => {
         const engine = new ArgumentEngine(ARG)
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
-        premise.addExpression(makeOpExpr("op-1", "and", { premiseId: premise.getId() }))
+        premise.addExpression(
+            makeOpExpr("op-1", "and", { premiseId: premise.getId() })
+        )
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         premise.removeExpression("op-1", true)
         expect(callCount).toBe(1)
     })
@@ -8476,9 +8484,13 @@ describe("PremiseEngine onMutate callback", () => {
         const engine = new ArgumentEngine(ARG)
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
-        premise.addExpression(makeOpExpr("op-1", "and", { premiseId: premise.getId() }))
+        premise.addExpression(
+            makeOpExpr("op-1", "and", { premiseId: premise.getId() })
+        )
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         premise.updateExpression("op-1", { operator: "or" })
         expect(callCount).toBe(1)
     })
@@ -8488,7 +8500,9 @@ describe("PremiseEngine onMutate callback", () => {
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         premise.appendExpression(null, {
             id: "op-1",
             argumentId: ARG.id,
@@ -8516,7 +8530,9 @@ describe("PremiseEngine onMutate callback", () => {
             variableId: VAR_P.id,
         } as TExpressionWithoutPosition)
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         // Insert an "or" between root and child
         premise.insertExpression(
             makeOpExpr("op-insert", "or", { premiseId: pid }),
@@ -8531,7 +8547,9 @@ describe("PremiseEngine onMutate callback", () => {
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
-        premise.setOnMutate(() => { callCount++ })
+        premise.setOnMutate(() => {
+            callCount++
+        })
         premise.deleteExpressionsUsingVariable("nonexistent")
         expect(callCount).toBe(0)
     })
@@ -8541,7 +8559,9 @@ describe("ArgumentEngine subscribe", () => {
     it("notifies subscriber when a premise is created", () => {
         const engine = new ArgumentEngine(ARG)
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.createPremise()
         expect(notified).toBe(true)
     })
@@ -8550,7 +8570,9 @@ describe("ArgumentEngine subscribe", () => {
         const engine = new ArgumentEngine(ARG)
         const { result: premise } = engine.createPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removePremise(premise.getId())
         expect(notified).toBe(true)
     })
@@ -8558,7 +8580,9 @@ describe("ArgumentEngine subscribe", () => {
     it("notifies subscriber when a variable is added", () => {
         const engine = new ArgumentEngine(ARG)
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.addVariable({
             id: "v1",
             argumentId: ARG.id,
@@ -8577,7 +8601,9 @@ describe("ArgumentEngine subscribe", () => {
             symbol: "P",
         })
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.updateVariable("v1", { symbol: "Q" })
         expect(notified).toBe(true)
     })
@@ -8591,7 +8617,9 @@ describe("ArgumentEngine subscribe", () => {
             symbol: "P",
         })
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removeVariable("v1")
         expect(notified).toBe(true)
     })
@@ -8601,7 +8629,9 @@ describe("ArgumentEngine subscribe", () => {
         const { result: premise } = engine.createPremise()
         engine.clearConclusionPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.setConclusionPremise(premise.getId())
         expect(notified).toBe(true)
     })
@@ -8610,7 +8640,9 @@ describe("ArgumentEngine subscribe", () => {
         const engine = new ArgumentEngine(ARG)
         engine.createPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.clearConclusionPremise()
         expect(notified).toBe(true)
     })
@@ -8620,7 +8652,9 @@ describe("ArgumentEngine subscribe", () => {
         const snap = engine.snapshot()
         engine.createPremise()
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.rollback(snap)
         expect(notified).toBe(true)
     })
@@ -8628,7 +8662,9 @@ describe("ArgumentEngine subscribe", () => {
     it("unsubscribe stops notifications", () => {
         const engine = new ArgumentEngine(ARG)
         let count = 0
-        const unsub = engine.subscribe(() => { count++ })
+        const unsub = engine.subscribe(() => {
+            count++
+        })
         engine.createPremise()
         expect(count).toBe(1)
         unsub()
@@ -8640,7 +8676,9 @@ describe("ArgumentEngine subscribe", () => {
         const engine = new ArgumentEngine(ARG)
         const { result: premise } = engine.createPremise()
         let count = 0
-        engine.subscribe(() => { count++ })
+        engine.subscribe(() => {
+            count++
+        })
 
         premise.addExpression({
             id: "expr-1",
@@ -8659,7 +8697,9 @@ describe("ArgumentEngine subscribe", () => {
     it("does not notify when removePremise finds nothing", () => {
         const engine = new ArgumentEngine(ARG)
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removePremise("nonexistent")
         expect(notified).toBe(false)
     })
@@ -8667,7 +8707,9 @@ describe("ArgumentEngine subscribe", () => {
     it("does not notify when removeVariable finds nothing", () => {
         const engine = new ArgumentEngine(ARG)
         let notified = false
-        engine.subscribe(() => { notified = true })
+        engine.subscribe(() => {
+            notified = true
+        })
         engine.removeVariable("nonexistent")
         expect(notified).toBe(false)
     })
@@ -8700,7 +8742,9 @@ describe("ArgumentEngine getSnapshot", () => {
         expect(snap.variables["v1"]).toBeDefined()
         expect(snap.variables["v1"].symbol).toBe("P")
         expect(snap.premises[premise.getId()]).toBeDefined()
-        expect(snap.premises[premise.getId()].expressions["expr-1"]).toBeDefined()
+        expect(
+            snap.premises[premise.getId()].expressions["expr-1"]
+        ).toBeDefined()
         expect(snap.premises[premise.getId()].rootExpressionId).toBe("expr-1")
         expect(snap.roles).toBeDefined()
     })
@@ -8863,7 +8907,9 @@ describe("ArgumentEngine reactive store integration", () => {
         const final = engine.getSnapshot()
         expect(final.variables["v1"]).toBeDefined()
         expect(Object.keys(final.premises).length).toBe(1)
-        expect(final.premises[premise.getId()].expressions["expr-root"]).toBeDefined()
+        expect(
+            final.premises[premise.getId()].expressions["expr-root"]
+        ).toBeDefined()
 
         unsub()
     })

@@ -23,7 +23,10 @@ import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
-import type { TReactiveSnapshot, TReactivePremiseSnapshot } from "../types/reactive.js"
+import type {
+    TReactiveSnapshot,
+    TReactivePremiseSnapshot,
+} from "../types/reactive.js"
 import { getOrCreate, sortedUnique } from "../utils/collections.js"
 import { ChangeCollector } from "./changeCollector.js"
 import { canonicalSerialize, computeHash, entityChecksum } from "./checksum.js"
@@ -86,7 +89,9 @@ export class ArgumentEngine<
         premiseIds: new Set<string>(),
         allPremises: true,
     }
-    private cachedReactiveSnapshot: TReactiveSnapshot<TArg, TPremise, TExpr, TVar> | undefined
+    private cachedReactiveSnapshot:
+        | TReactiveSnapshot<TArg, TPremise, TExpr, TVar>
+        | undefined
 
     constructor(
         argument: TOptionalChecksum<TArg>,
@@ -110,7 +115,9 @@ export class ArgumentEngine<
      */
     public subscribe = (listener: () => void): (() => void) => {
         this.listeners.add(listener)
-        return () => { this.listeners.delete(listener) }
+        return () => {
+            this.listeners.delete(listener)
+        }
     }
 
     protected notifySubscribers(): void {
@@ -120,24 +127,39 @@ export class ArgumentEngine<
     }
 
     public getSnapshot = (): TReactiveSnapshot<TArg, TPremise, TExpr, TVar> => {
+        return this.buildReactiveSnapshot()
+    }
+
+    protected buildReactiveSnapshot(): TReactiveSnapshot<
+        TArg,
+        TPremise,
+        TExpr,
+        TVar
+    > {
         const dirty = this.reactiveDirty
         const prev = this.cachedReactiveSnapshot
 
-        if (prev && !dirty.argument && !dirty.variables && !dirty.roles && dirty.premiseIds.size === 0 && !dirty.allPremises) {
+        if (
+            prev &&
+            !dirty.argument &&
+            !dirty.variables &&
+            !dirty.roles &&
+            dirty.premiseIds.size === 0 &&
+            !dirty.allPremises
+        ) {
             return prev
         }
 
-        const argument = dirty.argument || !prev
-            ? this.getArgument()
-            : prev.argument
+        const argument =
+            dirty.argument || !prev ? this.getArgument() : prev.argument
 
-        const variables = dirty.variables || !prev
-            ? this.buildVariablesRecord()
-            : prev.variables
+        const variables =
+            dirty.variables || !prev
+                ? this.buildVariablesRecord()
+                : prev.variables
 
-        const roles = dirty.roles || !prev
-            ? { ...this.getRoleState() }
-            : prev.roles
+        const roles =
+            dirty.roles || !prev ? { ...this.getRoleState() } : prev.roles
 
         let premises: Record<string, TReactivePremiseSnapshot<TPremise, TExpr>>
         if (dirty.allPremises || !prev) {
@@ -194,8 +216,14 @@ export class ArgumentEngine<
         return result
     }
 
-    private buildAllPremisesRecord(): Record<string, TReactivePremiseSnapshot<TPremise, TExpr>> {
-        const result: Record<string, TReactivePremiseSnapshot<TPremise, TExpr>> = {}
+    private buildAllPremisesRecord(): Record<
+        string,
+        TReactivePremiseSnapshot<TPremise, TExpr>
+    > {
+        const result: Record<
+            string,
+            TReactivePremiseSnapshot<TPremise, TExpr>
+        > = {}
         for (const [id, pm] of this.premises) {
             result[id] = this.buildPremiseRecord(pm)
         }
@@ -216,7 +244,9 @@ export class ArgumentEngine<
         }
     }
 
-    private markReactiveDirty(changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>): void {
+    private markReactiveDirty(
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    ): void {
         if (changes.argument) {
             this.reactiveDirty.argument = true
         }
@@ -233,11 +263,17 @@ export class ArgumentEngine<
                 ...changes.expressions.removed,
             ]
             for (const expr of allExprs) {
-                this.reactiveDirty.premiseIds.add((expr as unknown as { premiseId: string }).premiseId)
+                this.reactiveDirty.premiseIds.add(
+                    (expr as unknown as { premiseId: string }).premiseId
+                )
             }
         }
         if (changes.premises) {
-            for (const p of [...changes.premises.added, ...changes.premises.modified, ...changes.premises.removed]) {
+            for (const p of [
+                ...changes.premises.added,
+                ...changes.premises.modified,
+                ...changes.premises.removed,
+            ]) {
                 this.reactiveDirty.premiseIds.add(p.id)
             }
         }

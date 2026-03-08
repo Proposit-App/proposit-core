@@ -250,7 +250,8 @@ function ArgumentView() {
             <h2>Premises</h2>
             {Object.entries(snapshot.premises).map(([id, p]) => (
                 <div key={id}>
-                    Premise {id} — {Object.keys(p.expressions).length} expressions
+                    Premise {id} — {Object.keys(p.expressions).length}{" "}
+                    expressions
                 </div>
             ))}
         </div>
@@ -261,18 +262,28 @@ function ArgumentView() {
 For fine-grained reactivity, select a specific slice — React skips re-rendering if the reference is unchanged thanks to structural sharing:
 
 ```tsx
-function ExpressionView({ premiseId, expressionId }: {
+function ExpressionView({
+    premiseId,
+    expressionId,
+}: {
     premiseId: string
     expressionId: string
 }) {
     // Only re-renders when THIS expression changes
     const expression = useSyncExternalStore(
         engine.subscribe,
-        () => engine.getSnapshot().premises[premiseId]?.expressions[expressionId]
+        () =>
+            engine.getSnapshot().premises[premiseId]?.expressions[expressionId]
     )
 
     if (!expression) return null
-    return <span>{expression.type === "variable" ? expression.variableId : expression.operator}</span>
+    return (
+        <span>
+            {expression.type === "variable"
+                ? expression.variableId
+                : expression.operator}
+        </span>
+    )
 }
 ```
 
@@ -281,14 +292,16 @@ Mutations go through the engine as usual — subscribers are notified automatica
 ```tsx
 function AddVariableButton() {
     return (
-        <button onClick={() => {
-            engine.addVariable({
-                id: crypto.randomUUID(),
-                argumentId: "arg-1",
-                argumentVersion: 1,
-                symbol: "R",
-            })
-        }}>
+        <button
+            onClick={() => {
+                engine.addVariable({
+                    id: crypto.randomUUID(),
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    symbol: "R",
+                })
+            }}
+        >
             Add variable R
         </button>
     )
@@ -865,14 +878,14 @@ A version of `TPropositionalExpression` with both the `position` and `checksum` 
 
 Hierarchical snapshot types for capturing and restoring engine state:
 
-| Type                         | Contains                                                                                |
-| ---------------------------- | --------------------------------------------------------------------------------------- |
-| `TExpressionManagerSnapshot` | `expressions` (with checksums), `config`                                                |
-| `TVariableManagerSnapshot`   | `variables`, `config`                                                                   |
-| `TPremiseEngineSnapshot`     | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                |
-| `TArgumentEngineSnapshot`    | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config` |
+| Type                         | Contains                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `TExpressionManagerSnapshot` | `expressions` (with checksums), `config`                                                    |
+| `TVariableManagerSnapshot`   | `variables`, `config`                                                                       |
+| `TPremiseEngineSnapshot`     | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                    |
+| `TArgumentEngineSnapshot`    | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config`     |
 | `TReactiveSnapshot`          | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles` |
-| `TReactivePremiseSnapshot`   | `premise`, `expressions` (Record by ID), `rootExpressionId` |
+| `TReactivePremiseSnapshot`   | `premise`, `expressions` (Record by ID), `rootExpressionId`                                 |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
