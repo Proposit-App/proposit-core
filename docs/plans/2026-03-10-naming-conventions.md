@@ -13,6 +13,7 @@
 ## File Structure
 
 **Modified files:**
+
 - `eslint.config.mjs` — add naming-convention and filename rules
 - `package.json` / `pnpm-lock.yaml` — add eslint-plugin-check-file dependency
 - `src/lib/schemata/shared.ts` — rename non-T-prefixed type aliases, rename `DateType` function
@@ -25,18 +26,18 @@
 
 **Renamed files (camelCase → kebab-case):**
 
-| Old path | New path |
-|----------|----------|
-| `src/cli/commands/versionShow.ts` | `src/cli/commands/version-show.ts` |
-| `src/cli/output/diffRenderer.ts` | `src/cli/output/diff-renderer.ts` |
-| `src/lib/core/argumentEngine.ts` | `src/lib/core/argument-engine.ts` |
-| `src/lib/core/changeCollector.ts` | `src/lib/core/change-collector.ts` |
+| Old path                            | New path                             |
+| ----------------------------------- | ------------------------------------ |
+| `src/cli/commands/versionShow.ts`   | `src/cli/commands/version-show.ts`   |
+| `src/cli/output/diffRenderer.ts`    | `src/cli/output/diff-renderer.ts`    |
+| `src/lib/core/argumentEngine.ts`    | `src/lib/core/argument-engine.ts`    |
+| `src/lib/core/changeCollector.ts`   | `src/lib/core/change-collector.ts`   |
 | `src/lib/core/expressionManager.ts` | `src/lib/core/expression-manager.ts` |
-| `src/lib/core/premiseEngine.ts` | `src/lib/core/premise-engine.ts` |
-| `src/lib/core/variableManager.ts` | `src/lib/core/variable-manager.ts` |
-| `src/lib/utils/defaultMap.ts` | `src/lib/utils/default-map.ts` |
-| `test/diffCommand.test.ts` | `test/diff-command.test.ts` |
-| `test/diffRenderer.test.ts` | `test/diff-renderer.test.ts` |
+| `src/lib/core/premiseEngine.ts`     | `src/lib/core/premise-engine.ts`     |
+| `src/lib/core/variableManager.ts`   | `src/lib/core/variable-manager.ts`   |
+| `src/lib/utils/defaultMap.ts`       | `src/lib/utils/default-map.ts`       |
+| `test/diffCommand.test.ts`          | `test/diff-command.test.ts`          |
+| `test/diffRenderer.test.ts`         | `test/diff-renderer.test.ts`         |
 
 ---
 
@@ -45,6 +46,7 @@
 ### Task 1: Install eslint-plugin-check-file
 
 **Files:**
+
 - Modify: `package.json`
 
 - [ ] **Step 1: Install the plugin**
@@ -73,6 +75,7 @@ git commit -m "chore: add eslint-plugin-check-file dependency"
 ### Task 2: Configure ESLint naming rules
 
 **Files:**
+
 - Modify: `eslint.config.mjs`
 
 - [ ] **Step 1: Add both rules to eslint.config.mjs**
@@ -154,6 +157,7 @@ pnpm eslint . 2>&1 | grep -E "naming-convention|filename-naming" | head -60
 ```
 
 Expected violations:
+
 - **naming-convention:** `JsonPrimitive`, `JsonValue`, `JsonObject`, `JsonArray`, `UUID` (type), `FormulaAST`, `DateType` (function)
 - **filename-naming-convention:** the 10 multi-word camelCase files listed in File Structure
 
@@ -169,6 +173,7 @@ git commit -m "chore: configure naming-convention and filename-naming-convention
 ### Task 3: Fix type alias naming violations
 
 **Files:**
+
 - Modify: `src/lib/schemata/shared.ts`
 - Modify: `src/lib/core/parser/formula.ts`
 - Modify: `src/lib/index.ts`
@@ -181,13 +186,13 @@ git commit -m "chore: configure naming-convention and filename-naming-convention
 
 Apply these renames (definitions only — all in this one file since these types are only used internally):
 
-| Old name | New name | Line |
-|----------|----------|------|
-| `type JsonPrimitive` | `type TJsonPrimitive` | 43 |
-| `type JsonValue` | `type TJsonValue` | 66–69 (self-referencing) |
-| `type JsonObject` | `type TJsonObject` | 70 |
-| `type JsonArray` | `type TJsonArray` | 71 |
-| `type UUID` | `type TUUID` | 83 |
+| Old name             | New name              | Line                     |
+| -------------------- | --------------------- | ------------------------ |
+| `type JsonPrimitive` | `type TJsonPrimitive` | 43                       |
+| `type JsonValue`     | `type TJsonValue`     | 66–69 (self-referencing) |
+| `type JsonObject`    | `type TJsonObject`    | 70                       |
+| `type JsonArray`     | `type TJsonArray`     | 71                       |
+| `type UUID`          | `type TUUID`          | 83                       |
 
 The self-referencing `JsonValue` type must update all internal references:
 
@@ -315,6 +320,7 @@ git commit -m "refactor: rename type aliases to use T prefix convention"
 ### Task 4: Rename files to kebab-case and update imports
 
 **Files:**
+
 - Rename: all 10 files listed in File Structure
 - Modify: all files that import from renamed files
 
@@ -347,16 +353,16 @@ This will produce the complete list of import statements to update.
 
 For each file found in Step 2, update the import path. The key substitutions (all `.js` extension imports):
 
-| Old import segment | New import segment |
-|---|---|
-| `versionShow.js` | `version-show.js` |
-| `diffRenderer.js` | `diff-renderer.js` |
-| `argumentEngine.js` | `argument-engine.js` |
-| `changeCollector.js` | `change-collector.js` |
+| Old import segment     | New import segment      |
+| ---------------------- | ----------------------- |
+| `versionShow.js`       | `version-show.js`       |
+| `diffRenderer.js`      | `diff-renderer.js`      |
+| `argumentEngine.js`    | `argument-engine.js`    |
+| `changeCollector.js`   | `change-collector.js`   |
 | `expressionManager.js` | `expression-manager.js` |
-| `premiseEngine.js` | `premise-engine.js` |
-| `variableManager.js` | `variable-manager.js` |
-| `defaultMap.js` | `default-map.js` |
+| `premiseEngine.js`     | `premise-engine.js`     |
+| `variableManager.js`   | `variable-manager.js`   |
+| `defaultMap.js`        | `default-map.js`        |
 
 For test files that import without `.js` extension (e.g. `from "../src/cli/output/diffRenderer"`), update those too.
 
@@ -414,6 +420,7 @@ git commit -m "refactor: rename files from camelCase to kebab-case"
 ### Task 5: Update CLAUDE.md
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Add a "Naming conventions" section to CLAUDE.md**
@@ -425,19 +432,20 @@ Add a new section after "ESM import requirements" (or wherever it fits best in t
 
 Enforced by ESLint (`@typescript-eslint/naming-convention` and `check-file/filename-naming-convention`).
 
-| Category | Convention | Examples |
-|----------|-----------|----------|
-| Filenames | `kebab-case` | `argument-engine.ts`, `default-map.ts` |
-| Functions, methods, variables | `camelCase` | `parseFormula`, `getVariable`, `rootId` |
-| Classes | `PascalCase` | `ArgumentEngine`, `DefaultMap` |
-| Type aliases and interfaces | `T`-prefixed `PascalCase` | `TCoreArgument`, `TFormulaAST`, `TUUID` |
-| Type parameters | `PascalCase` (no prefix required) | `T`, `K`, `TExpr`, `TVar` |
-| Enum names | `PascalCase` | `LogicalOperator` |
-| Enum members | `SCREAMING_SNAKE_CASE` | `AND`, `IMPLIES`, `MAX_ITERATIONS` |
-| True constants | `SCREAMING_SNAKE_CASE` | `POSITION_MIN`, `DEFAULT_CHECKSUM_CONFIG` |
-| Typebox schema objects | `PascalCase` (allowed for `const`) | `CoreArgumentSchema`, `UUID` |
+| Category                      | Convention                         | Examples                                  |
+| ----------------------------- | ---------------------------------- | ----------------------------------------- |
+| Filenames                     | `kebab-case`                       | `argument-engine.ts`, `default-map.ts`    |
+| Functions, methods, variables | `camelCase`                        | `parseFormula`, `getVariable`, `rootId`   |
+| Classes                       | `PascalCase`                       | `ArgumentEngine`, `DefaultMap`            |
+| Type aliases and interfaces   | `T`-prefixed `PascalCase`          | `TCoreArgument`, `TFormulaAST`, `TUUID`   |
+| Type parameters               | `PascalCase` (no prefix required)  | `T`, `K`, `TExpr`, `TVar`                 |
+| Enum names                    | `PascalCase`                       | `LogicalOperator`                         |
+| Enum members                  | `SCREAMING_SNAKE_CASE`             | `AND`, `IMPLIES`, `MAX_ITERATIONS`        |
+| True constants                | `SCREAMING_SNAKE_CASE`             | `POSITION_MIN`, `DEFAULT_CHECKSUM_CONFIG` |
+| Typebox schema objects        | `PascalCase` (allowed for `const`) | `CoreArgumentSchema`, `UUID`              |
 
 **Notes:**
+
 - `SCREAMING_SNAKE_CASE` is for proper constants (hard-coded values, enum members), not for every `const` declaration.
 - `PascalCase` is allowed for `const` variables that are Typebox schema objects or similar class-like constructors.
 - Destructured variables are exempt from naming enforcement (source determines naming).
@@ -448,16 +456,16 @@ Enforced by ESLint (`@typescript-eslint/naming-convention` and `check-file/filen
 
 Update all file paths in the `Architecture` section to reflect the new kebab-case filenames. The key renames:
 
-| Old | New |
-|-----|-----|
-| `argumentEngine.ts` | `argument-engine.ts` |
-| `premiseEngine.ts` | `premise-engine.ts` |
+| Old                    | New                     |
+| ---------------------- | ----------------------- |
+| `argumentEngine.ts`    | `argument-engine.ts`    |
+| `premiseEngine.ts`     | `premise-engine.ts`     |
 | `expressionManager.ts` | `expression-manager.ts` |
-| `variableManager.ts` | `variable-manager.ts` |
-| `changeCollector.ts` | `change-collector.ts` |
-| `defaultMap.ts` | `default-map.ts` |
-| `versionShow.ts` | `version-show.ts` |
-| `diffRenderer.ts` | `diff-renderer.ts` |
+| `variableManager.ts`   | `variable-manager.ts`   |
+| `changeCollector.ts`   | `change-collector.ts`   |
+| `defaultMap.ts`        | `default-map.ts`        |
+| `versionShow.ts`       | `version-show.ts`       |
+| `diffRenderer.ts`      | `diff-renderer.ts`      |
 
 Also update any prose references to these filenames throughout the document.
 
@@ -503,16 +511,21 @@ Expected: all CLI commands pass.
 ## Design Decisions & Edge Cases
 
 ### Schema constants stay PascalCase
+
 Typebox schema objects (`CoreArgumentSchema`, `UUID`, `Nullable`, etc.) follow `PascalCase` naming — the standard convention across schema validation libraries (Typebox, Zod, Yup). They are NOT renamed to `SCREAMING_SNAKE_CASE` because they are complex constructed objects, not simple value constants. The ESLint rule allows `PascalCase` for all `const` variables to accommodate this.
 
 ### `UUID` const vs type
+
 `shared.ts` exports both `const UUID` (Typebox schema) and `type UUID` (TypeScript type). Only the type is renamed to `TUUID`. The const stays as `UUID`. All current importers use `UUID` as a schema value in `Type.Object()` field definitions — no import changes needed for those files.
 
 ### Type parameters don't require T prefix
+
 Generic type parameters (`T`, `K`, `V`, `TArg`, `TExpr`) use `PascalCase` without requiring the `T` prefix. Single-letter params like `K` and `V` (used in `DefaultMap<K, V>`) are standard and shouldn't be forced into `TK`/`TV`.
 
 ### `TDateType` class keeps its name
+
 The class `TDateType` follows TypeBox's convention for custom type classes (`TString`, `TNumber`, etc.). It's valid `PascalCase` under the class rule. The `T` prefix happens to match our type convention, but it's the TypeBox convention driving the name.
 
 ### Breaking public API changes
+
 Renaming `FormulaAST` → `TFormulaAST`, `UUID` type → `TUUID`, and `DateType()` → `dateType()` are breaking changes to the public API. Acceptable at version 0.2.x (pre-1.0).

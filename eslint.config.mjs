@@ -51,7 +51,11 @@ export default defineConfig([
                 // Default: camelCase for everything not specifically overridden
                 { selector: "default", format: ["camelCase"] },
                 // Destructured variables: no enforcement (source determines naming)
-                { selector: "variable", modifiers: ["destructured"], format: null },
+                {
+                    selector: "variable",
+                    modifiers: ["destructured"],
+                    format: null,
+                },
                 // const: camelCase, UPPER_CASE (true constants), PascalCase (Typebox schemas)
                 {
                     selector: "variable",

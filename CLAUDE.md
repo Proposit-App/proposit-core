@@ -29,7 +29,7 @@ src/
     index.ts            # Complete library barrel — re-exports core classes, schemata, types, and utilities
     consts.ts            # DEFAULT_CHECKSUM_CONFIG, createChecksumConfig
     utils/
-      defaultMap.ts     # DefaultMap utility (Map subclass with auto-factory and optional LRU limit)
+      default-map.ts    # DefaultMap utility (Map subclass with auto-factory and optional LRU limit)
       collections.ts    # getOrCreate, sortedCopyById, sortedUnique
       position.ts       # POSITION_MIN, POSITION_MAX, POSITION_INITIAL, DEFAULT_POSITION_CONFIG, TCorePositionConfig, midpoint
     schemata/
@@ -48,20 +48,19 @@ src/
       relationships.ts  # Relationship types: TCorePremiseRelationshipAnalysis, TCorePremiseProfile,
                         #   TCoreVariableAppearance, TCorePremiseRelationResult, etc.
     core/
-      argumentEngine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity, checksum, snapshot, fromSnapshot, rollback, fromData, toDisplayString, lookup methods (getVariable, getExpression, findPremiseByExpressionId, etc.)
-      premiseEngine.ts     # PremiseEngine — variables, expressions, evaluate, toDisplayString, toPremiseData, snapshot, isInference, isConstraint, checksum
-      expressionManager.ts # Low-level expression tree (addExpression, appendExpression, addExpressionRelative, updateExpression, removeExpression, insertExpression)
-      variableManager.ts   # Low-level variable registry (with symbol→id reverse lookup via getVariableBySymbol)
-      changeCollector.ts   # Internal change collector (not exported) — accumulates entity changes during mutations
+      argument-engine.ts    # ArgumentEngine — premise CRUD, role management, evaluate, checkValidity, checksum, snapshot, fromSnapshot, rollback, fromData, toDisplayString, lookup methods (getVariable, getExpression, findPremiseByExpressionId, etc.)
+      premise-engine.ts     # PremiseEngine — variables, expressions, evaluate, toDisplayString, toPremiseData, snapshot, isInference, isConstraint, checksum
+      expression-manager.ts # Low-level expression tree (addExpression, appendExpression, addExpressionRelative, updateExpression, removeExpression, insertExpression)
+      variable-manager.ts   # Low-level variable registry (with symbol→id reverse lookup via getVariableBySymbol)
+      change-collector.ts   # Internal change collector (not exported) — accumulates entity changes during mutations
       checksum.ts          # computeHash, canonicalSerialize, entityChecksum (standalone utilities)
       diff.ts              # diffArguments + default comparators (standalone function, pluggable)
       relationships.ts     # analyzePremiseRelationships + buildPremiseProfile (standalone functions)
-      # All core/ files use camelCase naming
       evaluation/
         kleene.ts          # kleeneNot, kleeneAnd, kleeneOr, kleeneImplies, kleeneIff
         validation.ts      # makeValidationResult, makeErrorIssue, implicationValue, buildDirectionalVacuity
       parser/
-        formula.ts         # parseFormula — parses logical formula strings into FormulaAST
+        formula.ts         # parseFormula — parses logical formula strings into TFormulaAST
   cli/
     config.ts             # Path helpers: getStateDir, getArgumentDir, getVersionDir, getPremisesDir, getPremiseDir
     engine.ts             # hydrateEngine(argumentId, version) → ArgumentEngine (reads disk, BFS expression load)
@@ -78,7 +77,7 @@ src/
     commands/
       meta.ts             # version command
       arguments.ts        # arguments: create, list, delete, publish
-      versionShow.ts      # <id> <ver> show
+      version-show.ts     # <id> <ver> show
       render.ts           # <id> <ver> render
       roles.ts            # <id> <ver> roles: show, set-conclusion, clear-conclusion
       variables.ts        # <id> <ver> variables: create, list, show, update, delete, list-unused, delete-unused
@@ -364,7 +363,7 @@ Utility types:
 
 - `TOptionalChecksum<T>` — `Omit<T, "checksum"> & Partial<Pick<T, "checksum">>`. Makes the `checksum` field optional. Defined in `src/lib/schemata/shared.ts`. Used for constructor inputs and internal storage where checksums are attached lazily.
 
-Position and input types (in `src/lib/core/expressionManager.ts` and `src/lib/utils/position.ts`):
+Position and input types (in `src/lib/core/expression-manager.ts` and `src/lib/utils/position.ts`):
 
 - `TExpressionInput<TExpr>` — `TExpr` with `checksum` omitted via distributive conditional type. Preserves discriminated-union narrowing. Generic with default. Used as input for `addExpression` and `insertExpression`.
 - `TExpressionWithoutPosition<TExpr>` — `TExpr` with both `position` and `checksum` omitted via distributive conditional type. Preserves discriminated-union narrowing. Generic with default. Used as input for `appendExpression` and `addExpressionRelative`.
@@ -456,6 +455,30 @@ The project uses `moduleResolution: "bundler"` in `tsconfig.json`, which allows 
 **Rule:** All relative imports in `src/cli/` and `src/lib/` must end in `.js`. Directory imports (e.g. `schemata/`) must use the explicit index path (`schemata/index.js`).
 
 If you add a new file in `src/cli/` or `src/lib/`, ensure all its relative imports include `.js`.
+
+## Naming conventions
+
+Enforced by ESLint (`@typescript-eslint/naming-convention` and `check-file/filename-naming-convention`).
+
+| Category                      | Convention                         | Examples                                  |
+| ----------------------------- | ---------------------------------- | ----------------------------------------- |
+| Filenames                     | `kebab-case`                       | `argument-engine.ts`, `default-map.ts`    |
+| Functions, methods, variables | `camelCase`                        | `parseFormula`, `getVariable`, `rootId`   |
+| Classes                       | `PascalCase`                       | `ArgumentEngine`, `DefaultMap`            |
+| Type aliases and interfaces   | `T`-prefixed `PascalCase`          | `TCoreArgument`, `TFormulaAST`, `TUUID`   |
+| Type parameters               | `PascalCase` (no prefix required)  | `T`, `K`, `TExpr`, `TVar`                 |
+| Enum names                    | `PascalCase`                       | `LogicalOperator`                         |
+| Enum members                  | `SCREAMING_SNAKE_CASE`             | `AND`, `IMPLIES`                          |
+| True constants                | `SCREAMING_SNAKE_CASE`             | `POSITION_MIN`, `DEFAULT_CHECKSUM_CONFIG` |
+| Typebox schema objects        | `PascalCase` (allowed for `const`) | `CoreArgumentSchema`, `UUID`              |
+
+**Notes:**
+
+- `SCREAMING_SNAKE_CASE` is for proper constants (hard-coded values, enum members), not for every `const` declaration.
+- `PascalCase` is allowed for `const` variables that are Typebox schema objects or similar class-like constructors.
+- Destructured variables are exempt from naming enforcement (source determines naming).
+- Imports are exempt from naming enforcement (external packages control their export names).
+- Override methods are exempt from naming enforcement (parent class determines the name).
 
 ## Documentation Sync
 
