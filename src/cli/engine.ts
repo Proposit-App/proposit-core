@@ -1,5 +1,5 @@
 import fs from "node:fs/promises"
-import { ArgumentEngine } from "../lib/core/argumentEngine.js"
+import { ArgumentEngine } from "../lib/core/argument-engine.js"
 import type { TCoreArgument } from "../lib/schemata/index.js"
 import type { TCliArgumentMeta, TCliArgumentVersionMeta } from "./schemata.js"
 import { getPremisesDir } from "./config.js"

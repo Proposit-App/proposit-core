@@ -28,18 +28,18 @@ import type {
     TReactivePremiseSnapshot,
 } from "../types/reactive.js"
 import { getOrCreate, sortedUnique } from "../utils/collections.js"
-import { ChangeCollector } from "./changeCollector.js"
+import { ChangeCollector } from "./change-collector.js"
 import { canonicalSerialize, computeHash, entityChecksum } from "./checksum.js"
 import { kleeneAnd, kleeneNot } from "./evaluation/kleene.js"
 import {
     makeErrorIssue,
     makeValidationResult,
 } from "./evaluation/validation.js"
-import type { TExpressionInput } from "./expressionManager.js"
-import { PremiseEngine } from "./premiseEngine.js"
-import type { TPremiseEngineSnapshot } from "./premiseEngine.js"
-import { VariableManager } from "./variableManager.js"
-import type { TVariableManagerSnapshot } from "./variableManager.js"
+import type { TExpressionInput } from "./expression-manager.js"
+import { PremiseEngine } from "./premise-engine.js"
+import type { TPremiseEngineSnapshot } from "./premise-engine.js"
+import { VariableManager } from "./variable-manager.js"
+import type { TVariableManagerSnapshot } from "./variable-manager.js"
 
 export type TLogicEngineOptions = {
     checksumConfig?: TCoreChecksumConfig

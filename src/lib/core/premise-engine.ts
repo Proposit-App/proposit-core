@@ -6,7 +6,7 @@ import type {
     TCorePropositionalVariable,
     TOptionalChecksum,
 } from "../schemata/index.js"
-import { DefaultMap } from "../utils/defaultMap.js"
+import { DefaultMap } from "../utils/default-map.js"
 import { sortedCopyById, sortedUnique } from "../utils/collections.js"
 import type {
     TCoreExpressionAssignment,
@@ -30,18 +30,18 @@ import {
     makeValidationResult,
 } from "./evaluation/validation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
-import type { TLogicEngineOptions } from "./argumentEngine.js"
+import type { TLogicEngineOptions } from "./argument-engine.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
-import { ChangeCollector } from "./changeCollector.js"
+import { ChangeCollector } from "./change-collector.js"
 import { canonicalSerialize, computeHash, entityChecksum } from "./checksum.js"
 import type {
     TExpressionInput,
     TExpressionManagerSnapshot,
     TExpressionWithoutPosition,
     TExpressionUpdate,
-} from "./expressionManager.js"
-import { ExpressionManager } from "./expressionManager.js"
-import { VariableManager } from "./variableManager.js"
+} from "./expression-manager.js"
+import { ExpressionManager } from "./expression-manager.js"
+import { VariableManager } from "./variable-manager.js"
 
 export type TPremiseEngineSnapshot<
     TPremise extends TCorePremise = TCorePremise,

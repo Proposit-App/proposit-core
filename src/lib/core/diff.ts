@@ -15,7 +15,7 @@ import type {
     TCorePremiseSetDiff,
     TCoreRoleDiff,
 } from "../types/diff.js"
-import type { ArgumentEngine } from "./argumentEngine.js"
+import type { ArgumentEngine } from "./argument-engine.js"
 
 /** Compares two argument objects. Core argument only has identity fields (id, version), so no diffable fields. */
 export function defaultCompareArgument(

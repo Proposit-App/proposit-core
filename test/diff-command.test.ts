@@ -37,7 +37,7 @@ vi.mock("../src/lib/core/diff.js", () => ({
 
 // Mock renderDiff
 const mockRenderDiff = vi.fn()
-vi.mock("../src/cli/output/diffRenderer.js", () => ({
+vi.mock("../src/cli/output/diff-renderer.js", () => ({
     renderDiff: mockRenderDiff,
 }))
 

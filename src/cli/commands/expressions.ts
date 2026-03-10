@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { Command } from "commander"
 import type { TCoreLogicalOperatorType } from "../../lib/schemata/index.js"
-import type { TExpressionInput } from "../../lib/core/expressionManager.js"
+import type { TExpressionInput } from "../../lib/core/expression-manager.js"
 import { POSITION_INITIAL } from "../../lib/utils/position.js"
 import { hydrateEngine } from "../engine.js"
 import { errorExit, printJson, printLine } from "../output.js"

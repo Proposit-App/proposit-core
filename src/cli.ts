@@ -2,7 +2,7 @@
 import { Command } from "commander"
 import { registerMetaCommands } from "./cli/commands/meta.js"
 import { registerArgumentCommands } from "./cli/commands/arguments.js"
-import { registerVersionShowCommand } from "./cli/commands/versionShow.js"
+import { registerVersionShowCommand } from "./cli/commands/version-show.js"
 import { registerRoleCommands } from "./cli/commands/roles.js"
 import { registerVariableCommands } from "./cli/commands/variables.js"
 import { registerPremiseCommands } from "./cli/commands/premises.js"

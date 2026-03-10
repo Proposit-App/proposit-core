@@ -2,14 +2,14 @@ import type {
     TCoreLogicalOperatorType,
     TCorePropositionalExpression,
 } from "../schemata/index.js"
-import type { ChangeCollector } from "./changeCollector.js"
+import type { ChangeCollector } from "./change-collector.js"
 import { getOrCreate } from "../utils/collections.js"
 import {
     DEFAULT_POSITION_CONFIG,
     type TCorePositionConfig,
     midpoint,
 } from "../utils/position.js"
-import type { TLogicEngineOptions } from "./argumentEngine.js"
+import type { TLogicEngineOptions } from "./argument-engine.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
 

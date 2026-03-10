@@ -3,15 +3,15 @@
  * types, schemata, and the diff function.
  */
 export * from "./schemata/index.js"
-export { ArgumentEngine } from "./core/argumentEngine.js"
+export { ArgumentEngine } from "./core/argument-engine.js"
 export type {
     TLogicEngineOptions,
     TArgumentEngineSnapshot,
-} from "./core/argumentEngine.js"
-export { PremiseEngine } from "./core/premiseEngine.js"
-export type { TPremiseEngineSnapshot } from "./core/premiseEngine.js"
-export type { TExpressionManagerSnapshot } from "./core/expressionManager.js"
-export type { TVariableManagerSnapshot } from "./core/variableManager.js"
+} from "./core/argument-engine.js"
+export { PremiseEngine } from "./core/premise-engine.js"
+export type { TPremiseEngineSnapshot } from "./core/premise-engine.js"
+export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
+export type { TVariableManagerSnapshot } from "./core/variable-manager.js"
 export * from "./types/evaluation.js"
 export * from "./types/diff.js"
 export * from "./types/mutation.js"
@@ -40,7 +40,7 @@ export type {
     TExpressionInput,
     TExpressionWithoutPosition,
     TExpressionUpdate,
-} from "./core/expressionManager.js"
+} from "./core/expression-manager.js"
 export {
     POSITION_MIN,
     POSITION_MAX,

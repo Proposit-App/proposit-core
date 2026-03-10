@@ -1,5 +1,5 @@
-import type { ArgumentEngine } from "./argumentEngine.js"
-import type { PremiseEngine } from "./premiseEngine.js"
+import type { ArgumentEngine } from "./argument-engine.js"
+import type { PremiseEngine } from "./premise-engine.js"
 import type {
     TCoreVariableAppearance,
     TCorePremiseProfile,

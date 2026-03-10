@@ -2,7 +2,7 @@ import { Command } from "commander"
 import { diffArguments } from "../../lib/core/diff.js"
 import { hydrateEngine } from "../engine.js"
 import { errorExit, printJson } from "../output.js"
-import { renderDiff } from "../output/diffRenderer.js"
+import { renderDiff } from "../output/diff-renderer.js"
 import { resolveVersion } from "../router.js"
 
 /**
