@@ -29,23 +29,33 @@ export interface TExpressionMutations<
     /**
      * Adds an expression to this premise's tree.
      *
-     * If the expression has `parentId: null` it becomes the root; only one root is
-     * permitted per premise. All structural rules (`implies`/`iff` root-only, child
-     * limits, position uniqueness) are enforced.
+     * If the expression has `parentId: null` it becomes the root; only one
+     * root is permitted per premise. All structural rules (`implies`/`iff`
+     * root-only, child limits, position uniqueness) are enforced.
      *
-     * @throws If the premise already has a root expression and this one is also a root.
+     * @param expression - The expression to add, including position and
+     *   parent assignment.
+     * @returns The added expression (with checksum) and changeset.
+     * @throws If the premise already has a root expression and this one is
+     *   also a root.
      * @throws If the expression's parent does not exist in this premise.
-     * @throws If the expression is a variable reference and the variable has not been registered.
+     * @throws If the expression is a variable reference and the variable
+     *   has not been registered.
      */
     addExpression(
         expression: TExpressionInput<TExpr>
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
     /**
-     * Adds an expression as the last child of the given parent, with position
-     * computed automatically. If `parentId` is `null`, the expression becomes the root.
+     * Adds an expression as the last child of the given parent, with
+     * position computed automatically. If `parentId` is `null`, the
+     * expression becomes the root.
      *
-     * @throws If the premise already has a root and parentId is null.
-     * @throws If the expression is a variable reference and the variable has not been registered.
+     * @param parentId - The parent expression ID, or `null` for root.
+     * @param expression - The expression to add (position is auto-assigned).
+     * @returns The added expression (with checksum) and changeset.
+     * @throws If the premise already has a root and `parentId` is `null`.
+     * @throws If the expression is a variable reference and the variable
+     *   has not been registered.
      */
     appendExpression(
         parentId: string | null,
@@ -55,8 +65,14 @@ export interface TExpressionMutations<
      * Adds an expression immediately before or after an existing sibling,
      * with position computed automatically.
      *
+     * @param siblingId - The ID of the existing sibling expression.
+     * @param relativePosition - Whether to insert `"before"` or `"after"`
+     *   the sibling.
+     * @param expression - The expression to add (position is auto-assigned).
+     * @returns The added expression (with checksum) and changeset.
      * @throws If the sibling does not exist in this premise.
-     * @throws If the expression is a variable reference and the variable has not been registered.
+     * @throws If the expression is a variable reference and the variable
+     *   has not been registered.
      */
     addExpressionRelative(
         siblingId: string,
@@ -67,6 +83,9 @@ export interface TExpressionMutations<
      * Updates mutable fields of an existing expression. Only `position`,
      * `variableId`, and `operator` may be updated.
      *
+     * @param expressionId - The ID of the expression to update.
+     * @param updates - The fields to update.
+     * @returns The updated expression and changeset.
      * @throws If the expression does not exist in this premise.
      * @throws If `variableId` references a non-existent variable.
      */
@@ -75,10 +94,12 @@ export interface TExpressionMutations<
         updates: TExpressionUpdate
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
     /**
-     * Removes an expression and optionally its entire descendant subtree, then
-     * collapses any ancestor operators with fewer than two children.
+     * Removes an expression and optionally its entire descendant subtree,
+     * then collapses any ancestor operators with fewer than two children.
      *
-     * Returns the removed root expression, or `undefined` if not found.
+     * @param expressionId - The ID of the expression to remove.
+     * @param deleteSubtree - Whether to remove all descendants as well.
+     * @returns The removed root expression, or `undefined` if not found.
      */
     removeExpression(
         expressionId: string,
@@ -89,7 +110,15 @@ export interface TExpressionMutations<
      * expression inherits the tree slot of the anchor node
      * (`leftNodeId ?? rightNodeId`).
      *
-     * @throws If the expression is a variable reference and the variable has not been registered.
+     * @param expression - The expression to insert, including position and
+     *   parent assignment.
+     * @param leftNodeId - The existing node to become the left child of
+     *   the new expression.
+     * @param rightNodeId - The existing node to become the right child of
+     *   the new expression.
+     * @returns The inserted expression (with checksum) and changeset.
+     * @throws If the expression is a variable reference and the variable
+     *   has not been registered.
      */
     insertExpression(
         expression: TExpressionInput<TExpr>,
@@ -100,10 +129,19 @@ export interface TExpressionMutations<
      * Wraps an existing expression with a new operator and a new sibling
      * in a single atomic operation.
      *
+     * The operator takes the existing node's slot in the tree. Both the
+     * existing node and the new sibling become children of the operator.
      * Exactly one of `leftNodeId` / `rightNodeId` must be provided — it
-     * identifies the existing node. The new sibling fills the other slot.
+     * identifies the existing node and which child slot it occupies.
      *
-     * @throws If the new sibling is a variable reference and the variable has not been registered.
+     * @param operator - The new operator expression to wrap with.
+     * @param newSibling - The new sibling expression to add alongside the
+     *   existing node.
+     * @param leftNodeId - The existing node to place as the left child.
+     * @param rightNodeId - The existing node to place as the right child.
+     * @returns The inserted operator (with checksum) and changeset.
+     * @throws If the new sibling is a variable reference and the variable
+     *   has not been registered.
      */
     wrapExpression(
         operator: TExpressionWithoutPosition<TExpr>,
@@ -119,15 +157,41 @@ export interface TExpressionMutations<
 export interface TExpressionQueries<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
 > {
-    /** Returns an expression by ID, or `undefined` if not found in this premise. */
+    /**
+     * Returns an expression by ID, or `undefined` if not found in this
+     * premise.
+     *
+     * @param id - The expression ID to look up.
+     * @returns The expression entity, or `undefined`.
+     */
     getExpression(id: string): TExpr | undefined
-    /** Returns the ID of the root expression, or `undefined` if the premise is empty. */
+    /**
+     * Returns the ID of the root expression, or `undefined` if the premise
+     * is empty.
+     *
+     * @returns The root expression ID, or `undefined`.
+     */
     getRootExpressionId(): string | undefined
-    /** Returns the root expression, or `undefined` if the premise is empty. */
+    /**
+     * Returns the root expression, or `undefined` if the premise is empty.
+     *
+     * @returns The root expression entity, or `undefined`.
+     */
     getRootExpression(): TExpr | undefined
-    /** Returns all expressions in this premise. */
+    /**
+     * Returns all expressions in this premise.
+     *
+     * @returns An array of expression entities.
+     */
     getExpressions(): TExpr[]
-    /** Returns the child expressions of the given parent, sorted by position. */
+    /**
+     * Returns the child expressions of the given parent, sorted by
+     * position.
+     *
+     * @param parentId - The parent expression ID, or `null` for root-level
+     *   children.
+     * @returns An array of child expression entities.
+     */
     getChildExpressions(parentId: string | null): TExpr[]
 }
 
@@ -140,11 +204,31 @@ export interface TVariableReferences<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
 > {
-    /** Returns all argument-level variables (from the shared VariableManager) sorted by ID. */
+    /**
+     * Returns all argument-level variables (from the shared
+     * VariableManager) sorted by ID. Since the VariableManager is shared
+     * across all premises, this returns every registered variable — not
+     * just those referenced by expressions in this premise.
+     *
+     * @returns An array of variable entities.
+     */
     getVariables(): TVar[]
-    /** Returns the set of variable IDs referenced by expressions in this premise. */
+    /**
+     * Returns the set of variable IDs referenced by expressions in this
+     * premise. Only variables that appear in `type: "variable"` expression
+     * nodes are included.
+     *
+     * @returns A Set of referenced variable ID strings.
+     */
     getReferencedVariableIds(): Set<string>
-    /** Deletes all expressions that reference the given variable ID, including their subtrees. Operator collapse runs after each removal. */
+    /**
+     * Deletes all expressions that reference the given variable ID,
+     * including their subtrees. Operator collapse runs after each removal.
+     *
+     * @param variableId - The variable ID whose referencing expressions
+     *   should be removed.
+     * @returns The removed expressions and changeset.
+     */
     deleteExpressionsUsingVariable(
         variableId: string
     ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg>
@@ -154,24 +238,50 @@ export interface TVariableReferences<
  * Premise type classification (inference vs constraint).
  */
 export interface TPremiseClassification {
-    /** Returns `true` if the root expression is an `implies` or `iff` operator. */
+    /**
+     * Returns `true` if the root expression is an `implies` or `iff`
+     * operator, meaning this premise expresses a logical inference
+     * relationship.
+     *
+     * @returns Whether this premise is an inference.
+     */
     isInference(): boolean
-    /** Returns `true` if this premise does not have an inference operator at its root. Equivalent to `!isInference()`. */
+    /**
+     * Returns `true` if this premise does not have an inference operator at
+     * its root. Equivalent to `!isInference()`.
+     *
+     * @returns Whether this premise is a constraint.
+     */
     isConstraint(): boolean
 }
 
 /**
- * Premise-level evaluation: single-assignment evaluation and
- * evaluability validation.
+ * Premise-level evaluation: single-assignment evaluation and evaluability
+ * validation.
  */
 export interface TPremiseEvaluation {
-    /** Validates that this premise is structurally ready for evaluation. */
+    /**
+     * Validates that this premise is structurally ready for evaluation.
+     *
+     * @returns A validation result with any issues found.
+     */
     validateEvaluability(): TCoreValidationResult
     /**
      * Evaluates the premise under a three-valued expression assignment.
      *
-     * Variable values are looked up using Kleene three-valued logic (`null` = unknown).
-     * For inference premises, an `inferenceDiagnostic` is computed.
+     * Variable values are looked up using Kleene three-valued logic
+     * (`null` = unknown). Missing variables default to `null`. For
+     * inference premises (`implies`/`iff`), an `inferenceDiagnostic` is
+     * computed with three-valued fields unless the root is rejected.
+     *
+     * @param assignment - The variable assignment and optional rejected
+     *   expression IDs.
+     * @param options - Optional evaluation options.
+     * @param options.strictUnknownKeys - If `true`, unknown variable keys
+     *   in the assignment cause an error.
+     * @param options.requireExactCoverage - If `true`, the assignment must
+     *   cover exactly the referenced variables.
+     * @returns The premise evaluation result.
      */
     evaluate(
         assignment: TCoreExpressionAssignment,
@@ -190,11 +300,22 @@ export interface TPremiseLifecycle<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
 > {
-    /** Returns a serializable snapshot of the premise's owned state. */
+    /**
+     * Returns a serializable snapshot of the premise's owned state.
+     *
+     * @returns The premise engine snapshot.
+     */
     snapshot(): TPremiseEngineSnapshot<TPremise, TExpr>
-    /** Sets a callback invoked after every mutation, or `undefined` to clear. */
+    /**
+     * Sets a callback invoked after every mutation, or `undefined` to
+     * clear.
+     *
+     * @param callback - The mutation callback, or `undefined` to remove.
+     */
     setOnMutate(callback: (() => void) | undefined): void
-    /** Invalidates the cached checksum so the next call recomputes it. */
+    /**
+     * Invalidates the cached checksum so the next call recomputes it.
+     */
     markDirty(): void
 }
 
@@ -207,13 +328,32 @@ export interface TPremiseIdentity<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
 > {
-    /** Returns the premise ID. */
+    /**
+     * Returns the premise ID.
+     *
+     * @returns The premise ID string.
+     */
     getId(): string
-    /** Returns a serializable premise representation containing only identity/metadata and checksum. */
+    /**
+     * Returns a serializable premise representation containing only
+     * identity/metadata and checksum. Use `getRootExpressionId()`,
+     * `getExpressions()`, `getReferencedVariableIds()` for runtime state.
+     *
+     * @returns The premise data entity.
+     */
     toPremiseData(): TPremise
-    /** Returns the premise's extra metadata record. */
+    /**
+     * Returns the premise's extra metadata record.
+     *
+     * @returns The extras record.
+     */
     getExtras(): Record<string, unknown>
-    /** Replaces the premise's extra metadata record. */
+    /**
+     * Replaces the premise's extra metadata record.
+     *
+     * @param extras - The new extras record.
+     * @returns The previous extras record and changeset.
+     */
     setExtras(
         extras: Record<string, unknown>
     ): TCoreMutationResult<Record<string, unknown>, TExpr, TVar, TPremise, TArg>
