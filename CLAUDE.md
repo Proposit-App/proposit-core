@@ -61,3 +61,6 @@ Defined in the `brain-style` skill. Enforced by ESLint (`@typescript-eslint/nami
 - `CLAUDE.md` [Public-API] — Design rules and conventions sections
 - `CLI_EXAMPLES.md` [Public-CLI-API] — Walkthrough examples and the complete script
 - `scripts/smoke-test.sh` [Public-CLI-API] — Add coverage for new commands, flags, or behaviors
+- `src/lib/core/interfaces/argument-engine.interfaces.ts` [Public-Engine-API] — JSDoc for ArgumentEngine interface methods; update when ArgumentEngine public method signatures, parameters, return types, or thrown errors change
+- `src/lib/core/interfaces/premise-engine.interfaces.ts` [Public-Engine-API] — JSDoc for PremiseEngine interface methods; update when PremiseEngine public method signatures, parameters, return types, or thrown errors change
+- `src/lib/core/interfaces/shared.interfaces.ts` [Public-Engine-API] — JSDoc for shared engine interfaces (TDisplayable, TChecksummable); update when shared method signatures change
