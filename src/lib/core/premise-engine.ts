@@ -42,6 +42,17 @@ import type {
 } from "./expression-manager.js"
 import { ExpressionManager } from "./expression-manager.js"
 import { VariableManager } from "./variable-manager.js"
+import type {
+    TExpressionMutations,
+    TExpressionQueries,
+    TVariableReferences,
+    TPremiseClassification,
+    TPremiseEvaluation,
+    TPremiseLifecycle,
+    TPremiseIdentity,
+    TDisplayable,
+    TChecksummable,
+} from "./interfaces/index.js"
 
 export type TPremiseEngineSnapshot<
     TPremise extends TCorePremise = TCorePremise,
@@ -58,7 +69,18 @@ export class PremiseEngine<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-> {
+>
+    implements
+        TExpressionMutations<TArg, TPremise, TExpr, TVar>,
+        TExpressionQueries<TExpr>,
+        TVariableReferences<TArg, TPremise, TExpr, TVar>,
+        TPremiseClassification,
+        TPremiseEvaluation,
+        TPremiseLifecycle<TPremise, TExpr>,
+        TPremiseIdentity<TArg, TPremise, TExpr, TVar>,
+        TDisplayable,
+        TChecksummable
+{
     private premise: TOptionalChecksum<TPremise>
     private rootExpressionId: string | undefined
     private variables: VariableManager<TVar>
