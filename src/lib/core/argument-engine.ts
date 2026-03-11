@@ -40,6 +40,17 @@ import { PremiseEngine } from "./premise-engine.js"
 import type { TPremiseEngineSnapshot } from "./premise-engine.js"
 import { VariableManager } from "./variable-manager.js"
 import type { TVariableManagerSnapshot } from "./variable-manager.js"
+import type {
+    TPremiseCrud,
+    TVariableManagement,
+    TArgumentExpressionQueries,
+    TArgumentRoleState,
+    TArgumentEvaluation,
+    TArgumentLifecycle,
+    TArgumentIdentity,
+    TDisplayable,
+    TChecksummable,
+} from "./interfaces/index.js"
 
 export type TLogicEngineOptions = {
     checksumConfig?: TCoreChecksumConfig
@@ -71,7 +82,18 @@ export class ArgumentEngine<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-> {
+>
+    implements
+        TPremiseCrud<TArg, TPremise, TExpr, TVar>,
+        TVariableManagement<TArg, TPremise, TExpr, TVar>,
+        TArgumentExpressionQueries<TExpr>,
+        TArgumentRoleState<TArg, TPremise, TExpr, TVar>,
+        TArgumentEvaluation,
+        TArgumentLifecycle<TArg, TPremise, TExpr, TVar>,
+        TArgumentIdentity<TArg>,
+        TDisplayable,
+        TChecksummable
+{
     private argument: TOptionalChecksum<TArg>
     private premises: Map<string, PremiseEngine<TArg, TPremise, TExpr, TVar>>
     private variables: VariableManager<TVar>
