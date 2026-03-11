@@ -3,6 +3,7 @@
 ## Generic instructions
 
 - Git commit messages should not include any co-authoring content
+- When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.
 
 ## Commands
 
@@ -51,23 +52,7 @@ All relative imports in `src/cli/` and `src/lib/` must end in `.js`. Directory i
 
 ## Naming conventions
 
-Enforced by ESLint (`@typescript-eslint/naming-convention` and `check-file/filename-naming-convention`).
-
-| Category                      | Convention                         | Examples                                  |
-| ----------------------------- | ---------------------------------- | ----------------------------------------- |
-| Filenames                     | `kebab-case`                       | `argument-engine.ts`, `default-map.ts`    |
-| Functions, methods, variables | `camelCase`                        | `parseFormula`, `getVariable`, `rootId`   |
-| Classes                       | `PascalCase`                       | `ArgumentEngine`, `DefaultMap`            |
-| Type aliases and interfaces   | `T`-prefixed `PascalCase`          | `TCoreArgument`, `TFormulaAST`, `TUUID`   |
-| Type parameters               | `PascalCase` (no prefix required)  | `T`, `K`, `TExpr`, `TVar`                 |
-| Enum names                    | `PascalCase`                       | `LogicalOperator`                         |
-| Enum members                  | `SCREAMING_SNAKE_CASE`             | `AND`, `IMPLIES`                          |
-| True constants                | `SCREAMING_SNAKE_CASE`             | `POSITION_MIN`, `DEFAULT_CHECKSUM_CONFIG` |
-| Typebox schema objects        | `PascalCase` (allowed for `const`) | `CoreArgumentSchema`, `UUID`              |
-
-**Notes:**
-- Destructured variables and imports are exempt (source determines naming).
-- Override methods are exempt (parent class determines name).
+Defined in the `brain-style` skill. Enforced by ESLint (`@typescript-eslint/naming-convention` and `check-file/filename-naming-convention`).
 
 ## Documentation Sync
 
