@@ -49,13 +49,7 @@ export interface TPremiseCrud<
     >
     removePremise(
         premiseId: string
-    ): TCoreMutationResult<
-        TPremise | undefined,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    >
+    ): TCoreMutationResult<TPremise | undefined, TExpr, TVar, TPremise, TArg>
     getPremise(
         premiseId: string
     ): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined
@@ -130,13 +124,7 @@ export interface TArgumentRoleState<
     listSupportingPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[]
     setConclusionPremise(
         premiseId: string
-    ): TCoreMutationResult<
-        TCoreArgumentRoleState,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    >
+    ): TCoreMutationResult<TCoreArgumentRoleState, TExpr, TVar, TPremise, TArg>
     clearConclusionPremise(): TCoreMutationResult<
         TCoreArgumentRoleState,
         TExpr,
@@ -157,9 +145,7 @@ export interface TArgumentEvaluation {
         assignment: TCoreExpressionAssignment,
         options?: TCoreArgumentEvaluationOptions
     ): TCoreArgumentEvaluationResult
-    checkValidity(
-        options?: TCoreValidityCheckOptions
-    ): TCoreValidityCheckResult
+    checkValidity(options?: TCoreValidityCheckOptions): TCoreValidityCheckResult
 }
 
 /**
@@ -183,8 +169,6 @@ export interface TArgumentLifecycle<
 /**
  * Argument entity access.
  */
-export interface TArgumentIdentity<
-    TArg extends TCoreArgument = TCoreArgument,
-> {
+export interface TArgumentIdentity<TArg extends TCoreArgument = TCoreArgument> {
     getArgument(): TArg
 }

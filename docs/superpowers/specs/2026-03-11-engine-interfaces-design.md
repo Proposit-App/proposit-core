@@ -38,7 +38,7 @@ Implemented by both `ArgumentEngine` and `PremiseEngine`.
 
 ```typescript
 interface TDisplayable {
-  toDisplayString(): string;
+    toDisplayString(): string
 }
 ```
 
@@ -46,7 +46,7 @@ interface TDisplayable {
 
 ```typescript
 interface TChecksummable {
-  checksum(): string;
+    checksum(): string
 }
 ```
 
@@ -56,14 +56,37 @@ interface TChecksummable {
 
 ```typescript
 interface TPremiseCrud<TArg, TPremise, TExpr, TVar> {
-  createPremise(extras?: Record<string, unknown>): TCoreMutationResult<PremiseEngine<TArg, TPremise, TExpr, TVar>, TExpr, TVar, TPremise, TArg>;
-  createPremiseWithId(id: string, extras?: Record<string, unknown>): TCoreMutationResult<PremiseEngine<TArg, TPremise, TExpr, TVar>, TExpr, TVar, TPremise, TArg>;
-  removePremise(premiseId: string): TCoreMutationResult<TPremise | undefined, TExpr, TVar, TPremise, TArg>;
-  getPremise(premiseId: string): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined;
-  hasPremise(premiseId: string): boolean;
-  listPremiseIds(): string[];
-  listPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[];
-  findPremiseByExpressionId(expressionId: string): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined;
+    createPremise(
+        extras?: Record<string, unknown>
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    createPremiseWithId(
+        id: string,
+        extras?: Record<string, unknown>
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    removePremise(
+        premiseId: string
+    ): TCoreMutationResult<TPremise | undefined, TExpr, TVar, TPremise, TArg>
+    getPremise(
+        premiseId: string
+    ): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined
+    hasPremise(premiseId: string): boolean
+    listPremiseIds(): string[]
+    listPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[]
+    findPremiseByExpressionId(
+        expressionId: string
+    ): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined
 }
 ```
 
@@ -71,14 +94,21 @@ interface TPremiseCrud<TArg, TPremise, TExpr, TVar> {
 
 ```typescript
 interface TVariableManagement<TArg, TPremise, TExpr, TVar> {
-  addVariable(variable: TOptionalChecksum<TVar>): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>;
-  updateVariable(variableId: string, updates: { symbol?: string }): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>;
-  removeVariable(variableId: string): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>;
-  getVariable(variableId: string): TVar | undefined;
-  hasVariable(variableId: string): boolean;
-  getVariableBySymbol(symbol: string): TVar | undefined;
-  getVariables(): TVar[];
-  buildVariableIndex<K>(keyFn: (v: TVar) => K): Map<K, TVar>;
+    addVariable(
+        variable: TOptionalChecksum<TVar>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>
+    updateVariable(
+        variableId: string,
+        updates: { symbol?: string }
+    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>
+    removeVariable(
+        variableId: string
+    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>
+    getVariable(variableId: string): TVar | undefined
+    hasVariable(variableId: string): boolean
+    getVariableBySymbol(symbol: string): TVar | undefined
+    getVariables(): TVar[]
+    buildVariableIndex<K>(keyFn: (v: TVar) => K): Map<K, TVar>
 }
 ```
 
@@ -88,17 +118,20 @@ Cross-premise expression lookups.
 
 ```typescript
 interface TArgumentExpressionQueries<TExpr> {
-  getExpression(expressionId: string): TExpr | undefined;
-  hasExpression(expressionId: string): boolean;
-  getExpressionPremiseId(expressionId: string): string | undefined;
-  getAllExpressions(): TExpr[];
-  getExpressionsByVariableId(variableId: string): TExpr[];
-  listRootExpressions(): TExpr[];
-  collectReferencedVariables(): {
-    variableIds: string[];
-    byId: Record<string, { symbol: string; premiseIds: string[] }>;
-    bySymbol: Record<string, { variableIds: string[]; premiseIds: string[] }>;
-  };
+    getExpression(expressionId: string): TExpr | undefined
+    hasExpression(expressionId: string): boolean
+    getExpressionPremiseId(expressionId: string): string | undefined
+    getAllExpressions(): TExpr[]
+    getExpressionsByVariableId(variableId: string): TExpr[]
+    listRootExpressions(): TExpr[]
+    collectReferencedVariables(): {
+        variableIds: string[]
+        byId: Record<string, { symbol: string; premiseIds: string[] }>
+        bySymbol: Record<
+            string,
+            { variableIds: string[]; premiseIds: string[] }
+        >
+    }
 }
 ```
 
@@ -106,11 +139,21 @@ interface TArgumentExpressionQueries<TExpr> {
 
 ```typescript
 interface TArgumentRoleState<TArg, TPremise, TExpr, TVar> {
-  getConclusionPremise(): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined;
-  listSupportingPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[];
-  setConclusionPremise(premiseId: string): TCoreMutationResult<TCoreArgumentRoleState, TExpr, TVar, TPremise, TArg>;
-  clearConclusionPremise(): TCoreMutationResult<TCoreArgumentRoleState, TExpr, TVar, TPremise, TArg>;
-  getRoleState(): TCoreArgumentRoleState;
+    getConclusionPremise():
+        | PremiseEngine<TArg, TPremise, TExpr, TVar>
+        | undefined
+    listSupportingPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[]
+    setConclusionPremise(
+        premiseId: string
+    ): TCoreMutationResult<TCoreArgumentRoleState, TExpr, TVar, TPremise, TArg>
+    clearConclusionPremise(): TCoreMutationResult<
+        TCoreArgumentRoleState,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    getRoleState(): TCoreArgumentRoleState
 }
 ```
 
@@ -118,9 +161,12 @@ interface TArgumentRoleState<TArg, TPremise, TExpr, TVar> {
 
 ```typescript
 interface TArgumentEvaluation {
-  validateEvaluability(): TCoreValidationResult;
-  evaluate(assignment: TCoreExpressionAssignment, options?: TCoreArgumentEvaluationOptions): TCoreArgumentEvaluationResult;
-  checkValidity(options?: TCoreValidityCheckOptions): TCoreValidityCheckResult;
+    validateEvaluability(): TCoreValidationResult
+    evaluate(
+        assignment: TCoreExpressionAssignment,
+        options?: TCoreArgumentEvaluationOptions
+    ): TCoreArgumentEvaluationResult
+    checkValidity(options?: TCoreValidityCheckOptions): TCoreValidityCheckResult
 }
 ```
 
@@ -130,10 +176,12 @@ Static factory methods (`fromSnapshot`, `fromData`) are not included — TypeScr
 
 ```typescript
 interface TArgumentLifecycle<TArg, TPremise, TExpr, TVar> {
-  subscribe(listener: () => void): () => void;
-  getSnapshot(): TReactiveSnapshot<TArg, TPremise, TExpr, TVar>;
-  snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>;
-  rollback(snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>): void;
+    subscribe(listener: () => void): () => void
+    getSnapshot(): TReactiveSnapshot<TArg, TPremise, TExpr, TVar>
+    snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
+    rollback(
+        snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
+    ): void
 }
 ```
 
@@ -141,7 +189,7 @@ interface TArgumentLifecycle<TArg, TPremise, TExpr, TVar> {
 
 ```typescript
 interface TArgumentIdentity<TArg> {
-  getArgument(): TArg;
+    getArgument(): TArg
 }
 ```
 
@@ -153,13 +201,37 @@ Single-premise expression writes.
 
 ```typescript
 interface TExpressionMutations<TArg, TPremise, TExpr, TVar> {
-  addExpression(expression: TExpressionInput<TExpr>): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>;
-  appendExpression(parentId: string | null, expression: TExpressionWithoutPosition<TExpr>): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>;
-  addExpressionRelative(siblingId: string, relativePosition: "before" | "after", expression: TExpressionWithoutPosition<TExpr>): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>;
-  updateExpression(expressionId: string, updates: TExpressionUpdate): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>;
-  removeExpression(expressionId: string, deleteSubtree: boolean): TCoreMutationResult<TExpr | undefined, TExpr, TVar, TPremise, TArg>;
-  insertExpression(expression: TExpressionInput<TExpr>, leftNodeId?: string, rightNodeId?: string): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>;
-  wrapExpression(operator: TExpressionWithoutPosition<TExpr>, newSibling: TExpressionWithoutPosition<TExpr>, leftNodeId?: string, rightNodeId?: string): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>;
+    addExpression(
+        expression: TExpressionInput<TExpr>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    appendExpression(
+        parentId: string | null,
+        expression: TExpressionWithoutPosition<TExpr>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    addExpressionRelative(
+        siblingId: string,
+        relativePosition: "before" | "after",
+        expression: TExpressionWithoutPosition<TExpr>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    updateExpression(
+        expressionId: string,
+        updates: TExpressionUpdate
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    removeExpression(
+        expressionId: string,
+        deleteSubtree: boolean
+    ): TCoreMutationResult<TExpr | undefined, TExpr, TVar, TPremise, TArg>
+    insertExpression(
+        expression: TExpressionInput<TExpr>,
+        leftNodeId?: string,
+        rightNodeId?: string
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    wrapExpression(
+        operator: TExpressionWithoutPosition<TExpr>,
+        newSibling: TExpressionWithoutPosition<TExpr>,
+        leftNodeId?: string,
+        rightNodeId?: string
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
 }
 ```
 
@@ -169,11 +241,11 @@ Single-premise expression reads.
 
 ```typescript
 interface TExpressionQueries<TExpr> {
-  getExpression(id: string): TExpr | undefined;
-  getRootExpressionId(): string | undefined;
-  getRootExpression(): TExpr | undefined;
-  getExpressions(): TExpr[];
-  getChildExpressions(parentId: string | null): TExpr[];
+    getExpression(id: string): TExpr | undefined
+    getRootExpressionId(): string | undefined
+    getRootExpression(): TExpr | undefined
+    getExpressions(): TExpr[]
+    getChildExpressions(parentId: string | null): TExpr[]
 }
 ```
 
@@ -181,9 +253,11 @@ interface TExpressionQueries<TExpr> {
 
 ```typescript
 interface TVariableReferences<TArg, TPremise, TExpr, TVar> {
-  getVariables(): TVar[];
-  getReferencedVariableIds(): Set<string>;
-  deleteExpressionsUsingVariable(variableId: string): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg>;
+    getVariables(): TVar[]
+    getReferencedVariableIds(): Set<string>
+    deleteExpressionsUsingVariable(
+        variableId: string
+    ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg>
 }
 ```
 
@@ -191,8 +265,8 @@ interface TVariableReferences<TArg, TPremise, TExpr, TVar> {
 
 ```typescript
 interface TPremiseClassification {
-  isInference(): boolean;
-  isConstraint(): boolean;
+    isInference(): boolean
+    isConstraint(): boolean
 }
 ```
 
@@ -200,11 +274,14 @@ interface TPremiseClassification {
 
 ```typescript
 interface TPremiseEvaluation {
-  validateEvaluability(): TCoreValidationResult;
-  evaluate(assignment: TCoreExpressionAssignment, options?: {
-    strictUnknownKeys?: boolean;
-    requireExactCoverage?: boolean;
-  }): TCorePremiseEvaluationResult;
+    validateEvaluability(): TCoreValidationResult
+    evaluate(
+        assignment: TCoreExpressionAssignment,
+        options?: {
+            strictUnknownKeys?: boolean
+            requireExactCoverage?: boolean
+        }
+    ): TCorePremiseEvaluationResult
 }
 ```
 
@@ -214,9 +291,9 @@ The static `fromSnapshot` factory is not included — TypeScript interfaces cann
 
 ```typescript
 interface TPremiseLifecycle<TPremise, TExpr> {
-  snapshot(): TPremiseEngineSnapshot<TPremise, TExpr>;
-  setOnMutate(callback: (() => void) | undefined): void;
-  markDirty(): void;
+    snapshot(): TPremiseEngineSnapshot<TPremise, TExpr>
+    setOnMutate(callback: (() => void) | undefined): void
+    markDirty(): void
 }
 ```
 
@@ -224,10 +301,12 @@ interface TPremiseLifecycle<TPremise, TExpr> {
 
 ```typescript
 interface TPremiseIdentity<TArg, TPremise, TExpr, TVar> {
-  getId(): string;
-  toPremiseData(): TPremise;
-  getExtras(): Record<string, unknown>;
-  setExtras(extras: Record<string, unknown>): TCoreMutationResult<Record<string, unknown>, TExpr, TVar, TPremise, TArg>;
+    getId(): string
+    toPremiseData(): TPremise
+    getExtras(): Record<string, unknown>
+    setExtras(
+        extras: Record<string, unknown>
+    ): TCoreMutationResult<Record<string, unknown>, TExpr, TVar, TPremise, TArg>
 }
 ```
 

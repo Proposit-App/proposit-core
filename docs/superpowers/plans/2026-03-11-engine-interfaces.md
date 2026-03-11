@@ -14,15 +14,15 @@
 
 ## File Map
 
-| Action | File | Responsibility |
-|--------|------|---------------|
-| Create | `src/lib/core/interfaces/shared.interfaces.ts` | `TDisplayable`, `TChecksummable` |
-| Create | `src/lib/core/interfaces/argument-engine.interfaces.ts` | 7 ArgumentEngine interfaces |
-| Create | `src/lib/core/interfaces/premise-engine.interfaces.ts` | 7 PremiseEngine interfaces |
-| Create | `src/lib/core/interfaces/index.ts` | Barrel re-export |
-| Modify | `src/lib/core/argument-engine.ts` | Add `implements` clause + import |
-| Modify | `src/lib/core/premise-engine.ts` | Add `implements` clause + import |
-| Modify | `src/lib/index.ts` | Re-export interfaces barrel |
+| Action | File                                                    | Responsibility                   |
+| ------ | ------------------------------------------------------- | -------------------------------- |
+| Create | `src/lib/core/interfaces/shared.interfaces.ts`          | `TDisplayable`, `TChecksummable` |
+| Create | `src/lib/core/interfaces/argument-engine.interfaces.ts` | 7 ArgumentEngine interfaces      |
+| Create | `src/lib/core/interfaces/premise-engine.interfaces.ts`  | 7 PremiseEngine interfaces       |
+| Create | `src/lib/core/interfaces/index.ts`                      | Barrel re-export                 |
+| Modify | `src/lib/core/argument-engine.ts`                       | Add `implements` clause + import |
+| Modify | `src/lib/core/premise-engine.ts`                        | Add `implements` clause + import |
+| Modify | `src/lib/index.ts`                                      | Re-export interfaces barrel      |
 
 ---
 
@@ -31,6 +31,7 @@
 ### Task 1: Create shared interfaces file
 
 **Files:**
+
 - Create: `src/lib/core/interfaces/shared.interfaces.ts`
 
 - [ ] **Step 1: Create the shared interfaces file**
@@ -72,6 +73,7 @@ git commit -m "feat: add TDisplayable and TChecksummable shared interfaces"
 ### Task 2: Create ArgumentEngine interfaces file
 
 **Files:**
+
 - Create: `src/lib/core/interfaces/argument-engine.interfaces.ts`
 
 The file imports types from `../../schemata/index.js`, `../../types/evaluation.js`, `../../types/mutation.js`, and `../../types/reactive.js`. It also forward-references `PremiseEngine` from `../premise-engine.js` and `TArgumentEngineSnapshot` from `../argument-engine.js`.
@@ -131,13 +133,7 @@ export interface TPremiseCrud<
     >
     removePremise(
         premiseId: string
-    ): TCoreMutationResult<
-        TPremise | undefined,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    >
+    ): TCoreMutationResult<TPremise | undefined, TExpr, TVar, TPremise, TArg>
     getPremise(
         premiseId: string
     ): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined
@@ -212,13 +208,7 @@ export interface TArgumentRoleState<
     listSupportingPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[]
     setConclusionPremise(
         premiseId: string
-    ): TCoreMutationResult<
-        TCoreArgumentRoleState,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    >
+    ): TCoreMutationResult<TCoreArgumentRoleState, TExpr, TVar, TPremise, TArg>
     clearConclusionPremise(): TCoreMutationResult<
         TCoreArgumentRoleState,
         TExpr,
@@ -239,9 +229,7 @@ export interface TArgumentEvaluation {
         assignment: TCoreExpressionAssignment,
         options?: TCoreArgumentEvaluationOptions
     ): TCoreArgumentEvaluationResult
-    checkValidity(
-        options?: TCoreValidityCheckOptions
-    ): TCoreValidityCheckResult
+    checkValidity(options?: TCoreValidityCheckOptions): TCoreValidityCheckResult
 }
 
 /**
@@ -265,9 +253,7 @@ export interface TArgumentLifecycle<
 /**
  * Argument entity access.
  */
-export interface TArgumentIdentity<
-    TArg extends TCoreArgument = TCoreArgument,
-> {
+export interface TArgumentIdentity<TArg extends TCoreArgument = TCoreArgument> {
     getArgument(): TArg
 }
 ```
@@ -291,6 +277,7 @@ git commit -m "feat: add ArgumentEngine capability interfaces"
 ### Task 3: Create PremiseEngine interfaces file
 
 **Files:**
+
 - Create: `src/lib/core/interfaces/premise-engine.interfaces.ts`
 
 Imports follow the same pattern as `premise-engine.ts`. References `TExpressionInput`, `TExpressionWithoutPosition`, `TExpressionUpdate` from `../expression-manager.js`, and `TPremiseEngineSnapshot` from `../premise-engine.js`.
@@ -439,13 +426,7 @@ export interface TPremiseIdentity<
     getExtras(): Record<string, unknown>
     setExtras(
         extras: Record<string, unknown>
-    ): TCoreMutationResult<
-        Record<string, unknown>,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    >
+    ): TCoreMutationResult<Record<string, unknown>, TExpr, TVar, TPremise, TArg>
 }
 ```
 
@@ -468,16 +449,14 @@ git commit -m "feat: add PremiseEngine capability interfaces"
 ### Task 4: Create interfaces barrel export
 
 **Files:**
+
 - Create: `src/lib/core/interfaces/index.ts`
 
 - [ ] **Step 1: Create the barrel file**
 
 ```typescript
 // src/lib/core/interfaces/index.ts
-export type {
-    TDisplayable,
-    TChecksummable,
-} from "./shared.interfaces.js"
+export type { TDisplayable, TChecksummable } from "./shared.interfaces.js"
 
 export type {
     TPremiseCrud,
@@ -515,6 +494,7 @@ git commit -m "feat: add interfaces barrel export"
 ### Task 5: Wire interfaces into ArgumentEngine
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts:1-74` (imports and class declaration)
 
 - [ ] **Step 1: Add import of interfaces**
@@ -590,6 +570,7 @@ git commit -m "feat: ArgumentEngine implements capability interfaces"
 ### Task 6: Wire interfaces into PremiseEngine
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts:1-61` (imports and class declaration)
 
 - [ ] **Step 1: Add import of interfaces**
@@ -665,6 +646,7 @@ git commit -m "feat: PremiseEngine implements capability interfaces"
 ### Task 7: Re-export interfaces from library barrel
 
 **Files:**
+
 - Modify: `src/lib/index.ts`
 
 - [ ] **Step 1: Add interfaces re-export**

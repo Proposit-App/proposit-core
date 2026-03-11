@@ -138,11 +138,5 @@ export interface TPremiseIdentity<
     getExtras(): Record<string, unknown>
     setExtras(
         extras: Record<string, unknown>
-    ): TCoreMutationResult<
-        Record<string, unknown>,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    >
+    ): TCoreMutationResult<Record<string, unknown>, TExpr, TVar, TPremise, TArg>
 }

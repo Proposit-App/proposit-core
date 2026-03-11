@@ -1,7 +1,4 @@
-export type {
-    TDisplayable,
-    TChecksummable,
-} from "./shared.interfaces.js"
+export type { TDisplayable, TChecksummable } from "./shared.interfaces.js"
 
 export type {
     TPremiseCrud,
