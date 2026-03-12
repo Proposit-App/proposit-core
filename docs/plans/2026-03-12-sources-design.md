@@ -128,7 +128,7 @@ Gains:
 
 Extended cascades:
 - `removeVariable()` — now also calls `sourceManager.removeAssociationsForVariable()` (which may cascade to orphaned source deletion)
-- `removePremise()` — current implementation does not call `removeExpression()` individually; it discards the `PremiseEngine` and cleans up the expression index directly. This must be extended to enumerate all expressions in the premise and call `sourceManager.removeAssociationsForExpression()` for each before discarding the premise. Orphan source cleanup applies.
+- `removePremise()` — current implementation does not call `removeExpression()` individually; it iterates all expressions in the premise and removes each from the expression index, then discards the `PremiseEngine`. This iteration must be extended to also call `sourceManager.removeAssociationsForExpression()` for each expression before discarding the premise. Orphan source cleanup applies.
 
 ### PremiseEngine
 
@@ -163,6 +163,7 @@ All parameters have `extends BaseType = BaseType` defaults. `TSource extends TCo
 - `TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar, TSource>`
 - `TReactiveSnapshot<...>`
 - `TCoreDiffOptions<TArg, TVar, TPremise, TExpr, TSource>`
+- `diffArguments<TArg, TPremise, TExpr, TVar, TSource>` (note: `diffArguments` has a pre-existing parameter ordering that differs from `TCoreArgumentDiff`; this is not introduced by this spec)
 
 ## Changeset Expansion
 
@@ -176,6 +177,8 @@ interface TCoreChangeset<TExpr, TVar, TPremise, TArg, TSource> {
     expressionSourceAssociations?: TCoreEntityChanges<TCoreExpressionSourceAssociation>
 }
 ```
+
+`ChangeCollector` (internal class that mirrors `TCoreChangeset`) gains `TSource` as a fifth type parameter and new accumulator methods: `addedSource`, `removedSource`, `addedVariableSourceAssociation`, `removedVariableSourceAssociation`, `addedExpressionSourceAssociation`, `removedExpressionSourceAssociation`.
 
 ## Diff Expansion
 
@@ -218,10 +221,10 @@ Note: Associations are **immutable** — they can be created or deleted, but not
 4. Changeset includes removed source + all removed associations
 
 ### `removeVariable(variableId)` (extended)
-1. Existing: cascade-delete referencing expressions with operator collapse
-2. New: delete variable-source associations for this variable
-3. New: delete any source left with zero associations (orphan cleanup)
-4. Changeset now also includes removed associations and orphaned sources
+1. Existing: cascade-delete referencing expressions with operator collapse. This transitively triggers expression-source association cleanup via the extended `removeExpression` cascade (see below).
+2. New: delete *variable*-source associations for this variable (a separate concern from expression-source associations handled in step 1)
+3. New: delete any source left with zero associations after both steps (orphan cleanup)
+4. Changeset now also includes removed associations and orphaned sources from both steps
 
 ### `removeExpression(expressionId)` (extended)
 1. Existing: remove expression, collapse operators, may recurse
@@ -230,8 +233,8 @@ Note: Associations are **immutable** — they can be created or deleted, but not
 4. Changeset now also includes removed associations and orphaned sources
 
 ### `removePremise(premiseId)` (extended)
-1. Existing: discard the `PremiseEngine` and clean up the expression index
-2. New: before discarding, enumerate all expressions in the premise and call `sourceManager.removeAssociationsForExpression()` for each
+1. Existing: iterate all expressions in the premise, remove each from the expression index, then discard the `PremiseEngine`
+2. New: during the expression iteration (before discarding), call `sourceManager.removeAssociationsForExpression()` for each expression
 3. New: delete any source left with zero associations (orphan cleanup)
 4. Changeset now also includes removed expression-source associations and orphaned sources
 
