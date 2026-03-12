@@ -9971,3 +9971,922 @@ describe("SourceManager", () => {
         })
     })
 })
+
+// ---------------------------------------------------------------------------
+// ArgumentEngine source management (Tasks 11-13)
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine source management", () => {
+    const SRC_ARG: Omit<TCoreArgument, "checksum"> = {
+        id: "arg-src",
+        version: 1,
+    }
+
+    function srcMakeVar(id: string, symbol: string): TVariableInput {
+        return {
+            id,
+            argumentId: SRC_ARG.id,
+            argumentVersion: SRC_ARG.version,
+            symbol,
+        }
+    }
+
+    function srcMakeVarExpr(
+        id: string,
+        variableId: string,
+        opts: {
+            parentId?: string | null
+            position?: number
+            premiseId?: string
+        } = {}
+    ): TExpressionInput {
+        return {
+            id,
+            argumentId: SRC_ARG.id,
+            argumentVersion: SRC_ARG.version,
+            premiseId: opts.premiseId ?? "premise-src",
+            type: "variable",
+            variableId,
+            parentId: opts.parentId ?? null,
+            position: opts.position ?? POSITION_INITIAL,
+        }
+    }
+
+    function srcMakeOpExpr(
+        id: string,
+        operator: "not" | "and" | "or" | "implies" | "iff",
+        opts: {
+            parentId?: string | null
+            position?: number
+            premiseId?: string
+        } = {}
+    ): TExpressionInput {
+        return {
+            id,
+            argumentId: SRC_ARG.id,
+            argumentVersion: SRC_ARG.version,
+            premiseId: opts.premiseId ?? "premise-src",
+            type: "operator",
+            operator,
+            parentId: opts.parentId ?? null,
+            position: opts.position ?? POSITION_INITIAL,
+        }
+    }
+
+    /** Helper: create an engine with a premise and variable expressions wired up. */
+    function buildFixture() {
+        const engine = new ArgumentEngine(SRC_ARG)
+        const varP = engine.addVariable(srcMakeVar("var-p-src", "P")).result
+        const varQ = engine.addVariable(srcMakeVar("var-q-src", "Q")).result
+
+        const { result: pm } = engine.createPremiseWithId("premise-src")
+        const exprAnd = pm.addExpression(
+            srcMakeOpExpr("expr-and", "and", {
+                premiseId: "premise-src",
+                parentId: null,
+                position: 0,
+            })
+        ).result
+        const exprP = pm.addExpression(
+            srcMakeVarExpr("expr-p", "var-p-src", {
+                premiseId: "premise-src",
+                parentId: "expr-and",
+                position: 0,
+            })
+        ).result
+        const exprQ = pm.addExpression(
+            srcMakeVarExpr("expr-q", "var-q-src", {
+                premiseId: "premise-src",
+                parentId: "expr-and",
+                position: 1,
+            })
+        ).result
+        return { engine, pm, varP, varQ, exprAnd, exprP, exprQ }
+    }
+
+    // ------------------------------------------------------------------
+    // Task 11: ArgumentEngine source CRUD
+    // ------------------------------------------------------------------
+
+    describe("addSource", () => {
+        it("adds a source and returns it with checksum", () => {
+            const { engine } = buildFixture()
+            const { result, changes } = engine.addSource({
+                id: "src-1",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            expect(result.id).toBe("src-1")
+            expect(result.checksum).toBeTruthy()
+            expect(engine.getSources()).toHaveLength(1)
+            expect(engine.getSource("src-1")).toEqual(result)
+            expect(changes.sources?.added).toHaveLength(1)
+        })
+
+        it("throws on duplicate source ID", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-dup",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            expect(() =>
+                engine.addSource({
+                    id: "src-dup",
+                    argumentId: "arg-src",
+                    argumentVersion: 1,
+                    checksum: "",
+                })
+            ).toThrow(/already exists/)
+        })
+
+        it("throws on mismatched argumentId", () => {
+            const { engine } = buildFixture()
+            expect(() =>
+                engine.addSource({
+                    id: "src-bad",
+                    argumentId: "wrong-arg",
+                    argumentVersion: 1,
+                    checksum: "",
+                })
+            ).toThrow(/does not match/)
+        })
+    })
+
+    describe("removeSource", () => {
+        it("removes an existing source", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rm",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result, changes } = engine.removeSource("src-rm")
+            expect(result?.id).toBe("src-rm")
+            expect(engine.getSource("src-rm")).toBeUndefined()
+            expect(changes.sources?.removed).toHaveLength(1)
+        })
+
+        it("returns undefined for non-existent source", () => {
+            const { engine } = buildFixture()
+            const { result, changes } = engine.removeSource("no-such-src")
+            expect(result).toBeUndefined()
+            expect(changes).toEqual({})
+        })
+
+        it("cascades deletion to associations", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-cas",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-cas", "var-p-src")
+            engine.addExpressionSourceAssociation(
+                "src-cas",
+                "expr-p",
+                "premise-src"
+            )
+            const { changes } = engine.removeSource("src-cas")
+            expect(changes.variableSourceAssociations?.removed).toHaveLength(1)
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                1
+            )
+        })
+    })
+
+    describe("addVariableSourceAssociation", () => {
+        it("creates an association with checksum", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-va",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result, changes } = engine.addVariableSourceAssociation(
+                "src-va",
+                "var-p-src"
+            )
+            expect(result.sourceId).toBe("src-va")
+            expect(result.variableId).toBe("var-p-src")
+            expect(result.checksum).toBeTruthy()
+            expect(result.argumentId).toBe("arg-src")
+            expect(changes.variableSourceAssociations?.added).toHaveLength(1)
+        })
+
+        it("throws for non-existent source", () => {
+            const { engine } = buildFixture()
+            expect(() =>
+                engine.addVariableSourceAssociation("no-src", "var-p-src")
+            ).toThrow(/does not exist/)
+        })
+
+        it("throws for non-existent variable", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-va2",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            expect(() =>
+                engine.addVariableSourceAssociation("src-va2", "no-var")
+            ).toThrow(/does not exist/)
+        })
+    })
+
+    describe("removeVariableSourceAssociation", () => {
+        it("removes an existing association", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rva",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result: assoc } = engine.addVariableSourceAssociation(
+                "src-rva",
+                "var-p-src"
+            )
+            const { result, changes } = engine.removeVariableSourceAssociation(
+                assoc.id
+            )
+            expect(result?.id).toBe(assoc.id)
+            expect(changes.variableSourceAssociations?.removed).toHaveLength(1)
+        })
+
+        it("returns undefined for non-existent association", () => {
+            const { engine } = buildFixture()
+            const { result } = engine.removeVariableSourceAssociation("no-such")
+            expect(result).toBeUndefined()
+        })
+
+        it("removes orphaned source when last association is removed", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-orphan",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result: assoc } = engine.addVariableSourceAssociation(
+                "src-orphan",
+                "var-p-src"
+            )
+            const { changes } = engine.removeVariableSourceAssociation(assoc.id)
+            expect(changes.sources?.removed).toHaveLength(1)
+            expect(changes.sources?.removed[0].id).toBe("src-orphan")
+            expect(engine.getSource("src-orphan")).toBeUndefined()
+        })
+    })
+
+    describe("addExpressionSourceAssociation", () => {
+        it("creates an association with all fields", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-ea",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result } = engine.addExpressionSourceAssociation(
+                "src-ea",
+                "expr-p",
+                "premise-src"
+            )
+            expect(result.sourceId).toBe("src-ea")
+            expect(result.expressionId).toBe("expr-p")
+            expect(result.premiseId).toBe("premise-src")
+            expect(result.checksum).toBeTruthy()
+        })
+
+        it("throws for non-existent source", () => {
+            const { engine } = buildFixture()
+            expect(() =>
+                engine.addExpressionSourceAssociation(
+                    "no-src",
+                    "expr-p",
+                    "premise-src"
+                )
+            ).toThrow(/does not exist/)
+        })
+
+        it("throws for non-existent premise", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-ea2",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            expect(() =>
+                engine.addExpressionSourceAssociation(
+                    "src-ea2",
+                    "expr-p",
+                    "no-premise"
+                )
+            ).toThrow(/does not exist/)
+        })
+
+        it("throws for non-existent expression in premise", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-ea3",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            expect(() =>
+                engine.addExpressionSourceAssociation(
+                    "src-ea3",
+                    "no-expr",
+                    "premise-src"
+                )
+            ).toThrow(/does not exist/)
+        })
+    })
+
+    describe("removeExpressionSourceAssociation", () => {
+        it("removes an existing association", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rea",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result: assoc } = engine.addExpressionSourceAssociation(
+                "src-rea",
+                "expr-p",
+                "premise-src"
+            )
+            const { result } = engine.removeExpressionSourceAssociation(
+                assoc.id
+            )
+            expect(result?.id).toBe(assoc.id)
+        })
+
+        it("returns undefined for non-existent association", () => {
+            const { engine } = buildFixture()
+            const { result } =
+                engine.removeExpressionSourceAssociation("no-such")
+            expect(result).toBeUndefined()
+        })
+    })
+
+    describe("query methods", () => {
+        it("getSources returns all sources", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-q1",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addSource({
+                id: "src-q2",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            expect(engine.getSources()).toHaveLength(2)
+        })
+
+        it("getAssociationsForSource returns variable and expression associations", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-afs",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-afs", "var-p-src")
+            engine.addExpressionSourceAssociation(
+                "src-afs",
+                "expr-p",
+                "premise-src"
+            )
+            const assocs = engine.getAssociationsForSource("src-afs")
+            expect(assocs.variable).toHaveLength(1)
+            expect(assocs.expression).toHaveLength(1)
+        })
+
+        it("getAssociationsForVariable returns variable associations", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-afv",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-afv", "var-p-src")
+            expect(engine.getAssociationsForVariable("var-p-src")).toHaveLength(
+                1
+            )
+        })
+
+        it("getAssociationsForExpression returns expression associations", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-afe",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addExpressionSourceAssociation(
+                "src-afe",
+                "expr-p",
+                "premise-src"
+            )
+            expect(engine.getAssociationsForExpression("expr-p")).toHaveLength(
+                1
+            )
+        })
+
+        it("getAllVariableSourceAssociations returns all", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-gv",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-gv", "var-p-src")
+            engine.addVariableSourceAssociation("src-gv", "var-q-src")
+            expect(engine.getAllVariableSourceAssociations()).toHaveLength(2)
+        })
+
+        it("getAllExpressionSourceAssociations returns all", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-ge",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addExpressionSourceAssociation(
+                "src-ge",
+                "expr-p",
+                "premise-src"
+            )
+            engine.addExpressionSourceAssociation(
+                "src-ge",
+                "expr-q",
+                "premise-src"
+            )
+            expect(engine.getAllExpressionSourceAssociations()).toHaveLength(2)
+        })
+    })
+
+    // ------------------------------------------------------------------
+    // Task 11: snapshot / fromSnapshot / rollback with sources
+    // ------------------------------------------------------------------
+
+    describe("snapshot and restore with sources", () => {
+        it("snapshot includes source data", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-snap",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-snap", "var-p-src")
+            const snap = engine.snapshot()
+            expect(snap.sources).toBeDefined()
+            expect(snap.sources!.sources).toHaveLength(1)
+            expect(snap.sources!.variableSourceAssociations).toHaveLength(1)
+        })
+
+        it("fromSnapshot restores sources", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-fs",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-fs", "var-p-src")
+            const snap = engine.snapshot()
+            const restored = ArgumentEngine.fromSnapshot(snap)
+            expect(restored.getSources()).toHaveLength(1)
+            expect(restored.getSource("src-fs")).toBeDefined()
+            expect(
+                restored.getAssociationsForVariable("var-p-src")
+            ).toHaveLength(1)
+        })
+
+        it("rollback restores sources", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rb",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const snap = engine.snapshot()
+            engine.removeSource("src-rb")
+            expect(engine.getSource("src-rb")).toBeUndefined()
+            engine.rollback(snap)
+            expect(engine.getSource("src-rb")).toBeDefined()
+        })
+
+        it("getSnapshot populates source records", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rs",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-rs", "var-p-src")
+            engine.addExpressionSourceAssociation(
+                "src-rs",
+                "expr-p",
+                "premise-src"
+            )
+            const reactive = engine.getSnapshot()
+            expect(Object.keys(reactive.sources)).toHaveLength(1)
+            expect(
+                Object.keys(reactive.variableSourceAssociations)
+            ).toHaveLength(1)
+            expect(
+                Object.keys(reactive.expressionSourceAssociations)
+            ).toHaveLength(1)
+        })
+    })
+
+    // ------------------------------------------------------------------
+    // Task 12: PremiseEngine source convenience methods
+    // ------------------------------------------------------------------
+
+    describe("PremiseEngine.addExpressionSourceAssociation", () => {
+        it("fills premiseId automatically", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-pe",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result } = pm.addExpressionSourceAssociation(
+                "src-pe",
+                "expr-p"
+            )
+            expect(result.premiseId).toBe("premise-src")
+            expect(result.expressionId).toBe("expr-p")
+            expect(result.sourceId).toBe("src-pe")
+            expect(result.checksum).toBeTruthy()
+        })
+
+        it("throws for non-existent expression", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-pe2",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            expect(() =>
+                pm.addExpressionSourceAssociation("src-pe2", "no-expr")
+            ).toThrow(/does not exist/)
+        })
+    })
+
+    describe("PremiseEngine.removeExpressionSourceAssociation", () => {
+        it("delegates to sourceManager", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-pe-rm",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            const { result: assoc } = pm.addExpressionSourceAssociation(
+                "src-pe-rm",
+                "expr-p"
+            )
+            const { result } = pm.removeExpressionSourceAssociation(assoc.id)
+            expect(result?.id).toBe(assoc.id)
+        })
+    })
+
+    describe("PremiseEngine.getSourceAssociationsForExpression", () => {
+        it("returns associations for expression", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-pe-g",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            pm.addExpressionSourceAssociation("src-pe-g", "expr-p")
+            const assocs = pm.getSourceAssociationsForExpression("expr-p")
+            expect(assocs).toHaveLength(1)
+            expect(assocs[0].expressionId).toBe("expr-p")
+        })
+    })
+
+    describe("removeExpression cascades source associations", () => {
+        it("removes expression-source association when expression is removed", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-re",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            pm.addExpressionSourceAssociation("src-re", "expr-p")
+            // Also add a variable assoc to keep the source alive
+            engine.addVariableSourceAssociation("src-re", "var-p-src")
+
+            const { changes } = pm.removeExpression("expr-p", true)
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                1
+            )
+            // Source survives because variable association still references it
+            expect(engine.getSource("src-re")).toBeDefined()
+        })
+
+        it("removes orphaned source when expression is the only association", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-re-orphan",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            pm.addExpressionSourceAssociation("src-re-orphan", "expr-p")
+
+            const { changes } = pm.removeExpression("expr-p", true)
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                1
+            )
+            expect(changes.sources?.removed).toHaveLength(1)
+            expect(changes.sources?.removed[0].id).toBe("src-re-orphan")
+            expect(engine.getSource("src-re-orphan")).toBeUndefined()
+        })
+
+        it("cascades for subtree deletion — associations on descendants removed", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-st",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            // Associate source with both child expressions
+            pm.addExpressionSourceAssociation("src-st", "expr-p")
+            pm.addExpressionSourceAssociation("src-st", "expr-q")
+
+            // Remove the parent "and" with deleteSubtree=true
+            const { changes } = pm.removeExpression("expr-and", true)
+            // Both child associations should be removed
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                2
+            )
+            // Source becomes orphaned
+            expect(changes.sources?.removed).toHaveLength(1)
+        })
+
+        it("cascades for operator collapse — associations on collapsed expressions removed", () => {
+            // Build a fresh fixture: and(P, Q) — remove P, which collapses
+            // and to Q (operator collapse since only 1 child remains).
+            const colArg: Omit<TCoreArgument, "checksum"> = {
+                id: "arg-collapse",
+                version: 1,
+            }
+            const eng = new ArgumentEngine(colArg)
+            eng.addVariable({
+                id: "v-p",
+                symbol: "P",
+                argumentId: "arg-collapse",
+                argumentVersion: 1,
+            })
+            eng.addVariable({
+                id: "v-q",
+                symbol: "Q",
+                argumentId: "arg-collapse",
+                argumentVersion: 1,
+            })
+            const { result: pm2 } = eng.createPremiseWithId("pm-col")
+            pm2.addExpression({
+                id: "op-and",
+                argumentId: "arg-collapse",
+                argumentVersion: 1,
+                premiseId: "pm-col",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+            })
+            pm2.addExpression({
+                id: "ve-p",
+                argumentId: "arg-collapse",
+                argumentVersion: 1,
+                premiseId: "pm-col",
+                type: "variable",
+                variableId: "v-p",
+                parentId: "op-and",
+                position: 0,
+            })
+            pm2.addExpression({
+                id: "ve-q",
+                argumentId: "arg-collapse",
+                argumentVersion: 1,
+                premiseId: "pm-col",
+                type: "variable",
+                variableId: "v-q",
+                parentId: "op-and",
+                position: 1,
+            })
+
+            eng.addSource({
+                id: "s-col",
+                argumentId: "arg-collapse",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            // Associate source with the "and" operator
+            pm2.addExpressionSourceAssociation("s-col", "op-and")
+
+            // Remove P (non-subtree). This triggers operator collapse of "and"
+            // because only Q remains — "and" is deleted and Q is promoted.
+            const { changes } = pm2.removeExpression("ve-p", false)
+
+            // The "and" operator was collapsed, so its source association should be removed
+            const removedAssocs =
+                changes.expressionSourceAssociations?.removed ?? []
+            expect(removedAssocs.length).toBeGreaterThanOrEqual(1)
+            expect(removedAssocs.some((a) => a.expressionId === "op-and")).toBe(
+                true
+            )
+        })
+    })
+
+    // ------------------------------------------------------------------
+    // Task 13: ArgumentEngine cascades
+    // ------------------------------------------------------------------
+
+    describe("removeVariable cascades source cleanup", () => {
+        it("removes variable-source associations", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rv",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-rv", "var-p-src")
+            // Keep source alive with another association
+            engine.addVariableSourceAssociation("src-rv", "var-q-src")
+
+            const { changes } = engine.removeVariable("var-p-src")
+            expect(changes.variableSourceAssociations?.removed).toHaveLength(1)
+            expect(
+                changes.variableSourceAssociations?.removed[0].variableId
+            ).toBe("var-p-src")
+            // Source survives because Q association still exists
+            expect(engine.getSource("src-rv")).toBeDefined()
+        })
+
+        it("removes orphaned source when variable is the only association", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rv-orphan",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-rv-orphan", "var-p-src")
+
+            const { changes } = engine.removeVariable("var-p-src")
+            expect(changes.variableSourceAssociations?.removed).toHaveLength(1)
+            expect(changes.sources?.removed).toHaveLength(1)
+            expect(changes.sources?.removed[0].id).toBe("src-rv-orphan")
+        })
+
+        it("transitively removes expression-source associations via PremiseEngine", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-rv-expr",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            // Associate source with the expression for var-p
+            pm.addExpressionSourceAssociation("src-rv-expr", "expr-p")
+
+            const { changes } = engine.removeVariable("var-p-src")
+            // The expression for var-p was deleted, cascading its source association
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                1
+            )
+            // Source becomes orphaned
+            expect(changes.sources?.removed).toHaveLength(1)
+        })
+
+        it("changeset includes all removed source associations and orphaned sources", () => {
+            const { engine, pm } = buildFixture()
+            engine.addSource({
+                id: "src-rv-all",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addVariableSourceAssociation("src-rv-all", "var-p-src")
+            pm.addExpressionSourceAssociation("src-rv-all", "expr-p")
+
+            const { changes } = engine.removeVariable("var-p-src")
+            // Both associations removed
+            expect(changes.variableSourceAssociations?.removed).toHaveLength(1)
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                1
+            )
+            // Source orphaned and removed
+            expect(changes.sources?.removed).toHaveLength(1)
+        })
+    })
+
+    describe("removePremise cascades source cleanup", () => {
+        it("removes expression-source associations for premise expressions", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rp",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addExpressionSourceAssociation(
+                "src-rp",
+                "expr-p",
+                "premise-src"
+            )
+            // Keep source alive with a variable association
+            engine.addVariableSourceAssociation("src-rp", "var-p-src")
+
+            const { changes } = engine.removePremise("premise-src")
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                1
+            )
+            // Source survives because variable association still exists
+            expect(engine.getSource("src-rp")).toBeDefined()
+        })
+
+        it("removes orphaned sources when premise is removed", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rp-orphan",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addExpressionSourceAssociation(
+                "src-rp-orphan",
+                "expr-p",
+                "premise-src"
+            )
+
+            const { changes } = engine.removePremise("premise-src")
+            expect(changes.expressionSourceAssociations?.removed).toHaveLength(
+                1
+            )
+            expect(changes.sources?.removed).toHaveLength(1)
+            expect(changes.sources?.removed[0].id).toBe("src-rp-orphan")
+        })
+
+        it("changeset from removePremise includes all expression-source associations and orphaned sources", () => {
+            const { engine } = buildFixture()
+            engine.addSource({
+                id: "src-rp-all",
+                argumentId: "arg-src",
+                argumentVersion: 1,
+                checksum: "",
+            })
+            engine.addExpressionSourceAssociation(
+                "src-rp-all",
+                "expr-p",
+                "premise-src"
+            )
+            engine.addExpressionSourceAssociation(
+                "src-rp-all",
+                "expr-q",
+                "premise-src"
+            )
+
+            const { changes } = engine.removePremise("premise-src")
+            // Both expression associations removed (for expr-p and expr-q)
+            // Note: expr-and also removed but has no association
+            expect(
+                (changes.expressionSourceAssociations?.removed ?? []).length
+            ).toBe(2)
+            // Source orphaned
+            expect(changes.sources?.removed).toHaveLength(1)
+        })
+    })
+})

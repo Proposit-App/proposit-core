@@ -40,7 +40,7 @@ export interface TPremiseCrud<
     createPremise(
         extras?: Record<string, unknown>
     ): TCoreMutationResult<
-        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        PremiseEngine<TArg, TPremise, TExpr, TVar, TSource>,
         TExpr,
         TVar,
         TPremise,
@@ -60,7 +60,7 @@ export interface TPremiseCrud<
         id: string,
         extras?: Record<string, unknown>
     ): TCoreMutationResult<
-        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        PremiseEngine<TArg, TPremise, TExpr, TVar, TSource>,
         TExpr,
         TVar,
         TPremise,
@@ -91,7 +91,7 @@ export interface TPremiseCrud<
      */
     getPremise(
         premiseId: string
-    ): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined
+    ): PremiseEngine<TArg, TPremise, TExpr, TVar, TSource> | undefined
     /**
      * Returns `true` if a premise with the given ID exists.
      *
@@ -110,7 +110,7 @@ export interface TPremiseCrud<
      *
      * @returns An array of PremiseEngine instances.
      */
-    listPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[]
+    listPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar, TSource>[]
     /**
      * Returns the PremiseEngine containing the given expression, or
      * `undefined`.
@@ -120,7 +120,7 @@ export interface TPremiseCrud<
      */
     findPremiseByExpressionId(
         expressionId: string
-    ): PremiseEngine<TArg, TPremise, TExpr, TVar> | undefined
+    ): PremiseEngine<TArg, TPremise, TExpr, TVar, TSource> | undefined
 }
 
 /**
@@ -303,7 +303,7 @@ export interface TArgumentRoleState<
      * @returns The conclusion PremiseEngine, or `undefined`.
      */
     getConclusionPremise():
-        | PremiseEngine<TArg, TPremise, TExpr, TVar>
+        | PremiseEngine<TArg, TPremise, TExpr, TVar, TSource>
         | undefined
     /**
      * Returns all supporting premises (derived: inference premises that are
@@ -311,7 +311,13 @@ export interface TArgumentRoleState<
      *
      * @returns An array of supporting PremiseEngine instances.
      */
-    listSupportingPremises(): PremiseEngine<TArg, TPremise, TExpr, TVar>[]
+    listSupportingPremises(): PremiseEngine<
+        TArg,
+        TPremise,
+        TExpr,
+        TVar,
+        TSource
+    >[]
     /**
      * Designates a premise as the argument's conclusion.
      *
@@ -427,14 +433,14 @@ export interface TArgumentLifecycle<
      *
      * @returns The engine snapshot.
      */
-    snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
+    snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar, TSource>
     /**
      * Restores the engine to a previously captured snapshot state.
      *
      * @param snapshot - The snapshot to restore from.
      */
     rollback(
-        snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
+        snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar, TSource>
     ): void
 }
 
