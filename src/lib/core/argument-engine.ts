@@ -122,6 +122,7 @@ export class ArgumentEngine<
         argument: true,
         variables: true,
         roles: true,
+        sources: true,
         premiseIds: new Set<string>(),
         allPremises: true,
     }
@@ -184,6 +185,7 @@ export class ArgumentEngine<
             !dirty.argument &&
             !dirty.variables &&
             !dirty.roles &&
+            !dirty.sources &&
             dirty.premiseIds.size === 0 &&
             !dirty.allPremises
         ) {
@@ -229,21 +231,26 @@ export class ArgumentEngine<
             }
         }
 
-        const sourcesRecord: Record<string, TSource> = {}
-        for (const s of this.sourceManager.getSources()) {
-            sourcesRecord[s.id] = s
-        }
-        const varAssocRecord: Record<string, TCoreVariableSourceAssociation> =
-            {}
-        for (const a of this.sourceManager.getAllVariableSourceAssociations()) {
-            varAssocRecord[a.id] = a
-        }
-        const exprAssocRecord: Record<
-            string,
-            TCoreExpressionSourceAssociation
-        > = {}
-        for (const a of this.sourceManager.getAllExpressionSourceAssociations()) {
-            exprAssocRecord[a.id] = a
+        let sourcesRecord: Record<string, TSource>
+        let varAssocRecord: Record<string, TCoreVariableSourceAssociation>
+        let exprAssocRecord: Record<string, TCoreExpressionSourceAssociation>
+        if (dirty.sources || !prev) {
+            sourcesRecord = {}
+            for (const s of this.sourceManager.getSources()) {
+                sourcesRecord[s.id] = s
+            }
+            varAssocRecord = {}
+            for (const a of this.sourceManager.getAllVariableSourceAssociations()) {
+                varAssocRecord[a.id] = a
+            }
+            exprAssocRecord = {}
+            for (const a of this.sourceManager.getAllExpressionSourceAssociations()) {
+                exprAssocRecord[a.id] = a
+            }
+        } else {
+            sourcesRecord = prev.sources
+            varAssocRecord = prev.variableSourceAssociations
+            exprAssocRecord = prev.expressionSourceAssociations
         }
 
         const snapshot: TReactiveSnapshot<
@@ -267,6 +274,7 @@ export class ArgumentEngine<
             argument: false,
             variables: false,
             roles: false,
+            sources: false,
             premiseIds: new Set(),
             allPremises: false,
         }
@@ -342,6 +350,13 @@ export class ArgumentEngine<
             ]) {
                 this.reactiveDirty.premiseIds.add(p.id)
             }
+        }
+        if (
+            changes.sources ||
+            changes.variableSourceAssociations ||
+            changes.expressionSourceAssociations
+        ) {
+            this.reactiveDirty.sources = true
         }
     }
 
@@ -858,6 +873,11 @@ export class ArgumentEngine<
                 `Source argumentId "${source.argumentId}" does not match engine argument ID "${this.argument.id}".`
             )
         }
+        if (source.argumentVersion !== this.argument.version) {
+            throw new Error(
+                `Source argumentVersion ${source.argumentVersion} does not match engine argument version ${this.argument.version}.`
+            )
+        }
         const fields =
             this.checksumConfig?.sourceFields ??
             DEFAULT_CHECKSUM_CONFIG.sourceFields!
@@ -981,34 +1001,33 @@ export class ArgumentEngine<
         TArg,
         TSource
     > {
-        try {
-            const removalResult =
-                this.sourceManager.removeVariableSourceAssociation(
-                    associationId
-                )
-            const collector = new ChangeCollector<
-                TExpr,
-                TVar,
-                TPremise,
-                TArg,
-                TSource
-            >()
-            for (const assoc of removalResult.removedVariableAssociations) {
-                collector.removedVariableSourceAssociation(assoc)
-            }
-            for (const orphan of removalResult.removedOrphanSources) {
-                collector.removedSource(orphan)
-            }
-            this.markDirty()
-            const changes = collector.toChangeset()
-            this.markReactiveDirty(changes)
-            this.notifySubscribers()
-            return {
-                result: removalResult.removedVariableAssociations[0],
-                changes,
-            }
-        } catch {
+        const allVarAssocs =
+            this.sourceManager.getAllVariableSourceAssociations()
+        if (!allVarAssocs.some((a) => a.id === associationId)) {
             return { result: undefined, changes: {} }
+        }
+        const removalResult =
+            this.sourceManager.removeVariableSourceAssociation(associationId)
+        const collector = new ChangeCollector<
+            TExpr,
+            TVar,
+            TPremise,
+            TArg,
+            TSource
+        >()
+        for (const assoc of removalResult.removedVariableAssociations) {
+            collector.removedVariableSourceAssociation(assoc)
+        }
+        for (const orphan of removalResult.removedOrphanSources) {
+            collector.removedSource(orphan)
+        }
+        this.markDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
+        return {
+            result: removalResult.removedVariableAssociations[0],
+            changes,
         }
     }
 
@@ -1081,34 +1100,33 @@ export class ArgumentEngine<
         TArg,
         TSource
     > {
-        try {
-            const removalResult =
-                this.sourceManager.removeExpressionSourceAssociation(
-                    associationId
-                )
-            const collector = new ChangeCollector<
-                TExpr,
-                TVar,
-                TPremise,
-                TArg,
-                TSource
-            >()
-            for (const assoc of removalResult.removedExpressionAssociations) {
-                collector.removedExpressionSourceAssociation(assoc)
-            }
-            for (const orphan of removalResult.removedOrphanSources) {
-                collector.removedSource(orphan)
-            }
-            this.markDirty()
-            const changes = collector.toChangeset()
-            this.markReactiveDirty(changes)
-            this.notifySubscribers()
-            return {
-                result: removalResult.removedExpressionAssociations[0],
-                changes,
-            }
-        } catch {
+        const allExprAssocs =
+            this.sourceManager.getAllExpressionSourceAssociations()
+        if (!allExprAssocs.some((a) => a.id === associationId)) {
             return { result: undefined, changes: {} }
+        }
+        const removalResult =
+            this.sourceManager.removeExpressionSourceAssociation(associationId)
+        const collector = new ChangeCollector<
+            TExpr,
+            TVar,
+            TPremise,
+            TArg,
+            TSource
+        >()
+        for (const assoc of removalResult.removedExpressionAssociations) {
+            collector.removedExpressionSourceAssociation(assoc)
+        }
+        for (const orphan of removalResult.removedOrphanSources) {
+            collector.removedSource(orphan)
+        }
+        this.markDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
+        return {
+            result: removalResult.removedExpressionAssociations[0],
+            changes,
         }
     }
 
@@ -1188,6 +1206,12 @@ export class ArgumentEngine<
         for (const v of snapshot.variables.variables) {
             engine.addVariable(v)
         }
+        // Restore source manager (before premises, so PremiseEngines get the correct reference)
+        if (snapshot.sources) {
+            engine.sourceManager = SourceManager.fromSnapshot<TSource>(
+                snapshot.sources
+            )
+        }
         // Restore premises using PremiseEngine.fromSnapshot
         for (const premiseSnap of snapshot.premises) {
             const pe = PremiseEngine.fromSnapshot<
@@ -1212,12 +1236,6 @@ export class ArgumentEngine<
         }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
         engine.conclusionPremiseId = snapshot.conclusionPremiseId
-        // Restore source manager
-        if (snapshot.sources) {
-            engine.sourceManager = SourceManager.fromSnapshot<TSource>(
-                snapshot.sources
-            )
-        }
         return engine
     }
 
@@ -1358,6 +1376,7 @@ export class ArgumentEngine<
             argument: true,
             variables: true,
             roles: true,
+            sources: true,
             premiseIds: new Set(),
             allPremises: true,
         }

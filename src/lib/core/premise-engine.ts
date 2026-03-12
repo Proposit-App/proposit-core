@@ -726,32 +726,31 @@ export class PremiseEngine<
         if (!this.sourceManager) {
             return { result: undefined, changes: {} }
         }
-        try {
-            const removalResult =
-                this.sourceManager.removeExpressionSourceAssociation(
-                    associationId
-                )
-            const collector = new ChangeCollector<
-                TExpr,
-                TVar,
-                TPremise,
-                TArg,
-                TSource
-            >()
-            for (const assoc of removalResult.removedExpressionAssociations) {
-                collector.removedExpressionSourceAssociation(assoc)
-            }
-            for (const orphan of removalResult.removedOrphanSources) {
-                collector.removedSource(orphan)
-            }
-            this.markDirty()
-            this.onMutate?.()
-            return {
-                result: removalResult.removedExpressionAssociations[0],
-                changes: collector.toChangeset(),
-            }
-        } catch {
+        const allExprAssocs =
+            this.sourceManager.getAllExpressionSourceAssociations()
+        if (!allExprAssocs.some((a) => a.id === associationId)) {
             return { result: undefined, changes: {} }
+        }
+        const removalResult =
+            this.sourceManager.removeExpressionSourceAssociation(associationId)
+        const collector = new ChangeCollector<
+            TExpr,
+            TVar,
+            TPremise,
+            TArg,
+            TSource
+        >()
+        for (const assoc of removalResult.removedExpressionAssociations) {
+            collector.removedExpressionSourceAssociation(assoc)
+        }
+        for (const orphan of removalResult.removedOrphanSources) {
+            collector.removedSource(orphan)
+        }
+        this.markDirty()
+        this.onMutate?.()
+        return {
+            result: removalResult.removedExpressionAssociations[0],
+            changes: collector.toChangeset(),
         }
     }
 
