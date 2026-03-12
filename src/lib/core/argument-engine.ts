@@ -1589,6 +1589,54 @@ export class ArgumentEngine<
             issues.push(...premiseValidation.issues)
         }
 
+        // Source validation
+        for (const assoc of this.sourceManager.getAllVariableSourceAssociations()) {
+            if (!this.variables.hasVariable(assoc.variableId)) {
+                issues.push(
+                    makeErrorIssue({
+                        code: "SOURCE_VARIABLE_ASSOCIATION_INVALID_VARIABLE",
+                        message: `Variable-source association "${assoc.id}" references non-existent variable "${assoc.variableId}".`,
+                    })
+                )
+            }
+        }
+
+        for (const assoc of this.sourceManager.getAllExpressionSourceAssociations()) {
+            const premise = this.premises.get(assoc.premiseId)
+            if (!premise) {
+                issues.push(
+                    makeErrorIssue({
+                        code: "SOURCE_EXPRESSION_ASSOCIATION_INVALID_PREMISE",
+                        message: `Expression-source association "${assoc.id}" references non-existent premise "${assoc.premiseId}".`,
+                    })
+                )
+            } else if (!premise.getExpression(assoc.expressionId)) {
+                issues.push(
+                    makeErrorIssue({
+                        code: "SOURCE_EXPRESSION_ASSOCIATION_INVALID_EXPRESSION",
+                        message: `Expression-source association "${assoc.id}" references non-existent expression "${assoc.expressionId}" in premise "${assoc.premiseId}".`,
+                    })
+                )
+            }
+        }
+
+        // Orphaned sources (warning, not error)
+        for (const source of this.sourceManager.getSources()) {
+            const assocs = this.sourceManager.getAssociationsForSource(
+                source.id
+            )
+            if (
+                assocs.variable.length === 0 &&
+                assocs.expression.length === 0
+            ) {
+                issues.push({
+                    severity: "warning" as const,
+                    code: "SOURCE_ORPHANED",
+                    message: `Source "${source.id}" has no associations.`,
+                })
+            }
+        }
+
         return makeValidationResult(issues)
     }
 

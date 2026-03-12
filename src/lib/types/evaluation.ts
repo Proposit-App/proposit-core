@@ -33,6 +33,10 @@ export type TCoreValidationCode =
     | "EXPR_VARIABLE_UNDECLARED"
     | "ASSIGNMENT_MISSING_VARIABLE"
     | "ASSIGNMENT_UNKNOWN_VARIABLE"
+    | "SOURCE_VARIABLE_ASSOCIATION_INVALID_VARIABLE"
+    | "SOURCE_EXPRESSION_ASSOCIATION_INVALID_PREMISE"
+    | "SOURCE_EXPRESSION_ASSOCIATION_INVALID_EXPRESSION"
+    | "SOURCE_ORPHANED"
 
 export interface TCoreValidationIssue {
     /** Machine-readable issue code for callers/tests/UI logic. */

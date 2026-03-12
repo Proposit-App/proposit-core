@@ -9397,6 +9397,7 @@ describe("wrapExpression", () => {
 // ---------------------------------------------------------------------------
 
 import { SourceManager } from "../src/lib/core/source-manager"
+import type { TSourceManagerSnapshot } from "../src/lib/core/source-manager"
 import type {
     TCoreSource,
     TCoreVariableSourceAssociation,
@@ -11091,5 +11092,210 @@ describe("diffArguments sources", () => {
                 { field: "label", before: "Alpha", after: "Beta" },
             ])
         })
+    })
+})
+
+// ---------------------------------------------------------------------------
+// validateEvaluability source checks
+// ---------------------------------------------------------------------------
+
+describe("validateEvaluability source checks", () => {
+    const VAL_ARG: Omit<TCoreArgument, "checksum"> = {
+        id: "arg-val-src",
+        version: 1,
+    }
+
+    /** Builds a valid engine with a premise containing a variable expression. */
+    function buildValidEngine() {
+        const engine = new ArgumentEngine(VAL_ARG)
+        engine.addVariable({
+            id: "var-val",
+            symbol: "P",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+        })
+        const { result: pm } = engine.createPremiseWithId("premise-val")
+        pm.addExpression({
+            id: "expr-val",
+            type: "variable",
+            variableId: "var-val",
+            parentId: null,
+            position: 0,
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            premiseId: "premise-val",
+        })
+        return engine
+    }
+
+    it("reports SOURCE_ORPHANED warning for a source with no associations", () => {
+        const engine = buildValidEngine()
+        const snap = engine.snapshot()
+
+        const orphanedSource: TCoreSource = {
+            id: "src-orphan",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "checksum-orphan",
+        }
+        const corruptedSources: TSourceManagerSnapshot = {
+            sources: [orphanedSource],
+            variableSourceAssociations: [],
+            expressionSourceAssociations: [],
+        }
+        const corruptedSnap = { ...snap, sources: corruptedSources }
+        const restored = ArgumentEngine.fromSnapshot(corruptedSnap)
+
+        const result = restored.validateEvaluability()
+        expect(result.ok).toBe(true) // warnings don't fail ok
+        expect(result.issues.some((i) => i.code === "SOURCE_ORPHANED")).toBe(
+            true
+        )
+        const issue = result.issues.find((i) => i.code === "SOURCE_ORPHANED")!
+        expect(issue.severity).toBe("warning")
+        expect(issue.message).toContain("src-orphan")
+    })
+
+    it("reports SOURCE_VARIABLE_ASSOCIATION_INVALID_VARIABLE error for association referencing nonexistent variable", () => {
+        const engine = buildValidEngine()
+        const snap = engine.snapshot()
+
+        const src: TCoreSource = {
+            id: "src-bad-var",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "checksum-src-bad-var",
+        }
+        const badAssoc: TCoreVariableSourceAssociation = {
+            id: "assoc-bad-var",
+            sourceId: "src-bad-var",
+            variableId: "nonexistent-variable",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "checksum-assoc-bad-var",
+        }
+        const corruptedSources: TSourceManagerSnapshot = {
+            sources: [src],
+            variableSourceAssociations: [badAssoc],
+            expressionSourceAssociations: [],
+        }
+        const corruptedSnap = { ...snap, sources: corruptedSources }
+        const restored = ArgumentEngine.fromSnapshot(corruptedSnap)
+
+        const result = restored.validateEvaluability()
+        expect(result.ok).toBe(false)
+        const issue = result.issues.find(
+            (i) => i.code === "SOURCE_VARIABLE_ASSOCIATION_INVALID_VARIABLE"
+        )
+        expect(issue).toBeDefined()
+        expect(issue!.severity).toBe("error")
+        expect(issue!.message).toContain("assoc-bad-var")
+        expect(issue!.message).toContain("nonexistent-variable")
+    })
+
+    it("reports SOURCE_EXPRESSION_ASSOCIATION_INVALID_EXPRESSION error for association referencing nonexistent expression", () => {
+        const engine = buildValidEngine()
+        const snap = engine.snapshot()
+
+        const src: TCoreSource = {
+            id: "src-bad-expr",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "checksum-src-bad-expr",
+        }
+        const badAssoc: TCoreExpressionSourceAssociation = {
+            id: "assoc-bad-expr",
+            sourceId: "src-bad-expr",
+            expressionId: "nonexistent-expr",
+            premiseId: "premise-val",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "checksum-assoc-bad-expr",
+        }
+        const corruptedSources: TSourceManagerSnapshot = {
+            sources: [src],
+            variableSourceAssociations: [],
+            expressionSourceAssociations: [badAssoc],
+        }
+        const corruptedSnap = { ...snap, sources: corruptedSources }
+        const restored = ArgumentEngine.fromSnapshot(corruptedSnap)
+
+        const result = restored.validateEvaluability()
+        expect(result.ok).toBe(false)
+        const issue = result.issues.find(
+            (i) => i.code === "SOURCE_EXPRESSION_ASSOCIATION_INVALID_EXPRESSION"
+        )
+        expect(issue).toBeDefined()
+        expect(issue!.severity).toBe("error")
+        expect(issue!.message).toContain("assoc-bad-expr")
+        expect(issue!.message).toContain("nonexistent-expr")
+        expect(issue!.message).toContain("premise-val")
+    })
+
+    it("reports SOURCE_EXPRESSION_ASSOCIATION_INVALID_PREMISE error for association referencing nonexistent premise", () => {
+        const engine = buildValidEngine()
+        const snap = engine.snapshot()
+
+        const src: TCoreSource = {
+            id: "src-bad-premise",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "checksum-src-bad-premise",
+        }
+        const badAssoc: TCoreExpressionSourceAssociation = {
+            id: "assoc-bad-premise",
+            sourceId: "src-bad-premise",
+            expressionId: "expr-val",
+            premiseId: "nonexistent-premise",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "checksum-assoc-bad-premise",
+        }
+        const corruptedSources: TSourceManagerSnapshot = {
+            sources: [src],
+            variableSourceAssociations: [],
+            expressionSourceAssociations: [badAssoc],
+        }
+        const corruptedSnap = { ...snap, sources: corruptedSources }
+        const restored = ArgumentEngine.fromSnapshot(corruptedSnap)
+
+        const result = restored.validateEvaluability()
+        expect(result.ok).toBe(false)
+        const issue = result.issues.find(
+            (i) => i.code === "SOURCE_EXPRESSION_ASSOCIATION_INVALID_PREMISE"
+        )
+        expect(issue).toBeDefined()
+        expect(issue!.severity).toBe("error")
+        expect(issue!.message).toContain("assoc-bad-premise")
+        expect(issue!.message).toContain("nonexistent-premise")
+    })
+
+    it("produces no source-related issues for a properly wired engine", () => {
+        const engine = buildValidEngine()
+
+        engine.addSource({
+            id: "src-valid",
+            argumentId: VAL_ARG.id,
+            argumentVersion: VAL_ARG.version,
+            checksum: "",
+        })
+        engine.addVariableSourceAssociation("src-valid", "var-val")
+        engine.addExpressionSourceAssociation(
+            "src-valid",
+            "expr-val",
+            "premise-val"
+        )
+
+        const result = engine.validateEvaluability()
+        const sourceCodes = [
+            "SOURCE_ORPHANED",
+            "SOURCE_VARIABLE_ASSOCIATION_INVALID_VARIABLE",
+            "SOURCE_EXPRESSION_ASSOCIATION_INVALID_PREMISE",
+            "SOURCE_EXPRESSION_ASSOCIATION_INVALID_EXPRESSION",
+        ]
+        const sourceIssues = result.issues.filter((i) =>
+            sourceCodes.includes(i.code)
+        )
+        expect(sourceIssues).toHaveLength(0)
     })
 })
