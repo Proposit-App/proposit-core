@@ -329,6 +329,44 @@ $CLI "$ARG" latest analysis delete --file scenario-b.json --confirm
 $CLI "$ARG" latest analysis list
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 9m. SOURCES — add, list, show, link, unlink, remove
+# ─────────────────────────────────────────────────────────────────────────────
+section "9m. sources"
+
+SRC1=$($CLI "$ARG" latest sources add --url "https://example.com/rain-study")
+echo "SRC1=$SRC1"
+
+SRC2=$($CLI "$ARG" latest sources add --url "https://example.com/weather-data")
+echo "SRC2=$SRC2"
+
+$CLI "$ARG" latest sources list
+$CLI "$ARG" latest sources list --json
+$CLI "$ARG" latest sources show "$SRC1"
+$CLI "$ARG" latest sources show "$SRC1" --json
+
+# Link source to variable
+$CLI "$ARG" latest sources link-variable "$SRC1" "$R"
+# Link source to expression
+$CLI "$ARG" latest sources link-expression "$SRC1" "$ROOT1"
+
+$CLI "$ARG" latest sources show "$SRC1"
+$CLI "$ARG" latest sources show "$SRC1" --json
+
+# Unlink the variable association
+ASSOC_ID=$($CLI "$ARG" latest sources show "$SRC1" --json | node -e "
+const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+console.log(d.associations.variable[0].id);
+")
+echo "Unlinking ASSOC_ID=$ASSOC_ID"
+$CLI "$ARG" latest sources unlink "$ASSOC_ID"
+
+# Remove source
+$CLI "$ARG" latest sources remove "$SRC2"
+echo "SRC2 removed"
+
+$CLI "$ARG" latest sources list
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 10. PUBLISH and VERSION SELECTORS
 # ─────────────────────────────────────────────────────────────────────────────
 section "10. publish and version selectors"
