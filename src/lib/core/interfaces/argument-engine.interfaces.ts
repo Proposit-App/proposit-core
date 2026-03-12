@@ -205,7 +205,6 @@ export interface TVariableManagement<
  */
 export interface TArgumentExpressionQueries<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
-    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Returns an expression by ID from any premise, or `undefined` if not

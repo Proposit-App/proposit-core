@@ -4,8 +4,6 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
     TOptionalChecksum,
-} from "../../schemata/index.js"
-import type {
     TCoreSource,
     TCoreVariableSourceAssociation,
     TCoreExpressionSourceAssociation,
