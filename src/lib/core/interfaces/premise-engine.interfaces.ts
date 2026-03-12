@@ -3,6 +3,8 @@ import type {
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
+    TCoreSource,
+    TCoreExpressionSourceAssociation,
 } from "../../schemata/index.js"
 import type {
     TCoreExpressionAssignment,
@@ -25,6 +27,7 @@ export interface TExpressionMutations<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Adds an expression to this premise's tree.
@@ -44,7 +47,7 @@ export interface TExpressionMutations<
      */
     addExpression(
         expression: TExpressionInput<TExpr>
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Adds an expression as the last child of the given parent, with
      * position computed automatically. If `parentId` is `null`, the
@@ -60,7 +63,7 @@ export interface TExpressionMutations<
     appendExpression(
         parentId: string | null,
         expression: TExpressionWithoutPosition<TExpr>
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Adds an expression immediately before or after an existing sibling,
      * with position computed automatically.
@@ -78,7 +81,7 @@ export interface TExpressionMutations<
         siblingId: string,
         relativePosition: "before" | "after",
         expression: TExpressionWithoutPosition<TExpr>
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Updates mutable fields of an existing expression. Only `position`,
      * `variableId`, and `operator` may be updated.
@@ -92,7 +95,7 @@ export interface TExpressionMutations<
     updateExpression(
         expressionId: string,
         updates: TExpressionUpdate
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Removes an expression and optionally its entire descendant subtree,
      * then collapses any ancestor operators with fewer than two children.
@@ -104,7 +107,7 @@ export interface TExpressionMutations<
     removeExpression(
         expressionId: string,
         deleteSubtree: boolean
-    ): TCoreMutationResult<TExpr | undefined, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr | undefined, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Splices a new expression between existing nodes in the tree. The new
      * expression inherits the tree slot of the anchor node
@@ -124,7 +127,7 @@ export interface TExpressionMutations<
         expression: TExpressionInput<TExpr>,
         leftNodeId?: string,
         rightNodeId?: string
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Wraps an existing expression with a new operator and a new sibling
      * in a single atomic operation.
@@ -148,7 +151,55 @@ export interface TExpressionMutations<
         newSibling: TExpressionWithoutPosition<TExpr>,
         leftNodeId?: string,
         rightNodeId?: string
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource>
+    /**
+     * Creates an association between a source and this expression within
+     * this premise.
+     *
+     * @param sourceId - The ID of the source.
+     * @param expressionId - The ID of the expression to associate.
+     * @returns The created association and changeset.
+     * @throws If the source does not exist.
+     * @throws If the expression does not exist in this premise.
+     * @throws If the association already exists.
+     */
+    addExpressionSourceAssociation(
+        sourceId: string,
+        expressionId: string
+    ): TCoreMutationResult<
+        TCoreExpressionSourceAssociation,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg,
+        TSource
+    >
+    /**
+     * Removes an expression–source association by its own ID.
+     *
+     * @param associationId - The ID of the association to remove.
+     * @returns The removed association, or `undefined` if not found.
+     */
+    removeExpressionSourceAssociation(
+        associationId: string
+    ): TCoreMutationResult<
+        TCoreExpressionSourceAssociation | undefined,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg,
+        TSource
+    >
+    /**
+     * Returns all source associations for a given expression in this
+     * premise.
+     *
+     * @param expressionId - The expression ID to look up.
+     * @returns An array of expression–source associations.
+     */
+    getSourceAssociationsForExpression(
+        expressionId: string
+    ): TCoreExpressionSourceAssociation[]
 }
 
 /**
@@ -203,6 +254,7 @@ export interface TVariableReferences<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Returns all argument-level variables (from the shared
@@ -231,7 +283,7 @@ export interface TVariableReferences<
      */
     deleteExpressionsUsingVariable(
         variableId: string
-    ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg, TSource>
 }
 
 /**
@@ -327,6 +379,7 @@ export interface TPremiseIdentity<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Returns the premise ID.
@@ -356,5 +409,5 @@ export interface TPremiseIdentity<
      */
     setExtras(
         extras: Record<string, unknown>
-    ): TCoreMutationResult<Record<string, unknown>, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<Record<string, unknown>, TExpr, TVar, TPremise, TArg, TSource>
 }

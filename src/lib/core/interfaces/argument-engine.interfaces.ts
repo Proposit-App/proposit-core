@@ -4,6 +4,7 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
     TOptionalChecksum,
+    TCoreSource,
 } from "../../schemata/index.js"
 import type {
     TCoreArgumentEvaluationOptions,
@@ -27,6 +28,7 @@ export interface TPremiseCrud<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Creates a new premise with an auto-generated UUID and registers it
@@ -42,7 +44,8 @@ export interface TPremiseCrud<
         TExpr,
         TVar,
         TPremise,
-        TArg
+        TArg,
+        TSource
     >
     /**
      * Creates a premise with a caller-supplied ID and registers it with
@@ -61,7 +64,8 @@ export interface TPremiseCrud<
         TExpr,
         TVar,
         TPremise,
-        TArg
+        TArg,
+        TSource
     >
     /**
      * Removes a premise and clears any role assignments that reference it.
@@ -71,7 +75,7 @@ export interface TPremiseCrud<
      */
     removePremise(
         premiseId: string
-    ): TCoreMutationResult<TPremise | undefined, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TPremise | undefined, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Returns the premise with the given ID, or `undefined` if not found.
      *
@@ -120,6 +124,7 @@ export interface TVariableManagement<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Registers a propositional variable for use across all premises.
@@ -132,7 +137,7 @@ export interface TVariableManagement<
      */
     addVariable(
         variable: TOptionalChecksum<TVar>
-    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Updates fields on an existing variable. Since all premises share the
      * same VariableManager, the update is immediately visible everywhere.
@@ -145,7 +150,7 @@ export interface TVariableManagement<
     updateVariable(
         variableId: string,
         updates: { symbol?: string }
-    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Removes a variable and cascade-deletes all expressions referencing it
      * across every premise (including subtrees and operator collapse).
@@ -155,7 +160,7 @@ export interface TVariableManagement<
      */
     removeVariable(
         variableId: string
-    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Returns the variable with the given ID, or `undefined` if not found.
      *
@@ -200,6 +205,7 @@ export interface TVariableManagement<
  */
 export interface TArgumentExpressionQueries<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Returns an expression by ID from any premise, or `undefined` if not
@@ -269,6 +275,7 @@ export interface TArgumentRoleState<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Returns the conclusion premise, or `undefined` if none is set.
@@ -294,7 +301,7 @@ export interface TArgumentRoleState<
      */
     setConclusionPremise(
         premiseId: string
-    ): TCoreMutationResult<TCoreArgumentRoleState, TExpr, TVar, TPremise, TArg>
+    ): TCoreMutationResult<TCoreArgumentRoleState, TExpr, TVar, TPremise, TArg, TSource>
     /**
      * Clears the conclusion designation.
      *
@@ -305,7 +312,8 @@ export interface TArgumentRoleState<
         TExpr,
         TVar,
         TPremise,
-        TArg
+        TArg,
+        TSource
     >
     /**
      * Returns the current role assignments (conclusion premise ID only;
@@ -372,6 +380,7 @@ export interface TArgumentLifecycle<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
 > {
     /**
      * Registers a listener that is called after every mutation.
@@ -385,7 +394,7 @@ export interface TArgumentLifecycle<
      *
      * @returns The reactive snapshot.
      */
-    getSnapshot(): TReactiveSnapshot<TArg, TPremise, TExpr, TVar>
+    getSnapshot(): TReactiveSnapshot<TArg, TPremise, TExpr, TVar, TSource>
     /**
      * Returns a serializable snapshot of the full engine state.
      *
