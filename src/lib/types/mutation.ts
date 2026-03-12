@@ -7,6 +7,11 @@ import type {
     TCoreArgument,
     TCoreArgumentRoleState,
 } from "../schemata/argument.js"
+import type {
+    TCoreSource,
+    TCoreVariableSourceAssociation,
+    TCoreExpressionSourceAssociation,
+} from "../schemata/index.js"
 /** Added/modified/removed entities of one type within a single mutation. */
 export interface TCoreEntityChanges<T> {
     added: T[]
@@ -23,6 +28,7 @@ export interface TCoreChangeset<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TPremise extends TCorePremise = TCorePremise,
     TArg extends TCoreArgument = TCoreArgument,
+    TSource extends TCoreSource = TCoreSource,
 > {
     expressions?: TCoreEntityChanges<TExpr>
     variables?: TCoreEntityChanges<TVar>
@@ -31,6 +37,9 @@ export interface TCoreChangeset<
     roles?: TCoreArgumentRoleState
     /** New argument metadata, present only when argument changed. */
     argument?: TArg
+    sources?: TCoreEntityChanges<TSource>
+    variableSourceAssociations?: TCoreEntityChanges<TCoreVariableSourceAssociation>
+    expressionSourceAssociations?: TCoreEntityChanges<TCoreExpressionSourceAssociation>
 }
 
 /**
@@ -44,7 +53,8 @@ export interface TCoreMutationResult<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TPremise extends TCorePremise = TCorePremise,
     TArg extends TCoreArgument = TCoreArgument,
+    TSource extends TCoreSource = TCoreSource,
 > {
     result: T
-    changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    changes: TCoreChangeset<TExpr, TVar, TPremise, TArg, TSource>
 }

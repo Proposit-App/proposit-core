@@ -7,6 +7,11 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
 } from "../schemata/propositional.js"
+import type {
+    TCoreSource,
+    TCoreVariableSourceAssociation,
+    TCoreExpressionSourceAssociation,
+} from "../schemata/source.js"
 import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
 
 function emptyEntityChanges<T>(): TCoreEntityChanges<T> {
@@ -31,12 +36,18 @@ export class ChangeCollector<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TPremise extends TCorePremise = TCorePremise,
     TArg extends TCoreArgument = TCoreArgument,
+    TSource extends TCoreSource = TCoreSource,
 > {
     private expressions: TCoreEntityChanges<TExpr> = emptyEntityChanges()
     private variables: TCoreEntityChanges<TVar> = emptyEntityChanges()
     private premises: TCoreEntityChanges<TPremise> = emptyEntityChanges()
     private roles: TCoreArgumentRoleState | undefined = undefined
     private argument: TArg | undefined = undefined
+    private sources: TCoreEntityChanges<TSource> = emptyEntityChanges()
+    private variableSourceAssociations: TCoreEntityChanges<TCoreVariableSourceAssociation> =
+        emptyEntityChanges()
+    private expressionSourceAssociations: TCoreEntityChanges<TCoreExpressionSourceAssociation> =
+        emptyEntityChanges()
 
     addedExpression(expr: TExpr): void {
         this.expressions.added.push(expr)
@@ -73,14 +84,48 @@ export class ChangeCollector<
         this.argument = argument
     }
 
-    toChangeset(): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
-        const cs: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
+    addedSource(source: TSource): void {
+        this.sources.added.push(source)
+    }
+    removedSource(source: TSource): void {
+        this.sources.removed.push(source)
+    }
+
+    addedVariableSourceAssociation(
+        assoc: TCoreVariableSourceAssociation
+    ): void {
+        this.variableSourceAssociations.added.push(assoc)
+    }
+    removedVariableSourceAssociation(
+        assoc: TCoreVariableSourceAssociation
+    ): void {
+        this.variableSourceAssociations.removed.push(assoc)
+    }
+
+    addedExpressionSourceAssociation(
+        assoc: TCoreExpressionSourceAssociation
+    ): void {
+        this.expressionSourceAssociations.added.push(assoc)
+    }
+    removedExpressionSourceAssociation(
+        assoc: TCoreExpressionSourceAssociation
+    ): void {
+        this.expressionSourceAssociations.removed.push(assoc)
+    }
+
+    toChangeset(): TCoreChangeset<TExpr, TVar, TPremise, TArg, TSource> {
+        const cs: TCoreChangeset<TExpr, TVar, TPremise, TArg, TSource> = {}
         if (!isEntityChangesEmpty(this.expressions))
             cs.expressions = this.expressions
         if (!isEntityChangesEmpty(this.variables)) cs.variables = this.variables
         if (!isEntityChangesEmpty(this.premises)) cs.premises = this.premises
         if (this.roles !== undefined) cs.roles = this.roles
         if (this.argument !== undefined) cs.argument = this.argument
+        if (!isEntityChangesEmpty(this.sources)) cs.sources = this.sources
+        if (!isEntityChangesEmpty(this.variableSourceAssociations))
+            cs.variableSourceAssociations = this.variableSourceAssociations
+        if (!isEntityChangesEmpty(this.expressionSourceAssociations))
+            cs.expressionSourceAssociations = this.expressionSourceAssociations
         return cs
     }
 }

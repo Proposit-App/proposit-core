@@ -289,5 +289,8 @@ export function diffArguments<
             rolesA.conclusionPremiseId,
             rolesB.conclusionPremiseId
         ),
+        sources: { added: [], removed: [], modified: [] },
+        variableSourceAssociations: { added: [], removed: [], modified: [] },
+        expressionSourceAssociations: { added: [], removed: [], modified: [] },
     }
 }

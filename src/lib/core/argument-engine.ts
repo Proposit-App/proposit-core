@@ -212,6 +212,9 @@ export class ArgumentEngine<
             variables,
             premises,
             roles,
+            sources: {},
+            variableSourceAssociations: {},
+            expressionSourceAssociations: {},
         }
 
         this.cachedReactiveSnapshot = snapshot

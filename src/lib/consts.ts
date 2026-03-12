@@ -16,6 +16,22 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
     premiseFields: new Set(["id", "argumentId", "argumentVersion"]),
     argumentFields: new Set(["id", "version"]),
     roleFields: new Set(["conclusionPremiseId"]),
+    sourceFields: new Set(["id", "argumentId", "argumentVersion"]),
+    variableSourceAssociationFields: new Set([
+        "id",
+        "sourceId",
+        "variableId",
+        "argumentId",
+        "argumentVersion",
+    ]),
+    expressionSourceAssociationFields: new Set([
+        "id",
+        "sourceId",
+        "expressionId",
+        "premiseId",
+        "argumentId",
+        "argumentVersion",
+    ]),
 }
 
 /**
@@ -31,6 +47,9 @@ export function createChecksumConfig(
         "premiseFields",
         "argumentFields",
         "roleFields",
+        "sourceFields",
+        "variableSourceAssociationFields",
+        "expressionSourceAssociationFields",
     ] as const
     const result: TCoreChecksumConfig = {}
     for (const key of keys) {

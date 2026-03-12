@@ -3,6 +3,9 @@ import type {
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
+    TCoreSource,
+    TCoreVariableSourceAssociation,
+    TCoreExpressionSourceAssociation,
 } from "../schemata/index.js"
 
 /** A single field-level change on an entity. */
@@ -54,11 +57,15 @@ export interface TCoreArgumentDiff<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TSource extends TCoreSource = TCoreSource,
 > {
     argument: TCoreEntityFieldDiff<TArg>
     variables: TCoreEntitySetDiff<TVar>
     premises: TCorePremiseSetDiff<TPremise, TExpr>
     roles: TCoreRoleDiff
+    sources: TCoreEntitySetDiff<TSource>
+    variableSourceAssociations: TCoreEntitySetDiff<TCoreVariableSourceAssociation>
+    expressionSourceAssociations: TCoreEntitySetDiff<TCoreExpressionSourceAssociation>
 }
 
 /** A comparator receives two matched objects and returns field-level changes. */
@@ -73,9 +80,13 @@ export interface TCoreDiffOptions<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TSource extends TCoreSource = TCoreSource,
 > {
     compareArgument?: TCoreFieldComparator<TArg>
     compareVariable?: TCoreFieldComparator<TVar>
     comparePremise?: TCoreFieldComparator<TPremise>
     compareExpression?: TCoreFieldComparator<TExpr>
+    compareSource?: TCoreFieldComparator<TSource>
+    compareVariableSourceAssociation?: TCoreFieldComparator<TCoreVariableSourceAssociation>
+    compareExpressionSourceAssociation?: TCoreFieldComparator<TCoreExpressionSourceAssociation>
 }
