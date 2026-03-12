@@ -8873,7 +8873,7 @@ describe("ArgumentEngine reactive store integration", () => {
             snapshots.push(engine.getSnapshot())
         })
 
-        const _snap0 = engine.getSnapshot()
+        engine.getSnapshot()
 
         // Mutation 1: add variable
         engine.addVariable({
