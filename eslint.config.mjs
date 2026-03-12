@@ -124,6 +124,7 @@ export default defineConfig([
     globalIgnores([
         "dist/",
         "node_modules/",
+        ".untracked/",
         "src/lib/core/parser/formula-gen.js",
     ]),
 ])

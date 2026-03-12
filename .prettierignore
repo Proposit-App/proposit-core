@@ -1,4 +1,5 @@
 dist/
 coverage/
 .claude/
+.untracked/
 src/lib/core/parser/formula-gen.js
