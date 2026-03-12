@@ -9391,3 +9391,583 @@ describe("wrapExpression", () => {
         expect(pm.getRootExpressionId()).toBe("expr-p")
     })
 })
+
+// ---------------------------------------------------------------------------
+// SourceManager
+// ---------------------------------------------------------------------------
+
+import { SourceManager } from "../src/lib/core/source-manager"
+import type {
+    TCoreSource,
+    TCoreVariableSourceAssociation,
+    TCoreExpressionSourceAssociation,
+} from "../src/lib/schemata/source"
+
+function makeSource(id: string): TCoreSource {
+    return {
+        id,
+        argumentId: "arg-1",
+        argumentVersion: 1,
+        checksum: `checksum-${id}`,
+    }
+}
+
+function makeVarAssoc(
+    id: string,
+    sourceId: string,
+    variableId: string
+): TCoreVariableSourceAssociation {
+    return {
+        id,
+        sourceId,
+        variableId,
+        argumentId: "arg-1",
+        argumentVersion: 1,
+        checksum: `checksum-${id}`,
+    }
+}
+
+function makeExprAssoc(
+    id: string,
+    sourceId: string,
+    expressionId: string,
+    premiseId = "premise-1"
+): TCoreExpressionSourceAssociation {
+    return {
+        id,
+        sourceId,
+        expressionId,
+        premiseId,
+        argumentId: "arg-1",
+        argumentVersion: 1,
+        checksum: `checksum-${id}`,
+    }
+}
+
+describe("SourceManager", () => {
+    // -------------------------------------------------------------------
+    // addSource / getSource / getSources
+    // -------------------------------------------------------------------
+
+    describe("addSource", () => {
+        it("adds a source and retrieves it by ID", () => {
+            const sm = new SourceManager()
+            const src = makeSource("s1")
+            sm.addSource(src)
+            expect(sm.getSource("s1")).toEqual(src)
+        })
+
+        it("throws on duplicate source ID", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            expect(() => sm.addSource(makeSource("s1"))).toThrow(
+                'Source with ID "s1" already exists.'
+            )
+        })
+    })
+
+    describe("getSources", () => {
+        it("returns sources sorted by ID", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s-b"))
+            sm.addSource(makeSource("s-a"))
+            sm.addSource(makeSource("s-c"))
+            const ids = sm.getSources().map((s) => s.id)
+            expect(ids).toEqual(["s-a", "s-b", "s-c"])
+        })
+
+        it("returns empty array when no sources exist", () => {
+            const sm = new SourceManager()
+            expect(sm.getSources()).toEqual([])
+        })
+    })
+
+    describe("getSource", () => {
+        it("returns undefined for non-existent ID", () => {
+            const sm = new SourceManager()
+            expect(sm.getSource("nope")).toBeUndefined()
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // removeSource
+    // -------------------------------------------------------------------
+
+    describe("removeSource", () => {
+        it("removes source with no associations", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            const result = sm.removeSource("s1")
+            expect(sm.getSource("s1")).toBeUndefined()
+            expect(result.removedVariableAssociations).toEqual([])
+            expect(result.removedExpressionAssociations).toEqual([])
+            expect(result.removedOrphanSources).toEqual([])
+        })
+
+        it("cascades deletion of variable associations", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            const assoc = makeVarAssoc("va1", "s1", "var-1")
+            sm.addVariableSourceAssociation(assoc)
+            const result = sm.removeSource("s1")
+            expect(result.removedVariableAssociations).toEqual([assoc])
+            expect(sm.getAllVariableSourceAssociations()).toEqual([])
+            expect(sm.getAssociationsForVariable("var-1")).toEqual([])
+        })
+
+        it("cascades deletion of expression associations", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            const assoc = makeExprAssoc("ea1", "s1", "expr-1")
+            sm.addExpressionSourceAssociation(assoc)
+            const result = sm.removeSource("s1")
+            expect(result.removedExpressionAssociations).toEqual([assoc])
+            expect(sm.getAllExpressionSourceAssociations()).toEqual([])
+            expect(sm.getAssociationsForExpression("expr-1")).toEqual([])
+        })
+
+        it("throws for non-existent source", () => {
+            const sm = new SourceManager()
+            expect(() => sm.removeSource("nope")).toThrow(
+                'Source "nope" does not exist.'
+            )
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // addVariableSourceAssociation / removeVariableSourceAssociation
+    // -------------------------------------------------------------------
+
+    describe("addVariableSourceAssociation", () => {
+        it("adds an association and indexes it", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            const assoc = makeVarAssoc("va1", "s1", "var-1")
+            sm.addVariableSourceAssociation(assoc)
+            expect(sm.getAssociationsForVariable("var-1")).toEqual([assoc])
+            expect(sm.getAssociationsForSource("s1").variable).toEqual([assoc])
+        })
+
+        it("throws on duplicate association ID", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            expect(() =>
+                sm.addVariableSourceAssociation(
+                    makeVarAssoc("va1", "s1", "var-2")
+                )
+            ).toThrow(
+                'Variable-source association with ID "va1" already exists.'
+            )
+        })
+
+        it("throws when referenced source does not exist", () => {
+            const sm = new SourceManager()
+            expect(() =>
+                sm.addVariableSourceAssociation(
+                    makeVarAssoc("va1", "s-missing", "var-1")
+                )
+            ).toThrow('Source "s-missing" does not exist.')
+        })
+    })
+
+    describe("removeVariableSourceAssociation", () => {
+        it("removes association and updates indices", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            const result = sm.removeVariableSourceAssociation("va1")
+            expect(result.removedVariableAssociations).toHaveLength(1)
+            expect(result.removedVariableAssociations[0].id).toBe("va1")
+            expect(sm.getAssociationsForVariable("var-1")).toEqual([])
+        })
+
+        it("throws for non-existent association", () => {
+            const sm = new SourceManager()
+            expect(() => sm.removeVariableSourceAssociation("nope")).toThrow(
+                'Variable-source association "nope" does not exist.'
+            )
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // addExpressionSourceAssociation / removeExpressionSourceAssociation
+    // -------------------------------------------------------------------
+
+    describe("addExpressionSourceAssociation", () => {
+        it("adds an association and indexes it", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            const assoc = makeExprAssoc("ea1", "s1", "expr-1")
+            sm.addExpressionSourceAssociation(assoc)
+            expect(sm.getAssociationsForExpression("expr-1")).toEqual([assoc])
+            expect(sm.getAssociationsForSource("s1").expression).toEqual([
+                assoc,
+            ])
+        })
+
+        it("throws on duplicate association ID", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            expect(() =>
+                sm.addExpressionSourceAssociation(
+                    makeExprAssoc("ea1", "s1", "expr-2")
+                )
+            ).toThrow(
+                'Expression-source association with ID "ea1" already exists.'
+            )
+        })
+
+        it("throws when referenced source does not exist", () => {
+            const sm = new SourceManager()
+            expect(() =>
+                sm.addExpressionSourceAssociation(
+                    makeExprAssoc("ea1", "s-missing", "expr-1")
+                )
+            ).toThrow('Source "s-missing" does not exist.')
+        })
+    })
+
+    describe("removeExpressionSourceAssociation", () => {
+        it("removes association and updates indices", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            const result = sm.removeExpressionSourceAssociation("ea1")
+            expect(result.removedExpressionAssociations).toHaveLength(1)
+            expect(result.removedExpressionAssociations[0].id).toBe("ea1")
+            expect(sm.getAssociationsForExpression("expr-1")).toEqual([])
+        })
+
+        it("throws for non-existent association", () => {
+            const sm = new SourceManager()
+            expect(() => sm.removeExpressionSourceAssociation("nope")).toThrow(
+                'Expression-source association "nope" does not exist.'
+            )
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // Bulk removal: removeAssociationsForVariable
+    // -------------------------------------------------------------------
+
+    describe("removeAssociationsForVariable", () => {
+        it("removes all variable associations for a variable", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addSource(makeSource("s2"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va2", "s2", "var-1"))
+            // Also add a var-2 association to s1 so s1 survives
+            sm.addVariableSourceAssociation(makeVarAssoc("va3", "s1", "var-2"))
+
+            const result = sm.removeAssociationsForVariable("var-1")
+            expect(result.removedVariableAssociations).toHaveLength(2)
+            expect(sm.getAssociationsForVariable("var-1")).toEqual([])
+            // s1 still has va3, so it survives
+            expect(sm.getSource("s1")).toBeDefined()
+            // s2 had only va2 — now orphaned
+            expect(result.removedOrphanSources).toHaveLength(1)
+            expect(result.removedOrphanSources[0].id).toBe("s2")
+            expect(sm.getSource("s2")).toBeUndefined()
+        })
+
+        it("returns empty result for unknown variable", () => {
+            const sm = new SourceManager()
+            const result = sm.removeAssociationsForVariable("unknown")
+            expect(result.removedVariableAssociations).toEqual([])
+            expect(result.removedOrphanSources).toEqual([])
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // Bulk removal: removeAssociationsForExpression
+    // -------------------------------------------------------------------
+
+    describe("removeAssociationsForExpression", () => {
+        it("removes all expression associations for an expression", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addSource(makeSource("s2"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea2", "s2", "expr-1")
+            )
+            // Keep s1 alive via another association
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea3", "s1", "expr-2")
+            )
+
+            const result = sm.removeAssociationsForExpression("expr-1")
+            expect(result.removedExpressionAssociations).toHaveLength(2)
+            expect(sm.getAssociationsForExpression("expr-1")).toEqual([])
+            // s1 still has ea3
+            expect(sm.getSource("s1")).toBeDefined()
+            // s2 had only ea2 — now orphaned
+            expect(result.removedOrphanSources).toHaveLength(1)
+            expect(result.removedOrphanSources[0].id).toBe("s2")
+            expect(sm.getSource("s2")).toBeUndefined()
+        })
+
+        it("returns empty result for unknown expression", () => {
+            const sm = new SourceManager()
+            const result = sm.removeAssociationsForExpression("unknown")
+            expect(result.removedExpressionAssociations).toEqual([])
+            expect(result.removedOrphanSources).toEqual([])
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // Query methods
+    // -------------------------------------------------------------------
+
+    describe("getAssociationsForSource", () => {
+        it("returns both variable and expression associations", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            const va = makeVarAssoc("va1", "s1", "var-1")
+            const ea = makeExprAssoc("ea1", "s1", "expr-1")
+            sm.addVariableSourceAssociation(va)
+            sm.addExpressionSourceAssociation(ea)
+            const result = sm.getAssociationsForSource("s1")
+            expect(result.variable).toEqual([va])
+            expect(result.expression).toEqual([ea])
+        })
+
+        it("returns empty arrays for unknown source", () => {
+            const sm = new SourceManager()
+            const result = sm.getAssociationsForSource("unknown")
+            expect(result.variable).toEqual([])
+            expect(result.expression).toEqual([])
+        })
+    })
+
+    describe("getAllVariableSourceAssociations", () => {
+        it("returns all variable associations", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va2", "s1", "var-2"))
+            expect(sm.getAllVariableSourceAssociations()).toHaveLength(2)
+        })
+    })
+
+    describe("getAllExpressionSourceAssociations", () => {
+        it("returns all expression associations", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea2", "s1", "expr-2")
+            )
+            expect(sm.getAllExpressionSourceAssociations()).toHaveLength(2)
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // Orphan cleanup (Task 8)
+    // -------------------------------------------------------------------
+
+    describe("orphan cleanup", () => {
+        it("removes orphaned source when variable association removed", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            const result = sm.removeVariableSourceAssociation("va1")
+            expect(result.removedOrphanSources).toHaveLength(1)
+            expect(result.removedOrphanSources[0].id).toBe("s1")
+            expect(sm.getSource("s1")).toBeUndefined()
+        })
+
+        it("removes orphaned source when expression association removed", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            const result = sm.removeExpressionSourceAssociation("ea1")
+            expect(result.removedOrphanSources).toHaveLength(1)
+            expect(result.removedOrphanSources[0].id).toBe("s1")
+            expect(sm.getSource("s1")).toBeUndefined()
+        })
+
+        it("source with remaining associations survives removal", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va2", "s1", "var-2"))
+            const result = sm.removeVariableSourceAssociation("va1")
+            expect(result.removedOrphanSources).toEqual([])
+            expect(sm.getSource("s1")).toBeDefined()
+        })
+
+        it("source with mixed associations survives partial removal", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            // Remove variable association — expression association keeps source alive
+            const result = sm.removeVariableSourceAssociation("va1")
+            expect(result.removedOrphanSources).toEqual([])
+            expect(sm.getSource("s1")).toBeDefined()
+        })
+
+        it("removeAssociationsForVariable orphans multiple sources", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addSource(makeSource("s2"))
+            sm.addSource(makeSource("s3"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va2", "s2", "var-1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va3", "s3", "var-1"))
+            // s3 also used by another variable
+            sm.addVariableSourceAssociation(makeVarAssoc("va4", "s3", "var-2"))
+
+            const result = sm.removeAssociationsForVariable("var-1")
+            expect(result.removedVariableAssociations).toHaveLength(3)
+            // s1, s2 orphaned; s3 survives
+            const orphanIds = result.removedOrphanSources
+                .map((s) => s.id)
+                .sort()
+            expect(orphanIds).toEqual(["s1", "s2"])
+            expect(sm.getSource("s1")).toBeUndefined()
+            expect(sm.getSource("s2")).toBeUndefined()
+            expect(sm.getSource("s3")).toBeDefined()
+        })
+
+        it("removeAssociationsForExpression orphans multiple sources", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addSource(makeSource("s2"))
+            sm.addSource(makeSource("s3"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea2", "s2", "expr-1")
+            )
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea3", "s3", "expr-1")
+            )
+            // s3 also linked to another expression
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea4", "s3", "expr-2")
+            )
+
+            const result = sm.removeAssociationsForExpression("expr-1")
+            expect(result.removedExpressionAssociations).toHaveLength(3)
+            const orphanIds = result.removedOrphanSources
+                .map((s) => s.id)
+                .sort()
+            expect(orphanIds).toEqual(["s1", "s2"])
+            expect(sm.getSource("s1")).toBeUndefined()
+            expect(sm.getSource("s2")).toBeUndefined()
+            expect(sm.getSource("s3")).toBeDefined()
+        })
+    })
+
+    // -------------------------------------------------------------------
+    // Snapshot & restoration (Task 9)
+    // -------------------------------------------------------------------
+
+    describe("snapshot", () => {
+        it("returns all data sorted by ID", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s-b"))
+            sm.addSource(makeSource("s-a"))
+            sm.addVariableSourceAssociation(
+                makeVarAssoc("va-b", "s-b", "var-1")
+            )
+            sm.addVariableSourceAssociation(
+                makeVarAssoc("va-a", "s-a", "var-2")
+            )
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea-b", "s-b", "expr-1")
+            )
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea-a", "s-a", "expr-2")
+            )
+
+            const snap = sm.snapshot()
+            expect(snap.sources.map((s) => s.id)).toEqual(["s-a", "s-b"])
+            expect(snap.variableSourceAssociations.map((a) => a.id)).toEqual([
+                "va-a",
+                "va-b",
+            ])
+            expect(snap.expressionSourceAssociations.map((a) => a.id)).toEqual([
+                "ea-a",
+                "ea-b",
+            ])
+        })
+    })
+
+    describe("fromSnapshot", () => {
+        it("rebuilds with correct state and indices", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+
+            const restored = SourceManager.fromSnapshot(sm.snapshot())
+            expect(restored.getSource("s1")).toEqual(makeSource("s1"))
+            expect(restored.getAssociationsForVariable("var-1")).toHaveLength(1)
+            expect(
+                restored.getAssociationsForExpression("expr-1")
+            ).toHaveLength(1)
+            expect(
+                restored.getAssociationsForSource("s1").variable
+            ).toHaveLength(1)
+            expect(
+                restored.getAssociationsForSource("s1").expression
+            ).toHaveLength(1)
+        })
+
+        it("round-trip preserves all data", () => {
+            const sm = new SourceManager()
+            sm.addSource(makeSource("s1"))
+            sm.addSource(makeSource("s2"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va1", "s1", "var-1"))
+            sm.addVariableSourceAssociation(makeVarAssoc("va2", "s2", "var-2"))
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea1", "s1", "expr-1")
+            )
+            sm.addExpressionSourceAssociation(
+                makeExprAssoc("ea2", "s2", "expr-2")
+            )
+
+            const snap1 = sm.snapshot()
+            const restored = SourceManager.fromSnapshot(snap1)
+            const snap2 = restored.snapshot()
+            expect(snap2).toEqual(snap1)
+        })
+
+        it("restores orphaned source verbatim (no auto-cleanup)", () => {
+            // Construct a snapshot with an orphaned source (no associations)
+            const snapshot = {
+                sources: [makeSource("s-orphan"), makeSource("s-linked")],
+                variableSourceAssociations: [
+                    makeVarAssoc("va1", "s-linked", "var-1"),
+                ],
+                expressionSourceAssociations: [],
+            }
+            const restored = SourceManager.fromSnapshot(snapshot)
+            // The orphan should be present — fromSnapshot does not clean up
+            expect(restored.getSource("s-orphan")).toBeDefined()
+            expect(restored.getSource("s-linked")).toBeDefined()
+            expect(restored.getSources()).toHaveLength(2)
+        })
+    })
+})

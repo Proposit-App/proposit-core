@@ -13,6 +13,11 @@ export type { TPremiseEngineSnapshot } from "./core/premise-engine.js"
 export type * from "./core/interfaces/index.js"
 export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
 export type { TVariableManagerSnapshot } from "./core/variable-manager.js"
+export { SourceManager } from "./core/source-manager.js"
+export type {
+    TSourceManagerSnapshot,
+    TSourceRemovalResult,
+} from "./core/source-manager.js"
 export * from "./types/evaluation.js"
 export * from "./types/diff.js"
 export * from "./types/mutation.js"
