@@ -1417,6 +1417,19 @@ export class ArgumentEngine<
             checksumMap[pe.getId()] = pe.checksum()
         }
 
+        // Source checksums
+        for (const s of this.sourceManager.getSources()) {
+            checksumMap[s.id] = s.checksum
+        }
+
+        // Association checksums
+        for (const a of this.sourceManager.getAllVariableSourceAssociations()) {
+            checksumMap[a.id] = a.checksum
+        }
+        for (const a of this.sourceManager.getAllExpressionSourceAssociations()) {
+            checksumMap[a.id] = a.checksum
+        }
+
         return computeHash(canonicalSerialize(checksumMap))
     }
 

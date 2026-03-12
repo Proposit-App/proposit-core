@@ -11311,3 +11311,52 @@ describe("validateEvaluability source checks", () => {
         expect(sourceIssues).toHaveLength(0)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Argument checksum includes sources and associations
+// ---------------------------------------------------------------------------
+describe("Argument checksum includes sources", () => {
+    it("changes when a source is added", () => {
+        const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
+        const checksumBefore = engine.getArgument().checksum
+        engine.addSource({
+            id: "src-1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        const checksumAfter = engine.getArgument().checksum
+        expect(checksumAfter).not.toBe(checksumBefore)
+    })
+
+    it("changes when an association is added", () => {
+        const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
+        engine.addVariable({
+            id: "v-1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            symbol: "P",
+        })
+        engine.addSource({
+            id: "src-1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        const checksumBefore = engine.getArgument().checksum
+        engine.addVariableSourceAssociation("src-1", "v-1")
+        const checksumAfter = engine.getArgument().checksum
+        expect(checksumAfter).not.toBe(checksumBefore)
+    })
+
+    it("reverts when source is removed", () => {
+        const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
+        const checksumBefore = engine.getArgument().checksum
+        engine.addSource({
+            id: "src-1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+        })
+        engine.removeSource("src-1")
+        const checksumAfter = engine.getArgument().checksum
+        expect(checksumAfter).toBe(checksumBefore)
+    })
+})

@@ -3,6 +3,7 @@ import { Command } from "commander"
 import { hydrateEngine, persistEngine } from "../engine.js"
 import { errorExit, printJson, printLine } from "../output.js"
 import { readVersionMeta } from "../storage/arguments.js"
+import { deleteSourceDir } from "../storage/sources.js"
 
 async function assertNotPublished(
     argumentId: string,
@@ -70,6 +71,7 @@ export function registerSourceCommands(
 
             engine.removeSource(sourceId)
             await persistEngine(engine)
+            await deleteSourceDir(argumentId, version, sourceId)
             printLine("success")
         })
 
