@@ -1,1 +1,2 @@
-// IEEE citation extension — barrel exports added in Task 24.
+export * from "./references.js"
+export * from "./source.js"

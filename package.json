@@ -18,6 +18,10 @@
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
+        },
+        "./extensions/ieee": {
+            "types": "./dist/extensions/ieee/index.d.ts",
+            "import": "./dist/extensions/ieee/index.js"
         }
     },
     "bin": {
