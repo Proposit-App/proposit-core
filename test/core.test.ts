@@ -11052,8 +11052,20 @@ describe("diffArguments sources", () => {
 
         it("uses a custom compareSource comparator to detect field changes", () => {
             type TExtendedSource = TCoreSource & { label: string }
-            const engineA = new ArgumentEngine({ id: "arg-1", version: 1 })
-            const engineB = new ArgumentEngine({ id: "arg-1", version: 1 })
+            const engineA = new ArgumentEngine<
+                TCoreArgument,
+                TCorePremise,
+                TCorePropositionalExpression,
+                TCorePropositionalVariable,
+                TExtendedSource
+            >({ id: "arg-1", version: 1 })
+            const engineB = new ArgumentEngine<
+                TCoreArgument,
+                TCorePremise,
+                TCorePropositionalExpression,
+                TCorePropositionalVariable,
+                TExtendedSource
+            >({ id: "arg-1", version: 1 })
             const srcA: TExtendedSource = {
                 id: "src-ext",
                 argumentId: "arg-1",
