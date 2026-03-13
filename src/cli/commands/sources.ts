@@ -33,12 +33,8 @@ export function registerSourceCommands(
             "--id <source_id>",
             "Explicit source ID (default: generated UUID)"
         )
-        .action(async (opts: { url: string; id?: string }) => {
+        .action(async (_opts: { url: string; id?: string }) => {
             await assertNotPublished(argumentId, version)
-            const engine = await hydrateEngine(argumentId, version)
-
-            // Source entities now live in the global SourceLibrary.
-            // TODO: wire SourceLibrary into the CLI.
             errorExit(
                 "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
             )
@@ -48,12 +44,8 @@ export function registerSourceCommands(
     sources
         .command("remove <source_id>")
         .description("Remove a source and its associations")
-        .action(async (sourceId: string) => {
+        .action(async (_sourceId: string) => {
             await assertNotPublished(argumentId, version)
-            const engine = await hydrateEngine(argumentId, version)
-
-            // Source entities now live in the global SourceLibrary.
-            // TODO: wire SourceLibrary into the CLI.
             errorExit(
                 "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
             )
@@ -64,10 +56,7 @@ export function registerSourceCommands(
         .command("list")
         .description("List all sources")
         .option("--json", "Output as JSON")
-        .action(async (opts: { json?: boolean }) => {
-            const engine = await hydrateEngine(argumentId, version)
-            // Source entities now live in the global SourceLibrary.
-            // TODO: wire SourceLibrary into the CLI.
+        .action(async (_opts: { json?: boolean }) => {
             errorExit(
                 "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
             )
@@ -78,10 +67,7 @@ export function registerSourceCommands(
         .command("show <source_id>")
         .description("Show a source and its associations")
         .option("--json", "Output as JSON")
-        .action(async (sourceId: string, opts: { json?: boolean }) => {
-            const engine = await hydrateEngine(argumentId, version)
-            // Source entities now live in the global SourceLibrary.
-            // TODO: wire SourceLibrary into the CLI.
+        .action(async (_sourceId: string, _opts: { json?: boolean }) => {
             errorExit(
                 "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
             )

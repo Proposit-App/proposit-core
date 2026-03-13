@@ -9732,19 +9732,9 @@ describe("wrapExpression", () => {
 import { SourceManager } from "../src/lib/core/source-manager"
 import type { TSourceManagerSnapshot } from "../src/lib/core/source-manager"
 import type {
-    TCoreSource,
     TCoreVariableSourceAssociation,
     TCoreExpressionSourceAssociation,
 } from "../src/lib/schemata/source"
-
-function makeSource(id: string): TCoreSource {
-    return {
-        id,
-        version: 0,
-        frozen: false,
-        checksum: `checksum-${id}`,
-    }
-}
 
 function makeVarAssoc(
     id: string,
