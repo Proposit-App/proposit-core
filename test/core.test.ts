@@ -62,6 +62,7 @@ import type {
     TSourceLookup,
 } from "../src/lib/core/interfaces/library.interfaces"
 import { AssertionLibrary } from "../src/lib/core/assertion-library"
+import { SourceLibrary } from "../src/lib/core/source-library"
 
 type TVariableInput = Omit<TCorePropositionalVariable, "checksum">
 
@@ -11516,5 +11517,42 @@ describe("AssertionLibrary", () => {
             expect(restored.get("a1", 0)!.frozen).toBe(true)
             expect(restored.get("a1", 1)!.frozen).toBe(false)
         })
+    })
+})
+
+// ---------------------------------------------------------------------------
+// SourceLibrary
+// ---------------------------------------------------------------------------
+
+describe("SourceLibrary", () => {
+    function makeLibrary() {
+        return new SourceLibrary()
+    }
+
+    it("creates a source at version 0, unfrozen", () => {
+        const lib = makeLibrary()
+        const s = lib.create({ id: "s1" })
+        expect(s.version).toBe(0)
+        expect(s.frozen).toBe(false)
+        expect(s.checksum).toBeTruthy()
+    })
+
+    it("freeze creates next version", () => {
+        const lib = makeLibrary()
+        lib.create({ id: "s1" })
+        const { frozen, current } = lib.freeze("s1")
+        expect(frozen.version).toBe(0)
+        expect(frozen.frozen).toBe(true)
+        expect(current.version).toBe(1)
+        expect(current.frozen).toBe(false)
+    })
+
+    it("snapshot round-trips", () => {
+        const lib = makeLibrary()
+        lib.create({ id: "s1" })
+        lib.freeze("s1")
+        const restored = SourceLibrary.fromSnapshot(lib.snapshot())
+        expect(restored.get("s1", 0)!.frozen).toBe(true)
+        expect(restored.get("s1", 1)!.frozen).toBe(false)
     })
 })
