@@ -131,9 +131,25 @@ constructor(options?: { checksumConfig?: TCoreChecksumConfig })
 
 **Internal storage:** `Map<string, Map<number, TAssertion>>` (id → version → entity)
 
+**Freeze copy semantics:** `freeze()` performs a shallow spread (`{ ...entity, version: N+1, frozen: false }`) then recomputes the checksum. Extensions with nested objects get shallow-copied — deep cloning is the caller's responsibility if needed.
+
 ### SourceLibrary\<TSource\>
 
 Same API shape as `AssertionLibrary`, implementing `TSourceLookup<TSource>`.
+
+### Library Snapshot Types
+
+```typescript
+type TAssertionLibrarySnapshot<TAssertion extends TCoreAssertion = TCoreAssertion> = {
+    assertions: TAssertion[]  // all versions, flattened
+}
+
+type TSourceLibrarySnapshot<TSource extends TCoreSource = TCoreSource> = {
+    sources: TSource[]  // all versions, flattened
+}
+```
+
+Reconstructed into the `Map<string, Map<number, T>>` structure by `fromSnapshot` using each entity's `id` and `version` fields.
 
 ## ArgumentEngine Integration
 
@@ -156,6 +172,10 @@ class ArgumentEngine<
     )
 }
 ```
+
+### Generic Parameter Cascade
+
+`PremiseEngine` drops `TSource` from its generic parameters since `TSource` is removed from `TCoreChangeset` and `TCoreMutationResult`. `PremiseEngine` does not gain `TAssertion` — assertion validation is `ArgumentEngine`'s responsibility. `ChangeCollector` also drops `TSource`.
 
 ### Validation Behavior
 
@@ -181,9 +201,11 @@ class ArgumentEngine<
 - `snapshot()`, `fromSnapshot()`
 
 **Internal changes:**
-- `sourceToAssociations` index is lazily populated: `addVariableSourceAssociation` and `addExpressionSourceAssociation` create entries on demand (no prior `addSource` call needed).
+- `sourceToAssociations` index remains `Map<string, Set<string>>` keyed by `sourceId` alone (not a compound key with version). It is lazily populated: `addVariableSourceAssociation` and `addExpressionSourceAssociation` create entries on demand via `getOrCreate` (no prior `addSource` call needed).
 - `getAssociationsForSource(sourceId)` returns associations across all source versions for that ID. It does not accept a version parameter — callers can filter by `sourceVersion` if needed.
+- `SourceManager` constructor remains parameterless (no changes needed).
 - Return types for `removeAssociationsForVariable()` and `removeAssociationsForExpression()` simplified: return `{ removedVariableAssociations: TCoreVariableSourceAssociation[]; removedExpressionAssociations: TCoreExpressionSourceAssociation[] }` instead of `TSourceRemovalResult`.
+- `TSourceManagerSnapshot` drops the `sources` field — becomes `{ variableSourceAssociations: TCoreVariableSourceAssociation[]; expressionSourceAssociations: TCoreExpressionSourceAssociation[] }`.
 
 ### TSourceManagement Interface
 
@@ -213,7 +235,7 @@ updateVariable(variableId: string, updates: {
 }): TCoreMutationResult<...>
 ```
 
-When `assertionId` or `assertionVersion` are provided, the engine validates the new reference against the assertion library.
+`assertionId` and `assertionVersion` must be provided together (both or neither). Providing only one throws. When both are provided, the engine validates the new reference against the assertion library before applying the update.
 
 ## Changeset and Snapshot Updates
 
@@ -267,7 +289,8 @@ DEFAULT_CHECKSUM_CONFIG = {
 - `TCoreArgumentDiff` drops the `sources` field and the `TSource` generic parameter
 - `TCoreDiffOptions` drops `compareSource`
 - Association comparators updated to include `sourceVersion`
-- `diffArguments` drops source entity diffing; retains association diffing
+- `defaultCompareVariable` updated to compare `assertionId` and `assertionVersion` in addition to `symbol`
+- `diffArguments` drops source entity diffing; retains association diffing. Uses default generic parameters for `TSource` and `TAssertion` (no new generics needed on `diffArguments` itself)
 
 ## File Organization
 
@@ -278,7 +301,7 @@ DEFAULT_CHECKSUM_CONFIG = {
 | `src/lib/schemata/assertion.ts` | `CoreAssertionSchema`, `TCoreAssertion` |
 | `src/lib/core/assertion-library.ts` | `AssertionLibrary<T>` class |
 | `src/lib/core/source-library.ts` | `SourceLibrary<T>` class |
-| `src/lib/core/interfaces/library.interfaces.ts` | `TAssertionLookup`, `TSourceLookup` |
+| `src/lib/core/interfaces/library.interfaces.ts` | `TAssertionLookup`, `TSourceLookup`, `TAssertionLibrarySnapshot`, `TSourceLibrarySnapshot` |
 
 ### Modified Files
 
@@ -288,7 +311,8 @@ DEFAULT_CHECKSUM_CONFIG = {
 | `src/lib/schemata/propositional.ts` | Add assertionId/assertionVersion to variable schema |
 | `src/lib/schemata/index.ts` | Export assertion schema |
 | `src/lib/core/source-manager.ts` | Strip to association-only |
-| `src/lib/core/argument-engine.ts` | New constructor, validation, new generic param |
+| `src/lib/core/argument-engine.ts` | New constructor, validation, new `TAssertion` generic param |
+| `src/lib/core/premise-engine.ts` | Drop `TSource` generic parameter |
 | `src/lib/core/interfaces/source-management.interfaces.ts` | Remove source entity methods |
 | `src/lib/core/interfaces/index.ts` | Export library interfaces |
 | `src/lib/types/mutation.ts` | Drop sources from changeset |
