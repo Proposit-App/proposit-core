@@ -6,7 +6,6 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
     TOptionalChecksum,
-    TCoreSource,
     TCoreExpressionSourceAssociation,
 } from "../schemata/index.js"
 import { DefaultMap } from "../utils/default-map.js"
@@ -73,16 +72,15 @@ export class PremiseEngine<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
 >
     implements
-        TExpressionMutations<TArg, TPremise, TExpr, TVar, TSource>,
+        TExpressionMutations<TArg, TPremise, TExpr, TVar>,
         TExpressionQueries<TExpr>,
-        TVariableReferences<TArg, TPremise, TExpr, TVar, TSource>,
+        TVariableReferences<TArg, TPremise, TExpr, TVar>,
         TPremiseClassification,
         TPremiseEvaluation,
         TPremiseLifecycle<TPremise, TExpr>,
-        TPremiseIdentity<TArg, TPremise, TExpr, TVar, TSource>,
+        TPremiseIdentity<TArg, TPremise, TExpr, TVar>,
         TDisplayable,
         TChecksummable
 {
@@ -96,7 +94,7 @@ export class PremiseEngine<
     private checksumDirty = true
     private cachedChecksum: string | undefined
     private expressionIndex?: Map<string, string>
-    private sourceManager?: SourceManager<TSource>
+    private sourceManager?: SourceManager
     private onMutate?: () => void
 
     constructor(
@@ -105,7 +103,7 @@ export class PremiseEngine<
             argument: TOptionalChecksum<TArg>
             variables: VariableManager<TVar>
             expressionIndex?: Map<string, string>
-            sourceManager?: SourceManager<TSource>
+            sourceManager?: SourceManager
         },
         config?: TLogicEngineOptions
     ) {
@@ -126,19 +124,13 @@ export class PremiseEngine<
 
     public deleteExpressionsUsingVariable(
         variableId: string
-    ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg, TSource> {
+    ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg> {
         const expressionIds = this.expressionsByVariableId.get(variableId)
         if (expressionIds.size === 0) {
             return { result: [], changes: {} }
         }
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
 
         // Suppress onMutate during the loop to avoid redundant notifications
         const savedOnMutate = this.onMutate
@@ -162,11 +154,6 @@ export class PremiseEngine<
                     for (const a of changes.expressionSourceAssociations
                         .removed) {
                         collector.removedExpressionSourceAssociation(a)
-                    }
-                }
-                if (changes.sources) {
-                    for (const s of changes.sources.removed) {
-                        collector.removedSource(s)
                     }
                 }
             }
@@ -194,7 +181,7 @@ export class PremiseEngine<
 
     public addExpression(
         expression: TExpressionInput<TExpr>
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource> {
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         this.assertBelongsToArgument(
             expression.argumentId,
             expression.argumentVersion
@@ -223,13 +210,7 @@ export class PremiseEngine<
             }
         }
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
             // Delegate structural validation (operator type checks, position
@@ -261,7 +242,7 @@ export class PremiseEngine<
     public appendExpression(
         parentId: string | null,
         expression: TExpressionWithoutPosition<TExpr>
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource> {
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         this.assertBelongsToArgument(
             expression.argumentId,
             expression.argumentVersion
@@ -290,13 +271,7 @@ export class PremiseEngine<
             }
         }
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
             this.expressions.appendExpression(parentId, expression)
@@ -327,7 +302,7 @@ export class PremiseEngine<
         siblingId: string,
         relativePosition: "before" | "after",
         expression: TExpressionWithoutPosition<TExpr>
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource> {
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         this.assertBelongsToArgument(
             expression.argumentId,
             expression.argumentVersion
@@ -348,13 +323,7 @@ export class PremiseEngine<
             )
         }
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
             this.expressions.addExpressionRelative(
@@ -385,7 +354,7 @@ export class PremiseEngine<
     public updateExpression(
         expressionId: string,
         updates: TExpressionUpdate
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource> {
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         const existing = this.expressions.getExpression(expressionId)
         if (!existing) {
             throw new Error(
@@ -401,13 +370,7 @@ export class PremiseEngine<
             }
         }
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
             const oldVariableId =
@@ -450,24 +413,11 @@ export class PremiseEngine<
     public removeExpression(
         expressionId: string,
         deleteSubtree: boolean
-    ): TCoreMutationResult<
-        TExpr | undefined,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg,
-        TSource
-    > {
+    ): TCoreMutationResult<TExpr | undefined, TExpr, TVar, TPremise, TArg> {
         // Snapshot the expression before removal (for result).
         const snapshot = this.expressions.getExpression(expressionId)
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
             if (!snapshot) {
@@ -519,9 +469,6 @@ export class PremiseEngine<
                         for (const assoc of sourceResult.removedExpressionAssociations) {
                             collector.removedExpressionSourceAssociation(assoc)
                         }
-                        for (const orphan of sourceResult.removedOrphanSources) {
-                            collector.removedSource(orphan)
-                        }
                     }
                 }
             }
@@ -542,7 +489,7 @@ export class PremiseEngine<
         expression: TExpressionInput<TExpr>,
         leftNodeId?: string,
         rightNodeId?: string
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource> {
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         this.assertBelongsToArgument(
             expression.argumentId,
             expression.argumentVersion
@@ -557,13 +504,7 @@ export class PremiseEngine<
             )
         }
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
             this.expressions.insertExpression(
@@ -598,7 +539,7 @@ export class PremiseEngine<
         newSibling: TExpressionWithoutPosition<TExpr>,
         leftNodeId?: string,
         rightNodeId?: string
-    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg, TSource> {
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         this.assertBelongsToArgument(
             operator.argumentId,
             operator.argumentVersion
@@ -617,13 +558,7 @@ export class PremiseEngine<
             )
         }
 
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
             this.expressions.wrapExpression(
@@ -660,20 +595,17 @@ export class PremiseEngine<
 
     public addExpressionSourceAssociation(
         sourceId: string,
+        sourceVersion: number,
         expressionId: string
     ): TCoreMutationResult<
         TCoreExpressionSourceAssociation,
         TExpr,
         TVar,
         TPremise,
-        TArg,
-        TSource
+        TArg
     > {
         if (!this.sourceManager) {
             throw new Error("No SourceManager available.")
-        }
-        if (!this.sourceManager.getSource(sourceId)) {
-            throw new Error(`Source "${sourceId}" does not exist.`)
         }
         if (!this.expressions.getExpression(expressionId)) {
             throw new Error(
@@ -683,6 +615,7 @@ export class PremiseEngine<
         const assoc: TCoreExpressionSourceAssociation = {
             id: randomUUID(),
             sourceId,
+            sourceVersion,
             expressionId,
             premiseId: this.premise.id,
             argumentId: this.argument.id,
@@ -700,13 +633,7 @@ export class PremiseEngine<
             ),
         }
         this.sourceManager.addExpressionSourceAssociation(assocWithChecksum)
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.addedExpressionSourceAssociation(assocWithChecksum)
         this.markDirty()
         this.onMutate?.()
@@ -720,8 +647,7 @@ export class PremiseEngine<
         TExpr,
         TVar,
         TPremise,
-        TArg,
-        TSource
+        TArg
     > {
         if (!this.sourceManager) {
             return { result: undefined, changes: {} }
@@ -733,18 +659,9 @@ export class PremiseEngine<
         }
         const removalResult =
             this.sourceManager.removeExpressionSourceAssociation(associationId)
-        const collector = new ChangeCollector<
-            TExpr,
-            TVar,
-            TPremise,
-            TArg,
-            TSource
-        >()
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         for (const assoc of removalResult.removedExpressionAssociations) {
             collector.removedExpressionSourceAssociation(assoc)
-        }
-        for (const orphan of removalResult.removedOrphanSources) {
-            collector.removedSource(orphan)
         }
         this.markDirty()
         this.onMutate?.()
@@ -789,8 +706,7 @@ export class PremiseEngine<
         TExpr,
         TVar,
         TPremise,
-        TArg,
-        TSource
+        TArg
     > {
         // Strip old extras and replace with new ones
         const { id, argumentId, argumentVersion, checksum } = this
@@ -1356,15 +1272,14 @@ export class PremiseEngine<
         TExpr extends TCorePropositionalExpression =
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-        TSource extends TCoreSource = TCoreSource,
     >(
         snapshot: TPremiseEngineSnapshot<TPremise, TExpr>,
         argument: TOptionalChecksum<TArg>,
         variables: VariableManager<TVar>,
         expressionIndex?: Map<string, string>,
-        sourceManager?: SourceManager<TSource>
-    ): PremiseEngine<TArg, TPremise, TExpr, TVar, TSource> {
-        const pe = new PremiseEngine<TArg, TPremise, TExpr, TVar, TSource>(
+        sourceManager?: SourceManager
+    ): PremiseEngine<TArg, TPremise, TExpr, TVar> {
+        const pe = new PremiseEngine<TArg, TPremise, TExpr, TVar>(
             snapshot.premise,
             { argument, variables, expressionIndex, sourceManager },
             snapshot.config
@@ -1387,7 +1302,7 @@ export class PremiseEngine<
     }
 
     private syncExpressionIndex(
-        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg, TSource>
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
     ): void {
         if (!this.expressionIndex || !changes.expressions) return
         for (const expr of changes.expressions.added) {
