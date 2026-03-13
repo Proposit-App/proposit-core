@@ -10,6 +10,5 @@ export type TFormulaAST =
     | { type: "iff"; left: TFormulaAST; right: TFormulaAST }
 
 export function parseFormula(input: string): TFormulaAST {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return pegParse(input) as TFormulaAST
 }

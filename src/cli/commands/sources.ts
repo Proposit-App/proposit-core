@@ -1,9 +1,7 @@
-import { randomUUID } from "node:crypto"
 import { Command } from "commander"
 import { hydrateEngine, persistEngine } from "../engine.js"
-import { errorExit, printJson, printLine } from "../output.js"
+import { errorExit, printLine } from "../output.js"
 import { readVersionMeta } from "../storage/arguments.js"
-import { deleteSourceDir } from "../storage/sources.js"
 
 async function assertNotPublished(
     argumentId: string,
@@ -39,22 +37,11 @@ export function registerSourceCommands(
             await assertNotPublished(argumentId, version)
             const engine = await hydrateEngine(argumentId, version)
 
-            const newId = opts.id ?? randomUUID()
-            const source = {
-                id: newId,
-                argumentId,
-                argumentVersion: version,
-                url: opts.url,
-            }
-
-            try {
-                engine.addSource(source)
-            } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
-            }
-
-            await persistEngine(engine)
-            printLine(newId)
+            // Source entities now live in the global SourceLibrary.
+            // TODO: wire SourceLibrary into the CLI.
+            errorExit(
+                "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
+            )
         })
 
     // ── remove ─────────────────────────────────────────────────────────────
@@ -65,14 +52,11 @@ export function registerSourceCommands(
             await assertNotPublished(argumentId, version)
             const engine = await hydrateEngine(argumentId, version)
 
-            if (!engine.getSource(sourceId)) {
-                errorExit(`Source "${sourceId}" not found.`)
-            }
-
-            engine.removeSource(sourceId)
-            await persistEngine(engine)
-            await deleteSourceDir(argumentId, version, sourceId)
-            printLine("success")
+            // Source entities now live in the global SourceLibrary.
+            // TODO: wire SourceLibrary into the CLI.
+            errorExit(
+                "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
+            )
         })
 
     // ── list ───────────────────────────────────────────────────────────────
@@ -82,17 +66,11 @@ export function registerSourceCommands(
         .option("--json", "Output as JSON")
         .action(async (opts: { json?: boolean }) => {
             const engine = await hydrateEngine(argumentId, version)
-            const allSources = engine.getSources()
-
-            if (opts.json) {
-                printJson(allSources)
-            } else {
-                for (const s of allSources) {
-                    const record = s as Record<string, unknown>
-                    const url = typeof record.url === "string" ? record.url : ""
-                    printLine(`${s.id} | ${url}`)
-                }
-            }
+            // Source entities now live in the global SourceLibrary.
+            // TODO: wire SourceLibrary into the CLI.
+            errorExit(
+                "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
+            )
         })
 
     // ── show ───────────────────────────────────────────────────────────────
@@ -102,32 +80,11 @@ export function registerSourceCommands(
         .option("--json", "Output as JSON")
         .action(async (sourceId: string, opts: { json?: boolean }) => {
             const engine = await hydrateEngine(argumentId, version)
-            const source = engine.getSource(sourceId)
-            if (!source) errorExit(`Source "${sourceId}" not found.`)
-
-            const associations = engine.getAssociationsForSource(sourceId)
-
-            if (opts.json) {
-                printJson({ source, associations })
-            } else {
-                const record = source as Record<string, unknown>
-                const url = typeof record.url === "string" ? record.url : ""
-                printLine(`${source.id} | ${url}`)
-                if (associations.variable.length > 0) {
-                    printLine("Variable associations:")
-                    for (const a of associations.variable) {
-                        printLine(`  ${a.id} → variable ${a.variableId}`)
-                    }
-                }
-                if (associations.expression.length > 0) {
-                    printLine("Expression associations:")
-                    for (const a of associations.expression) {
-                        printLine(
-                            `  ${a.id} → expression ${a.expressionId} (premise ${a.premiseId})`
-                        )
-                    }
-                }
-            }
+            // Source entities now live in the global SourceLibrary.
+            // TODO: wire SourceLibrary into the CLI.
+            errorExit(
+                "Source entity management has moved to global SourceLibrary. Not yet implemented in CLI."
+            )
         })
 
     // ── link-variable ──────────────────────────────────────────────────────
@@ -139,7 +96,8 @@ export function registerSourceCommands(
             const engine = await hydrateEngine(argumentId, version)
 
             try {
-                engine.addVariableSourceAssociation(sourceId, variableId)
+                // TODO: resolve actual source version from SourceLibrary
+                engine.addVariableSourceAssociation(sourceId, 0, variableId)
             } catch (err) {
                 errorExit(err instanceof Error ? err.message : String(err))
             }
@@ -165,8 +123,10 @@ export function registerSourceCommands(
             }
 
             try {
+                // TODO: resolve actual source version from SourceLibrary
                 engine.addExpressionSourceAssociation(
                     sourceId,
+                    0,
                     expressionId,
                     premise.getId()
                 )

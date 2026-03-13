@@ -29,12 +29,15 @@ Today, sources are argument-scoped (carry `argumentId`/`argumentVersion`) and va
 ### CoreAssertionSchema (new)
 
 ```typescript
-CoreAssertionSchema = Type.Object({
-    id: UUID,
-    version: Type.Number(),
-    frozen: Type.Boolean(),
-    checksum: Type.String(),
-}, { additionalProperties: true })
+CoreAssertionSchema = Type.Object(
+    {
+        id: UUID,
+        version: Type.Number(),
+        frozen: Type.Boolean(),
+        checksum: Type.String(),
+    },
+    { additionalProperties: true }
+)
 ```
 
 ### CoreSourceSchema (updated)
@@ -42,26 +45,32 @@ CoreAssertionSchema = Type.Object({
 ```typescript
 // Before: { id, argumentId, argumentVersion, checksum }
 // After:
-CoreSourceSchema = Type.Object({
-    id: UUID,
-    version: Type.Number(),
-    frozen: Type.Boolean(),
-    checksum: Type.String(),
-}, { additionalProperties: true })
+CoreSourceSchema = Type.Object(
+    {
+        id: UUID,
+        version: Type.Number(),
+        frozen: Type.Boolean(),
+        checksum: Type.String(),
+    },
+    { additionalProperties: true }
+)
 ```
 
 ### CorePropositionalVariableSchema (updated)
 
 ```typescript
-CorePropositionalVariableSchema = Type.Object({
-    id: UUID,
-    argumentId: UUID,
-    argumentVersion: Type.Number(),
-    symbol: Type.String(),
-    assertionId: UUID,              // new, required
-    assertionVersion: Type.Number(), // new, required
-    checksum: Type.String(),
-}, { additionalProperties: true })
+CorePropositionalVariableSchema = Type.Object(
+    {
+        id: UUID,
+        argumentId: UUID,
+        argumentVersion: Type.Number(),
+        symbol: Type.String(),
+        assertionId: UUID, // new, required
+        assertionVersion: Type.Number(), // new, required
+        checksum: Type.String(),
+    },
+    { additionalProperties: true }
+)
 ```
 
 ### Association Schemas (updated)
@@ -72,7 +81,7 @@ Both gain `sourceVersion`:
 CoreVariableSourceAssociationSchema = Type.Object({
     id: UUID,
     sourceId: UUID,
-    sourceVersion: Type.Number(),  // new
+    sourceVersion: Type.Number(), // new
     variableId: UUID,
     argumentId: UUID,
     argumentVersion: Type.Number(),
@@ -82,7 +91,7 @@ CoreVariableSourceAssociationSchema = Type.Object({
 CoreExpressionSourceAssociationSchema = Type.Object({
     id: UUID,
     sourceId: UUID,
-    sourceVersion: Type.Number(),  // new
+    sourceVersion: Type.Number(), // new
     expressionId: UUID,
     premiseId: UUID,
     argumentId: UUID,
@@ -114,11 +123,13 @@ interface TSourceLookup<TSource extends TCoreSource = TCoreSource> {
 Generic class implementing `TAssertionLookup<TAssertion>`.
 
 **Constructor:**
+
 ```typescript
 constructor(options?: { checksumConfig?: TCoreChecksumConfig })
 ```
 
 **Methods:**
+
 - `create(assertion: Omit<TAssertion, 'version' | 'frozen' | 'checksum'>): TAssertion` — creates at version 0, unfrozen
 - `update(id: string, updates: Partial<Omit<TAssertion, 'id' | 'version' | 'frozen' | 'checksum'>>): TAssertion` — updates the highest-numbered version; throws if that version is frozen
 - `freeze(id: string): { frozen: TAssertion; current: TAssertion }` — freezes the highest-numbered version, auto-creates next version as mutable copy. Returns both the frozen version and the new mutable version. Throws if the highest-numbered version is already frozen.
@@ -140,12 +151,14 @@ Same API shape as `AssertionLibrary`, implementing `TSourceLookup<TSource>`.
 ### Library Snapshot Types
 
 ```typescript
-type TAssertionLibrarySnapshot<TAssertion extends TCoreAssertion = TCoreAssertion> = {
-    assertions: TAssertion[]  // all versions, flattened
+type TAssertionLibrarySnapshot<
+    TAssertion extends TCoreAssertion = TCoreAssertion,
+> = {
+    assertions: TAssertion[] // all versions, flattened
 }
 
 type TSourceLibrarySnapshot<TSource extends TCoreSource = TCoreSource> = {
-    sources: TSource[]  // all versions, flattened
+    sources: TSource[] // all versions, flattened
 }
 ```
 
@@ -188,12 +201,14 @@ class ArgumentEngine<
 `SourceManager` is stripped down to association-only management:
 
 **Removed:**
+
 - `sources` map
 - `addSource()`, `removeSource()`, `getSource()`, `getSources()`
 - `cleanupOrphanedSource()` / orphan cleanup logic
 - `TSourceRemovalResult` type (replaced — see below)
 
 **Retained:**
+
 - `addVariableSourceAssociation()`, `removeVariableSourceAssociation()`
 - `addExpressionSourceAssociation()`, `removeExpressionSourceAssociation()`
 - `removeAssociationsForVariable()`, `removeAssociationsForExpression()`
@@ -201,6 +216,7 @@ class ArgumentEngine<
 - `snapshot()`, `fromSnapshot()`
 
 **Internal changes:**
+
 - `sourceToAssociations` index remains `Map<string, Set<string>>` keyed by `sourceId` alone (not a compound key with version). It is lazily populated: `addVariableSourceAssociation` and `addExpressionSourceAssociation` create entries on demand via `getOrCreate` (no prior `addSource` call needed).
 - `getAssociationsForSource(sourceId)` returns associations across all source versions for that ID. It does not accept a version parameter — callers can filter by `sourceVersion` if needed.
 - `SourceManager` constructor remains parameterless (no changes needed).
@@ -267,18 +283,31 @@ Both drop the `sources` record. Association records remain.
 DEFAULT_CHECKSUM_CONFIG = {
     // ... existing fields ...
     assertionFields: new Set(["id", "version"]),
-    sourceFields: new Set(["id", "version"]),  // updated: removed argumentId/argumentVersion
+    sourceFields: new Set(["id", "version"]), // updated: removed argumentId/argumentVersion
     variableFields: new Set([
-        "id", "symbol", "argumentId", "argumentVersion",
-        "assertionId", "assertionVersion",  // new
+        "id",
+        "symbol",
+        "argumentId",
+        "argumentVersion",
+        "assertionId",
+        "assertionVersion", // new
     ]),
     variableSourceAssociationFields: new Set([
-        "id", "sourceId", "sourceVersion",  // sourceVersion new
-        "variableId", "argumentId", "argumentVersion",
+        "id",
+        "sourceId",
+        "sourceVersion", // sourceVersion new
+        "variableId",
+        "argumentId",
+        "argumentVersion",
     ]),
     expressionSourceAssociationFields: new Set([
-        "id", "sourceId", "sourceVersion",  // sourceVersion new
-        "expressionId", "premiseId", "argumentId", "argumentVersion",
+        "id",
+        "sourceId",
+        "sourceVersion", // sourceVersion new
+        "expressionId",
+        "premiseId",
+        "argumentId",
+        "argumentVersion",
     ]),
 }
 ```
@@ -296,35 +325,35 @@ DEFAULT_CHECKSUM_CONFIG = {
 
 ### New Files
 
-| File | Contents |
-|------|----------|
-| `src/lib/schemata/assertion.ts` | `CoreAssertionSchema`, `TCoreAssertion` |
-| `src/lib/core/assertion-library.ts` | `AssertionLibrary<T>` class |
-| `src/lib/core/source-library.ts` | `SourceLibrary<T>` class |
+| File                                            | Contents                                                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/lib/schemata/assertion.ts`                 | `CoreAssertionSchema`, `TCoreAssertion`                                                    |
+| `src/lib/core/assertion-library.ts`             | `AssertionLibrary<T>` class                                                                |
+| `src/lib/core/source-library.ts`                | `SourceLibrary<T>` class                                                                   |
 | `src/lib/core/interfaces/library.interfaces.ts` | `TAssertionLookup`, `TSourceLookup`, `TAssertionLibrarySnapshot`, `TSourceLibrarySnapshot` |
 
 ### Modified Files
 
-| File | Changes |
-|------|---------|
-| `src/lib/schemata/source.ts` | Drop argument fields, add version/frozen |
-| `src/lib/schemata/propositional.ts` | Add assertionId/assertionVersion to variable schema |
-| `src/lib/schemata/index.ts` | Export assertion schema |
-| `src/lib/core/source-manager.ts` | Strip to association-only |
-| `src/lib/core/argument-engine.ts` | New constructor, validation, new `TAssertion` generic param |
-| `src/lib/core/premise-engine.ts` | Drop `TSource` generic parameter |
-| `src/lib/core/interfaces/source-management.interfaces.ts` | Remove source entity methods |
-| `src/lib/core/interfaces/index.ts` | Export library interfaces |
-| `src/lib/types/mutation.ts` | Drop sources from changeset |
-| `src/lib/types/reactive.ts` | Drop sources from snapshots |
-| `src/lib/types/checksum.ts` | Add assertionFields to config type |
-| `src/lib/consts.ts` | Update DEFAULT_CHECKSUM_CONFIG |
-| `src/lib/core/diff.ts` | Remove source diffing, drop TSource generic, update association diffing |
-| `src/lib/types/diff.ts` | Drop sources from `TCoreArgumentDiff`, drop `compareSource` from `TCoreDiffOptions`, remove `TSource` generic |
-| `src/lib/core/change-collector.ts` | Remove `addedSource`/`removedSource` methods, drop `TSource` generic |
-| `src/lib/index.ts` | Export new classes and types |
-| `src/extensions/ieee/source.ts` | Update to new CoreSourceSchema |
-| `test/core.test.ts` | Update all tests; add library tests |
+| File                                                      | Changes                                                                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `src/lib/schemata/source.ts`                              | Drop argument fields, add version/frozen                                                                      |
+| `src/lib/schemata/propositional.ts`                       | Add assertionId/assertionVersion to variable schema                                                           |
+| `src/lib/schemata/index.ts`                               | Export assertion schema                                                                                       |
+| `src/lib/core/source-manager.ts`                          | Strip to association-only                                                                                     |
+| `src/lib/core/argument-engine.ts`                         | New constructor, validation, new `TAssertion` generic param                                                   |
+| `src/lib/core/premise-engine.ts`                          | Drop `TSource` generic parameter                                                                              |
+| `src/lib/core/interfaces/source-management.interfaces.ts` | Remove source entity methods                                                                                  |
+| `src/lib/core/interfaces/index.ts`                        | Export library interfaces                                                                                     |
+| `src/lib/types/mutation.ts`                               | Drop sources from changeset                                                                                   |
+| `src/lib/types/reactive.ts`                               | Drop sources from snapshots                                                                                   |
+| `src/lib/types/checksum.ts`                               | Add assertionFields to config type                                                                            |
+| `src/lib/consts.ts`                                       | Update DEFAULT_CHECKSUM_CONFIG                                                                                |
+| `src/lib/core/diff.ts`                                    | Remove source diffing, drop TSource generic, update association diffing                                       |
+| `src/lib/types/diff.ts`                                   | Drop sources from `TCoreArgumentDiff`, drop `compareSource` from `TCoreDiffOptions`, remove `TSource` generic |
+| `src/lib/core/change-collector.ts`                        | Remove `addedSource`/`removedSource` methods, drop `TSource` generic                                          |
+| `src/lib/index.ts`                                        | Export new classes and types                                                                                  |
+| `src/extensions/ieee/source.ts`                           | Update to new CoreSourceSchema                                                                                |
+| `test/core.test.ts`                                       | Update all tests; add library tests                                                                           |
 
 ## Checksum Config Sharing
 

@@ -1,10 +1,11 @@
 import fs from "node:fs/promises"
 import { ArgumentEngine } from "../lib/core/argument-engine.js"
+import { AssertionLibrary } from "../lib/core/assertion-library.js"
+import { SourceLibrary } from "../lib/core/source-library.js"
 import type { TCoreArgument } from "../lib/schemata/index.js"
 import type {
     TCliArgumentMeta,
     TCliArgumentVersionMeta,
-    TCliSourceMeta,
 } from "./schemata.js"
 import { getPremisesDir, getSourcesDir } from "./config.js"
 import {
@@ -22,12 +23,9 @@ import {
 } from "./storage/premises.js"
 import { readRoles, writeRoles } from "./storage/roles.js"
 import {
-    listSourceIds as listDiskSourceIds,
     readExpressionAssociations,
-    readSourceMeta,
     readVariableAssociations,
     writeExpressionAssociations,
-    writeSourceMeta,
     writeVariableAssociations,
 } from "./storage/sources.js"
 import { readVariables, writeVariables } from "./storage/variables.js"
@@ -59,7 +57,11 @@ export async function hydrateEngine(
         ...argMeta,
         ...versionMeta,
     }
-    const engine = new ArgumentEngine(argument)
+    const engine = new ArgumentEngine(
+        argument,
+        new AssertionLibrary(),
+        new SourceLibrary()
+    )
 
     // Register all argument-level variables once on the engine; the shared
     // VariableManager is visible to every PremiseEngine.
@@ -127,26 +129,14 @@ export async function hydrateEngine(
     // ── Sources ────────────────────────────────────────────────────────────
     // Restore sources via snapshot/rollback to preserve association IDs
     // (engine.addVariableSourceAssociation would generate new IDs).
-    const [sourceIds, varAssociations, exprAssociations] = await Promise.all([
-        listDiskSourceIds(argumentId, version),
+    const [varAssociations, exprAssociations] = await Promise.all([
         readVariableAssociations(argumentId, version),
         readExpressionAssociations(argumentId, version),
     ])
 
-    if (
-        sourceIds.length > 0 ||
-        varAssociations.length > 0 ||
-        exprAssociations.length > 0
-    ) {
-        const sourceMetas = await Promise.all(
-            sourceIds.map((sid) => readSourceMeta(argumentId, version, sid))
-        )
+    if (varAssociations.length > 0 || exprAssociations.length > 0) {
         const snap = engine.snapshot()
         snap.sources = {
-            sources: sourceMetas.map((s) => ({
-                ...s,
-                checksum: s.checksum ?? "",
-            })),
             variableSourceAssociations: varAssociations.map((a) => ({
                 ...a,
                 checksum: a.checksum ?? "",
@@ -215,14 +205,10 @@ export async function persistEngine(engine: ArgumentEngine): Promise<void> {
     const sourcesDir = getSourcesDir(id, arg.version)
     await fs.mkdir(sourcesDir, { recursive: true })
 
-    for (const source of engine.getSources()) {
-        await writeSourceMeta(
-            id,
-            arg.version,
-            source.id,
-            source as TCliSourceMeta
-        )
-    }
+    // Source entities now live in the global SourceLibrary and are not
+    // persisted per-argument by the engine. Only associations are stored.
+    // TODO: persist source entities from SourceLibrary when the CLI is
+    // updated to use global libraries.
 
     await writeVariableAssociations(
         id,

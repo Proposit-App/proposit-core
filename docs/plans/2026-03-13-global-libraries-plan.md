@@ -17,6 +17,7 @@
 ### Task 1: CoreAssertionSchema
 
 **Files:**
+
 - Create: `src/lib/schemata/assertion.ts`
 - Modify: `src/lib/schemata/index.ts`
 
@@ -74,6 +75,7 @@ git commit -m "feat: add CoreAssertionSchema"
 ### Task 2: Update CoreSourceSchema
 
 **Files:**
+
 - Modify: `src/lib/schemata/source.ts`
 
 - [ ] **Step 1: Write failing typecheck by removing argumentId/argumentVersion**
@@ -159,6 +161,7 @@ git commit -m "feat: update CoreSourceSchema to global, add sourceVersion to ass
 ### Task 3: Update CorePropositionalVariableSchema
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts`
 
 - [ ] **Step 1: Add assertionId and assertionVersion**
@@ -202,6 +205,7 @@ git commit -m "feat: add assertionId/assertionVersion to CorePropositionalVariab
 ### Task 4: Update TCoreChecksumConfig and DEFAULT_CHECKSUM_CONFIG
 
 **Files:**
+
 - Modify: `src/lib/types/checksum.ts`
 - Modify: `src/lib/consts.ts`
 
@@ -219,16 +223,19 @@ In `src/lib/types/checksum.ts`, add after `roleFields` (line 12):
 In `src/lib/consts.ts`, update the config object:
 
 1. Add `assertionFields` after `roleFields` (after line 18):
+
 ```typescript
     assertionFields: new Set(["id", "version"]),
 ```
 
 2. Update `sourceFields` (line 19) from `new Set(["id", "argumentId", "argumentVersion"])` to:
+
 ```typescript
     sourceFields: new Set(["id", "version"]),
 ```
 
 3. Update `variableFields` (line 15) to add assertion fields:
+
 ```typescript
     variableFields: new Set([
         "id",
@@ -241,6 +248,7 @@ In `src/lib/consts.ts`, update the config object:
 ```
 
 4. Add `sourceVersion` to `variableSourceAssociationFields` (lines 20–26):
+
 ```typescript
     variableSourceAssociationFields: new Set([
         "id",
@@ -253,6 +261,7 @@ In `src/lib/consts.ts`, update the config object:
 ```
 
 5. Add `sourceVersion` to `expressionSourceAssociationFields` (lines 27–34):
+
 ```typescript
     expressionSourceAssociationFields: new Set([
         "id",
@@ -266,18 +275,19 @@ In `src/lib/consts.ts`, update the config object:
 ```
 
 6. Add `"assertionFields"` to the `keys` array in `createChecksumConfig()` (line 44–53):
+
 ```typescript
-    const keys = [
-        "expressionFields",
-        "variableFields",
-        "premiseFields",
-        "argumentFields",
-        "roleFields",
-        "assertionFields",
-        "sourceFields",
-        "variableSourceAssociationFields",
-        "expressionSourceAssociationFields",
-    ] as const
+const keys = [
+    "expressionFields",
+    "variableFields",
+    "premiseFields",
+    "argumentFields",
+    "roleFields",
+    "assertionFields",
+    "sourceFields",
+    "variableSourceAssociationFields",
+    "expressionSourceAssociationFields",
+] as const
 ```
 
 - [ ] **Step 3: Commit**
@@ -290,6 +300,7 @@ git commit -m "feat: update checksum config for assertions and global sources"
 ### Task 5: Update TCoreChangeset and TCoreMutationResult — drop TSource
 
 **Files:**
+
 - Modify: `src/lib/types/mutation.ts`
 
 - [ ] **Step 1: Remove TSource generic and sources field**
@@ -366,6 +377,7 @@ git commit -m "feat: remove TSource generic from TCoreChangeset and TCoreMutatio
 ### Task 6: Update TReactiveSnapshot — drop sources
 
 **Files:**
+
 - Modify: `src/lib/types/reactive.ts`
 
 - [ ] **Step 1: Remove TSource generic and sources field**
@@ -420,6 +432,7 @@ git commit -m "feat: remove TSource and sources from TReactiveSnapshot"
 ### Task 7: Update diff types — drop TSource
 
 **Files:**
+
 - Modify: `src/lib/types/diff.ts`
 
 - [ ] **Step 1: Remove TSource from TCoreArgumentDiff and TCoreDiffOptions, drop sources field**
@@ -478,6 +491,7 @@ git commit -m "feat: remove TSource from diff types"
 ### Task 8: Library lookup interfaces
 
 **Files:**
+
 - Create: `src/lib/core/interfaces/library.interfaces.ts`
 - Modify: `src/lib/core/interfaces/index.ts`
 
@@ -504,8 +518,12 @@ describe("Library lookup interfaces", () => {
 ```
 
 Add imports at the top of test file:
+
 ```typescript
-import type { TAssertionLookup, TSourceLookup } from "../src/lib/core/interfaces/library.interfaces"
+import type {
+    TAssertionLookup,
+    TSourceLookup,
+} from "../src/lib/core/interfaces/library.interfaces"
 import type { TCoreAssertion } from "../src/lib/schemata/assertion"
 ```
 
@@ -542,11 +560,10 @@ export type TAssertionLibrarySnapshot<
 }
 
 /** Serializable snapshot of a SourceLibrary. */
-export type TSourceLibrarySnapshot<
-    TSource extends TCoreSource = TCoreSource,
-> = {
-    sources: TSource[]
-}
+export type TSourceLibrarySnapshot<TSource extends TCoreSource = TCoreSource> =
+    {
+        sources: TSource[]
+    }
 ```
 
 - [ ] **Step 4: Export from interfaces barrel**
@@ -577,6 +594,7 @@ git commit -m "feat: add TAssertionLookup and TSourceLookup interfaces"
 ### Task 9: AssertionLibrary class
 
 **Files:**
+
 - Create: `src/lib/core/assertion-library.ts`
 
 - [ ] **Step 1: Write tests for AssertionLibrary**
@@ -739,8 +757,7 @@ import type {
 
 export class AssertionLibrary<
     TAssertion extends TCoreAssertion = TCoreAssertion,
-> implements TAssertionLookup<TAssertion>
-{
+> implements TAssertionLookup<TAssertion> {
     private entities: Map<string, Map<number, TAssertion>>
     private checksumConfig?: TCoreChecksumConfig
 
@@ -801,9 +818,7 @@ export class AssertionLibrary<
         return updated
     }
 
-    public freeze(
-        id: string
-    ): { frozen: TAssertion; current: TAssertion } {
+    public freeze(id: string): { frozen: TAssertion; current: TAssertion } {
         const versions = this.entities.get(id)
         if (!versions) {
             throw new Error(`Assertion "${id}" does not exist.`)
@@ -921,6 +936,7 @@ git commit -m "feat: implement AssertionLibrary with versioning and freeze"
 ### Task 10: SourceLibrary class
 
 **Files:**
+
 - Create: `src/lib/core/source-library.ts`
 
 - [ ] **Step 1: Write tests for SourceLibrary**
@@ -985,9 +1001,9 @@ import type {
     TSourceLibrarySnapshot,
 } from "./interfaces/library.interfaces.js"
 
-export class SourceLibrary<TSource extends TCoreSource = TCoreSource>
-    implements TSourceLookup<TSource>
-{
+export class SourceLibrary<
+    TSource extends TCoreSource = TCoreSource,
+> implements TSourceLookup<TSource> {
     private entities: Map<string, Map<number, TSource>>
     private checksumConfig?: TCoreChecksumConfig
 
@@ -1165,6 +1181,7 @@ git commit -m "feat: implement SourceLibrary with versioning and freeze"
 ### Task 11: Strip SourceManager to association-only
 
 **Files:**
+
 - Modify: `src/lib/core/source-manager.ts`
 
 - [ ] **Step 1: Rewrite SourceManager**
@@ -1484,9 +1501,7 @@ export class SourceManager {
         }
     }
 
-    public static fromSnapshot(
-        data: TSourceManagerSnapshot
-    ): SourceManager {
+    public static fromSnapshot(data: TSourceManagerSnapshot): SourceManager {
         const sm = new SourceManager()
 
         for (const assoc of data.variableSourceAssociations) {
@@ -1540,6 +1555,7 @@ git commit -m "feat: strip SourceManager to association-only management"
 ### Task 12: Update ChangeCollector — drop TSource
 
 **Files:**
+
 - Modify: `src/lib/core/change-collector.ts`
 
 - [ ] **Step 1: Remove TSource generic, addedSource/removedSource methods, sources field**
@@ -1676,6 +1692,7 @@ git commit -m "feat: remove TSource from ChangeCollector"
 ### Task 13: Update argument-engine.interfaces.ts — drop TSource
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts`
 
 - [ ] **Step 1: Remove TSource generic from all interfaces**
@@ -1700,6 +1717,7 @@ git commit -m "feat: remove TSource from argument engine interfaces"
 ### Task 14: Update premise-engine.interfaces.ts — drop TSource
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts`
 
 - [ ] **Step 1: Remove TSource generic from all interfaces**
@@ -1710,6 +1728,7 @@ In `premise-engine.interfaces.ts`:
 2. Remove `TSource extends TCoreSource = TCoreSource` generic param from `TExpressionMutations`, `TVariableReferences`, `TPremiseIdentity`
 3. Remove `TSource` from all `TCoreMutationResult` return types (drop the 6th generic arg)
 4. Update `addExpressionSourceAssociation` to accept `sourceVersion` parameter:
+
 ```typescript
     addExpressionSourceAssociation(
         sourceId: string,
@@ -1734,6 +1753,7 @@ git commit -m "feat: remove TSource from premise engine interfaces, add sourceVe
 ### Task 15: Update TSourceManagement interface
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/source-management.interfaces.ts`
 
 - [ ] **Step 1: Remove source entity methods, add sourceVersion to association methods**
@@ -1882,9 +1902,11 @@ git commit -m "feat: update TSourceManagement to association-only with sourceVer
 ### Task 16: Update ArgumentEngine
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 
 This is the largest task. The engine needs:
+
 1. New `TAssertion` generic param
 2. Libraries as required constructor params
 3. Validation in `addVariable` and `updateVariable`
@@ -1897,12 +1919,17 @@ This is the largest task. The engine needs:
 - [ ] **Step 1: Update imports, types, and class signature**
 
 Add imports for the new types:
+
 ```typescript
 import type { TCoreAssertion } from "../schemata/assertion.js"
-import type { TAssertionLookup, TSourceLookup } from "./interfaces/library.interfaces.js"
+import type {
+    TAssertionLookup,
+    TSourceLookup,
+} from "./interfaces/library.interfaces.js"
 ```
 
 Update `TArgumentEngineSnapshot` — add `TAssertion` generic, remove `TSource` from sources field:
+
 ```typescript
 export type TArgumentEngineSnapshot<
     TArg extends TCoreArgument = TCoreArgument,
@@ -1920,6 +1947,7 @@ export type TArgumentEngineSnapshot<
 ```
 
 Update class signature — add `TAssertion`, drop `TSource` from interface impls:
+
 ```typescript
 export class ArgumentEngine<
     TArg extends TCoreArgument = TCoreArgument,
@@ -1945,12 +1973,14 @@ export class ArgumentEngine<
 - [ ] **Step 2: Update private fields and constructor**
 
 Add library fields, update constructor signature:
+
 ```typescript
     private assertionLibrary: TAssertionLookup<TAssertion>
     private sourceLibrary: TSourceLookup<TSource>
 ```
 
 Update constructor:
+
 ```typescript
     constructor(
         argument: TOptionalChecksum<TArg>,
@@ -1968,29 +1998,22 @@ Update constructor:
 - [ ] **Step 3: Update addVariable — add assertion validation**
 
 In `addVariable`, after the argumentVersion check, add:
+
 ```typescript
-        const varTyped = variable as unknown as {
-            assertionId?: string
-            assertionVersion?: number
-        }
-        if (
-            varTyped.assertionId == null ||
-            varTyped.assertionVersion == null
-        ) {
-            throw new Error(
-                "Variable must have assertionId and assertionVersion."
-            )
-        }
-        if (
-            !this.assertionLibrary.get(
-                varTyped.assertionId,
-                varTyped.assertionVersion
-            )
-        ) {
-            throw new Error(
-                `Assertion "${varTyped.assertionId}" version ${varTyped.assertionVersion} does not exist in the assertion library.`
-            )
-        }
+const varTyped = variable as unknown as {
+    assertionId?: string
+    assertionVersion?: number
+}
+if (varTyped.assertionId == null || varTyped.assertionVersion == null) {
+    throw new Error("Variable must have assertionId and assertionVersion.")
+}
+if (
+    !this.assertionLibrary.get(varTyped.assertionId, varTyped.assertionVersion)
+) {
+    throw new Error(
+        `Assertion "${varTyped.assertionId}" version ${varTyped.assertionVersion} does not exist in the assertion library.`
+    )
+}
 ```
 
 Remove `TSource` from all `ChangeCollector` instantiations — they now take 4 generic params.
@@ -1998,6 +2021,7 @@ Remove `TSource` from all `ChangeCollector` instantiations — they now take 4 g
 - [ ] **Step 4: Update updateVariable — add assertion reference support and validation**
 
 Update the `updates` parameter type to accept assertion fields:
+
 ```typescript
     public updateVariable(
         variableId: string,
@@ -2010,27 +2034,22 @@ Update the `updates` parameter type to accept assertion fields:
 ```
 
 Add validation before applying:
+
 ```typescript
-        if (
-            (updates.assertionId != null) !==
-            (updates.assertionVersion != null)
-        ) {
-            throw new Error(
-                "assertionId and assertionVersion must be provided together."
-            )
-        }
-        if (
-            updates.assertionId != null &&
-            updates.assertionVersion != null &&
-            !this.assertionLibrary.get(
-                updates.assertionId,
-                updates.assertionVersion
-            )
-        ) {
-            throw new Error(
-                `Assertion "${updates.assertionId}" version ${updates.assertionVersion} does not exist in the assertion library.`
-            )
-        }
+if ((updates.assertionId != null) !== (updates.assertionVersion != null)) {
+    throw new Error(
+        "assertionId and assertionVersion must be provided together."
+    )
+}
+if (
+    updates.assertionId != null &&
+    updates.assertionVersion != null &&
+    !this.assertionLibrary.get(updates.assertionId, updates.assertionVersion)
+) {
+    throw new Error(
+        `Assertion "${updates.assertionId}" version ${updates.assertionVersion} does not exist in the assertion library.`
+    )
+}
 ```
 
 - [ ] **Step 5: Remove addSource, removeSource, getSource, getSources methods**
@@ -2040,25 +2059,27 @@ Delete the `addSource()`, `removeSource()`, `getSource()`, `getSources()` method
 - [ ] **Step 6: Update addVariableSourceAssociation — add sourceVersion, validate via library**
 
 Update signature to `(sourceId: string, sourceVersion: number, variableId: string)`. Replace `this.sourceManager.getSource(sourceId)` check with:
+
 ```typescript
-        if (!this.sourceLibrary.get(sourceId, sourceVersion)) {
-            throw new Error(
-                `Source "${sourceId}" version ${sourceVersion} does not exist in the source library.`
-            )
-        }
+if (!this.sourceLibrary.get(sourceId, sourceVersion)) {
+    throw new Error(
+        `Source "${sourceId}" version ${sourceVersion} does not exist in the source library.`
+    )
+}
 ```
 
 Add `sourceVersion` to the association entity:
+
 ```typescript
-        const assoc: TCoreVariableSourceAssociation = {
-            id: randomUUID(),
-            sourceId,
-            sourceVersion,
-            variableId,
-            argumentId: this.argument.id,
-            argumentVersion: this.argument.version,
-            checksum: "",
-        }
+const assoc: TCoreVariableSourceAssociation = {
+    id: randomUUID(),
+    sourceId,
+    sourceVersion,
+    variableId,
+    argumentId: this.argument.id,
+    argumentVersion: this.argument.version,
+    checksum: "",
+}
 ```
 
 - [ ] **Step 7: Update addExpressionSourceAssociation — same pattern**
@@ -2091,6 +2112,7 @@ git commit -m "feat: integrate libraries into ArgumentEngine, drop TSource from 
 ### Task 17: Update PremiseEngine — drop TSource, add sourceVersion
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts`
 
 - [ ] **Step 1: Remove TSource generic parameter from class**
@@ -2102,6 +2124,7 @@ Remove `sourceManager?: SourceManager<TSource>` → `sourceManager?: SourceManag
 Remove the orphan cleanup code in `removeExpressionSourceAssociation`.
 
 Update `addExpressionSourceAssociation` to accept `sourceVersion` parameter and include it in the constructed association entity:
+
 ```typescript
     public addExpressionSourceAssociation(
         sourceId: string,
@@ -2122,6 +2145,7 @@ git commit -m "feat: drop TSource from PremiseEngine"
 ### Task 18: Update diff.ts — remove source diffing
 
 **Files:**
+
 - Modify: `src/lib/core/diff.ts`
 
 - [ ] **Step 1: Remove defaultCompareSource function**
@@ -2137,15 +2161,33 @@ export function defaultCompareVariable(
 ): TCoreFieldChange[] {
     const changes: TCoreFieldChange[] = []
     if (before.symbol !== after.symbol) {
-        changes.push({ field: "symbol", before: before.symbol, after: after.symbol })
+        changes.push({
+            field: "symbol",
+            before: before.symbol,
+            after: after.symbol,
+        })
     }
-    const bAssert = before as unknown as { assertionId?: string; assertionVersion?: number }
-    const aAssert = after as unknown as { assertionId?: string; assertionVersion?: number }
+    const bAssert = before as unknown as {
+        assertionId?: string
+        assertionVersion?: number
+    }
+    const aAssert = after as unknown as {
+        assertionId?: string
+        assertionVersion?: number
+    }
     if (bAssert.assertionId !== aAssert.assertionId) {
-        changes.push({ field: "assertionId", before: bAssert.assertionId, after: aAssert.assertionId })
+        changes.push({
+            field: "assertionId",
+            before: bAssert.assertionId,
+            after: aAssert.assertionId,
+        })
     }
     if (bAssert.assertionVersion !== aAssert.assertionVersion) {
-        changes.push({ field: "assertionVersion", before: bAssert.assertionVersion, after: aAssert.assertionVersion })
+        changes.push({
+            field: "assertionVersion",
+            before: bAssert.assertionVersion,
+            after: aAssert.assertionVersion,
+        })
     }
     return changes
 }
@@ -2177,20 +2219,26 @@ git commit -m "feat: remove source entity diffing, add assertion/sourceVersion t
 ### Task 19: Update library barrel exports
 
 **Files:**
+
 - Modify: `src/lib/index.ts`
 
 - [ ] **Step 1: Add new exports, update existing ones**
 
 Add:
+
 ```typescript
 export { AssertionLibrary } from "./core/assertion-library.js"
 export { SourceLibrary } from "./core/source-library.js"
 ```
 
 Update `SourceManager` exports — remove `TSourceRemovalResult`:
+
 ```typescript
 export { SourceManager } from "./core/source-manager.js"
-export type { TSourceManagerSnapshot, TSourceAssociationRemovalResult } from "./core/source-manager.js"
+export type {
+    TSourceManagerSnapshot,
+    TSourceAssociationRemovalResult,
+} from "./core/source-manager.js"
 ```
 
 Remove `defaultCompareSource` from diff exports.
@@ -2205,6 +2253,7 @@ git commit -m "feat: update barrel exports for global libraries"
 ### Task 20: Update IEEE extension
 
 **Files:**
+
 - Modify: `src/extensions/ieee/source.ts`
 
 - [ ] **Step 1: Update IEEESourceSchema**
@@ -2225,6 +2274,7 @@ git commit -m "fix: update IEEE source extension for new CoreSourceSchema"
 ### Task 21: Update existing tests
 
 **Files:**
+
 - Modify: `test/core.test.ts`
 
 - [ ] **Step 1: Update test fixtures and helpers**
@@ -2232,6 +2282,7 @@ git commit -m "fix: update IEEE source extension for new CoreSourceSchema"
 Every `new ArgumentEngine(arg)` call now needs `assertionLibrary` and `sourceLibrary` params. Every `makeVar()` call now needs `assertionId` and `assertionVersion`.
 
 Add at top of fixtures section:
+
 ```typescript
 function makeAssertionLibrary() {
     const lib = new AssertionLibrary()
@@ -2245,6 +2296,7 @@ function makeSourceLibrary() {
 ```
 
 Update `makeVar` helper:
+
 ```typescript
 function makeVar(
     id: string,
@@ -2289,11 +2341,13 @@ git commit -m "test: update all tests for global libraries"
 ### Task 22: Documentation sync check
 
 **Files:**
+
 - Potentially modify: `CLAUDE.md`, `docs/api-reference.md`, `README.md`
 
 - [ ] **Step 1: Update CLAUDE.md design rules**
 
 Update the source-related rules in the "Key design rules" section to reflect:
+
 - Sources are library-scoped (not argument-scoped)
 - `SourceManager` is association-only
 - Orphan cleanup is removed
