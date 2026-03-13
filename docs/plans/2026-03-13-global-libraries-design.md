@@ -95,17 +95,19 @@ CoreExpressionSourceAssociationSchema = Type.Object({
 
 ### Lookup Interfaces (engine dependencies)
 
+Narrow interfaces — only what the engine needs for validation:
+
 ```typescript
 interface TAssertionLookup<TAssertion extends TCoreAssertion = TCoreAssertion> {
     get(id: string, version: number): TAssertion | undefined
-    getAll(): TAssertion[]
 }
 
 interface TSourceLookup<TSource extends TCoreSource = TCoreSource> {
     get(id: string, version: number): TSource | undefined
-    getAll(): TSource[]
 }
 ```
+
+`getAll()` lives on the full library classes only, not on the lookup interfaces.
 
 ### AssertionLibrary\<TAssertion\>
 
@@ -118,14 +120,14 @@ constructor(options?: { checksumConfig?: TCoreChecksumConfig })
 
 **Methods:**
 - `create(assertion: Omit<TAssertion, 'version' | 'frozen' | 'checksum'>): TAssertion` — creates at version 0, unfrozen
-- `update(id: string, updates: Partial<Omit<TAssertion, 'id' | 'version' | 'frozen' | 'checksum'>>): TAssertion` — updates latest (unfrozen) version; throws if frozen
-- `freeze(id: string): TAssertion` — freezes latest version, auto-creates next version as mutable copy, returns the new mutable version
+- `update(id: string, updates: Partial<Omit<TAssertion, 'id' | 'version' | 'frozen' | 'checksum'>>): TAssertion` — updates the highest-numbered version; throws if that version is frozen
+- `freeze(id: string): { frozen: TAssertion; current: TAssertion }` — freezes the highest-numbered version, auto-creates next version as mutable copy. Returns both the frozen version and the new mutable version. Throws if the highest-numbered version is already frozen.
 - `get(id: string, version: number): TAssertion | undefined`
 - `getCurrent(id: string): TAssertion | undefined` — returns latest version
 - `getAll(): TAssertion[]` — all versions of all assertions
 - `getVersions(id: string): TAssertion[]` — all versions of a specific assertion
 - `snapshot(): TAssertionLibrarySnapshot<TAssertion>`
-- `static fromSnapshot<T>(...): AssertionLibrary<T>`
+- `static fromSnapshot<T>(snapshot: TAssertionLibrarySnapshot<T>, options?: { checksumConfig?: TCoreChecksumConfig }): AssertionLibrary<T>`
 
 **Internal storage:** `Map<string, Map<number, TAssertion>>` (id → version → entity)
 
@@ -169,6 +171,7 @@ class ArgumentEngine<
 - `sources` map
 - `addSource()`, `removeSource()`, `getSource()`, `getSources()`
 - `cleanupOrphanedSource()` / orphan cleanup logic
+- `TSourceRemovalResult` type (replaced — see below)
 
 **Retained:**
 - `addVariableSourceAssociation()`, `removeVariableSourceAssociation()`
@@ -177,28 +180,60 @@ class ArgumentEngine<
 - All association query methods
 - `snapshot()`, `fromSnapshot()`
 
+**Internal changes:**
+- `sourceToAssociations` index is lazily populated: `addVariableSourceAssociation` and `addExpressionSourceAssociation` create entries on demand (no prior `addSource` call needed).
+- `getAssociationsForSource(sourceId)` returns associations across all source versions for that ID. It does not accept a version parameter — callers can filter by `sourceVersion` if needed.
+- Return types for `removeAssociationsForVariable()` and `removeAssociationsForExpression()` simplified: return `{ removedVariableAssociations: TCoreVariableSourceAssociation[]; removedExpressionAssociations: TCoreExpressionSourceAssociation[] }` instead of `TSourceRemovalResult`.
+
 ### TSourceManagement Interface
 
-Updated to remove source entity methods. Retains association CRUD and queries only.
+Updated to remove source entity methods. Association method signatures updated to include `sourceVersion`:
+
+```typescript
+addVariableSourceAssociation(
+    sourceId: string, sourceVersion: number, variableId: string
+): TCoreMutationResult<...>
+
+addExpressionSourceAssociation(
+    sourceId: string, sourceVersion: number, expressionId: string, premiseId: string
+): TCoreMutationResult<...>
+```
+
+Retains all association query and removal methods. `removeVariableSourceAssociation` and `removeExpressionSourceAssociation` signatures unchanged (operate by association ID).
+
+### Variable Assertion Updates
+
+`updateVariable` is extended to accept assertion reference changes:
+
+```typescript
+updateVariable(variableId: string, updates: {
+    symbol?: string;
+    assertionId?: string;
+    assertionVersion?: number;
+}): TCoreMutationResult<...>
+```
+
+When `assertionId` or `assertionVersion` are provided, the engine validates the new reference against the assertion library.
 
 ## Changeset and Snapshot Updates
 
 ### TCoreChangeset
 
-Drops `sources` field:
+Drops `sources` field and the `TSource` generic parameter (no longer needed since source entities are library-managed):
 
 ```typescript
-interface TCoreChangeset<TExpr, TVar, TPremise, TArg, TSource> {
+interface TCoreChangeset<TExpr, TVar, TPremise, TArg> {
     expressions?: TCoreEntityChanges<TExpr>
     variables?: TCoreEntityChanges<TVar>
     premises?: TCoreEntityChanges<TPremise>
     roles?: TCoreArgumentRoleState
     argument?: TArg
-    // sources field removed
     variableSourceAssociations?: TCoreEntityChanges<TCoreVariableSourceAssociation>
     expressionSourceAssociations?: TCoreEntityChanges<TCoreExpressionSourceAssociation>
 }
 ```
+
+`TCoreMutationResult` also drops `TSource` from its generic parameters.
 
 ### TArgumentEngineSnapshot and TReactiveSnapshot
 
@@ -229,6 +264,8 @@ DEFAULT_CHECKSUM_CONFIG = {
 ## Diff API Updates
 
 - `defaultCompareSource` removed (sources no longer argument-owned)
+- `TCoreArgumentDiff` drops the `sources` field and the `TSource` generic parameter
+- `TCoreDiffOptions` drops `compareSource`
 - Association comparators updated to include `sourceVersion`
 - `diffArguments` drops source entity diffing; retains association diffing
 
@@ -258,10 +295,20 @@ DEFAULT_CHECKSUM_CONFIG = {
 | `src/lib/types/reactive.ts` | Drop sources from snapshots |
 | `src/lib/types/checksum.ts` | Add assertionFields to config type |
 | `src/lib/consts.ts` | Update DEFAULT_CHECKSUM_CONFIG |
-| `src/lib/core/diff.ts` | Remove source diffing, update association diffing |
+| `src/lib/core/diff.ts` | Remove source diffing, drop TSource generic, update association diffing |
+| `src/lib/types/diff.ts` | Drop sources from `TCoreArgumentDiff`, drop `compareSource` from `TCoreDiffOptions`, remove `TSource` generic |
+| `src/lib/core/change-collector.ts` | Remove `addedSource`/`removedSource` methods, drop `TSource` generic |
 | `src/lib/index.ts` | Export new classes and types |
 | `src/extensions/ieee/source.ts` | Update to new CoreSourceSchema |
 | `test/core.test.ts` | Update all tests; add library tests |
+
+## Checksum Config Sharing
+
+`AssertionLibrary` and `SourceLibrary` reuse the existing `TCoreChecksumConfig` type. Libraries use `assertionFields` and `sourceFields` respectively from the config. The same config instance can be shared across libraries and engines for consistency, or each can use its own. `DEFAULT_CHECKSUM_CONFIG` includes defaults for all field sets.
+
+## CLI Scope
+
+CLI files (`src/cli/`) will need updating for the new model (hydration, storage, commands). This is **out of scope** for this spec — CLI changes will be addressed in a follow-up spec after the core library changes land.
 
 ## Breaking Changes
 
