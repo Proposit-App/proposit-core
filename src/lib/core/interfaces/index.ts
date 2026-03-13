@@ -21,3 +21,10 @@ export type {
 } from "./premise-engine.interfaces.js"
 
 export type { TSourceManagement } from "./source-management.interfaces.js"
+
+export type {
+    TAssertionLookup,
+    TSourceLookup,
+    TAssertionLibrarySnapshot,
+    TSourceLibrarySnapshot,
+} from "./library.interfaces.js"

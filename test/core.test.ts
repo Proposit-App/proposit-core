@@ -57,6 +57,10 @@ import {
     canonicalSerialize,
     entityChecksum,
 } from "../src/lib/core/checksum"
+import type {
+    TAssertionLookup,
+    TSourceLookup,
+} from "../src/lib/core/interfaces/library.interfaces"
 
 type TVariableInput = Omit<TCorePropositionalVariable, "checksum">
 
@@ -6234,7 +6238,7 @@ describe("PremiseEngine — updateExpression", () => {
         )
 
         expect(() =>
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { id: "new-id" } as any)
         ).toThrowError(/forbidden/)
     })
@@ -6246,7 +6250,7 @@ describe("PremiseEngine — updateExpression", () => {
         )
 
         expect(() =>
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { parentId: "op-and" } as any)
         ).toThrowError(/forbidden/)
     })
@@ -6258,7 +6262,7 @@ describe("PremiseEngine — updateExpression", () => {
         )
 
         expect(() =>
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { type: "operator" } as any)
         ).toThrowError(/forbidden/)
     })
@@ -6270,7 +6274,7 @@ describe("PremiseEngine — updateExpression", () => {
         )
 
         expect(() =>
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { argumentId: "arg-2" } as any)
         ).toThrowError(/forbidden/)
     })
@@ -6282,7 +6286,7 @@ describe("PremiseEngine — updateExpression", () => {
         )
 
         expect(() =>
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { argumentVersion: 99 } as any)
         ).toThrowError(/forbidden/)
     })
@@ -6294,7 +6298,7 @@ describe("PremiseEngine — updateExpression", () => {
         )
 
         expect(() =>
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { checksum: "abcd1234" } as any)
         ).toThrowError(/forbidden/)
     })
@@ -11358,5 +11362,25 @@ describe("Argument checksum includes sources", () => {
         engine.removeSource("src-1")
         const checksumAfter = engine.getArgument().checksum
         expect(checksumAfter).toBe(checksumBefore)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Library lookup interfaces
+// ---------------------------------------------------------------------------
+
+describe("Library lookup interfaces", () => {
+    it("TAssertionLookup has get method", () => {
+        const lookup: TAssertionLookup = {
+            get: (_id: string, _version: number) => undefined,
+        }
+        expect(lookup.get("x", 0)).toBeUndefined()
+    })
+
+    it("TSourceLookup has get method", () => {
+        const lookup: TSourceLookup = {
+            get: (_id: string, _version: number) => undefined,
+        }
+        expect(lookup.get("x", 0)).toBeUndefined()
     })
 })
