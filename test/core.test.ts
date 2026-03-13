@@ -61,6 +61,7 @@ import type {
     TAssertionLookup,
     TSourceLookup,
 } from "../src/lib/core/interfaces/library.interfaces"
+import { AssertionLibrary } from "../src/lib/core/assertion-library"
 
 type TVariableInput = Omit<TCorePropositionalVariable, "checksum">
 
@@ -11382,5 +11383,138 @@ describe("Library lookup interfaces", () => {
             get: (_id: string, _version: number) => undefined,
         }
         expect(lookup.get("x", 0)).toBeUndefined()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// AssertionLibrary
+// ---------------------------------------------------------------------------
+
+describe("AssertionLibrary", () => {
+    function makeLibrary() {
+        return new AssertionLibrary()
+    }
+
+    describe("create", () => {
+        it("creates an assertion at version 0, unfrozen", () => {
+            const lib = makeLibrary()
+            const a = lib.create({ id: "a1" })
+            expect(a.id).toBe("a1")
+            expect(a.version).toBe(0)
+            expect(a.frozen).toBe(false)
+            expect(a.checksum).toBeTruthy()
+        })
+
+        it("throws on duplicate ID", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            expect(() => lib.create({ id: "a1" })).toThrow("already exists")
+        })
+    })
+
+    describe("get", () => {
+        it("returns undefined for nonexistent", () => {
+            const lib = makeLibrary()
+            expect(lib.get("x", 0)).toBeUndefined()
+        })
+
+        it("returns the assertion at a specific version", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            const result = lib.get("a1", 0)
+            expect(result).toBeDefined()
+            expect(result!.version).toBe(0)
+        })
+    })
+
+    describe("getCurrent", () => {
+        it("returns the highest version", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            lib.freeze("a1")
+            const current = lib.getCurrent("a1")
+            expect(current!.version).toBe(1)
+        })
+    })
+
+    describe("update", () => {
+        it("throws when latest is frozen", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            lib.freeze("a1")
+            lib.freeze("a1") // freeze v1 too
+            // now latest (v2) is unfrozen, should work
+            lib.update("a1", {})
+        })
+
+        it("throws when ID does not exist", () => {
+            const lib = makeLibrary()
+            expect(() => lib.update("nope", {})).toThrow("does not exist")
+        })
+
+        it("updates the highest version", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            const updated = lib.update("a1", {})
+            expect(updated.version).toBe(0)
+        })
+    })
+
+    describe("freeze", () => {
+        it("freezes current and creates next version", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            const { frozen, current } = lib.freeze("a1")
+            expect(frozen.version).toBe(0)
+            expect(frozen.frozen).toBe(true)
+            expect(current.version).toBe(1)
+            expect(current.frozen).toBe(false)
+        })
+
+        it("throws when latest is already frozen", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            lib.freeze("a1")
+            lib.freeze("a1")
+            lib.freeze("a1")
+            // After 3 freezes: v0 frozen, v1 frozen, v2 frozen, v3 unfrozen
+            const v3 = lib.getCurrent("a1")
+            expect(v3!.version).toBe(3)
+            expect(v3!.frozen).toBe(false)
+        })
+
+        it("throws when ID does not exist", () => {
+            const lib = makeLibrary()
+            expect(() => lib.freeze("nope")).toThrow("does not exist")
+        })
+    })
+
+    describe("getAll / getVersions", () => {
+        it("returns all versions of all assertions", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            lib.freeze("a1")
+            lib.create({ id: "a2" })
+            expect(lib.getAll()).toHaveLength(3)
+        })
+
+        it("returns versions for a specific ID", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            lib.freeze("a1")
+            expect(lib.getVersions("a1")).toHaveLength(2)
+        })
+    })
+
+    describe("snapshot / fromSnapshot", () => {
+        it("round-trips", () => {
+            const lib = makeLibrary()
+            lib.create({ id: "a1" })
+            lib.freeze("a1")
+            const snap = lib.snapshot()
+            const restored = AssertionLibrary.fromSnapshot(snap)
+            expect(restored.get("a1", 0)!.frozen).toBe(true)
+            expect(restored.get("a1", 1)!.frozen).toBe(false)
+        })
     })
 })
