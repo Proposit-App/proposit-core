@@ -3391,7 +3391,11 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("preserves extras on premises through toData()", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), sLib())
+        const engine = new ArgumentEngine(
+            { id: "arg-1", version: 1 },
+            aLib(),
+            sLib()
+        )
         const { result: pm } = engine.createPremise({
             title: "My Premise",
             priority: "high",
@@ -3402,7 +3406,11 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("preserves extras on premises through engine.snapshot()", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), sLib())
+        const engine = new ArgumentEngine(
+            { id: "arg-1", version: 1 },
+            aLib(),
+            sLib()
+        )
         engine.createPremise({ title: "Premise One" })
         const snap = engine.snapshot()
         expect(
@@ -3411,7 +3419,11 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("setExtras replaces all extras, not merges", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), sLib())
+        const engine = new ArgumentEngine(
+            { id: "arg-1", version: 1 },
+            aLib(),
+            sLib()
+        )
         const { result: pm } = engine.createPremise({ a: "1", b: "2" })
         pm.setExtras({ c: "3" })
         expect(pm.getExtras()).toEqual({ c: "3" })
@@ -3419,7 +3431,11 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("structural fields in toData() cannot be shadowed by extras", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), sLib())
+        const engine = new ArgumentEngine(
+            { id: "arg-1", version: 1 },
+            aLib(),
+            sLib()
+        )
         const { result: pm } = engine.createPremise({
             id: "should-be-overridden",
             rootExpressionId: "fake",
@@ -4720,7 +4736,11 @@ describe("ChangeCollector", () => {
 
 describe("PremiseEngine — mutation changesets", () => {
     function setup() {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const v1 = {
             id: "v1",
             symbol: "P",
@@ -4960,7 +4980,11 @@ describe("PremiseEngine — mutation changesets", () => {
     })
 
     it("addVariable returns the variable in result and changes", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const v = {
             id: "v1",
             symbol: "P",
@@ -4977,7 +5001,11 @@ describe("PremiseEngine — mutation changesets", () => {
     })
 
     it("removeVariable returns removed variable in result and changes", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const v = {
             id: "v1",
             symbol: "P",
@@ -4994,14 +5022,22 @@ describe("PremiseEngine — mutation changesets", () => {
     })
 
     it("removeVariable for non-existent variable returns undefined with empty changes", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result, changes } = eng.removeVariable("nonexistent")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
 
     it("setExtras returns new extras with empty changes", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: pm } = eng.createPremise()
         const { result, changes } = pm.setExtras({ title: "Test" })
         expect(result).toEqual({ title: "Test" })
@@ -5015,7 +5051,11 @@ describe("PremiseEngine — mutation changesets", () => {
 
 describe("ArgumentEngine — mutation changesets", () => {
     it("createPremise returns PremiseEngine and records added premise", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: pm, changes } = eng.createPremise()
         expect(pm).toBeInstanceOf(PremiseEngine)
         expect(changes.premises?.added).toHaveLength(1)
@@ -5023,7 +5063,11 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("createPremiseWithId returns PremiseEngine with specified ID", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: pm, changes } = eng.createPremiseWithId("my-premise")
         expect(pm.getId()).toBe("my-premise")
         expect(changes.premises?.added).toHaveLength(1)
@@ -5031,7 +5075,11 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("removePremise returns premise data and records removal", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.createPremise()
         const premiseId = eng.listPremiseIds()[0]
         const { result, changes } = eng.removePremise(premiseId)
@@ -5041,7 +5089,11 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("removePremise that was conclusion also records role change", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: pm } = eng.createPremise()
         eng.setConclusionPremise(pm.getId())
         const { changes } = eng.removePremise(pm.getId())
@@ -5050,14 +5102,22 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("removePremise for non-existent ID returns undefined", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result, changes } = eng.removePremise("nope")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
 
     it("setConclusionPremise returns new role state", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: pm } = eng.createPremise()
         const { result, changes } = eng.setConclusionPremise(pm.getId())
         expect(result.conclusionPremiseId).toBe(pm.getId())
@@ -5065,7 +5125,11 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("clearConclusionPremise returns empty role state", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: pm } = eng.createPremise()
         eng.setConclusionPremise(pm.getId())
         const { result, changes } = eng.clearConclusionPremise()
@@ -5165,7 +5229,11 @@ describe("checksum utilities", () => {
 
     describe("PremiseEngine — checksum", () => {
         it("returns consistent checksum for same state", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                aLib(),
+                sLib()
+            )
             const { result: pm } = eng.createPremise()
             const cs1 = pm.checksum()
             const cs2 = pm.checksum()
@@ -5173,7 +5241,11 @@ describe("checksum utilities", () => {
         })
 
         it("checksum changes when an expression is added", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                aLib(),
+                sLib()
+            )
             const v = {
                 id: "v1",
                 symbol: "P",
@@ -5200,7 +5272,11 @@ describe("checksum utilities", () => {
         })
 
         it("premise checksum does not change when a variable is added (variables are argument-scoped)", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                aLib(),
+                sLib()
+            )
             const { result: pm } = eng.createPremise()
             const before = pm.checksum()
             eng.addVariable({
@@ -5216,7 +5292,11 @@ describe("checksum utilities", () => {
         })
 
         it("identical premises built the same way produce same checksum", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                aLib(),
+                sLib()
+            )
             const v1 = {
                 id: "v1",
                 symbol: "P",
@@ -5235,12 +5315,20 @@ describe("checksum utilities", () => {
 
     describe("ArgumentEngine — checksum", () => {
         it("returns consistent checksum for same state", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                aLib(),
+                sLib()
+            )
             expect(eng.checksum()).toBe(eng.checksum())
         })
 
         it("checksum changes when a premise is added", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                aLib(),
+                sLib()
+            )
             const before = eng.checksum()
             eng.createPremise()
             const after = eng.checksum()
@@ -5248,7 +5336,11 @@ describe("checksum utilities", () => {
         })
 
         it("checksum changes when conclusion is set", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+            const eng = new ArgumentEngine(
+                { id: "arg1", version: 0 },
+                aLib(),
+                sLib()
+            )
             // First premise is auto-set as conclusion
             eng.createPremise()
             const { result: pm2 } = eng.createPremise()
@@ -5278,7 +5370,11 @@ describe("checksum utilities", () => {
 
 describe("entity checksum fields", () => {
     function setupPremise() {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const v = {
             id: "v1",
             symbol: "P",
@@ -5328,7 +5424,11 @@ describe("entity checksum fields", () => {
     })
 
     it("getChildExpressions returns expressions with checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5407,7 +5507,11 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset expressions from addExpression include checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5441,7 +5545,11 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset variables from addVariable include checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { changes } = eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5455,7 +5563,11 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset variables from removeVariable include checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5470,7 +5582,11 @@ describe("entity checksum fields", () => {
     })
 
     it("addExpression result includes checksum", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5494,7 +5610,11 @@ describe("entity checksum fields", () => {
     })
 
     it("addVariable result includes checksum", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result } = eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5507,7 +5627,11 @@ describe("entity checksum fields", () => {
     })
 
     it("ArgumentEngine getArgument includes argument-level checksum", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.createPremise()
         const arg = eng.getArgument()
         expect(arg.checksum).toBeDefined()
@@ -5515,7 +5639,11 @@ describe("entity checksum fields", () => {
     })
 
     it("ArgumentEngine premise checksums via listPremises", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.createPremise()
         const premises = eng.listPremises()
         expect(premises).toHaveLength(1)
@@ -5532,7 +5660,11 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset modified expressions include checksums after collapse", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5999,21 +6131,33 @@ describe("variable expressions cannot have children", () => {
 
 describe("ArgumentEngine — auto-conclusion on first premise", () => {
     it("first createPremise auto-sets conclusion", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: pm, changes } = eng.createPremise()
         expect(eng.getRoleState().conclusionPremiseId).toBe(pm.getId())
         expect(changes.roles?.conclusionPremiseId).toBe(pm.getId())
     })
 
     it("first createPremiseWithId auto-sets conclusion", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { changes } = eng.createPremiseWithId("my-premise")
         expect(eng.getRoleState().conclusionPremiseId).toBe("my-premise")
         expect(changes.roles?.conclusionPremiseId).toBe("my-premise")
     })
 
     it("second createPremise does not change conclusion", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: first } = eng.createPremise()
         const { changes } = eng.createPremise()
         expect(eng.getRoleState().conclusionPremiseId).toBe(first.getId())
@@ -6021,7 +6165,11 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
     })
 
     it("createPremise after clearConclusionPremise auto-sets again", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.createPremise()
         eng.clearConclusionPremise()
         const { result: pm2, changes } = eng.createPremise()
@@ -6030,7 +6178,11 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
     })
 
     it("createPremise after removing conclusion premise auto-sets again", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         const { result: first } = eng.createPremise()
         eng.removePremise(first.getId())
         const { result: second, changes } = eng.createPremise()
@@ -6039,7 +6191,11 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
     })
 
     it("setConclusionPremise overrides auto-assignment", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: "arg1", version: 0 },
+            aLib(),
+            sLib()
+        )
         eng.createPremise()
         const { result: second } = eng.createPremise()
         eng.setConclusionPremise(second.getId())
@@ -6432,7 +6588,11 @@ describe("PremiseEngine — updateExpression", () => {
 
 describe("removeExpression — deleteSubtree parameter", () => {
     function setup() {
-        const eng = new ArgumentEngine({ id: ARG.id, version: ARG.version }, aLib(), sLib())
+        const eng = new ArgumentEngine(
+            { id: ARG.id, version: ARG.version },
+            aLib(),
+            sLib()
+        )
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -6983,7 +7143,9 @@ describe("configurable position range", () => {
 
     it("ArgumentEngine passes positionConfig to premises", () => {
         const config: TCorePositionConfig = { min: 100, max: 300, initial: 200 }
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), { positionConfig: config })
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), {
+            positionConfig: config,
+        })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -10010,11 +10172,7 @@ describe("ArgumentEngine source management", () => {
         it("throws for non-existent source", () => {
             const { engine } = buildFixture()
             expect(() =>
-                engine.addVariableSourceAssociation(
-                    "no-src",
-                    0,
-                    "var-p-src"
-                )
+                engine.addVariableSourceAssociation("no-src", 0, "var-p-src")
             ).toThrow(/does not exist/)
         })
 
@@ -10242,13 +10400,13 @@ describe("ArgumentEngine source management", () => {
             engine.removeVariableSourceAssociation(
                 engine.getAssociationsForVariable("var-p-src")[0].id
             )
-            expect(
-                engine.getAssociationsForVariable("var-p-src")
-            ).toHaveLength(0)
+            expect(engine.getAssociationsForVariable("var-p-src")).toHaveLength(
+                0
+            )
             engine.rollback(snap)
-            expect(
-                engine.getAssociationsForVariable("var-p-src")
-            ).toHaveLength(1)
+            expect(engine.getAssociationsForVariable("var-p-src")).toHaveLength(
+                1
+            )
         })
 
         it("getSnapshot populates source records", () => {
@@ -10544,7 +10702,11 @@ import {
 describe("diffArguments source associations", () => {
     function buildEngine(sl1?: SourceLibrary) {
         const sourceLib = sl1 ?? sLib()
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), sourceLib)
+        const engine = new ArgumentEngine(
+            { id: "arg-1", version: 1 },
+            aLib(),
+            sourceLib
+        )
         engine.addVariable(makeVar("var-p", "P"))
         const { result: pm } = engine.createPremiseWithId("premise-1")
         pm.addExpression(
@@ -10707,7 +10869,11 @@ describe("validateEvaluability source checks", () => {
             expressionSourceAssociations: [],
         }
         const corruptedSnap = { ...snap, sources: corruptedSources }
-        const restored = ArgumentEngine.fromSnapshot(corruptedSnap, aLib(), sLib())
+        const restored = ArgumentEngine.fromSnapshot(
+            corruptedSnap,
+            aLib(),
+            sLib()
+        )
 
         const result = restored.validateEvaluability()
         expect(result.ok).toBe(false)
@@ -10739,7 +10905,11 @@ describe("validateEvaluability source checks", () => {
             expressionSourceAssociations: [badAssoc],
         }
         const corruptedSnap = { ...snap, sources: corruptedSources }
-        const restored = ArgumentEngine.fromSnapshot(corruptedSnap, aLib(), sLib())
+        const restored = ArgumentEngine.fromSnapshot(
+            corruptedSnap,
+            aLib(),
+            sLib()
+        )
 
         const result = restored.validateEvaluability()
         expect(result.ok).toBe(false)
@@ -10772,7 +10942,11 @@ describe("validateEvaluability source checks", () => {
             expressionSourceAssociations: [badAssoc],
         }
         const corruptedSnap = { ...snap, sources: corruptedSources }
-        const restored = ArgumentEngine.fromSnapshot(corruptedSnap, aLib(), sLib())
+        const restored = ArgumentEngine.fromSnapshot(
+            corruptedSnap,
+            aLib(),
+            sLib()
+        )
 
         const result = restored.validateEvaluability()
         expect(result.ok).toBe(false)
@@ -10818,7 +10992,11 @@ describe("Argument checksum includes source associations", () => {
     it("changes when an association is added", () => {
         const sl1 = sLib()
         sl1.create({ id: "src-1" })
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), sl1)
+        const engine = new ArgumentEngine(
+            { id: "arg-1", version: 1 },
+            aLib(),
+            sl1
+        )
         engine.addVariable({
             id: "v-1",
             argumentId: "arg-1",

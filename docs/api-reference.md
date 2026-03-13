@@ -721,17 +721,17 @@ A version of `TPropositionalExpression` with both the `position` and `checksum` 
 
 Hierarchical snapshot types for capturing and restoring engine state:
 
-| Type                         | Contains                                                                                                                                                                     |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TExpressionManagerSnapshot` | `expressions` (with checksums), `config`                                                                                                                                     |
-| `TVariableManagerSnapshot`   | `variables`, `config`                                                                                                                                                        |
-| `TPremiseEngineSnapshot`     | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                                                                                                     |
-| `TSourceManagerSnapshot`     | `variableSourceAssociations`, `expressionSourceAssociations`                                                                                                                 |
-| `TArgumentEngineSnapshot`    | `argument`, `variables` snapshot, `premises` snapshots, `sources` snapshot, `conclusionPremiseId`, `config`                                                                  |
-| `TReactiveSnapshot`          | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles`, `variableSourceAssociations`, `expressionSourceAssociations` Records            |
-| `TReactivePremiseSnapshot`   | `premise`, `expressions` (Record by ID), `rootExpressionId`                                                                                                                  |
-| `TAssertionLibrarySnapshot`  | `assertions` (all versions of all assertions)                                                                                                                                |
-| `TSourceLibrarySnapshot`     | `sources` (all versions of all sources)                                                                                                                                      |
+| Type                         | Contains                                                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TExpressionManagerSnapshot` | `expressions` (with checksums), `config`                                                                                                                          |
+| `TVariableManagerSnapshot`   | `variables`, `config`                                                                                                                                             |
+| `TPremiseEngineSnapshot`     | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                                                                                          |
+| `TSourceManagerSnapshot`     | `variableSourceAssociations`, `expressionSourceAssociations`                                                                                                      |
+| `TArgumentEngineSnapshot`    | `argument`, `variables` snapshot, `premises` snapshots, `sources` snapshot, `conclusionPremiseId`, `config`                                                       |
+| `TReactiveSnapshot`          | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles`, `variableSourceAssociations`, `expressionSourceAssociations` Records |
+| `TReactivePremiseSnapshot`   | `premise`, `expressions` (Record by ID), `rootExpressionId`                                                                                                       |
+| `TAssertionLibrarySnapshot`  | `assertions` (all versions of all assertions)                                                                                                                     |
+| `TSourceLibrarySnapshot`     | `sources` (all versions of all sources)                                                                                                                           |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
@@ -747,16 +747,16 @@ Internal manager class for source associations (variable–source and expression
 
 ### Source Types
 
-| Type                               | Description                                                                         |
-| ---------------------------------- | ----------------------------------------------------------------------------------- |
-| `TCoreSource`                      | Base source entity (`{ id, version, frozen, checksum }`)                            |
-| `TCoreAssertion`                   | Base assertion entity (`{ id, version, frozen, checksum }`)                         |
-| `TCoreVariableSourceAssociation`   | Links a source version to a variable (`{ sourceId, sourceVersion, variableId, … }`) |
-| `TCoreExpressionSourceAssociation` | Links a source version to an expression within a premise                            |
+| Type                               | Description                                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `TCoreSource`                      | Base source entity (`{ id, version, frozen, checksum }`)                                                   |
+| `TCoreAssertion`                   | Base assertion entity (`{ id, version, frozen, checksum }`)                                                |
+| `TCoreVariableSourceAssociation`   | Links a source version to a variable (`{ sourceId, sourceVersion, variableId, … }`)                        |
+| `TCoreExpressionSourceAssociation` | Links a source version to an expression within a premise                                                   |
 | `TSourceAssociationRemovalResult`  | Return type of bulk association removal (`{ removedVariableAssociations, removedExpressionAssociations }`) |
-| `TSourceManagement`                | Interface contract for source association management methods on `ArgumentEngine`    |
-| `TSourceManagerSnapshot`           | Snapshot type for `SourceManager` state                                             |
-| `TAssertionLookup`                 | Narrow read-only interface for assertion lookups (`get(id, version)`)               |
-| `TSourceLookup`                    | Narrow read-only interface for source lookups (`get(id, version)`)                  |
-| `TAssertionLibrarySnapshot`        | Snapshot type for `AssertionLibrary` state                                          |
-| `TSourceLibrarySnapshot`           | Snapshot type for `SourceLibrary` state                                             |
+| `TSourceManagement`                | Interface contract for source association management methods on `ArgumentEngine`                           |
+| `TSourceManagerSnapshot`           | Snapshot type for `SourceManager` state                                                                    |
+| `TAssertionLookup`                 | Narrow read-only interface for assertion lookups (`get(id, version)`)                                      |
+| `TSourceLookup`                    | Narrow read-only interface for source lookups (`get(id, version)`)                                         |
+| `TAssertionLibrarySnapshot`        | Snapshot type for `AssertionLibrary` state                                                                 |
+| `TSourceLibrarySnapshot`           | Snapshot type for `SourceLibrary` state                                                                    |
