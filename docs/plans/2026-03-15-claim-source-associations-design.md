@@ -144,21 +144,26 @@ class ArgumentEngine<
 
 `ArgumentEngine` does not mutate claim-source associations. It can query them (e.g., "what sources support the claim behind variable P?") but `ClaimSourceLibrary` is managed externally.
 
-`TArgumentEngineSnapshot` gains an optional `claimSourceAssociations` field for hydration convenience, though the library is managed externally. `fromSnapshot()` and `rollback()` remove their variable-association restoration code.
+`TArgumentEngineSnapshot` gains an optional `claimSourceAssociations` field for hydration convenience, though the library is managed externally.
+
+All static factory and restoration methods gain the new library parameter:
+- `fromSnapshot(snapshot, claimLibrary, sourceLibrary, claimSourceLibrary, options?)` — adds `claimSourceLibrary` parameter, removes variable-association restoration code
+- `fromData(data, claimLibrary, sourceLibrary, claimSourceLibrary, options?)` — adds `claimSourceLibrary` parameter
+- `rollback(snapshot)` — internal reconstruction passes stored `claimSourceLibrary` reference to constructor, removes variable-association restoration code
 
 ### `SourceManager` changes
 
 The entire variable-association half is removed:
 - Deleted: `variableAssociations` map, `variableToAssociations` index, all `*VariableSourceAssociation*` methods, `removeAssociationsForVariable`
 - Kept: all expression-association logic unchanged
-- `TSourceAssociationRemovalResult` replaced by `TCoreExpressionSourceAssociation[]` (single-field wrapper no longer needed)
+- `TSourceAssociationRemovalResult` deleted — `removeExpressionSourceAssociation()` and `removeAssociationsForExpression()` now return `TCoreExpressionSourceAssociation[]` directly
 - `TSourceManagerSnapshot` drops `variableSourceAssociations`
-- `getAssociationsForSource` simplified: returns `TCoreExpressionSourceAssociation[]` instead of `{ variable, expression }` (only expression associations remain)
+- `getAssociationsForSource` renamed to `getExpressionAssociationsForSource` and simplified: returns `TCoreExpressionSourceAssociation[]` instead of `{ variable, expression }`
 - `sourceToAssociations` reverse index now only tracks expression associations; the `getAssociationsForSource` implementation simplifies to a direct lookup into `expressionAssociations`
 
 ### `PremiseEngine` changes
 
-`PremiseEngine` has call sites that access `.removedExpressionAssociations` on the old `TSourceAssociationRemovalResult` return type (in `removeExpression` cascade logic). These update to use the new `TCoreExpressionSourceAssociation[]` return type directly.
+`PremiseEngine` has call sites that access `.removedExpressionAssociations` on the old `TSourceAssociationRemovalResult` return type (in `removeExpression` cascade logic at lines ~469, ~728, ~734). After this change, `removeAssociationsForExpression()` and `removeExpressionSourceAssociation()` return `TCoreExpressionSourceAssociation[]` directly, so the `.removedExpressionAssociations` property access is replaced by iterating the return value directly.
 
 ### `TSourceManagement` interface changes
 
@@ -169,7 +174,7 @@ Removed methods:
 - `getAllVariableSourceAssociations`
 
 Changed methods:
-- `getAssociationsForSource(sourceId)` — simplified to return `TCoreExpressionSourceAssociation[]` (was `{ variable, expression }`)
+- `getAssociationsForSource(sourceId)` renamed to `getExpressionAssociationsForSource(sourceId)` — returns `TCoreExpressionSourceAssociation[]` (was `{ variable, expression }` under the old name)
 
 Kept methods (all expression-source):
 - `addExpressionSourceAssociation`
@@ -195,12 +200,14 @@ In `src/lib/types/mutation.ts`:
 In `src/lib/types/reactive.ts`:
 - Remove `variableSourceAssociations: Record<string, TCoreVariableSourceAssociation>` field
 - Keep `expressionSourceAssociations` field unchanged
+- No replacement field for claim-source associations — they are global (not argument-scoped), so they do not belong in argument-level reactive snapshots
 
 ### Diff module changes
 
 In `src/lib/types/diff.ts`:
 - Remove `variableSourceAssociations` field from `TCoreArgumentDiff`
 - Remove `compareVariableSourceAssociation` field from `TCoreDiffOptions`
+- No replacement field for claim-source associations — they are global (not argument-scoped), so they do not belong in argument-level diffs. Diffing claim-source associations is a separate concern if needed in the future.
 
 In `src/lib/core/diff.ts`:
 - Remove `defaultCompareVariableSourceAssociation` comparator function
