@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type {
     TCoreArgument,
-    TCoreAssertion,
+    TCoreClaim,
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
@@ -55,7 +55,7 @@ import type {
     TSourceManagement,
     TDisplayable,
     TChecksummable,
-    TAssertionLookup,
+    TClaimLookup,
     TSourceLookup,
 } from "./interfaces/index.js"
 import { SourceManager } from "./source-manager.js"
@@ -93,7 +93,7 @@ export class ArgumentEngine<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TSource extends TCoreSource = TCoreSource,
-    TAssertion extends TCoreAssertion = TCoreAssertion,
+    TClaim extends TCoreClaim = TCoreClaim,
 >
     implements
         TPremiseCrud<TArg, TPremise, TExpr, TVar>,
@@ -111,7 +111,7 @@ export class ArgumentEngine<
     private premises: Map<string, PremiseEngine<TArg, TPremise, TExpr, TVar>>
     private variables: VariableManager<TVar>
     private sourceManager: SourceManager
-    private assertionLibrary: TAssertionLookup<TAssertion>
+    private claimLibrary: TClaimLookup<TClaim>
     private sourceLibrary: TSourceLookup<TSource>
     private conclusionPremiseId: string | undefined
     private checksumConfig?: TCoreChecksumConfig
@@ -134,12 +134,12 @@ export class ArgumentEngine<
 
     constructor(
         argument: TOptionalChecksum<TArg>,
-        assertionLibrary: TAssertionLookup<TAssertion>,
+        claimLibrary: TClaimLookup<TClaim>,
         sourceLibrary: TSourceLookup<TSource>,
         options?: TLogicEngineOptions
     ) {
         this.argument = { ...argument }
-        this.assertionLibrary = assertionLibrary
+        this.claimLibrary = claimLibrary
         this.sourceLibrary = sourceLibrary
         this.premises = new Map()
         this.checksumConfig = options?.checksumConfig
@@ -512,15 +512,15 @@ export class ArgumentEngine<
                 `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`
             )
         }
-        // Validate assertion reference
+        // Validate claim reference
         if (
-            !this.assertionLibrary.get(
-                variable.assertionId,
-                variable.assertionVersion
+            !this.claimLibrary.get(
+                variable.claimId,
+                variable.claimVersion
             )
         ) {
             throw new Error(
-                `Assertion "${variable.assertionId}" version ${variable.assertionVersion} does not exist in the assertion library.`
+                `Claim "${variable.claimId}" version ${variable.claimVersion} does not exist in the claim library.`
             )
         }
         const withChecksum = this.attachVariableChecksum({ ...variable })
@@ -542,28 +542,28 @@ export class ArgumentEngine<
         variableId: string,
         updates: {
             symbol?: string
-            assertionId?: string
-            assertionVersion?: number
+            claimId?: string
+            claimVersion?: number
         }
     ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg> {
-        // Validate: assertionId and assertionVersion must be provided together
-        const hasAssertionId = updates.assertionId !== undefined
-        const hasAssertionVersion = updates.assertionVersion !== undefined
-        if (hasAssertionId !== hasAssertionVersion) {
+        // Validate: claimId and claimVersion must be provided together
+        const hasClaimId = updates.claimId !== undefined
+        const hasClaimVersion = updates.claimVersion !== undefined
+        if (hasClaimId !== hasClaimVersion) {
             throw new Error(
-                "assertionId and assertionVersion must be provided together."
+                "claimId and claimVersion must be provided together."
             )
         }
-        // Validate assertion reference if provided
-        if (hasAssertionId && hasAssertionVersion) {
+        // Validate claim reference if provided
+        if (hasClaimId && hasClaimVersion) {
             if (
-                !this.assertionLibrary.get(
-                    updates.assertionId!,
-                    updates.assertionVersion!
+                !this.claimLibrary.get(
+                    updates.claimId!,
+                    updates.claimVersion!
                 )
             ) {
                 throw new Error(
-                    `Assertion "${updates.assertionId}" version ${updates.assertionVersion} does not exist in the assertion library.`
+                    `Claim "${updates.claimId}" version ${updates.claimVersion} does not exist in the claim library.`
                 )
             }
         }
@@ -1014,20 +1014,20 @@ export class ArgumentEngine<
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
         TSource extends TCoreSource = TCoreSource,
-        TAssertion extends TCoreAssertion = TCoreAssertion,
+        TClaim extends TCoreClaim = TCoreClaim,
     >(
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>,
-        assertionLibrary: TAssertionLookup<TAssertion>,
+        claimLibrary: TClaimLookup<TClaim>,
         sourceLibrary: TSourceLookup<TSource>
-    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TAssertion> {
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim> {
         const engine = new ArgumentEngine<
             TArg,
             TPremise,
             TExpr,
             TVar,
             TSource,
-            TAssertion
-        >(snapshot.argument, assertionLibrary, sourceLibrary, snapshot.config)
+            TClaim
+        >(snapshot.argument, claimLibrary, sourceLibrary, snapshot.config)
         // Restore variables
         for (const v of snapshot.variables.variables) {
             engine.addVariable(v)
@@ -1070,25 +1070,25 @@ export class ArgumentEngine<
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
         TSource extends TCoreSource = TCoreSource,
-        TAssertion extends TCoreAssertion = TCoreAssertion,
+        TClaim extends TCoreClaim = TCoreClaim,
     >(
         argument: TOptionalChecksum<TArg>,
-        assertionLibrary: TAssertionLookup<TAssertion>,
+        claimLibrary: TClaimLookup<TClaim>,
         sourceLibrary: TSourceLookup<TSource>,
         variables: TOptionalChecksum<TVar>[],
         premises: TOptionalChecksum<TPremise>[],
         expressions: TExpressionInput<TExpr>[],
         roles: TCoreArgumentRoleState,
         config?: TLogicEngineOptions
-    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TAssertion> {
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim> {
         const engine = new ArgumentEngine<
             TArg,
             TPremise,
             TExpr,
             TVar,
             TSource,
-            TAssertion
-        >(argument, assertionLibrary, sourceLibrary, config)
+            TClaim
+        >(argument, claimLibrary, sourceLibrary, config)
 
         // Register variables
         for (const v of variables) {

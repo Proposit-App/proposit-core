@@ -1,16 +1,16 @@
-import type { TCoreAssertion } from "../schemata/assertion.js"
+import type { TCoreClaim } from "../schemata/claim.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
 import type {
-    TAssertionLookup,
-    TAssertionLibrarySnapshot,
+    TClaimLookup,
+    TClaimLibrarySnapshot,
 } from "./interfaces/library.interfaces.js"
 
-export class AssertionLibrary<
-    TAssertion extends TCoreAssertion = TCoreAssertion,
-> implements TAssertionLookup<TAssertion> {
-    private entities: Map<string, Map<number, TAssertion>>
+export class ClaimLibrary<
+    TClaim extends TCoreClaim = TCoreClaim,
+> implements TClaimLookup<TClaim> {
+    private entities: Map<string, Map<number, TClaim>>
     private checksumConfig?: TCoreChecksumConfig
 
     constructor(options?: { checksumConfig?: TCoreChecksumConfig }) {
@@ -19,22 +19,22 @@ export class AssertionLibrary<
     }
 
     public create(
-        assertion: Omit<TAssertion, "version" | "frozen" | "checksum">
-    ): TAssertion {
-        if (this.entities.has(assertion.id as string)) {
+        claim: Omit<TClaim, "version" | "frozen" | "checksum">
+    ): TClaim {
+        if (this.entities.has(claim.id as string)) {
             throw new Error(
-                `Assertion with ID "${assertion.id}" already exists.`
+                `Claim with ID "${claim.id}" already exists.`
             )
         }
         const full = {
-            ...assertion,
+            ...claim,
             version: 0,
             frozen: false,
             checksum: "",
-        } as TAssertion
+        } as TClaim
         full.checksum = this.computeChecksum(full)
 
-        const versions = new Map<number, TAssertion>()
+        const versions = new Map<number, TClaim>()
         versions.set(0, full)
         this.entities.set(full.id, versions)
         return full
@@ -43,18 +43,18 @@ export class AssertionLibrary<
     public update(
         id: string,
         updates: Partial<
-            Omit<TAssertion, "id" | "version" | "frozen" | "checksum">
+            Omit<TClaim, "id" | "version" | "frozen" | "checksum">
         >
-    ): TAssertion {
+    ): TClaim {
         const versions = this.entities.get(id)
         if (!versions) {
-            throw new Error(`Assertion "${id}" does not exist.`)
+            throw new Error(`Claim "${id}" does not exist.`)
         }
         const maxVersion = this.maxVersion(versions)
         const current = versions.get(maxVersion)!
         if (current.frozen) {
             throw new Error(
-                `Assertion "${id}" version ${maxVersion} is frozen and cannot be updated.`
+                `Claim "${id}" version ${maxVersion} is frozen and cannot be updated.`
             )
         }
         const updated = {
@@ -64,29 +64,29 @@ export class AssertionLibrary<
             version: current.version,
             frozen: current.frozen,
             checksum: "",
-        } as TAssertion
+        } as TClaim
         updated.checksum = this.computeChecksum(updated)
         versions.set(maxVersion, updated)
         return updated
     }
 
-    public freeze(id: string): { frozen: TAssertion; current: TAssertion } {
+    public freeze(id: string): { frozen: TClaim; current: TClaim } {
         const versions = this.entities.get(id)
         if (!versions) {
-            throw new Error(`Assertion "${id}" does not exist.`)
+            throw new Error(`Claim "${id}" does not exist.`)
         }
         const maxVersion = this.maxVersion(versions)
         const current = versions.get(maxVersion)!
         if (current.frozen) {
             throw new Error(
-                `Assertion "${id}" version ${maxVersion} is already frozen.`
+                `Claim "${id}" version ${maxVersion} is already frozen.`
             )
         }
         const frozenEntity = {
             ...current,
             frozen: true,
             checksum: "",
-        } as TAssertion
+        } as TClaim
         frozenEntity.checksum = this.computeChecksum(frozenEntity)
         versions.set(maxVersion, frozenEntity)
 
@@ -96,25 +96,25 @@ export class AssertionLibrary<
             version: nextVersion,
             frozen: false,
             checksum: "",
-        } as TAssertion
+        } as TClaim
         nextEntity.checksum = this.computeChecksum(nextEntity)
         versions.set(nextVersion, nextEntity)
 
         return { frozen: frozenEntity, current: nextEntity }
     }
 
-    public get(id: string, version: number): TAssertion | undefined {
+    public get(id: string, version: number): TClaim | undefined {
         return this.entities.get(id)?.get(version)
     }
 
-    public getCurrent(id: string): TAssertion | undefined {
+    public getCurrent(id: string): TClaim | undefined {
         const versions = this.entities.get(id)
         if (!versions) return undefined
         return versions.get(this.maxVersion(versions))
     }
 
-    public getAll(): TAssertion[] {
-        const result: TAssertion[] = []
+    public getAll(): TClaim[] {
+        const result: TClaim[] = []
         for (const versions of this.entities.values()) {
             for (const entity of versions.values()) {
                 result.push(entity)
@@ -123,7 +123,7 @@ export class AssertionLibrary<
         return result
     }
 
-    public getVersions(id: string): TAssertion[] {
+    public getVersions(id: string): TClaim[] {
         const versions = this.entities.get(id)
         if (!versions) return []
         return Array.from(versions.values()).sort(
@@ -131,18 +131,18 @@ export class AssertionLibrary<
         )
     }
 
-    public snapshot(): TAssertionLibrarySnapshot<TAssertion> {
-        return { assertions: this.getAll() }
+    public snapshot(): TClaimLibrarySnapshot<TClaim> {
+        return { claims: this.getAll() }
     }
 
     public static fromSnapshot<
-        TAssertion extends TCoreAssertion = TCoreAssertion,
+        TClaim extends TCoreClaim = TCoreClaim,
     >(
-        snapshot: TAssertionLibrarySnapshot<TAssertion>,
+        snapshot: TClaimLibrarySnapshot<TClaim>,
         options?: { checksumConfig?: TCoreChecksumConfig }
-    ): AssertionLibrary<TAssertion> {
-        const lib = new AssertionLibrary<TAssertion>(options)
-        for (const entity of snapshot.assertions) {
+    ): ClaimLibrary<TClaim> {
+        const lib = new ClaimLibrary<TClaim>(options)
+        for (const entity of snapshot.claims) {
             let versions = lib.entities.get(entity.id)
             if (!versions) {
                 versions = new Map()
@@ -153,7 +153,7 @@ export class AssertionLibrary<
         return lib
     }
 
-    private maxVersion(versions: Map<number, TAssertion>): number {
+    private maxVersion(versions: Map<number, TClaim>): number {
         let max = -1
         for (const v of versions.keys()) {
             if (v > max) max = v
@@ -161,10 +161,10 @@ export class AssertionLibrary<
         return max
     }
 
-    private computeChecksum(entity: TAssertion): string {
+    private computeChecksum(entity: TClaim): string {
         const fields =
-            this.checksumConfig?.assertionFields ??
-            DEFAULT_CHECKSUM_CONFIG.assertionFields!
+            this.checksumConfig?.claimFields ??
+            DEFAULT_CHECKSUM_CONFIG.claimFields!
         return entityChecksum(
             entity as unknown as Record<string, unknown>,
             fields

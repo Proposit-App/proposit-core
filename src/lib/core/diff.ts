@@ -27,7 +27,7 @@ export function defaultCompareArgument(
     return []
 }
 
-/** Compares two variables and returns field-level changes for `symbol`, `assertionId`, and `assertionVersion`. */
+/** Compares two variables and returns field-level changes for `symbol`, `claimId`, and `claimVersion`. */
 export function defaultCompareVariable(
     before: TCorePropositionalVariable,
     after: TCorePropositionalVariable
@@ -40,18 +40,18 @@ export function defaultCompareVariable(
             after: after.symbol,
         })
     }
-    if (before.assertionId !== after.assertionId) {
+    if (before.claimId !== after.claimId) {
         changes.push({
-            field: "assertionId",
-            before: before.assertionId,
-            after: after.assertionId,
+            field: "claimId",
+            before: before.claimId,
+            after: after.claimId,
         })
     }
-    if (before.assertionVersion !== after.assertionVersion) {
+    if (before.claimVersion !== after.claimVersion) {
         changes.push({
-            field: "assertionVersion",
-            before: before.assertionVersion,
-            after: after.assertionVersion,
+            field: "claimVersion",
+            before: before.claimVersion,
+            after: after.claimVersion,
         })
     }
     return changes
