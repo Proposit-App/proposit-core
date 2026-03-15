@@ -5,6 +5,7 @@ import {
     ClaimLibrary,
     SourceLibrary,
 } from "../src/lib/index"
+import { ClaimSourceLibrary } from "../src/lib/core/claim-source-library"
 import type { TReactiveSnapshot } from "../src/lib/index"
 import { Value } from "typebox/value"
 import {
@@ -11170,5 +11171,452 @@ describe("Argument checksum includes source associations", () => {
         engine.addVariableSourceAssociation("src-1", 0, "v-1")
         const checksumAfter = engine.getArgument().checksum
         expect(checksumAfter).not.toBe(checksumBefore)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ClaimSourceLibrary
+// ---------------------------------------------------------------------------
+describe("ClaimSourceLibrary", () => {
+    function makeFixtures() {
+        const claimLib = new ClaimLibrary()
+        const claim1 = claimLib.create({ id: "claim-1" })
+        const claim2 = claimLib.create({ id: "claim-2" })
+        const sourceLib = new SourceLibrary()
+        const source1 = sourceLib.create({ id: "source-1" })
+        const source2 = sourceLib.create({ id: "source-2" })
+        const lib = new ClaimSourceLibrary(claimLib, sourceLib)
+        return { claimLib, claim1, claim2, sourceLib, source1, source2, lib }
+    }
+
+    describe("add", () => {
+        it("adds an association and returns it with a checksum", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            const assoc = lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            expect(assoc.id).toBe("assoc-1")
+            expect(assoc.claimId).toBe("claim-1")
+            expect(assoc.sourceId).toBe("source-1")
+            expect(assoc.checksum).toBeTruthy()
+            expect(typeof assoc.checksum).toBe("string")
+        })
+
+        it("throws on duplicate association ID", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            expect(() =>
+                lib.add({
+                    id: "assoc-1",
+                    claimId: claim1.id,
+                    claimVersion: claim1.version,
+                    sourceId: source1.id,
+                    sourceVersion: source1.version,
+                })
+            ).toThrow()
+        })
+
+        it("throws when claim does not exist in the claim lookup", () => {
+            const { lib, source1 } = makeFixtures()
+            expect(() =>
+                lib.add({
+                    id: "assoc-1",
+                    claimId: "nonexistent-claim",
+                    claimVersion: 0,
+                    sourceId: source1.id,
+                    sourceVersion: source1.version,
+                })
+            ).toThrow()
+        })
+
+        it("throws when claim version does not exist", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            expect(() =>
+                lib.add({
+                    id: "assoc-1",
+                    claimId: claim1.id,
+                    claimVersion: 999,
+                    sourceId: source1.id,
+                    sourceVersion: source1.version,
+                })
+            ).toThrow()
+        })
+
+        it("throws when source does not exist in the source lookup", () => {
+            const { lib, claim1 } = makeFixtures()
+            expect(() =>
+                lib.add({
+                    id: "assoc-1",
+                    claimId: claim1.id,
+                    claimVersion: claim1.version,
+                    sourceId: "nonexistent-source",
+                    sourceVersion: 0,
+                })
+            ).toThrow()
+        })
+
+        it("throws when source version does not exist", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            expect(() =>
+                lib.add({
+                    id: "assoc-1",
+                    claimId: claim1.id,
+                    claimVersion: claim1.version,
+                    sourceId: source1.id,
+                    sourceVersion: 999,
+                })
+            ).toThrow()
+        })
+    })
+
+    describe("remove", () => {
+        it("removes an association and returns it", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            const added = lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            const removed = lib.remove("assoc-1")
+            expect(removed).toEqual(added)
+            expect(lib.get("assoc-1")).toBeUndefined()
+        })
+
+        it("throws when association is not found", () => {
+            const { lib } = makeFixtures()
+            expect(() => lib.remove("nonexistent")).toThrow()
+        })
+
+        it("cleans up claim index on remove", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.remove("assoc-1")
+            expect(lib.getForClaim(claim1.id)).toEqual([])
+        })
+
+        it("cleans up source index on remove", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.remove("assoc-1")
+            expect(lib.getForSource(source1.id)).toEqual([])
+        })
+    })
+
+    describe("getForClaim", () => {
+        it("returns all associations for a given claim ID", () => {
+            const { lib, claim1, claim2, source1, source2 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.add({
+                id: "assoc-2",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source2.id,
+                sourceVersion: source2.version,
+            })
+            lib.add({
+                id: "assoc-3",
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            const result = lib.getForClaim(claim1.id)
+            expect(result).toHaveLength(2)
+            expect(result.map((a) => a.id)).toContain("assoc-1")
+            expect(result.map((a) => a.id)).toContain("assoc-2")
+        })
+
+        it("returns empty array when no associations exist for the claim", () => {
+            const { lib, claim1 } = makeFixtures()
+            expect(lib.getForClaim(claim1.id)).toEqual([])
+        })
+    })
+
+    describe("getForSource", () => {
+        it("returns all associations for a given source ID", () => {
+            const { lib, claim1, claim2, source1, source2 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.add({
+                id: "assoc-2",
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.add({
+                id: "assoc-3",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source2.id,
+                sourceVersion: source2.version,
+            })
+            const result = lib.getForSource(source1.id)
+            expect(result).toHaveLength(2)
+            expect(result.map((a) => a.id)).toContain("assoc-1")
+            expect(result.map((a) => a.id)).toContain("assoc-2")
+        })
+
+        it("returns empty array when no associations exist for the source", () => {
+            const { lib, source1 } = makeFixtures()
+            expect(lib.getForSource(source1.id)).toEqual([])
+        })
+    })
+
+    describe("get", () => {
+        it("returns the association by ID", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            const result = lib.get("assoc-1")
+            expect(result).toBeDefined()
+            expect(result!.id).toBe("assoc-1")
+        })
+
+        it("returns undefined for unknown ID", () => {
+            const { lib } = makeFixtures()
+            expect(lib.get("nonexistent")).toBeUndefined()
+        })
+    })
+
+    describe("getAll", () => {
+        it("returns all associations", () => {
+            const { lib, claim1, claim2, source1, source2 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.add({
+                id: "assoc-2",
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                sourceId: source2.id,
+                sourceVersion: source2.version,
+            })
+            expect(lib.getAll()).toHaveLength(2)
+        })
+
+        it("returns empty array when no associations exist", () => {
+            const { lib } = makeFixtures()
+            expect(lib.getAll()).toEqual([])
+        })
+    })
+
+    describe("filter", () => {
+        it("filters associations by predicate", () => {
+            const { lib, claim1, claim2, source1, source2 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.add({
+                id: "assoc-2",
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                sourceId: source2.id,
+                sourceVersion: source2.version,
+            })
+            const result = lib.filter((a) => a.claimId === claim1.id)
+            expect(result).toHaveLength(1)
+            expect(result[0].id).toBe("assoc-1")
+        })
+
+        it("returns empty array when predicate matches nothing", () => {
+            const { lib, claim1, source1 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            expect(lib.filter(() => false)).toEqual([])
+        })
+    })
+
+    describe("snapshot / fromSnapshot", () => {
+        it("round-trips through snapshot and fromSnapshot", () => {
+            const { lib, claimLib, sourceLib, claim1, claim2, source1, source2 } =
+                makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            lib.add({
+                id: "assoc-2",
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                sourceId: source2.id,
+                sourceVersion: source2.version,
+            })
+            const snap = lib.snapshot()
+            expect(snap.claimSourceAssociations).toHaveLength(2)
+
+            const restored = ClaimSourceLibrary.fromSnapshot(
+                snap,
+                claimLib,
+                sourceLib
+            )
+            expect(restored.getAll()).toHaveLength(2)
+            expect(restored.get("assoc-1")).toEqual(lib.get("assoc-1"))
+            expect(restored.get("assoc-2")).toEqual(lib.get("assoc-2"))
+        })
+
+        it("restores claim and source indexes correctly", () => {
+            const { lib, claimLib, sourceLib, claim1, source1 } = makeFixtures()
+            lib.add({
+                id: "assoc-1",
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+            })
+            const snap = lib.snapshot()
+            const restored = ClaimSourceLibrary.fromSnapshot(
+                snap,
+                claimLib,
+                sourceLib
+            )
+            expect(restored.getForClaim(claim1.id)).toHaveLength(1)
+            expect(restored.getForSource(source1.id)).toHaveLength(1)
+        })
+
+        it("snapshot of empty library returns empty array", () => {
+            const { lib } = makeFixtures()
+            expect(lib.snapshot()).toEqual({ claimSourceAssociations: [] })
+        })
+    })
+
+    describe("generic TAssoc extension", () => {
+        it("preserves extended fields through add, get, and snapshot", () => {
+            const claimLib = new ClaimLibrary()
+            const claim = claimLib.create({ id: "claim-ext" })
+            const sourceLib = new SourceLibrary()
+            const source = sourceLib.create({ id: "source-ext" })
+
+            type TExtAssoc = {
+                id: string
+                claimId: string
+                claimVersion: number
+                sourceId: string
+                sourceVersion: number
+                checksum: string
+                createdBy: string
+            }
+
+            const lib = new ClaimSourceLibrary<TExtAssoc>(claimLib, sourceLib)
+            const assoc = lib.add({
+                id: "assoc-ext",
+                claimId: claim.id,
+                claimVersion: claim.version,
+                sourceId: source.id,
+                sourceVersion: source.version,
+                createdBy: "user-1",
+            })
+            expect(assoc.createdBy).toBe("user-1")
+
+            const fetched = lib.get("assoc-ext")
+            expect(fetched?.createdBy).toBe("user-1")
+
+            const snap = lib.snapshot()
+            expect(
+                (snap.claimSourceAssociations[0]).createdBy
+            ).toBe("user-1")
+
+            const restored = ClaimSourceLibrary.fromSnapshot<TExtAssoc>(
+                snap,
+                claimLib,
+                sourceLib
+            )
+            expect(restored.get("assoc-ext")?.createdBy).toBe("user-1")
+        })
+
+        it("filter works on extended fields", () => {
+            const claimLib = new ClaimLibrary()
+            const claim = claimLib.create({ id: "claim-ext2" })
+            const sourceLib = new SourceLibrary()
+            const source1 = sourceLib.create({ id: "source-ext2a" })
+            const source2 = sourceLib.create({ id: "source-ext2b" })
+
+            type TExtAssoc = {
+                id: string
+                claimId: string
+                claimVersion: number
+                sourceId: string
+                sourceVersion: number
+                checksum: string
+                tag: string
+            }
+
+            const lib = new ClaimSourceLibrary<TExtAssoc>(claimLib, sourceLib)
+            lib.add({
+                id: "assoc-ext-a",
+                claimId: claim.id,
+                claimVersion: claim.version,
+                sourceId: source1.id,
+                sourceVersion: source1.version,
+                tag: "alpha",
+            })
+            lib.add({
+                id: "assoc-ext-b",
+                claimId: claim.id,
+                claimVersion: claim.version,
+                sourceId: source2.id,
+                sourceVersion: source2.version,
+                tag: "beta",
+            })
+            const result = lib.filter((a) => a.tag === "alpha")
+            expect(result).toHaveLength(1)
+            expect(result[0].id).toBe("assoc-ext-a")
+        })
     })
 })
