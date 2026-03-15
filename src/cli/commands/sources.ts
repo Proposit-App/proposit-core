@@ -72,36 +72,25 @@ export function registerSourceCommands(
             )
         })
 
-    // ── link-variable ──────────────────────────────────────────────────────
+    // ── link-claim ─────────────────────────────────────────────────────────
     sources
-        .command("link-variable <source_id> <variable_id>")
-        .description("Link a source to a variable")
-        .action(async (_sourceId: string, _variableId: string) => {
+        .command("link-claim <source_id> <claim_id>")
+        .description("Link a source to a claim")
+        .action(async (_sourceId: string, _claimId: string) => {
             await assertNotPublished(argumentId, version)
             errorExit(
-                "Source associations have moved to ClaimSourceLibrary. Not yet implemented in CLI."
-            )
-        })
-
-    // ── link-expression ────────────────────────────────────────────────────
-    sources
-        .command("link-expression <source_id> <expression_id>")
-        .description("Link a source to an expression")
-        .action(async (_sourceId: string, _expressionId: string) => {
-            await assertNotPublished(argumentId, version)
-            errorExit(
-                "Source associations have moved to ClaimSourceLibrary. Not yet implemented in CLI."
+                "Claim-source association management via CLI is not yet implemented. Use the library API directly."
             )
         })
 
     // ── unlink ─────────────────────────────────────────────────────────────
     sources
         .command("unlink <association_id>")
-        .description("Remove a source association")
+        .description("Remove a claim-source association")
         .action(async (_associationId: string) => {
             await assertNotPublished(argumentId, version)
             errorExit(
-                "Source associations have moved to ClaimSourceLibrary. Not yet implemented in CLI."
+                "Claim-source association management via CLI is not yet implemented. Use the library API directly."
             )
         })
 }

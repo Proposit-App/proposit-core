@@ -106,18 +106,3 @@ export const CliPremiseDataSchema = Type.Object({
     }),
 })
 export type TCliPremiseData = Static<typeof CliPremiseDataSchema>
-
-// ---------------------------------------------------------------------------
-// Source meta (stored in sources/<id>/meta.json)
-// ---------------------------------------------------------------------------
-export const CliSourceMetaSchema = Type.Object(
-    {
-        id: UUID,
-        argumentId: UUID,
-        argumentVersion: Type.Number(),
-        url: Type.String(),
-        checksum: Type.Optional(Type.String()),
-    },
-    { additionalProperties: true }
-)
-export type TCliSourceMeta = Static<typeof CliSourceMetaSchema>

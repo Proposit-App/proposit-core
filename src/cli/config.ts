@@ -30,15 +30,3 @@ export function getPremiseDir(
 ): string {
     return path.join(getPremisesDir(argumentId, version), premiseId)
 }
-
-export function getSourcesDir(argumentId: string, version: number): string {
-    return path.join(getVersionDir(argumentId, version), "sources")
-}
-
-export function getSourceDir(
-    argumentId: string,
-    version: number,
-    sourceId: string
-): string {
-    return path.join(getSourcesDir(argumentId, version), sourceId)
-}
