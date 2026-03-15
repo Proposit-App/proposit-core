@@ -1,35 +1,35 @@
-# Global Libraries Design — Assertions and Sources
+# Global Libraries Design — Claims and Sources
 
 **Date:** 2026-03-13
 **Status:** Draft
 
 ## Overview
 
-Introduce global, inter-argument entities — **Assertions** and **Sources** — managed by dedicated library classes. Assertions represent the propositional content that variables refer to. Sources provide evidentiary support. Both are reusable across arguments and have their own versioning system independent of argument versions.
+Introduce global, inter-argument entities — **Claims** and **Sources** — managed by dedicated library classes. Claims represent the propositional content that variables refer to. Sources provide evidentiary support. Both are reusable across arguments and have their own versioning system independent of argument versions.
 
 ## Motivation
 
-Today, sources are argument-scoped (carry `argumentId`/`argumentVersion`) and variables have no formal connection to the propositional content they represent. This limits reuse: the same source or propositional claim used across multiple arguments must be duplicated. Global libraries solve this by making assertions and sources first-class, independently versioned entities that arguments reference rather than own.
+Today, sources are argument-scoped (carry `argumentId`/`argumentVersion`) and variables have no formal connection to the propositional content they represent. This limits reuse: the same source or propositional claim used across multiple arguments must be duplicated. Global libraries solve this by making claims and sources first-class, independently versioned entities that arguments reference rather than own.
 
 ## Key Decisions
 
-1. **Assertions are minimal and extensible.** `CoreAssertionSchema` has only identity fields (`id`, `version`, `frozen`, `checksum`) with `additionalProperties: true`. Content schema is left to extensions.
+1. **Claims are minimal and extensible.** `CoreClaimSchema` has only identity fields (`id`, `version`, `frozen`, `checksum`) with `additionalProperties: true`. Content schema is left to extensions.
 2. **Sources are no longer argument-scoped.** `CoreSourceSchema` drops `argumentId`/`argumentVersion`, gains `version`/`frozen`.
-3. **Variables require assertion references.** `assertionId` and `assertionVersion` are required (non-nullable) fields on `CorePropositionalVariableSchema`.
-4. **Variables pin to a specific assertion version.** The engine validates that the referenced assertion exists in the library but does not enforce that it is frozen.
+3. **Variables require claim references.** `claimId` and `claimVersion` are required (non-nullable) fields on `CorePropositionalVariableSchema`.
+4. **Variables pin to a specific claim version.** The engine validates that the referenced claim exists in the library but does not enforce that it is frozen.
 5. **Libraries are required by ArgumentEngine.** Passed as positional constructor parameters.
-6. **Engine depends on narrow lookup interfaces.** `TAssertionLookup` and `TSourceLookup` — not the full library classes.
-7. **No deletion from libraries.** Assertions and sources are permanent once created.
+6. **Engine depends on narrow lookup interfaces.** `TClaimLookup` and `TSourceLookup` — not the full library classes.
+7. **No deletion from libraries.** Claims and sources are permanent once created.
 8. **Versioning with freeze semantics.** Entities start at version 0 (mutable). `freeze()` locks the current version and auto-creates the next version as a mutable copy. Only the latest version can be updated.
 9. **Source associations gain `sourceVersion`.** Associations pin to a specific source version.
 10. **SourceManager simplified to association-only.** No longer stores source entities; renamed considerations.
 
 ## Entity Schemas
 
-### CoreAssertionSchema (new)
+### CoreClaimSchema (new)
 
 ```typescript
-CoreAssertionSchema = Type.Object(
+CoreClaimSchema = Type.Object(
     {
         id: UUID,
         version: Type.Number(),
@@ -65,8 +65,8 @@ CorePropositionalVariableSchema = Type.Object(
         argumentId: UUID,
         argumentVersion: Type.Number(),
         symbol: Type.String(),
-        assertionId: UUID, // new, required
-        assertionVersion: Type.Number(), // new, required
+        claimId: UUID, // new, required
+        claimVersion: Type.Number(), // new, required
         checksum: Type.String(),
     },
     { additionalProperties: true }
@@ -107,8 +107,8 @@ CoreExpressionSourceAssociationSchema = Type.Object({
 Narrow interfaces — only what the engine needs for validation:
 
 ```typescript
-interface TAssertionLookup<TAssertion extends TCoreAssertion = TCoreAssertion> {
-    get(id: string, version: number): TAssertion | undefined
+interface TClaimLookup<TClaim extends TCoreClaim = TCoreClaim> {
+    get(id: string, version: number): TClaim | undefined
 }
 
 interface TSourceLookup<TSource extends TCoreSource = TCoreSource> {
@@ -118,9 +118,9 @@ interface TSourceLookup<TSource extends TCoreSource = TCoreSource> {
 
 `getAll()` lives on the full library classes only, not on the lookup interfaces.
 
-### AssertionLibrary\<TAssertion\>
+### ClaimLibrary\<TClaim\>
 
-Generic class implementing `TAssertionLookup<TAssertion>`.
+Generic class implementing `TClaimLookup<TClaim>`.
 
 **Constructor:**
 
@@ -130,31 +130,31 @@ constructor(options?: { checksumConfig?: TCoreChecksumConfig })
 
 **Methods:**
 
-- `create(assertion: Omit<TAssertion, 'version' | 'frozen' | 'checksum'>): TAssertion` — creates at version 0, unfrozen
-- `update(id: string, updates: Partial<Omit<TAssertion, 'id' | 'version' | 'frozen' | 'checksum'>>): TAssertion` — updates the highest-numbered version; throws if that version is frozen
-- `freeze(id: string): { frozen: TAssertion; current: TAssertion }` — freezes the highest-numbered version, auto-creates next version as mutable copy. Returns both the frozen version and the new mutable version. Throws if the highest-numbered version is already frozen.
-- `get(id: string, version: number): TAssertion | undefined`
-- `getCurrent(id: string): TAssertion | undefined` — returns latest version
-- `getAll(): TAssertion[]` — all versions of all assertions
-- `getVersions(id: string): TAssertion[]` — all versions of a specific assertion
-- `snapshot(): TAssertionLibrarySnapshot<TAssertion>`
-- `static fromSnapshot<T>(snapshot: TAssertionLibrarySnapshot<T>, options?: { checksumConfig?: TCoreChecksumConfig }): AssertionLibrary<T>`
+- `create(claim: Omit<TClaim, 'version' | 'frozen' | 'checksum'>): TClaim` — creates at version 0, unfrozen
+- `update(id: string, updates: Partial<Omit<TClaim, 'id' | 'version' | 'frozen' | 'checksum'>>): TClaim` — updates the highest-numbered version; throws if that version is frozen
+- `freeze(id: string): { frozen: TClaim; current: TClaim }` — freezes the highest-numbered version, auto-creates next version as mutable copy. Returns both the frozen version and the new mutable version. Throws if the highest-numbered version is already frozen.
+- `get(id: string, version: number): TClaim | undefined`
+- `getCurrent(id: string): TClaim | undefined` — returns latest version
+- `getAll(): TClaim[]` — all versions of all claims
+- `getVersions(id: string): TClaim[]` — all versions of a specific claim
+- `snapshot(): TClaimLibrarySnapshot<TClaim>`
+- `static fromSnapshot<T>(snapshot: TClaimLibrarySnapshot<T>, options?: { checksumConfig?: TCoreChecksumConfig }): ClaimLibrary<T>`
 
-**Internal storage:** `Map<string, Map<number, TAssertion>>` (id → version → entity)
+**Internal storage:** `Map<string, Map<number, TClaim>>` (id → version → entity)
 
 **Freeze copy semantics:** `freeze()` performs a shallow spread (`{ ...entity, version: N+1, frozen: false }`) then recomputes the checksum. Extensions with nested objects get shallow-copied — deep cloning is the caller's responsibility if needed.
 
 ### SourceLibrary\<TSource\>
 
-Same API shape as `AssertionLibrary`, implementing `TSourceLookup<TSource>`.
+Same API shape as `ClaimLibrary`, implementing `TSourceLookup<TSource>`.
 
 ### Library Snapshot Types
 
 ```typescript
-type TAssertionLibrarySnapshot<
-    TAssertion extends TCoreAssertion = TCoreAssertion,
+type TClaimLibrarySnapshot<
+    TClaim extends TCoreClaim = TCoreClaim,
 > = {
-    assertions: TAssertion[] // all versions, flattened
+    claims: TClaim[] // all versions, flattened
 }
 
 type TSourceLibrarySnapshot<TSource extends TCoreSource = TCoreSource> = {
@@ -175,11 +175,11 @@ class ArgumentEngine<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TSource extends TCoreSource = TCoreSource,
-    TAssertion extends TCoreAssertion = TCoreAssertion,
+    TClaim extends TCoreClaim = TCoreClaim,
 > {
     constructor(
         argument: TOptionalChecksum<TArg>,
-        assertionLibrary: TAssertionLookup<TAssertion>,
+        claimLibrary: TClaimLookup<TClaim>,
         sourceLibrary: TSourceLookup<TSource>,
         options?: TLogicEngineOptions
     )
@@ -188,11 +188,11 @@ class ArgumentEngine<
 
 ### Generic Parameter Cascade
 
-`PremiseEngine` drops `TSource` from its generic parameters since `TSource` is removed from `TCoreChangeset` and `TCoreMutationResult`. `PremiseEngine` does not gain `TAssertion` — assertion validation is `ArgumentEngine`'s responsibility. `ChangeCollector` also drops `TSource`.
+`PremiseEngine` drops `TSource` from its generic parameters since `TSource` is removed from `TCoreChangeset` and `TCoreMutationResult`. `PremiseEngine` does not gain `TClaim` — claim validation is `ArgumentEngine`'s responsibility. `ChangeCollector` also drops `TSource`.
 
 ### Validation Behavior
 
-- `addVariable(variable)` — validates `variable.assertionId` and `variable.assertionVersion` exist in the assertion library. Throws if not found.
+- `addVariable(variable)` — validates `variable.claimId` and `variable.claimVersion` exist in the claim library. Throws if not found.
 - `addVariableSourceAssociation(sourceId, sourceVersion, variableId)` — validates `sourceId`/`sourceVersion` exist in the source library. Throws if not found.
 - `addExpressionSourceAssociation(sourceId, sourceVersion, expressionId, premiseId)` — validates `sourceId`/`sourceVersion` exist in the source library. Throws if not found.
 
@@ -239,19 +239,19 @@ addExpressionSourceAssociation(
 
 Retains all association query and removal methods. `removeVariableSourceAssociation` and `removeExpressionSourceAssociation` signatures unchanged (operate by association ID).
 
-### Variable Assertion Updates
+### Variable Claim Updates
 
-`updateVariable` is extended to accept assertion reference changes:
+`updateVariable` is extended to accept claim reference changes:
 
 ```typescript
 updateVariable(variableId: string, updates: {
     symbol?: string;
-    assertionId?: string;
-    assertionVersion?: number;
+    claimId?: string;
+    claimVersion?: number;
 }): TCoreMutationResult<...>
 ```
 
-`assertionId` and `assertionVersion` must be provided together (both or neither). Providing only one throws. When both are provided, the engine validates the new reference against the assertion library before applying the update.
+`claimId` and `claimVersion` must be provided together (both or neither). Providing only one throws. When both are provided, the engine validates the new reference against the claim library before applying the update.
 
 ## Changeset and Snapshot Updates
 
@@ -282,15 +282,15 @@ Both drop the `sources` record. Association records remain.
 ```typescript
 DEFAULT_CHECKSUM_CONFIG = {
     // ... existing fields ...
-    assertionFields: new Set(["id", "version"]),
+    claimFields: new Set(["id", "version"]),
     sourceFields: new Set(["id", "version"]), // updated: removed argumentId/argumentVersion
     variableFields: new Set([
         "id",
         "symbol",
         "argumentId",
         "argumentVersion",
-        "assertionId",
-        "assertionVersion", // new
+        "claimId",
+        "claimVersion", // new
     ]),
     variableSourceAssociationFields: new Set([
         "id",
@@ -318,35 +318,35 @@ DEFAULT_CHECKSUM_CONFIG = {
 - `TCoreArgumentDiff` drops the `sources` field and the `TSource` generic parameter
 - `TCoreDiffOptions` drops `compareSource`
 - Association comparators updated to include `sourceVersion`
-- `defaultCompareVariable` updated to compare `assertionId` and `assertionVersion` in addition to `symbol`
-- `diffArguments` drops source entity diffing; retains association diffing. Uses default generic parameters for `TSource` and `TAssertion` (no new generics needed on `diffArguments` itself)
+- `defaultCompareVariable` updated to compare `claimId` and `claimVersion` in addition to `symbol`
+- `diffArguments` drops source entity diffing; retains association diffing. Uses default generic parameters for `TSource` and `TClaim` (no new generics needed on `diffArguments` itself)
 
 ## File Organization
 
 ### New Files
 
-| File                                            | Contents                                                                                   |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `src/lib/schemata/assertion.ts`                 | `CoreAssertionSchema`, `TCoreAssertion`                                                    |
-| `src/lib/core/assertion-library.ts`             | `AssertionLibrary<T>` class                                                                |
-| `src/lib/core/source-library.ts`                | `SourceLibrary<T>` class                                                                   |
-| `src/lib/core/interfaces/library.interfaces.ts` | `TAssertionLookup`, `TSourceLookup`, `TAssertionLibrarySnapshot`, `TSourceLibrarySnapshot` |
+| File                                            | Contents                                                                           |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/lib/schemata/claim.ts`                     | `CoreClaimSchema`, `TCoreClaim`                                                    |
+| `src/lib/core/claim-library.ts`                 | `ClaimLibrary<T>` class                                                            |
+| `src/lib/core/source-library.ts`                | `SourceLibrary<T>` class                                                           |
+| `src/lib/core/interfaces/library.interfaces.ts` | `TClaimLookup`, `TSourceLookup`, `TClaimLibrarySnapshot`, `TSourceLibrarySnapshot` |
 
 ### Modified Files
 
 | File                                                      | Changes                                                                                                       |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `src/lib/schemata/source.ts`                              | Drop argument fields, add version/frozen                                                                      |
-| `src/lib/schemata/propositional.ts`                       | Add assertionId/assertionVersion to variable schema                                                           |
-| `src/lib/schemata/index.ts`                               | Export assertion schema                                                                                       |
+| `src/lib/schemata/propositional.ts`                       | Add claimId/claimVersion to variable schema                                                                   |
+| `src/lib/schemata/index.ts`                               | Export claim schema                                                                                           |
 | `src/lib/core/source-manager.ts`                          | Strip to association-only                                                                                     |
-| `src/lib/core/argument-engine.ts`                         | New constructor, validation, new `TAssertion` generic param                                                   |
+| `src/lib/core/argument-engine.ts`                         | New constructor, validation, new `TClaim` generic param                                                       |
 | `src/lib/core/premise-engine.ts`                          | Drop `TSource` generic parameter                                                                              |
 | `src/lib/core/interfaces/source-management.interfaces.ts` | Remove source entity methods                                                                                  |
 | `src/lib/core/interfaces/index.ts`                        | Export library interfaces                                                                                     |
 | `src/lib/types/mutation.ts`                               | Drop sources from changeset                                                                                   |
 | `src/lib/types/reactive.ts`                               | Drop sources from snapshots                                                                                   |
-| `src/lib/types/checksum.ts`                               | Add assertionFields to config type                                                                            |
+| `src/lib/types/checksum.ts`                               | Add claimFields to config type                                                                                |
 | `src/lib/consts.ts`                                       | Update DEFAULT_CHECKSUM_CONFIG                                                                                |
 | `src/lib/core/diff.ts`                                    | Remove source diffing, drop TSource generic, update association diffing                                       |
 | `src/lib/types/diff.ts`                                   | Drop sources from `TCoreArgumentDiff`, drop `compareSource` from `TCoreDiffOptions`, remove `TSource` generic |
@@ -357,7 +357,7 @@ DEFAULT_CHECKSUM_CONFIG = {
 
 ## Checksum Config Sharing
 
-`AssertionLibrary` and `SourceLibrary` reuse the existing `TCoreChecksumConfig` type. Libraries use `assertionFields` and `sourceFields` respectively from the config. The same config instance can be shared across libraries and engines for consistency, or each can use its own. `DEFAULT_CHECKSUM_CONFIG` includes defaults for all field sets.
+`ClaimLibrary` and `SourceLibrary` reuse the existing `TCoreChecksumConfig` type. Libraries use `claimFields` and `sourceFields` respectively from the config. The same config instance can be shared across libraries and engines for consistency, or each can use its own. `DEFAULT_CHECKSUM_CONFIG` includes defaults for all field sets.
 
 ## CLI Scope
 
@@ -367,9 +367,9 @@ CLI files (`src/cli/`) will need updating for the new model (hydration, storage,
 
 This is version 0.5.0. All breaks are acceptable at pre-1.0.
 
-1. `ArgumentEngine` constructor requires `assertionLibrary` and `sourceLibrary`
+1. `ArgumentEngine` constructor requires `claimLibrary` and `sourceLibrary`
 2. `CoreSourceSchema` drops `argumentId`/`argumentVersion`, gains `version`/`frozen`
-3. `CorePropositionalVariableSchema` requires `assertionId`/`assertionVersion`
+3. `CorePropositionalVariableSchema` requires `claimId`/`claimVersion`
 4. `TSourceManagement` loses source entity methods
 5. `TCoreChangeset` loses `sources` field
 6. `TReactiveSnapshot` / `TArgumentEngineSnapshot` lose `sources` record

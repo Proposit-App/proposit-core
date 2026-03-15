@@ -2,9 +2,9 @@
 
 ## `ArgumentEngine`
 
-### `new ArgumentEngine(argument, assertionLibrary, sourceLibrary, options?)`
+### `new ArgumentEngine(argument, claimLibrary, sourceLibrary, options?)`
 
-Creates an engine scoped to `argument` (`{ id, version, title, description }`, without `checksum` — it is computed lazily). Requires an `assertionLibrary` implementing `TAssertionLookup` (used to validate assertion references on variables) and a `sourceLibrary` implementing `TSourceLookup` (used to validate source references on associations). Accepts an optional `config?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums) and `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
+Creates an engine scoped to `argument` (`{ id, version, title, description }`, without `checksum` — it is computed lazily). Requires a `claimLibrary` implementing `TClaimLookup` (used to validate claim references on variables) and a `sourceLibrary` implementing `TSourceLookup` (used to validate source references on associations). Accepts an optional `config?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums) and `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
 
 ---
 
@@ -46,13 +46,13 @@ Returns all premise IDs sorted alphabetically.
 
 ### `addVariable(variable)` → `TCoreMutationResult<TPropositionalVariable>`
 
-Registers a variable (without `checksum` — it is computed lazily) for use across all premises. The variable must include `assertionId: string` and `assertionVersion: number` fields referencing a valid entry in the `AssertionLibrary`. Throws if the `id` or `symbol` already exists, if `argumentId`/`argumentVersion` don't match the engine's argument, or if the assertion reference is not found in the assertion library.
+Registers a variable (without `checksum` — it is computed lazily) for use across all premises. The variable must include `claimId: string` and `claimVersion: number` fields referencing a valid entry in the `ClaimLibrary`. Throws if the `id` or `symbol` already exists, if `argumentId`/`argumentVersion` don't match the engine's argument, or if the claim reference is not found in the claim library.
 
 ---
 
-### `updateVariable(variableId, { symbol?, assertionId?, assertionVersion? })` → `TCoreMutationResult<TPropositionalVariable>`
+### `updateVariable(variableId, { symbol?, claimId?, claimVersion? })` → `TCoreMutationResult<TPropositionalVariable>`
 
-Updates variable fields. `assertionId` and `assertionVersion` must be provided together — providing one without the other throws. Returns a mutation result with the modified variable.
+Updates variable fields. `claimId` and `claimVersion` must be provided together — providing one without the other throws. Returns a mutation result with the modified variable.
 
 ---
 
@@ -226,9 +226,9 @@ Returns a serialisable snapshot of the full engine state (`{ argument, variables
 
 ---
 
-### `static fromSnapshot(snapshot, assertionLibrary, sourceLibrary)` → `ArgumentEngine`
+### `static fromSnapshot(snapshot, claimLibrary, sourceLibrary)` → `ArgumentEngine`
 
-Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `assertionLibrary` (implementing `TAssertionLookup`) and `sourceLibrary` (implementing `TSourceLookup`) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`.
+Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `claimLibrary` (implementing `TClaimLookup`) and `sourceLibrary` (implementing `TSourceLookup`) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`.
 
 ---
 
@@ -238,9 +238,9 @@ Restores the engine's internal state in place from a previously captured snapsho
 
 ---
 
-### `static fromData(argument, assertionLibrary, sourceLibrary, variables, premises, expressions, roles, config?)` → `ArgumentEngine`
+### `static fromData(argument, claimLibrary, sourceLibrary, variables, premises, expressions, roles, config?)` → `ArgumentEngine`
 
-Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `assertionLibrary` and `sourceLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments.
+Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `claimLibrary` and `sourceLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments.
 
 ---
 
@@ -306,69 +306,69 @@ Returns all expression–source associations across the argument.
 
 ---
 
-## `AssertionLibrary<TAssertion>`
+## `ClaimLibrary<TClaim>`
 
-Global versioned repository for assertion entities. Implements `TAssertionLookup<TAssertion>`. Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable assertion reference validation on variables.
+Global versioned repository for claim entities. Implements `TClaimLookup<TClaim>`. Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable claim reference validation on variables.
 
-Each assertion has a `version` (starting at `0`) and a `frozen` flag. Freezing locks the current version and auto-creates a new mutable copy at the next version number.
+Each claim has a `version` (starting at `0`) and a `frozen` flag. Freezing locks the current version and auto-creates a new mutable copy at the next version number.
 
-### `new AssertionLibrary(options?)`
+### `new ClaimLibrary(options?)`
 
 Creates an empty library. Accepts an optional `{ checksumConfig? }` parameter.
 
 ---
 
-### `create(assertion)` → `TAssertion`
+### `create(claim)` → `TClaim`
 
-Creates a new assertion at version `0` (unfrozen). The `assertion` parameter omits `version`, `frozen`, and `checksum` fields — these are set automatically. Throws if an assertion with the given ID already exists.
-
----
-
-### `update(id, updates)` → `TAssertion`
-
-Updates fields on the latest (unfrozen) version of an assertion. Throws if the assertion does not exist or its latest version is frozen.
+Creates a new claim at version `0` (unfrozen). The `claim` parameter omits `version`, `frozen`, and `checksum` fields — these are set automatically. Throws if a claim with the given ID already exists.
 
 ---
 
-### `freeze(id)` → `{ frozen: TAssertion; current: TAssertion }`
+### `update(id, updates)` → `TClaim`
 
-Marks the current version as frozen and creates the next mutable version (incrementing version number, copying all fields except `frozen`). Returns both the frozen and new current entity. Throws if the assertion does not exist or is already frozen.
-
----
-
-### `get(id, version)` → `TAssertion | undefined`
-
-Returns a specific version of an assertion, or `undefined` if not found.
+Updates fields on the latest (unfrozen) version of a claim. Throws if the claim does not exist or its latest version is frozen.
 
 ---
 
-### `getCurrent(id)` → `TAssertion | undefined`
+### `freeze(id)` → `{ frozen: TClaim; current: TClaim }`
 
-Returns the latest version of an assertion, or `undefined` if not found.
-
----
-
-### `getAll()` → `TAssertion[]`
-
-Returns all assertion entities across all versions and IDs.
+Marks the current version as frozen and creates the next mutable version (incrementing version number, copying all fields except `frozen`). Returns both the frozen and new current entity. Throws if the claim does not exist or is already frozen.
 
 ---
 
-### `getVersions(id)` → `TAssertion[]`
+### `get(id, version)` → `TClaim | undefined`
 
-Returns all versions of a given assertion ID, sorted by version number ascending.
-
----
-
-### `snapshot()` → `TAssertionLibrarySnapshot<TAssertion>`
-
-Returns a serialisable snapshot `{ assertions: TAssertion[] }` containing all assertion entities across all versions.
+Returns a specific version of a claim, or `undefined` if not found.
 
 ---
 
-### `static fromSnapshot(snapshot, options?)` → `AssertionLibrary<TAssertion>`
+### `getCurrent(id)` → `TClaim | undefined`
 
-Reconstructs an `AssertionLibrary` from a previously captured snapshot.
+Returns the latest version of a claim, or `undefined` if not found.
+
+---
+
+### `getAll()` → `TClaim[]`
+
+Returns all claim entities across all versions and IDs.
+
+---
+
+### `getVersions(id)` → `TClaim[]`
+
+Returns all versions of a given claim ID, sorted by version number ascending.
+
+---
+
+### `snapshot()` → `TClaimLibrarySnapshot<TClaim>`
+
+Returns a serialisable snapshot `{ claims: TClaim[] }` containing all claim entities across all versions.
+
+---
+
+### `static fromSnapshot(snapshot, options?)` → `ClaimLibrary<TClaim>`
+
+Reconstructs a `ClaimLibrary` from a previously captured snapshot.
 
 ---
 
@@ -376,7 +376,7 @@ Reconstructs an `AssertionLibrary` from a previously captured snapshot.
 
 Global versioned repository for source entities. Implements `TSourceLookup<TSource>`. Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable source reference validation on associations.
 
-Has the same versioning and freeze semantics as `AssertionLibrary`. Source entities live here — `SourceManager` within `ArgumentEngine` manages associations only.
+Has the same versioning and freeze semantics as `ClaimLibrary`. Source entities live here — `SourceManager` within `ArgumentEngine` manages associations only.
 
 ### `new SourceLibrary(options?)`
 
@@ -730,7 +730,7 @@ Hierarchical snapshot types for capturing and restoring engine state:
 | `TArgumentEngineSnapshot`    | `argument`, `variables` snapshot, `premises` snapshots, `sources` snapshot, `conclusionPremiseId`, `config`                                                       |
 | `TReactiveSnapshot`          | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles`, `variableSourceAssociations`, `expressionSourceAssociations` Records |
 | `TReactivePremiseSnapshot`   | `premise`, `expressions` (Record by ID), `rootExpressionId`                                                                                                       |
-| `TAssertionLibrarySnapshot`  | `assertions` (all versions of all assertions)                                                                                                                     |
+| `TClaimLibrarySnapshot`      | `claims` (all versions of all claims)                                                                                                                     |
 | `TSourceLibrarySnapshot`     | `sources` (all versions of all sources)                                                                                                                           |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
@@ -750,13 +750,13 @@ Internal manager class for source associations (variable–source and expression
 | Type                               | Description                                                                                                |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `TCoreSource`                      | Base source entity (`{ id, version, frozen, checksum }`)                                                   |
-| `TCoreAssertion`                   | Base assertion entity (`{ id, version, frozen, checksum }`)                                                |
+| `TCoreClaim`                       | Base claim entity (`{ id, version, frozen, checksum }`)                                                    |
 | `TCoreVariableSourceAssociation`   | Links a source version to a variable (`{ sourceId, sourceVersion, variableId, … }`)                        |
 | `TCoreExpressionSourceAssociation` | Links a source version to an expression within a premise                                                   |
 | `TSourceAssociationRemovalResult`  | Return type of bulk association removal (`{ removedVariableAssociations, removedExpressionAssociations }`) |
 | `TSourceManagement`                | Interface contract for source association management methods on `ArgumentEngine`                           |
 | `TSourceManagerSnapshot`           | Snapshot type for `SourceManager` state                                                                    |
-| `TAssertionLookup`                 | Narrow read-only interface for assertion lookups (`get(id, version)`)                                      |
+| `TClaimLookup`                     | Narrow read-only interface for claim lookups (`get(id, version)`)                                          |
 | `TSourceLookup`                    | Narrow read-only interface for source lookups (`get(id, version)`)                                         |
-| `TAssertionLibrarySnapshot`        | Snapshot type for `AssertionLibrary` state                                                                 |
+| `TClaimLibrarySnapshot`            | Snapshot type for `ClaimLibrary` state                                                                     |
 | `TSourceLibrarySnapshot`           | Snapshot type for `SourceLibrary` state                                                                    |
