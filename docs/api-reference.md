@@ -730,7 +730,7 @@ Hierarchical snapshot types for capturing and restoring engine state:
 | `TArgumentEngineSnapshot`    | `argument`, `variables` snapshot, `premises` snapshots, `sources` snapshot, `conclusionPremiseId`, `config`                                                       |
 | `TReactiveSnapshot`          | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles`, `variableSourceAssociations`, `expressionSourceAssociations` Records |
 | `TReactivePremiseSnapshot`   | `premise`, `expressions` (Record by ID), `rootExpressionId`                                                                                                       |
-| `TClaimLibrarySnapshot`      | `claims` (all versions of all claims)                                                                                                                     |
+| `TClaimLibrarySnapshot`      | `claims` (all versions of all claims)                                                                                                                             |
 | `TSourceLibrarySnapshot`     | `sources` (all versions of all sources)                                                                                                                           |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.

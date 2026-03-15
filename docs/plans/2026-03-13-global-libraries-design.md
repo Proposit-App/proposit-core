@@ -151,9 +151,7 @@ Same API shape as `ClaimLibrary`, implementing `TSourceLookup<TSource>`.
 ### Library Snapshot Types
 
 ```typescript
-type TClaimLibrarySnapshot<
-    TClaim extends TCoreClaim = TCoreClaim,
-> = {
+type TClaimLibrarySnapshot<TClaim extends TCoreClaim = TCoreClaim> = {
     claims: TClaim[] // all versions, flattened
 }
 
