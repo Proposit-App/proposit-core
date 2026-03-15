@@ -30,8 +30,6 @@ export {
     defaultCompareVariable,
     defaultComparePremise,
     defaultCompareExpression,
-    defaultCompareVariableSourceAssociation,
-    defaultCompareExpressionSourceAssociation,
 } from "./core/diff.js"
 export * from "./types/relationships.js"
 export {

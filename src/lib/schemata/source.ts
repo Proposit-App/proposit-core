@@ -23,23 +23,6 @@ export const CoreSourceSchema = Type.Object(
 )
 export type TCoreSource = Static<typeof CoreSourceSchema>
 
-export const CoreVariableSourceAssociationSchema = Type.Object({
-    id: UUID,
-    sourceId: UUID,
-    sourceVersion: Type.Number({
-        description: "The version of the source this association pins to.",
-    }),
-    variableId: UUID,
-    argumentId: UUID,
-    argumentVersion: Type.Number(),
-    checksum: Type.String({
-        description: "Association checksum for sync detection.",
-    }),
-})
-export type TCoreVariableSourceAssociation = Static<
-    typeof CoreVariableSourceAssociationSchema
->
-
 export const CoreClaimSourceAssociationSchema = Type.Object(
     {
         id: UUID,
@@ -65,20 +48,3 @@ export type TCoreClaimSourceAssociation = Static<
     typeof CoreClaimSourceAssociationSchema
 >
 
-export const CoreExpressionSourceAssociationSchema = Type.Object({
-    id: UUID,
-    sourceId: UUID,
-    sourceVersion: Type.Number({
-        description: "The version of the source this association pins to.",
-    }),
-    expressionId: UUID,
-    premiseId: UUID,
-    argumentId: UUID,
-    argumentVersion: Type.Number(),
-    checksum: Type.String({
-        description: "Association checksum for sync detection.",
-    }),
-})
-export type TCoreExpressionSourceAssociation = Static<
-    typeof CoreExpressionSourceAssociationSchema
->

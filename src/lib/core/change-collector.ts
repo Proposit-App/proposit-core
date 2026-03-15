@@ -7,10 +7,6 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
 } from "../schemata/propositional.js"
-import type {
-    TCoreVariableSourceAssociation,
-    TCoreExpressionSourceAssociation,
-} from "../schemata/source.js"
 import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
 
 function emptyEntityChanges<T>(): TCoreEntityChanges<T> {
@@ -36,10 +32,6 @@ export class ChangeCollector<
     private premises: TCoreEntityChanges<TPremise> = emptyEntityChanges()
     private roles: TCoreArgumentRoleState | undefined = undefined
     private argument: TArg | undefined = undefined
-    private variableSourceAssociations: TCoreEntityChanges<TCoreVariableSourceAssociation> =
-        emptyEntityChanges()
-    private expressionSourceAssociations: TCoreEntityChanges<TCoreExpressionSourceAssociation> =
-        emptyEntityChanges()
 
     addedExpression(expr: TExpr): void {
         this.expressions.added.push(expr)
@@ -76,28 +68,6 @@ export class ChangeCollector<
         this.argument = argument
     }
 
-    addedVariableSourceAssociation(
-        assoc: TCoreVariableSourceAssociation
-    ): void {
-        this.variableSourceAssociations.added.push(assoc)
-    }
-    removedVariableSourceAssociation(
-        assoc: TCoreVariableSourceAssociation
-    ): void {
-        this.variableSourceAssociations.removed.push(assoc)
-    }
-
-    addedExpressionSourceAssociation(
-        assoc: TCoreExpressionSourceAssociation
-    ): void {
-        this.expressionSourceAssociations.added.push(assoc)
-    }
-    removedExpressionSourceAssociation(
-        assoc: TCoreExpressionSourceAssociation
-    ): void {
-        this.expressionSourceAssociations.removed.push(assoc)
-    }
-
     toChangeset(): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
         const cs: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
         if (!isEntityChangesEmpty(this.expressions))
@@ -106,10 +76,6 @@ export class ChangeCollector<
         if (!isEntityChangesEmpty(this.premises)) cs.premises = this.premises
         if (this.roles !== undefined) cs.roles = this.roles
         if (this.argument !== undefined) cs.argument = this.argument
-        if (!isEntityChangesEmpty(this.variableSourceAssociations))
-            cs.variableSourceAssociations = this.variableSourceAssociations
-        if (!isEntityChangesEmpty(this.expressionSourceAssociations))
-            cs.expressionSourceAssociations = this.expressionSourceAssociations
         return cs
     }
 }

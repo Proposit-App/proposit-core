@@ -3,8 +3,6 @@ import type {
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
-    TCoreVariableSourceAssociation,
-    TCoreExpressionSourceAssociation,
 } from "../schemata/index.js"
 
 /** A single field-level change on an entity. */
@@ -61,8 +59,6 @@ export interface TCoreArgumentDiff<
     variables: TCoreEntitySetDiff<TVar>
     premises: TCorePremiseSetDiff<TPremise, TExpr>
     roles: TCoreRoleDiff
-    variableSourceAssociations: TCoreEntitySetDiff<TCoreVariableSourceAssociation>
-    expressionSourceAssociations: TCoreEntitySetDiff<TCoreExpressionSourceAssociation>
 }
 
 /** A comparator receives two matched objects and returns field-level changes. */
@@ -82,6 +78,4 @@ export interface TCoreDiffOptions<
     compareVariable?: TCoreFieldComparator<TVar>
     comparePremise?: TCoreFieldComparator<TPremise>
     compareExpression?: TCoreFieldComparator<TExpr>
-    compareVariableSourceAssociation?: TCoreFieldComparator<TCoreVariableSourceAssociation>
-    compareExpressionSourceAssociation?: TCoreFieldComparator<TCoreExpressionSourceAssociation>
 }

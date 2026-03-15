@@ -14,10 +14,6 @@ export interface TCoreChecksumConfig {
     claimFields?: Set<string>
     /** Fields to hash for source entities. Defaults to ["id", "version"]. */
     sourceFields?: Set<string>
-    /** Fields to hash for variable-source associations. */
-    variableSourceAssociationFields?: Set<string>
-    /** Fields to hash for expression-source associations. */
-    expressionSourceAssociationFields?: Set<string>
     /** Fields to hash for claim-source associations. */
     claimSourceAssociationFields?: Set<string>
 }

@@ -3,8 +3,6 @@ import type {
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
-    TCoreVariableSourceAssociation,
-    TCoreExpressionSourceAssociation,
 } from "../schemata/index.js"
 import type {
     TCoreArgumentDiff,
@@ -63,73 +61,6 @@ export function defaultComparePremise(
     _after: TCorePremise
 ): TCoreFieldChange[] {
     return []
-}
-
-/** Compares two variable-source associations and returns field-level changes for `sourceId`, `sourceVersion`, and `variableId`. */
-export function defaultCompareVariableSourceAssociation(
-    before: TCoreVariableSourceAssociation,
-    after: TCoreVariableSourceAssociation
-): TCoreFieldChange[] {
-    const changes: TCoreFieldChange[] = []
-    if (before.sourceId !== after.sourceId) {
-        changes.push({
-            field: "sourceId",
-            before: before.sourceId,
-            after: after.sourceId,
-        })
-    }
-    if (before.sourceVersion !== after.sourceVersion) {
-        changes.push({
-            field: "sourceVersion",
-            before: before.sourceVersion,
-            after: after.sourceVersion,
-        })
-    }
-    if (before.variableId !== after.variableId) {
-        changes.push({
-            field: "variableId",
-            before: before.variableId,
-            after: after.variableId,
-        })
-    }
-    return changes
-}
-
-/** Compares two expression-source associations and returns field-level changes for `sourceId`, `sourceVersion`, `expressionId`, and `premiseId`. */
-export function defaultCompareExpressionSourceAssociation(
-    before: TCoreExpressionSourceAssociation,
-    after: TCoreExpressionSourceAssociation
-): TCoreFieldChange[] {
-    const changes: TCoreFieldChange[] = []
-    if (before.sourceId !== after.sourceId) {
-        changes.push({
-            field: "sourceId",
-            before: before.sourceId,
-            after: after.sourceId,
-        })
-    }
-    if (before.sourceVersion !== after.sourceVersion) {
-        changes.push({
-            field: "sourceVersion",
-            before: before.sourceVersion,
-            after: after.sourceVersion,
-        })
-    }
-    if (before.expressionId !== after.expressionId) {
-        changes.push({
-            field: "expressionId",
-            before: before.expressionId,
-            after: after.expressionId,
-        })
-    }
-    if (before.premiseId !== after.premiseId) {
-        changes.push({
-            field: "premiseId",
-            before: before.premiseId,
-            after: after.premiseId,
-        })
-    }
-    return changes
 }
 
 /** Compares two expressions and returns field-level changes for structural fields (`type`, `parentId`, `position`, `variableId`, `operator`). */
@@ -346,12 +277,6 @@ export function diffArguments<
     const compareExpr =
         options?.compareExpression ??
         (defaultCompareExpression as TCoreFieldComparator<TExpr>)
-    const compareVarAssoc =
-        options?.compareVariableSourceAssociation ??
-        defaultCompareVariableSourceAssociation
-    const compareExprAssoc =
-        options?.compareExpressionSourceAssociation ??
-        defaultCompareExpressionSourceAssociation
 
     const argumentChanges = compareArg(argA, argB)
 
@@ -377,16 +302,6 @@ export function diffArguments<
         roles: diffRoles(
             rolesA.conclusionPremiseId,
             rolesB.conclusionPremiseId
-        ),
-        variableSourceAssociations: diffEntitySet(
-            engineA.getAllVariableSourceAssociations(),
-            engineB.getAllVariableSourceAssociations(),
-            compareVarAssoc
-        ),
-        expressionSourceAssociations: diffEntitySet(
-            engineA.getAllExpressionSourceAssociations(),
-            engineB.getAllExpressionSourceAssociations(),
-            compareExprAssoc
         ),
     }
 }

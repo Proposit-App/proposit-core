@@ -3,8 +3,6 @@ import type {
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
-    TCoreVariableSourceAssociation,
-    TCoreExpressionSourceAssociation,
 } from "../schemata/index.js"
 import type { TCoreArgumentRoleState } from "./evaluation.js"
 
@@ -27,9 +25,4 @@ export type TReactiveSnapshot<
     variables: Record<string, TVar>
     premises: Record<string, TReactivePremiseSnapshot<TPremise, TExpr>>
     roles: TCoreArgumentRoleState
-    variableSourceAssociations: Record<string, TCoreVariableSourceAssociation>
-    expressionSourceAssociations: Record<
-        string,
-        TCoreExpressionSourceAssociation
-    >
 }

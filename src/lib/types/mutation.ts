@@ -7,10 +7,6 @@ import type {
     TCoreArgument,
     TCoreArgumentRoleState,
 } from "../schemata/argument.js"
-import type {
-    TCoreVariableSourceAssociation,
-    TCoreExpressionSourceAssociation,
-} from "../schemata/index.js"
 
 /** Added/modified/removed entities of one type within a single mutation. */
 export interface TCoreEntityChanges<T> {
@@ -36,8 +32,6 @@ export interface TCoreChangeset<
     roles?: TCoreArgumentRoleState
     /** New argument metadata, present only when argument changed. */
     argument?: TArg
-    variableSourceAssociations?: TCoreEntityChanges<TCoreVariableSourceAssociation>
-    expressionSourceAssociations?: TCoreEntityChanges<TCoreExpressionSourceAssociation>
 }
 
 /**
