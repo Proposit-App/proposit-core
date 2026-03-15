@@ -11,8 +11,7 @@ import type {
 
 export class ClaimSourceLibrary<
     TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
-> implements TClaimSourceLookup<TAssoc>
-{
+> implements TClaimSourceLookup<TAssoc> {
     private associations: Map<string, TAssoc>
     private claimToAssociations: Map<string, Set<string>>
     private sourceToAssociations: Map<string, Set<string>>
@@ -47,7 +46,10 @@ export class ClaimSourceLibrary<
             )
         }
 
-        const source = this.sourceLookup.get(assoc.sourceId, assoc.sourceVersion)
+        const source = this.sourceLookup.get(
+            assoc.sourceId,
+            assoc.sourceVersion
+        )
         if (!source) {
             throw new Error(
                 `Source "${assoc.sourceId}" version ${assoc.sourceVersion} not found in source lookup.`
@@ -130,7 +132,8 @@ export class ClaimSourceLibrary<
     }
 
     public static fromSnapshot<
-        TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+        TAssoc extends TCoreClaimSourceAssociation =
+            TCoreClaimSourceAssociation,
     >(
         snapshot: TClaimSourceLibrarySnapshot<TAssoc>,
         claimLookup: TClaimLookup,

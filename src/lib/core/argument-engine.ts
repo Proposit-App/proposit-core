@@ -761,7 +761,8 @@ export class ArgumentEngine<
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
         TSource extends TCoreSource = TCoreSource,
         TClaim extends TCoreClaim = TCoreClaim,
-        TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+        TAssoc extends TCoreClaimSourceAssociation =
+            TCoreClaimSourceAssociation,
     >(
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>,
         claimLibrary: TClaimLookup<TClaim>,
@@ -776,7 +777,13 @@ export class ArgumentEngine<
             TSource,
             TClaim,
             TAssoc
-        >(snapshot.argument, claimLibrary, sourceLibrary, claimSourceLibrary, snapshot.config)
+        >(
+            snapshot.argument,
+            claimLibrary,
+            sourceLibrary,
+            claimSourceLibrary,
+            snapshot.config
+        )
         // Restore variables
         for (const v of snapshot.variables.variables) {
             engine.addVariable(v)
@@ -815,7 +822,8 @@ export class ArgumentEngine<
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
         TSource extends TCoreSource = TCoreSource,
         TClaim extends TCoreClaim = TCoreClaim,
-        TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+        TAssoc extends TCoreClaimSourceAssociation =
+            TCoreClaimSourceAssociation,
     >(
         argument: TOptionalChecksum<TArg>,
         claimLibrary: TClaimLookup<TClaim>,

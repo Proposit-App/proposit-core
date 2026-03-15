@@ -19,6 +19,7 @@
 Add the new schema and type infrastructure. Old schemas stay temporarily for compilation.
 
 **Files:**
+
 - Modify: `src/lib/schemata/source.ts` (add new schema)
 - Modify: `src/lib/types/checksum.ts` (add `claimSourceAssociationFields`)
 - Modify: `src/lib/consts.ts` (add default fields and `createChecksumConfig` key)
@@ -127,6 +128,7 @@ git commit -m "feat: add CoreClaimSourceAssociationSchema and supporting types"
 Build the new class test-first. Implementation code is in the spec under "`ClaimSourceLibrary<TAssoc>` class".
 
 **Files:**
+
 - Create: `src/lib/core/claim-source-library.ts`
 - Modify: `test/core.test.ts` (add new describe block at bottom)
 
@@ -141,6 +143,7 @@ import { ClaimSourceLibrary } from "../src/lib/core/claim-source-library"
 ```
 
 Add the full test block with helpers and all test cases — see spec sections "Mutations", "Queries", "Snapshot/restore" for the API surface to test. Tests should cover:
+
 - `add` — happy path, duplicate ID, missing claim, missing source
 - `remove` — happy path, not found, index cleanup
 - `getForClaim`, `getForSource`, `getAll`, `filter` — query coverage
@@ -179,6 +182,7 @@ git commit -m "feat: add ClaimSourceLibrary class with full test coverage"
 Remove the files and all their re-exports.
 
 **Files:**
+
 - Delete: `src/lib/core/source-manager.ts`
 - Delete: `src/lib/core/interfaces/source-management.interfaces.ts`
 - Modify: `src/lib/core/interfaces/index.ts` (remove re-exports)
@@ -202,6 +206,7 @@ git commit -m "refactor: delete SourceManager and TSourceManagement"
 Clean up all type files, `ChangeCollector`, and diff module.
 
 **Files:**
+
 - Modify: `src/lib/schemata/source.ts` (delete old schemas)
 - Modify: `src/lib/types/checksum.ts` (remove old fields)
 - Modify: `src/lib/types/mutation.ts` (remove association fields from `TCoreChangeset`)
@@ -256,6 +261,7 @@ git commit -m "refactor: remove all source association types, comparators, and t
 Remove all source-related code from `PremiseEngine` and its interface.
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts` (remove sourceManager dep, cascade blocks, expression-source methods)
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts` (remove expression-source methods from `TExpressionMutations`)
 
@@ -293,6 +299,7 @@ git commit -m "refactor: remove all source association code from PremiseEngine"
 Add `TAssoc` generic and `claimSourceLibrary` parameter. Remove all source management code.
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts` (heavy edits)
 
 - [ ] **Step 1: Add `TAssoc` generic parameter and `claimSourceLibrary` to class and constructor**
@@ -368,6 +375,7 @@ git commit -m "refactor: replace SourceManager with TClaimSourceLookup in Argume
 ### Task 7: Update barrel exports and add `ClaimSourceLibrary` export
 
 **Files:**
+
 - Modify: `src/lib/index.ts`
 
 - [ ] **Step 1: Add `ClaimSourceLibrary` export**
@@ -397,6 +405,7 @@ git commit -m "refactor: update barrel exports for claim-source migration"
 Remove old source association tests, update test fixtures to pass new constructor arguments.
 
 **Files:**
+
 - Modify: `test/core.test.ts` (remove describe blocks, update fixtures)
 - Modify: `test/diff-renderer.test.ts` (remove fixture fields)
 
@@ -467,6 +476,7 @@ git commit -m "test: update tests for claim-source association migration"
 Update commands, storage, and engine hydration.
 
 **Files:**
+
 - Modify: `src/cli/commands/sources.ts`
 - Modify: `src/cli/storage/sources.ts`
 - Modify: `src/cli/engine.ts`
@@ -492,6 +502,7 @@ In `src/cli/schemata.ts`: remove `CliSourceMetaSchema` and any schemas referenci
 - [ ] **Step 5: Update engine hydration/persistence**
 
 In `src/cli/engine.ts`:
+
 - Remove all source association reads/writes from `hydrateEngine` and `persistEngine`
 - Update `ArgumentEngine` constructor call to pass a `TClaimSourceLookup` (hydrated from global storage or an empty lookup)
 - Add `hydrateClaimSourceLibrary()` and `persistClaimSourceLibrary()` helper functions for global lifecycle
@@ -499,6 +510,7 @@ In `src/cli/engine.ts`:
 - [ ] **Step 6: Update source commands**
 
 In `src/cli/commands/sources.ts`:
+
 - Replace `link-variable` with `link-claim` calling `ClaimSourceLibrary.add()`
 - Remove `link-expression` command
 - Simplify `unlink` to only handle claim-source associations
@@ -523,6 +535,7 @@ git commit -m "refactor: update CLI for claim-source associations"
 Update all documentation per CLAUDE.md Documentation Sync rules.
 
 **Files:**
+
 - Modify: `docs/api-reference.md`
 - Modify: `README.md`
 - Modify: `CLI_EXAMPLES.md`

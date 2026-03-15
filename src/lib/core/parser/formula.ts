@@ -10,6 +10,5 @@ export type TFormulaAST =
     | { type: "iff"; left: TFormulaAST; right: TFormulaAST }
 
 export function parseFormula(input: string): TFormulaAST {
-     
     return pegParse(input) as TFormulaAST
 }

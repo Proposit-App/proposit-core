@@ -47,4 +47,3 @@ export const CoreClaimSourceAssociationSchema = Type.Object(
 export type TCoreClaimSourceAssociation = Static<
     typeof CoreClaimSourceAssociationSchema
 >
-

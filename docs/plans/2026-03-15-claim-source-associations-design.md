@@ -4,7 +4,7 @@
 
 Source associations are semantically misaligned at two levels:
 
-1. **Variable-source associations** are argument-scoped, but a source supports the truth of a *proposition* (claim), not a particular use of that proposition in an argument. Both claims and sources are global library entities — the association should be global too.
+1. **Variable-source associations** are argument-scoped, but a source supports the truth of a _proposition_ (claim), not a particular use of that proposition in an argument. Both claims and sources are global library entities — the association should be global too.
 
 2. **Expression-source associations** are unnecessary. If you want to cite evidence for a structural relationship (e.g., `A implies B`), you reify that relationship as a claim, assign it to a variable P, and cite sources for the claim. For example, a premise `P implies (A implies B)` uses P (backed by a sourced claim) to establish the relationship. This keeps all sourcing at one level.
 
@@ -12,13 +12,13 @@ This design replaces both association types with a single global `ClaimSourceLib
 
 ## Decisions
 
-| Question | Decision |
-|----------|----------|
-| Scope | Replace variable-source with claim-source. Delete expression-source associations entirely. Delete `SourceManager`. |
-| Where associations live | New standalone `ClaimSourceLibrary<TAssoc>` class. |
-| Versioning/freeze | No. Associations are create-or-delete only. Version-pinning on `claimVersion` + `sourceVersion` within each association captures the temporal relationship. |
-| Validation | Yes. `ClaimSourceLibrary` takes `TClaimLookup` and `TSourceLookup` and validates on add. |
-| Extensibility | Generic `TAssoc extends TCoreClaimSourceAssociation`. Consumers extend the base schema with additional fields and use `filter()` for custom queries. |
+| Question                | Decision                                                                                                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope                   | Replace variable-source with claim-source. Delete expression-source associations entirely. Delete `SourceManager`.                                          |
+| Where associations live | New standalone `ClaimSourceLibrary<TAssoc>` class.                                                                                                          |
+| Versioning/freeze       | No. Associations are create-or-delete only. Version-pinning on `claimVersion` + `sourceVersion` within each association captures the temporal relationship. |
+| Validation              | Yes. `ClaimSourceLibrary` takes `TClaimLookup` and `TSourceLookup` and validates on add.                                                                    |
+| Extensibility           | Generic `TAssoc extends TCoreClaimSourceAssociation`. Consumers extend the base schema with additional fields and use `filter()` for custom queries.        |
 
 ## Schema
 
@@ -52,6 +52,7 @@ export type TCoreClaimSourceAssociation = Static<
 ```
 
 Deleted schemas:
+
 - `CoreVariableSourceAssociationSchema` and `TCoreVariableSourceAssociation`
 - `CoreExpressionSourceAssociationSchema` and `TCoreExpressionSourceAssociation`
 
@@ -140,6 +141,7 @@ class ArgumentEngine<
 `ArgumentEngine` does not mutate claim-source associations. It can query them (e.g., "what sources support the claim behind variable P?") but `ClaimSourceLibrary` is managed externally.
 
 Removed from `ArgumentEngine`:
+
 - `sourceManager` private field — deleted entirely
 - All `TSourceManagement` method implementations (both variable-source and expression-source)
 - `ArgumentEngine` no longer implements `TSourceManagement`
@@ -148,10 +150,12 @@ Removed from `ArgumentEngine`:
 - `reactiveDirty.sources` field and all its usages removed (dirty-tracking for source association changes in reactive snapshots)
 
 `TArgumentEngineSnapshot`:
+
 - Remove `sources?: TSourceManagerSnapshot` field entirely
 - No replacement — claim-source associations are global, not argument-scoped
 
 All static factory and restoration methods:
+
 - `fromSnapshot(snapshot, claimLibrary, sourceLibrary, claimSourceLibrary, options?)` — adds `claimSourceLibrary` parameter, removes all source association restoration code
 - `fromData(data, claimLibrary, sourceLibrary, claimSourceLibrary, options?)` — adds `claimSourceLibrary` parameter
 - `rollback(snapshot)` — internal reconstruction passes stored `claimSourceLibrary` reference, removes all source association restoration code
@@ -159,6 +163,7 @@ All static factory and restoration methods:
 ### `SourceManager` deletion
 
 The entire `src/lib/core/source-manager.ts` file is deleted. All types it exports are removed:
+
 - `SourceManager` class
 - `TSourceManagerSnapshot` interface
 - `TSourceAssociationRemovalResult` interface
@@ -170,6 +175,7 @@ The entire `src/lib/core/interfaces/source-management.interfaces.ts` file is del
 ### `PremiseEngine` changes
 
 All source-related code is removed from `PremiseEngine`:
+
 - `sourceManager` field removed from the `deps` parameter object type (in `premise-engine.ts` constructor deps)
 - In `removeExpression`: remove the cascade block that calls `sourceManager.removeAssociationsForExpression()` and notifies the collector
 - Delete all expression-source methods: `addExpressionSourceAssociation`, `removeExpressionSourceAssociation`, `getSourceAssociationsForExpression`
@@ -178,12 +184,14 @@ All source-related code is removed from `PremiseEngine`:
 ### `TExpressionMutations` interface changes
 
 In `src/lib/core/interfaces/premise-engine.interfaces.ts`:
+
 - Remove `addExpressionSourceAssociation`, `removeExpressionSourceAssociation`, `getSourceAssociationsForExpression` methods
 - Remove `TCoreExpressionSourceAssociation` import
 
 ### `ChangeCollector` changes
 
 In `src/lib/core/change-collector.ts`:
+
 - Remove `variableSourceAssociations` private field and its `addedVariableSourceAssociation()`/`removedVariableSourceAssociation()` methods
 - Remove `expressionSourceAssociations` private field and its `addedExpressionSourceAssociation()`/`removedExpressionSourceAssociation()` methods
 - Remove both from `toChangeset()` output
@@ -191,12 +199,14 @@ In `src/lib/core/change-collector.ts`:
 ### `TCoreChangeset` changes
 
 In `src/lib/types/mutation.ts`:
+
 - Remove `variableSourceAssociations?: TCoreEntityChanges<TCoreVariableSourceAssociation>` field
 - Remove `expressionSourceAssociations?: TCoreEntityChanges<TCoreExpressionSourceAssociation>` field
 
 ### `TReactiveSnapshot` changes
 
 In `src/lib/types/reactive.ts`:
+
 - Remove `variableSourceAssociations: Record<string, TCoreVariableSourceAssociation>` field
 - Remove `expressionSourceAssociations: Record<string, TCoreExpressionSourceAssociation>` field
 - No replacement — claim-source associations are global (not argument-scoped), so they do not belong in argument-level reactive snapshots
@@ -204,6 +214,7 @@ In `src/lib/types/reactive.ts`:
 ### Diff module changes
 
 In `src/lib/types/diff.ts`:
+
 - Remove `variableSourceAssociations` field from `TCoreArgumentDiff`
 - Remove `expressionSourceAssociations` field from `TCoreArgumentDiff`
 - Remove `compareVariableSourceAssociation` field from `TCoreDiffOptions`
@@ -211,6 +222,7 @@ In `src/lib/types/diff.ts`:
 - No replacement — claim-source associations are global, so they do not belong in argument-level diffs
 
 In `src/lib/core/diff.ts`:
+
 - Remove `defaultCompareVariableSourceAssociation` comparator function
 - Remove `defaultCompareExpressionSourceAssociation` comparator function
 - Remove all source association diffing from `diffArguments`
@@ -261,21 +273,25 @@ In `src/lib/core/diff.ts`:
 ## Testing
 
 Affected test blocks in `test/core.test.ts`:
+
 - All `SourceManager` tests — remove entire describe block
 - All `ArgumentEngine` variable-source and expression-source association tests — remove entirely
 - All source cascade tests in `removeVariable`, `removePremise`, `removeExpression` — remove source-specific assertions, keep structural cascade assertions
 - All `getAssociationsFor*` and `getAllVariableSourceAssociations`/`getAllExpressionSourceAssociations` tests — remove
 
 Affected test blocks in `test/diff-renderer.test.ts`:
+
 - Fixture objects that include `variableSourceAssociations` or `expressionSourceAssociations` — remove fields
 
 New tests to add:
+
 - `ClaimSourceLibrary` — add/remove, validation against `ClaimLookup`/`SourceLookup`, `getForClaim`, `getForSource`, `filter`, snapshot/restore, duplicate ID rejection, missing claim/source rejection
 - Generic `TAssoc` extension — verify extended fields are preserved through add/snapshot/filter
 
 ## Documentation sync
 
 Per CLAUDE.md Documentation Sync rules, the following files need updating:
+
 - `docs/api-reference.md` — remove all source association sections (variable and expression), add `ClaimSourceLibrary` sections, update `ArgumentEngine` constructor/generics, remove `TSourceManagement`, update `TReactiveSnapshot`/`TCoreChangeset`/diff types
 - `README.md` — update source association concept references
 - `CLI_EXAMPLES.md` — replace `sources link-variable` and `sources link-expression` examples with `sources link-claim`

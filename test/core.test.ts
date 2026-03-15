@@ -7031,8 +7031,18 @@ describe("diffArguments — generic type parameters", () => {
             version: 1,
             projectId: "proj-1",
         }
-        const engineA = new ArgumentEngine<TExtArg>(argA, aLib(), sLib(), csLib())
-        const engineB = new ArgumentEngine<TExtArg>(argB, aLib(), sLib(), csLib())
+        const engineA = new ArgumentEngine<TExtArg>(
+            argA,
+            aLib(),
+            sLib(),
+            csLib()
+        )
+        const engineB = new ArgumentEngine<TExtArg>(
+            argB,
+            aLib(),
+            sLib(),
+            csLib()
+        )
 
         const diff = diffArguments(engineA, engineB)
         expect(diff.argument.before.projectId).toBe("proj-1")
@@ -7461,7 +7471,12 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("round-trips a premise with expressions", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(
+            ARG as TCoreArgument,
+            aLib(),
+            sLib(),
+            csLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7520,7 +7535,12 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restored premise is independent from original", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(
+            ARG as TCoreArgument,
+            aLib(),
+            sLib(),
+            csLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7581,7 +7601,12 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restores rootExpressionId correctly", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(
+            ARG as TCoreArgument,
+            aLib(),
+            sLib(),
+            csLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7621,7 +7646,12 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("rebuilds expressionsByVariableId index on restore", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(
+            ARG as TCoreArgument,
+            aLib(),
+            sLib(),
+            csLib()
+        )
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7724,7 +7754,12 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     it("round-trips an empty engine", () => {
         const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib())
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib()
+        )
         expect(restored.getArgument().id).toBe("arg-1")
         expect(restored.listPremiseIds()).toEqual([])
         expect(restored.getVariables()).toEqual([])
@@ -7748,7 +7783,12 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         })
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib())
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib()
+        )
 
         expect(restored.listPremiseIds()).toEqual(["p1"])
         expect(restored.getVariables()).toHaveLength(2)
@@ -7764,7 +7804,12 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         engine.setConclusionPremise("p2")
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib())
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib()
+        )
 
         expect(restored.getRoleState().conclusionPremiseId).toBe("p2")
     })
@@ -7786,7 +7831,12 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         engine.createPremiseWithId("p1")
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib())
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib()
+        )
 
         // Mutate restored, original should be unaffected
         restored.createPremiseWithId("p2")
@@ -8768,7 +8818,12 @@ describe("ArgumentEngine — lookup methods", () => {
         it("survives snapshot round-trip", () => {
             const { engine } = setupEngine()
             const snap = engine.snapshot()
-            const restored = ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib())
+            const restored = ArgumentEngine.fromSnapshot(
+                snap,
+                aLib(),
+                sLib(),
+                csLib()
+            )
             expect(restored.getExpression("e1")?.id).toBe("e1")
             expect(restored.getExpressionPremiseId("e3")).toBe("p2")
         })
@@ -10258,8 +10313,15 @@ describe("ClaimSourceLibrary", () => {
 
     describe("snapshot / fromSnapshot", () => {
         it("round-trips through snapshot and fromSnapshot", () => {
-            const { lib, claimLib, sourceLib, claim1, claim2, source1, source2 } =
-                makeFixtures()
+            const {
+                lib,
+                claimLib,
+                sourceLib,
+                claim1,
+                claim2,
+                source1,
+                source2,
+            } = makeFixtures()
             lib.add({
                 id: "assoc-1",
                 claimId: claim1.id,
@@ -10344,9 +10406,7 @@ describe("ClaimSourceLibrary", () => {
             expect(fetched?.createdBy).toBe("user-1")
 
             const snap = lib.snapshot()
-            expect(
-                (snap.claimSourceAssociations[0]).createdBy
-            ).toBe("user-1")
+            expect(snap.claimSourceAssociations[0].createdBy).toBe("user-1")
 
             const restored = ClaimSourceLibrary.fromSnapshot<TExtAssoc>(
                 snap,
