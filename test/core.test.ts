@@ -12246,9 +12246,9 @@ describe("Parsing — response schemas", () => {
                 selectionRationale: "Clear argument structure",
                 failureText: null,
             }
-            expect(
-                Value.Check(ParsedArgumentResponseSchema, response)
-            ).toBe(true)
+            expect(Value.Check(ParsedArgumentResponseSchema, response)).toBe(
+                true
+            )
         })
 
         it("accepts null argument with failureText", () => {
@@ -12258,9 +12258,9 @@ describe("Parsing — response schemas", () => {
                 selectionRationale: null,
                 failureText: "Could not parse argument",
             }
-            expect(
-                Value.Check(ParsedArgumentResponseSchema, response)
-            ).toBe(true)
+            expect(Value.Check(ParsedArgumentResponseSchema, response)).toBe(
+                true
+            )
         })
 
         it("accepts additional properties on nested schemas", () => {
@@ -12298,9 +12298,9 @@ describe("Parsing — response schemas", () => {
                 failureText: null,
                 customResponseField: "top-level-extra",
             }
-            expect(
-                Value.Check(ParsedArgumentResponseSchema, response)
-            ).toBe(true)
+            expect(Value.Check(ParsedArgumentResponseSchema, response)).toBe(
+                true
+            )
         })
     })
 
@@ -12468,6 +12468,33 @@ describe("Parsing — response schemas", () => {
                 failureText: null,
             }
             expect(Value.Check(schema, response)).toBe(true)
+        })
+    })
+
+    describe("getParsingResponseSchema", () => {
+        it("returns a valid JSON Schema object from core schema", () => {
+            const jsonSchema = getParsingResponseSchema()
+            expect(jsonSchema).toBeDefined()
+            expect(jsonSchema.type).toBe("object")
+            const props = jsonSchema.properties as Record<string, unknown>
+            expect(props).toBeDefined()
+            expect(props.argument).toBeDefined()
+            expect(props.uncategorizedText).toBeDefined()
+            expect(props.failureText).toBeDefined()
+        })
+
+        it("returns JSON Schema from an extended schema", () => {
+            const extended = buildParsingResponseSchema({
+                claimSchema: Type.Object({
+                    confidence: Type.Number(),
+                }),
+            })
+            const jsonSchema = getParsingResponseSchema(extended)
+            expect(jsonSchema).toBeDefined()
+            expect(jsonSchema.type).toBe("object")
+            const props = jsonSchema.properties as Record<string, unknown>
+            expect(props).toBeDefined()
+            expect(props.argument).toBeDefined()
         })
     })
 })

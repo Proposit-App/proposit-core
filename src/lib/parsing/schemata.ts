@@ -67,7 +67,9 @@ export const ParsedArgumentResponseSchema = Type.Object(
     },
     { additionalProperties: true }
 )
-export type TParsedArgumentResponse = Static<typeof ParsedArgumentResponseSchema>
+export type TParsedArgumentResponse = Static<
+    typeof ParsedArgumentResponseSchema
+>
 
 function mergeObjectSchemas(base: TObject, extension: TObject): TObject {
     return Type.Object(
@@ -142,4 +144,11 @@ export function buildParsingResponseSchema(
         : Type.Object(baseResponseProps, { additionalProperties: true })
 
     return responseSch
+}
+
+export function getParsingResponseSchema(
+    schema?: TSchema
+): Record<string, unknown> {
+    const target = schema ?? ParsedArgumentResponseSchema
+    return JSON.parse(JSON.stringify(target)) as Record<string, unknown>
 }
