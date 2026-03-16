@@ -4,6 +4,7 @@ coverage/
 *.tsbuildinfo
 .ltstash/
 .claude/
+.superpowers/
 .worktrees/
 .release_notes.md
 .untracked/
