@@ -3,13 +3,13 @@ import type { TCoreChecksumConfig } from "../types/checksum.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
 import type {
-    TClaimLookup,
+    TClaimLibraryManagement,
     TClaimLibrarySnapshot,
 } from "./interfaces/library.interfaces.js"
 
 export class ClaimLibrary<
     TClaim extends TCoreClaim = TCoreClaim,
-> implements TClaimLookup<TClaim> {
+> implements TClaimLibraryManagement<TClaim> {
     private entities: Map<string, Map<number, TClaim>>
     private checksumConfig?: TCoreChecksumConfig
 

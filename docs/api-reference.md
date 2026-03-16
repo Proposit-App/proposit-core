@@ -266,7 +266,7 @@ Renders the full argument as a multi-line string. Each premise is prefixed with 
 
 ## `ClaimSourceLibrary<TAssoc>`
 
-Global standalone repository for claim-source associations. Implements `TClaimSourceLookup<TAssoc>`. Associations link a claim version to a source version. Create-or-delete only — no update path.
+Global standalone repository for claim-source associations. Implements `TClaimSourceLibraryManagement<TAssoc>` (which extends `TClaimSourceLookup<TAssoc>`). Associations link a claim version to a source version. Create-or-delete only — no update path.
 
 Pass an instance to `ArgumentEngine` constructor (and `fromSnapshot`) as the fourth parameter.
 
@@ -332,7 +332,7 @@ Reconstructs a `ClaimSourceLibrary` from a previously captured snapshot. Does no
 
 ## `ClaimLibrary<TClaim>`
 
-Global versioned repository for claim entities. Implements `TClaimLookup<TClaim>`. Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable claim reference validation on variables.
+Global versioned repository for claim entities. Implements `TClaimLibraryManagement<TClaim>` (which extends `TClaimLookup<TClaim>`). Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable claim reference validation on variables.
 
 Each claim has a `version` (starting at `0`) and a `frozen` flag. Freezing locks the current version and auto-creates a new mutable copy at the next version number.
 
@@ -398,7 +398,7 @@ Reconstructs a `ClaimLibrary` from a previously captured snapshot.
 
 ## `SourceLibrary<TSource>`
 
-Global versioned repository for source entities. Implements `TSourceLookup<TSource>`. Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable source reference validation on `ClaimSourceLibrary` associations.
+Global versioned repository for source entities. Implements `TSourceLibraryManagement<TSource>` (which extends `TSourceLookup<TSource>`). Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable source reference validation on `ClaimSourceLibrary` associations.
 
 Has the same versioning and freeze semantics as `ClaimLibrary`.
 
@@ -760,14 +760,17 @@ Premise-bound variables enable hierarchical argument structure: variable Q bound
 
 ### Source and Claim-Source Types
 
-| Type                          | Description                                                                                         |
-| ----------------------------- | --------------------------------------------------------------------------------------------------- |
-| `TCoreSource`                 | Base source entity (`{ id, version, frozen, checksum }`)                                            |
-| `TCoreClaim`                  | Base claim entity (`{ id, version, frozen, checksum }`)                                             |
-| `TCoreClaimSourceAssociation` | Links a claim version to a source version (`{ claimId, claimVersion, sourceId, sourceVersion, … }`) |
-| `TClaimLookup`                | Narrow read-only interface for claim lookups (`get(id, version)`)                                   |
-| `TSourceLookup`               | Narrow read-only interface for source lookups (`get(id, version)`)                                  |
-| `TClaimSourceLookup`          | Narrow read-only interface for claim-source lookups (`getForClaim`, `getForSource`, `get`)          |
-| `TClaimLibrarySnapshot`       | Snapshot type for `ClaimLibrary` state                                                              |
-| `TSourceLibrarySnapshot`      | Snapshot type for `SourceLibrary` state                                                             |
-| `TClaimSourceLibrarySnapshot` | Snapshot type for `ClaimSourceLibrary` state                                                        |
+| Type                            | Description                                                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TCoreSource`                   | Base source entity (`{ id, version, frozen, checksum }`)                                                                                                      |
+| `TCoreClaim`                    | Base claim entity (`{ id, version, frozen, checksum }`)                                                                                                       |
+| `TCoreClaimSourceAssociation`   | Links a claim version to a source version (`{ claimId, claimVersion, sourceId, sourceVersion, … }`)                                                           |
+| `TClaimLookup`                  | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                             |
+| `TClaimLibraryManagement`       | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)   |
+| `TSourceLookup`                 | Narrow read-only interface for source lookups (`get(id, version)`)                                                                                            |
+| `TSourceLibraryManagement`      | Full management interface for `SourceLibrary` (extends `TSourceLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`) |
+| `TClaimSourceLookup`            | Narrow read-only interface for claim-source lookups (`getForClaim`, `getForSource`, `get`)                                                                    |
+| `TClaimSourceLibraryManagement` | Full management interface for `ClaimSourceLibrary` (extends `TClaimSourceLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`)                       |
+| `TClaimLibrarySnapshot`         | Snapshot type for `ClaimLibrary` state                                                                                                                        |
+| `TSourceLibrarySnapshot`        | Snapshot type for `SourceLibrary` state                                                                                                                       |
+| `TClaimSourceLibrarySnapshot`   | Snapshot type for `ClaimSourceLibrary` state                                                                                                                  |

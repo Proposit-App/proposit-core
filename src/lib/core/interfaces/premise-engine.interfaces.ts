@@ -327,6 +327,29 @@ export interface TPremiseLifecycle<
      */
     setOnMutate(callback: (() => void) | undefined): void
     /**
+     * Sets a callback that checks whether adding a variable-expression to a
+     * premise would create a circular binding. Injected by `ArgumentEngine`
+     * to enable cross-premise cycle detection. If not set, only the direct
+     * check (within the premise itself) runs.
+     *
+     * @param check - A function that returns `true` if adding the variable
+     *   to the premise would create a cycle, or `undefined` to clear.
+     */
+    setCircularityCheck(
+        check: ((variableId: string, premiseId: string) => boolean) | undefined
+    ): void
+    /**
+     * Sets a callback that checks whether a premise-bound variable's target
+     * premise has an empty expression tree. Injected by `ArgumentEngine` to
+     * enable cross-premise validation. Used during `validateEvaluability`.
+     *
+     * @param check - A function that returns `true` if the variable's bound
+     *   premise has no root expression, or `undefined` to clear.
+     */
+    setEmptyBoundPremiseCheck(
+        check: ((variableId: string) => boolean) | undefined
+    ): void
+    /**
      * Invalidates the cached checksum so the next call recomputes it.
      */
     markDirty(): void

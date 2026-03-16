@@ -3,13 +3,13 @@ import type { TCoreChecksumConfig } from "../types/checksum.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
 import type {
-    TSourceLookup,
+    TSourceLibraryManagement,
     TSourceLibrarySnapshot,
 } from "./interfaces/library.interfaces.js"
 
 export class SourceLibrary<
     TSource extends TCoreSource = TCoreSource,
-> implements TSourceLookup<TSource> {
+> implements TSourceLibraryManagement<TSource> {
     private entities: Map<string, Map<number, TSource>>
     private checksumConfig?: TCoreChecksumConfig
 

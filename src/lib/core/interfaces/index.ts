@@ -22,9 +22,12 @@ export type {
 
 export type {
     TClaimLookup,
+    TClaimLibraryManagement,
     TSourceLookup,
+    TSourceLibraryManagement,
     TClaimLibrarySnapshot,
     TSourceLibrarySnapshot,
     TClaimSourceLookup,
+    TClaimSourceLibraryManagement,
     TClaimSourceLibrarySnapshot,
 } from "./library.interfaces.js"

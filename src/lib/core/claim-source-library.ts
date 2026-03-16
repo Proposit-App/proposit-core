@@ -5,13 +5,13 @@ import { entityChecksum } from "./checksum.js"
 import type {
     TClaimLookup,
     TSourceLookup,
-    TClaimSourceLookup,
+    TClaimSourceLibraryManagement,
     TClaimSourceLibrarySnapshot,
 } from "./interfaces/library.interfaces.js"
 
 export class ClaimSourceLibrary<
     TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
-> implements TClaimSourceLookup<TAssoc> {
+> implements TClaimSourceLibraryManagement<TAssoc> {
     private associations: Map<string, TAssoc>
     private claimToAssociations: Map<string, Set<string>>
     private sourceToAssociations: Map<string, Set<string>>
