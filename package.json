@@ -22,6 +22,10 @@
         "./extensions/ieee": {
             "types": "./dist/extensions/ieee/index.d.ts",
             "import": "./dist/extensions/ieee/index.js"
+        },
+        "./extensions/basics": {
+            "types": "./dist/extensions/basics/index.d.ts",
+            "import": "./dist/extensions/basics/index.js"
         }
     },
     "bin": {
