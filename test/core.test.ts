@@ -10963,3 +10963,199 @@ describe("Premise-variable associations — transitive circularity", () => {
         ).toThrow(/circular/i)
     })
 })
+
+describe("Premise-variable associations — evaluation filtering", () => {
+    it("excludes premise-bound variables from truth table columns", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        claimLibrary.create({ id: "c2" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+
+        // Premise 1: A implies B (the sub-argument)
+        engine.createPremiseWithId("p1")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.addVariable({
+            id: "vB",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "B",
+            claimId: "c2",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        const p1 = engine.getPremise("p1")!
+        p1.addExpression({
+            id: "op1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+            type: "operator",
+            operator: "implies",
+            position: 0,
+        })
+        p1.addExpression({
+            id: "e1a",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "op1",
+            type: "variable",
+            variableId: "vA",
+            position: 0,
+        })
+        p1.addExpression({
+            id: "e1b",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "op1",
+            type: "variable",
+            variableId: "vB",
+            position: 1,
+        })
+
+        // Premise 2: P implies Q, where Q is bound to p1
+        engine.createPremiseWithId("p2")
+        engine.addVariable({
+            id: "vP",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+        const p2 = engine.getPremise("p2")!
+        p2.addExpression({
+            id: "op2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            type: "operator",
+            operator: "implies",
+            position: 0,
+        })
+        p2.addExpression({
+            id: "e2a",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: "op2",
+            type: "variable",
+            variableId: "vP",
+            position: 0,
+        })
+        p2.addExpression({
+            id: "e2b",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: "op2",
+            type: "variable",
+            variableId: "vQ",
+            position: 1,
+        })
+
+        engine.setConclusionPremise("p2")
+
+        // checkValidity should only generate assignments for A, B, P (not Q)
+        const result = engine.checkValidity()
+        expect(result).toBeDefined()
+        expect(result.ok).toBe(true)
+        if (result.ok) {
+            // 3 claim-bound variables → 2^3 = 8 assignments
+            expect(result.numAssignmentsChecked).toBe(8)
+        }
+    })
+
+    it("includes premise-bound variables in referencedVariableIds but not in assignment generation", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+
+        engine.createPremiseWithId("p1")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        const p1 = engine.getPremise("p1")!
+        p1.appendExpression(null, {
+            id: "e1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+            type: "variable",
+            variableId: "vA",
+        })
+
+        engine.createPremiseWithId("p2")
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+        const p2 = engine.getPremise("p2")!
+        p2.appendExpression(null, {
+            id: "e2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            type: "variable",
+            variableId: "vQ",
+        })
+
+        engine.setConclusionPremise("p2")
+
+        // checkValidity should only assign A (not Q)
+        const result = engine.checkValidity()
+        expect(result.ok).toBe(true)
+        if (result.ok) {
+            // 1 claim-bound variable → 2^1 = 2 assignments
+            expect(result.numAssignmentsChecked).toBe(2)
+            // But both variables are referenced
+            expect(result.checkedVariableIds).toContain("vA")
+            // Q is not in checkedVariableIds since it's premise-bound
+            expect(result.checkedVariableIds).not.toContain("vQ")
+        }
+    })
+})

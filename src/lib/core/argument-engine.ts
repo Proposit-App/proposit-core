@@ -1349,7 +1349,7 @@ export class ArgumentEngine<
             ...supportingPremises,
             ...constraintPremises,
         ]
-        const referencedVariableIds = [
+        const allVariableIds = [
             ...new Set(
                 allRelevantPremises.flatMap((pm) =>
                     pm
@@ -1364,6 +1364,13 @@ export class ArgumentEngine<
                 )
             ),
         ].sort()
+
+        // Only claim-bound variables get truth-table columns;
+        // premise-bound variables are resolved lazily from their bound premise.
+        const referencedVariableIds = allVariableIds.filter((vid) => {
+            const v = this.variables.getVariable(vid)
+            return v != null && isClaimBound(v)
+        })
 
         try {
             const evalOpts = {
@@ -1485,7 +1492,7 @@ export class ArgumentEngine<
                 !supportingIds.has(pm.getId())
         )
 
-        const checkedVariableIds = [
+        const allVariableIdsForCheck = [
             ...new Set(
                 [
                     conclusion,
@@ -1504,6 +1511,13 @@ export class ArgumentEngine<
                 )
             ),
         ].sort()
+
+        // Only claim-bound variables get truth-table columns;
+        // premise-bound variables are resolved lazily from their bound premise.
+        const checkedVariableIds = allVariableIdsForCheck.filter((vid) => {
+            const v = this.variables.getVariable(vid)
+            return v != null && isClaimBound(v)
+        })
 
         if (
             options?.maxVariables !== undefined &&
