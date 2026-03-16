@@ -10887,3 +10887,79 @@ describe("Premise-variable associations — circularity prevention", () => {
         ).not.toThrow()
     })
 })
+
+// ---------------------------------------------------------------------------
+// Premise-variable associations — transitive circularity
+// ---------------------------------------------------------------------------
+
+describe("Premise-variable associations — transitive circularity", () => {
+    it("rejects indirect cycles through binding chain", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        engine.createPremiseWithId("p2")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        // Q bound to p1, R bound to p2
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+        engine.bindVariableToPremise({
+            id: "vR",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "R",
+            boundPremiseId: "p2",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+
+        // Add R to p1's tree (R is bound to p2, this is fine)
+        const p1 = engine.getPremise("p1")!
+        p1.appendExpression(null, {
+            id: "e1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+            type: "variable",
+            variableId: "vR",
+        })
+
+        // Now try to add Q to p2 — Q bound to p1, which contains R, which is bound to p2
+        // Transitive cycle: adding Q to p2 means p2 depends on Q → p1 → R → p2
+        const p2 = engine.getPremise("p2")!
+        expect(() =>
+            p2.appendExpression(null, {
+                id: "e2",
+                argumentId: "a1",
+                argumentVersion: 0,
+                premiseId: "p2",
+                parentId: null,
+                type: "variable",
+                variableId: "vQ",
+            })
+        ).toThrow(/circular/i)
+    })
+})
