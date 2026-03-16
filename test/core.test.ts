@@ -11636,3 +11636,57 @@ describe("Premise-variable associations — diff", () => {
         ])
     })
 })
+
+// ---------------------------------------------------------------------------
+// Premise-variable associations — snapshot round-trip
+// ---------------------------------------------------------------------------
+
+describe("Premise-variable associations — snapshot round-trip", () => {
+    it("restores premise-bound variables from snapshot", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+
+        const snapshot = engine.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(
+            snapshot,
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+
+        const vQ = restored.getVariable("vQ")
+        expect(vQ).toBeDefined()
+        expect(isPremiseBound(vQ!)).toBe(true)
+        expect((vQ as TPremiseBoundVariable).boundPremiseId).toBe("p1")
+
+        const vA = restored.getVariable("vA")
+        expect(vA).toBeDefined()
+        expect(isClaimBound(vA!)).toBe(true)
+    })
+})

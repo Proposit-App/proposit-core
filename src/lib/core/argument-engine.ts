@@ -964,13 +964,7 @@ export class ArgumentEngine<
             claimSourceLibrary,
             snapshot.config
         )
-        // Restore variables
-        for (const v of snapshot.variables.variables) {
-            engine.addVariable(
-                v as unknown as TOptionalChecksum<TClaimBoundVariable>
-            )
-        }
-        // Restore premises using PremiseEngine.fromSnapshot
+        // Restore premises first (premise-bound variables reference them)
         for (const premiseSnap of snapshot.premises) {
             const pe = PremiseEngine.fromSnapshot<TArg, TPremise, TExpr, TVar>(
                 premiseSnap,
@@ -985,6 +979,29 @@ export class ArgumentEngine<
                 engine.reactiveDirty.premiseIds.add(premiseId)
                 engine.notifySubscribers()
             })
+        }
+        // Restore claim-bound variables first, then premise-bound variables
+        for (const v of snapshot.variables.variables) {
+            if (
+                isClaimBound(
+                    v as unknown as TCorePropositionalVariable
+                )
+            ) {
+                engine.addVariable(
+                    v as unknown as TOptionalChecksum<TClaimBoundVariable>
+                )
+            }
+        }
+        for (const v of snapshot.variables.variables) {
+            if (
+                isPremiseBound(
+                    v as unknown as TCorePropositionalVariable
+                )
+            ) {
+                engine.bindVariableToPremise(
+                    v as unknown as TOptionalChecksum<TPremiseBoundVariable>
+                )
+            }
         }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
         engine.conclusionPremiseId = snapshot.conclusionPremiseId
@@ -1028,11 +1045,50 @@ export class ArgumentEngine<
             TAssoc
         >(argument, claimLibrary, sourceLibrary, claimSourceLibrary, config)
 
-        // Register variables
+        // Register claim-bound variables first (no dependencies)
         for (const v of variables) {
-            engine.addVariable(
-                v as unknown as TOptionalChecksum<TClaimBoundVariable>
+            if (
+                isClaimBound(
+                    v as unknown as TCorePropositionalVariable
+                )
+            ) {
+                engine.addVariable(
+                    v as unknown as TOptionalChecksum<TClaimBoundVariable>
+                )
+            }
+        }
+
+        // Create premises (premise-bound variables reference them)
+        const premiseEngines = new Map<
+            string,
+            PremiseEngine<TArg, TPremise, TExpr, TVar>
+        >()
+        for (const premise of premises) {
+            const {
+                id: _id,
+                argumentId: _argumentId,
+                argumentVersion: _argumentVersion,
+                checksum: _checksum,
+                ...extras
+            } = premise as unknown as Record<string, unknown>
+            const { result: pe } = engine.createPremiseWithId(
+                premise.id,
+                extras
             )
+            premiseEngines.set(premise.id, pe)
+        }
+
+        // Register premise-bound variables (depend on premises)
+        for (const v of variables) {
+            if (
+                isPremiseBound(
+                    v as unknown as TCorePropositionalVariable
+                )
+            ) {
+                engine.bindVariableToPremise(
+                    v as unknown as TOptionalChecksum<TPremiseBoundVariable>
+                )
+            }
         }
 
         // Group expressions by premiseId
@@ -1048,22 +1104,9 @@ export class ArgumentEngine<
             group.push(expr)
         }
 
-        // Create premises and load their expressions in BFS order
-        for (const premise of premises) {
-            const {
-                id: _id,
-                argumentId: _argumentId,
-                argumentVersion: _argumentVersion,
-                checksum: _checksum,
-                ...extras
-            } = premise as unknown as Record<string, unknown>
-            const { result: pe } = engine.createPremiseWithId(
-                premise.id,
-                extras
-            )
-
-            // Add expressions in BFS order (roots first, then children)
-            const premiseExprs = exprsByPremise.get(premise.id) ?? []
+        // Add expressions in BFS order (roots first, then children)
+        for (const [premiseId, pe] of premiseEngines) {
+            const premiseExprs = exprsByPremise.get(premiseId) ?? []
             // Cast to base type to access .id and .parentId on the distributive conditional type
             type TBaseInput = TExpressionInput<TCorePropositionalExpression>
             const pending = new Map(
