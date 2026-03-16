@@ -11735,9 +11735,7 @@ describe("Premise-variable associations — validateEvaluability", () => {
 
         const validation = p2.validateEvaluability()
         expect(
-            validation.issues.some(
-                (i) => i.code === "EXPR_BOUND_PREMISE_EMPTY"
-            )
+            validation.issues.some((i) => i.code === "EXPR_BOUND_PREMISE_EMPTY")
         ).toBe(true)
     })
 
@@ -11799,9 +11797,7 @@ describe("Premise-variable associations — validateEvaluability", () => {
 
         const validation = p2.validateEvaluability()
         expect(
-            validation.issues.some(
-                (i) => i.code === "EXPR_BOUND_PREMISE_EMPTY"
-            )
+            validation.issues.some((i) => i.code === "EXPR_BOUND_PREMISE_EMPTY")
         ).toBe(false)
     })
 

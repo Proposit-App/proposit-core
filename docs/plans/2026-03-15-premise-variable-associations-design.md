@@ -18,18 +18,18 @@ A **premise-variable binding** that binds a variable to a premise within the sam
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| Binding target | Premise (not formula/expression) | Motivating use case is nested implications, which are whole-premise constructs |
-| Semantic equivalence | Yes | If the binding doesn't affect evaluation, it's just a label |
-| Storage | Argument-internal | Bindings are argument-scoped and tightly coupled to evaluation |
-| Variable binding model | Claim XOR premise (discriminated union) | Clean type safety, no ambiguous optional combinations |
-| Schema future-proofing | Include `boundArgumentId`/`boundArgumentVersion` fields | Enables cross-argument references in the future |
-| Current scope restriction | Same-argument only | `boundArgumentId` must equal variable's `argumentId` |
-| Circularity prevention | Enforced at bind time and expression-add time | Cycles are logical errors, not evaluation edge cases |
-| Evaluation strategy | Lazy resolution | Preserves original tree structure, handles recursive bindings naturally |
-| Premise removal cascade | Deletes bound variables (which cascade through expressions) | Consistent with existing cascade behavior |
-| Cardinality | Many-to-one (multiple variables can bind to one premise) | No reason to artificially restrict |
+| Decision                  | Choice                                                      | Rationale                                                                      |
+| ------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Binding target            | Premise (not formula/expression)                            | Motivating use case is nested implications, which are whole-premise constructs |
+| Semantic equivalence      | Yes                                                         | If the binding doesn't affect evaluation, it's just a label                    |
+| Storage                   | Argument-internal                                           | Bindings are argument-scoped and tightly coupled to evaluation                 |
+| Variable binding model    | Claim XOR premise (discriminated union)                     | Clean type safety, no ambiguous optional combinations                          |
+| Schema future-proofing    | Include `boundArgumentId`/`boundArgumentVersion` fields     | Enables cross-argument references in the future                                |
+| Current scope restriction | Same-argument only                                          | `boundArgumentId` must equal variable's `argumentId`                           |
+| Circularity prevention    | Enforced at bind time and expression-add time               | Cycles are logical errors, not evaluation edge cases                           |
+| Evaluation strategy       | Lazy resolution                                             | Preserves original tree structure, handles recursive bindings naturally        |
+| Premise removal cascade   | Deletes bound variables (which cascade through expressions) | Consistent with existing cascade behavior                                      |
+| Cardinality               | Many-to-one (multiple variables can bind to one premise)    | No reason to artificially restrict                                             |
 
 ## 1. Variable Schema Changes
 
@@ -39,13 +39,13 @@ A **premise-variable binding** that binds a variable to a premise within the sam
 
 ```typescript
 {
-  id: UUID
-  argumentId: UUID
-  argumentVersion: number
-  symbol: string
-  claimId: UUID          // required
-  claimVersion: number   // required
-  checksum: string
+    id: UUID
+    argumentId: UUID
+    argumentVersion: number
+    symbol: string
+    claimId: UUID // required
+    claimVersion: number // required
+    checksum: string
 }
 ```
 
@@ -55,14 +55,14 @@ This is the existing variable shape, unchanged.
 
 ```typescript
 {
-  id: UUID
-  argumentId: UUID
-  argumentVersion: number
-  symbol: string
-  boundPremiseId: UUID          // required
-  boundArgumentId: UUID         // required
-  boundArgumentVersion: number  // required
-  checksum: string
+    id: UUID
+    argumentId: UUID
+    argumentVersion: number
+    symbol: string
+    boundPremiseId: UUID // required
+    boundArgumentId: UUID // required
+    boundArgumentVersion: number // required
+    checksum: string
 }
 ```
 
@@ -89,6 +89,7 @@ Since TypeBox generics (`Generic`/`Parameter`/`Call`) don't work in v1.1.0, defi
 **`bindVariableToPremise(variable: TPremiseBoundVariableInput): TCoreMutationResult`**
 
 Creates a premise-bound variable. Validates:
+
 - `boundPremiseId` references an existing premise in this argument
 - `boundArgumentId === variable.argumentId` (current restriction)
 - Symbol uniqueness (same as `addVariable`)
@@ -151,6 +152,7 @@ When adding a variable-expression to a premise, check whether the referenced var
 **Direct check:** `variable.boundPremiseId === expression.premiseId` → reject.
 
 **Transitive check:** Walk the binding chain. When adding variable-expression for Q to Premise X:
+
 1. If Q is premise-bound, find Q's target premise
 2. Collect all variable-expressions in that target premise's tree
 3. For each such variable, if it is premise-bound to Premise X, reject
@@ -167,6 +169,7 @@ Currently, `PremiseEngine.evaluate` is self-contained — it evaluates its own e
 ### Variable Resolution
 
 When the evaluator encounters a variable-expression:
+
 1. Check if the variable is claim-bound or premise-bound
 2. If **claim-bound**: look up truth value from the current assignment (existing behavior)
 3. If **premise-bound**: call the resolver callback, which evaluates the target premise's expression tree under the current assignment and returns the result (lazy resolution)

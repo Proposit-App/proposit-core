@@ -16,7 +16,7 @@ Creates a new `PremiseEngine`, registers it with the engine, and returns it wrap
 
 ### `removePremise(premiseId)` → `TCoreMutationResult<TCorePremise>`
 
-Removes a premise and clears its role assignments. Returns the removed premise data.
+Removes a premise and clears its role assignments. Also cascade-deletes any premise-bound variables targeting the removed premise (which in turn cascade-deletes their referencing expressions). Returns the removed premise data.
 
 ---
 
@@ -46,13 +46,27 @@ Returns all premise IDs sorted alphabetically.
 
 ### `addVariable(variable)` → `TCoreMutationResult<TPropositionalVariable>`
 
-Registers a variable (without `checksum` — it is computed lazily) for use across all premises. The variable must include `claimId: string` and `claimVersion: number` fields referencing a valid entry in the `ClaimLibrary`. Throws if the `id` or `symbol` already exists, if `argumentId`/`argumentVersion` don't match the engine's argument, or if the claim reference is not found in the claim library.
+Registers a claim-bound variable (without `checksum` — it is computed lazily) for use across all premises. The variable must include `claimId: string` and `claimVersion: number` fields referencing a valid entry in the `ClaimLibrary`. Throws if the `id` or `symbol` already exists, if `argumentId`/`argumentVersion` don't match the engine's argument, or if the claim reference is not found in the claim library. Only accepts claim-bound variables — use `bindVariableToPremise` for premise-bound variables.
 
 ---
 
-### `updateVariable(variableId, { symbol?, claimId?, claimVersion? })` → `TCoreMutationResult<TPropositionalVariable>`
+### `bindVariableToPremise(variable)` → `TCoreMutationResult<TPropositionalVariable>`
 
-Updates variable fields. `claimId` and `claimVersion` must be provided together — providing one without the other throws. Returns a mutation result with the modified variable.
+Registers a premise-bound variable whose truth value is derived from another premise's evaluation. The variable must include `boundPremiseId`, `boundArgumentId`, and `boundArgumentVersion` fields. Throws if the `id` or `symbol` already exists, if `boundPremiseId` does not reference an existing premise, if `boundArgumentId` does not match this argument, or if binding would create a circular dependency.
+
+Premise-bound variables are resolved lazily during evaluation: the bound premise is evaluated first, and its root value becomes the variable's truth value. If the bound premise is empty, the variable resolves to `null` (unknown). Circularity detection is transitive — if premise A's variable Q is bound to premise B, and premise B uses a variable R bound to premise A, the binding is rejected.
+
+---
+
+### `getVariablesBoundToPremise(premiseId)` → `TPropositionalVariable[]`
+
+Returns all premise-bound variables whose `boundPremiseId` matches the given premise ID. This is a linear scan over all variables.
+
+---
+
+### `updateVariable(variableId, updates)` → `TCoreMutationResult<TPropositionalVariable>`
+
+Updates variable fields. For claim-bound variables, allowed updates are `symbol`, `claimId`, `claimVersion` (`claimId` and `claimVersion` must be provided together). For premise-bound variables, allowed updates are `symbol`, `boundPremiseId`, `boundArgumentId`, `boundArgumentVersion`. Throws if updates include fields from the wrong binding type. Returns a mutation result with the modified variable.
 
 ---
 
@@ -724,6 +738,23 @@ Hierarchical snapshot types for capturing and restoring engine state:
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
 Each snapshot captures only what the class **owns**. Dependencies (e.g., variables for a premise) are excluded and must be passed separately during restoration via `fromSnapshot()`.
+
+---
+
+### Variable Types
+
+Variables are a discriminated union (`TCorePropositionalVariable = TClaimBoundVariable | TPremiseBoundVariable`). Type guards `isClaimBound(v)` and `isPremiseBound(v)` narrow the union.
+
+| Type                             | Description                                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `TClaimBoundVariable`            | Claim-bound variable with `claimId`/`claimVersion` referencing a global claim                                     |
+| `TPremiseBoundVariable`          | Premise-bound variable with `boundPremiseId`/`boundArgumentId`/`boundArgumentVersion`; resolved during evaluation |
+| `CoreClaimBoundVariableSchema`   | Typebox schema for claim-bound variables                                                                          |
+| `CorePremiseBoundVariableSchema` | Typebox schema for premise-bound variables                                                                        |
+| `isClaimBound(v)`                | Type guard — returns `true` if variable has `claimId`                                                             |
+| `isPremiseBound(v)`              | Type guard — returns `true` if variable has `boundPremiseId`                                                      |
+
+Premise-bound variables enable hierarchical argument structure: variable Q bound to premise P1 derives its truth value from P1's evaluation. During `evaluate()` and `checkValidity()`, premise-bound variables are excluded from truth-table generation (they are not free variables); their values are resolved lazily by evaluating the bound premise. Circular bindings (direct or transitive) are rejected at bind time.
 
 ---
 

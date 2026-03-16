@@ -96,9 +96,7 @@ export function registerVariableCommands(
                         boundArgumentVersion: version,
                     })
                 } catch (err) {
-                    errorExit(
-                        err instanceof Error ? err.message : String(err)
-                    )
+                    errorExit(err instanceof Error ? err.message : String(err))
                 }
 
                 await persistEngine(engine)
@@ -117,8 +115,7 @@ export function registerVariableCommands(
                 printJson(variables)
             } else {
                 for (const v of variables) {
-                    const typed =
-                        v as unknown as TCorePropositionalVariable
+                    const typed = v as unknown as TCorePropositionalVariable
                     let binding = ""
                     if (isClaimBound(typed)) {
                         const cv = typed
