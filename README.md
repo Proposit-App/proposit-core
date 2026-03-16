@@ -120,6 +120,46 @@ To evaluate or check an argument, premises must be assigned roles:
 
 A premise that is neither supporting nor the conclusion and whose type is `"constraint"` is automatically used to filter admissible variable assignments during validity checking.
 
+The following diagram shows how premises, roles, and shared variables compose an argument:
+
+```mermaid
+flowchart TD
+    ARG["Argument"]
+
+    ARG --> P1["Premise 1\n<b>Conclusion</b>\n(inference: root is →)"]
+    ARG --> P2["Premise 2\n<b>Supporting</b>\n(inference: root is ↔)"]
+    ARG --> P3["Premise 3\n<b>Constraint</b>\n(root is ∧)"]
+
+    subgraph Shared["Shared Variables"]
+        VP["P"]
+        VQ["Q"]
+        VR["R"]
+    end
+
+    P1 -.- VP
+    P1 -.- VQ
+    P2 -.- VQ
+    P2 -.- VR
+    P3 -.- VP
+    P3 -.- VR
+
+    note1["Conclusion: set via setConclusionPremise()\nFirst premise auto-designated if not set"]
+    note2["Supporting: any inference premise\nthat is not the conclusion (derived)"]
+    note3["Constraint: any non-inference premise (derived)"]
+
+    P1 ~~~ note1
+    P2 ~~~ note2
+    P3 ~~~ note3
+
+    style P1 fill:#e8f4fd,stroke:#2196f3
+    style P2 fill:#e8f4fd,stroke:#2196f3
+    style P3 fill:#fff3e0,stroke:#ff9800
+    style Shared fill:none,stroke:#888,stroke-dasharray: 5 5
+    style note1 fill:none,stroke:none
+    style note2 fill:none,stroke:none
+    style note3 fill:none,stroke:none
+```
+
 ### Sources
 
 A **source** is an evidentiary reference (paper, article, URL). Source entities live in a global `SourceLibrary` with versioning and freeze semantics (same as `ClaimLibrary`).
