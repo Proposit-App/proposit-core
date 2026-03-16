@@ -26,6 +26,7 @@ import {
 import { writeVariables } from "../storage/variables.js"
 import { writeRoles } from "../storage/roles.js"
 import { getPremisesDir } from "../config.js"
+import { registerParseCommand } from "./parse.js"
 
 export function registerArgumentCommands(program: Command): void {
     const args = program.command("arguments").description("Manage arguments")
@@ -192,4 +193,6 @@ export function registerArgumentCommands(program: Command): void {
 
             printLine(`Version ${V} published, draft version ${newV} prepared`)
         })
+
+    registerParseCommand(args)
 }
