@@ -10493,3 +10493,55 @@ describe("Premise-variable associations — type guards", () => {
         expect(isClaimBound(v)).toBe(false)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Premise-variable associations — VariableManager.updateVariable generalized
+// ---------------------------------------------------------------------------
+
+describe("Premise-variable associations — VariableManager.updateVariable generalized", () => {
+    it("applies non-symbol fields via VariableManager directly", () => {
+        const vm = new VariableManager<TCorePropositionalVariable>()
+        vm.addVariable({
+            id: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "c1",
+            claimVersion: 0,
+            checksum: "",
+        })
+        const updated = vm.updateVariable("v1", {
+            claimId: "c2",
+        } as Partial<TCorePropositionalVariable>)
+        expect(updated).toBeDefined()
+        expect((updated as TClaimBoundVariable).claimId).toBe("c2")
+    })
+    it("applies non-symbol fields through ArgumentEngine", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        claimLibrary.create({ id: "c2" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.addVariable({
+            id: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "c1",
+            claimVersion: 0,
+        })
+        const result = engine.updateVariable("v1", {
+            claimId: "c2",
+            claimVersion: 0,
+        })
+        expect(result).toBeDefined()
+        const updated = engine.getVariable("v1")! as TClaimBoundVariable
+        expect(updated.claimId).toBe("c2")
+    })
+})

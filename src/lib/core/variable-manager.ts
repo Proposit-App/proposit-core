@@ -115,20 +115,31 @@ export class VariableManager<
 
     /**
      * Updates fields on an existing variable.
-     * Currently supports `symbol` updates.
+     * Handles `symbol` updates via the symbol index; all other provided
+     * fields are spread onto the stored variable.
      *
      * @throws If the new symbol is already in use by a different variable.
      * @returns The updated variable, or `undefined` if not found.
      */
     public updateVariable(
         variableId: string,
-        updates: { symbol?: string }
+        updates: Partial<TVar>
     ): TVar | undefined {
         const variable = this.variables.get(variableId)
         if (!variable) return undefined
 
         if (updates.symbol !== undefined) {
             this.renameVariable(variableId, updates.symbol)
+        }
+
+        // Apply remaining fields (symbol already handled by renameVariable)
+        const { symbol: _symbol, ...rest } = updates
+        if (Object.keys(rest).length > 0) {
+            const current = this.variables.get(variableId)!
+            this.variables.set(variableId, {
+                ...current,
+                ...rest,
+            } as TVar)
         }
 
         return this.variables.get(variableId)
