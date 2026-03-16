@@ -7,22 +7,21 @@ import {
     BasicsClaimSchema,
     BasicsPremiseSchema,
 } from "../../src/extensions/basics"
-import type { TParsedArgumentResponse } from "../../src/lib/parsing/schemata"
 
-function basicsResponse(): TParsedArgumentResponse & Record<string, unknown> {
+function basicsResponse(): Record<string, unknown> {
     return {
         argument: {
             claims: [
                 {
                     miniId: "C1",
-                    role: "premise" as const,
+                    role: "premise",
                     sourceMiniIds: [],
                     title: "Earth is warming",
                     body: "Global average temperatures have increased over the past century.",
                 },
                 {
                     miniId: "C2",
-                    role: "conclusion" as const,
+                    role: "conclusion",
                     sourceMiniIds: [],
                     title: "Action needed",
                     body: "Immediate action is required to address climate change.",
