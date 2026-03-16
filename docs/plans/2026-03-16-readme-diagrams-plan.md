@@ -19,13 +19,14 @@
 ### Task 1: Add Visual Overview diagram
 
 **Files:**
+
 - Modify: `README.md` — insert new section between opening paragraph and `## Installation`
 
 - [ ] **Step 1: Add the Visual Overview section with Mermaid diagram**
 
 Insert a new `## Visual Overview` section after the opening paragraph (the line starting with `Also ships a **CLI**...`) and before `## Installation`. The diagram is a `flowchart TD` showing the ArgumentEngine containment hierarchy.
 
-```markdown
+````markdown
 ## Visual Overview
 
 ```mermaid
@@ -58,10 +59,12 @@ flowchart TD
     style Injected fill:none,stroke:#888,stroke-dasharray: 5 5
 `` `
 ```
+````
 
 - [ ] **Step 2: Verify the diagram renders**
 
 Open the README in a Mermaid-capable preview (GitHub, VS Code with Mermaid extension, or `npx @mermaid-js/mermaid-cli` if available). Confirm:
+
 - ArgumentEngine at top, flows down to PremiseEngine, Variables, Roles
 - Variables split into claim-bound and premise-bound with dotted arrows to ClaimLibrary and PremiseEngine respectively
 - Injected Libraries in a dashed subgraph
@@ -79,14 +82,14 @@ git commit -m "docs: add visual overview diagram to README"
 ### Task 2: Add Expression Tree diagram
 
 **Files:**
+
 - Modify: `README.md` — insert after the operator arity table in the Expressions section (after the line `` `implies` and `iff` are **root-only** ``) and before `### Argument roles`
 
 - [ ] **Step 1: Add the expression tree diagram**
 
 Insert after the line `` `implies` and `iff` are **root-only**: they must have `parentId: null` and cannot be nested inside another expression. `` and before `### Argument roles`. The example expression is `¬((P ∧ R)) → (Q ∨ S)` — a formula node wraps the `and` to show its role.
 
-```markdown
-
+````markdown
 The following diagram shows how the expression `¬(P ∧ R) → (Q ∨ S)` is represented as a tree. Note the formula node — a transparent wrapper equivalent to parentheses — and that `implies` must be the root:
 
 ```mermaid
@@ -117,10 +120,12 @@ flowchart TD
     style S fill:#f5f5f5,stroke:#666
 `` `
 ```
+````
 
 - [ ] **Step 2: Verify the diagram renders**
 
 Confirm:
+
 - `implies` is root, with annotation "(root-only, binary)"
 - Left subtree: `not` → formula (dashed) → `and` → P, R
 - Right subtree: `or` → Q, S
@@ -139,14 +144,14 @@ git commit -m "docs: add expression tree diagram to README"
 ### Task 3: Add Argument Composition diagram
 
 **Files:**
+
 - Modify: `README.md` — insert at the end of the `### Argument roles` section, after the paragraph about constraint premises and before `### Sources`
 
 - [ ] **Step 1: Add the argument composition diagram**
 
 Insert after the paragraph starting with `A premise that is neither supporting nor the conclusion` (end of the Argument roles section) and before `### Sources`. Add a new paragraph and Mermaid block:
 
-```markdown
-
+````markdown
 The following diagram shows how premises, roles, and shared variables compose an argument:
 
 ```mermaid
@@ -187,10 +192,12 @@ flowchart TD
     style note3 fill:none,stroke:none
 `` `
 ```
+````
 
 - [ ] **Step 2: Verify the diagram renders**
 
 Confirm:
+
 - Three premises with role labels: Conclusion, Supporting, Constraint
 - Inference premises (P1, P2) styled blue, constraint (P3) styled orange
 - Variables P, Q, R in a shared subgraph with dotted connections to premises
@@ -208,14 +215,14 @@ git commit -m "docs: add argument composition diagram to README"
 ### Task 4: Add Evaluation Flow diagram
 
 **Files:**
+
 - Modify: `README.md` — insert before the `### Evaluating an argument` code example (before the line `Assignments use \`TCoreExpressionAssignment\`...`)
 
 - [ ] **Step 1: Add the evaluation flow diagram**
 
-Insert before the paragraph starting with `Assignments use \`TCoreExpressionAssignment\`` (inside the `### Evaluating an argument` section). Add a new paragraph and Mermaid block:
+Insert before the paragraph starting with `Assignments use \`TCoreExpressionAssignment\``(inside the`### Evaluating an argument` section). Add a new paragraph and Mermaid block:
 
-```markdown
-
+````markdown
 The evaluation pipeline proceeds as follows:
 
 ```mermaid
@@ -261,10 +268,12 @@ flowchart LR
     style Validity fill:none,stroke:#888,stroke-dasharray: 5 5
 `` `
 ```
+````
 
 - [ ] **Step 2: Verify the diagram renders**
 
 Confirm:
+
 - Left-to-right flow starting with Input
 - Validation gate with early exit to `{ ok: false }`
 - Constraint → admissible? → Supporting → all true? → Conclusion → true?
@@ -285,11 +294,13 @@ git commit -m "docs: add evaluation flow diagram to README"
 ### Task 5: Final verification
 
 **Files:**
+
 - Read: `README.md` (full file)
 
 - [ ] **Step 1: Read the full README and verify section order**
 
 Confirm the final structure matches the spec:
+
 ```
 # proposit-core
   (opening paragraph)

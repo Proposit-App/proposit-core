@@ -35,6 +35,7 @@ Add Mermaid diagrams to the README to help developers integrating the library qu
 **Content:** Tree diagram (`flowchart TD`) showing a concrete expression: `¬(P ∧ R) → (Q ∨ S)`.
 
 Nodes show:
+
 - Root `implies` operator (root-only annotation)
 - Left subtree: `not` → formula (transparent wrapper, exactly one child) → `and` (variadic) → variable leaves `P`, `R`
 - Right subtree: `or` (variadic) → variable leaves `Q`, `S`
@@ -53,9 +54,9 @@ The formula node is included in the left subtree to demonstrate its role. The ex
 **Content:** Flowchart (`flowchart LR` or `flowchart TD`) showing a concrete argument with:
 
 - Three premises with role annotations:
-  - One conclusion (inference premise, root is `implies`) — explicitly set via `setConclusionPremise()`
-  - One supporting (inference premise, root is `iff`) — derived role: inference AND NOT conclusion
-  - One constraint (root is `and`, not an implication operator) — derived role: not inference
+    - One conclusion (inference premise, root is `implies`) — explicitly set via `setConclusionPremise()`
+    - One supporting (inference premise, root is `iff`) — derived role: inference AND NOT conclusion
+    - One constraint (root is `and`, not an implication operator) — derived role: not inference
 - Variables `P`, `Q`, `R` shown as shared across premises (referenced by multiple premise expression trees)
 - Annotation: first premise added is auto-designated as conclusion if `setConclusionPremise()` is never called; explicit call overrides this
 - Annotation: supporting = any inference premise not designated as conclusion (derived, not stored)
@@ -85,6 +86,7 @@ Decision nodes use diamond shapes. Three-valued outcomes (true/false/null) shown
 Current section order is preserved. Diagram 3 is placed after Argument Roles (its current position in the README), not before Variables.
 
 Current structure:
+
 ```
 # proposit-core
   (opening paragraph)
@@ -101,6 +103,7 @@ Current structure:
 ```
 
 New structure:
+
 ```
 # proposit-core
   (opening paragraph)

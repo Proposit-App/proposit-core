@@ -4,6 +4,7 @@
 
 - Git commit messages should not include any co-authoring content
 - When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.
+- After completing a major set of changes, offer to cut a new version via `pnpm version patch|minor|major`. Use `patch` for most changes, `minor` for major feature work, and `major` only when explicitly instructed. When versioning, add release notes to `docs/release-notes/{version}.md` summarizing what changed.
 
 ## Commands
 
