@@ -310,6 +310,51 @@ const { result: expr, changes: exprChanges } = pm.addExpression({
 
 ### Evaluating an argument
 
+The evaluation pipeline proceeds as follows:
+
+```mermaid
+flowchart LR
+    IN["Input\n(variable ID → true/false/null\n+ rejected expression IDs)"]
+
+    IN --> VAL{"validateEvaluability()"}
+
+    VAL -->|"fail"| FAIL["{ ok: false }\nvalidation errors"]
+    VAL -->|"pass"| CON["Evaluate\nConstraint\nPremises"]
+
+    CON --> ADM{"Admissible?\n(three-valued)"}
+
+    ADM -->|"true"| SUP["Evaluate\nSupporting\nPremises"]
+    ADM -->|"false/null"| INADM["Not admissible\n(skip)"]
+
+    SUP --> SUPR{"All supporting\ntrue?\n(three-valued)"}
+
+    SUPR -->|"true"| CONC["Evaluate\nConclusion"]
+    SUPR -->|"false/null"| NONCE["Not a\ncounterexample"]
+
+    CONC --> CONCR{"Conclusion\ntrue?\n(three-valued)"}
+
+    CONCR -->|"false"| CE["Counterexample\n(admissible + all supporting\ntrue + conclusion false)"]
+    CONCR -->|"true/null"| NONCE2["Not a\ncounterexample"]
+
+    subgraph Validity["Validity Check (all 2ⁿ assignments)"]
+        direction LR
+        VALID["No counterexamples\namong admissible\nassignments → Valid"]
+    end
+
+    CE --> Validity
+    NONCE --> Validity
+    NONCE2 --> Validity
+    INADM --> Validity
+
+    style FAIL fill:#ffebee,stroke:#f44336
+    style CE fill:#ffebee,stroke:#f44336
+    style NONCE fill:#e8f5e9,stroke:#4caf50
+    style NONCE2 fill:#e8f5e9,stroke:#4caf50
+    style INADM fill:#f5f5f5,stroke:#888
+    style VALID fill:#e8f5e9,stroke:#4caf50
+    style Validity fill:none,stroke:#888,stroke-dasharray: 5 5
+```
+
 Assignments use `TCoreExpressionAssignment`, which carries both variable truth values (three-valued: `true`, `false`, or `null` for unknown) and a list of rejected expression IDs:
 
 ```typescript
