@@ -1,4 +1,5 @@
 import type {
+    TClaimBoundVariable,
     TCoreArgument,
     TCorePremise,
     TCorePropositionalExpression,
@@ -131,7 +132,8 @@ export interface TVariableManagement<
      * @throws If the variable does not belong to this argument.
      */
     addVariable(
-        variable: TOptionalChecksum<TVar>
+        variable: TOptionalChecksum<TClaimBoundVariable> &
+            Record<string, unknown>
     ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>
     /**
      * Updates fields on an existing variable. Since all premises share the

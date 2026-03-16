@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto"
-import type {
-    TCoreArgument,
-    TCoreClaim,
-    TCoreClaimSourceAssociation,
-    TCorePremise,
-    TCorePropositionalExpression,
-    TCorePropositionalVariable,
-    TOptionalChecksum,
-    TCoreSource,
+import {
+    isClaimBound,
+    type TClaimBoundVariable,
+    type TCoreArgument,
+    type TCoreClaim,
+    type TCoreClaimSourceAssociation,
+    type TCorePremise,
+    type TCorePropositionalExpression,
+    type TCorePropositionalVariable,
+    type TOptionalChecksum,
+    type TCoreSource,
 } from "../schemata/index.js"
 import type {
     TCoreArgumentEvaluationOptions,
@@ -464,8 +466,16 @@ export class ArgumentEngine<
     }
 
     public addVariable(
-        variable: TOptionalChecksum<TVar>
+        variable: TOptionalChecksum<TClaimBoundVariable> &
+            Record<string, unknown>
     ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
+        // Only claim-bound variables may be added via addVariable.
+        // Premise-bound variables must use bindVariableToPremise.
+        if (!isClaimBound(variable as unknown as TCorePropositionalVariable)) {
+            throw new Error(
+                "addVariable only accepts claim-bound variables. Use bindVariableToPremise for premise-bound variables."
+            )
+        }
         if (variable.argumentId !== this.argument.id) {
             throw new Error(
                 `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
@@ -482,7 +492,9 @@ export class ArgumentEngine<
                 `Claim "${variable.claimId}" version ${variable.claimVersion} does not exist in the claim library.`
             )
         }
-        const withChecksum = this.attachVariableChecksum({ ...variable })
+        const withChecksum = this.attachVariableChecksum({
+            ...variable,
+        } as unknown as TOptionalChecksum<TVar>)
         this.variables.addVariable(withChecksum)
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.addedVariable(withChecksum)
@@ -523,7 +535,10 @@ export class ArgumentEngine<
                 )
             }
         }
-        const updated = this.variables.updateVariable(variableId, updates)
+        const updated = this.variables.updateVariable(
+            variableId,
+            updates as Partial<TVar>
+        )
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         if (updated) {
             const withChecksum = this.attachVariableChecksum({ ...updated })
@@ -786,7 +801,9 @@ export class ArgumentEngine<
         )
         // Restore variables
         for (const v of snapshot.variables.variables) {
-            engine.addVariable(v)
+            engine.addVariable(
+                v as unknown as TOptionalChecksum<TClaimBoundVariable>
+            )
         }
         // Restore premises using PremiseEngine.fromSnapshot
         for (const premiseSnap of snapshot.premises) {
@@ -847,7 +864,9 @@ export class ArgumentEngine<
 
         // Register variables
         for (const v of variables) {
-            engine.addVariable(v)
+            engine.addVariable(
+                v as unknown as TOptionalChecksum<TClaimBoundVariable>
+            )
         }
 
         // Group expressions by premiseId

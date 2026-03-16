@@ -3,7 +3,11 @@ import { ArgumentEngine } from "../lib/core/argument-engine.js"
 import { ClaimLibrary } from "../lib/core/claim-library.js"
 import { ClaimSourceLibrary } from "../lib/core/claim-source-library.js"
 import { SourceLibrary } from "../lib/core/source-library.js"
-import type { TCoreArgument } from "../lib/schemata/index.js"
+import type {
+    TClaimBoundVariable,
+    TCoreArgument,
+    TOptionalChecksum,
+} from "../lib/schemata/index.js"
 import type { TCliArgumentMeta, TCliArgumentVersionMeta } from "./schemata.js"
 import { getPremisesDir } from "./config.js"
 import {
@@ -59,7 +63,10 @@ export async function hydrateEngine(
     // Register all argument-level variables once on the engine; the shared
     // VariableManager is visible to every PremiseEngine.
     for (const variable of allVariables) {
-        engine.addVariable({ ...variable, argumentVersion: version })
+        engine.addVariable({
+            ...variable,
+            argumentVersion: version,
+        } as TOptionalChecksum<TClaimBoundVariable>)
     }
 
     for (const premiseId of premiseIds) {

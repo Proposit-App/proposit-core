@@ -10545,3 +10545,33 @@ describe("Premise-variable associations — VariableManager.updateVariable gener
         expect(updated.claimId).toBe("c2")
     })
 })
+
+// ---------------------------------------------------------------------------
+// Premise-variable associations — addVariable type guard
+// ---------------------------------------------------------------------------
+
+describe("Premise-variable associations — addVariable type guard", () => {
+    it("rejects premise-bound variable passed to addVariable", () => {
+        const claimLibrary = new ClaimLibrary()
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        expect(() =>
+            engine.addVariable({
+                id: "v1",
+                argumentId: "a1",
+                argumentVersion: 0,
+                symbol: "Q",
+                boundPremiseId: "p1",
+                boundArgumentId: "a1",
+                boundArgumentVersion: 0,
+            } as unknown as TOptionalChecksum<TClaimBoundVariable>)
+        ).toThrow(/claim-bound/)
+    })
+})
