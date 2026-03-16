@@ -356,7 +356,7 @@ describe("Premise-variable associations — addVariable type guard", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
 
     expect(() =>
       engine.addVariable({
@@ -442,8 +442,8 @@ describe("Premise-variable associations — bindVariableToPremise", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -550,64 +550,50 @@ Expected: FAIL — `bindVariableToPremise` does not exist.
 
 - [ ] **Step 3: Implement bindVariableToPremise**
 
-In `src/lib/core/argument-engine.ts`, add the method after `addVariable`:
+In `src/lib/core/argument-engine.ts`, add the method after `addVariable`. Follow the same pattern as `addVariable` (uses `ChangeCollector`, `markDirty`, `markAllPremisesDirty`, `markReactiveDirty`, `notifySubscribers`):
 
 ```typescript
 public bindVariableToPremise(
   variable: TOptionalChecksum<TPremiseBoundVariable>,
-): TCoreMutationResult<TVar, TCoreChangeset<TPremise, TExpr, TVar>> {
+): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
   this.throwIfPublished();
 
-  // Validate argument scope
   if (variable.argumentId !== this.argument.id) {
     throw new Error(
-      `Variable argumentId "${variable.argumentId}" does not match engine argumentId "${this.argument.id}"`,
+      `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`,
     );
   }
   if (variable.argumentVersion !== this.argument.version) {
     throw new Error(
-      `Variable argumentVersion ${variable.argumentVersion} does not match engine argumentVersion ${this.argument.version}`,
+      `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`,
     );
   }
 
   // Current restriction: same-argument only
   if (variable.boundArgumentId !== this.argument.id) {
     throw new Error(
-      `Cross-argument bindings are not yet supported. boundArgumentId must equal argumentId.`,
+      "Cross-argument bindings are not yet supported. boundArgumentId must equal argumentId.",
     );
   }
 
   // Validate target premise exists
   if (!this.premises.has(variable.boundPremiseId)) {
     throw new Error(
-      `Premise "${variable.boundPremiseId}" does not exist in this argument`,
+      `Premise "${variable.boundPremiseId}" does not exist in this argument.`,
     );
   }
 
-  // Attach checksum
-  const withChecksum = {
-    ...variable,
-    checksum: entityChecksum(
-      variable,
-      this.checksumConfig.variableFields,
-    ),
-  } as TVar;
-
-  // Add to variable manager (validates symbol uniqueness, ID uniqueness)
+  const withChecksum = this.attachVariableChecksum({ ...variable }) as TVar;
   this.variables.addVariable(withChecksum);
 
-  // Mark all premises dirty
-  for (const pm of this.premises.values()) {
-    pm.markDirty();
-  }
-
-  const changes: TCoreChangeset<TPremise, TExpr, TVar> = {
-    variables: { added: [withChecksum], updated: [], removed: [] },
-    expressions: { added: [], updated: [], removed: [] },
-    premises: { added: [], updated: [], removed: [] },
-  };
-
-  return this.emitMutation({ result: withChecksum, changes });
+  const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>();
+  collector.addedVariable(withChecksum);
+  this.markDirty();
+  this.markAllPremisesDirty();
+  const changes = collector.toChangeset();
+  this.markReactiveDirty(changes);
+  this.notifySubscribers();
+  return { result: withChecksum, changes };
 }
 ```
 
@@ -654,8 +640,8 @@ describe("Premise-variable associations — getVariablesBoundToPremise", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -750,8 +736,8 @@ describe("Premise-variable associations — removePremise cascade", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -799,23 +785,27 @@ Expected: FAIL — `vQ` still exists after `removePremise("p1")`.
 
 - [ ] **Step 3: Modify removePremise**
 
-In `src/lib/core/argument-engine.ts`, in the `removePremise` method, after removing the premise and its expressions, add cascade logic:
+In `src/lib/core/argument-engine.ts`, in the `removePremise` method, after `this.premises.delete(premiseId)` and `collector.removedPremise(data)`, add cascade logic before `this.markDirty()`:
 
 ```typescript
 // Cascade: remove variables bound to this premise
 const boundVars = this.getVariablesBoundToPremise(premiseId);
 for (const v of boundVars) {
   const removeResult = this.removeVariable(v.id);
-  if (removeResult) {
-    changes.variables.removed.push(
-      ...removeResult.changes.variables.removed,
-    );
-    changes.expressions.removed.push(
-      ...removeResult.changes.expressions.removed,
-    );
+  if (removeResult.changes.variables) {
+    for (const rv of removeResult.changes.variables.removed) {
+      collector.removedVariable(rv);
+    }
+  }
+  if (removeResult.changes.expressions) {
+    for (const re of removeResult.changes.expressions.removed) {
+      collector.removedExpression(re);
+    }
   }
 }
 ```
+
+Note: `removePremise` uses a `ChangeCollector`, not a plain changes object. The cascade results are accumulated into the same collector before `toChangeset()` is called.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -857,8 +847,8 @@ describe("Premise-variable associations — circularity prevention", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -1022,7 +1012,7 @@ private wouldCreateCycle(
 }
 ```
 
-Call `premiseEngine.setCircularityCheck(this.createCircularityCheck())` on each `PremiseEngine` instance after creation.
+Call `premiseEngine.setCircularityCheck(this.createCircularityCheck())` on each `PremiseEngine` instance after creation. The wiring points are: `createPremiseWithId`, `fromSnapshot` (after `PremiseEngine.fromSnapshot`), and `fromData`.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -1063,8 +1053,8 @@ describe("Premise-variable associations — transitive circularity", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -1161,7 +1151,7 @@ describe("Premise-variable associations — evaluation filtering", () => {
     );
 
     // Premise 1: A implies B (the sub-argument)
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -1205,7 +1195,7 @@ describe("Premise-variable associations — evaluation filtering", () => {
     });
 
     // Premise 2: P implies Q, where Q is bound to p1
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vP",
       argumentId: "a1",
@@ -1228,10 +1218,12 @@ describe("Premise-variable associations — evaluation filtering", () => {
     const result = engine.checkValidity();
     expect(result).toBeDefined();
     // 3 claim-bound variables → 2^3 = 8 assignments
-    expect(result!.assignments).toHaveLength(8);
+    expect(result!.numAssignmentsChecked).toBe(8);
   });
 });
 ```
+
+**Note:** This task only validates assignment count, not evaluation correctness. The evaluation values for premise-bound variables will be `null` (unresolved) until Task 10 wires up the resolver callback.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1328,7 +1320,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
     });
 
     // Premise 1: A implies B
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
     const p1 = engine.getPremise("p1")!;
     p1.appendExpression(null, {
       id: "op1",
@@ -1367,7 +1359,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
     });
 
     // Premise 2: P implies Q (this is the conclusion)
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p2");
     const p2 = engine.getPremise("p2")!;
     p2.appendExpression(null, {
       id: "op2",
@@ -1395,7 +1387,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
     });
 
     // p2 is conclusion, p1 is supporting
-    engine.setConclusion("p2");
+    engine.setConclusionPremise("p2");
 
     return engine;
   }
@@ -1410,7 +1402,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
     });
     expect(result).toBeDefined();
     // Conclusion: P implies Q = true implies true = true
-    expect(result!.conclusion.value).toBe(true);
+    expect(result!.conclusion!.rootValue).toBe(true);
   });
 
   it("evaluates Q as false when A=true, B=false", () => {
@@ -1423,7 +1415,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
       rejectedExpressionIds: [],
     });
     expect(result).toBeDefined();
-    expect(result!.conclusion.value).toBe(false);
+    expect(result!.conclusion!.rootValue).toBe(false);
   });
 
   it("evaluates Q as true when A=false (vacuous truth)", () => {
@@ -1436,7 +1428,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
       rejectedExpressionIds: [],
     });
     expect(result).toBeDefined();
-    expect(result!.conclusion.value).toBe(true);
+    expect(result!.conclusion!.rootValue).toBe(true);
   });
 });
 ```
@@ -1502,8 +1494,8 @@ const resolver = (variableId: string): boolean | null => {
     resolverCache.set(variableId, null);
     return null;
   }
-  const premiseResult = boundPremise.evaluate(assignment, { resolver });
-  const value = premiseResult?.value ?? null;
+  const premiseResult = boundPremise.evaluate(assignment, { ...evalOptions, resolver });
+  const value = premiseResult?.rootValue ?? null;
   resolverCache.set(variableId, value);
   return value;
 };
@@ -1552,8 +1544,8 @@ describe("Premise-variable associations — updateVariable", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -1610,16 +1602,16 @@ Expected: FAIL
 
 - [ ] **Step 3: Update ArgumentEngine.updateVariable**
 
-In `src/lib/core/argument-engine.ts`, rewrite `updateVariable` to handle both variants:
+In `src/lib/core/argument-engine.ts`, rewrite `updateVariable` to handle both variants. Follow the existing pattern (ChangeCollector, markDirty, etc.):
 
 ```typescript
 public updateVariable(
   variableId: string,
   updates: Partial<TVar>,
-): TCoreMutationResult<TVar, TCoreChangeset<TPremise, TExpr, TVar>> | undefined {
+): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg> {
   this.throwIfPublished();
   const variable = this.variables.getVariable(variableId);
-  if (!variable) return undefined;
+  if (!variable) return { result: undefined, changes: {} };
 
   const varAsPropositional = variable as TCorePropositionalVariable;
 
@@ -1634,46 +1626,38 @@ public updateVariable(
       const newClaimId = u.claimId ?? (varAsPropositional as TClaimBoundVariable).claimId;
       const newClaimVersion = u.claimVersion ?? (varAsPropositional as TClaimBoundVariable).claimVersion;
       if (!this.claimLibrary.get(newClaimId, newClaimVersion)) {
-        throw new Error(`Claim "${newClaimId}" version ${newClaimVersion} not found`);
+        throw new Error(`Claim "${newClaimId}" version ${newClaimVersion} not found in the claim library.`);
       }
     }
   } else if (isPremiseBound(varAsPropositional)) {
     if ("claimId" in updates || "claimVersion" in updates) {
       throw new Error("Cannot convert premise-bound variable to claim-bound. Delete and recreate.");
     }
-    // Validate rebinding if provided
     const u = updates as Partial<TPremiseBoundVariable>;
     if (u.boundPremiseId !== undefined) {
       if (!this.premises.has(u.boundPremiseId)) {
-        throw new Error(`Premise "${u.boundPremiseId}" does not exist`);
+        throw new Error(`Premise "${u.boundPremiseId}" does not exist in this argument.`);
       }
       // TODO: circularity check for rebinding
     }
   }
 
   const updated = this.variables.updateVariable(variableId, updates);
-  if (!updated) return undefined;
+  if (!updated) return { result: undefined, changes: {} };
 
   // Re-checksum
-  const withChecksum = {
-    ...updated,
-    checksum: entityChecksum(updated, this.checksumConfig.variableFields),
-  } as TVar;
+  const withChecksum = this.attachVariableChecksum({ ...updated }) as TVar;
   this.variables.removeVariable(variableId);
   this.variables.addVariable(withChecksum);
 
-  // Mark premises dirty
-  for (const pm of this.premises.values()) {
-    pm.markDirty();
-  }
-
-  const changes: TCoreChangeset<TPremise, TExpr, TVar> = {
-    variables: { added: [], updated: [withChecksum], removed: [] },
-    expressions: { added: [], updated: [], removed: [] },
-    premises: { added: [], updated: [], removed: [] },
-  };
-
-  return this.emitMutation({ result: withChecksum, changes });
+  const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>();
+  collector.modifiedVariable(withChecksum);
+  this.markDirty();
+  this.markAllPremisesDirty();
+  const changes = collector.toChangeset();
+  this.markReactiveDirty(changes);
+  this.notifySubscribers();
+  return { result: withChecksum, changes };
 }
 ```
 
@@ -1846,7 +1830,7 @@ describe("Premise-variable associations — snapshot round-trip", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -1865,7 +1849,7 @@ describe("Premise-variable associations — snapshot round-trip", () => {
       boundArgumentVersion: 0,
     });
 
-    const snapshot = engine.getSnapshot();
+    const snapshot = engine.snapshot();
     const restored = ArgumentEngine.fromSnapshot(
       snapshot,
       claimLibrary,
@@ -1956,8 +1940,8 @@ describe("Premise-variable associations — validateEvaluability", () => {
       sourceLibrary,
       csLibrary,
     );
-    engine.addPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 });
-    engine.addPremise({ id: "p2", argumentId: "a1", argumentVersion: 0 });
+    engine.createPremiseWithId("p1");
+    engine.createPremiseWithId("p2");
     engine.addVariable({
       id: "vA",
       argumentId: "a1",
@@ -2014,22 +1998,25 @@ public setEmptyBoundPremiseCheck(
 }
 ```
 
-In `validateEvaluability`, after the undeclared variable check:
+First, add `"EXPR_BOUND_PREMISE_EMPTY"` to the `TCoreValidationCode` union type in `src/lib/types/evaluation.ts`.
+
+Then in `validateEvaluability`, after the undeclared variable check:
 
 ```typescript
 if (
   expr.type === "variable" &&
   this.emptyBoundPremiseCheck?.(expr.variableId)
 ) {
-  issues.push(
-    makeErrorIssue({
-      code: "EXPR_BOUND_PREMISE_EMPTY",
-      message: `Variable "${expr.variableId}" is bound to a premise with no expression tree`,
-      expressionId: expr.id,
-    }),
-  );
+  issues.push({
+    code: "EXPR_BOUND_PREMISE_EMPTY" as TCoreValidationCode,
+    message: `Variable "${expr.variableId}" is bound to a premise with no expression tree`,
+    expressionId: expr.id,
+    severity: "warning",
+  });
 }
 ```
+
+Note: Use `severity: "warning"` (not error) — this should not block evaluation per the spec. The bound variable will evaluate to `null`/unknown under Kleene logic.
 
 Wire up in `ArgumentEngine` when creating `PremiseEngine` instances.
 
