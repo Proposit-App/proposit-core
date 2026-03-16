@@ -81,6 +81,36 @@ The five supported operators and their arities are:
 
 `implies` and `iff` are **root-only**: they must have `parentId: null` and cannot be nested inside another expression.
 
+The following diagram shows how the expression `¬(P ∧ R) → (Q ∨ S)` is represented as a tree. Note the formula node — a transparent wrapper equivalent to parentheses — and that `implies` must be the root:
+
+```mermaid
+flowchart TD
+    IMP["→ implies\n(root-only, binary)"]
+
+    IMP --> NOT["¬ not\n(unary)"]
+    IMP --> OR["∨ or\n(variadic, ≥ 2)"]
+
+    NOT --> FRM["( ) formula\n(transparent wrapper,\nexactly 1 child)"]
+
+    FRM --> AND["∧ and\n(variadic, ≥ 2)"]
+
+    AND --> P["P\n(variable)"]
+    AND --> R["R\n(variable)"]
+
+    OR --> Q["Q\n(variable)"]
+    OR --> S["S\n(variable)"]
+
+    style IMP fill:#e8f4fd,stroke:#2196f3
+    style NOT fill:#e8f4fd,stroke:#2196f3
+    style AND fill:#e8f4fd,stroke:#2196f3
+    style OR fill:#e8f4fd,stroke:#2196f3
+    style FRM fill:none,stroke:#888,stroke-dasharray: 5 5
+    style P fill:#f5f5f5,stroke:#666
+    style R fill:#f5f5f5,stroke:#666
+    style Q fill:#f5f5f5,stroke:#666
+    style S fill:#f5f5f5,stroke:#666
+```
+
 ### Argument roles
 
 To evaluate or check an argument, premises must be assigned roles:
