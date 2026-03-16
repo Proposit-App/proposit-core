@@ -67,6 +67,23 @@ import {
     canonicalSerialize,
     entityChecksum,
 } from "../src/lib/core/checksum"
+import {
+    ParsedClaimSchema,
+    ParsedVariableSchema,
+    ParsedSourceSchema,
+    ParsedPremiseSchema,
+    ParsedArgumentResponseSchema,
+    buildParsingResponseSchema,
+    getParsingResponseSchema,
+} from "../src/lib/parsing/schemata"
+import type {
+    TParsedClaim,
+    TParsedVariable,
+    TParsedSource,
+    TParsedPremise,
+    TParsedArgumentResponse,
+} from "../src/lib/parsing/schemata"
+import Type from "typebox"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 
@@ -12139,5 +12156,151 @@ describe("Premise-variable associations — integration", () => {
         expect(result.numAssignmentsChecked).toBe(8)
         // The argument "given (A implies B), therefore (P implies Q)" is valid
         expect(result.isValid).toBe(true)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Parsing — response schemas
+// ---------------------------------------------------------------------------
+describe("Parsing — response schemas", () => {
+    describe("ParsedClaimSchema", () => {
+        it("accepts a valid claim", () => {
+            const claim: TParsedClaim = {
+                miniId: "c1",
+                role: "premise",
+                sourceMiniIds: ["s1"],
+            }
+            expect(Value.Check(ParsedClaimSchema, claim)).toBe(true)
+        })
+
+        it("accepts additional properties", () => {
+            const claim = {
+                miniId: "c1",
+                role: "conclusion",
+                sourceMiniIds: [],
+                customField: "extra",
+            }
+            expect(Value.Check(ParsedClaimSchema, claim)).toBe(true)
+        })
+
+        it("rejects invalid role", () => {
+            const claim = {
+                miniId: "c1",
+                role: "invalid",
+                sourceMiniIds: [],
+            }
+            expect(Value.Check(ParsedClaimSchema, claim)).toBe(false)
+        })
+    })
+
+    describe("ParsedVariableSchema", () => {
+        it("accepts a valid variable", () => {
+            const variable: TParsedVariable = {
+                miniId: "v1",
+                symbol: "P",
+                claimMiniId: "c1",
+            }
+            expect(Value.Check(ParsedVariableSchema, variable)).toBe(true)
+        })
+    })
+
+    describe("ParsedSourceSchema", () => {
+        it("accepts a valid source", () => {
+            const source: TParsedSource = {
+                miniId: "s1",
+                text: "Some source text",
+            }
+            expect(Value.Check(ParsedSourceSchema, source)).toBe(true)
+        })
+    })
+
+    describe("ParsedPremiseSchema", () => {
+        it("accepts a valid premise", () => {
+            const premise: TParsedPremise = {
+                miniId: "p1",
+                formula: "P and Q",
+            }
+            expect(Value.Check(ParsedPremiseSchema, premise)).toBe(true)
+        })
+    })
+
+    describe("ParsedArgumentResponseSchema", () => {
+        it("accepts a valid response with argument", () => {
+            const response: TParsedArgumentResponse = {
+                argument: {
+                    claims: [
+                        {
+                            miniId: "c1",
+                            role: "premise",
+                            sourceMiniIds: ["s1"],
+                        },
+                    ],
+                    variables: [
+                        { miniId: "v1", symbol: "P", claimMiniId: "c1" },
+                    ],
+                    sources: [{ miniId: "s1", text: "A source" }],
+                    premises: [{ miniId: "p1", formula: "P" }],
+                    conclusionPremiseMiniId: "p1",
+                },
+                uncategorizedText: null,
+                selectionRationale: "Clear argument structure",
+                failureText: null,
+            }
+            expect(
+                Value.Check(ParsedArgumentResponseSchema, response)
+            ).toBe(true)
+        })
+
+        it("accepts null argument with failureText", () => {
+            const response: TParsedArgumentResponse = {
+                argument: null,
+                uncategorizedText: "Some text",
+                selectionRationale: null,
+                failureText: "Could not parse argument",
+            }
+            expect(
+                Value.Check(ParsedArgumentResponseSchema, response)
+            ).toBe(true)
+        })
+
+        it("accepts additional properties on nested schemas", () => {
+            const response = {
+                argument: {
+                    claims: [
+                        {
+                            miniId: "c1",
+                            role: "conclusion",
+                            sourceMiniIds: [],
+                            customClaimField: true,
+                        },
+                    ],
+                    variables: [
+                        {
+                            miniId: "v1",
+                            symbol: "P",
+                            claimMiniId: "c1",
+                            customVarField: 42,
+                        },
+                    ],
+                    sources: [],
+                    premises: [
+                        {
+                            miniId: "p1",
+                            formula: "P",
+                            customPremField: "x",
+                        },
+                    ],
+                    conclusionPremiseMiniId: "p1",
+                    customArgField: "extra",
+                },
+                uncategorizedText: null,
+                selectionRationale: null,
+                failureText: null,
+                customResponseField: "top-level-extra",
+            }
+            expect(
+                Value.Check(ParsedArgumentResponseSchema, response)
+            ).toBe(true)
+        })
     })
 })
