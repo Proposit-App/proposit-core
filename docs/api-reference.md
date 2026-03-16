@@ -586,7 +586,7 @@ Reconstructs a `PremiseEngine` from a snapshot, with the argument and `VariableM
 
 ### `diffArguments(engineA, engineB, options?)` → `TCoreArgumentDiff`
 
-Compares two `ArgumentEngine` instances and returns a structured diff covering argument metadata, variables, premises (with nested expression diffs), role changes, and source association changes. Each entity category reports added, removed, and modified items with field-level change details.
+Compares two `ArgumentEngine` instances and returns a structured diff covering argument metadata, variables, premises (with nested expression diffs), and role changes. Each entity category reports added, removed, and modified items with field-level change details.
 
 Options allow plugging custom comparators per entity type via `TCoreDiffOptions`:
 
