@@ -56,7 +56,7 @@ All schemas use `additionalProperties: true` for developer extensibility.
     variables: TParsedVariable[]
     sources: TParsedSource[]
     premises: TParsedPremise[]
-    conclusionMiniId: string
+    conclusionPremiseMiniId: string  // miniId of the conclusion premise
   } | null
   uncategorizedText: string | null
   selectionRationale: string | null
@@ -74,6 +74,8 @@ All schemas use `additionalProperties: true` for developer extensibility.
 }
 ```
 
+The `role` field is informational metadata — it communicates the AI's assessment of each claim's function in the argument. The authoritative conclusion designation is `conclusionPremiseMiniId` on the argument object, which references a *premise* (not a claim), consistent with `ArgumentEngine.setConclusionPremise()`.
+
 ### `TParsedVariable`
 
 ```typescript
@@ -84,7 +86,7 @@ All schemas use `additionalProperties: true` for developer extensibility.
 }
 ```
 
-One variable per claim within an argument. If multiple premises reference the same claim, they share the same variable in their formula strings.
+One variable per claim within an argument. If multiple premises reference the same claim, they share the same variable in their formula strings. This 1:1 constraint is a parsing-layer simplification — the core engine allows multiple variables per claim.
 
 ### `TParsedSource`
 
@@ -94,6 +96,8 @@ One variable per claim within an argument. If multiple premises reference the sa
   text: string                // Citation/URL as it appears in the text
 }
 ```
+
+Note: `TCoreSource` has no `text` field — it only has system fields (`id`, `version`, `frozen`, `checksum`) with `additionalProperties: true`. In core-only usage, the `text` value from the AI response is not persisted. Developers must subclass `ArgumentParser` and override `mapSource()` to map `text` to an extension field on their custom source type.
 
 ### `TParsedPremise`
 
@@ -105,6 +109,8 @@ One variable per claim within an argument. If multiple premises reference the sa
 ```
 
 Formula strings use the syntax accepted by `parseFormula()`: variable miniIds as operand names, `and`, `or`, `not`, `implies`, `iff` as operators, parentheses for grouping.
+
+**Root-only constraint:** `implies` and `iff` operators must appear only at the root of a formula (they cannot be nested). This matches the engine's invariant enforced by `ExpressionManager`. The prompt builder includes this constraint in its formula syntax instructions.
 
 ## Prompt Builder
 
@@ -128,6 +134,7 @@ function buildParsingPrompt(
    - Multiple arguments → pick the most substantial, explain in `selectionRationale`
    - Can't parse → set `argument` to null, explain in `failureText`
    - Formula syntax rules (operators: `and`, `or`, `not`, `implies`, `iff`; parentheses for grouping)
+   - Root-only constraint: `implies` and `iff` must appear only at the root level of a formula, never nested inside other operators
    - Third person, active voice, present tense
 
 2. **Schema-driven extension instructions** — walks the response schema to discover fields beyond the core set. For each extension field, generates an instruction line using the field's `description`, `minLength`, and `maxLength` TypeBox attributes.
@@ -142,8 +149,8 @@ type TParsingSchemaOptions = {
   sourceSchema?: TSchema
   variableSchema?: TSchema
   premiseSchema?: TSchema
-  argumentSchema?: TSchema
-  responseSchema?: TSchema
+  parsedArgumentSchema?: TSchema   // Extends the inner parsed argument object, not TCoreArgument
+  responseSchema?: TSchema         // Extends the outer TParsedArgumentResponse
 }
 
 function buildParsingResponseSchema(
@@ -197,26 +204,29 @@ build(response: TParsedArgumentResponse): {
 
 ### Build Phase Internals
 
-1. `mapArgument()` → create `TArg`
-2. For each parsed claim → `mapClaim()` → `claimLibrary.create()`
-3. For each parsed source → `mapSource()` → `sourceLibrary.create()`
-4. Wire up claim-source associations via `sourceMiniIds`
-5. Create `ArgumentEngine` with the libraries
-6. For each parsed variable → `mapVariable()` → `engine.addVariable()` with claim binding
-7. For each parsed premise → `mapPremise()` → `engine.addPremise()`, then `parseFormula()` on formula string → add expressions
-8. Set conclusion role based on `conclusionMiniId`
+`build()` throws if `response.argument` is null — there is nothing to build. The caller should check for null and handle `failureText` before calling `build()`.
+
+1. **Validate formulas** — for each parsed premise, call `parseFormula()` on the formula string. Verify that every variable name in the resulting AST matches a declared `TParsedVariable.miniId`. Verify that `implies`/`iff` operators appear only at the root. Throw a descriptive error identifying the premise miniId and the specific issue on failure.
+2. `mapArgument()` → create `TArg` (build phase generates `id`, `version`, `checksum`)
+3. For each parsed claim → `mapClaim()` → `claimLibrary.create()` (build phase generates `id`, `version`, `frozen`, `checksum`)
+4. For each parsed source → `mapSource()` → `sourceLibrary.create()` (build phase generates `id`, `version`, `frozen`, `checksum`)
+5. Wire up claim-source associations via `sourceMiniIds`
+6. Create `ArgumentEngine` with the libraries
+7. For each parsed variable → `mapVariable()` → `engine.addVariable()` with claim binding (build phase generates `id`, `argumentId`, `argumentVersion`, `checksum`)
+8. For each parsed premise → `mapPremise()` → `engine.addPremise()`, then use the pre-validated formula AST to add expressions (build phase generates all expression system fields)
+9. Set conclusion role based on `conclusionPremiseMiniId`
 
 ### Protected Mapping Hooks
 
 ```typescript
-protected mapClaim(parsed: TParsedClaim): Partial<TClaim>
-protected mapSource(parsed: TParsedSource): Partial<TSource>
-protected mapVariable(parsed: TParsedVariable): Partial<TVar>
-protected mapArgument(parsed: TParsedArgumentResponse["argument"]): Partial<TArg>
-protected mapPremise(parsed: TParsedPremise): Partial<TPremise>
+protected mapClaim(parsed: TParsedClaim): Record<string, unknown>
+protected mapSource(parsed: TParsedSource): Record<string, unknown>
+protected mapVariable(parsed: TParsedVariable): Record<string, unknown>
+protected mapArgument(parsed: NonNullable<TParsedArgumentResponse["argument"]>): Record<string, unknown>
+protected mapPremise(parsed: TParsedPremise): Record<string, unknown>
 ```
 
-Default implementations return empty objects (core schemas have no metadata fields). Subclasses override to map extension fields.
+Mapping hooks return extension fields only. System fields (`id`, `version`, `frozen`, `checksum`, `argumentId`, `argumentVersion`, etc.) are generated by the build phase and must not come from hooks. Default implementations return empty objects (core schemas have no metadata fields). Subclasses override to map extension fields onto their custom entity types.
 
 ## Basics Extension
 
@@ -288,6 +298,7 @@ export type { TBasicsArgument, TBasicsClaim, TBasicsPremise } from "./schemata.j
 - `buildParsingPrompt` — includes core instructions; discovers extension fields and generates constraint instructions from schema attributes; appends `customInstructions`
 - `ArgumentParser.validate` — accepts valid response JSON; rejects malformed responses; handles null argument with failureText
 - `ArgumentParser.build` — produces working `ArgumentEngine` + libraries from a valid parsed response; correctly maps miniIds to real UUIDs; parses formula strings into expression trees; wires claim-source associations; sets conclusion role; one variable per claim shared across premises
+- `ArgumentParser.build` validation — throws on formula referencing undeclared variable miniId; throws on nested `implies`/`iff` in formula; throws on null argument; throws on invalid formula syntax with descriptive error identifying the premise miniId
 - `ArgumentParser` subclass hooks — `mapClaim`/`mapSource`/`mapVariable`/`mapArgument`/`mapPremise` overrides called and reflected in built entities
 
 ### Basics extension tests (new `test/extensions/basics.test.ts`)
@@ -300,3 +311,6 @@ export type { TBasicsArgument, TBasicsClaim, TBasicsPremise } from "./schemata.j
 
 - If `.untracked/proposit-server` causes issues during implementation or testing, delete the entire folder.
 - CLI migration to basics extension schemas is a follow-up task, not part of this implementation.
+- `TPromptOptions` and `TParsingSchemaOptions` live in `src/lib/parsing/types.ts`, imported by `prompt-builder.ts` and `schemata.ts` respectively.
+- A `package.json` exports entry must be added for the basics extension: `"./extensions/basics"` pointing to `./dist/extensions/basics/index.js` (and corresponding types entry).
+- The `tsconfig.build.json` may need updating to include `src/extensions/` in compilation.
