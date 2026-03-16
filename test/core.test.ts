@@ -12583,7 +12583,7 @@ describe("Parsing — response schemas", () => {
                     ],
                     sources: [{ miniId: "S1", text: "Some source" }],
                     premises: [
-                        { miniId: "P1", formula: "P -> Q" },
+                        { miniId: "P1", formula: "P implies Q" },
                         { miniId: "P2", formula: "P" },
                     ],
                     conclusionPremiseMiniId: "P1",
@@ -12733,7 +12733,7 @@ describe("Parsing — response schemas", () => {
                 resp.argument!.premises = [
                     {
                         miniId: "P1",
-                        formula: "(P -> Q) && P",
+                        formula: "(P implies Q) and P",
                     },
                 ]
                 expect(() => parser.build(resp)).toThrow(/implication/i)
