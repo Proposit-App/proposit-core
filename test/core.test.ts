@@ -13,6 +13,9 @@ import {
     CorePropositionalVariableSchema,
     CorePropositionalExpressionSchema,
     CorePremiseSchema,
+    isClaimBound,
+    isPremiseBound,
+    type TClaimBoundVariable,
     type TCoreArgument,
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
@@ -64,7 +67,7 @@ import {
     entityChecksum,
 } from "../src/lib/core/checksum"
 
-type TVariableInput = Omit<TCorePropositionalVariable, "checksum">
+type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -7740,7 +7743,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     function makeVariable(
         id: string,
         symbol: string
-    ): Omit<TCorePropositionalVariable, "checksum"> {
+    ): TOptionalChecksum<TClaimBoundVariable> {
         return {
             id,
             symbol,
@@ -10454,5 +10457,39 @@ describe("ClaimSourceLibrary", () => {
             expect(result).toHaveLength(1)
             expect(result[0].id).toBe("assoc-ext-a")
         })
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Premise-variable associations — type guards
+// ---------------------------------------------------------------------------
+
+describe("Premise-variable associations — type guards", () => {
+    it("isClaimBound returns true for claim-bound variable", () => {
+        const v: TCorePropositionalVariable = {
+            id: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "c1",
+            claimVersion: 0,
+            checksum: "",
+        }
+        expect(isClaimBound(v)).toBe(true)
+        expect(isPremiseBound(v)).toBe(false)
+    })
+    it("isPremiseBound returns true for premise-bound variable", () => {
+        const v: TCorePropositionalVariable = {
+            id: "v2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+            checksum: "",
+        }
+        expect(isPremiseBound(v)).toBe(true)
+        expect(isClaimBound(v)).toBe(false)
     })
 })

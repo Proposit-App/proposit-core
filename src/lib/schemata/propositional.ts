@@ -90,33 +90,78 @@ export type TCorePropositionalExpression<
         TCorePropositionalExpressionTypes,
 > = Extract<TCorePropositionalExpressionCombined, { type: T }>
 
-export const CorePropositionalVariableSchema = Type.Object(
+const CoreVariableBaseFields = {
+    id: UUID,
+    argumentId: UUID,
+    argumentVersion: Type.Number(),
+    symbol: Type.String({
+        description: 'Human-readable symbol for this variable (e.g. "P", "Q").',
+    }),
+    checksum: Type.String({
+        description: "Entity-level checksum for sync detection.",
+    }),
+}
+
+export const CoreClaimBoundVariableSchema = Type.Object(
     {
-        id: UUID,
-        argumentId: UUID,
-        argumentVersion: Type.Number(),
-        symbol: Type.String({
-            description:
-                'Human-readable symbol for this variable (e.g. "P", "Q").',
-        }),
+        ...CoreVariableBaseFields,
         claimId: UUID,
         claimVersion: Type.Number({
             description: "The version of the claim this variable references.",
-        }),
-        checksum: Type.String({
-            description: "Entity-level checksum for sync detection.",
         }),
     },
     {
         additionalProperties: true,
         description:
-            "A named propositional variable belonging to a specific argument version, referencing a global claim.",
+            "A claim-bound propositional variable referencing a global claim.",
     }
 )
+
+export type TClaimBoundVariable = Static<typeof CoreClaimBoundVariableSchema>
+
+export const CorePremiseBoundVariableSchema = Type.Object(
+    {
+        ...CoreVariableBaseFields,
+        boundPremiseId: UUID,
+        boundArgumentId: UUID,
+        boundArgumentVersion: Type.Number({
+            description:
+                "The version of the argument that owns the bound premise.",
+        }),
+    },
+    {
+        additionalProperties: true,
+        description:
+            "A premise-bound propositional variable whose truth value is derived from another premise's evaluation.",
+    }
+)
+
+export type TPremiseBoundVariable = Static<
+    typeof CorePremiseBoundVariableSchema
+>
+
+export const CorePropositionalVariableSchema = Type.Union([
+    CoreClaimBoundVariableSchema,
+    CorePremiseBoundVariableSchema,
+])
 
 export type TCorePropositionalVariable = Static<
     typeof CorePropositionalVariableSchema
 >
+
+/** Type guard: returns `true` if the variable is claim-bound. */
+export function isClaimBound(
+    v: TCorePropositionalVariable
+): v is TClaimBoundVariable {
+    return "claimId" in v
+}
+
+/** Type guard: returns `true` if the variable is premise-bound. */
+export function isPremiseBound(
+    v: TCorePropositionalVariable
+): v is TPremiseBoundVariable {
+    return "boundPremiseId" in v
+}
 
 export const CorePremiseSchema = Type.Object(
     {
