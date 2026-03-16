@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import {
     isClaimBound,
     type TClaimBoundVariable,
+    type TPremiseBoundVariable,
     type TCoreArgument,
     type TCoreClaim,
     type TCoreClaimSourceAssociation,
@@ -490,6 +491,47 @@ export class ArgumentEngine<
         if (!this.claimLibrary.get(variable.claimId, variable.claimVersion)) {
             throw new Error(
                 `Claim "${variable.claimId}" version ${variable.claimVersion} does not exist in the claim library.`
+            )
+        }
+        const withChecksum = this.attachVariableChecksum({
+            ...variable,
+        } as unknown as TOptionalChecksum<TVar>)
+        this.variables.addVariable(withChecksum)
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+        collector.addedVariable(withChecksum)
+        this.markDirty()
+        this.markAllPremisesDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
+        return {
+            result: withChecksum,
+            changes,
+        }
+    }
+
+    public bindVariableToPremise(
+        variable: TOptionalChecksum<TPremiseBoundVariable> &
+            Record<string, unknown>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
+        if (variable.argumentId !== this.argument.id) {
+            throw new Error(
+                `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
+            )
+        }
+        if (variable.argumentVersion !== this.argument.version) {
+            throw new Error(
+                `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`
+            )
+        }
+        if (variable.boundArgumentId !== this.argument.id) {
+            throw new Error(
+                `Cross-argument bindings are not supported. boundArgumentId "${variable.boundArgumentId}" does not match engine argument ID "${this.argument.id}".`
+            )
+        }
+        if (!this.premises.has(variable.boundPremiseId)) {
+            throw new Error(
+                `Bound premise "${variable.boundPremiseId}" does not exist in this argument.`
             )
         }
         const withChecksum = this.attachVariableChecksum({

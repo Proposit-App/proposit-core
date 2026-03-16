@@ -10575,3 +10575,119 @@ describe("Premise-variable associations — addVariable type guard", () => {
         ).toThrow(/claim-bound/)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Premise-variable associations — bindVariableToPremise
+// ---------------------------------------------------------------------------
+
+describe("Premise-variable associations — bindVariableToPremise", () => {
+    function makeEngine() {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        engine.createPremiseWithId("p2")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        return engine
+    }
+
+    it("creates a premise-bound variable", () => {
+        const engine = makeEngine()
+        const result = engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+        expect(result).toBeDefined()
+        const v = engine.getVariable("vQ")
+        expect(v).toBeDefined()
+        expect(isPremiseBound(v!)).toBe(true)
+    })
+
+    it("rejects binding to non-existent premise", () => {
+        const engine = makeEngine()
+        expect(() =>
+            engine.bindVariableToPremise({
+                id: "vQ",
+                argumentId: "a1",
+                argumentVersion: 0,
+                symbol: "Q",
+                boundPremiseId: "nonexistent",
+                boundArgumentId: "a1",
+                boundArgumentVersion: 0,
+            })
+        ).toThrow()
+    })
+
+    it("rejects duplicate symbol", () => {
+        const engine = makeEngine()
+        expect(() =>
+            engine.bindVariableToPremise({
+                id: "vQ",
+                argumentId: "a1",
+                argumentVersion: 0,
+                symbol: "A",
+                boundPremiseId: "p1",
+                boundArgumentId: "a1",
+                boundArgumentVersion: 0,
+            })
+        ).toThrow()
+    })
+
+    it("rejects cross-argument binding", () => {
+        const engine = makeEngine()
+        expect(() =>
+            engine.bindVariableToPremise({
+                id: "vQ",
+                argumentId: "a1",
+                argumentVersion: 0,
+                symbol: "Q",
+                boundPremiseId: "p1",
+                boundArgumentId: "other-arg",
+                boundArgumentVersion: 0,
+            })
+        ).toThrow()
+    })
+
+    it("allows multiple variables bound to same premise", () => {
+        const engine = makeEngine()
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+        engine.bindVariableToPremise({
+            id: "vR",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "R",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+        expect(engine.getVariable("vQ")).toBeDefined()
+        expect(engine.getVariable("vR")).toBeDefined()
+    })
+})

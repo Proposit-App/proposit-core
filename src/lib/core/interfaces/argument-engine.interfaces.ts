@@ -1,5 +1,6 @@
 import type {
     TClaimBoundVariable,
+    TPremiseBoundVariable,
     TCoreArgument,
     TCorePremise,
     TCorePropositionalExpression,
@@ -133,6 +134,22 @@ export interface TVariableManagement<
      */
     addVariable(
         variable: TOptionalChecksum<TClaimBoundVariable> &
+            Record<string, unknown>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>
+    /**
+     * Registers a premise-bound propositional variable whose truth value is
+     * derived from another premise's evaluation.
+     *
+     * @param variable - The premise-bound variable entity to register.
+     * @returns The registered variable (with checksum) and changeset.
+     * @throws If `variable.symbol` is already in use.
+     * @throws If `variable.id` already exists.
+     * @throws If `variable.boundPremiseId` does not exist in this argument.
+     * @throws If `variable.boundArgumentId` does not match this argument.
+     * @throws If the variable does not belong to this argument.
+     */
+    bindVariableToPremise(
+        variable: TOptionalChecksum<TPremiseBoundVariable> &
             Record<string, unknown>
     ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg>
     /**
