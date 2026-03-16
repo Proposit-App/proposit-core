@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto"
-import type {
-    TCoreArgument,
-    TCoreLogicalOperatorType,
-    TCorePremise,
-    TCorePropositionalExpression,
-    TCorePropositionalVariable,
-    TOptionalChecksum,
+import {
+    isPremiseBound,
+    type TCoreArgument,
+    type TCoreLogicalOperatorType,
+    type TCorePremise,
+    type TCorePropositionalExpression,
+    type TCorePropositionalVariable,
+    type TOptionalChecksum,
 } from "../schemata/index.js"
 import { DefaultMap } from "../utils/default-map.js"
 import { sortedCopyById, sortedUnique } from "../utils/collections.js"
@@ -908,6 +909,7 @@ export class PremiseEngine<
         options?: {
             strictUnknownKeys?: boolean
             requireExactCoverage?: boolean
+            resolver?: (variableId: string) => boolean | null
         }
     ): TCorePremiseEvaluationResult {
         const validation = this.validateEvaluability()
@@ -961,8 +963,23 @@ export class PremiseEngine<
             }
 
             if (expression.type === "variable") {
-                const value =
-                    assignment.variables[expression.variableId] ?? null
+                let value: TCoreTrivalentValue
+                if (options?.resolver) {
+                    const variable = this.variables.getVariable(
+                        expression.variableId
+                    )
+                    if (
+                        variable &&
+                        isPremiseBound(variable)
+                    ) {
+                        value = options.resolver(expression.variableId)
+                    } else {
+                        value =
+                            assignment.variables[expression.variableId] ?? null
+                    }
+                } else {
+                    value = assignment.variables[expression.variableId] ?? null
+                }
                 expressionValues[expression.id] = value
                 return value
             }
@@ -1021,6 +1038,16 @@ export class PremiseEngine<
         const rootValue = evaluateExpression(rootExpressionId)
         const variableValues: Record<string, TCoreTrivalentValue> = {}
         for (const variableId of referencedVariableIds) {
+            if (options?.resolver) {
+                const variable = this.variables.getVariable(variableId)
+                if (
+                    variable &&
+                    isPremiseBound(variable)
+                ) {
+                    variableValues[variableId] = options.resolver(variableId)
+                    continue
+                }
+            }
             variableValues[variableId] =
                 assignment.variables[variableId] ?? null
         }

@@ -1373,9 +1373,40 @@ export class ArgumentEngine<
         })
 
         try {
+            // Build a resolver that lazily evaluates premise-bound variables
+            // by evaluating their bound premise's expression tree under the
+            // same assignment. Results are cached per-variable per-evaluate call.
+            const resolverCache = new Map<string, boolean | null>()
+            const resolver = (variableId: string): boolean | null => {
+                if (resolverCache.has(variableId)) {
+                    return resolverCache.get(variableId)!
+                }
+                const variable = this.variables.getVariable(variableId)
+                if (
+                    !variable ||
+                    !isPremiseBound(variable)
+                ) {
+                    return assignment.variables[variableId] ?? null
+                }
+                const boundPremiseId = (variable)
+                    .boundPremiseId
+                const boundPremise = this.premises.get(boundPremiseId)
+                if (!boundPremise) {
+                    resolverCache.set(variableId, null)
+                    return null
+                }
+                const premiseResult = boundPremise.evaluate(assignment, {
+                    resolver,
+                })
+                const value = premiseResult?.rootValue ?? null
+                resolverCache.set(variableId, value)
+                return value
+            }
+
             const evalOpts = {
                 strictUnknownKeys:
                     options?.strictUnknownAssignmentKeys ?? false,
+                resolver,
             }
             const conclusionEvaluation = conclusion.evaluate(
                 assignment,
