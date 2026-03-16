@@ -86,6 +86,7 @@ import type {
 import { buildParsingPrompt } from "../src/lib/parsing/prompt-builder"
 import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
+import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 
@@ -12871,5 +12872,127 @@ describe("Parsing — response schemas", () => {
                 expect(link).toMatch(/^C1-/)
             })
         })
+    })
+})
+
+describe("LLM provider abstraction", () => {
+    describe("resolveApiKey", () => {
+        it("returns explicit key when provided", () => {
+            const key = resolveApiKey("openai", "sk-explicit")
+            expect(key).toBe("sk-explicit")
+        })
+
+        it("falls back to OPENAI_API_KEY env var", () => {
+            const original = process.env.OPENAI_API_KEY
+            try {
+                process.env.OPENAI_API_KEY = "sk-from-env"
+                const key = resolveApiKey("openai")
+                expect(key).toBe("sk-from-env")
+            } finally {
+                if (original === undefined) {
+                    delete process.env.OPENAI_API_KEY
+                } else {
+                    process.env.OPENAI_API_KEY = original
+                }
+            }
+        })
+
+        it("throws when no key is available", () => {
+            const original = process.env.OPENAI_API_KEY
+            try {
+                delete process.env.OPENAI_API_KEY
+                expect(() => resolveApiKey("openai")).toThrow(/OPENAI_API_KEY/)
+            } finally {
+                if (original !== undefined) {
+                    process.env.OPENAI_API_KEY = original
+                }
+            }
+        })
+
+        it("throws for unknown provider with no explicit key", () => {
+            expect(() => resolveApiKey("unknown")).toThrow(/unknown/)
+        })
+
+        it("returns explicit key even for unknown provider", () => {
+            const key = resolveApiKey("unknown", "sk-explicit")
+            expect(key).toBe("sk-explicit")
+        })
+    })
+
+    describe("createLlmProvider", () => {
+        it("creates an openai provider", () => {
+            const provider = createLlmProvider("openai", {
+                apiKey: "sk-test",
+            })
+            expect(provider).toBeDefined()
+            expect(typeof provider.complete).toBe("function")
+        })
+
+        it("throws on unknown provider name", () => {
+            expect(() =>
+                createLlmProvider("unknown", { apiKey: "sk-test" })
+            ).toThrow(/unknown/i)
+        })
+    })
+})
+
+describe("CliArgumentParser metadata injection", () => {
+    class TestCliParser extends ArgumentParser {
+        private readonly title: string
+        private readonly description: string
+
+        constructor(title: string, description: string) {
+            super()
+            this.title = title
+            this.description = description
+        }
+
+        protected override mapArgument(): Record<string, unknown> {
+            return {
+                title: this.title,
+                description: this.description,
+                createdAt: new Date("2026-01-01T00:00:00Z"),
+                published: false,
+            }
+        }
+    }
+
+    function validResponse(): TParsedArgumentResponse {
+        return {
+            argument: {
+                claims: [
+                    {
+                        miniId: "C1",
+                        role: "premise" as const,
+                        sourceMiniIds: [],
+                    },
+                ],
+                variables: [{ miniId: "V1", symbol: "A", claimMiniId: "C1" }],
+                sources: [],
+                premises: [{ miniId: "P1", formula: "A" }],
+                conclusionPremiseMiniId: "P1",
+            },
+            uncategorizedText: null,
+            selectionRationale: null,
+            failureText: null,
+        }
+    }
+
+    it("injects title and description into the built argument", () => {
+        const parser = new TestCliParser("My Title", "My Desc")
+        const { engine } = parser.build(validResponse())
+        const arg = engine.getArgument() as Record<string, unknown>
+        expect(arg.title).toBe("My Title")
+        expect(arg.description).toBe("My Desc")
+        expect(arg.published).toBe(false)
+        expect(arg.createdAt).toEqual(new Date("2026-01-01T00:00:00Z"))
+    })
+
+    it("uses default title when not specified", () => {
+        const parser = new TestCliParser("Parsed argument", "")
+        const { engine } = parser.build(validResponse())
+        const arg = engine.getArgument() as Record<string, unknown>
+        expect(arg.title).toBe("Parsed argument")
+        expect(arg.description).toBe("")
     })
 })
