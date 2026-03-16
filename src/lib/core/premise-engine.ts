@@ -93,6 +93,10 @@ export class PremiseEngine<
     private cachedChecksum: string | undefined
     private expressionIndex?: Map<string, string>
     private onMutate?: () => void
+    private circularityCheck?: (
+        variableId: string,
+        premiseId: string
+    ) => boolean
 
     constructor(
         premise: TOptionalChecksum<TPremise>,
@@ -115,6 +119,12 @@ export class PremiseEngine<
 
     public setOnMutate(callback: (() => void) | undefined): void {
         this.onMutate = callback
+    }
+
+    public setCircularityCheck(
+        check: ((variableId: string, premiseId: string) => boolean) | undefined
+    ): void {
+        this.circularityCheck = check
     }
 
     public deleteExpressionsUsingVariable(
@@ -185,6 +195,14 @@ export class PremiseEngine<
             )
         }
 
+        if (expression.type === "variable" && this.circularityCheck) {
+            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+                throw new Error(
+                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                )
+            }
+        }
+
         if (expression.parentId === null) {
             if (this.rootExpressionId !== undefined) {
                 throw new Error(
@@ -246,6 +264,14 @@ export class PremiseEngine<
             )
         }
 
+        if (expression.type === "variable" && this.circularityCheck) {
+            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+                throw new Error(
+                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                )
+            }
+        }
+
         if (parentId === null) {
             if (this.rootExpressionId !== undefined) {
                 throw new Error(
@@ -304,6 +330,14 @@ export class PremiseEngine<
             throw new Error(
                 `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
             )
+        }
+
+        if (expression.type === "variable" && this.circularityCheck) {
+            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+                throw new Error(
+                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                )
+            }
         }
 
         if (!this.expressions.getExpression(siblingId)) {
@@ -477,6 +511,14 @@ export class PremiseEngine<
             )
         }
 
+        if (expression.type === "variable" && this.circularityCheck) {
+            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+                throw new Error(
+                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                )
+            }
+        }
+
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         this.expressions.setCollector(collector)
         try {
@@ -529,6 +571,14 @@ export class PremiseEngine<
             throw new Error(
                 `Variable expression "${newSibling.id}" references non-existent variable "${newSibling.variableId}".`
             )
+        }
+
+        if (newSibling.type === "variable" && this.circularityCheck) {
+            if (this.circularityCheck(newSibling.variableId, this.premise.id)) {
+                throw new Error(
+                    `Circular binding: variable "${newSibling.variableId}" is bound to this premise (directly or transitively)`
+                )
+            }
         }
 
         const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()

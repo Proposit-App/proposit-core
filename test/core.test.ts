@@ -10800,3 +10800,90 @@ describe("Premise-variable associations — removePremise cascade", () => {
         expect(engine.getVariable("vA")).toBeDefined()
     })
 })
+
+// ---------------------------------------------------------------------------
+// Premise-variable associations — circularity prevention
+// ---------------------------------------------------------------------------
+
+describe("Premise-variable associations — circularity prevention", () => {
+    function makeEngineWithBinding() {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        engine.createPremiseWithId("p2")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+        return engine
+    }
+
+    it("rejects adding a variable expression to the premise it is bound to", () => {
+        const engine = makeEngineWithBinding()
+        const p1 = engine.getPremise("p1")!
+        expect(() =>
+            p1.appendExpression(null, {
+                id: "e1",
+                argumentId: "a1",
+                argumentVersion: 0,
+                premiseId: "p1",
+                parentId: null,
+                type: "variable",
+                variableId: "vQ",
+            })
+        ).toThrow(/circular/i)
+    })
+
+    it("allows adding a variable expression to a different premise", () => {
+        const engine = makeEngineWithBinding()
+        const p2 = engine.getPremise("p2")!
+        expect(() =>
+            p2.appendExpression(null, {
+                id: "e1",
+                argumentId: "a1",
+                argumentVersion: 0,
+                premiseId: "p2",
+                parentId: null,
+                type: "variable",
+                variableId: "vQ",
+            })
+        ).not.toThrow()
+    })
+
+    it("allows adding a claim-bound variable expression to any premise", () => {
+        const engine = makeEngineWithBinding()
+        const p1 = engine.getPremise("p1")!
+        expect(() =>
+            p1.appendExpression(null, {
+                id: "e1",
+                argumentId: "a1",
+                argumentVersion: 0,
+                premiseId: "p1",
+                parentId: null,
+                type: "variable",
+                variableId: "vA",
+            })
+        ).not.toThrow()
+    })
+})

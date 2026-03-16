@@ -153,6 +153,63 @@ export class ArgumentEngine<
         this.conclusionPremiseId = undefined
     }
 
+    private createCircularityCheck(): (
+        variableId: string,
+        premiseId: string
+    ) => boolean {
+        return (variableId: string, targetPremiseId: string): boolean => {
+            return this.wouldCreateCycle(variableId, targetPremiseId, new Set())
+        }
+    }
+
+    private wouldCreateCycle(
+        variableId: string,
+        targetPremiseId: string,
+        visited: Set<string>
+    ): boolean {
+        const variable = this.variables.getVariable(variableId)
+        if (!variable) return false
+
+        if (!isPremiseBound(variable)) return false
+
+        const bound = variable as unknown as TPremiseBoundVariable
+        if (bound.boundPremiseId === targetPremiseId) return true
+
+        if (visited.size >= this.premises.size) {
+            throw new Error(
+                `Circularity check depth limit exceeded (visited ${visited.size} premises).`
+            )
+        }
+
+        if (visited.has(bound.boundPremiseId)) return false
+        visited.add(bound.boundPremiseId)
+
+        const boundPremise = this.premises.get(bound.boundPremiseId)
+        if (!boundPremise) return false
+
+        for (const expr of boundPremise.getExpressions()) {
+            if (expr.type === "variable") {
+                if (
+                    this.wouldCreateCycle(
+                        expr.variableId,
+                        targetPremiseId,
+                        visited
+                    )
+                ) {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    private wireCircularityCheck(
+        pm: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): void {
+        pm.setCircularityCheck(this.createCircularityCheck())
+    }
+
     public subscribe = (listener: () => void): (() => void) => {
         this.listeners.add(listener)
         return () => {
@@ -393,6 +450,7 @@ export class ArgumentEngine<
             }
         )
         this.premises.set(id, pm)
+        this.wireCircularityCheck(pm)
         pm.setOnMutate(() => {
             this.reactiveDirty.premiseIds.add(id)
             this.notifySubscribers()
@@ -879,6 +937,7 @@ export class ArgumentEngine<
                 engine.expressionIndex
             )
             engine.premises.set(pe.getId(), pe)
+            engine.wireCircularityCheck(pe)
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
                 engine.reactiveDirty.premiseIds.add(premiseId)
@@ -1019,6 +1078,7 @@ export class ArgumentEngine<
         }
         this.conclusionPremiseId = snapshot.conclusionPremiseId
         for (const pe of this.premises.values()) {
+            this.wireCircularityCheck(pe)
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
                 this.reactiveDirty.premiseIds.add(premiseId)
