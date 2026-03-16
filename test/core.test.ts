@@ -11855,3 +11855,289 @@ describe("Premise-variable associations — validateEvaluability", () => {
         ).toBe(true)
     })
 })
+
+describe("Premise-variable associations — integration", () => {
+    it("full round-trip: create, evaluate, snapshot, restore, re-evaluate", () => {
+        // Build "P implies (A implies B)" argument
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "cA" })
+        claimLibrary.create({ id: "cB" })
+        claimLibrary.create({ id: "cP" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "cA",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.addVariable({
+            id: "vB",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "B",
+            claimId: "cB",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.addVariable({
+            id: "vP",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "cP",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        // Premise 1: A implies B
+        engine.createPremiseWithId("p1")
+        const p1 = engine.getPremise("p1")!
+        p1.addExpression({
+            id: "op1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+            position: 0,
+            type: "operator",
+            operator: "implies",
+        })
+        p1.addExpression({
+            id: "e1a",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "op1",
+            position: 0,
+            type: "variable",
+            variableId: "vA",
+        })
+        p1.addExpression({
+            id: "e1b",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "op1",
+            position: 1,
+            type: "variable",
+            variableId: "vB",
+        })
+
+        // Q bound to p1
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+
+        // Premise 2: P implies Q (conclusion)
+        engine.createPremiseWithId("p2")
+        const p2 = engine.getPremise("p2")!
+        p2.addExpression({
+            id: "op2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            position: 0,
+            type: "operator",
+            operator: "implies",
+        })
+        p2.addExpression({
+            id: "e2a",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: "op2",
+            position: 0,
+            type: "variable",
+            variableId: "vP",
+        })
+        p2.addExpression({
+            id: "e2b",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: "op2",
+            position: 1,
+            type: "variable",
+            variableId: "vQ",
+        })
+
+        engine.setConclusionPremise("p2")
+
+        // Evaluate: A=true, B=false => Q = (true implies false) = false
+        // P=true, Q=false => (true implies false) = false
+        const evalResult = engine.evaluate({
+            variables: { vA: true, vB: false, vP: true },
+            rejectedExpressionIds: [],
+        })
+        expect(evalResult).toBeDefined()
+        expect(evalResult.conclusion!.rootValue).toBe(false)
+
+        // Snapshot
+        const snapshot = engine.snapshot()
+
+        // Restore
+        const restored = ArgumentEngine.fromSnapshot(
+            snapshot,
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+
+        // Re-evaluate with same assignment
+        const reEvalResult = restored.evaluate({
+            variables: { vA: true, vB: false, vP: true },
+            rejectedExpressionIds: [],
+        })
+        expect(reEvalResult).toBeDefined()
+        expect(reEvalResult.conclusion!.rootValue).toBe(false)
+
+        // Remove target premise and verify cascade
+        restored.removePremise("p1")
+        expect(restored.getVariable("vQ")).toBeUndefined()
+        expect(restored.getPremise("p2")!.getExpressions().length).toBeLessThan(
+            3
+        )
+    })
+
+    it("checkValidity produces correct result for nested implication", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "cA" })
+        claimLibrary.create({ id: "cB" })
+        claimLibrary.create({ id: "cP" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "cA",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.addVariable({
+            id: "vB",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "B",
+            claimId: "cB",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.addVariable({
+            id: "vP",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "cP",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        // p1: A implies B (supporting)
+        engine.createPremiseWithId("p1")
+        const p1 = engine.getPremise("p1")!
+        p1.addExpression({
+            id: "op1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+            position: 0,
+            type: "operator",
+            operator: "implies",
+        })
+        p1.addExpression({
+            id: "e1a",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "op1",
+            position: 0,
+            type: "variable",
+            variableId: "vA",
+        })
+        p1.addExpression({
+            id: "e1b",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "op1",
+            position: 1,
+            type: "variable",
+            variableId: "vB",
+        })
+
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+
+        // p2: P implies Q (conclusion)
+        engine.createPremiseWithId("p2")
+        const p2 = engine.getPremise("p2")!
+        p2.addExpression({
+            id: "op2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            position: 0,
+            type: "operator",
+            operator: "implies",
+        })
+        p2.addExpression({
+            id: "e2a",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: "op2",
+            position: 0,
+            type: "variable",
+            variableId: "vP",
+        })
+        p2.addExpression({
+            id: "e2b",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: "op2",
+            position: 1,
+            type: "variable",
+            variableId: "vQ",
+        })
+
+        engine.setConclusionPremise("p2")
+
+        const result = engine.checkValidity()
+        expect(result).toBeDefined()
+        // 3 claim-bound variables -> 8 assignments
+        expect(result.numAssignmentsChecked).toBe(8)
+        // The argument "given (A implies B), therefore (P implies Q)" is valid
+        expect(result.isValid).toBe(true)
+    })
+})
