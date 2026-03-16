@@ -210,6 +210,23 @@ export class ArgumentEngine<
         pm.setCircularityCheck(this.createCircularityCheck())
     }
 
+    private wireEmptyBoundPremiseCheck(
+        pm: PremiseEngine<TArg, TPremise, TExpr, TVar>
+    ): void {
+        pm.setEmptyBoundPremiseCheck((variableId: string) => {
+            const v = this.variables.getVariable(variableId)
+            if (
+                !v ||
+                !isPremiseBound(v as unknown as TCorePropositionalVariable)
+            )
+                return false
+            const boundPremise = this.premises.get(
+                (v as TPremiseBoundVariable).boundPremiseId
+            )
+            return !boundPremise?.getRootExpressionId()
+        })
+    }
+
     public subscribe = (listener: () => void): (() => void) => {
         this.listeners.add(listener)
         return () => {
@@ -451,6 +468,7 @@ export class ArgumentEngine<
         )
         this.premises.set(id, pm)
         this.wireCircularityCheck(pm)
+        this.wireEmptyBoundPremiseCheck(pm)
         pm.setOnMutate(() => {
             this.reactiveDirty.premiseIds.add(id)
             this.notifySubscribers()
@@ -973,6 +991,7 @@ export class ArgumentEngine<
             )
             engine.premises.set(pe.getId(), pe)
             engine.wireCircularityCheck(pe)
+            engine.wireEmptyBoundPremiseCheck(pe)
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
                 engine.reactiveDirty.premiseIds.add(premiseId)
@@ -1147,6 +1166,7 @@ export class ArgumentEngine<
         this.conclusionPremiseId = snapshot.conclusionPremiseId
         for (const pe of this.premises.values()) {
             this.wireCircularityCheck(pe)
+            this.wireEmptyBoundPremiseCheck(pe)
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
                 this.reactiveDirty.premiseIds.add(premiseId)

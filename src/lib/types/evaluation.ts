@@ -37,6 +37,7 @@ export type TCoreValidationCode =
     | "SOURCE_EXPRESSION_ASSOCIATION_INVALID_PREMISE"
     | "SOURCE_EXPRESSION_ASSOCIATION_INVALID_EXPRESSION"
     | "SOURCE_ORPHANED"
+    | "EXPR_BOUND_PREMISE_EMPTY"
 
 export interface TCoreValidationIssue {
     /** Machine-readable issue code for callers/tests/UI logic. */

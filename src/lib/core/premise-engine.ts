@@ -98,6 +98,7 @@ export class PremiseEngine<
         variableId: string,
         premiseId: string
     ) => boolean
+    private emptyBoundPremiseCheck?: (variableId: string) => boolean
 
     constructor(
         premise: TOptionalChecksum<TPremise>,
@@ -126,6 +127,12 @@ export class PremiseEngine<
         check: ((variableId: string, premiseId: string) => boolean) | undefined
     ): void {
         this.circularityCheck = check
+    }
+
+    public setEmptyBoundPremiseCheck(
+        check: ((variableId: string) => boolean) | undefined
+    ): void {
+        this.emptyBoundPremiseCheck = check
     }
 
     public deleteExpressionsUsingVariable(
@@ -823,6 +830,18 @@ export class PremiseEngine<
                         variableId: expr.variableId,
                     })
                 )
+            }
+
+            if (
+                expr.type === "variable" &&
+                this.emptyBoundPremiseCheck?.(expr.variableId)
+            ) {
+                issues.push({
+                    code: "EXPR_BOUND_PREMISE_EMPTY",
+                    severity: "warning",
+                    message: `Variable "${expr.variableId}" is bound to a premise with no expression tree`,
+                    expressionId: expr.id,
+                })
             }
 
             if (expr.type !== "operator" && expr.type !== "formula") {

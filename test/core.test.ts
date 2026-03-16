@@ -11688,3 +11688,174 @@ describe("Premise-variable associations — snapshot round-trip", () => {
         expect(isClaimBound(vA!)).toBe(true)
     })
 })
+
+describe("Premise-variable associations — validateEvaluability", () => {
+    it("warns when premise-bound variable targets an empty premise", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        engine.createPremiseWithId("p2")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+
+        // Add Q to p2's tree so it gets validated
+        const p2 = engine.getPremise("p2")!
+        p2.appendExpression(null, {
+            id: "e1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            type: "variable",
+            variableId: "vQ",
+        })
+
+        const validation = p2.validateEvaluability()
+        expect(
+            validation.issues.some(
+                (i) => i.code === "EXPR_BOUND_PREMISE_EMPTY"
+            )
+        ).toBe(true)
+    })
+
+    it("does not warn when premise-bound variable targets a premise with expressions", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        engine.createPremiseWithId("p2")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        // Add expression to p1 so it is not empty
+        const p1 = engine.getPremise("p1")!
+        p1.appendExpression(null, {
+            id: "e0",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+            type: "variable",
+            variableId: "vA",
+        })
+
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+
+        // Add Q to p2's tree
+        const p2 = engine.getPremise("p2")!
+        p2.appendExpression(null, {
+            id: "e1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            type: "variable",
+            variableId: "vQ",
+        })
+
+        const validation = p2.validateEvaluability()
+        expect(
+            validation.issues.some(
+                (i) => i.code === "EXPR_BOUND_PREMISE_EMPTY"
+            )
+        ).toBe(false)
+    })
+
+    it("warning does not block evaluation (ok is still true)", () => {
+        const claimLibrary = new ClaimLibrary()
+        claimLibrary.create({ id: "c1" })
+        const sourceLibrary = new SourceLibrary()
+        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const engine = new ArgumentEngine(
+            { id: "a1", version: 0 },
+            claimLibrary,
+            sourceLibrary,
+            csLibrary
+        )
+        engine.createPremiseWithId("p1")
+        engine.createPremiseWithId("p2")
+        engine.addVariable({
+            id: "vA",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "A",
+            claimId: "c1",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        engine.bindVariableToPremise({
+            id: "vQ",
+            argumentId: "a1",
+            argumentVersion: 0,
+            symbol: "Q",
+            boundPremiseId: "p1",
+            boundArgumentId: "a1",
+            boundArgumentVersion: 0,
+        })
+
+        const p2 = engine.getPremise("p2")!
+        p2.appendExpression(null, {
+            id: "e1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            type: "variable",
+            variableId: "vQ",
+        })
+
+        const validation = p2.validateEvaluability()
+        // Warning severity does not set ok to false
+        expect(validation.ok).toBe(true)
+        expect(
+            validation.issues.some(
+                (i) =>
+                    i.code === "EXPR_BOUND_PREMISE_EMPTY" &&
+                    i.severity === "warning"
+            )
+        ).toBe(true)
+    })
+})
