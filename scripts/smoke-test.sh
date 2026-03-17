@@ -329,12 +329,42 @@ $CLI "$ARG" latest analysis delete --file scenario-b.json --confirm
 $CLI "$ARG" latest analysis list
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9m. SOURCES — skipped (pending implementation)
-# Source entity CRUD and claim-source association commands are not yet
-# implemented in the CLI. Source entities live in the global SourceLibrary and
-# claim-source associations are managed via the library API. Once CLI support
-# is added, this section should be updated with the new commands.
+# 9m. CLAIMS — add, update, list, show, freeze
 # ─────────────────────────────────────────────────────────────────────────────
+section "9m. claims"
+CLAIM1=$($CLI claims add --title "It rains" --body "Precipitation is occurring")
+echo "CLAIM1=$CLAIM1"
+
+$CLI claims list
+$CLI claims list --json
+
+$CLI claims show "$CLAIM1"
+$CLI claims show "$CLAIM1" --json
+
+$CLI claims update "$CLAIM1" --title "Rain occurs" --body "Precipitation is actively occurring"
+$CLI claims show "$CLAIM1"
+
+$CLI claims freeze "$CLAIM1"
+$CLI claims show "$CLAIM1"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9n. SOURCES — add, list, show, link-claim, unlink
+# ─────────────────────────────────────────────────────────────────────────────
+section "9n. sources"
+SRC1=$($CLI sources add --text "Journal of Atmospheric Sciences, 2024")
+echo "SRC1=$SRC1"
+
+$CLI sources list
+$CLI sources list --json
+$CLI sources show "$SRC1"
+$CLI sources show "$SRC1" --json
+
+# Link the source to the claim (use the frozen version: v0)
+ASSOC=$($CLI sources link-claim "$SRC1" "$CLAIM1")
+echo "ASSOC=$ASSOC"
+
+# Unlink
+$CLI sources unlink "$ASSOC"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 10. PUBLISH and VERSION SELECTORS

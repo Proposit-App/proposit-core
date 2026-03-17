@@ -588,6 +588,18 @@ proposit-core arguments create <title> <desc>      Create a new argument (prints
 proposit-core arguments list [--json]              List all arguments
 proposit-core arguments delete [--all] [--confirm] <id>   Delete an argument or its latest version
 proposit-core arguments publish <id>               Publish latest version, prepare new draft
+proposit-core arguments parse [text] [options]     Parse natural language into an argument via LLM
+proposit-core arguments import <yaml_file>         Import an argument from YAML
+proposit-core claims list [--json]                 List all claims
+proposit-core claims show <claim_id> [--json]      Show all versions of a claim
+proposit-core claims add [--title <t>] [--body <b>]  Create a new claim
+proposit-core claims update <claim_id> [--title <t>] [--body <b>]  Update claim metadata
+proposit-core claims freeze <claim_id>             Freeze current version
+proposit-core sources list [--json]                List all sources
+proposit-core sources show <source_id> [--json]    Show all versions of a source
+proposit-core sources add --text <text>            Create a new source
+proposit-core sources link-claim <source_id> <claim_id>  Link a source to a claim
+proposit-core sources unlink <association_id>      Remove a claim-source association
 ```
 
 By default `delete` removes only the latest version. Pass `--all` to remove the argument entirely. Both `delete` and `delete-unused` prompt for confirmation unless `--confirm` is supplied.
@@ -614,7 +626,15 @@ Displays argument metadata (id, title, description, version, createdAt, publishe
 proposit-core <id> <ver> render
 ```
 
-Prints every premise in the argument, one per line, in the format `<premise_id>: <display_string>`. The premise designated as the conclusion is marked with an asterisk (`<premise_id>*: <display_string>`). Display strings use standard logical notation (¬ ∧ ∨ → ↔).
+Renders the full argument with metadata. Output includes:
+
+- **Argument header** — title and description
+- **Premises** — one per line with formula display string and title (if present); conclusion marked with `*`
+- **Variables** — symbol and bound claim title (or premise binding)
+- **Claims** — ID, version, frozen status, title, and body
+- **Sources** — ID, version, and text
+
+Display strings use standard logical notation (¬ ∧ ∨ → ↔).
 
 #### roles
 
@@ -710,6 +730,10 @@ proposit-core <id> <ver> analysis export [--json]
 - **`validate-argument`** — checks structural readiness (conclusion set, inference premises, etc.).
 - **`refs`** — lists every variable referenced across all premises.
 - **`export`** — dumps the full `ArgumentEngine` state as JSON (uses `snapshot()` internally).
+
+### Logging
+
+All CLI invocations are logged to `~/.proposit-core/logs/cli.jsonl` (or `$PROPOSIT_HOME/logs/cli.jsonl`). Each line is a JSON object with a timestamp and event name. The `arguments parse` command additionally logs the full LLM request and response, plus dedicated error entries for validation and build failures.
 
 ## Development
 

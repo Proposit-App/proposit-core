@@ -246,24 +246,70 @@ proposit-core <argument-id> latest roles clear-conclusion
 
 ---
 
-## 7. Sources
+## 7. Sources and Claims
 
-Source entities live in a global `SourceLibrary` and claim-source associations are managed via a global `ClaimSourceLibrary`. CLI support for source management is not yet implemented.
+Claims and sources are global library entities, separate from argument-scoped data.
+
+### Claims
+
+```bash
+# Create a claim with metadata
+proposit-core claims add --title "It is raining" --body "Precipitation is currently occurring"
+
+# List all claims
+proposit-core claims list
+
+# Show versions of a claim
+proposit-core claims show <claim-id>
+
+# Update claim metadata
+proposit-core claims update <claim-id> --title "New title" --body "New description"
+
+# Freeze a claim version
+proposit-core claims freeze <claim-id>
+```
+
+### Sources
+
+```bash
+# Create a source
+proposit-core sources add --text "Journal of Atmospheric Sciences, 2024"
+
+# List all sources
+proposit-core sources list
+
+# Link a source to a claim
+proposit-core sources link-claim <source-id> <claim-id>
+
+# Remove a link
+proposit-core sources unlink <association-id>
+```
 
 ---
 
 ## 8. Render
 
-Print all premises in one shot, with the conclusion marked by an asterisk:
+Print the full argument with metadata:
 
 ```bash
 proposit-core <argument-id> latest render
-# → <premise3-id>*: (P → R)
-# → <premise1-id>: (P → Q)
-# → <premise2-id>: (Q → R)
+# → Argument: Hypothetical Syllogism — If P→Q and Q→R then P→R
+# →
+# → Premises:
+# →   * (P → R) | P implies R
+# →     (P → Q) | P implies Q
+# →     (Q → R) | Q implies R
+# →
+# → Variables:
+# →   P → <claim title>
+# →   Q → <claim title>
+# →   R → <claim title>
+# →
+# → Claims:
+# →   <claim-id>@0 | title: ... | body: ...
 ```
 
-Each line follows the pattern `<premise_id>[*]: <display_string>`. The asterisk appears only on the premise with the conclusion role.
+The conclusion premise is marked with `*`. Each section includes any available metadata (title, body) from the basics extension.
 
 ---
 
