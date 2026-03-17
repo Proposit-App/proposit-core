@@ -9,6 +9,7 @@ import { hydrateLibraries, persistEngine, persistLibraries } from "../engine.js"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
 import { SourceLibrary } from "../../lib/core/source-library.js"
 import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
+import { cliLog } from "../logging.js"
 import { errorExit, printJson, printLine } from "../output.js"
 import { resolveApiKey, createLlmProvider } from "../llm/index.js"
 
@@ -114,18 +115,27 @@ export function registerParseCommand(args: Command): void {
                         responseSchema,
                     })
                 } catch (error) {
-                    errorExit(
+                    const msg =
                         error instanceof Error ? error.message : String(error)
-                    )
+                    await cliLog("parse:llm-error", { error: msg })
+                    errorExit(msg)
                 }
 
-                // 5. Dry-run: print raw response and exit
+                // 5. Log raw LLM response
+                await cliLog("parse:llm-response", {
+                    provider: opts.llm,
+                    model: opts.model ?? "(default)",
+                    inputText,
+                    response: result,
+                })
+
+                // 6. Dry-run: print raw response and exit
                 if (opts.dryRun) {
                     printJson(result)
                     return
                 }
 
-                // 6. Validate
+                // 7. Validate
                 const parser = new CliArgumentParser(
                     opts.title,
                     opts.description
@@ -134,30 +144,35 @@ export function registerParseCommand(args: Command): void {
                 try {
                     response = parser.validate(result)
                 } catch (error) {
-                    errorExit(
-                        `Validation failed: ${error instanceof Error ? error.message : String(error)}`
-                    )
+                    const msg =
+                        error instanceof Error ? error.message : String(error)
+                    await cliLog("parse:validation-error", { error: msg })
+                    errorExit(`Validation failed: ${msg}`)
                 }
 
-                // 7. Check for null argument
+                // 8. Check for null argument
                 if (response.argument === null) {
-                    errorExit(
+                    const msg =
                         response.failureText ??
-                            "The LLM could not parse the input as an argument."
-                    )
+                        "The LLM could not parse the input as an argument."
+                    await cliLog("parse:null-argument", {
+                        failureText: response.failureText,
+                    })
+                    errorExit(msg)
                 }
 
-                // 8. Build engine
+                // 9. Build engine
                 let built
                 try {
                     built = parser.build(response)
                 } catch (error) {
-                    errorExit(
-                        `Build failed: ${error instanceof Error ? error.message : String(error)}`
-                    )
+                    const msg =
+                        error instanceof Error ? error.message : String(error)
+                    await cliLog("parse:build-error", { error: msg })
+                    errorExit(`Build failed: ${msg}`)
                 }
 
-                // 9. Merge libraries with existing global state
+                // 10. Merge libraries with existing global state
                 const existing = await hydrateLibraries()
                 const mergedClaims = ClaimLibrary.fromSnapshot({
                     claims: [
@@ -184,7 +199,7 @@ export function registerParseCommand(args: Command): void {
                     mergedSources
                 )
 
-                // 10. Persist and output
+                // 11. Persist and output
                 await persistEngine(built.engine)
                 await persistLibraries(
                     mergedClaims,

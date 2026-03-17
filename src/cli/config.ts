@@ -30,3 +30,7 @@ export function getPremiseDir(
 ): string {
     return path.join(getPremisesDir(argumentId, version), premiseId)
 }
+
+export function getLogsDir(): string {
+    return path.join(getStateDir(), "logs")
+}

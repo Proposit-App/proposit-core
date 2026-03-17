@@ -14,6 +14,7 @@ import { registerRenderCommand } from "./cli/commands/render.js"
 import { registerDiffCommand } from "./cli/commands/diff.js"
 import { isNamedCommand, resolveVersion } from "./cli/router.js"
 import { errorExit } from "./cli/output.js"
+import { cliLog } from "./cli/logging.js"
 
 const program = new Command()
 program
@@ -21,6 +22,8 @@ program
     .description("Proposit Core CLI")
     .enablePositionalOptions()
     .allowUnknownOption(false)
+
+await cliLog("command", { argv: process.argv.slice(2) })
 
 // ── Named top-level commands ──────────────────────────────────────────────────
 registerMetaCommands(program)
