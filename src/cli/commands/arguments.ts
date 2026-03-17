@@ -4,7 +4,10 @@ import path from "node:path"
 import { Command } from "commander"
 import { importArgumentFromYaml } from "../import.js"
 import { getVersionDir } from "../config.js"
-import { persistEngine } from "../engine.js"
+import { hydrateLibraries, persistEngine, persistLibraries } from "../engine.js"
+import { ClaimLibrary } from "../../lib/core/claim-library.js"
+import { SourceLibrary } from "../../lib/core/source-library.js"
+import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
 import {
     errorExit,
     printJson,
@@ -61,17 +64,45 @@ export function registerArgumentCommands(program: Command): void {
                 errorExit(`Cannot read file: ${filePath}`)
             }
 
-            let engine: ReturnType<typeof importArgumentFromYaml>
+            let result: ReturnType<typeof importArgumentFromYaml>
             try {
-                engine = importArgumentFromYaml(content)
+                result = importArgumentFromYaml(content)
             } catch (error) {
                 errorExit(
                     error instanceof Error ? error.message : String(error)
                 )
             }
 
-            await persistEngine(engine)
-            printLine(engine.getArgument().id)
+            // Merge new libraries into existing global libraries
+            const existing = await hydrateLibraries()
+            const mergedClaims = ClaimLibrary.fromSnapshot({
+                claims: [
+                    ...existing.claimLibrary.snapshot().claims,
+                    ...result.claimLibrary.snapshot().claims,
+                ],
+            })
+            const mergedSources = SourceLibrary.fromSnapshot({
+                sources: [
+                    ...existing.sourceLibrary.snapshot().sources,
+                    ...result.sourceLibrary.snapshot().sources,
+                ],
+            })
+            const mergedAssocs = ClaimSourceLibrary.fromSnapshot(
+                {
+                    claimSourceAssociations: [
+                        ...existing.claimSourceLibrary.snapshot()
+                            .claimSourceAssociations,
+                        ...result.claimSourceLibrary.snapshot()
+                            .claimSourceAssociations,
+                    ],
+                },
+                mergedClaims,
+                mergedSources
+            )
+
+            await persistEngine(result.engine)
+            await persistLibraries(mergedClaims, mergedSources, mergedAssocs)
+            printLine(result.engine.getArgument().id)
         })
 
     args.command("list")

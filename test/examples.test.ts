@@ -14,7 +14,7 @@ function loadExample(filename: string): string {
 
 /** Build a variable-id lookup from the first premise's variable list. */
 function variableMap(
-    engine: ReturnType<typeof importArgumentFromYaml>
+    engine: ReturnType<typeof importArgumentFromYaml>["engine"]
 ): Map<string, string> {
     const vars = engine.listPremises()[0].getVariables()
     return new Map(vars.map((v) => [v.symbol, v.id]))
@@ -39,7 +39,7 @@ function makeAssignment(
 // ---------------------------------------------------------------------------
 
 describe("monopoly-regulation.yaml", () => {
-    const engine = importArgumentFromYaml(
+    const { engine } = importArgumentFromYaml(
         loadExample("monopoly-regulation.yaml")
     )
 
@@ -109,7 +109,9 @@ describe("monopoly-regulation.yaml", () => {
 // ---------------------------------------------------------------------------
 
 describe("education-reform.yaml", () => {
-    const engine = importArgumentFromYaml(loadExample("education-reform.yaml"))
+    const { engine } = importArgumentFromYaml(
+        loadExample("education-reform.yaml")
+    )
 
     it("has the correct title", () => {
         expect((engine.getArgument() as Record<string, unknown>).title).toBe(
@@ -169,7 +171,9 @@ describe("education-reform.yaml", () => {
 // ---------------------------------------------------------------------------
 
 describe("exam-performance.yaml", () => {
-    const engine = importArgumentFromYaml(loadExample("exam-performance.yaml"))
+    const { engine } = importArgumentFromYaml(
+        loadExample("exam-performance.yaml")
+    )
 
     it("has the correct title", () => {
         expect((engine.getArgument() as Record<string, unknown>).title).toBe(
@@ -239,7 +243,7 @@ describe("exam-performance.yaml", () => {
 // ---------------------------------------------------------------------------
 
 describe("free-speech-misinformation.yaml", () => {
-    const engine = importArgumentFromYaml(
+    const { engine } = importArgumentFromYaml(
         loadExample("free-speech-misinformation.yaml")
     )
 

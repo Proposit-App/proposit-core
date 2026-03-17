@@ -202,7 +202,12 @@ function buildExpressions(
  * @throws On YAML parse errors, schema validation failures, formula
  *   parse errors, nested implies/iff operators, or multiple conclusions.
  */
-export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
+export function importArgumentFromYaml(yamlString: string): {
+    engine: ArgumentEngine
+    claimLibrary: ClaimLibrary
+    sourceLibrary: SourceLibrary
+    claimSourceLibrary: ClaimSourceLibrary
+} {
     const raw = yaml.load(yamlString)
     const input: TCoreYamlArgument = Value.Parse(CoreYamlArgumentSchema, raw)
 
@@ -255,11 +260,16 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
 
     const claimLibrary = new ClaimLibrary()
     const defaultClaim = claimLibrary.create({ id: randomUUID() })
+    const sourceLibrary = new SourceLibrary()
+    const claimSourceLibrary = new ClaimSourceLibrary(
+        claimLibrary,
+        sourceLibrary
+    )
     const engine = new ArgumentEngine(
         argument,
         claimLibrary,
-        new SourceLibrary(),
-        new ClaimSourceLibrary(claimLibrary, new SourceLibrary())
+        sourceLibrary,
+        claimSourceLibrary
     )
 
     // Create variables
@@ -311,5 +321,5 @@ export function importArgumentFromYaml(yamlString: string): ArgumentEngine {
         // Non-conclusion inference premises are automatically supporting
     }
 
-    return engine
+    return { engine, claimLibrary, sourceLibrary, claimSourceLibrary }
 }

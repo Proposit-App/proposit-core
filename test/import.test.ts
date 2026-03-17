@@ -338,7 +338,7 @@ premises:
   - formula: "P \u2192 P"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const arg = engine.getArgument() as Record<string, unknown>
         expect(arg.title).toBe("Simple Argument")
         expect(arg.description).toBe("A basic test")
@@ -355,7 +355,7 @@ premises:
   - formula: "A \u2227 C"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const vars = engine.collectReferencedVariables()
         expect(vars.bySymbol.A).toBeDefined()
         expect(vars.bySymbol.B).toBeDefined()
@@ -372,7 +372,7 @@ premises:
   - formula: "P \u2192 P"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         expect(
             (engine.getArgument() as Record<string, unknown>).description
         ).toBeUndefined()
@@ -388,7 +388,7 @@ premises:
   - formula: "P \u2192 Q"
   - formula: "P \u2192 Q"
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         expect(engine.listSupportingPremises().length).toBe(2)
         expect(engine.getConclusionPremise()).toBeDefined()
     })
@@ -411,7 +411,7 @@ premises:
     formula: "P \u2192 Q"
     role: conclusion
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const conclusion = engine.getConclusionPremise()
         expect(conclusion).toBeDefined()
         expect(conclusion!.getExtras().title).toBe("Therefore Q")
@@ -430,7 +430,7 @@ premises:
   - formula: "P \u2227 Q"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const pm = engine.listPremises()[0]
         expect(pm.toDisplayString()).toBe("(P \u2227 Q)")
     })
@@ -445,7 +445,7 @@ premises:
   - formula: "(A \u2228 \u00ACB) \u2192 C"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const pm = engine.listPremises()[0]
         expect(pm.toDisplayString()).toBe("((A \u2228 \u00AC(B)) \u2192 C)")
     })
@@ -460,7 +460,7 @@ premises:
   - formula: "P \u2227 Q \u2227 R"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const pm = engine.listPremises()[0]
         expect(pm.toDisplayString()).toBe("(P \u2227 Q \u2227 R)")
     })
@@ -475,7 +475,7 @@ premises:
   - formula: "P \u2194 Q"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const pm = engine.listPremises()[0]
         expect(pm.toDisplayString()).toBe("(P \u2194 Q)")
     })
@@ -492,7 +492,7 @@ premises:
   - formula: "P \u2192 Q"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const validation = engine.validateEvaluability()
         expect(validation.ok).toBe(true)
     })
@@ -507,7 +507,7 @@ premises:
   - formula: "Q \u2192 Q"
     role: conclusion
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const result = engine.checkValidity()
         expect(result.ok).toBe(true)
     })
@@ -524,7 +524,7 @@ premises:
   - formula: "P \u2192 Q"
     role: conclusion
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const vars = engine.collectReferencedVariables()
         expect(vars.bySymbol.P.premiseIds.length).toBe(2)
     })
@@ -616,7 +616,7 @@ premises:
   - formula: "!P && Q || R -> S"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const pm = engine.listPremises()[0]
         // !P && Q || R -> S  parses as  ((\u00ACP \u2227 Q) \u2228 R) \u2192 S
         // Rendering: operator children are wrapped in parens, \u00AC wraps operand in parens
@@ -637,7 +637,7 @@ premises:
   - formula: "P \u2192 P"
     role: supporting
 `
-        const engine = importArgumentFromYaml(yaml)
+        const { engine } = importArgumentFromYaml(yaml)
         const arg = engine.getArgument() as Record<string, unknown>
         expect(arg.version).toBe(0)
         expect(arg.published).toBe(false)
