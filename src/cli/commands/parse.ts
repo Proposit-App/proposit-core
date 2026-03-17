@@ -5,7 +5,10 @@ import {
     buildParsingPrompt,
 } from "../../lib/parsing/index.js"
 import type { TParsedArgument } from "../../lib/parsing/index.js"
-import { persistEngine } from "../engine.js"
+import { hydrateLibraries, persistEngine, persistLibraries } from "../engine.js"
+import { ClaimLibrary } from "../../lib/core/claim-library.js"
+import { SourceLibrary } from "../../lib/core/source-library.js"
+import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
 import { errorExit, printJson, printLine } from "../output.js"
 import { resolveApiKey, createLlmProvider } from "../llm/index.js"
 
@@ -140,19 +143,50 @@ export function registerParseCommand(args: Command): void {
                 }
 
                 // 8. Build engine
-                let engine
+                let built
                 try {
-                    const built = parser.build(response)
-                    engine = built.engine
+                    built = parser.build(response)
                 } catch (error) {
                     errorExit(
                         `Build failed: ${error instanceof Error ? error.message : String(error)}`
                     )
                 }
 
-                // 9. Persist and output
-                await persistEngine(engine)
-                printLine(engine.getArgument().id)
+                // 9. Merge libraries with existing global state
+                const existing = await hydrateLibraries()
+                const mergedClaims = ClaimLibrary.fromSnapshot({
+                    claims: [
+                        ...existing.claimLibrary.snapshot().claims,
+                        ...built.claimLibrary.snapshot().claims,
+                    ],
+                })
+                const mergedSources = SourceLibrary.fromSnapshot({
+                    sources: [
+                        ...existing.sourceLibrary.snapshot().sources,
+                        ...built.sourceLibrary.snapshot().sources,
+                    ],
+                })
+                const mergedAssocs = ClaimSourceLibrary.fromSnapshot(
+                    {
+                        claimSourceAssociations: [
+                            ...existing.claimSourceLibrary.snapshot()
+                                .claimSourceAssociations,
+                            ...built.claimSourceLibrary.snapshot()
+                                .claimSourceAssociations,
+                        ],
+                    },
+                    mergedClaims,
+                    mergedSources
+                )
+
+                // 10. Persist and output
+                await persistEngine(built.engine)
+                await persistLibraries(
+                    mergedClaims,
+                    mergedSources,
+                    mergedAssocs
+                )
+                printLine(built.engine.getArgument().id)
             }
         )
 }
