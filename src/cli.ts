@@ -9,6 +9,7 @@ import { registerPremiseCommands } from "./cli/commands/premises.js"
 import { registerExpressionCommands } from "./cli/commands/expressions.js"
 import { registerAnalysisCommands } from "./cli/commands/analysis.js"
 import { registerSourceCommands } from "./cli/commands/sources.js"
+import { registerClaimCommands } from "./cli/commands/claims.js"
 import { registerRenderCommand } from "./cli/commands/render.js"
 import { registerDiffCommand } from "./cli/commands/diff.js"
 import { isNamedCommand, resolveVersion } from "./cli/router.js"
@@ -24,7 +25,9 @@ program
 // ── Named top-level commands ──────────────────────────────────────────────────
 registerMetaCommands(program)
 registerArgumentCommands(program)
+registerClaimCommands(program)
 registerDiffCommand(program)
+registerSourceCommands(program)
 
 // ── Version-scoped commands ───────────────────────────────────────────────────
 // If the first user argument is not a named command, treat it as an argument ID
@@ -53,7 +56,6 @@ if (!isNamedCommand(process.argv)) {
     registerPremiseCommands(sub, argumentId, version)
     registerExpressionCommands(sub, argumentId, version)
     registerAnalysisCommands(sub, argumentId, version)
-    registerSourceCommands(sub, argumentId, version)
 
     // Replace the consumed positional args with the remainder so Commander
     // sees: ["node", "proposit-core", <group>, <subcommand>, ...]
