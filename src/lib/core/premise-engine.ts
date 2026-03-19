@@ -1188,6 +1188,31 @@ export class PremiseEngine<
         return computeHash(canonicalSerialize(checksumMap))
     }
 
+    /**
+     * Loads expressions in BFS order with the nesting check bypassed.
+     * Bypasses all PremiseEngine validation (ownership, variable existence, circularity)
+     * since restoration paths trust existing data completely.
+     */
+    public loadExpressions(expressions: TExpressionInput<TExpr>[]): void {
+        this.expressions.loadExpressions(expressions)
+
+        // Rebuild root and variable tracking after bulk load.
+        for (const expr of this.expressions.toArray()) {
+            if (expr.parentId === null) {
+                this.rootExpressionId = expr.id
+            }
+            if (expr.type === "variable") {
+                this.expressionsByVariableId
+                    .get(expr.variableId)
+                    .add(expr.id)
+            }
+            if (this.expressionIndex) {
+                this.expressionIndex.set(expr.id, this.premise.id)
+            }
+        }
+        this.markDirty()
+    }
+
     public markDirty(): void {
         this.checksumDirty = true
     }

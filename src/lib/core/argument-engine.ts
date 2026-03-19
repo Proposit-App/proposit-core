@@ -1106,35 +1106,10 @@ export class ArgumentEngine<
             group.push(expr)
         }
 
-        // Add expressions in BFS order (roots first, then children)
+        // Add expressions via loadExpressions (bypasses nesting check for legacy data)
         for (const [premiseId, pe] of premiseEngines) {
             const premiseExprs = exprsByPremise.get(premiseId) ?? []
-            // Cast to base type to access .id and .parentId on the distributive conditional type
-            type TBaseInput = TExpressionInput<TCorePropositionalExpression>
-            const pending = new Map(
-                premiseExprs.map((e) => [(e as unknown as TBaseInput).id, e])
-            )
-            let progressed = true
-            while (pending.size > 0 && progressed) {
-                progressed = false
-                for (const [eid, expr] of Array.from(pending.entries())) {
-                    const base = expr as unknown as TBaseInput
-                    if (
-                        base.parentId !== null &&
-                        !pe.getExpression(base.parentId)
-                    ) {
-                        continue
-                    }
-                    pe.addExpression(expr)
-                    pending.delete(eid)
-                    progressed = true
-                }
-            }
-            if (pending.size > 0) {
-                throw new Error(
-                    `Could not resolve parent relationships for expressions: ${Array.from(pending.keys()).join(", ")}`
-                )
-            }
+            pe.loadExpressions(premiseExprs)
         }
 
         // Set roles (override auto-assignment)

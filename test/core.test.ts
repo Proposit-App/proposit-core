@@ -13775,4 +13775,57 @@ describe("operator nesting restriction", () => {
             )
         })
     })
+
+    describe("restoration bypass", () => {
+        it("fromSnapshot can restore a tree with operator-under-operator", () => {
+            const em = ExpressionManager.fromSnapshot({
+                expressions: [
+                    { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
+                    { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
+                ] as TCorePropositionalExpression[],
+            })
+            expect(em.getExpression("op-or")).toBeDefined()
+        })
+
+        it("fromData can reconstruct a tree with operator-under-operator", () => {
+            const arg = { id: "arg-1", version: 1 }
+            const variables = [
+                { id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1, claimId: "claim-default", claimVersion: 0 },
+            ]
+            const premises: TOptionalChecksum<TCorePremise>[] = [
+                { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            ]
+            const expressions = [
+                { id: "e-and", type: "operator" as const, operator: "and" as const, argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: null, position: 0 },
+                { id: "e-or", type: "operator" as const, operator: "or" as const, argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-and", position: 0 },
+                { id: "e-v1", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-or", position: 0 },
+                { id: "e-v2", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-or", position: 1 },
+                { id: "e-v3", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-and", position: 1 },
+            ]
+            const roles = { conclusionPremiseId: "p1" }
+            expect(() =>
+                ArgumentEngine.fromData(arg, aLib(), sLib(), csLib(), variables, premises, expressions, roles)
+            ).not.toThrow()
+        })
+
+        it("rollback can restore a tree with operator-under-operator", () => {
+            const arg = { id: "arg-1", version: 1 }
+            const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
+            engine.addVariable({
+                id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1,
+                claimId: "claim-default", claimVersion: 0,
+            })
+            const { result: pm } = engine.createPremise()
+
+            const snapshot = engine.snapshot()
+            const premSnap = snapshot.premises[0]
+            premSnap.expressions.expressions = [
+                { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: "arg-1", argumentVersion: 1, premiseId: pm.getId(), checksum: "" },
+                { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: "arg-1", argumentVersion: 1, premiseId: pm.getId(), checksum: "" },
+            ] as TCorePropositionalExpression[]
+            premSnap.rootExpressionId = "op-and"
+
+            expect(() => engine.rollback(snapshot)).not.toThrow()
+        })
+    })
 })

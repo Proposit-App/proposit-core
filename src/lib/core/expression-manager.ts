@@ -1310,6 +1310,14 @@ export class ExpressionManager<
         ).add(anchorPosition)
     }
 
+    /**
+     * Loads expressions in BFS order with the nesting check bypassed.
+     * Used by restoration paths (fromData, rollback) that load existing data.
+     */
+    public loadExpressions(expressions: TExpressionInput<TExpr>[]): void {
+        this.loadInitialExpressions(expressions)
+    }
+
     /** Returns a serializable snapshot of the current state. */
     public snapshot(): TExpressionManagerSnapshot<TExpr> {
         return {
