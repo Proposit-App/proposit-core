@@ -484,7 +484,9 @@ Returns all argument-level variables (shared across premises via the engine's `V
 
 ### `addExpression(expression)` → `TCoreMutationResult<TPropositionalExpression>`
 
-Adds an expression (without `checksum` — it is computed lazily) to the tree with an explicit numeric position. Validates argument membership, variable references, root uniqueness, and structural constraints (operator type, child limits, position uniqueness). This is the low-level escape hatch — prefer `appendExpression` or `addExpressionRelative` for most use cases.
+Adds an expression (without `checksum` — it is computed lazily) to the tree with an explicit numeric position. Validates argument membership, variable references, root uniqueness, and structural constraints (operator type, child limits, position uniqueness, operator nesting). This is the low-level escape hatch — prefer `appendExpression` or `addExpressionRelative` for most use cases.
+
+Throws if a non-`not` operator would become a direct child of another operator expression. Wrap the child in a `formula` node to nest operators.
 
 ---
 
@@ -492,11 +494,15 @@ Adds an expression (without `checksum` — it is computed lazily) to the tree wi
 
 Appends an expression as the last child of `parentId` (or as a root if `parentId` is `null`). Position is computed automatically using the engine's `positionConfig`: `initial` for the first child, or the midpoint between the last child's position and `max` for subsequent children. The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
 
+Throws if a non-`not` operator would become a direct child of another operator expression.
+
 ---
 
 ### `addExpressionRelative(siblingId, relativePosition, expression)` → `TCoreMutationResult<TPropositionalExpression>`
 
 Inserts an expression before or after an existing sibling. `relativePosition` is `"before"` or `"after"`. Position is computed as the midpoint between the sibling and its neighbor (or `config.min`/`config.max` at the boundaries). The `expression` argument omits the `position` field (`TExpressionWithoutPosition`).
+
+Throws if a non-`not` operator would become a direct child of another operator expression.
 
 ---
 
@@ -504,11 +510,29 @@ Inserts an expression before or after an existing sibling. `relativePosition` is
 
 Removes an expression and its subtree, then collapses degenerate ancestor operators. Returns the removed root expression, or `undefined` if not found.
 
+Throws if removal would promote a non-`not` operator as a direct child of another operator expression via collapse.
+
 ---
 
 ### `insertExpression(expression, leftNodeId?, rightNodeId?)` → `TCoreMutationResult<TPropositionalExpression>`
 
 Splices `expression` into the tree. At least one of `leftNodeId` / `rightNodeId` must be provided. `leftNodeId` becomes position 0 and `rightNodeId` position 1 under the new expression.
+
+Throws if a non-`not` operator would become a direct child of another operator expression.
+
+---
+
+### `wrapExpression(operator, newSibling, leftNodeId?, rightNodeId?)` → `TCoreMutationResult<TPropositionalExpression>`
+
+Wraps an existing expression with a new operator and a new sibling in a single atomic operation. The operator takes the existing node's slot in the tree. Both the existing node and the new sibling become children of the operator. Exactly one of `leftNodeId` / `rightNodeId` must be provided — it identifies the existing node and which child slot it occupies.
+
+Throws if a non-`not` operator would become a direct child of another operator expression.
+
+---
+
+### `loadExpressions(expressions)` → `void`
+
+Bulk-loads expressions into the premise's tree, bypassing the operator nesting check. Intended for restoring persisted data that may predate the nesting restriction. Expressions are added in the order provided; callers should supply them in BFS order (parents before children). Does not emit mutation results or trigger subscribers.
 
 ---
 

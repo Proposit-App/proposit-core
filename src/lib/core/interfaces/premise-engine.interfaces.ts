@@ -41,6 +41,8 @@ export interface TExpressionMutations<
      * @throws If the expression's parent does not exist in this premise.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
+     * @throws If a non-not operator would become a direct child of another
+     *   operator expression.
      */
     addExpression(
         expression: TExpressionInput<TExpr>
@@ -56,6 +58,8 @@ export interface TExpressionMutations<
      * @throws If the premise already has a root and `parentId` is `null`.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
+     * @throws If a non-not operator would become a direct child of another
+     *   operator expression.
      */
     appendExpression(
         parentId: string | null,
@@ -73,6 +77,8 @@ export interface TExpressionMutations<
      * @throws If the sibling does not exist in this premise.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
+     * @throws If a non-not operator would become a direct child of another
+     *   operator expression.
      */
     addExpressionRelative(
         siblingId: string,
@@ -100,6 +106,8 @@ export interface TExpressionMutations<
      * @param expressionId - The ID of the expression to remove.
      * @param deleteSubtree - Whether to remove all descendants as well.
      * @returns The removed root expression, or `undefined` if not found.
+     * @throws If removal would promote a non-not operator as a direct
+     *   child of another operator expression.
      */
     removeExpression(
         expressionId: string,
@@ -119,6 +127,8 @@ export interface TExpressionMutations<
      * @returns The inserted expression (with checksum) and changeset.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
+     * @throws If a non-not operator would become a direct child of another
+     *   operator expression.
      */
     insertExpression(
         expression: TExpressionInput<TExpr>,
@@ -142,6 +152,8 @@ export interface TExpressionMutations<
      * @returns The inserted operator (with checksum) and changeset.
      * @throws If the new sibling is a variable reference and the variable
      *   has not been registered.
+     * @throws If a non-not operator would become a direct child of another
+     *   operator expression.
      */
     wrapExpression(
         operator: TExpressionWithoutPosition<TExpr>,
