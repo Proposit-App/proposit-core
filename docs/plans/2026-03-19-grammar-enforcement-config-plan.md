@@ -16,20 +16,21 @@
 
 ## File Map
 
-| File | Action | Responsibility |
-|------|--------|----------------|
-| `src/lib/types/grammar.ts` | Create | `TGrammarOptions`, `TGrammarConfig`, `DEFAULT_GRAMMAR_CONFIG` |
-| `src/lib/index.ts` | Modify | Re-export grammar types |
-| `src/lib/core/argument-engine.ts` | Modify | Add `grammarConfig` to `TLogicEngineOptions`; update `fromSnapshot`, `fromData`, `rollback` |
+| File                                 | Action | Responsibility                                                                                           |
+| ------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------- |
+| `src/lib/types/grammar.ts`           | Create | `TGrammarOptions`, `TGrammarConfig`, `DEFAULT_GRAMMAR_CONFIG`                                            |
+| `src/lib/index.ts`                   | Modify | Re-export grammar types                                                                                  |
+| `src/lib/core/argument-engine.ts`    | Modify | Add `grammarConfig` to `TLogicEngineOptions`; update `fromSnapshot`, `fromData`, `rollback`              |
 | `src/lib/core/expression-manager.ts` | Modify | Replace `skipNestingCheck` with grammar config; update all checks; add auto-normalize to `addExpression` |
-| `src/lib/core/premise-engine.ts` | Modify | Update `snapshot()`, `fromSnapshot`, `loadExpressions` for grammar config |
-| `test/core.test.ts` | Modify | Add `describe("grammar enforcement config")` block; update existing restoration tests |
+| `src/lib/core/premise-engine.ts`     | Modify | Update `snapshot()`, `fromSnapshot`, `loadExpressions` for grammar config                                |
+| `test/core.test.ts`                  | Modify | Add `describe("grammar enforcement config")` block; update existing restoration tests                    |
 
 ---
 
 ### Task 1: Create `TGrammarConfig` type and add to `TLogicEngineOptions`
 
 **Files:**
+
 - Create: `src/lib/types/grammar.ts`
 - Modify: `src/lib/index.ts`
 - Modify: `src/lib/core/argument-engine.ts:65-68`
@@ -124,6 +125,7 @@ git commit -m "feat: add TGrammarConfig type and DEFAULT_GRAMMAR_CONFIG"
 ### Task 2: Replace `skipNestingCheck` with grammar config in `ExpressionManager`
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts`
 - Modify: `test/core.test.ts`
 
@@ -139,7 +141,10 @@ describe("grammar enforcement config", () => {
             premise.addExpression(makeOpExpr("op-root", "and"))
             expect(() =>
                 premise.addExpression(
-                    makeOpExpr("op-child", "or", { parentId: "op-root", position: 0 })
+                    makeOpExpr("op-child", "or", {
+                        parentId: "op-root",
+                        position: 0,
+                    })
                 )
             ).toThrowError(/cannot be direct children of operator expressions/)
         })
@@ -191,13 +196,18 @@ Expected: "default config enforces" PASSES, "enforcement disabled" FAILS.
 In `src/lib/core/expression-manager.ts`:
 
 1. Add import at top:
+
 ```typescript
-import { DEFAULT_GRAMMAR_CONFIG, type TGrammarConfig } from "../types/grammar.js"
+import {
+    DEFAULT_GRAMMAR_CONFIG,
+    type TGrammarConfig,
+} from "../types/grammar.js"
 ```
 
 2. Remove `private skipNestingCheck = false` (line 74).
 
 3. Add a private getter that reads grammar config from `this.config` (single source of truth — no separate field, no dual-storage risk):
+
 ```typescript
     private get grammarConfig(): TGrammarConfig {
         return this.config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
@@ -207,6 +217,7 @@ import { DEFAULT_GRAMMAR_CONFIG, type TGrammarConfig } from "../types/grammar.js
 The constructor stays unchanged — `this.config` is already stored.
 
 4. Update the nesting guard in `addExpression` (lines 154-164). Replace:
+
 ```typescript
             if (
                 !this.skipNestingCheck &&
@@ -215,7 +226,9 @@ The constructor stays unchanged — `this.config` is already stored.
                 expression.operator !== "not"
             ) {
 ```
+
 With:
+
 ```typescript
             if (
                 this.grammarConfig.enforceFormulaBetweenOperators &&
@@ -253,6 +266,7 @@ git commit -m "feat: replace skipNestingCheck with grammarConfig in ExpressionMa
 ### Task 3: Update all nesting checks to use grammar config
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts`
 - Modify: `test/core.test.ts`
 
@@ -261,118 +275,195 @@ git commit -m "feat: replace skipNestingCheck with grammarConfig in ExpressionMa
 Add inside `describe("grammar enforcement config")`:
 
 ```typescript
-    describe("enforcement disabled for all methods", () => {
-        it("allows operator-under-operator via insertExpression", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: false,
-                    autoNormalize: false,
-                },
-            })
-            // Build: and(root) → [P, Q]
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-p", type: "variable", variableId: VAR_P.id,
-                parentId: "op-and", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-q", type: "variable", variableId: VAR_Q.id,
-                parentId: "op-and", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            // Insert or between and and v-p — or becomes child of and
-            expect(() =>
-                em.insertExpression({
-                    id: "op-or", type: "operator", operator: "or",
-                    parentId: null, position: 0,
-                    argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-                } as TExpressionInput, "v-p")
-            ).not.toThrow()
+describe("enforcement disabled for all methods", () => {
+    it("allows operator-under-operator via insertExpression", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: false,
+                autoNormalize: false,
+            },
         })
-
-        it("allows operator-under-operator via wrapExpression", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: false,
-                    autoNormalize: false,
-                },
-            })
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-p", type: "variable", variableId: VAR_P.id,
-                parentId: "op-and", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-q", type: "variable", variableId: VAR_Q.id,
-                parentId: "op-and", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            // Wrap v-p with or, sibling is and2 → or becomes child of and
-            expect(() =>
-                em.wrapExpression(
-                    { id: "op-or", type: "operator", operator: "or",
-                      argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-                    } as TExpressionWithoutPosition,
-                    { id: "v-r", type: "variable", variableId: VAR_R.id,
-                      argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-                    } as TExpressionWithoutPosition,
-                    "v-p"
-                )
-            ).not.toThrow()
-        })
-
-        it("allows removal that would promote operator-under-operator", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: false,
-                    autoNormalize: false,
-                },
-            })
-            // Build: and → formula → or → [P, Q], and has second child R
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "formula-1", type: "formula",
-                parentId: "op-and", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "op-or", type: "operator", operator: "or",
-                parentId: "formula-1", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-p", type: "variable", variableId: VAR_P.id,
-                parentId: "op-or", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-q", type: "variable", variableId: VAR_Q.id,
-                parentId: "op-or", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-r", type: "variable", variableId: VAR_R.id,
-                parentId: "op-and", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            // Remove formula → or promoted under and (normally a violation)
-            expect(() => em.removeExpression("formula-1", false)).not.toThrow()
-        })
+        // Build: and(root) → [P, Q]
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-p",
+            type: "variable",
+            variableId: VAR_P.id,
+            parentId: "op-and",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-q",
+            type: "variable",
+            variableId: VAR_Q.id,
+            parentId: "op-and",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        // Insert or between and and v-p — or becomes child of and
+        expect(() =>
+            em.insertExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "v-p"
+            )
+        ).not.toThrow()
     })
+
+    it("allows operator-under-operator via wrapExpression", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: false,
+                autoNormalize: false,
+            },
+        })
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-p",
+            type: "variable",
+            variableId: VAR_P.id,
+            parentId: "op-and",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-q",
+            type: "variable",
+            variableId: VAR_Q.id,
+            parentId: "op-and",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        // Wrap v-p with or, sibling is and2 → or becomes child of and
+        expect(() =>
+            em.wrapExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "v-r",
+                    type: "variable",
+                    variableId: VAR_R.id,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "v-p"
+            )
+        ).not.toThrow()
+    })
+
+    it("allows removal that would promote operator-under-operator", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: false,
+                autoNormalize: false,
+            },
+        })
+        // Build: and → formula → or → [P, Q], and has second child R
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "formula-1",
+            type: "formula",
+            parentId: "op-and",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "op-or",
+            type: "operator",
+            operator: "or",
+            parentId: "formula-1",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-p",
+            type: "variable",
+            variableId: VAR_P.id,
+            parentId: "op-or",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-q",
+            type: "variable",
+            variableId: VAR_Q.id,
+            parentId: "op-or",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-r",
+            type: "variable",
+            variableId: VAR_R.id,
+            parentId: "op-and",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        // Remove formula → or promoted under and (normally a violation)
+        expect(() => em.removeExpression("formula-1", false)).not.toThrow()
+    })
+})
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -443,6 +534,7 @@ git commit -m "feat: all nesting checks consult grammarConfig"
 ### Task 4: Auto-normalize in `addExpression`
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts`
 - Modify: `test/core.test.ts`
 
@@ -451,176 +543,273 @@ git commit -m "feat: all nesting checks consult grammarConfig"
 Add inside `describe("grammar enforcement config")`:
 
 ```typescript
-    describe("auto-normalize", () => {
-        it("addExpression auto-inserts formula buffer when autoNormalize is true", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: true,
-                    autoNormalize: true,
-                },
-            })
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            // This would normally throw — but autoNormalize inserts a formula
-            em.addExpression({
-                id: "op-or", type: "operator", operator: "or",
-                parentId: "op-and", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-
-            // op-or should exist and be parented under a formula, not directly under op-and
-            const orExpr = em.getExpression("op-or")!
-            expect(orExpr).toBeDefined()
-            expect(orExpr.parentId).not.toBe("op-and")
-            expect(orExpr.position).toBe(0)
-
-            // The auto-inserted formula should be parented under op-and
-            const formulaId = orExpr.parentId!
-            const formulaExpr = em.getExpression(formulaId)!
-            expect(formulaExpr).toBeDefined()
-            expect(formulaExpr.type).toBe("formula")
-            expect(formulaExpr.parentId).toBe("op-and")
-            expect(formulaExpr.argumentId).toBe(ARG.id)
-            expect(formulaExpr.argumentVersion).toBe(ARG.version)
-            expect((formulaExpr as any).premiseId).toBe("premise-1")
+describe("auto-normalize", () => {
+    it("addExpression auto-inserts formula buffer when autoNormalize is true", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: true,
+            },
         })
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        // This would normally throw — but autoNormalize inserts a formula
+        em.addExpression({
+            id: "op-or",
+            type: "operator",
+            operator: "or",
+            parentId: "op-and",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
 
-        it("auto-inserted formula has correct position under parent", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: true,
-                    autoNormalize: true,
-                },
-            })
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "op-or", type: "operator", operator: "or",
-                parentId: "op-and", position: 5,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
+        // op-or should exist and be parented under a formula, not directly under op-and
+        const orExpr = em.getExpression("op-or")!
+        expect(orExpr).toBeDefined()
+        expect(orExpr.parentId).not.toBe("op-and")
+        expect(orExpr.position).toBe(0)
 
-            const orExpr = em.getExpression("op-or")!
-            const formulaExpr = em.getExpression(orExpr.parentId!)!
-            // The formula takes the original position (5) under and
-            expect(formulaExpr.position).toBe(5)
-        })
-
-        it("insertExpression still throws even with autoNormalize", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: true,
-                    autoNormalize: true,
-                },
-            })
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-p", type: "variable", variableId: VAR_P.id,
-                parentId: "op-and", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-q", type: "variable", variableId: VAR_Q.id,
-                parentId: "op-and", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            expect(() =>
-                em.insertExpression({
-                    id: "op-or", type: "operator", operator: "or",
-                    parentId: null, position: 0,
-                    argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-                } as TExpressionInput, "v-p")
-            ).toThrowError(/cannot be direct children of operator expressions/)
-        })
-
-        it("wrapExpression still throws even with autoNormalize", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: true,
-                    autoNormalize: true,
-                },
-            })
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-p", type: "variable", variableId: VAR_P.id,
-                parentId: "op-and", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-q", type: "variable", variableId: VAR_Q.id,
-                parentId: "op-and", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            expect(() =>
-                em.wrapExpression(
-                    { id: "op-or", type: "operator", operator: "or",
-                      argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-                    } as TExpressionWithoutPosition,
-                    { id: "v-r", type: "variable", variableId: VAR_R.id,
-                      argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-                    } as TExpressionWithoutPosition,
-                    "v-p"
-                )
-            ).toThrowError(/cannot be direct children of operator expressions/)
-        })
-
-        it("removeExpression still throws even with autoNormalize", () => {
-            const em = new ExpressionManager({
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: true,
-                    autoNormalize: true,
-                },
-            })
-            em.addExpression({
-                id: "op-and", type: "operator", operator: "and",
-                parentId: null, position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "formula-1", type: "formula",
-                parentId: "op-and", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "op-or", type: "operator", operator: "or",
-                parentId: "formula-1", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-p", type: "variable", variableId: VAR_P.id,
-                parentId: "op-or", position: 0,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-q", type: "variable", variableId: VAR_Q.id,
-                parentId: "op-or", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            em.addExpression({
-                id: "v-r", type: "variable", variableId: VAR_R.id,
-                parentId: "op-and", position: 1,
-                argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1",
-            } as TExpressionInput)
-            // Remove formula → or would promote under and
-            expect(() => em.removeExpression("formula-1", false)).toThrowError(
-                /would promote a non-not operator/
-            )
-        })
+        // The auto-inserted formula should be parented under op-and
+        const formulaId = orExpr.parentId!
+        const formulaExpr = em.getExpression(formulaId)!
+        expect(formulaExpr).toBeDefined()
+        expect(formulaExpr.type).toBe("formula")
+        expect(formulaExpr.parentId).toBe("op-and")
+        expect(formulaExpr.argumentId).toBe(ARG.id)
+        expect(formulaExpr.argumentVersion).toBe(ARG.version)
+        expect((formulaExpr as any).premiseId).toBe("premise-1")
     })
+
+    it("auto-inserted formula has correct position under parent", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: true,
+            },
+        })
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "op-or",
+            type: "operator",
+            operator: "or",
+            parentId: "op-and",
+            position: 5,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+
+        const orExpr = em.getExpression("op-or")!
+        const formulaExpr = em.getExpression(orExpr.parentId!)!
+        // The formula takes the original position (5) under and
+        expect(formulaExpr.position).toBe(5)
+    })
+
+    it("insertExpression still throws even with autoNormalize", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: true,
+            },
+        })
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-p",
+            type: "variable",
+            variableId: VAR_P.id,
+            parentId: "op-and",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-q",
+            type: "variable",
+            variableId: VAR_Q.id,
+            parentId: "op-and",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        expect(() =>
+            em.insertExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "v-p"
+            )
+        ).toThrowError(/cannot be direct children of operator expressions/)
+    })
+
+    it("wrapExpression still throws even with autoNormalize", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: true,
+            },
+        })
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-p",
+            type: "variable",
+            variableId: VAR_P.id,
+            parentId: "op-and",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-q",
+            type: "variable",
+            variableId: VAR_Q.id,
+            parentId: "op-and",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        expect(() =>
+            em.wrapExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "v-r",
+                    type: "variable",
+                    variableId: VAR_R.id,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "v-p"
+            )
+        ).toThrowError(/cannot be direct children of operator expressions/)
+    })
+
+    it("removeExpression still throws even with autoNormalize", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: true,
+            },
+        })
+        em.addExpression({
+            id: "op-and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "formula-1",
+            type: "formula",
+            parentId: "op-and",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "op-or",
+            type: "operator",
+            operator: "or",
+            parentId: "formula-1",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-p",
+            type: "variable",
+            variableId: VAR_P.id,
+            parentId: "op-or",
+            position: 0,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-q",
+            type: "variable",
+            variableId: VAR_Q.id,
+            parentId: "op-or",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        em.addExpression({
+            id: "v-r",
+            type: "variable",
+            variableId: VAR_R.id,
+            parentId: "op-and",
+            position: 1,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+        } as TExpressionInput)
+        // Remove formula → or would promote under and
+        expect(() => em.removeExpression("formula-1", false)).toThrowError(
+            /would promote a non-not operator/
+        )
+    })
+})
 ```
 
 - [ ] **Step 2: Run tests to verify auto-normalize tests fail**
@@ -634,58 +823,58 @@ Expected: First 2 tests FAIL (auto-normalize not implemented). Last 3 PASS (they
 In `src/lib/core/expression-manager.ts`, update the nesting guard in `addExpression`. The current code throws when `enforceFormulaBetweenOperators` is true. Add an `autoNormalize` branch:
 
 ```typescript
-            // Non-not operators cannot be direct children of operators.
-            if (
-                this.grammarConfig.enforceFormulaBetweenOperators &&
-                parent.type === "operator" &&
-                expression.type === "operator" &&
-                expression.operator !== "not"
-            ) {
-                if (this.grammarConfig.autoNormalize) {
-                    // Auto-insert a formula buffer between parent and expression.
-                    const formulaId = randomUUID()
-                    const formulaExpr = this.attachChecksum({
-                        id: formulaId,
-                        type: "formula",
-                        argumentId: expression.argumentId,
-                        argumentVersion: expression.argumentVersion,
-                        premiseId: expression.premiseId,
-                        parentId: expression.parentId,
-                        position: expression.position,
-                    } as TExpressionInput<TExpr>)
+// Non-not operators cannot be direct children of operators.
+if (
+    this.grammarConfig.enforceFormulaBetweenOperators &&
+    parent.type === "operator" &&
+    expression.type === "operator" &&
+    expression.operator !== "not"
+) {
+    if (this.grammarConfig.autoNormalize) {
+        // Auto-insert a formula buffer between parent and expression.
+        const formulaId = randomUUID()
+        const formulaExpr = this.attachChecksum({
+            id: formulaId,
+            type: "formula",
+            argumentId: expression.argumentId,
+            argumentVersion: expression.argumentVersion,
+            premiseId: expression.premiseId,
+            parentId: expression.parentId,
+            position: expression.position,
+        } as TExpressionInput<TExpr>)
 
-                    // Register formula directly in stores (no recursive addExpression).
-                    this.expressions.set(formulaId, formulaExpr)
-                    this.collector?.addedExpression({
-                        ...formulaExpr,
-                    } as unknown as TCorePropositionalExpression)
-                    getOrCreate(
-                        this.childExpressionIdsByParentId,
-                        expression.parentId,
-                        () => new Set()
-                    ).add(formulaId)
-                    getOrCreate(
-                        this.childPositionsByParentId,
-                        expression.parentId,
-                        () => new Set()
-                    ).add(expression.position)
+        // Register formula directly in stores (no recursive addExpression).
+        this.expressions.set(formulaId, formulaExpr)
+        this.collector?.addedExpression({
+            ...formulaExpr,
+        } as unknown as TCorePropositionalExpression)
+        getOrCreate(
+            this.childExpressionIdsByParentId,
+            expression.parentId,
+            () => new Set()
+        ).add(formulaId)
+        getOrCreate(
+            this.childPositionsByParentId,
+            expression.parentId,
+            () => new Set()
+        ).add(expression.position)
 
-                    // Rewrite expression to be child of formula.
-                    expression = {
-                        ...expression,
-                        parentId: formulaId,
-                        position: 0,
-                    } as TExpressionInput<TExpr>
+        // Rewrite expression to be child of formula.
+        expression = {
+            ...expression,
+            parentId: formulaId,
+            position: 0,
+        } as TExpressionInput<TExpr>
 
-                    // Re-assign parent for subsequent checks (child limit, etc.)
-                    // The formula is unary, and we're adding the first child, so no limit check needed.
-                    // Continue with normal addExpression flow using the rewritten expression.
-                } else {
-                    throw new Error(
-                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                    )
-                }
-            }
+        // Re-assign parent for subsequent checks (child limit, etc.)
+        // The formula is unary, and we're adding the first child, so no limit check needed.
+        // Continue with normal addExpression flow using the rewritten expression.
+    } else {
+        throw new Error(
+            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+        )
+    }
+}
 ```
 
 Add `import { randomUUID } from "node:crypto"` at the top if not already imported. Check existing imports first — `expression-manager.ts` may not import it yet. If not, add it.
@@ -724,6 +913,7 @@ git commit -m "feat: add auto-normalize for operator nesting in addExpression"
 ### Task 5: Update `fromSnapshot` signatures and restoration tests
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts` (`fromSnapshot`)
 - Modify: `src/lib/core/premise-engine.ts` (`fromSnapshot`, `snapshot()`)
 - Modify: `src/lib/core/argument-engine.ts` (`fromSnapshot`, `fromData`, `rollback`)
@@ -734,90 +924,235 @@ git commit -m "feat: add auto-normalize for operator nesting in addExpression"
 Add inside `describe("grammar enforcement config")`:
 
 ```typescript
-    describe("restoration paths", () => {
-        it("fromSnapshot with enforcing config rejects operator-under-operator", () => {
-            expect(() =>
-                ExpressionManager.fromSnapshot({
-                    expressions: [
-                        { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
-                        { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
-                    ] as TCorePropositionalExpression[],
-                })
-            ).toThrowError(/cannot be direct children of operator expressions/)
-        })
-
-        it("fromSnapshot with permissive config allows operator-under-operator", () => {
-            const em = ExpressionManager.fromSnapshot(
-                {
-                    expressions: [
-                        { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
-                        { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
-                    ] as TCorePropositionalExpression[],
-                },
-                PERMISSIVE_GRAMMAR_CONFIG
-            )
-            expect(em.getExpression("op-or")).toBeDefined()
-        })
-
-        it("fromSnapshot with auto-normalize config normalizes legacy tree", () => {
-            const em = ExpressionManager.fromSnapshot(
-                {
-                    expressions: [
-                        { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
-                        { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
-                    ] as TCorePropositionalExpression[],
-                },
-                { enforceFormulaBetweenOperators: true, autoNormalize: true }
-            )
-            // op-or should exist but parented under a formula, not directly under op-and
-            const orExpr = em.getExpression("op-or")!
-            expect(orExpr).toBeDefined()
-            expect(orExpr.parentId).not.toBe("op-and")
-            const formulaExpr = em.getExpression(orExpr.parentId!)!
-            expect(formulaExpr.type).toBe("formula")
-            expect(formulaExpr.parentId).toBe("op-and")
-        })
-
-        it("fromData with no grammar config uses permissive default", () => {
-            const arg = { id: "arg-1", version: 1 }
-            const variables = [
-                { id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1, claimId: "claim-default", claimVersion: 0 },
-            ]
-            const premises: TOptionalChecksum<TCorePremise>[] = [
-                { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
-            ]
-            const expressions = [
-                { id: "e-and", type: "operator" as const, operator: "and" as const, argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: null, position: 0 },
-                { id: "e-or", type: "operator" as const, operator: "or" as const, argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-and", position: 0 },
-                { id: "e-v1", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-or", position: 0 },
-                { id: "e-v2", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-or", position: 1 },
-                { id: "e-v3", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-and", position: 1 },
-            ]
-            expect(() =>
-                ArgumentEngine.fromData(arg, aLib(), sLib(), csLib(), variables, premises, expressions, { conclusionPremiseId: "p1" })
-            ).not.toThrow()
-        })
-
-        it("rollback to snapshot with operator-under-operator succeeds", () => {
-            const arg = { id: "arg-1", version: 1 }
-            const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
-            engine.addVariable({
-                id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1,
-                claimId: "claim-default", claimVersion: 0,
+describe("restoration paths", () => {
+    it("fromSnapshot with enforcing config rejects operator-under-operator", () => {
+        expect(() =>
+            ExpressionManager.fromSnapshot({
+                expressions: [
+                    {
+                        id: "op-and",
+                        type: "operator",
+                        operator: "and",
+                        parentId: null,
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
+                    {
+                        id: "op-or",
+                        type: "operator",
+                        operator: "or",
+                        parentId: "op-and",
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
+                ] as TCorePropositionalExpression[],
             })
-            const { result: pm } = engine.createPremise()
-
-            const snapshot = engine.snapshot()
-            const premSnap = snapshot.premises[0]
-            premSnap.expressions.expressions = [
-                { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: "arg-1", argumentVersion: 1, premiseId: pm.getId(), checksum: "" },
-                { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: "arg-1", argumentVersion: 1, premiseId: pm.getId(), checksum: "" },
-            ] as TCorePropositionalExpression[]
-            premSnap.rootExpressionId = "op-and"
-
-            expect(() => engine.rollback(snapshot)).not.toThrow()
-        })
+        ).toThrowError(/cannot be direct children of operator expressions/)
     })
+
+    it("fromSnapshot with permissive config allows operator-under-operator", () => {
+        const em = ExpressionManager.fromSnapshot(
+            {
+                expressions: [
+                    {
+                        id: "op-and",
+                        type: "operator",
+                        operator: "and",
+                        parentId: null,
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
+                    {
+                        id: "op-or",
+                        type: "operator",
+                        operator: "or",
+                        parentId: "op-and",
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
+                ] as TCorePropositionalExpression[],
+            },
+            PERMISSIVE_GRAMMAR_CONFIG
+        )
+        expect(em.getExpression("op-or")).toBeDefined()
+    })
+
+    it("fromSnapshot with auto-normalize config normalizes legacy tree", () => {
+        const em = ExpressionManager.fromSnapshot(
+            {
+                expressions: [
+                    {
+                        id: "op-and",
+                        type: "operator",
+                        operator: "and",
+                        parentId: null,
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
+                    {
+                        id: "op-or",
+                        type: "operator",
+                        operator: "or",
+                        parentId: "op-and",
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
+                ] as TCorePropositionalExpression[],
+            },
+            { enforceFormulaBetweenOperators: true, autoNormalize: true }
+        )
+        // op-or should exist but parented under a formula, not directly under op-and
+        const orExpr = em.getExpression("op-or")!
+        expect(orExpr).toBeDefined()
+        expect(orExpr.parentId).not.toBe("op-and")
+        const formulaExpr = em.getExpression(orExpr.parentId!)!
+        expect(formulaExpr.type).toBe("formula")
+        expect(formulaExpr.parentId).toBe("op-and")
+    })
+
+    it("fromData with no grammar config uses permissive default", () => {
+        const arg = { id: "arg-1", version: 1 }
+        const variables = [
+            {
+                id: "v1",
+                symbol: "P",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                claimId: "claim-default",
+                claimVersion: 0,
+            },
+        ]
+        const premises: TOptionalChecksum<TCorePremise>[] = [
+            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+        ]
+        const expressions = [
+            {
+                id: "e-and",
+                type: "operator" as const,
+                operator: "and" as const,
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p1",
+                parentId: null,
+                position: 0,
+            },
+            {
+                id: "e-or",
+                type: "operator" as const,
+                operator: "or" as const,
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p1",
+                parentId: "e-and",
+                position: 0,
+            },
+            {
+                id: "e-v1",
+                type: "variable" as const,
+                variableId: "v1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p1",
+                parentId: "e-or",
+                position: 0,
+            },
+            {
+                id: "e-v2",
+                type: "variable" as const,
+                variableId: "v1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p1",
+                parentId: "e-or",
+                position: 1,
+            },
+            {
+                id: "e-v3",
+                type: "variable" as const,
+                variableId: "v1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: "p1",
+                parentId: "e-and",
+                position: 1,
+            },
+        ]
+        expect(() =>
+            ArgumentEngine.fromData(
+                arg,
+                aLib(),
+                sLib(),
+                csLib(),
+                variables,
+                premises,
+                expressions,
+                { conclusionPremiseId: "p1" }
+            )
+        ).not.toThrow()
+    })
+
+    it("rollback to snapshot with operator-under-operator succeeds", () => {
+        const arg = { id: "arg-1", version: 1 }
+        const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            claimId: "claim-default",
+            claimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise()
+
+        const snapshot = engine.snapshot()
+        const premSnap = snapshot.premises[0]
+        premSnap.expressions.expressions = [
+            {
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: pm.getId(),
+                checksum: "",
+            },
+            {
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: "op-and",
+                position: 0,
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                premiseId: pm.getId(),
+                checksum: "",
+            },
+        ] as TCorePropositionalExpression[]
+        premSnap.rootExpressionId = "op-and"
+
+        expect(() => engine.rollback(snapshot)).not.toThrow()
+    })
+})
 ```
 
 - [ ] **Step 2: Run tests to check which fail**
@@ -858,15 +1193,15 @@ Add `grammarConfig` parameter. Since `grammarConfig` is read via a getter from `
 In `src/lib/core/premise-engine.ts`, update `snapshot()` (line 1374-1377) to spread `exprSnapshot.config` instead of cherry-picking fields. This ensures future config additions (like `grammarConfig`) are automatically included:
 
 ```typescript
-        return {
-            premise: { ...this.premise },
-            rootExpressionId: this.rootExpressionId,
-            expressions: exprSnapshot,
-            config: {
-                ...exprSnapshot.config,
-                checksumConfig: this.checksumConfig,
-            },
-        }
+return {
+    premise: { ...this.premise },
+    rootExpressionId: this.rootExpressionId,
+    expressions: exprSnapshot,
+    config: {
+        ...exprSnapshot.config,
+        checksumConfig: this.checksumConfig,
+    },
+}
 ```
 
 `checksumConfig` comes from `PremiseEngine`'s own field (which may differ from `exprSnapshot.config.checksumConfig`), so it overrides the spread. `positionConfig` and `grammarConfig` come from the expression manager's config via the spread.
@@ -884,10 +1219,13 @@ In `src/lib/core/argument-engine.ts`, update `snapshot()` (around line 945-948).
 ```
 
 This requires `ArgumentEngine` to store `grammarConfig` in the constructor. Add a private field:
+
 ```typescript
 private grammarConfig?: TGrammarConfig
 ```
+
 And in the constructor, set it from the options:
+
 ```typescript
 this.grammarConfig = config?.grammarConfig
 ```
@@ -1050,6 +1388,7 @@ git commit -m "feat: add grammarConfig parameter to fromSnapshot, fromData, and 
 ### Task 6: Update CLAUDE.md, docs, and final cleanup
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 - Modify: `docs/api-reference.md`
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts`
@@ -1065,6 +1404,7 @@ Update the "Operator nesting restriction" bullet in the Key design rules section
 - [ ] **Step 2: Update API reference and interface JSDoc**
 
 Update `docs/api-reference.md` to document:
+
 - `TGrammarConfig`, `TGrammarOptions`, `DEFAULT_GRAMMAR_CONFIG`, `PERMISSIVE_GRAMMAR_CONFIG`
 - The `grammarConfig` parameter on `fromSnapshot`, `fromData`
 - Auto-normalize behavior

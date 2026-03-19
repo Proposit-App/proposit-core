@@ -71,6 +71,7 @@ if grammarConfig.enforceFormulaBetweenOperators
 ```
 
 Auto-normalization mechanics (all within the same `addExpression` invocation, not recursive):
+
 1. Create a formula node with `randomUUID()` as ID, copying `argumentId`, `argumentVersion`, `premiseId` from the expression
 2. Use the expression's intended position under the parent for the formula
 3. Register the formula directly in the expression store and index maps (bypassing `addExpression` to avoid recursion). This is safe because formula nodes never trigger the nesting check (they are type `"formula"`, not `"operator"`)
