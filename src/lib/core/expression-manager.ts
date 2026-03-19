@@ -687,29 +687,34 @@ export class ExpressionManager<
             initialExpressions.map((expression) => [expression.id, expression])
         )
 
-        let progressed = true
-        while (pending.size > 0 && progressed) {
-            progressed = false
+        this.skipNestingCheck = true
+        try {
+            let progressed = true
+            while (pending.size > 0 && progressed) {
+                progressed = false
 
-            for (const [id, expression] of Array.from(pending.entries())) {
-                if (
-                    expression.parentId !== null &&
-                    !this.expressions.has(expression.parentId)
-                ) {
-                    continue
+                for (const [id, expression] of Array.from(pending.entries())) {
+                    if (
+                        expression.parentId !== null &&
+                        !this.expressions.has(expression.parentId)
+                    ) {
+                        continue
+                    }
+
+                    this.addExpression(expression)
+                    pending.delete(id)
+                    progressed = true
                 }
-
-                this.addExpression(expression)
-                pending.delete(id)
-                progressed = true
             }
-        }
 
-        if (pending.size > 0) {
-            const unresolved = Array.from(pending.keys()).join(", ")
-            throw new Error(
-                `Could not resolve parent relationships for expressions: ${unresolved}.`
-            )
+            if (pending.size > 0) {
+                const unresolved = Array.from(pending.keys()).join(", ")
+                throw new Error(
+                    `Could not resolve parent relationships for expressions: ${unresolved}.`
+                )
+            }
+        } finally {
+            this.skipNestingCheck = false
         }
     }
 
@@ -911,6 +916,43 @@ export class ExpressionManager<
             throw new Error(
                 `Operator expression "${expression.id}" with "${expression.operator}" must be a root expression (parentId must be null).`
             )
+        }
+
+        // 10a. Non-not operators cannot be direct children of operators.
+        // Check 1: new expression as child of anchor's parent.
+        if (
+            anchor.parentId !== null &&
+            expression.type === "operator" &&
+            expression.operator !== "not"
+        ) {
+            const anchorParent = this.expressions.get(anchor.parentId)
+            if (anchorParent && anchorParent.type === "operator") {
+                throw new Error(
+                    `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                )
+            }
+        }
+
+        // Check 2: left/right nodes as children of the new expression.
+        if (expression.type === "operator") {
+            if (
+                leftNode &&
+                leftNode.type === "operator" &&
+                leftNode.operator !== "not"
+            ) {
+                throw new Error(
+                    `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                )
+            }
+            if (
+                rightNode &&
+                rightNode.type === "operator" &&
+                rightNode.operator !== "not"
+            ) {
+                throw new Error(
+                    `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                )
+            }
         }
 
         const anchorParentId = anchor.parentId
