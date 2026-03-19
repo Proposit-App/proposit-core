@@ -67,6 +67,7 @@ import {
     canonicalSerialize,
     entityChecksum,
 } from "../src/lib/core/checksum"
+import { PERMISSIVE_GRAMMAR_CONFIG } from "../src/lib/types/grammar"
 import {
     ParsedClaimSchema,
     ParsedVariableSchema,
@@ -13351,6 +13352,7 @@ describe("operator nesting restriction", () => {
                         checksum: "",
                     },
                 ] as TCorePropositionalExpression[],
+                config: { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG },
             })
             expect(() =>
                 em.insertExpression(
@@ -13643,6 +13645,7 @@ describe("operator nesting restriction", () => {
                         checksum: "",
                     },
                 ] as TCorePropositionalExpression[],
+                config: { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG },
             })
             expect(() => em.removeExpression("v-r", true)).toThrowError(
                 /would promote a non-not operator as a direct child of another operator/
@@ -13721,6 +13724,7 @@ describe("operator nesting restriction", () => {
                         checksum: "",
                     },
                 ] as TCorePropositionalExpression[],
+                config: { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG },
             })
             expect(() => em.removeExpression("v-q", true)).not.toThrow()
         })
@@ -13853,6 +13857,7 @@ describe("operator nesting restriction", () => {
                         checksum: "",
                     },
                 ] as TCorePropositionalExpression[],
+                config: { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG },
             })
             expect(() => em.removeExpression("v-p", true)).toThrowError(
                 /would promote a non-not operator as a direct child of another operator/
@@ -13887,6 +13892,7 @@ describe("operator nesting restriction", () => {
                         checksum: "",
                     },
                 ] as TCorePropositionalExpression[],
+                config: { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG },
             })
             expect(em.getExpression("op-or")).toBeDefined()
         })
@@ -13968,7 +13974,8 @@ describe("operator nesting restriction", () => {
                     variables,
                     premises,
                     expressions,
-                    roles
+                    roles,
+                    { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
                 )
             ).not.toThrow()
         })
@@ -14012,9 +14019,60 @@ describe("operator nesting restriction", () => {
                     checksum: "",
                 },
             ] as TCorePropositionalExpression[]
+            premSnap.expressions.config = {
+                grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+            }
             premSnap.rootExpressionId = "op-and"
 
             expect(() => engine.rollback(snapshot)).not.toThrow()
+        })
+    })
+})
+
+describe("grammar enforcement config", () => {
+    describe("config toggles enforcement", () => {
+        it("default config enforces nesting restriction", () => {
+            const premise = premiseWithVars()
+            premise.addExpression(makeOpExpr("op-root", "and"))
+            expect(() =>
+                premise.addExpression(
+                    makeOpExpr("op-child", "or", {
+                        parentId: "op-root",
+                        position: 0,
+                    })
+                )
+            ).toThrowError(/cannot be direct children of operator expressions/)
+        })
+
+        it("enforcement disabled allows operator-under-operator via addExpression", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: false,
+                    autoNormalize: false,
+                },
+            })
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            expect(() =>
+                em.addExpression({
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    parentId: "op-and",
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput)
+            ).not.toThrow()
         })
     })
 })

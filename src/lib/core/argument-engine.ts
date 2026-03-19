@@ -118,6 +118,7 @@ export class ArgumentEngine<
     private conclusionPremiseId: string | undefined
     private checksumConfig?: TCoreChecksumConfig
     private positionConfig?: TCorePositionConfig
+    private grammarConfig?: TGrammarConfig
     private checksumDirty = true
     private cachedChecksum: string | undefined
     private expressionIndex: Map<string, string>
@@ -147,6 +148,7 @@ export class ArgumentEngine<
         this.premises = new Map()
         this.checksumConfig = options?.checksumConfig
         this.positionConfig = options?.positionConfig
+        this.grammarConfig = options?.grammarConfig
         this.variables = new VariableManager<TVar>({
             checksumConfig: this.checksumConfig,
             positionConfig: this.positionConfig,
@@ -466,6 +468,7 @@ export class ArgumentEngine<
             {
                 checksumConfig: this.checksumConfig,
                 positionConfig: this.positionConfig,
+                grammarConfig: this.grammarConfig,
             }
         )
         this.premises.set(id, pm)
@@ -947,6 +950,7 @@ export class ArgumentEngine<
             config: {
                 checksumConfig: this.checksumConfig,
                 positionConfig: this.positionConfig,
+                grammarConfig: this.grammarConfig,
             },
         }
     }
@@ -1128,6 +1132,7 @@ export class ArgumentEngine<
         this.argument = { ...snapshot.argument }
         this.checksumConfig = snapshot.config?.checksumConfig
         this.positionConfig = snapshot.config?.positionConfig
+        this.grammarConfig = snapshot.config?.grammarConfig
         this.variables = VariableManager.fromSnapshot<TVar>(snapshot.variables)
         this.premises = new Map()
         this.expressionIndex = new Map()

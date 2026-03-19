@@ -12,6 +12,10 @@ import {
 import type { TLogicEngineOptions } from "./argument-engine.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
+import {
+    DEFAULT_GRAMMAR_CONFIG,
+    type TGrammarConfig,
+} from "../types/grammar.js"
 
 // Distribute Omit across the union to preserve discriminated-union narrowing.
 export type TExpressionInput<
@@ -71,7 +75,6 @@ export class ExpressionManager<
     private positionConfig: TCorePositionConfig
     private config?: TLogicEngineOptions
     private collector: ChangeCollector | null = null
-    private skipNestingCheck = false
 
     setCollector(collector: ChangeCollector | null): void {
         this.collector = collector
@@ -83,6 +86,10 @@ export class ExpressionManager<
         this.childPositionsByParentId = new Map()
         this.positionConfig = config?.positionConfig ?? DEFAULT_POSITION_CONFIG
         this.config = config
+    }
+
+    private get grammarConfig(): TGrammarConfig {
+        return this.config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
     }
 
     private attachChecksum(expr: TExpressionInput<TExpr>): TExpr {
@@ -153,7 +160,7 @@ export class ExpressionManager<
 
             // Non-not operators cannot be direct children of operators.
             if (
-                !this.skipNestingCheck &&
+                this.grammarConfig.enforceFormulaBetweenOperators &&
                 parent.type === "operator" &&
                 expression.type === "operator" &&
                 expression.operator !== "not"
@@ -725,34 +732,29 @@ export class ExpressionManager<
             initialExpressions.map((expression) => [expression.id, expression])
         )
 
-        this.skipNestingCheck = true
-        try {
-            let progressed = true
-            while (pending.size > 0 && progressed) {
-                progressed = false
+        let progressed = true
+        while (pending.size > 0 && progressed) {
+            progressed = false
 
-                for (const [id, expression] of Array.from(pending.entries())) {
-                    if (
-                        expression.parentId !== null &&
-                        !this.expressions.has(expression.parentId)
-                    ) {
-                        continue
-                    }
-
-                    this.addExpression(expression)
-                    pending.delete(id)
-                    progressed = true
+            for (const [id, expression] of Array.from(pending.entries())) {
+                if (
+                    expression.parentId !== null &&
+                    !this.expressions.has(expression.parentId)
+                ) {
+                    continue
                 }
-            }
 
-            if (pending.size > 0) {
-                const unresolved = Array.from(pending.keys()).join(", ")
-                throw new Error(
-                    `Could not resolve parent relationships for expressions: ${unresolved}.`
-                )
+                this.addExpression(expression)
+                pending.delete(id)
+                progressed = true
             }
-        } finally {
-            this.skipNestingCheck = false
+        }
+
+        if (pending.size > 0) {
+            const unresolved = Array.from(pending.keys()).join(", ")
+            throw new Error(
+                `Could not resolve parent relationships for expressions: ${unresolved}.`
+            )
         }
     }
 
@@ -1311,7 +1313,7 @@ export class ExpressionManager<
     }
 
     /**
-     * Loads expressions in BFS order with the nesting check bypassed.
+     * Loads expressions in BFS order, respecting the current grammar config.
      * Used by restoration paths (fromData, rollback) that load existing data.
      */
     public loadExpressions(expressions: TExpressionInput<TExpr>[]): void {
