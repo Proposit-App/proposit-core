@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import type {
     TCoreLogicalOperatorType,
     TCorePropositionalExpression,
@@ -122,7 +123,9 @@ export class ExpressionManager<
      * @throws If the parent's child limit would be exceeded.
      * @throws If the position is already occupied under the parent.
      */
-    public addExpression(expression: TExpressionInput<TExpr>) {
+    public addExpression(input: TExpressionInput<TExpr>) {
+        let expression = input
+
         if (this.expressions.has(expression.id)) {
             throw new Error(
                 `Expression with ID "${expression.id}" already exists.`
@@ -146,7 +149,7 @@ export class ExpressionManager<
         }
 
         if (expression.parentId !== null) {
-            const parent = this.expressions.get(expression.parentId)
+            let parent = this.expressions.get(expression.parentId)
             if (!parent) {
                 throw new Error(
                     `Parent expression "${expression.parentId}" does not exist.`
@@ -165,13 +168,58 @@ export class ExpressionManager<
                 expression.type === "operator" &&
                 expression.operator !== "not"
             ) {
-                throw new Error(
-                    `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                )
+                if (this.grammarConfig.autoNormalize) {
+                    // Check original parent can accept the formula as a new child.
+                    this.assertChildLimit(parent.operator, expression.parentId)
+
+                    // Auto-insert a formula buffer between parent and expression.
+                    const formulaId = randomUUID()
+                    const formulaExpr = this.attachChecksum({
+                        id: formulaId,
+                        type: "formula",
+                        argumentId: expression.argumentId,
+                        argumentVersion: expression.argumentVersion,
+                        premiseId: (
+                            expression as unknown as { premiseId: string }
+                        ).premiseId,
+                        parentId: expression.parentId,
+                        position: expression.position,
+                    } as TExpressionInput<TExpr>)
+
+                    // Register formula directly in stores.
+                    this.expressions.set(formulaId, formulaExpr)
+                    this.collector?.addedExpression({
+                        ...formulaExpr,
+                    } as unknown as TCorePropositionalExpression)
+                    getOrCreate(
+                        this.childExpressionIdsByParentId,
+                        expression.parentId,
+                        () => new Set()
+                    ).add(formulaId)
+                    getOrCreate(
+                        this.childPositionsByParentId,
+                        expression.parentId,
+                        () => new Set()
+                    ).add(expression.position)
+
+                    // Rewrite expression to be child of formula.
+                    expression = {
+                        ...expression,
+                        parentId: formulaId,
+                        position: 0,
+                    } as TExpressionInput<TExpr>
+
+                    // Update parent reference for subsequent checks.
+                    parent = formulaExpr
+                } else {
+                    throw new Error(
+                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                    )
+                }
             }
 
             if (parent.type === "operator") {
-                this.assertChildLimit(parent.operator, expression.parentId)
+                this.assertChildLimit(parent.operator, expression.parentId!)
             } else {
                 const childCount =
                     this.childExpressionIdsByParentId.get(expression.parentId)
@@ -644,12 +692,8 @@ export class ExpressionManager<
                 // Nesting — grammar-configurable
                 if (this.grammarConfig.enforceFormulaBetweenOperators) {
                     if (child.operator !== "not" && grandparentId !== null) {
-                        const grandparent =
-                            this.expressions.get(grandparentId)
-                        if (
-                            grandparent &&
-                            grandparent.type === "operator"
-                        ) {
+                        const grandparent = this.expressions.get(grandparentId)
+                        if (grandparent && grandparent.type === "operator") {
                             throw new Error(
                                 `Cannot remove expression — would promote a non-not operator as a direct child of another operator`
                             )
