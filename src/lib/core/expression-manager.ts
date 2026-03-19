@@ -1101,6 +1101,38 @@ export class ExpressionManager<
             )
         }
 
+        // 10a. Non-not operators cannot be direct children of operators.
+        // Check 1: new operator as child of existing node's parent.
+        if (
+            existingNode.parentId !== null &&
+            operator.operator !== "not"
+        ) {
+            const existingParent = this.expressions.get(existingNode.parentId)
+            if (existingParent && existingParent.type === "operator") {
+                throw new Error(
+                    `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                )
+            }
+        }
+
+        // Check 2: existing node and new sibling as children of the new operator.
+        if (
+            existingNode.type === "operator" &&
+            existingNode.operator !== "not"
+        ) {
+            throw new Error(
+                `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+            )
+        }
+        if (
+            newSibling.type === "operator" &&
+            newSibling.operator !== "not"
+        ) {
+            throw new Error(
+                `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+            )
+        }
+
         // Save the existing node's slot (the operator will inherit it).
         const anchorParentId = existingNode.parentId
         const anchorPosition = existingNode.position

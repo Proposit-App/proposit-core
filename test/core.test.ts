@@ -13326,4 +13326,83 @@ describe("operator nesting restriction", () => {
             ).not.toThrow()
         })
     })
+
+    describe("wrapExpression", () => {
+        it("throws when wrapping with non-not operator under an operator parent", () => {
+            // Build: and(root) → [P, Q]
+            // Wrap P with or → or becomes child of and → violation
+            const premise = premiseWithVars()
+            premise.addExpression(makeOpExpr("op-root", "and"))
+            premise.addExpression(
+                makeVarExpr("v1", VAR_P.id, { parentId: "op-root", position: 0 })
+            )
+            premise.addExpression(
+                makeVarExpr("v2", VAR_Q.id, { parentId: "op-root", position: 1 })
+            )
+            expect(() =>
+                premise.wrapExpression(
+                    makeOpExpr("op-wrap", "or") as TExpressionWithoutPosition,
+                    makeVarExpr("v3", VAR_R.id) as TExpressionWithoutPosition,
+                    "v1"
+                )
+            ).toThrowError(
+                /cannot be direct children of operator expressions/
+            )
+        })
+
+        it("throws when existing node is a non-not operator being wrapped by a new non-not operator", () => {
+            // Build: formula(root) → or → [P, Q]
+            // Wrap or with and → or becomes child of and → violation
+            const premise = premiseWithVars()
+            premise.addExpression(makeFormulaExpr("formula-root"))
+            premise.addExpression(
+                makeOpExpr("op-or", "or", { parentId: "formula-root", position: 0 })
+            )
+            premise.addExpression(
+                makeVarExpr("v1", VAR_P.id, { parentId: "op-or", position: 0 })
+            )
+            premise.addExpression(
+                makeVarExpr("v2", VAR_Q.id, { parentId: "op-or", position: 1 })
+            )
+            expect(() =>
+                premise.wrapExpression(
+                    makeOpExpr("op-wrap", "and") as TExpressionWithoutPosition,
+                    makeVarExpr("v3", VAR_R.id) as TExpressionWithoutPosition,
+                    "op-or"
+                )
+            ).toThrowError(
+                /cannot be direct children of operator expressions/
+            )
+        })
+
+        it("throws when new sibling is a non-not operator", () => {
+            // Build: P (root variable)
+            // Wrap P with and, sibling is or → or as child of and → violation
+            const premise = premiseWithVars()
+            premise.addExpression(makeVarExpr("v1", VAR_P.id))
+            expect(() =>
+                premise.wrapExpression(
+                    makeOpExpr("op-wrap", "and") as TExpressionWithoutPosition,
+                    makeOpExpr("sib-or", "or") as TExpressionWithoutPosition,
+                    "v1"
+                )
+            ).toThrowError(
+                /cannot be direct children of operator expressions/
+            )
+        })
+
+        it("allows wrapping with non-not operator at root", () => {
+            // Build: P (root variable)
+            // Wrap P with and, sibling is Q → and at root, children are variables → OK
+            const premise = premiseWithVars()
+            premise.addExpression(makeVarExpr("v1", VAR_P.id))
+            expect(() =>
+                premise.wrapExpression(
+                    makeOpExpr("op-wrap", "and") as TExpressionWithoutPosition,
+                    makeVarExpr("v2", VAR_Q.id) as TExpressionWithoutPosition,
+                    "v1"
+                )
+            ).not.toThrow()
+        })
+    })
 })
