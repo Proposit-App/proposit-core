@@ -447,7 +447,8 @@ premises:
 `
         const { engine } = importArgumentFromYaml(yaml)
         const pm = engine.listPremises()[0]
-        expect(pm.toDisplayString()).toBe("((A \u2228 \u00AC(B)) \u2192 C)")
+        // Formula buffer wraps the or under implies: implies(formula(or(A, not(B))), C)
+        expect(pm.toDisplayString()).toBe("(((A \u2228 \u00AC(B))) \u2192 C)")
     })
 
     it("builds correct expression tree for three-way conjunction", () => {
@@ -619,9 +620,9 @@ premises:
         const { engine } = importArgumentFromYaml(yaml)
         const pm = engine.listPremises()[0]
         // !P && Q || R -> S  parses as  ((\u00ACP \u2227 Q) \u2228 R) \u2192 S
-        // Rendering: operator children are wrapped in parens, \u00AC wraps operand in parens
+        // Formula buffers between operator children: implies(formula(or(formula(and(not(P),Q)),R)),S)
         expect(pm.toDisplayString()).toBe(
-            "(((\u00AC(P) \u2227 Q) \u2228 R) \u2192 S)"
+            "(((((\u00AC(P) \u2227 Q)) \u2228 R)) \u2192 S)"
         )
     })
 

@@ -27,6 +27,7 @@ Non-obvious constraints enforced by the code that are easy to violate:
 
 - **Root-only operators:** `implies` and `iff` must have `parentId: null`. They cannot be nested. Enforced in `addExpression` and `insertExpression`.
 - **`formula` nodes:** Transparent unary wrappers (parentheses). Exactly one child. Collapse rules apply same as operators.
+- **Operator nesting restriction:** Non-`not` operator expressions (`and`, `or`, `implies`, `iff`) cannot be direct children of any operator expression. A `formula` node must sit between them. `not` is exempt as a child. Enforced in `addExpression`, `insertExpression`, `wrapExpression`, and `removeExpression` (pre-flight check). Bypassed during `fromSnapshot`/`fromData`/`rollback` restoration.
 - **Operator collapse:** When `removeExpression` leaves an operator/formula with 0 children, it's deleted (recurses to grandparent). With 1 child, the child is promoted into the operator's slot.
 - **`insertExpression` mutation order:** `reparent(rightNodeId)` runs before `reparent(leftNodeId)` to handle the case where right is a descendant of left's subtree.
 - **Premise types are derived:** `isInference()` = root is `implies`/`iff`. `isConstraint()` = anything else or empty. Not stored — derived from expression tree.

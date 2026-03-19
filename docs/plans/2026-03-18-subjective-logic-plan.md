@@ -14,25 +14,26 @@
 
 ## File Map
 
-| File | Action | Responsibility |
-|------|--------|---------------|
-| `src/lib/core/evaluation/subjective.ts` | Create | `TOpinion` type, corner constants, operators, utilities |
-| `src/lib/types/evaluation.ts` | Modify | Change `TCoreTrivalentValue` → `TOpinion` in result types, remove aggregate flags from `TCoreArgumentEvaluationResult`, update `TCoreVariableAssignment` |
-| `src/lib/core/evaluation/validation.ts` | Modify | Update `buildDirectionalVacuity` and `implicationValue` to use subjective operators |
-| `src/lib/core/premise-engine.ts` | Modify | Swap Kleene → subjective in `evaluate()` |
-| `src/lib/core/argument-engine.ts` | Modify | Remove aggregate flags from `evaluate()`, update resolver to `TOpinion`, update `checkValidity()` counterexample detection |
-| `src/lib/index.ts` | Modify | Re-export `subjective.ts` public symbols |
-| `src/lib/core/interfaces/argument-engine.interfaces.ts` | Modify | Update `evaluate()` / `checkValidity()` JSDoc |
-| `src/lib/core/interfaces/premise-engine.interfaces.ts` | Modify | Update `evaluate()` JSDoc |
-| `src/cli/commands/analysis.ts` | Modify | Update evaluate output (removed flags), accept opinion input |
-| `test/core.test.ts` | Modify | Update existing assertions, add new subjective operator and evaluation tests |
-| `test/examples.test.ts` | Modify | Update assertions that reference removed aggregate flags |
+| File                                                    | Action | Responsibility                                                                                                                                           |
+| ------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/core/evaluation/subjective.ts`                 | Create | `TOpinion` type, corner constants, operators, utilities                                                                                                  |
+| `src/lib/types/evaluation.ts`                           | Modify | Change `TCoreTrivalentValue` → `TOpinion` in result types, remove aggregate flags from `TCoreArgumentEvaluationResult`, update `TCoreVariableAssignment` |
+| `src/lib/core/evaluation/validation.ts`                 | Modify | Update `buildDirectionalVacuity` and `implicationValue` to use subjective operators                                                                      |
+| `src/lib/core/premise-engine.ts`                        | Modify | Swap Kleene → subjective in `evaluate()`                                                                                                                 |
+| `src/lib/core/argument-engine.ts`                       | Modify | Remove aggregate flags from `evaluate()`, update resolver to `TOpinion`, update `checkValidity()` counterexample detection                               |
+| `src/lib/index.ts`                                      | Modify | Re-export `subjective.ts` public symbols                                                                                                                 |
+| `src/lib/core/interfaces/argument-engine.interfaces.ts` | Modify | Update `evaluate()` / `checkValidity()` JSDoc                                                                                                            |
+| `src/lib/core/interfaces/premise-engine.interfaces.ts`  | Modify | Update `evaluate()` JSDoc                                                                                                                                |
+| `src/cli/commands/analysis.ts`                          | Modify | Update evaluate output (removed flags), accept opinion input                                                                                             |
+| `test/core.test.ts`                                     | Modify | Update existing assertions, add new subjective operator and evaluation tests                                                                             |
+| `test/examples.test.ts`                                 | Modify | Update assertions that reference removed aggregate flags                                                                                                 |
 
 ---
 
 ### Task 1: TOpinion type, corner constants, and utilities
 
 **Files:**
+
 - Create: `src/lib/core/evaluation/subjective.ts`
 - Test: `test/core.test.ts`
 
@@ -67,7 +68,10 @@ describe("Subjective logic — TOpinion utilities", () => {
 
         it("accepts a custom baseRate", () => {
             expect(toOpinion(true, 0.8)).toEqual({
-                belief: 1, disbelief: 0, uncertainty: 0, baseRate: 0.8,
+                belief: 1,
+                disbelief: 0,
+                uncertainty: 0,
+                baseRate: 0.8,
             })
         })
     })
@@ -80,19 +84,47 @@ describe("Subjective logic — TOpinion utilities", () => {
         })
 
         it("accepts a valid interior opinion", () => {
-            expect(isValidOpinion({ belief: 0.5, disbelief: 0.3, uncertainty: 0.2, baseRate: 0.5 })).toBe(true)
+            expect(
+                isValidOpinion({
+                    belief: 0.5,
+                    disbelief: 0.3,
+                    uncertainty: 0.2,
+                    baseRate: 0.5,
+                })
+            ).toBe(true)
         })
 
         it("rejects opinions that do not sum to 1", () => {
-            expect(isValidOpinion({ belief: 0.5, disbelief: 0.5, uncertainty: 0.5, baseRate: 0.5 })).toBe(false)
+            expect(
+                isValidOpinion({
+                    belief: 0.5,
+                    disbelief: 0.5,
+                    uncertainty: 0.5,
+                    baseRate: 0.5,
+                })
+            ).toBe(false)
         })
 
         it("rejects negative components", () => {
-            expect(isValidOpinion({ belief: -0.1, disbelief: 0.6, uncertainty: 0.5, baseRate: 0.5 })).toBe(false)
+            expect(
+                isValidOpinion({
+                    belief: -0.1,
+                    disbelief: 0.6,
+                    uncertainty: 0.5,
+                    baseRate: 0.5,
+                })
+            ).toBe(false)
         })
 
         it("rejects baseRate outside [0, 1]", () => {
-            expect(isValidOpinion({ belief: 0.5, disbelief: 0.3, uncertainty: 0.2, baseRate: 1.5 })).toBe(false)
+            expect(
+                isValidOpinion({
+                    belief: 0.5,
+                    disbelief: 0.3,
+                    uncertainty: 0.2,
+                    baseRate: 1.5,
+                })
+            ).toBe(false)
         })
     })
 
@@ -111,7 +143,14 @@ describe("Subjective logic — TOpinion utilities", () => {
 
         it("projects interior opinion correctly", () => {
             // P = 0.7 + 0.5 * 0.1 = 0.75
-            expect(projectProbability({ belief: 0.7, disbelief: 0.2, uncertainty: 0.1, baseRate: 0.5 })).toBeCloseTo(0.75)
+            expect(
+                projectProbability({
+                    belief: 0.7,
+                    disbelief: 0.2,
+                    uncertainty: 0.1,
+                    baseRate: 0.5,
+                })
+            ).toBeCloseTo(0.75)
         })
     })
 })
@@ -137,29 +176,43 @@ export interface TOpinion {
 
 /** Corner opinion for absolute belief. */
 export const OPINION_TRUE: TOpinion = Object.freeze({
-    belief: 1, disbelief: 0, uncertainty: 0, baseRate: 0.5,
+    belief: 1,
+    disbelief: 0,
+    uncertainty: 0,
+    baseRate: 0.5,
 })
 
 /** Corner opinion for absolute disbelief. */
 export const OPINION_FALSE: TOpinion = Object.freeze({
-    belief: 0, disbelief: 1, uncertainty: 0, baseRate: 0.5,
+    belief: 0,
+    disbelief: 1,
+    uncertainty: 0,
+    baseRate: 0.5,
 })
 
 /** Corner opinion for complete uncertainty. */
 export const OPINION_UNCERTAIN: TOpinion = Object.freeze({
-    belief: 0, disbelief: 0, uncertainty: 1, baseRate: 0.5,
+    belief: 0,
+    disbelief: 0,
+    uncertainty: 1,
+    baseRate: 0.5,
 })
 
 const TOLERANCE = 1e-9
 
 /** Converts a Kleene trivalue to a corner opinion. */
-export function toOpinion(
-    value: boolean | null,
-    baseRate = 0.5
-): TOpinion {
-    if (value === true) return baseRate === 0.5 ? OPINION_TRUE : { belief: 1, disbelief: 0, uncertainty: 0, baseRate }
-    if (value === false) return baseRate === 0.5 ? OPINION_FALSE : { belief: 0, disbelief: 1, uncertainty: 0, baseRate }
-    return baseRate === 0.5 ? OPINION_UNCERTAIN : { belief: 0, disbelief: 0, uncertainty: 1, baseRate }
+export function toOpinion(value: boolean | null, baseRate = 0.5): TOpinion {
+    if (value === true)
+        return baseRate === 0.5
+            ? OPINION_TRUE
+            : { belief: 1, disbelief: 0, uncertainty: 0, baseRate }
+    if (value === false)
+        return baseRate === 0.5
+            ? OPINION_FALSE
+            : { belief: 0, disbelief: 1, uncertainty: 0, baseRate }
+    return baseRate === 0.5
+        ? OPINION_UNCERTAIN
+        : { belief: 0, disbelief: 0, uncertainty: 1, baseRate }
 }
 
 /** Checks whether an opinion satisfies the simplex constraints. */
@@ -193,6 +246,7 @@ git commit -m "feat: add TOpinion type, corner constants, and utility functions"
 ### Task 2: Subjective logic operators
 
 **Files:**
+
 - Modify: `src/lib/core/evaluation/subjective.ts`
 - Test: `test/core.test.ts`
 
@@ -243,7 +297,12 @@ describe("Subjective logic — operators", () => {
         })
 
         it("swaps belief/disbelief and complements baseRate for interior opinion", () => {
-            const o: TOpinion = { belief: 0.7, disbelief: 0.2, uncertainty: 0.1, baseRate: 0.8 }
+            const o: TOpinion = {
+                belief: 0.7,
+                disbelief: 0.2,
+                uncertainty: 0.1,
+                baseRate: 0.8,
+            }
             const result = subjectiveNot(o)
             expect(result.belief).toBeCloseTo(0.2)
             expect(result.disbelief).toBeCloseTo(0.7)
@@ -271,22 +330,52 @@ describe("Subjective logic — operators", () => {
         })
 
         it("TRUE AND UNCERTAIN has masses (0, 0, 1)", () => {
-            expectMasses(subjectiveAnd(OPINION_TRUE, OPINION_UNCERTAIN), 0, 0, 1)
+            expectMasses(
+                subjectiveAnd(OPINION_TRUE, OPINION_UNCERTAIN),
+                0,
+                0,
+                1
+            )
         })
 
         it("FALSE AND UNCERTAIN has masses (0, 1, 0)", () => {
-            expectMasses(subjectiveAnd(OPINION_FALSE, OPINION_UNCERTAIN), 0, 1, 0)
+            expectMasses(
+                subjectiveAnd(OPINION_FALSE, OPINION_UNCERTAIN),
+                0,
+                1,
+                0
+            )
         })
 
         it("AND propagates baseRate as product", () => {
-            const a: TOpinion = { belief: 1, disbelief: 0, uncertainty: 0, baseRate: 0.8 }
-            const b: TOpinion = { belief: 1, disbelief: 0, uncertainty: 0, baseRate: 0.6 }
+            const a: TOpinion = {
+                belief: 1,
+                disbelief: 0,
+                uncertainty: 0,
+                baseRate: 0.8,
+            }
+            const b: TOpinion = {
+                belief: 1,
+                disbelief: 0,
+                uncertainty: 0,
+                baseRate: 0.6,
+            }
             expect(subjectiveAnd(a, b).baseRate).toBeCloseTo(0.48)
         })
 
         it("computes correct interior result", () => {
-            const a: TOpinion = { belief: 0.8, disbelief: 0.1, uncertainty: 0.1, baseRate: 0.5 }
-            const b: TOpinion = { belief: 0.6, disbelief: 0.2, uncertainty: 0.2, baseRate: 0.5 }
+            const a: TOpinion = {
+                belief: 0.8,
+                disbelief: 0.1,
+                uncertainty: 0.1,
+                baseRate: 0.5,
+            }
+            const b: TOpinion = {
+                belief: 0.6,
+                disbelief: 0.2,
+                uncertainty: 0.2,
+                baseRate: 0.5,
+            }
             const result = subjectiveAnd(a, b)
             // b_out = 0.8 * 0.6 = 0.48
             expect(result.belief).toBeCloseTo(0.48)
@@ -310,7 +399,12 @@ describe("Subjective logic — operators", () => {
         })
 
         it("FALSE OR UNCERTAIN has masses (0, 0, 1)", () => {
-            expectMasses(subjectiveOr(OPINION_FALSE, OPINION_UNCERTAIN), 0, 0, 1)
+            expectMasses(
+                subjectiveOr(OPINION_FALSE, OPINION_UNCERTAIN),
+                0,
+                0,
+                1
+            )
         })
 
         it("TRUE OR UNCERTAIN has masses (1, 0, 0)", () => {
@@ -318,8 +412,18 @@ describe("Subjective logic — operators", () => {
         })
 
         it("computes correct interior result", () => {
-            const a: TOpinion = { belief: 0.8, disbelief: 0.1, uncertainty: 0.1, baseRate: 0.5 }
-            const b: TOpinion = { belief: 0.6, disbelief: 0.2, uncertainty: 0.2, baseRate: 0.5 }
+            const a: TOpinion = {
+                belief: 0.8,
+                disbelief: 0.1,
+                uncertainty: 0.1,
+                baseRate: 0.5,
+            }
+            const b: TOpinion = {
+                belief: 0.6,
+                disbelief: 0.2,
+                uncertainty: 0.2,
+                baseRate: 0.5,
+            }
             const result = subjectiveOr(a, b)
             // b_out = 0.8 + 0.6 - 0.8 * 0.6 = 0.92
             expect(result.belief).toBeCloseTo(0.92)
@@ -337,31 +441,66 @@ describe("Subjective logic — operators", () => {
         })
 
         it("TRUE -> FALSE has masses (0, 1, 0)", () => {
-            expectMasses(subjectiveImplies(OPINION_TRUE, OPINION_FALSE), 0, 1, 0)
+            expectMasses(
+                subjectiveImplies(OPINION_TRUE, OPINION_FALSE),
+                0,
+                1,
+                0
+            )
         })
 
         it("FALSE -> TRUE has masses (1, 0, 0)", () => {
-            expectMasses(subjectiveImplies(OPINION_FALSE, OPINION_TRUE), 1, 0, 0)
+            expectMasses(
+                subjectiveImplies(OPINION_FALSE, OPINION_TRUE),
+                1,
+                0,
+                0
+            )
         })
 
         it("FALSE -> FALSE has masses (1, 0, 0)", () => {
-            expectMasses(subjectiveImplies(OPINION_FALSE, OPINION_FALSE), 1, 0, 0)
+            expectMasses(
+                subjectiveImplies(OPINION_FALSE, OPINION_FALSE),
+                1,
+                0,
+                0
+            )
         })
 
         it("FALSE -> UNCERTAIN has masses (1, 0, 0)", () => {
-            expectMasses(subjectiveImplies(OPINION_FALSE, OPINION_UNCERTAIN), 1, 0, 0)
+            expectMasses(
+                subjectiveImplies(OPINION_FALSE, OPINION_UNCERTAIN),
+                1,
+                0,
+                0
+            )
         })
 
         it("UNCERTAIN -> TRUE has masses (1, 0, 0)", () => {
-            expectMasses(subjectiveImplies(OPINION_UNCERTAIN, OPINION_TRUE), 1, 0, 0)
+            expectMasses(
+                subjectiveImplies(OPINION_UNCERTAIN, OPINION_TRUE),
+                1,
+                0,
+                0
+            )
         })
 
         it("TRUE -> UNCERTAIN has masses (0, 0, 1)", () => {
-            expectMasses(subjectiveImplies(OPINION_TRUE, OPINION_UNCERTAIN), 0, 0, 1)
+            expectMasses(
+                subjectiveImplies(OPINION_TRUE, OPINION_UNCERTAIN),
+                0,
+                0,
+                1
+            )
         })
 
         it("UNCERTAIN -> FALSE has masses (0, 0, 1)", () => {
-            expectMasses(subjectiveImplies(OPINION_UNCERTAIN, OPINION_FALSE), 0, 0, 1)
+            expectMasses(
+                subjectiveImplies(OPINION_UNCERTAIN, OPINION_FALSE),
+                0,
+                0,
+                1
+            )
         })
     })
 
@@ -379,7 +518,12 @@ describe("Subjective logic — operators", () => {
         })
 
         it("TRUE <-> UNCERTAIN has masses (0, 0, 1)", () => {
-            expectMasses(subjectiveIff(OPINION_TRUE, OPINION_UNCERTAIN), 0, 0, 1)
+            expectMasses(
+                subjectiveIff(OPINION_TRUE, OPINION_UNCERTAIN),
+                0,
+                0,
+                1
+            )
         })
     })
 })
@@ -459,6 +603,7 @@ git commit -m "feat: add subjective logic operators (NOT, AND, OR, IMPLIES, IFF)
 ### Task 3: Update evaluation types
 
 **Files:**
+
 - Modify: `src/lib/types/evaluation.ts`
 
 This task changes the type definitions. No tests yet — they compile-fail until the engines are updated in subsequent tasks.
@@ -529,6 +674,7 @@ variableValues: Record<string, TOpinion>
 - [ ] **Step 5: Remove aggregate flags from `TCoreArgumentEvaluationResult`**
 
 Remove these five fields entirely:
+
 - `isAdmissibleAssignment`
 - `allSupportingPremisesTrue`
 - `conclusionTrue`
@@ -554,6 +700,7 @@ git commit -m "feat: update evaluation types — TOpinion replaces TCoreTrivalen
 ### Task 4: Update validation helpers
 
 **Files:**
+
 - Modify: `src/lib/core/evaluation/validation.ts`
 
 - [ ] **Step 1: Update imports and function signatures**
@@ -575,7 +722,11 @@ import type {
     TCoreValidationResult,
 } from "../../types/evaluation.js"
 import type { TOpinion } from "./subjective.js"
-import { subjectiveAnd, subjectiveImplies, subjectiveNot } from "./subjective.js"
+import {
+    subjectiveAnd,
+    subjectiveImplies,
+    subjectiveNot,
+} from "./subjective.js"
 ```
 
 - [ ] **Step 2: Update `implicationValue` and `buildDirectionalVacuity`**
@@ -599,7 +750,10 @@ export function buildDirectionalVacuity(
         antecedentTrue,
         consequentTrue,
         implicationValue: implication,
-        isVacuouslyTrue: subjectiveAnd(implication, subjectiveNot(antecedentTrue)),
+        isVacuouslyTrue: subjectiveAnd(
+            implication,
+            subjectiveNot(antecedentTrue)
+        ),
         fired: antecedentTrue,
     }
 }
@@ -617,6 +771,7 @@ git commit -m "feat: update validation helpers to use subjective operators"
 ### Task 5: Update PremiseEngine.evaluate()
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts`
 
 - [ ] **Step 1: Update imports**
@@ -625,7 +780,13 @@ Replace Kleene imports with subjective imports. Keep the `buildDirectionalVacuit
 
 ```typescript
 // Remove these imports:
-import { kleeneAnd, kleeneIff, kleeneImplies, kleeneNot, kleeneOr } from "./evaluation/kleene.js"
+import {
+    kleeneAnd,
+    kleeneIff,
+    kleeneImplies,
+    kleeneNot,
+    kleeneOr,
+} from "./evaluation/kleene.js"
 
 // Add these imports:
 import {
@@ -649,121 +810,139 @@ Also remove `TCoreTrivalentValue` from the `../../types/evaluation.js` import if
 Key changes in the `evaluate()` method (around lines 926-1133):
 
 1. Change `expressionValues` type:
-   ```typescript
-   const expressionValues: Record<string, TOpinion> = {}
-   ```
+
+    ```typescript
+    const expressionValues: Record<string, TOpinion> = {}
+    ```
 
 2. Change `evaluateExpression` return type and inner `value` declarations:
-   ```typescript
-   const evaluateExpression = (expressionId: string): TOpinion => {
-   ```
+
+    ```typescript
+    const evaluateExpression = (expressionId: string): TOpinion => {
+    ```
 
 3. Rejected expressions return `OPINION_FALSE`:
-   ```typescript
-   if (assignment.rejectedExpressionIds.includes(expression.id)) {
-       expressionValues[expression.id] = OPINION_FALSE
-       return OPINION_FALSE
-   }
-   ```
+
+    ```typescript
+    if (assignment.rejectedExpressionIds.includes(expression.id)) {
+        expressionValues[expression.id] = OPINION_FALSE
+        return OPINION_FALSE
+    }
+    ```
 
 4. Variable lookup normalizes through `toOpinion()`:
-   ```typescript
-   if (expression.type === "variable") {
-       let value: TOpinion
-       if (options?.resolver) {
-           const variable = this.variables.getVariable(expression.variableId)
-           if (variable && isPremiseBound(variable)) {
-               value = options.resolver(expression.variableId)
-           } else {
-               const raw = assignment.variables[expression.variableId] ?? null
-               value = typeof raw === "object" && raw !== null && "belief" in raw ? raw : toOpinion(raw as boolean | null)
-           }
-       } else {
-           const raw = assignment.variables[expression.variableId] ?? null
-           value = typeof raw === "object" && raw !== null && "belief" in raw ? raw : toOpinion(raw as boolean | null)
-       }
-       expressionValues[expression.id] = value
-       return value
-   }
-   ```
 
-   **Important:** Extract the normalization into a local helper at the top of `evaluate()` to avoid duplication:
-   ```typescript
-   const normalizeValue = (raw: TOpinion | boolean | null | undefined): TOpinion => {
-       if (raw === undefined || raw === null) return toOpinion(null)
-       if (typeof raw === "boolean") return toOpinion(raw)
-       return raw as TOpinion
-   }
-   ```
+    ```typescript
+    if (expression.type === "variable") {
+        let value: TOpinion
+        if (options?.resolver) {
+            const variable = this.variables.getVariable(expression.variableId)
+            if (variable && isPremiseBound(variable)) {
+                value = options.resolver(expression.variableId)
+            } else {
+                const raw = assignment.variables[expression.variableId] ?? null
+                value =
+                    typeof raw === "object" && raw !== null && "belief" in raw
+                        ? raw
+                        : toOpinion(raw as boolean | null)
+            }
+        } else {
+            const raw = assignment.variables[expression.variableId] ?? null
+            value =
+                typeof raw === "object" && raw !== null && "belief" in raw
+                    ? raw
+                    : toOpinion(raw as boolean | null)
+        }
+        expressionValues[expression.id] = value
+        return value
+    }
+    ```
+
+    **Important:** Extract the normalization into a local helper at the top of `evaluate()` to avoid duplication:
+
+    ```typescript
+    const normalizeValue = (
+        raw: TOpinion | boolean | null | undefined
+    ): TOpinion => {
+        if (raw === undefined || raw === null) return toOpinion(null)
+        if (typeof raw === "boolean") return toOpinion(raw)
+        return raw as TOpinion
+    }
+    ```
 
 5. Operator switch — replace Kleene with subjective:
-   ```typescript
-   case "not":
-       value = subjectiveNot(evaluateExpression(children[0].id))
-       break
-   case "and":
-       value = children.reduce<TOpinion>(
-           (acc, child) => subjectiveAnd(acc, evaluateExpression(child.id)),
-           OPINION_TRUE
-       )
-       break
-   case "or":
-       value = children.reduce<TOpinion>(
-           (acc, child) => subjectiveOr(acc, evaluateExpression(child.id)),
-           OPINION_FALSE
-       )
-       break
-   case "implies": {
-       const left = children.find((child) => child.position === 0)
-       const right = children.find((child) => child.position === 1)
-       value = subjectiveImplies(
-           evaluateExpression(left!.id),
-           evaluateExpression(right!.id)
-       )
-       break
-   }
-   case "iff": {
-       const left = children.find((child) => child.position === 0)
-       const right = children.find((child) => child.position === 1)
-       value = subjectiveIff(
-           evaluateExpression(left!.id),
-           evaluateExpression(right!.id)
-       )
-       break
-   }
-   ```
+
+    ```typescript
+    case "not":
+        value = subjectiveNot(evaluateExpression(children[0].id))
+        break
+    case "and":
+        value = children.reduce<TOpinion>(
+            (acc, child) => subjectiveAnd(acc, evaluateExpression(child.id)),
+            OPINION_TRUE
+        )
+        break
+    case "or":
+        value = children.reduce<TOpinion>(
+            (acc, child) => subjectiveOr(acc, evaluateExpression(child.id)),
+            OPINION_FALSE
+        )
+        break
+    case "implies": {
+        const left = children.find((child) => child.position === 0)
+        const right = children.find((child) => child.position === 1)
+        value = subjectiveImplies(
+            evaluateExpression(left!.id),
+            evaluateExpression(right!.id)
+        )
+        break
+    }
+    case "iff": {
+        const left = children.find((child) => child.position === 0)
+        const right = children.find((child) => child.position === 1)
+        value = subjectiveIff(
+            evaluateExpression(left!.id),
+            evaluateExpression(right!.id)
+        )
+        break
+    }
+    ```
 
 6. Update `variableValues` construction:
-   ```typescript
-   const variableValues: Record<string, TOpinion> = {}
-   for (const variableId of referencedVariableIds) {
-       if (options?.resolver) {
-           const variable = this.variables.getVariable(variableId)
-           if (variable && isPremiseBound(variable)) {
-               variableValues[variableId] = options.resolver(variableId)
-               continue
-           }
-       }
-       variableValues[variableId] = normalizeValue(assignment.variables[variableId])
-   }
-   ```
+
+    ```typescript
+    const variableValues: Record<string, TOpinion> = {}
+    for (const variableId of referencedVariableIds) {
+        if (options?.resolver) {
+            const variable = this.variables.getVariable(variableId)
+            if (variable && isPremiseBound(variable)) {
+                variableValues[variableId] = options.resolver(variableId)
+                continue
+            }
+        }
+        variableValues[variableId] = normalizeValue(
+            assignment.variables[variableId]
+        )
+    }
+    ```
 
 7. Update inference diagnostics — replace `kleeneNot`/`kleeneAnd` with `subjectiveNot`/`subjectiveAnd`:
-   ```typescript
-   // implies diagnostic
-   isVacuouslyTrue: subjectiveNot(leftValue),
-   fired: leftValue,
-   firedAndHeld: subjectiveAnd(leftValue, rightValue),
 
-   // iff diagnostic
-   bothSidesTrue: subjectiveAnd(leftValue, rightValue),
-   bothSidesFalse: subjectiveAnd(subjectiveNot(leftValue), subjectiveNot(rightValue)),
-   ```
+    ```typescript
+    // implies diagnostic
+    isVacuouslyTrue: subjectiveNot(leftValue),
+    fired: leftValue,
+    firedAndHeld: subjectiveAnd(leftValue, rightValue),
+
+    // iff diagnostic
+    bothSidesTrue: subjectiveAnd(leftValue, rightValue),
+    bothSidesFalse: subjectiveAnd(subjectiveNot(leftValue), subjectiveNot(rightValue)),
+    ```
 
 8. Update the resolver callback type in the options:
-   ```typescript
-   resolver?: (variableId: string) => TOpinion
-   ```
+    ```typescript
+    resolver?: (variableId: string) => TOpinion
+    ```
 
 - [ ] **Step 3: Commit**
 
@@ -777,6 +956,7 @@ git commit -m "feat: update PremiseEngine.evaluate() to use subjective operators
 ### Task 6: Update ArgumentEngine.evaluate() and checkValidity()
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 
 - [ ] **Step 1: Update imports**
@@ -799,47 +979,49 @@ import {
 - [ ] **Step 2: Update `evaluate()` method**
 
 1. Change resolver cache and callback:
-   ```typescript
-   const resolverCache = new Map<string, TOpinion>()
-   const resolver = (variableId: string): TOpinion => {
-       if (resolverCache.has(variableId)) {
-           return resolverCache.get(variableId)!
-       }
-       const variable = this.variables.getVariable(variableId)
-       if (!variable || !isPremiseBound(variable)) {
-           const raw = assignment.variables[variableId] ?? null
-           if (typeof raw === "object" && raw !== null && "belief" in raw) return raw as TOpinion
-           return toOpinion(raw as boolean | null)
-       }
-       const boundPremiseId = variable.boundPremiseId
-       const boundPremise = this.premises.get(boundPremiseId)
-       if (!boundPremise) {
-           resolverCache.set(variableId, OPINION_UNCERTAIN)
-           return OPINION_UNCERTAIN
-       }
-       const premiseResult = boundPremise.evaluate(assignment, { resolver })
-       const value = premiseResult?.rootValue ?? OPINION_UNCERTAIN
-       resolverCache.set(variableId, value)
-       return value
-   }
-   ```
+
+    ```typescript
+    const resolverCache = new Map<string, TOpinion>()
+    const resolver = (variableId: string): TOpinion => {
+        if (resolverCache.has(variableId)) {
+            return resolverCache.get(variableId)!
+        }
+        const variable = this.variables.getVariable(variableId)
+        if (!variable || !isPremiseBound(variable)) {
+            const raw = assignment.variables[variableId] ?? null
+            if (typeof raw === "object" && raw !== null && "belief" in raw)
+                return raw as TOpinion
+            return toOpinion(raw as boolean | null)
+        }
+        const boundPremiseId = variable.boundPremiseId
+        const boundPremise = this.premises.get(boundPremiseId)
+        if (!boundPremise) {
+            resolverCache.set(variableId, OPINION_UNCERTAIN)
+            return OPINION_UNCERTAIN
+        }
+        const premiseResult = boundPremise.evaluate(assignment, { resolver })
+        const value = premiseResult?.rootValue ?? OPINION_UNCERTAIN
+        resolverCache.set(variableId, value)
+        return value
+    }
+    ```
 
 2. Remove the aggregate flag computation block (lines ~1506-1554 — the `isAdmissibleAssignment`, `allSupportingPremisesTrue`, `conclusionTrue`, `isCounterexample`, `preservesTruthUnderAssignment` block).
 
 3. Simplify the return:
-   ```typescript
-   return {
-       ok: true,
-       assignment: {
-           variables: { ...assignment.variables },
-           rejectedExpressionIds: [...assignment.rejectedExpressionIds],
-       },
-       referencedVariableIds,
-       conclusion: strip(conclusionEvaluation),
-       supportingPremises: supportingEvaluations.map(strip),
-       constraintPremises: constraintEvaluations.map(strip),
-   }
-   ```
+    ```typescript
+    return {
+        ok: true,
+        assignment: {
+            variables: { ...assignment.variables },
+            rejectedExpressionIds: [...assignment.rejectedExpressionIds],
+        },
+        referencedVariableIds,
+        conclusion: strip(conclusionEvaluation),
+        supportingPremises: supportingEvaluations.map(strip),
+        constraintPremises: constraintEvaluations.map(strip),
+    }
+    ```
 
 - [ ] **Step 3: Update `checkValidity()` counterexample and admissibility detection**
 
@@ -901,6 +1083,7 @@ git commit -m "feat: update ArgumentEngine evaluate/checkValidity for subjective
 ### Task 7: Update existing tests
 
 **Files:**
+
 - Modify: `test/core.test.ts`
 - Modify: `test/examples.test.ts`
 
@@ -914,7 +1097,7 @@ The "Kleene three-valued logic helpers" tests (line ~2826) test the Kleene funct
 
 Tests in "PremiseEngine — validation and evaluation" (line ~1801) and "PremiseEngine — three-valued evaluation" (line ~2998) assert `result.rootValue` with `.toBe(true)`, `.toBe(false)`, `.toBeNull()`. These need to change to compare against corner opinions:
 
-**Important baseRate note:** Binary operators propagate baseRate (e.g., AND: `a_out = a_a * a_b`), so operator *outputs* from corner inputs won't have `baseRate: 0.5`. Use `toMatchObject` with only the mass triple for assertions on computed values. Direct variable lookups (via `toOpinion`) will have `baseRate: 0.5` and can use `toEqual(OPINION_*)`.
+**Important baseRate note:** Binary operators propagate baseRate (e.g., AND: `a_out = a_a * a_b`), so operator _outputs_ from corner inputs won't have `baseRate: 0.5`. Use `toMatchObject` with only the mass triple for assertions on computed values. Direct variable lookups (via `toOpinion`) will have `baseRate: 0.5` and can use `toEqual(OPINION_*)`.
 
 ```typescript
 // For variable lookups (direct from assignment — baseRate preserved):
@@ -927,12 +1110,20 @@ expect(result.rootValue).toEqual(OPINION_TRUE)
 // Before:
 expect(result.rootValue).toBe(false)
 // After:
-expect(result.rootValue).toMatchObject({ belief: 0, disbelief: 1, uncertainty: 0 })
+expect(result.rootValue).toMatchObject({
+    belief: 0,
+    disbelief: 1,
+    uncertainty: 0,
+})
 
 // Before:
 expect(result.rootValue).toBeNull()
 // After (if from operator output):
-expect(result.rootValue).toMatchObject({ belief: 0, disbelief: 0, uncertainty: 1 })
+expect(result.rootValue).toMatchObject({
+    belief: 0,
+    disbelief: 0,
+    uncertainty: 1,
+})
 
 // Before:
 expect(result.expressionValues["e-p"]).toBe(true)
@@ -941,6 +1132,7 @@ expect(result.expressionValues["e-p"]).toEqual(OPINION_TRUE)
 ```
 
 Rejected expressions now return `OPINION_FALSE` instead of `false` (direct assignment, not operator output — can use `toEqual`):
+
 ```typescript
 // Before:
 expect(result.expressionValues["and-child"]).toBe(false)
@@ -951,6 +1143,7 @@ expect(result.expressionValues["and-child"]).toEqual(OPINION_FALSE)
 The `.toBeUndefined()` assertions for skipped children remain unchanged.
 
 Inference diagnostic field assertions — use `toMatchObject` with masses since diagnostic values come from operators:
+
 ```typescript
 // Before:
 expect(result.inferenceDiagnostic).toMatchObject({
@@ -966,8 +1159,16 @@ expect(result.inferenceDiagnostic?.kind).toBe("implies")
 expect(result.inferenceDiagnostic?.antecedentTrue).toEqual(OPINION_TRUE)
 expect(result.inferenceDiagnostic?.consequentTrue).toEqual(OPINION_FALSE)
 expect(result.inferenceDiagnostic?.fired).toEqual(OPINION_TRUE)
-expect(result.inferenceDiagnostic?.firedAndHeld).toMatchObject({ belief: 0, disbelief: 1, uncertainty: 0 })
-expect(result.inferenceDiagnostic?.isVacuouslyTrue).toMatchObject({ belief: 0, disbelief: 1, uncertainty: 0 })
+expect(result.inferenceDiagnostic?.firedAndHeld).toMatchObject({
+    belief: 0,
+    disbelief: 1,
+    uncertainty: 0,
+})
+expect(result.inferenceDiagnostic?.isVacuouslyTrue).toMatchObject({
+    belief: 0,
+    disbelief: 1,
+    uncertainty: 0,
+})
 ```
 
 Note: `antecedentTrue`, `consequentTrue`, and `fired` are direct variable lookups (not operator outputs), so they preserve `baseRate: 0.5`. `firedAndHeld` and `isVacuouslyTrue` are operator outputs (`subjectiveAnd`, `subjectiveNot`) so use `toMatchObject`.
@@ -1011,10 +1212,14 @@ expect(result.isCounterexample).toBe(false)
 
 // After — verify conclusion root directly:
 expect(result.conclusion?.rootValue).toEqual(OPINION_TRUE)
-expect(result.supportingPremises?.every(
-    (p) => p.rootValue !== undefined &&
-           p.rootValue.belief === 1 && p.rootValue.disbelief === 0
-)).toBe(true)
+expect(
+    result.supportingPremises?.every(
+        (p) =>
+            p.rootValue !== undefined &&
+            p.rootValue.belief === 1 &&
+            p.rootValue.disbelief === 0
+    )
+).toBe(true)
 ```
 
 The `checkValidity()` tests should pass unchanged since their assertions are on `isValid`, `numAssignmentsChecked`, `numAdmissibleAssignments`, and `counterexamples.length` — none of which changed.
@@ -1036,6 +1241,7 @@ git commit -m "test: update evaluation assertions for TOpinion return types"
 ### Task 8: Add opinion-specific evaluation tests
 
 **Files:**
+
 - Modify: `test/core.test.ts`
 
 - [ ] **Step 1: Write tests for evaluating with interior opinions**
@@ -1050,7 +1256,12 @@ describe("Subjective logic — opinion evaluation", () => {
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("e-p", "var-p"))
 
-        const opinion: TOpinion = { belief: 0.7, disbelief: 0.2, uncertainty: 0.1, baseRate: 0.5 }
+        const opinion: TOpinion = {
+            belief: 0.7,
+            disbelief: 0.2,
+            uncertainty: 0.1,
+            baseRate: 0.5,
+        }
         const result = pm.evaluate({
             variables: { "var-p": opinion },
             rejectedExpressionIds: [],
@@ -1067,7 +1278,12 @@ describe("Subjective logic — opinion evaluation", () => {
             makeVarExpr("e-p", "var-p", { parentId: "not-root", position: 0 })
         )
 
-        const opinion: TOpinion = { belief: 0.7, disbelief: 0.2, uncertainty: 0.1, baseRate: 0.8 }
+        const opinion: TOpinion = {
+            belief: 0.7,
+            disbelief: 0.2,
+            uncertainty: 0.1,
+            baseRate: 0.8,
+        }
         const result = pm.evaluate({
             variables: { "var-p": opinion },
             rejectedExpressionIds: [],
@@ -1092,7 +1308,12 @@ describe("Subjective logic — opinion evaluation", () => {
         )
 
         // Mix: P gets an opinion, Q gets a boolean (sugar)
-        const opinion: TOpinion = { belief: 0.8, disbelief: 0.1, uncertainty: 0.1, baseRate: 0.5 }
+        const opinion: TOpinion = {
+            belief: 0.8,
+            disbelief: 0.1,
+            uncertainty: 0.1,
+            baseRate: 0.5,
+        }
         const result = pm.evaluate({
             variables: { "var-p": opinion, "var-q": true },
             rejectedExpressionIds: [],
@@ -1116,8 +1337,18 @@ describe("Subjective logic — opinion evaluation", () => {
             makeVarExpr("e-q", "var-q", { parentId: "impl", position: 1 })
         )
 
-        const pOpinion: TOpinion = { belief: 0.9, disbelief: 0.05, uncertainty: 0.05, baseRate: 0.5 }
-        const qOpinion: TOpinion = { belief: 0.3, disbelief: 0.5, uncertainty: 0.2, baseRate: 0.5 }
+        const pOpinion: TOpinion = {
+            belief: 0.9,
+            disbelief: 0.05,
+            uncertainty: 0.05,
+            baseRate: 0.5,
+        }
+        const qOpinion: TOpinion = {
+            belief: 0.3,
+            disbelief: 0.5,
+            uncertainty: 0.2,
+            baseRate: 0.5,
+        }
         const result = pm.evaluate({
             variables: { "var-p": pOpinion, "var-q": qOpinion },
             rejectedExpressionIds: [],
@@ -1126,7 +1357,11 @@ describe("Subjective logic — opinion evaluation", () => {
         expect(result.premiseType).toBe("inference")
         expect(result.inferenceDiagnostic?.kind).toBe("implies")
         // Root value should be a valid opinion
-        expect(result.rootValue!.belief + result.rootValue!.disbelief + result.rootValue!.uncertainty).toBeCloseTo(1)
+        expect(
+            result.rootValue!.belief +
+                result.rootValue!.disbelief +
+                result.rootValue!.uncertainty
+        ).toBeCloseTo(1)
     })
 
     it("rejects invalid opinion in assignment", () => {
@@ -1135,7 +1370,12 @@ describe("Subjective logic — opinion evaluation", () => {
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("e-p", "var-p"))
 
-        const invalid = { belief: 0.5, disbelief: 0.5, uncertainty: 0.5, baseRate: 0.5 }
+        const invalid = {
+            belief: 0.5,
+            disbelief: 0.5,
+            uncertainty: 0.5,
+            baseRate: 0.5,
+        }
         expect(() =>
             pm.evaluate({
                 variables: { "var-p": invalid },
@@ -1161,8 +1401,18 @@ describe("Subjective logic — opinion evaluation", () => {
         conclusion.addExpression(makeVarExpr("c-q", VAR_Q.id))
         eng.setConclusionPremise(conclusion.getId())
 
-        const pOpinion: TOpinion = { belief: 0.8, disbelief: 0.1, uncertainty: 0.1, baseRate: 0.5 }
-        const qOpinion: TOpinion = { belief: 0.6, disbelief: 0.2, uncertainty: 0.2, baseRate: 0.5 }
+        const pOpinion: TOpinion = {
+            belief: 0.8,
+            disbelief: 0.1,
+            uncertainty: 0.1,
+            baseRate: 0.5,
+        }
+        const qOpinion: TOpinion = {
+            belief: 0.6,
+            disbelief: 0.2,
+            uncertainty: 0.2,
+            baseRate: 0.5,
+        }
         const result = eng.evaluate({
             variables: { [VAR_P.id]: pOpinion, [VAR_Q.id]: qOpinion },
             rejectedExpressionIds: [],
@@ -1214,6 +1464,7 @@ git commit -m "test: add subjective logic evaluation tests with interior opinion
 ### Task 9: Update library exports
 
 **Files:**
+
 - Modify: `src/lib/index.ts`
 
 - [ ] **Step 1: Add subjective module exports**
@@ -1254,6 +1505,7 @@ git commit -m "feat: export subjective logic types and functions from library ba
 ### Task 10: Update CLI analysis command
 
 **Files:**
+
 - Modify: `src/cli/commands/analysis.ts`
 
 - [ ] **Step 1: Update evaluate output (lines ~441-446)**
@@ -1313,6 +1565,7 @@ git commit -m "feat: update CLI evaluate output for opinion-valued results"
 ### Task 11: Update interface JSDoc
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts`
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts`
 
@@ -1399,6 +1652,7 @@ git commit -m "chore: fix lint and formatting"
 ### Task 13: Documentation sync
 
 **Files:**
+
 - Modify: `docs/api-reference.md`
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts` (if not done in Task 11)
 
@@ -1407,6 +1661,7 @@ Per CLAUDE.md Documentation Sync rules:
 - [ ] **Step 1: Update `docs/api-reference.md`**
 
 Update the evaluation section to document:
+
 - `TOpinion` type and corner constants
 - Updated `evaluate()` return type (opinions, no aggregate flags)
 - `toOpinion()`, `isValidOpinion()`, `projectProbability()` utilities
@@ -1416,6 +1671,7 @@ Update the evaluation section to document:
 - [ ] **Step 2: Update CLAUDE.md design rules**
 
 Add a design rule about subjective logic evaluation:
+
 - Variables are assigned opinion tuples `(belief, disbelief, uncertainty, baseRate)` or legacy `true`/`false`/`null`
 - `evaluate()` returns `TOpinion`-valued results; no aggregate classification flags
 - `checkValidity()` uses corner-case enumeration (classical validity)

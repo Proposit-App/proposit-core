@@ -14,21 +14,21 @@ However, non-`not` operators cannot be direct children of `not` either — a `fo
 
 ### Nesting Rules Table
 
-| Parent | Child | Allowed? |
-|--------|-------|----------|
-| `and`/`or` | `and`/`or`/`implies`/`iff` | No — needs `formula` buffer |
-| `and`/`or` | `not` | Yes |
-| `and`/`or` | `formula` | Yes |
-| `and`/`or` | `variable` | Yes |
+| Parent          | Child                      | Allowed?                    |
+| --------------- | -------------------------- | --------------------------- |
+| `and`/`or`      | `and`/`or`/`implies`/`iff` | No — needs `formula` buffer |
+| `and`/`or`      | `not`                      | Yes                         |
+| `and`/`or`      | `formula`                  | Yes                         |
+| `and`/`or`      | `variable`                 | Yes                         |
 | `implies`/`iff` | `and`/`or`/`implies`/`iff` | No — needs `formula` buffer |
-| `implies`/`iff` | `not` | Yes |
-| `implies`/`iff` | `formula` | Yes |
-| `implies`/`iff` | `variable` | Yes |
-| `not` | `and`/`or`/`implies`/`iff` | No — needs `formula` buffer |
-| `not` | `not` | Yes |
-| `not` | `formula` | Yes |
-| `not` | `variable` | Yes |
-| `formula` | any | Yes (formula is the buffer) |
+| `implies`/`iff` | `not`                      | Yes                         |
+| `implies`/`iff` | `formula`                  | Yes                         |
+| `implies`/`iff` | `variable`                 | Yes                         |
+| `not`           | `and`/`or`/`implies`/`iff` | No — needs `formula` buffer |
+| `not`           | `not`                      | Yes                         |
+| `not`           | `formula`                  | Yes                         |
+| `not`           | `variable`                 | Yes                         |
+| `formula`       | any                        | Yes (formula is the buffer) |
 
 Note: `implies`/`iff` are already root-only and cannot appear as children. The existing root-only check fires first, making the non-`not` child rows for `implies`/`iff` unreachable in practice. They are listed here for completeness — both restrictions are orthogonal and apply independently.
 
@@ -75,7 +75,7 @@ There are two promotion paths that can violate the nesting rule:
 
 2. **Collapse promotion (`collapseIfNeeded`, 1-child branch):** When removing a child leaves an operator/formula with 1 remaining child, the remaining child is promoted into the operator's slot. If the remaining child is a non-`not` operator and the grandparent is an operator, the nesting rule would be violated.
 
-**Implementation approach:** Both paths must validate *before* mutating the tree. The current code in `collapseIfNeeded` mutates (deletes the expression) before running collapse, so a pre-flight check is needed.
+**Implementation approach:** Both paths must validate _before_ mutating the tree. The current code in `collapseIfNeeded` mutates (deletes the expression) before running collapse, so a pre-flight check is needed.
 
 - For **direct promotion**: add the check before the existing root-only check at line 487, in the same guard block.
 - For **collapse promotion**: add a pre-flight validation step in `removeExpression` (the public method) that simulates the collapse chain before committing the deletion. This check must handle cascading collapse — removing a subtree under an operator could cause 0-child deletion of the operator, which triggers collapse at the grandparent, which may attempt to promote a non-`not` operator. The pre-flight simulation walks the chain: at each level, compute resulting child count; if 0, continue up (formula nodes losing their only child are treated as 0-child deletion, same as operators); if 1, check the surviving child against its new parent.
@@ -88,9 +88,9 @@ If the pre-flight check detects a violation, the removal is rejected with an err
 
 - **`updateExpression()`** — The only allowed operator swaps are `and↔or` and `implies↔iff`. These don't change whether an expression is a non-`not` operator, so no new violation can be created.
 - **`fromSnapshot()` / `fromData()` / `rollback()`** — Forward-only enforcement. Existing data created under old rules is trusted. All restoration paths must bypass the nesting check:
-  - `ExpressionManager.fromSnapshot` → `loadInitialExpressions` → `addExpression`: already an internal path. A private `skipNestingCheck` flag on `ExpressionManager` is set to `true` by `loadInitialExpressions` before loading and reset to `false` in a `finally` block. The flag is checked in `addExpression` only.
-  - `ArgumentEngine.fromData` calls `PremiseEngine.addExpression` → `ExpressionManager.addExpression` directly (not through `loadInitialExpressions`). To cover this path, `ExpressionManager` exposes a `loadExpressions(expressions[])` method that wraps the BFS-with-bypass logic currently in `loadInitialExpressions`. `PremiseEngine` exposes a corresponding `loadExpressions` method that delegates to it. `ArgumentEngine.fromData` calls `pe.loadExpressions(premiseExprs)` instead of calling `pe.addExpression` in a loop — eliminating the duplicated BFS logic in `fromData` as well.
-  - `ArgumentEngine.rollback` → `PremiseEngine.fromSnapshot` → `ExpressionManager.fromSnapshot` → `loadInitialExpressions`: covered by the `skipNestingCheck` flag path above.
+    - `ExpressionManager.fromSnapshot` → `loadInitialExpressions` → `addExpression`: already an internal path. A private `skipNestingCheck` flag on `ExpressionManager` is set to `true` by `loadInitialExpressions` before loading and reset to `false` in a `finally` block. The flag is checked in `addExpression` only.
+    - `ArgumentEngine.fromData` calls `PremiseEngine.addExpression` → `ExpressionManager.addExpression` directly (not through `loadInitialExpressions`). To cover this path, `ExpressionManager` exposes a `loadExpressions(expressions[])` method that wraps the BFS-with-bypass logic currently in `loadInitialExpressions`. `PremiseEngine` exposes a corresponding `loadExpressions` method that delegates to it. `ArgumentEngine.fromData` calls `pe.loadExpressions(premiseExprs)` instead of calling `pe.addExpression` in a loop — eliminating the duplicated BFS logic in `fromData` as well.
+    - `ArgumentEngine.rollback` → `PremiseEngine.fromSnapshot` → `ExpressionManager.fromSnapshot` → `loadInitialExpressions`: covered by the `skipNestingCheck` flag path above.
 
 ## Error Messages
 

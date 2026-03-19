@@ -639,13 +639,30 @@ export class PremiseEngine<
                 ? this.expressions.getExpression(target.parentId)
                 : undefined
 
-            if (
-                parent &&
-                parent.type === "operator" &&
-                parent.operator === "not"
-            ) {
-                // Remove the NOT operator, promoting target into its slot
-                this.expressions.removeExpression(parent.id, false)
+            // Check for direct not parent: not(target)
+            const isDirectNot =
+                parent?.type === "operator" && parent.operator === "not"
+
+            // Check for formula-buffered not: not(formula(target))
+            const grandparent =
+                parent?.type === "formula" && parent.parentId
+                    ? this.expressions.getExpression(parent.parentId)
+                    : undefined
+            const isBufferedNot =
+                parent?.type === "formula" &&
+                grandparent?.type === "operator" &&
+                grandparent.operator === "not"
+
+            if (isDirectNot || isBufferedNot) {
+                if (isBufferedNot) {
+                    // Structure is not → formula → target.
+                    // Remove just the not (promotes formula into its slot).
+                    // The formula remains as a transparent wrapper.
+                    this.expressions.removeExpression(grandparent.id, false)
+                } else {
+                    // Remove the NOT operator, promoting target into its slot
+                    this.expressions.removeExpression(parent.id, false)
+                }
 
                 this.syncRootExpressionId()
                 this.markDirty()
@@ -655,19 +672,55 @@ export class PremiseEngine<
                 this.onMutate?.()
                 return { result: null, changes }
             } else {
-                // Wrap target with a new NOT operator
-                const notExpr = {
-                    id: randomUUID(),
-                    argumentId: target.argumentId,
-                    argumentVersion: target.argumentVersion,
-                    premiseId: target.premiseId,
-                    type: "operator",
-                    operator: "not",
-                    parentId: target.parentId,
-                    position: target.position,
-                } as TExpressionInput<TExpr>
+                // When the target is a non-not operator, insert a formula
+                // buffer between the new not and the target so the tree
+                // satisfies the operator nesting restriction.
+                const needsFormula =
+                    target.type === "operator" && target.operator !== "not"
 
-                this.expressions.insertExpression(notExpr, expressionId)
+                let notExprId: string
+
+                if (needsFormula) {
+                    // Build not → formula → target
+                    const formulaExpr = {
+                        id: randomUUID(),
+                        argumentId: target.argumentId,
+                        argumentVersion: target.argumentVersion,
+                        premiseId: target.premiseId,
+                        type: "formula",
+                        parentId: target.parentId,
+                        position: target.position,
+                    } as TExpressionInput<TExpr>
+                    this.expressions.insertExpression(formulaExpr, expressionId)
+
+                    const notExpr = {
+                        id: randomUUID(),
+                        argumentId: target.argumentId,
+                        argumentVersion: target.argumentVersion,
+                        premiseId: target.premiseId,
+                        type: "operator",
+                        operator: "not",
+                        parentId: target.parentId,
+                        position: target.position,
+                    } as TExpressionInput<TExpr>
+                    this.expressions.insertExpression(notExpr, formulaExpr.id)
+                    notExprId = notExpr.id
+                } else {
+                    // Wrap target with a new NOT operator
+                    const notExpr = {
+                        id: randomUUID(),
+                        argumentId: target.argumentId,
+                        argumentVersion: target.argumentVersion,
+                        premiseId: target.premiseId,
+                        type: "operator",
+                        operator: "not",
+                        parentId: target.parentId,
+                        position: target.position,
+                    } as TExpressionInput<TExpr>
+
+                    this.expressions.insertExpression(notExpr, expressionId)
+                    notExprId = notExpr.id
+                }
 
                 this.syncRootExpressionId()
                 this.markDirty()
@@ -676,7 +729,7 @@ export class PremiseEngine<
                 this.syncExpressionIndex(changes)
                 this.onMutate?.()
                 return {
-                    result: this.expressions.getExpression(notExpr.id)!,
+                    result: this.expressions.getExpression(notExprId)!,
                     changes,
                 }
             }
@@ -1202,9 +1255,7 @@ export class PremiseEngine<
                 this.rootExpressionId = expr.id
             }
             if (expr.type === "variable") {
-                this.expressionsByVariableId
-                    .get(expr.variableId)
-                    .add(expr.id)
+                this.expressionsByVariableId.get(expr.variableId).add(expr.id)
             }
             if (this.expressionIndex) {
                 this.expressionIndex.set(expr.id, this.premise.id)

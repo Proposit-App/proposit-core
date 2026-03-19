@@ -130,6 +130,22 @@ function buildExpressions(
         }
         case "and":
         case "or": {
+            // Non-not operators cannot be direct children of operators.
+            // When this node has an operator parent, insert a formula wrapper.
+            let effectiveParentId = parentId
+            if (parentId !== null) {
+                const formulaId = randomUUID()
+                addExpression({
+                    id: formulaId,
+                    argumentId,
+                    argumentVersion,
+                    premiseId,
+                    type: "formula",
+                    parentId,
+                    position,
+                })
+                effectiveParentId = formulaId
+            }
             addExpression({
                 id,
                 argumentId,
@@ -137,8 +153,8 @@ function buildExpressions(
                 premiseId,
                 type: "operator",
                 operator: ast.type,
-                parentId,
-                position,
+                parentId: effectiveParentId,
+                position: effectiveParentId !== parentId ? 0 : position,
             })
             for (let i = 0; i < ast.operands.length; i++) {
                 buildExpressions(

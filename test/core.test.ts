@@ -479,15 +479,21 @@ describe("insertExpression", () => {
         const premise = premiseWithVars()
         premise.addExpression(makeOpExpr("op-outer", "and"))
         premise.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, {
+            makeFormulaExpr("formula-1", {
                 parentId: "op-outer",
                 position: 0,
             })
         )
-        // Insert op-inner wrapping expr-p; op-inner should inherit op-outer's slot 0
+        premise.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "formula-1",
+                position: 0,
+            })
+        )
+        // Insert op-inner wrapping expr-p; op-inner should inherit formula-1's slot 0
         premise.insertExpression(makeOpExpr("op-inner", "or"), "expr-p")
-        // op-outer → op-inner (pos 0) → expr-p (pos 0)
-        expect(premise.toDisplayString()).toBe("((P))")
+        // op-outer → formula-1 (pos 0) → op-inner (pos 0) → expr-p (pos 0)
+        expect(premise.toDisplayString()).toBe("(((P)))")
     })
 
     it("inserts new expression into anchor's slot when only right node is provided", () => {
@@ -516,23 +522,26 @@ describe("insertExpression", () => {
     })
 
     it("inserts binary expression with leftNode at position 0 and rightNode at position 1", () => {
-        const premise = premiseWithVars()
-        // Both nodes already exist as siblings in a tree
-        premise.addExpression(makeOpExpr("op-or", "or"))
-        premise.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-or", position: 0 })
+        // Use ExpressionManager directly to allow two root-level expressions
+        const em = new ExpressionManager()
+        em.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        em.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: null,
+                position: 1,
+            })
         )
-        premise.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-or", position: 1 })
-        )
-        // Insert op-and wrapping both children; anchor is expr-p (pos 0 under op-or)
-        premise.insertExpression(
-            makeOpExpr("op-and", "and"),
-            "expr-p",
-            "expr-q"
-        )
-        // op-or → [op-and(0) → [expr-p(0), expr-q(1)]]
-        expect(premise.toDisplayString()).toBe("((P ∧ Q))")
+        // Insert op-and: anchor is expr-p (root), so op-and becomes root
+        em.insertExpression(makeOpExpr("op-and", "and"), "expr-p", "expr-q")
+        // op-and (root) → [expr-p(0), expr-q(1)]
+        const andExpr = em.getExpression("op-and")!
+        expect(andExpr.parentId).toBeNull()
+        const pExpr = em.getExpression("expr-p")!
+        expect(pExpr.parentId).toBe("op-and")
+        expect(pExpr.position).toBe(0)
+        const qExpr = em.getExpression("expr-q")!
+        expect(qExpr.parentId).toBe("op-and")
+        expect(qExpr.position).toBe(1)
     })
 
     it("inserts not expression as a unary wrapper around its single left child", () => {
@@ -807,10 +816,19 @@ describe("removeExpression — operator collapse", () => {
 
     it("promotes the surviving child to a non-root slot (nested collapse)", () => {
         const premise = premiseWithVars()
-        // op-root (or, root) → [op-and (pos 0) → [expr-p (pos 0), expr-q (pos 1)], expr-r (pos 1)]
+        // op-root (or, root) → [formula-1 (pos 0) → op-and → [expr-p (pos 0), expr-q (pos 1)], expr-r (pos 1)]
         premise.addExpression(makeOpExpr("op-root", "or"))
         premise.addExpression(
-            makeOpExpr("op-and", "and", { parentId: "op-root", position: 0 })
+            makeFormulaExpr("formula-1", {
+                parentId: "op-root",
+                position: 0,
+            })
+        )
+        premise.addExpression(
+            makeOpExpr("op-and", "and", {
+                parentId: "formula-1",
+                position: 0,
+            })
         )
         premise.addExpression(
             makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 0 })
@@ -826,13 +844,14 @@ describe("removeExpression — operator collapse", () => {
         )
 
         // Remove expr-p → op-and has 1 child (expr-q)
-        // op-and is removed; expr-q is promoted into op-and's slot under op-root (pos 0)
-        // op-root now has 2 children: expr-q (pos 0) and expr-r (pos 1) — no further collapse
+        // op-and is removed; expr-q is promoted into op-and's slot under formula-1 (pos 0)
+        // formula-1 still has 1 child (expr-q) — no further collapse
+        // op-root has 2 children: formula-1 and expr-r — no further collapse
         premise.removeExpression("expr-p", true)
 
         expect(premise.removeExpression("op-and", true).result).toBeUndefined()
-        // op-root still exists with expr-q and expr-r as children
-        expect(premise.toDisplayString()).toBe("(Q ∨ R)")
+        // op-root still exists with formula-1 → expr-q and expr-r as children
+        expect(premise.toDisplayString()).toBe("((Q) ∨ R)")
     })
 
     it("does not collapse an operator that still has two or more children", () => {
@@ -1071,15 +1090,18 @@ describe("stress test", () => {
             if (numLeaves === 1) {
                 return emitLeaf(pm, parentId, position, `${key}-s0`, bool(0.25))
             }
+            // Insert a formula buffer between the operator parent and the cluster operator
+            const formulaId = `${key}-f`
+            emit(pm, makeFormulaExpr(formulaId, { parentId, position }))
             const clusterId = `${key}-cl`
             emit(
                 pm,
                 makeOpExpr(clusterId, bool() ? "and" : "or", {
-                    parentId,
-                    position,
+                    parentId: formulaId,
+                    position: 0,
                 })
             )
-            const ids = [clusterId]
+            const ids = [formulaId, clusterId]
             for (let i = 0; i < numLeaves; i++) {
                 ids.push(
                     ...emitLeaf(pm, clusterId, i, `${key}-s${i}`, bool(0.25))
@@ -3168,11 +3190,17 @@ describe("PremiseEngine — three-valued evaluation", () => {
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
         const { result: pm } = eng.createPremise()
-        // (P and Q) or R
+        // (P and Q) or R — with formula buffer between or and and
         pm.addExpression(makeOpExpr("or-root", "or"))
         pm.addExpression(
-            makeOpExpr("and-child", "and", {
+            makeFormulaExpr("formula-1", {
                 parentId: "or-root",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeOpExpr("and-child", "and", {
+                parentId: "formula-1",
                 position: 0,
             })
         )
@@ -3560,7 +3588,7 @@ describe("buildPremiseProfile", () => {
     })
 
     it("profiles double negation as positive polarity", () => {
-        // ¬(¬A ∧ B) → C
+        // ¬(¬A ∧ B) → C — with formula buffer between not and and
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
@@ -3571,7 +3599,13 @@ describe("buildPremiseProfile", () => {
             makeOpExpr("not-outer", "not", { parentId: "impl", position: 0 })
         )
         pm.addExpression(
-            makeOpExpr("and-1", "and", { parentId: "not-outer", position: 0 })
+            makeFormulaExpr("formula-not", {
+                parentId: "not-outer",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeOpExpr("and-1", "and", { parentId: "formula-not", position: 0 })
         )
         pm.addExpression(
             makeOpExpr("not-inner", "not", { parentId: "and-1", position: 0 })
@@ -3613,7 +3647,7 @@ describe("buildPremiseProfile", () => {
     })
 
     it("profiles compound antecedent and consequent", () => {
-        // (A ∧ B) → (B ∧ C)
+        // (A ∧ B) → (B ∧ C) — with formula buffers between implies and and
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
@@ -3621,7 +3655,10 @@ describe("buildPremiseProfile", () => {
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeOpExpr("impl", "implies"))
         pm.addExpression(
-            makeOpExpr("and-l", "and", { parentId: "impl", position: 0 })
+            makeFormulaExpr("formula-l", { parentId: "impl", position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr("and-l", "and", { parentId: "formula-l", position: 0 })
         )
         pm.addExpression(
             makeVarExpr("ve-a", VAR_A.id, { parentId: "and-l", position: 0 })
@@ -3630,7 +3667,10 @@ describe("buildPremiseProfile", () => {
             makeVarExpr("ve-b1", VAR_B.id, { parentId: "and-l", position: 1 })
         )
         pm.addExpression(
-            makeOpExpr("and-r", "and", { parentId: "impl", position: 1 })
+            makeFormulaExpr("formula-r", { parentId: "impl", position: 1 })
+        )
+        pm.addExpression(
+            makeOpExpr("and-r", "and", { parentId: "formula-r", position: 0 })
         )
         pm.addExpression(
             makeVarExpr("ve-b2", VAR_B.id, { parentId: "and-r", position: 0 })
@@ -3833,7 +3873,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     })
 
     it("classifies a premise with variable in both ante and conseq as restricting", () => {
-        // P1: B → (B ∧ C), P2 (focused): B → D
+        // P1: B → (B ∧ C), P2 (focused): B → D — with formula buffer
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         try {
             eng.addVariable(VAR_B)
@@ -3854,9 +3894,15 @@ describe("analyzePremiseRelationships — direct relationships", () => {
             })
         )
         p1.addExpression(
-            makeOpExpr("p1-and", "and", {
+            makeFormulaExpr("p1-formula", {
                 parentId: "p1-impl",
                 position: 1,
+            })
+        )
+        p1.addExpression(
+            makeOpExpr("p1-and", "and", {
+                parentId: "p1-formula",
+                position: 0,
             })
         )
         p1.addExpression(
@@ -4245,7 +4291,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
     it("contradicting takes precedence over supporting", () => {
         // P1: A → (¬B ∧ C), P2 (focused): (B ∧ C) → D
         // B: contradicting (¬B in conseq, B in ante), C: supporting (C in conseq, C in ante)
-        // Precedence: contradicting wins
+        // Precedence: contradicting wins — with formula buffers
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         try {
             eng.addVariable(VAR_A)
@@ -4276,9 +4322,15 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
             })
         )
         p1.addExpression(
-            makeOpExpr("p1-and", "and", {
+            makeFormulaExpr("p1-formula", {
                 parentId: "p1-impl",
                 position: 1,
+            })
+        )
+        p1.addExpression(
+            makeOpExpr("p1-and", "and", {
+                parentId: "p1-formula",
+                position: 0,
             })
         )
         p1.addExpression(
@@ -4303,8 +4355,14 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addExpression(makeOpExpr("p2-impl", "implies"))
         p2.addExpression(
-            makeOpExpr("p2-and", "and", {
+            makeFormulaExpr("p2-formula", {
                 parentId: "p2-impl",
+                position: 0,
+            })
+        )
+        p2.addExpression(
+            makeOpExpr("p2-and", "and", {
+                parentId: "p2-formula",
                 position: 0,
             })
         )
@@ -4336,7 +4394,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // P1: B → (B ∧ C), P2 (focused): (B ∧ C) → D
         // B: restricting (in both ante and conseq of P1, in ante of P2)
         // C: supporting (in conseq of P1, in ante of P2)
-        // Precedence: restricting wins
+        // Precedence: restricting wins — with formula buffers
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         try {
             eng.addVariable(VAR_B)
@@ -4362,9 +4420,15 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
             })
         )
         p1.addExpression(
-            makeOpExpr("p1-and", "and", {
+            makeFormulaExpr("p1-formula", {
                 parentId: "p1-impl",
                 position: 1,
+            })
+        )
+        p1.addExpression(
+            makeOpExpr("p1-and", "and", {
+                parentId: "p1-formula",
+                position: 0,
             })
         )
         p1.addExpression(
@@ -4383,8 +4447,14 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addExpression(makeOpExpr("p2-impl", "implies"))
         p2.addExpression(
-            makeOpExpr("p2-and", "and", {
+            makeFormulaExpr("p2-formula", {
                 parentId: "p2-impl",
+                position: 0,
+            })
+        )
+        p2.addExpression(
+            makeOpExpr("p2-and", "and", {
+                parentId: "p2-formula",
                 position: 0,
             })
         )
@@ -6696,12 +6766,15 @@ describe("removeExpression — deleteSubtree parameter", () => {
 
     it("deleteSubtree: false — promotes single child (operator)", () => {
         const { pm } = setup()
-        // Tree: and(or(P, Q))
+        // Tree: formula(or(P, Q)) — formula buffers the operator nesting
         pm.addExpression(
-            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
+            makeFormulaExpr("formula-1", { parentId: null, position: 1 })
         )
         pm.addExpression(
-            makeOpExpr("op-or", "or", { parentId: "op-and", position: 1 })
+            makeOpExpr("op-or", "or", {
+                parentId: "formula-1",
+                position: 1,
+            })
         )
         pm.addExpression(
             makeVarExpr("expr-p", VAR_P.id, { parentId: "op-or", position: 1 })
@@ -6710,8 +6783,8 @@ describe("removeExpression — deleteSubtree parameter", () => {
             makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-or", position: 2 })
         )
 
-        // Remove and with deleteSubtree: false — or promoted to root
-        pm.removeExpression("op-and", false)
+        // Remove formula with deleteSubtree: false — or promoted to root
+        pm.removeExpression("formula-1", false)
 
         expect(pm.getRootExpressionId()).toBe("op-or")
         const expressions = pm.getExpressions()
@@ -6793,7 +6866,7 @@ describe("removeExpression — deleteSubtree parameter", () => {
 
     it("deleteSubtree: false — promotes child into non-root slot", () => {
         const { pm } = setup()
-        // Tree: and(not(or(P, Q)))
+        // Tree: and(not(formula(or(P, Q))))
         pm.addExpression(
             makeOpExpr("op-and", "and", { parentId: null, position: 1 })
         )
@@ -6801,7 +6874,16 @@ describe("removeExpression — deleteSubtree parameter", () => {
             makeOpExpr("op-not", "not", { parentId: "op-and", position: 1 })
         )
         pm.addExpression(
-            makeOpExpr("op-or", "or", { parentId: "op-not", position: 1 })
+            makeFormulaExpr("formula-1", {
+                parentId: "op-not",
+                position: 1,
+            })
+        )
+        pm.addExpression(
+            makeOpExpr("op-or", "or", {
+                parentId: "formula-1",
+                position: 1,
+            })
         )
         pm.addExpression(
             makeVarExpr("expr-p", VAR_P.id, { parentId: "op-or", position: 1 })
@@ -6810,14 +6892,16 @@ describe("removeExpression — deleteSubtree parameter", () => {
             makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-or", position: 2 })
         )
 
-        // Remove not with deleteSubtree: false — or promoted into not's slot under and
+        // Remove not with deleteSubtree: false — formula promoted into not's slot under and
         pm.removeExpression("op-not", false)
 
         expect(pm.getRootExpressionId()).toBe("op-and")
         const expressions = pm.getExpressions()
-        expect(expressions).toHaveLength(4) // and, or, P, Q
+        expect(expressions).toHaveLength(5) // and, formula, or, P, Q
+        const formulaExpr = expressions.find((e) => e.id === "formula-1")!
+        expect(formulaExpr.parentId).toBe("op-and")
         const orExpr = expressions.find((e) => e.id === "op-or")!
-        expect(orExpr.parentId).toBe("op-and")
+        expect(orExpr.parentId).toBe("formula-1")
         const pExpr = expressions.find((e) => e.id === "expr-p")!
         expect(pExpr.parentId).toBe("op-or")
         const qExpr = expressions.find((e) => e.id === "expr-q")!
@@ -8969,27 +9053,35 @@ describe("PremiseEngine onMutate callback", () => {
     it("fires onMutate when insertExpression is called", () => {
         const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         engine.addVariable(VAR_P)
+        engine.addVariable(VAR_Q)
         const { result: premise } = engine.createPremise()
         const pid = premise.getId()
-        // Build: root "and" with a variable child
+        // Build: root "and" with two variable children
         premise.addExpression(makeOpExpr("op-root", "and", { premiseId: pid }))
         premise.appendExpression("op-root", {
-            id: "var-child",
+            id: "var-p",
             argumentId: ARG.id,
             argumentVersion: ARG.version,
             premiseId: pid,
             type: "variable",
             variableId: VAR_P.id,
         } as TExpressionWithoutPosition)
+        premise.appendExpression("op-root", {
+            id: "var-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pid,
+            type: "variable",
+            variableId: VAR_Q.id,
+        } as TExpressionWithoutPosition)
         let callCount = 0
         premise.setOnMutate(() => {
             callCount++
         })
-        // Insert an "or" between root and child
+        // Insert a "not" wrapping var-p — not is exempt from the nesting restriction
         premise.insertExpression(
-            makeOpExpr("op-insert", "or", { premiseId: pid }),
-            "op-root",
-            "var-child"
+            makeOpExpr("op-not", "not", { premiseId: pid }),
+            "var-p"
         )
         expect(callCount).toBe(1)
     })
@@ -9481,14 +9573,14 @@ describe("wrapExpression", () => {
         expect(pm.toDisplayString()).toBe("(P ↔ Q)")
     })
 
-    it("wraps non-root node (child of an 'and')", () => {
+    it("wraps non-root node (child of a formula)", () => {
         const pm = premiseWithVars()
-        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(makeFormulaExpr("formula-1"))
         pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 0 })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 1 })
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "formula-1",
+                position: 0,
+            })
         )
         // Wrap expr-p with an 'or' and a new sibling R
         pm.wrapExpression(
@@ -9496,34 +9588,25 @@ describe("wrapExpression", () => {
             wrapVar("expr-r", VAR_R.id),
             "expr-p" // P goes left under op-or
         )
-        // op-and → [op-or(0) → [expr-p(0), expr-r(1)], expr-q(1)]
-        expect(pm.toDisplayString()).toBe("((P ∨ R) ∧ Q)")
+        // formula-1 → op-or(0) → [expr-p(0), expr-r(1)]
+        expect(pm.toDisplayString()).toBe("((P ∨ R))")
     })
 
-    it("new sibling can be an operator expression", () => {
+    it("new sibling can be a not operator expression", () => {
         const pm = premiseWithVars()
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
-        // Wrap P with 'implies', sibling is an 'and' operator (no children yet — will be leaf)
-        // Actually, an operator with no children will collapse. Let me use insertExpression pattern.
-        // Instead: create a tree, then wrap a node with a new operator sibling.
-        // Let's create: P, then wrap P → (Q and R) implies P
-        // Step 1: P is root
-        // Step 2: wrapExpression with implies operator, and a new 'and' operator as sibling, P as right
+        // Wrap P with 'and', sibling is a 'not' operator (exempt from nesting restriction)
         pm.wrapExpression(
-            wrapOp("op-implies", "implies"),
             wrapOp("op-and", "and"),
-            undefined,
-            "expr-p" // P is right (consequent)
+            wrapOp("op-not", "not"),
+            "expr-p" // P is left
         )
-        // Now add children to the 'and' operator
+        // Now add a variable inside the 'not' operator
         pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 0 })
+            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-not", position: 0 })
         )
-        pm.addExpression(
-            makeVarExpr("expr-r", VAR_R.id, { parentId: "op-and", position: 1 })
-        )
-        // op-implies → [op-and(0) → [Q(0), R(1)], P(1)]
-        expect(pm.toDisplayString()).toBe("((Q ∧ R) → P)")
+        // op-and → [P(0), not(1) → [Q(0)]]
+        expect(pm.toDisplayString()).toBe("(P ∧ ¬(Q))")
     })
 
     it("new sibling can be a formula expression", () => {
@@ -9956,7 +10039,8 @@ describe("toggleNegation", () => {
 
         expect(result).not.toBeNull()
         if (result!.type === "operator") expect(result!.operator).toBe("not")
-        expect(premise.toDisplayString()).toBe("¬((P ∧ Q))")
+        // toggleNegation inserts not(formula(and(...))) for non-not operators
+        expect(premise.toDisplayString()).toBe("¬(((P ∧ Q)))")
     })
 
     it("works on formula expressions", () => {
@@ -13780,8 +13864,28 @@ describe("operator nesting restriction", () => {
         it("fromSnapshot can restore a tree with operator-under-operator", () => {
             const em = ExpressionManager.fromSnapshot({
                 expressions: [
-                    { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
-                    { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: ARG.id, argumentVersion: ARG.version, premiseId: "premise-1", checksum: "" },
+                    {
+                        id: "op-and",
+                        type: "operator",
+                        operator: "and",
+                        parentId: null,
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
+                    {
+                        id: "op-or",
+                        type: "operator",
+                        operator: "or",
+                        parentId: "op-and",
+                        position: 0,
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: "premise-1",
+                        checksum: "",
+                    },
                 ] as TCorePropositionalExpression[],
             })
             expect(em.getExpression("op-or")).toBeDefined()
@@ -13790,21 +13894,82 @@ describe("operator nesting restriction", () => {
         it("fromData can reconstruct a tree with operator-under-operator", () => {
             const arg = { id: "arg-1", version: 1 }
             const variables = [
-                { id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1, claimId: "claim-default", claimVersion: 0 },
+                {
+                    id: "v1",
+                    symbol: "P",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    claimId: "claim-default",
+                    claimVersion: 0,
+                },
             ]
             const premises: TOptionalChecksum<TCorePremise>[] = [
                 { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
             ]
             const expressions = [
-                { id: "e-and", type: "operator" as const, operator: "and" as const, argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: null, position: 0 },
-                { id: "e-or", type: "operator" as const, operator: "or" as const, argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-and", position: 0 },
-                { id: "e-v1", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-or", position: 0 },
-                { id: "e-v2", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-or", position: 1 },
-                { id: "e-v3", type: "variable" as const, variableId: "v1", argumentId: "arg-1", argumentVersion: 1, premiseId: "p1", parentId: "e-and", position: 1 },
+                {
+                    id: "e-and",
+                    type: "operator" as const,
+                    operator: "and" as const,
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    premiseId: "p1",
+                    parentId: null,
+                    position: 0,
+                },
+                {
+                    id: "e-or",
+                    type: "operator" as const,
+                    operator: "or" as const,
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    premiseId: "p1",
+                    parentId: "e-and",
+                    position: 0,
+                },
+                {
+                    id: "e-v1",
+                    type: "variable" as const,
+                    variableId: "v1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    premiseId: "p1",
+                    parentId: "e-or",
+                    position: 0,
+                },
+                {
+                    id: "e-v2",
+                    type: "variable" as const,
+                    variableId: "v1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    premiseId: "p1",
+                    parentId: "e-or",
+                    position: 1,
+                },
+                {
+                    id: "e-v3",
+                    type: "variable" as const,
+                    variableId: "v1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    premiseId: "p1",
+                    parentId: "e-and",
+                    position: 1,
+                },
             ]
             const roles = { conclusionPremiseId: "p1" }
             expect(() =>
-                ArgumentEngine.fromData(arg, aLib(), sLib(), csLib(), variables, premises, expressions, roles)
+                ArgumentEngine.fromData(
+                    arg,
+                    aLib(),
+                    sLib(),
+                    csLib(),
+                    variables,
+                    premises,
+                    expressions,
+                    roles
+                )
             ).not.toThrow()
         })
 
@@ -13812,16 +13977,40 @@ describe("operator nesting restriction", () => {
             const arg = { id: "arg-1", version: 1 }
             const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
             engine.addVariable({
-                id: "v1", symbol: "P", argumentId: "arg-1", argumentVersion: 1,
-                claimId: "claim-default", claimVersion: 0,
+                id: "v1",
+                symbol: "P",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                claimId: "claim-default",
+                claimVersion: 0,
             })
             const { result: pm } = engine.createPremise()
 
             const snapshot = engine.snapshot()
             const premSnap = snapshot.premises[0]
             premSnap.expressions.expressions = [
-                { id: "op-and", type: "operator", operator: "and", parentId: null, position: 0, argumentId: "arg-1", argumentVersion: 1, premiseId: pm.getId(), checksum: "" },
-                { id: "op-or", type: "operator", operator: "or", parentId: "op-and", position: 0, argumentId: "arg-1", argumentVersion: 1, premiseId: pm.getId(), checksum: "" },
+                {
+                    id: "op-and",
+                    type: "operator",
+                    operator: "and",
+                    parentId: null,
+                    position: 0,
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    premiseId: pm.getId(),
+                    checksum: "",
+                },
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    parentId: "op-and",
+                    position: 0,
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    premiseId: pm.getId(),
+                    checksum: "",
+                },
             ] as TCorePropositionalExpression[]
             premSnap.rootExpressionId = "op-and"
 
