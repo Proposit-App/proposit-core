@@ -1103,10 +1103,8 @@ export class ExpressionManager<
 
         // 10a. Non-not operators cannot be direct children of operators.
         // Check 1: new operator as child of existing node's parent.
-        if (
-            existingNode.parentId !== null &&
-            operator.operator !== "not"
-        ) {
+        // Note: step 7 already rejects `not`, so operator.operator is always non-not here.
+        if (existingNode.parentId !== null) {
             const existingParent = this.expressions.get(existingNode.parentId)
             if (existingParent && existingParent.type === "operator") {
                 throw new Error(
