@@ -82,12 +82,15 @@ There are two promotion paths that can violate the nesting rule:
 
 If the pre-flight check detects a violation, the removal is rejected with an error and no mutation occurs.
 
-**Pre-existing gap:** `collapseIfNeeded` also lacks the existing root-only check for `implies`/`iff` promotion (that check only exists in `removeAndPromote`). This should be fixed as part of this work — the pre-flight check should validate both the nesting rule and the root-only rule.
+**Pre-existing gap:** `collapseIfNeeded` also lacks the existing root-only check for `implies`/`iff` promotion (that check only exists in `removeAndPromote`). This should be fixed as part of this work. The pre-flight check validates both the nesting rule and the root-only rule before any mutation occurs. As defense-in-depth, `collapseIfNeeded` itself should also gain the same guards in its 1-child promotion branch — if the pre-flight simulation has a bug, the mutation-time check prevents silent data corruption.
 
 ### Methods NOT Affected
 
 - **`updateExpression()`** — The only allowed operator swaps are `and↔or` and `implies↔iff`. These don't change whether an expression is a non-`not` operator, so no new violation can be created.
-- **`fromSnapshot()` / `fromData()`** — Forward-only enforcement. Existing data created under old rules is trusted. `loadInitialExpressions` (the private method called by these paths) routes through `addExpression`, so it must bypass the nesting check. This is done by adding a private `skipNestingCheck` flag on `ExpressionManager` that `loadInitialExpressions` sets to `true` before loading and resets to `false` after (in a `finally` block to ensure cleanup on error). The flag is checked in `addExpression` only.
+- **`fromSnapshot()` / `fromData()` / `rollback()`** — Forward-only enforcement. Existing data created under old rules is trusted. All restoration paths must bypass the nesting check:
+  - `ExpressionManager.fromSnapshot` → `loadInitialExpressions` → `addExpression`: already an internal path. A private `skipNestingCheck` flag on `ExpressionManager` is set to `true` by `loadInitialExpressions` before loading and reset to `false` in a `finally` block. The flag is checked in `addExpression` only.
+  - `ArgumentEngine.fromData` calls `PremiseEngine.addExpression` → `ExpressionManager.addExpression` directly (not through `loadInitialExpressions`). To cover this path, `ExpressionManager` exposes a `loadExpressions(expressions[])` method that wraps the BFS-with-bypass logic currently in `loadInitialExpressions`. `PremiseEngine` exposes a corresponding `loadExpressions` method that delegates to it. `ArgumentEngine.fromData` calls `pe.loadExpressions(premiseExprs)` instead of calling `pe.addExpression` in a loop — eliminating the duplicated BFS logic in `fromData` as well.
+  - `ArgumentEngine.rollback` → `PremiseEngine.fromSnapshot` → `ExpressionManager.fromSnapshot` → `loadInitialExpressions`: covered by the `skipNestingCheck` flag path above.
 
 ## Error Messages
 
@@ -113,7 +116,7 @@ New `describe` block in `test/core.test.ts`:
 - Insert non-`not` operator between an operator parent and its child → throws (new expression is non-`not` op under operator)
 - Insert non-`not` operator that would receive non-`not` operator children → throws
 - Insert `not` between operator and its child → succeeds
-- Insert `formula` between operator and its non-`not` operator child → succeeds (this is the fix path)
+- Insert `formula` between operator and its child (e.g., `and → not → P`, insert formula between `and` and `not`) → succeeds (formula insertion is always valid; also demonstrates the pattern for fixing legacy trees loaded via `fromSnapshot`)
 
 ### `wrapExpression` tests
 
@@ -131,6 +134,8 @@ New `describe` block in `test/core.test.ts`:
 - Cascading collapse: remove node causing 0-child deletion chain, where final promotion is safe → succeeds (no false rejection)
 - Cascading collapse: remove node causing 0-child deletion chain, where final promotion violates the nesting rule → throws
 
-### `loadInitialExpressions` tests
+### Restoration tests
 
 - Verify `fromSnapshot` can restore a tree containing operator-under-operator (forward-only enforcement)
+- Verify `fromData` can reconstruct a tree containing operator-under-operator (forward-only enforcement)
+- Verify `rollback` can restore a tree containing operator-under-operator (forward-only enforcement)
