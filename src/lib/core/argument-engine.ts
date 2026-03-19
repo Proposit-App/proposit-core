@@ -27,6 +27,7 @@ import type {
     TCoreValidityCheckResult,
 } from "../types/evaluation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
+import type { TGrammarConfig } from "../types/grammar.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
@@ -65,6 +66,7 @@ import type {
 export type TLogicEngineOptions = {
     checksumConfig?: TCoreChecksumConfig
     positionConfig?: TCorePositionConfig
+    grammarConfig?: TGrammarConfig
 }
 
 export type TArgumentEngineSnapshot<
