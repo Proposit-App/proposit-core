@@ -14957,4 +14957,45 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
             new Set(["conclusionPremiseId", "customRole"])
         )
     })
+
+    it("handles native JSON round-trip where Sets become empty objects", () => {
+        const customConfig = {
+            checksumConfig: {
+                premiseFields: new Set(["premiseId", "createdOn"]),
+                argumentFields: new Set(["id", "version"]),
+            },
+        }
+        const engine = new ArgumentEngine(
+            ARG,
+            aLib(),
+            sLib(),
+            csLib(),
+            customConfig
+        )
+        const snap = engine.snapshot()
+
+        // Native JSON round-trip: JSON.stringify(Set) → "{}", JSON.parse("{}") → {}
+        const serialized = JSON.parse(JSON.stringify(snap)) as typeof snap
+
+        // Verify Sets became empty objects, not arrays
+        expect(serialized.config!.checksumConfig!.premiseFields).toEqual({})
+        expect(
+            serialized.config!.checksumConfig!.premiseFields
+        ).not.toBeInstanceOf(Set)
+
+        // fromSnapshot should handle {} gracefully (treat as empty Set)
+        const restored = ArgumentEngine.fromSnapshot(
+            serialized,
+            aLib(),
+            sLib(),
+            csLib()
+        )
+        const restoredSnap = restored.snapshot()
+        expect(
+            restoredSnap.config!.checksumConfig!.premiseFields
+        ).toBeInstanceOf(Set)
+        expect(
+            restoredSnap.config!.checksumConfig!.argumentFields
+        ).toBeInstanceOf(Set)
+    })
 })

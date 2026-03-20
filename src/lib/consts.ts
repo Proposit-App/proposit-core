@@ -39,7 +39,8 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
 
 /**
  * Ensures all fields of a `TCoreChecksumConfig` are `Set<string>` instances.
- * After a JSON round-trip, Sets become arrays; this converts them back.
+ * After a JSON round-trip, Sets become arrays (custom replacer) or empty
+ * objects (native `JSON.stringify`); this converts both forms back to Sets.
  * Returns `undefined` if the input is `undefined`. Leaves undefined fields as-is.
  */
 export function normalizeChecksumConfig(
@@ -60,7 +61,12 @@ export function normalizeChecksumConfig(
     for (const key of keys) {
         const value = config[key]
         if (value === undefined) continue
-        result[key] = value instanceof Set ? value : new Set(value)
+        result[key] =
+            value instanceof Set
+                ? value
+                : Array.isArray(value)
+                  ? new Set(value)
+                  : new Set()
     }
     return result
 }
