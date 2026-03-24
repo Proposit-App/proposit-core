@@ -15921,3 +15921,296 @@ describe("checksum verification on load", () => {
         ).toThrow(/checksum mismatch/i)
     })
 })
+
+// ---------------------------------------------------------------------------
+// hierarchical checksum propagation (end-to-end)
+// ---------------------------------------------------------------------------
+
+describe("hierarchical checksum propagation", () => {
+    it("deep expression change propagates to premise and argument", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        engine.addVariable(makeVar("v3", "R"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        // Build: and(P, formula(or(Q, placeholder)))
+        // We need `or` to have 2 children to avoid collapse later, so add Q and a dummy
+        // Actually, we need: and(P, formula(or(Q)))
+        // and is root with 2 children: P (pos 0), formula (pos 1)
+        // formula has 1 child: or
+        // or has 1 child: Q
+        pm.addExpression(makeOpExpr("e-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "e-and",
+                position: 0,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeFormulaExpr("e-formula", {
+                parentId: "e-and",
+                position: 1,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeOpExpr("e-or", "or", {
+                parentId: "e-formula",
+                position: 0,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "e-or",
+                position: 0,
+                premiseId,
+            })
+        )
+
+        // Flush and capture all combinedChecksums
+        engine.flushChecksums()
+
+        const orBefore = pm.getExpression("e-or")!.combinedChecksum
+        const formulaBefore = pm.getExpression("e-formula")!.combinedChecksum
+        const andBefore = pm.getExpression("e-and")!.combinedChecksum
+        const premiseMetaBefore = pm.checksum()
+        const premiseCombinedBefore = pm.combinedChecksum()
+        const argMetaBefore = engine.checksum()
+        const argCombinedBefore = engine.combinedChecksum()
+
+        // Mutate: add R to the `or` node
+        pm.addExpression(
+            makeVarExpr("e-r", "v3", {
+                parentId: "e-or",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+
+        // `or` node's combinedChecksum changed (got a new child)
+        expect(pm.getExpression("e-or")!.combinedChecksum).not.toBe(orBefore)
+        // `formula` node's combinedChecksum changed (its child `or` changed)
+        expect(pm.getExpression("e-formula")!.combinedChecksum).not.toBe(
+            formulaBefore
+        )
+        // `and` root's combinedChecksum changed
+        expect(pm.getExpression("e-and")!.combinedChecksum).not.toBe(andBefore)
+        // Premise combinedChecksum changed
+        expect(pm.combinedChecksum()).not.toBe(premiseCombinedBefore)
+        // Argument combinedChecksum changed
+        expect(engine.combinedChecksum()).not.toBe(argCombinedBefore)
+        // But premise meta checksum is unchanged
+        expect(pm.checksum()).toBe(premiseMetaBefore)
+        // And argument meta checksum is unchanged
+        expect(engine.checksum()).toBe(argMetaBefore)
+    })
+
+    it("operator collapse after removeExpression doesn't break flush", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        // Build: and(P, Q)
+        pm.addExpression(makeOpExpr("e-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "e-and",
+                position: 0,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "e-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+
+        const premiseCombinedBefore = pm.combinedChecksum()
+        const argCombinedBefore = engine.combinedChecksum()
+
+        // Remove Q — triggers operator collapse: `and` is deleted, P is promoted to root
+        pm.removeExpression("e-q", true)
+
+        // flushChecksums should not throw
+        expect(() => engine.flushChecksums()).not.toThrow()
+
+        // P is now root (parentId === null)
+        const pExpr = pm.getExpression("e-p")!
+        expect(pExpr.parentId).toBeNull()
+
+        // P has descendantChecksum === null (still a leaf)
+        expect(pExpr.descendantChecksum).toBeNull()
+
+        // Premise and argument combinedChecksums changed from before removal
+        expect(pm.combinedChecksum()).not.toBe(premiseCombinedBefore)
+        expect(engine.combinedChecksum()).not.toBe(argCombinedBefore)
+    })
+
+    it("insertExpression propagates checksum changes", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        // Build: and(P, Q)
+        pm.addExpression(makeOpExpr("e-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "e-and",
+                position: 0,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "e-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+        const combinedBefore = engine.combinedChecksum()
+
+        // Insert `not` wrapping variable P — `not` is exempt from the
+        // operator-nesting restriction, so this is valid as a child of `and`.
+        pm.insertExpression(makeOpExpr("e-not", "not", { premiseId }), "e-p")
+
+        engine.flushChecksums()
+        const combinedAfter = engine.combinedChecksum()
+
+        expect(combinedAfter).not.toBe(combinedBefore)
+    })
+
+    it("variable mutation changes argument but not premise combinedChecksum", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", { premiseId, parentId: null })
+        )
+
+        engine.flushChecksums()
+
+        const argCombinedBefore = engine.combinedChecksum()
+        const premiseCombinedBefore = pm.combinedChecksum()
+
+        // Add a second variable (argument-scoped, not premise-scoped)
+        engine.addVariable(makeVar("v2", "Q"))
+
+        engine.flushChecksums()
+
+        // Argument combinedChecksum changed (variables collection changed)
+        expect(engine.combinedChecksum()).not.toBe(argCombinedBefore)
+        // Premise combinedChecksum unchanged (variables are argument-scoped)
+        expect(pm.combinedChecksum()).toBe(premiseCombinedBefore)
+    })
+
+    it("snapshot round-trip preserves all hierarchical checksums", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        pm.addExpression(makeOpExpr("e-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "e-and",
+                position: 0,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "e-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+
+        // Capture all checksums from the original engine
+        const origArgChecksum = engine.checksum()
+        const origArgDescendant = engine.descendantChecksum()
+        const origArgCombined = engine.combinedChecksum()
+        const origPremiseChecksum = pm.checksum()
+        const origPremiseDescendant = pm.descendantChecksum()
+        const origPremiseCombined = pm.combinedChecksum()
+
+        // Snapshot and restore
+        const snap = engine.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib()
+        )
+
+        restored.flushChecksums()
+
+        // Verify all three checksum values match
+        expect(restored.checksum()).toBe(origArgChecksum)
+        expect(restored.descendantChecksum()).toBe(origArgDescendant)
+        expect(restored.combinedChecksum()).toBe(origArgCombined)
+
+        const restoredPm = restored.getPremise(premiseId)!
+        expect(restoredPm.checksum()).toBe(origPremiseChecksum)
+        expect(restoredPm.descendantChecksum()).toBe(origPremiseDescendant)
+        expect(restoredPm.combinedChecksum()).toBe(origPremiseCombined)
+    })
+
+    it("removeVariable cascades through to checksums", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        // Build: and(P, Q)
+        pm.addExpression(makeOpExpr("e-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "e-and",
+                position: 0,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "e-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+        const argCombinedBefore = engine.combinedChecksum()
+
+        // Remove variable Q — cascades: Q's variable expression is deleted,
+        // `and` collapses (only P left), P is promoted to root
+        engine.removeVariable("v2")
+
+        // No errors during flush (deleted expressions properly pruned from dirty set)
+        expect(() => engine.flushChecksums()).not.toThrow()
+
+        // Argument combinedChecksum changed
+        expect(engine.combinedChecksum()).not.toBe(argCombinedBefore)
+    })
+})

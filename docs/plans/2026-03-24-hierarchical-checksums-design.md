@@ -16,9 +16,9 @@ checksum fields:
 
 ```typescript
 interface THierarchicalChecksum {
-  checksum: string                    // meta — entity's own data only
-  descendantChecksum: string | null   // direct children's combinedChecksums
-  combinedChecksum: string            // hash(checksum + descendantChecksum)
+    checksum: string // meta — entity's own data only
+    descendantChecksum: string | null // direct children's combinedChecksums
+    combinedChecksum: string // hash(checksum + descendantChecksum)
 }
 ```
 
@@ -224,11 +224,11 @@ Replaces the existing `TChecksummable` interface:
 
 ```typescript
 interface THierarchicalChecksummable<TCollectionName extends string = string> {
-  checksum(): string
-  descendantChecksum(): string | null
-  combinedChecksum(): string
-  getCollectionChecksum(name: TCollectionName): string | null
-  flushChecksums(): void
+    checksum(): string
+    descendantChecksum(): string | null
+    combinedChecksum(): string
+    getCollectionChecksum(name: TCollectionName): string | null
+    flushChecksums(): void
 }
 ```
 
@@ -241,12 +241,14 @@ stored on the entity objects and recomputed during flush by `ExpressionManager`.
 ### `TOptionalHierarchicalChecksum<T>`
 
 ```typescript
-type TOptionalHierarchicalChecksum<T extends {
-  checksum: unknown
-  descendantChecksum: unknown
-  combinedChecksum: unknown
-}> = Omit<T, "checksum" | "descendantChecksum" | "combinedChecksum"> &
-  Partial<Pick<T, "checksum" | "descendantChecksum" | "combinedChecksum">>
+type TOptionalHierarchicalChecksum<
+    T extends {
+        checksum: unknown
+        descendantChecksum: unknown
+        combinedChecksum: unknown
+    },
+> = Omit<T, "checksum" | "descendantChecksum" | "combinedChecksum"> &
+    Partial<Pick<T, "checksum" | "descendantChecksum" | "combinedChecksum">>
 ```
 
 The constraint requires all three fields to exist (non-optional) on the input
@@ -262,8 +264,14 @@ remains for variables and other non-hierarchical types.
 all three checksum fields since they are engine-computed, not caller-provided:
 
 ```typescript
-type TExpressionInput<TExpr> = Omit<TExpr, "checksum" | "descendantChecksum" | "combinedChecksum">
-type TExpressionWithoutPosition<TExpr> = Omit<TExpr, "position" | "checksum" | "descendantChecksum" | "combinedChecksum">
+type TExpressionInput<TExpr> = Omit<
+    TExpr,
+    "checksum" | "descendantChecksum" | "combinedChecksum"
+>
+type TExpressionWithoutPosition<TExpr> = Omit<
+    TExpr,
+    "position" | "checksum" | "descendantChecksum" | "combinedChecksum"
+>
 ```
 
 The same applies to any other input/creation types that strip computed fields.

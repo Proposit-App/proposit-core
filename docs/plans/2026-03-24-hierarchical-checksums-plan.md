@@ -15,6 +15,7 @@
 ### Task 1: Schema Changes — Add Hierarchical Checksum Fields
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts:17-35` (BasePropositionalExpressionSchema)
 - Modify: `src/lib/schemata/propositional.ts:166-180` (CorePremiseSchema)
 - Modify: `src/lib/schemata/argument.ts:4-16` (CoreArgumentSchema)
@@ -31,14 +32,40 @@ describe("hierarchical checksum schema", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        const v = engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        const result = pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        const v = engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        const result = pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         const expr = pe.getExpression("e1")!
         expect(expr).toHaveProperty("checksum")
         expect(expr).toHaveProperty("descendantChecksum")
@@ -104,7 +131,11 @@ After the existing `TOptionalChecksum` (line 91), add:
 ```typescript
 /** Makes `checksum`, `descendantChecksum`, and `combinedChecksum` optional on a hierarchical entity type. */
 export type TOptionalHierarchicalChecksum<
-    T extends { checksum: unknown; descendantChecksum: unknown; combinedChecksum: unknown },
+    T extends {
+        checksum: unknown
+        descendantChecksum: unknown
+        combinedChecksum: unknown
+    },
 > = Omit<T, "checksum" | "descendantChecksum" | "combinedChecksum"> &
     Partial<Pick<T, "checksum" | "descendantChecksum" | "combinedChecksum">>
 ```
@@ -142,7 +173,13 @@ export type TExpressionWithoutPosition<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
 > = TExpr extends infer U
     ? U extends TCorePropositionalExpression
-        ? Omit<U, "position" | "checksum" | "descendantChecksum" | "combinedChecksum">
+        ? Omit<
+              U,
+              | "position"
+              | "checksum"
+              | "descendantChecksum"
+              | "combinedChecksum"
+          >
         : never
     : never
 ```
@@ -154,10 +191,12 @@ Run: `pnpm run typecheck`
 The new required fields will cause type errors anywhere entities are constructed inline (tests, `attachChecksum`, `computeChecksum`, `toPremiseData`, snapshot restoration). Fix these by providing placeholder values temporarily — subsequent tasks will implement correct computation.
 
 Placeholder strategy:
+
 - `descendantChecksum: null`
 - `combinedChecksum: ""` (will be overwritten by flush)
 
 Work through each type error. Key locations:
+
 - `ExpressionManager.attachChecksum()` — add the two new fields
 - `PremiseEngine.toPremiseData()` — add placeholder fields
 - `ArgumentEngine.snapshot()` — argument entity spread already includes all fields
@@ -179,6 +218,7 @@ git commit -m "feat: add hierarchical checksum fields to expression, premise, an
 ### Task 2: Interface Changes — `THierarchicalChecksummable`
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/shared.interfaces.ts:13-24`
 - Modify: `src/lib/core/interfaces/index.ts:1`
 - Modify: `src/lib/core/argument-engine.ts:117` (implements clause)
@@ -215,7 +255,10 @@ export interface THierarchicalChecksummable<
 In `src/lib/core/interfaces/index.ts`, line 1:
 
 ```typescript
-export type { TDisplayable, THierarchicalChecksummable } from "./shared.interfaces.js"
+export type {
+    TDisplayable,
+    THierarchicalChecksummable,
+} from "./shared.interfaces.js"
 ```
 
 - [ ] **Step 3: Update `ArgumentEngine` implements clause**
@@ -264,6 +307,7 @@ git commit -m "feat: replace TChecksummable with THierarchicalChecksummable inte
 ### Task 3: Expression-Level Hierarchical Checksums
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts:74-111` (class fields, attachChecksum, new methods)
 - Test: `test/core.test.ts`
 
@@ -275,14 +319,40 @@ describe("expression hierarchical checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         pe.flushChecksums()
         const expr = pe.getExpression("e1")!
         expect(expr.descendantChecksum).toBeNull()
@@ -304,17 +374,66 @@ it("parent expression descendantChecksum reflects children", () => {
     const claimLib = new ClaimLibrary<TCoreClaim>()
     const sourceLib = new SourceLibrary<TCoreSource>()
     const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-    const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+    const claim = claimLib.create({
+        id: "c1",
+        version: 0,
+        frozen: false,
+        checksum: "",
+    })
     const engine = new ArgumentEngine(
         { id: "a1", version: 0 },
-        claimLib, sourceLib, csLib,
+        claimLib,
+        sourceLib,
+        csLib
     )
-    const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-    engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-    engine.addVariable({ id: "v2", symbol: "Q", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-    pe.addExpression({ id: "e1", type: "operator", operator: "and", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
-    pe.addExpression({ id: "e2", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
-    pe.addExpression({ id: "e3", type: "variable", variableId: "v2", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+    const pe = engine.createPremise({
+        id: "p1",
+        argumentId: "a1",
+        argumentVersion: 0,
+    })
+    engine.addVariable({
+        id: "v1",
+        symbol: "P",
+        argumentId: "a1",
+        argumentVersion: 0,
+        claimId: claim.id,
+        claimVersion: claim.version,
+    })
+    engine.addVariable({
+        id: "v2",
+        symbol: "Q",
+        argumentId: "a1",
+        argumentVersion: 0,
+        claimId: claim.id,
+        claimVersion: claim.version,
+    })
+    pe.addExpression({
+        id: "e1",
+        type: "operator",
+        operator: "and",
+        argumentId: "a1",
+        argumentVersion: 0,
+        premiseId: "p1",
+        parentId: null,
+    })
+    pe.addExpression({
+        id: "e2",
+        type: "variable",
+        variableId: "v1",
+        argumentId: "a1",
+        argumentVersion: 0,
+        premiseId: "p1",
+        parentId: "e1",
+    })
+    pe.addExpression({
+        id: "e3",
+        type: "variable",
+        variableId: "v2",
+        argumentId: "a1",
+        argumentVersion: 0,
+        premiseId: "p1",
+        parentId: "e1",
+    })
     pe.flushChecksums()
 
     const parent = pe.getExpression("e1")!
@@ -345,21 +464,70 @@ it("adding a child changes parent descendantChecksum", () => {
     const claimLib = new ClaimLibrary<TCoreClaim>()
     const sourceLib = new SourceLibrary<TCoreSource>()
     const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-    const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+    const claim = claimLib.create({
+        id: "c1",
+        version: 0,
+        frozen: false,
+        checksum: "",
+    })
     const engine = new ArgumentEngine(
         { id: "a1", version: 0 },
-        claimLib, sourceLib, csLib,
+        claimLib,
+        sourceLib,
+        csLib
     )
-    const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-    engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-    engine.addVariable({ id: "v2", symbol: "Q", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-    pe.addExpression({ id: "e1", type: "operator", operator: "and", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
-    pe.addExpression({ id: "e2", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+    const pe = engine.createPremise({
+        id: "p1",
+        argumentId: "a1",
+        argumentVersion: 0,
+    })
+    engine.addVariable({
+        id: "v1",
+        symbol: "P",
+        argumentId: "a1",
+        argumentVersion: 0,
+        claimId: claim.id,
+        claimVersion: claim.version,
+    })
+    engine.addVariable({
+        id: "v2",
+        symbol: "Q",
+        argumentId: "a1",
+        argumentVersion: 0,
+        claimId: claim.id,
+        claimVersion: claim.version,
+    })
+    pe.addExpression({
+        id: "e1",
+        type: "operator",
+        operator: "and",
+        argumentId: "a1",
+        argumentVersion: 0,
+        premiseId: "p1",
+        parentId: null,
+    })
+    pe.addExpression({
+        id: "e2",
+        type: "variable",
+        variableId: "v1",
+        argumentId: "a1",
+        argumentVersion: 0,
+        premiseId: "p1",
+        parentId: "e1",
+    })
     pe.flushChecksums()
     const beforeDesc = pe.getExpression("e1")!.descendantChecksum
     const beforeCombined = pe.getExpression("e1")!.combinedChecksum
 
-    pe.addExpression({ id: "e3", type: "variable", variableId: "v2", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+    pe.addExpression({
+        id: "e3",
+        type: "variable",
+        variableId: "v2",
+        argumentId: "a1",
+        argumentVersion: 0,
+        premiseId: "p1",
+        parentId: "e1",
+    })
     pe.flushChecksums()
     const afterDesc = pe.getExpression("e1")!.descendantChecksum
     const afterCombined = pe.getExpression("e1")!.combinedChecksum
@@ -498,6 +666,7 @@ For `removeExpression` and `collapseIfNeeded`: the collapse logic recursively
 deletes expressions and may promote children. Track deleted IDs during collapse
 by collecting them from the `ChangeCollector`'s removed entries, or by adding
 a return value to `collapseIfNeeded` that reports deleted IDs. After collapse:
+
 1. Call `this.pruneDeletedFromDirtySet(deletedIds)` to remove stale IDs.
 2. For promoted children (whose `parentId` changed), call
    `this.markExpressionDirty(promotedChildId)` so their meta checksum is
@@ -528,6 +697,7 @@ git commit -m "feat: implement expression-level hierarchical checksum computatio
 ### Task 4: Premise-Level Hierarchical Checksums
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts:91-99,1210-1274`
 - Test: `test/core.test.ts`
 
@@ -539,16 +709,42 @@ describe("premise hierarchical checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
 
         const checksumBefore = pe.checksum()
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         const checksumAfter = pe.checksum()
 
         // Meta checksum should NOT change when expressions change
@@ -561,9 +757,15 @@ describe("premise hierarchical checksums", () => {
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
         expect(pe.descendantChecksum()).toBeNull()
     })
 
@@ -571,14 +773,40 @@ describe("premise hierarchical checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         pe.flushChecksums()
 
         const rootExpr = pe.getExpression("e1")!
@@ -589,38 +817,115 @@ describe("premise hierarchical checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         pe.flushChecksums()
 
-        expect(pe.getCollectionChecksum("expressions")).toBe(pe.descendantChecksum())
+        expect(pe.getCollectionChecksum("expressions")).toBe(
+            pe.descendantChecksum()
+        )
     })
 
     it("premise combinedChecksum changes when expression tree changes", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        engine.addVariable({ id: "v2", symbol: "Q", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "operator", operator: "and", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
-        pe.addExpression({ id: "e2", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        engine.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "operator",
+            operator: "and",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
+        pe.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
         pe.flushChecksums()
         const metaBefore = pe.checksum()
         const combinedBefore = pe.combinedChecksum()
 
-        pe.addExpression({ id: "e3", type: "variable", variableId: "v2", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+        pe.addExpression({
+            id: "e3",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
         pe.flushChecksums()
         const combinedAfter = pe.combinedChecksum()
 
@@ -770,6 +1075,7 @@ git commit -m "feat: implement premise-level hierarchical checksum computation"
 ### Task 5: Argument-Level Hierarchical Checksums
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts:119-143,1211-1257`
 - Test: `test/core.test.ts`
 
@@ -783,9 +1089,15 @@ describe("argument hierarchical checksums", () => {
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
 
         const checksumBefore = engine.checksum()
         engine.setConclusionPremise("p1")
@@ -801,7 +1113,9 @@ describe("argument hierarchical checksums", () => {
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
         expect(engine.descendantChecksum()).toBeNull()
     })
@@ -810,17 +1124,43 @@ describe("argument hierarchical checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
         engine.flushChecksums()
         const premisesBefore = engine.getCollectionChecksum("premises")
 
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         engine.flushChecksums()
         const premisesAfter = engine.getCollectionChecksum("premises")
 
@@ -831,15 +1171,29 @@ describe("argument hierarchical checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
         engine.flushChecksums()
         const varsBefore = engine.getCollectionChecksum("variables")
 
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
         engine.flushChecksums()
         const varsAfter = engine.getCollectionChecksum("variables")
 
@@ -850,19 +1204,53 @@ describe("argument hierarchical checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "operator", operator: "and", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "operator",
+            operator: "and",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         engine.flushChecksums()
         const metaBefore = engine.checksum()
         const combinedBefore = engine.combinedChecksum()
 
-        pe.addExpression({ id: "e2", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+        pe.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
         engine.flushChecksums()
         const combinedAfter = engine.combinedChecksum()
 
@@ -1093,6 +1481,7 @@ git commit -m "feat: implement argument-level hierarchical checksum computation 
 ### Task 6: Snapshot Restoration with Checksum Verification
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts:966-1041` (fromSnapshot)
 - Modify: `src/lib/core/argument-engine.ts:1049-1079` (fromData)
 - Test: `test/core.test.ts`
@@ -1105,19 +1494,52 @@ describe("checksum verification on load", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         engine.flushChecksums()
         const snap = engine.snapshot()
 
         expect(() => {
-            ArgumentEngine.fromSnapshot(snap, claimLib, sourceLib, csLib, undefined, "strict")
+            ArgumentEngine.fromSnapshot(
+                snap,
+                claimLib,
+                sourceLib,
+                csLib,
+                undefined,
+                "strict"
+            )
         }).not.toThrow()
     })
 
@@ -1125,14 +1547,40 @@ describe("checksum verification on load", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         engine.flushChecksums()
         const snap = engine.snapshot()
 
@@ -1140,7 +1588,14 @@ describe("checksum verification on load", () => {
         snap.premises[0].expressions[0].checksum = "tampered!"
 
         expect(() => {
-            ArgumentEngine.fromSnapshot(snap, claimLib, sourceLib, csLib, undefined, "strict")
+            ArgumentEngine.fromSnapshot(
+                snap,
+                claimLib,
+                sourceLib,
+                csLib,
+                undefined,
+                "strict"
+            )
         }).toThrow(/checksum mismatch/i)
     })
 
@@ -1150,7 +1605,9 @@ describe("checksum verification on load", () => {
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
         const snap = engine.snapshot()
         snap.argument.checksum = "tampered!"
@@ -1200,12 +1657,18 @@ if (checksumVerification === "strict") {
                         `Checksum mismatch on expression "${expr.id}": stored checksum="${exprSnap.checksum}", computed="${expr.checksum}"`
                     )
                 }
-                if (exprSnap.descendantChecksum !== undefined && exprSnap.descendantChecksum !== expr.descendantChecksum) {
+                if (
+                    exprSnap.descendantChecksum !== undefined &&
+                    exprSnap.descendantChecksum !== expr.descendantChecksum
+                ) {
                     throw new Error(
                         `Checksum mismatch on expression "${expr.id}": stored descendantChecksum="${exprSnap.descendantChecksum}", computed="${expr.descendantChecksum}"`
                     )
                 }
-                if (exprSnap.combinedChecksum && exprSnap.combinedChecksum !== expr.combinedChecksum) {
+                if (
+                    exprSnap.combinedChecksum &&
+                    exprSnap.combinedChecksum !== expr.combinedChecksum
+                ) {
                     throw new Error(
                         `Checksum mismatch on expression "${expr.id}": stored combinedChecksum="${exprSnap.combinedChecksum}", computed="${expr.combinedChecksum}"`
                     )
@@ -1233,7 +1696,11 @@ if (checksumVerification === "strict") {
         )
         if (premiseSnap?.premise) {
             const sp = premiseSnap.premise as Record<string, unknown>
-            for (const field of ["checksum", "descendantChecksum", "combinedChecksum"] as const) {
+            for (const field of [
+                "checksum",
+                "descendantChecksum",
+                "combinedChecksum",
+            ] as const) {
                 const stored = sp[field]
                 const computed = pe[field]()
                 if (stored !== undefined && stored !== computed) {
@@ -1246,7 +1713,11 @@ if (checksumVerification === "strict") {
     }
     // Verify argument checksums (all three fields)
     const sa = snapshot.argument as Record<string, unknown>
-    for (const field of ["checksum", "descendantChecksum", "combinedChecksum"] as const) {
+    for (const field of [
+        "checksum",
+        "descendantChecksum",
+        "combinedChecksum",
+    ] as const) {
         const stored = sa[field]
         const computed = engine[field]()
         if (stored !== undefined && stored !== computed) {
@@ -1285,6 +1756,7 @@ git commit -m "feat: add checksum verification option to fromSnapshot and fromDa
 ### Task 7: Update Existing Checksum Tests
 
 **Files:**
+
 - Modify: `test/core.test.ts:5263-5490` (existing checksum describe blocks)
 
 - [ ] **Step 1: Update existing "checksum utilities" tests**
@@ -1296,12 +1768,14 @@ Run: `pnpm vitest run test/core.test.ts -t "checksum utilities"`
 - [ ] **Step 2: Update existing "PremiseEngine — checksum" tests**
 
 Tests at line 5348+ may reference the old composite `checksum()` behavior. Update them:
+
 - Tests expecting `checksum()` to change when expressions change → change to `combinedChecksum()`
 - Tests expecting same `checksum()` for same state → keep (meta checksum is still deterministic)
 
 - [ ] **Step 3: Update existing "ArgumentEngine — checksum" tests**
 
 Tests at line 5438+ may reference the old composite `checksum()` behavior. Same updates:
+
 - Composite behavior → `combinedChecksum()`
 - Entity-only behavior → `checksum()` (now meta)
 
@@ -1329,6 +1803,7 @@ git commit -m "test: update existing checksum tests for hierarchical checksum se
 ### Task 8: Diff System — Exclude Derived Checksums
 
 **Files:**
+
 - Modify: `src/lib/core/diff.ts:69-115`
 - Test: `test/core.test.ts`
 
@@ -1351,20 +1826,51 @@ describe("diff excludes derived checksums", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
 
         const engine1 = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe1 = engine1.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine1.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe1.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe1 = engine1.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine1.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe1.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
 
         // Clone via snapshot to get identical structure
         engine1.flushChecksums()
         const snap = engine1.snapshot()
-        const engine2 = ArgumentEngine.fromSnapshot(snap, claimLib, sourceLib, csLib)
+        const engine2 = ArgumentEngine.fromSnapshot(
+            snap,
+            claimLib,
+            sourceLib,
+            csLib
+        )
 
         const diff = diffArguments(engine1, engine2)
         // No expression changes — structure is identical
@@ -1391,6 +1897,7 @@ git commit -m "test: verify diff system excludes derived checksum fields"
 ### Task 9: End-to-End Propagation Tests
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write deep propagation test**
@@ -1401,22 +1908,93 @@ describe("hierarchical checksum propagation", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        engine.addVariable({ id: "v2", symbol: "Q", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        engine.addVariable({ id: "v3", symbol: "R", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        engine.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        engine.addVariable({
+            id: "v3",
+            symbol: "R",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
 
         // Build: and(P, or(Q, R))
-        pe.addExpression({ id: "e1", type: "operator", operator: "and", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
-        pe.addExpression({ id: "e2", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
-        pe.addExpression({ id: "e3", type: "formula", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
-        pe.addExpression({ id: "e4", type: "operator", operator: "or", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e3" })
-        pe.addExpression({ id: "e5", type: "variable", variableId: "v2", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e4" })
+        pe.addExpression({
+            id: "e1",
+            type: "operator",
+            operator: "and",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
+        pe.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
+        pe.addExpression({
+            id: "e3",
+            type: "formula",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
+        pe.addExpression({
+            id: "e4",
+            type: "operator",
+            operator: "or",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e3",
+        })
+        pe.addExpression({
+            id: "e5",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e4",
+        })
         engine.flushChecksums()
 
         const argMetaBefore = engine.checksum()
@@ -1428,7 +2006,15 @@ describe("hierarchical checksum propagation", () => {
         const e1Before = pe.getExpression("e1")!.combinedChecksum
 
         // Add R as child of or — deep mutation
-        pe.addExpression({ id: "e6", type: "variable", variableId: "v3", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e4" })
+        pe.addExpression({
+            id: "e6",
+            type: "variable",
+            variableId: "v3",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e4",
+        })
         engine.flushChecksums()
 
         // e4 (or) changed — new child
@@ -1451,20 +2037,53 @@ describe("hierarchical checksum propagation", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         engine.flushChecksums()
 
         const argCombinedBefore = engine.combinedChecksum()
         const premiseCombinedBefore = pe.combinedChecksum()
 
-        engine.addVariable({ id: "v2", symbol: "Q", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
+        engine.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
         engine.flushChecksums()
 
         // Argument combined changed (variables collection changed)
@@ -1477,18 +2096,67 @@ describe("hierarchical checksum propagation", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        engine.addVariable({ id: "v2", symbol: "Q", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        engine.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
         // Build: and(P, Q) — removing Q should collapse `and` and promote P
-        pe.addExpression({ id: "e1", type: "operator", operator: "and", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
-        pe.addExpression({ id: "e2", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
-        pe.addExpression({ id: "e3", type: "variable", variableId: "v2", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+        pe.addExpression({
+            id: "e1",
+            type: "operator",
+            operator: "and",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
+        pe.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
+        pe.addExpression({
+            id: "e3",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
         engine.flushChecksums()
 
         pe.removeExpression("e3") // triggers collapse: and removed, P promoted to root
@@ -1505,18 +2173,67 @@ describe("hierarchical checksum propagation", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        engine.addVariable({ id: "v2", symbol: "Q", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        engine.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
         // Build: and(P, Q) then insert implies between root and children
-        pe.addExpression({ id: "e1", type: "operator", operator: "and", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
-        pe.addExpression({ id: "e2", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
-        pe.addExpression({ id: "e3", type: "variable", variableId: "v2", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: "e1" })
+        pe.addExpression({
+            id: "e1",
+            type: "operator",
+            operator: "and",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
+        pe.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
+        pe.addExpression({
+            id: "e3",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: "e1",
+        })
         engine.flushChecksums()
         const combinedBefore = engine.combinedChecksum()
 
@@ -1540,18 +2257,49 @@ describe("hierarchical checksum propagation", () => {
         const claimLib = new ClaimLibrary<TCoreClaim>()
         const sourceLib = new SourceLibrary<TCoreSource>()
         const csLib = new ClaimSourceLibrary<TCoreClaimSourceAssociation>()
-        const claim = claimLib.create({ id: "c1", version: 0, frozen: false, checksum: "" })
+        const claim = claimLib.create({
+            id: "c1",
+            version: 0,
+            frozen: false,
+            checksum: "",
+        })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLib, sourceLib, csLib,
+            claimLib,
+            sourceLib,
+            csLib
         )
-        const pe = engine.createPremise({ id: "p1", argumentId: "a1", argumentVersion: 0 })
-        engine.addVariable({ id: "v1", symbol: "P", argumentId: "a1", argumentVersion: 0, claimId: claim.id, claimVersion: claim.version })
-        pe.addExpression({ id: "e1", type: "variable", variableId: "v1", argumentId: "a1", argumentVersion: 0, premiseId: "p1", parentId: null })
+        const pe = engine.createPremise({
+            id: "p1",
+            argumentId: "a1",
+            argumentVersion: 0,
+        })
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "a1",
+            argumentVersion: 0,
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        pe.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+        })
         engine.flushChecksums()
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(snap, claimLib, sourceLib, csLib)
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            claimLib,
+            sourceLib,
+            csLib
+        )
         restored.flushChecksums()
 
         expect(restored.checksum()).toBe(engine.checksum())
@@ -1582,6 +2330,7 @@ git commit -m "test: add end-to-end hierarchical checksum propagation tests"
 ### Task 10: Cleanup and Documentation Sync
 
 **Files:**
+
 - Modify: `CLAUDE.md` — update design rules for hierarchical checksums
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts` — update JSDoc
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts` — update JSDoc
@@ -1590,6 +2339,7 @@ git commit -m "test: add end-to-end hierarchical checksum propagation tests"
 - [ ] **Step 1: Update CLAUDE.md design rules**
 
 Replace the checksum-related content with the new hierarchical model. Key points:
+
 - Three-pronged checksums: `checksum` (meta), `descendantChecksum`, `combinedChecksum`
 - Meta checksum = entity data only, driven by `checksumConfig`
 - Descendant/combined are fixed recursive formulas
