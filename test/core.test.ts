@@ -15457,3 +15457,191 @@ describe("premise hierarchical checksums", () => {
         expect(combinedAfter).not.toBe(combinedBefore)
     })
 })
+
+describe("argument hierarchical checksums", () => {
+    it("argument checksum includes role state", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.createPremise()
+        const { result: pm2 } = engine.createPremise()
+
+        // First premise is auto-set as conclusion; capture current meta checksum
+        const before = engine.checksum()
+
+        // Switch conclusion to pm2 — meta checksum should change
+        engine.setConclusionPremise(pm2.getId())
+        const after = engine.checksum()
+
+        expect(after).not.toBe(before)
+    })
+
+    it("argument descendantChecksum is null when no premises and no variables", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        expect(engine.descendantChecksum()).toBeNull()
+    })
+
+    it("argument getCollectionChecksum('premises') changes when premise expression changes", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        // Build initial tree: and(P)
+        pm.addExpression(makeOpExpr("op-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "op-and",
+                position: 0,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+        const premisesBefore = engine.getCollectionChecksum("premises")
+        expect(premisesBefore).not.toBeNull()
+
+        // Add a second child to the operator — and(P, Q)
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "op-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+        const premisesAfter = engine.getCollectionChecksum("premises")
+
+        expect(premisesAfter).not.toBe(premisesBefore)
+    })
+
+    it("argument getCollectionChecksum('variables') changes when variable is added", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+
+        engine.flushChecksums()
+        const varsBefore = engine.getCollectionChecksum("variables")
+        expect(varsBefore).toBeNull()
+
+        engine.addVariable(makeVar("v1", "P"))
+
+        engine.flushChecksums()
+        const varsAfter = engine.getCollectionChecksum("variables")
+        expect(varsAfter).not.toBeNull()
+        expect(varsAfter).not.toBe(varsBefore)
+    })
+
+    it("argument combinedChecksum changes when deep expression added but meta stays same", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        pm.addExpression(makeOpExpr("op-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "op-and",
+                position: 0,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+        const metaBefore = engine.checksum()
+        const combinedBefore = engine.combinedChecksum()
+
+        // Add another expression to the premise (deep mutation)
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "op-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        engine.flushChecksums()
+        const metaAfter = engine.checksum()
+        const combinedAfter = engine.combinedChecksum()
+
+        // Meta (entity-only) should be unchanged — no argument entity or role change
+        expect(metaAfter).toBe(metaBefore)
+
+        // Combined should have changed — descendants changed
+        expect(combinedAfter).not.toBe(combinedBefore)
+    })
+
+    it("snapshot includes all three checksum fields on argument", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        const { result: pm } = engine.createPremise()
+        pm.addExpression(
+            makeVarExpr("e1", "v1", {
+                premiseId: pm.getId(),
+                parentId: null,
+            })
+        )
+
+        const snap = engine.snapshot()
+        expect(snap.argument.checksum).toMatch(/^[0-9a-f]{8}$/)
+        expect(snap.argument.descendantChecksum).not.toBeNull()
+        expect(snap.argument.combinedChecksum).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it("getArgument includes all three checksum fields", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        const { result: pm } = engine.createPremise()
+        pm.addExpression(
+            makeVarExpr("e1", "v1", {
+                premiseId: pm.getId(),
+                parentId: null,
+            })
+        )
+
+        const arg = engine.getArgument()
+        expect(arg.checksum).toMatch(/^[0-9a-f]{8}$/)
+        expect(arg.descendantChecksum).not.toBeNull()
+        expect(arg.combinedChecksum).toMatch(/^[0-9a-f]{8}$/)
+        expect(arg.combinedChecksum).not.toBe(arg.checksum)
+    })
+
+    it("premise mutation propagates dirty to argument checksum", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        engine.flushChecksums()
+        const combinedBefore = engine.combinedChecksum()
+
+        // Mutate expression within premise via PremiseEngine (triggers onMutate)
+        pm.addExpression(makeVarExpr("e1", "v1", { premiseId, parentId: null }))
+
+        // The argument's checksumDirty flag should now be set via onMutate
+        const combinedAfter = engine.combinedChecksum()
+        expect(combinedAfter).not.toBe(combinedBefore)
+    })
+
+    it("descendantChecksum is computed from non-null collection checksums only", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+
+        // No premises, no variables — descendant is null
+        expect(engine.descendantChecksum()).toBeNull()
+        expect(engine.combinedChecksum()).toBe(engine.checksum())
+
+        // Add a premise — descendant becomes non-null
+        engine.createPremise()
+        engine.flushChecksums()
+        expect(engine.descendantChecksum()).not.toBeNull()
+        expect(engine.getCollectionChecksum("premises")).not.toBeNull()
+        expect(engine.getCollectionChecksum("variables")).toBeNull()
+
+        // Verify descendant is based only on premises collection (variables is null)
+        const expectedDescendant = computeHash(
+            canonicalSerialize({
+                premises: engine.getCollectionChecksum("premises"),
+            })
+        )
+        expect(engine.descendantChecksum()).toBe(expectedDescendant)
+    })
+})
