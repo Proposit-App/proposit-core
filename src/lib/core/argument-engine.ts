@@ -405,7 +405,13 @@ export class ArgumentEngine<
     }
 
     public getArgument(): TArg {
-        return { ...this.argument, checksum: this.checksum() } as TArg
+        const checksum = this.checksum()
+        return {
+            ...this.argument,
+            checksum,
+            descendantChecksum: null,
+            combinedChecksum: checksum,
+        } as TArg
     }
 
     public toDisplayString(): string {

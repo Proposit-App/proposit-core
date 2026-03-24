@@ -38,6 +38,8 @@ export const CliArgumentSchema = Type.Object({
     id: UUID,
     version: Type.Number(),
     checksum: Type.Optional(Type.String()),
+    descendantChecksum: Type.Optional(Nullable(Type.String())),
+    combinedChecksum: Type.Optional(Type.String()),
     title: Type.String(),
     description: Type.Optional(Type.String()),
     createdAt: EncodableDate,
@@ -70,6 +72,8 @@ const CliBaseExpressionSchema = Type.Object({
     parentId: Nullable(UUID),
     position: Type.Number(),
     checksum: Type.Optional(Type.String()),
+    descendantChecksum: Type.Optional(Nullable(Type.String())),
+    combinedChecksum: Type.Optional(Type.String()),
 })
 
 const CliExpressionSchema = Type.Union([

@@ -32,6 +32,15 @@ const BasePropositionalExpressionSchema = Type.Object({
     checksum: Type.String({
         description: "Entity-level checksum for sync detection.",
     }),
+
+    descendantChecksum: Nullable(Type.String(), {
+        description:
+            "Checksum derived from direct children's combinedChecksums. Null for leaf expressions.",
+    }),
+    combinedChecksum: Type.String({
+        description:
+            "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
+    }),
 })
 
 export const CorePropositionalVariableExpressionSchema = Type.Interface(
@@ -170,6 +179,14 @@ export const CorePremiseSchema = Type.Object(
         argumentVersion: Type.Number(),
         checksum: Type.String({
             description: "Premise-level checksum for sync detection.",
+        }),
+        descendantChecksum: Nullable(Type.String(), {
+            description:
+                "Checksum derived from direct children's combinedChecksums. Null for empty premises.",
+        }),
+        combinedChecksum: Type.String({
+            description:
+                "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
         }),
     },
     {

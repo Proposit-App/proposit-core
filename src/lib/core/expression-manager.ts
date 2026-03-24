@@ -27,7 +27,7 @@ export type TExpressionInput<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
 > = TExpr extends infer U
     ? U extends TCorePropositionalExpression
-        ? Omit<U, "checksum">
+        ? Omit<U, "checksum" | "descendantChecksum" | "combinedChecksum">
         : never
     : never
 
@@ -35,7 +35,13 @@ export type TExpressionWithoutPosition<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
 > = TExpr extends infer U
     ? U extends TCorePropositionalExpression
-        ? Omit<U, "position" | "checksum">
+        ? Omit<
+              U,
+              | "position"
+              | "checksum"
+              | "descendantChecksum"
+              | "combinedChecksum"
+          >
         : never
     : never
 
@@ -101,12 +107,15 @@ export class ExpressionManager<
         const fields =
             this.config?.checksumConfig?.expressionFields ??
             DEFAULT_CHECKSUM_CONFIG.expressionFields!
+        const checksum = entityChecksum(
+            expr as unknown as Record<string, unknown>,
+            fields
+        )
         return {
             ...expr,
-            checksum: entityChecksum(
-                expr as unknown as Record<string, unknown>,
-                fields
-            ),
+            checksum,
+            descendantChecksum: null,
+            combinedChecksum: checksum,
         } as TExpr
     }
 

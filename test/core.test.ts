@@ -95,7 +95,7 @@ type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const ARG: Omit<TCoreArgument, "checksum"> = {
+const ARG: TOptionalChecksum<TCoreArgument> = {
     id: "arg-1",
     version: 1,
 }
@@ -2349,12 +2349,16 @@ describe("diffArguments", () => {
                 argumentId: "arg-1",
                 argumentVersion: 1,
                 checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
             }
             const after = {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
                 checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
             }
             expect(defaultComparePremise(before, after)).toEqual([])
         })
@@ -2365,12 +2369,16 @@ describe("diffArguments", () => {
                 argumentId: "arg-1",
                 argumentVersion: 1,
                 checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
             }
             const after = {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
                 checksum: "y",
+                descendantChecksum: null,
+                combinedChecksum: "y",
             }
             expect(defaultComparePremise(before, after)).toEqual([])
         })
@@ -2449,7 +2457,7 @@ describe("diffArguments", () => {
     })
 
     // Helper: create an engine with one premise containing P → Q
-    function buildSimpleEngine(arg: Omit<TCoreArgument, "checksum">): {
+    function buildSimpleEngine(arg: TOptionalChecksum<TCoreArgument>): {
         engine: ArgumentEngine
         premiseId: string
     } {
@@ -3374,6 +3382,8 @@ describe("schema shapes with additionalProperties", () => {
             id: "x",
             version: 0,
             checksum: "abc123",
+            descendantChecksum: null,
+            combinedChecksum: "abc123",
             title: "Test",
             custom: 42,
         })
@@ -3409,6 +3419,8 @@ describe("schema shapes with additionalProperties", () => {
             variables: [],
             expressions: [],
             checksum: "abc123",
+            descendantChecksum: null,
+            combinedChecksum: "abc123",
             title: "My Premise",
             priority: 1,
         })
@@ -3426,7 +3438,7 @@ describe("field preservation — unknown fields survive round-trips", () => {
 
     it("preserves unknown fields on the argument through getArgument()", () => {
         const engine = new ArgumentEngine(
-            ARG_WITH_EXTRAS as Omit<TCoreArgument, "checksum">,
+            ARG_WITH_EXTRAS as TOptionalChecksum<TCoreArgument>,
             aLib(),
             sLib(),
             csLib()
@@ -3438,7 +3450,7 @@ describe("field preservation — unknown fields survive round-trips", () => {
 
     it("preserves unknown fields on the argument through snapshot()", () => {
         const engine = new ArgumentEngine(
-            ARG_WITH_EXTRAS as Omit<TCoreArgument, "checksum">,
+            ARG_WITH_EXTRAS as TOptionalChecksum<TCoreArgument>,
             aLib(),
             sLib(),
             csLib()
@@ -4808,6 +4820,8 @@ describe("ChangeCollector", () => {
             variables: [],
             expressions: [],
             checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
         } as TCorePremise
         collector.addedPremise(p)
         const cs = collector.toChangeset()
@@ -7075,7 +7089,13 @@ describe("ExpressionManager — generic type parameter", () => {
 describe("PremiseEngine — generic type parameters", () => {
     it("preserves extended premise type in toData()", () => {
         type TExtPremise = TCorePremise & { color: string }
-        const arg: TCoreArgument = { id: "a1", version: 0, checksum: "x" }
+        const arg: TCoreArgument = {
+            id: "a1",
+            version: 0,
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
         const vm = new VariableManager()
         const pm = new PremiseEngine<TCoreArgument, TExtPremise>(
             {
@@ -7094,7 +7114,7 @@ describe("PremiseEngine — generic type parameters", () => {
 describe("ArgumentEngine — generic type parameters", () => {
     it("preserves extended argument type", () => {
         type TExtArg = TCoreArgument & { projectId: string }
-        const arg: Omit<TExtArg, "checksum"> = {
+        const arg: TOptionalChecksum<TExtArg> = {
             id: "a1",
             version: 0,
             projectId: "proj-1",
@@ -7130,12 +7150,12 @@ describe("ArgumentEngine — generic type parameters", () => {
 describe("diffArguments — generic type parameters", () => {
     it("accepts and returns extended types", () => {
         type TExtArg = TCoreArgument & { projectId: string }
-        const argA: Omit<TExtArg, "checksum"> = {
+        const argA: TOptionalChecksum<TExtArg> = {
             id: "a1",
             version: 0,
             projectId: "proj-1",
         }
-        const argB: Omit<TExtArg, "checksum"> = {
+        const argB: TOptionalChecksum<TExtArg> = {
             id: "a1",
             version: 1,
             projectId: "proj-1",
@@ -7189,6 +7209,8 @@ describe("configurable position range", () => {
             parentId: null,
             position: -100,
             checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
             type: "variable" as const,
             variableId: "v1",
         }
@@ -8244,6 +8266,8 @@ describe("ArgumentEngine — fromData bulk loading", () => {
             id: "arg-1",
             version: 1,
             checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
             customField: "hello",
         }
         const engine = ArgumentEngine.fromData<TMyArg>(
@@ -15180,5 +15204,50 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         engine2.rollback(serialized)
         expect(engine2.listPremiseIds()).toEqual(["p1"])
         expect(engine2.getPremise("p1")!.getExpressions()).toHaveLength(1)
+    })
+})
+
+describe("hierarchical checksum schema", () => {
+    it("expression entity includes descendantChecksum and combinedChecksum", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        const { result: pm } = engine.createPremise()
+        pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
+
+        const expr = pm.getExpression("e1")!
+        expect(expr).toBeDefined()
+        expect(expr).toHaveProperty("checksum")
+        expect(expr).toHaveProperty("descendantChecksum")
+        expect(expr).toHaveProperty("combinedChecksum")
+        // Leaf expression: descendantChecksum should be null
+        expect(expr.descendantChecksum).toBeNull()
+        // combinedChecksum should be a non-empty string
+        expect(typeof expr.combinedChecksum).toBe("string")
+        expect(expr.combinedChecksum.length).toBeGreaterThan(0)
+    })
+
+    it("premise entity includes descendantChecksum and combinedChecksum", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        const { result: pm } = engine.createPremise()
+        pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
+
+        const premiseData = pm.toPremiseData()
+        expect(premiseData).toHaveProperty("checksum")
+        expect(premiseData).toHaveProperty("descendantChecksum")
+        expect(premiseData).toHaveProperty("combinedChecksum")
+        // Placeholder: descendantChecksum is null until hierarchical computation is implemented
+        expect(premiseData.descendantChecksum).toBeNull()
+        expect(typeof premiseData.combinedChecksum).toBe("string")
+        expect(premiseData.combinedChecksum.length).toBeGreaterThan(0)
+    })
+
+    it("argument entity includes descendantChecksum and combinedChecksum", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const arg = engine.getArgument()
+        expect(arg).toHaveProperty("checksum")
+        expect(arg).toHaveProperty("descendantChecksum")
+        expect(arg).toHaveProperty("combinedChecksum")
+        expect(typeof arg.combinedChecksum).toBe("string")
     })
 })

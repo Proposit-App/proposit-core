@@ -757,6 +757,8 @@ export class PremiseEngine<
             argumentId: _argumentId,
             argumentVersion: _argumentVersion,
             checksum: _checksum,
+            descendantChecksum: _descendantChecksum,
+            combinedChecksum: _combinedChecksum,
             ...extras
         } = this.premise as Record<string, unknown>
         return { ...extras }
@@ -772,14 +774,22 @@ export class PremiseEngine<
         TArg
     > {
         // Strip old extras and replace with new ones
-        const { id, argumentId, argumentVersion, checksum } = this
-            .premise as Record<string, unknown>
+        const {
+            id,
+            argumentId,
+            argumentVersion,
+            checksum,
+            descendantChecksum,
+            combinedChecksum,
+        } = this.premise as Record<string, unknown>
         this.premise = {
             ...extras,
             id,
             argumentId,
             argumentVersion,
             ...(checksum !== undefined ? { checksum } : {}),
+            ...(descendantChecksum !== undefined ? { descendantChecksum } : {}),
+            ...(combinedChecksum !== undefined ? { combinedChecksum } : {}),
         } as TOptionalChecksum<TPremise>
         this.markDirty()
         this.onMutate?.()
@@ -1208,9 +1218,12 @@ export class PremiseEngine<
     }
 
     public toPremiseData(): TPremise {
+        const checksum = this.checksum()
         return {
             ...this.premise,
-            checksum: this.checksum(),
+            checksum,
+            descendantChecksum: null,
+            combinedChecksum: checksum,
         } as TPremise
     }
 

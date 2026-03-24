@@ -3,6 +3,7 @@ import { Command } from "commander"
 import { PremiseEngine } from "../../lib/core/premise-engine.js"
 import { VariableManager } from "../../lib/core/variable-manager.js"
 import type { TCoreArgument, TCorePremise } from "../../lib/schemata/index.js"
+import type { TOptionalChecksum } from "../../lib/schemata/shared.js"
 import {
     errorExit,
     printJson,
@@ -37,7 +38,7 @@ async function assertNotPublished(
 async function buildArgument(
     argumentId: string,
     version: number
-): Promise<Omit<TCoreArgument, "checksum">> {
+): Promise<TOptionalChecksum<TCoreArgument>> {
     const [argMeta, vMeta] = await Promise.all([
         readArgumentMeta(argumentId),
         readVersionMeta(argumentId, version),

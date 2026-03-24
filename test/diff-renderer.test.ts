@@ -29,6 +29,8 @@ function makeArg(
         id: "a",
         version: 0,
         checksum: "x",
+        descendantChecksum: null as string | null,
+        combinedChecksum: "x",
         ...overrides,
     }
 }
@@ -193,6 +195,8 @@ describe("renderDiff", () => {
                         variables: [],
                         expressions: [],
                         checksum: "x",
+                        descendantChecksum: null,
+                        combinedChecksum: "x",
                     } as TCorePremise,
                 ],
                 removed: [
@@ -204,6 +208,8 @@ describe("renderDiff", () => {
                         variables: [],
                         expressions: [],
                         checksum: "x",
+                        descendantChecksum: null,
+                        combinedChecksum: "x",
                     } as TCorePremise,
                 ],
                 modified: [
@@ -216,6 +222,8 @@ describe("renderDiff", () => {
                             variables: [],
                             expressions: [],
                             checksum: "x",
+                            descendantChecksum: null,
+                            combinedChecksum: "x",
                         } as TCorePremise,
                         after: {
                             id: "p1",
@@ -225,6 +233,8 @@ describe("renderDiff", () => {
                             variables: [],
                             expressions: [],
                             checksum: "x",
+                            descendantChecksum: null,
+                            combinedChecksum: "x",
                         } as TCorePremise,
                         changes: [
                             {
@@ -245,6 +255,8 @@ describe("renderDiff", () => {
                                     position: 0,
                                     variableId: "v1",
                                     checksum: "x",
+                                    descendantChecksum: null,
+                                    combinedChecksum: "x",
                                 },
                             ],
                             removed: [],

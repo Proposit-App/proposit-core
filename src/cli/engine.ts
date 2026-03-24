@@ -89,7 +89,7 @@ export async function hydrateEngine(
             listPremiseIds(argumentId, version),
         ])
 
-    const argument: Omit<TCoreArgument, "checksum"> = {
+    const argument: TOptionalChecksum<TCoreArgument> = {
         ...argMeta,
         ...versionMeta,
     }
