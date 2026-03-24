@@ -888,11 +888,12 @@ private checksumDirty = true
 private cachedMetaChecksum: string | undefined
 private cachedDescendantChecksum: string | null | undefined
 private cachedCombinedChecksum: string | undefined
-private premisesCollectionChecksumDirty = true
-private variablesCollectionChecksumDirty = true
 private cachedPremisesCollectionChecksum: string | null | undefined
 private cachedVariablesCollectionChecksum: string | null | undefined
 ```
+
+A single `checksumDirty` flag is sufficient — `flushChecksums()` recomputes
+everything, so separate per-collection dirty flags are unnecessary.
 
 Replace `checksum()` and `computeChecksum()` methods (lines 1211-1246):
 
@@ -919,16 +920,12 @@ public combinedChecksum(): string {
 }
 
 public getCollectionChecksum(name: "premises" | "variables"): string | null {
-    if (name === "premises") {
-        if (this.premisesCollectionChecksumDirty || this.cachedPremisesCollectionChecksum === undefined) {
-            this.flushChecksums()
-        }
-        return this.cachedPremisesCollectionChecksum!
-    }
-    if (this.variablesCollectionChecksumDirty || this.cachedVariablesCollectionChecksum === undefined) {
+    if (this.checksumDirty) {
         this.flushChecksums()
     }
-    return this.cachedVariablesCollectionChecksum!
+    return name === "premises"
+        ? this.cachedPremisesCollectionChecksum!
+        : this.cachedVariablesCollectionChecksum!
 }
 
 public flushChecksums(): void {
@@ -1000,27 +997,18 @@ public flushChecksums(): void {
               )
 
     this.checksumDirty = false
-    this.premisesCollectionChecksumDirty = false
-    this.variablesCollectionChecksumDirty = false
 }
 ```
 
-Update `markDirty()` (line 1248):
+Update `markDirty()` (line 1248) — unchanged, single flag:
 
 ```typescript
 private markDirty(): void {
     this.checksumDirty = true
-    this.premisesCollectionChecksumDirty = true
-    this.variablesCollectionChecksumDirty = true
 }
 ```
 
 Add `canonicalSerialize` to the import from `./checksum.js`.
-
-Remove the now-unnecessary separate collection dirty flags
-(`premisesCollectionChecksumDirty`, `variablesCollectionChecksumDirty`) — the
-single `checksumDirty` flag is sufficient since `flushChecksums()` recomputes
-everything and all flags are set/cleared together.
 
 Update `ArgumentEngine.snapshot()` to flush and include hierarchical checksums
 on the argument entity:
