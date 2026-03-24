@@ -15251,3 +15251,112 @@ describe("hierarchical checksum schema", () => {
         expect(typeof arg.combinedChecksum).toBe("string")
     })
 })
+
+describe("expression hierarchical checksums", () => {
+    it("leaf expression has null descendantChecksum and combinedChecksum equals checksum", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        const { result: pm } = engine.createPremise()
+        pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
+
+        pm.flushChecksums()
+
+        const expr = pm.getExpression("e1")!
+        expect(expr.descendantChecksum).toBeNull()
+        expect(expr.combinedChecksum).toBe(expr.checksum)
+    })
+
+    it("parent expression descendantChecksum reflects children", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        pm.addExpression(makeOpExpr("op-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "op-and",
+                position: 0,
+                premiseId,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "op-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        pm.flushChecksums()
+
+        const parent = pm.getExpression("op-and")!
+        const childP = pm.getExpression("e-p")!
+        const childQ = pm.getExpression("e-q")!
+
+        // Leaves should still have null descendantChecksum
+        expect(childP.descendantChecksum).toBeNull()
+        expect(childQ.descendantChecksum).toBeNull()
+
+        // Parent should have non-null descendantChecksum
+        expect(parent.descendantChecksum).not.toBeNull()
+
+        // Parent combinedChecksum should differ from its meta checksum
+        expect(parent.combinedChecksum).not.toBe(parent.checksum)
+
+        // Verify exact descendantChecksum computation
+        const expectedDescendant = computeHash(
+            canonicalSerialize({
+                [childP.id]: childP.combinedChecksum,
+                [childQ.id]: childQ.combinedChecksum,
+            })
+        )
+        expect(parent.descendantChecksum).toBe(expectedDescendant)
+
+        // Verify exact combinedChecksum computation
+        const expectedCombined = computeHash(
+            parent.checksum + expectedDescendant
+        )
+        expect(parent.combinedChecksum).toBe(expectedCombined)
+    })
+
+    it("adding a child changes parent descendantChecksum", () => {
+        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        pm.addExpression(makeOpExpr("op-and", "and", { premiseId }))
+        pm.addExpression(
+            makeVarExpr("e-p", "v1", {
+                parentId: "op-and",
+                position: 0,
+                premiseId,
+            })
+        )
+
+        pm.flushChecksums()
+
+        const beforeDescendant = pm.getExpression("op-and")!.descendantChecksum
+        const beforeCombined = pm.getExpression("op-and")!.combinedChecksum
+
+        // Add a second child
+        pm.addExpression(
+            makeVarExpr("e-q", "v2", {
+                parentId: "op-and",
+                position: 1,
+                premiseId,
+            })
+        )
+
+        pm.flushChecksums()
+
+        const afterDescendant = pm.getExpression("op-and")!.descendantChecksum
+        const afterCombined = pm.getExpression("op-and")!.combinedChecksum
+
+        expect(afterDescendant).not.toBe(beforeDescendant)
+        expect(afterCombined).not.toBe(beforeCombined)
+    })
+})

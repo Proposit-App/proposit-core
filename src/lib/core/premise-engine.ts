@@ -1248,7 +1248,7 @@ export class PremiseEngine<
     }
 
     public flushChecksums(): void {
-        /* stub — will be implemented in Task 4 */
+        this.expressions.flushExpressionChecksums()
     }
 
     // -------------------------------------------------------------------------
