@@ -63,6 +63,8 @@ describe("Basics extension", () => {
                 id: "arg-1",
                 version: 0,
                 checksum: "abc",
+                descendantChecksum: null,
+                combinedChecksum: "abc",
                 title: "My argument",
             }
             expect(() => Value.Parse(BasicsArgumentSchema, arg)).not.toThrow()
@@ -86,6 +88,8 @@ describe("Basics extension", () => {
                 argumentId: "arg-1",
                 argumentVersion: 0,
                 checksum: "abc",
+                descendantChecksum: null,
+                combinedChecksum: "abc",
                 title: "My premise",
             }
             expect(() =>

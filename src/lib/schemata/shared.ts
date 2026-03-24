@@ -82,9 +82,27 @@ export const Nullable = <T extends TSchema>(
 export const UUID = Type.String() // `${string}-${string}-${string}-${string}-${string}`
 export type TUUID = Static<typeof UUID>
 
-/** Makes the `checksum` field optional on a type that has one. */
+/** Makes the `checksum`, `descendantChecksum`, and `combinedChecksum` fields optional on a type that has them. */
 export type TOptionalChecksum<T extends { checksum?: unknown }> = Omit<
     T,
-    "checksum"
+    "checksum" | "descendantChecksum" | "combinedChecksum"
 > &
-    Partial<Pick<T, "checksum">>
+    Partial<
+        Pick<
+            T,
+            Extract<
+                keyof T,
+                "checksum" | "descendantChecksum" | "combinedChecksum"
+            >
+        >
+    >
+
+/** Makes checksum, descendantChecksum, and combinedChecksum optional on a hierarchical entity type. */
+export type TOptionalHierarchicalChecksum<
+    T extends {
+        checksum: unknown
+        descendantChecksum: unknown
+        combinedChecksum: unknown
+    },
+> = Omit<T, "checksum" | "descendantChecksum" | "combinedChecksum"> &
+    Partial<Pick<T, "checksum" | "descendantChecksum" | "combinedChecksum">>

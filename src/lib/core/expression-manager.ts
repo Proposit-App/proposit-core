@@ -16,7 +16,7 @@ import {
     normalizeChecksumConfig,
     serializeChecksumConfig,
 } from "../consts.js"
-import { entityChecksum } from "./checksum.js"
+import { entityChecksum, computeHash, canonicalSerialize } from "./checksum.js"
 import {
     DEFAULT_GRAMMAR_CONFIG,
     type TGrammarConfig,
@@ -27,7 +27,7 @@ export type TExpressionInput<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
 > = TExpr extends infer U
     ? U extends TCorePropositionalExpression
-        ? Omit<U, "checksum">
+        ? Omit<U, "checksum" | "descendantChecksum" | "combinedChecksum">
         : never
     : never
 
@@ -35,7 +35,13 @@ export type TExpressionWithoutPosition<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
 > = TExpr extends infer U
     ? U extends TCorePropositionalExpression
-        ? Omit<U, "position" | "checksum">
+        ? Omit<
+              U,
+              | "position"
+              | "checksum"
+              | "descendantChecksum"
+              | "combinedChecksum"
+          >
         : never
     : never
 
@@ -80,6 +86,7 @@ export class ExpressionManager<
     private positionConfig: TCorePositionConfig
     private config?: TLogicEngineOptions
     private collector: ChangeCollector | null = null
+    private dirtyExpressionIds = new Set<string>()
 
     setCollector(collector: ChangeCollector | null): void {
         this.collector = collector
@@ -101,13 +108,104 @@ export class ExpressionManager<
         const fields =
             this.config?.checksumConfig?.expressionFields ??
             DEFAULT_CHECKSUM_CONFIG.expressionFields!
+        const checksum = entityChecksum(
+            expr as unknown as Record<string, unknown>,
+            fields
+        )
         return {
             ...expr,
-            checksum: entityChecksum(
+            checksum,
+            descendantChecksum: null,
+            combinedChecksum: checksum,
+        } as TExpr
+    }
+
+    /**
+     * Marks an expression and all its ancestors as dirty for hierarchical
+     * checksum recomputation. Stops early when it reaches an expression
+     * already in the dirty set (since its ancestors are already marked).
+     */
+    public markExpressionDirty(exprId: string): void {
+        let current: string | null = exprId
+        while (current !== null) {
+            if (this.dirtyExpressionIds.has(current)) break // ancestors already dirty
+            this.dirtyExpressionIds.add(current)
+            const expr = this.expressions.get(current)
+            current = expr ? expr.parentId : null
+        }
+    }
+
+    /**
+     * Recomputes `descendantChecksum` and `combinedChecksum` for all dirty
+     * expressions, processing bottom-up (deepest first) so that children
+     * are up-to-date before their parents are computed.
+     */
+    public flushExpressionChecksums(): void {
+        if (this.dirtyExpressionIds.size === 0) return
+
+        // Sort dirty expressions by depth (deepest first) for bottom-up processing
+        const dirtyIds = [...this.dirtyExpressionIds]
+        const depthOf = (id: string): number => {
+            let depth = 0
+            let current = this.expressions.get(id)
+            while (current && current.parentId !== null) {
+                depth++
+                current = this.expressions.get(current.parentId)
+            }
+            return depth
+        }
+        dirtyIds.sort((a, b) => depthOf(b) - depthOf(a))
+
+        const fields =
+            this.config?.checksumConfig?.expressionFields ??
+            DEFAULT_CHECKSUM_CONFIG.expressionFields!
+
+        for (const id of dirtyIds) {
+            const expr = this.expressions.get(id)
+            if (!expr) continue
+
+            const metaChecksum = entityChecksum(
                 expr as unknown as Record<string, unknown>,
                 fields
-            ),
-        } as TExpr
+            )
+
+            const childIds = this.childExpressionIdsByParentId.get(id)
+            let descendantChecksum: string | null = null
+            if (childIds && childIds.size > 0) {
+                const childMap: Record<string, string> = {}
+                for (const childId of childIds) {
+                    const child = this.expressions.get(childId)
+                    if (child) {
+                        childMap[childId] = child.combinedChecksum
+                    }
+                }
+                descendantChecksum = computeHash(canonicalSerialize(childMap))
+            }
+
+            const combinedChecksum =
+                descendantChecksum === null
+                    ? metaChecksum
+                    : computeHash(metaChecksum + descendantChecksum)
+
+            this.expressions.set(id, {
+                ...expr,
+                checksum: metaChecksum,
+                descendantChecksum,
+                combinedChecksum,
+            } as TExpr)
+        }
+
+        this.dirtyExpressionIds.clear()
+    }
+
+    /**
+     * Removes deleted expression IDs from the dirty set so that flush
+     * doesn't attempt to process expressions that no longer exist.
+     */
+    public pruneDeletedFromDirtySet(deletedIds: Set<string>): void {
+        for (const id of deletedIds) {
+            this.dirtyExpressionIds.delete(id)
+        }
     }
 
     /** Returns all expressions sorted by ID for deterministic output. */
@@ -258,6 +356,9 @@ export class ExpressionManager<
             expression.parentId,
             () => new Set()
         ).add(expression.id)
+
+        // Mark the new expression and its ancestors dirty for hierarchical checksum recomputation.
+        this.markExpressionDirty(expression.id)
     }
 
     /**
@@ -440,6 +541,9 @@ export class ExpressionManager<
             ...updated,
         } as unknown as TCorePropositionalExpression)
 
+        // Mark the updated expression and its ancestors dirty for hierarchical checksum recomputation.
+        this.markExpressionDirty(expressionId)
+
         return updated
     }
 
@@ -522,6 +626,12 @@ export class ExpressionManager<
             this.childPositionsByParentId.delete(id)
         }
 
+        // Prune deleted expressions from the dirty set and mark the surviving parent dirty.
+        this.pruneDeletedFromDirtySet(toRemove)
+        if (parentId !== null) {
+            this.markExpressionDirty(parentId)
+        }
+
         this.collapseIfNeeded(parentId)
 
         return target
@@ -550,6 +660,12 @@ export class ExpressionManager<
             this.childPositionsByParentId.get(parentId)?.delete(target.position)
             this.childExpressionIdsByParentId.delete(expressionId)
             this.childPositionsByParentId.delete(expressionId)
+
+            // Prune deleted expression from dirty set and mark surviving parent dirty.
+            this.dirtyExpressionIds.delete(expressionId)
+            if (parentId !== null) {
+                this.markExpressionDirty(parentId)
+            }
 
             this.collapseIfNeeded(parentId)
 
@@ -622,6 +738,11 @@ export class ExpressionManager<
         // Remove target from expressions map.
         this.expressions.delete(expressionId)
 
+        // Prune deleted expression from dirty set and mark promoted child dirty
+        // (its parentId changed) which also propagates to ancestors.
+        this.dirtyExpressionIds.delete(expressionId)
+        this.markExpressionDirty(child.id)
+
         // No collapseIfNeeded after promotion.
 
         return target
@@ -649,6 +770,13 @@ export class ExpressionManager<
                     ?.delete(operator.position)
                 this.childExpressionIdsByParentId.delete(operatorId)
                 this.childPositionsByParentId.delete(operatorId)
+
+                // Prune collapsed formula from dirty set and propagate to grandparent.
+                this.dirtyExpressionIds.delete(operatorId)
+                if (grandparentId !== null) {
+                    this.markExpressionDirty(grandparentId)
+                }
+
                 this.collapseIfNeeded(grandparentId)
             }
             return
@@ -674,6 +802,12 @@ export class ExpressionManager<
                 ?.delete(grandparentPosition)
             this.childExpressionIdsByParentId.delete(operatorId)
             this.childPositionsByParentId.delete(operatorId)
+
+            // Prune collapsed operator from dirty set and propagate to grandparent.
+            this.dirtyExpressionIds.delete(operatorId)
+            if (grandparentId !== null) {
+                this.markExpressionDirty(grandparentId)
+            }
 
             this.collapseIfNeeded(grandparentId)
         } else if (children.length === 1) {
@@ -738,6 +872,11 @@ export class ExpressionManager<
                 ...operator,
             } as unknown as TCorePropositionalExpression)
             this.expressions.delete(operatorId)
+
+            // Prune collapsed operator from dirty set and mark promoted child dirty
+            // (its parentId changed) which also propagates to ancestors.
+            this.dirtyExpressionIds.delete(operatorId)
+            this.markExpressionDirty(child.id)
 
             // The grandparent's child count is unchanged; no further recursion needed.
         }
@@ -938,6 +1077,7 @@ export class ExpressionManager<
         newPosition: number
     ): void {
         const expression = this.expressions.get(expressionId)!
+        const oldParentId = expression.parentId
 
         // Detach from old parent.
         this.childExpressionIdsByParentId
@@ -969,6 +1109,12 @@ export class ExpressionManager<
             newParentId,
             () => new Set()
         ).add(newPosition)
+
+        // Mark both old and new parent chains dirty for hierarchical checksum recomputation.
+        this.markExpressionDirty(expressionId)
+        if (oldParentId !== null && oldParentId !== newParentId) {
+            this.markExpressionDirty(oldParentId)
+        }
     }
 
     /**
@@ -1181,6 +1327,10 @@ export class ExpressionManager<
             anchorParentId,
             () => new Set()
         ).add(anchorPosition)
+
+        // Mark the new expression and its ancestors dirty for hierarchical checksum recomputation.
+        // Note: reparent() already marks children dirty, so this propagates from the new expression up.
+        this.markExpressionDirty(expression.id)
     }
 
     /**
@@ -1382,6 +1532,11 @@ export class ExpressionManager<
             anchorParentId,
             () => new Set()
         ).add(anchorPosition)
+
+        // Mark the new operator (and ancestors), the new sibling, and the reparented existing node dirty.
+        // reparent() already marks the existing node dirty; mark the operator and sibling as well.
+        this.markExpressionDirty(newSibling.id)
+        this.markExpressionDirty(operator.id)
     }
 
     /**

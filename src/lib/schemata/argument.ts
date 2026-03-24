@@ -1,5 +1,5 @@
 import Type, { type Static } from "typebox"
-import { UUID } from "./shared.js"
+import { Nullable, UUID } from "./shared.js"
 
 export const CoreArgumentSchema = Type.Object(
     {
@@ -7,6 +7,14 @@ export const CoreArgumentSchema = Type.Object(
         version: Type.Number(),
         checksum: Type.String({
             description: "Argument-level checksum for sync detection.",
+        }),
+        descendantChecksum: Nullable(Type.String(), {
+            description:
+                "Checksum derived from premises and variables collections. Null if argument has no descendants.",
+        }),
+        combinedChecksum: Type.String({
+            description:
+                "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
         }),
     },
     {

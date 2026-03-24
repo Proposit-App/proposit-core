@@ -41,6 +41,7 @@ Non-obvious constraints enforced by the code that are easy to violate:
 - **Libraries are required by ArgumentEngine:** Constructor is `(argument, claimLibrary, sourceLibrary, claimSourceLibrary, options?)`. Libraries are validated at variable-add time (claim library) and by `ClaimSourceLibrary` on association add (claim and source libraries).
 - **Claim and source libraries:** `ClaimLibrary` and `SourceLibrary` are global, versioned repositories with freeze semantics. `freeze()` locks the current version and auto-creates a new mutable copy. No deletion.
 - **Claim-source associations are global:** `ClaimSourceLibrary` is a standalone class (not argument-scoped). Create-or-delete only — no update path. Validates against `TClaimLookup` and `TSourceLookup` on `add()`. Associations link a claim version to a source version.
+- **Hierarchical checksums:** Every hierarchical entity (expression, premise, argument) carries three checksum fields: `checksum` (meta — entity data only, driven by `checksumConfig`), `descendantChecksum` (from children's `combinedChecksum` values, `null` for leaves), and `combinedChecksum` (equals `checksum` when `descendantChecksum` is null, otherwise `computeHash(checksum + descendantChecksum)`). Dirty flags propagate bottom-up on mutation; recomputation is lazy via `flushChecksums()`. Variables are non-hierarchical (single `checksum`). Role state is folded into the argument's meta checksum. Per-collection checksums are exposed via `getCollectionChecksum()`. `fromSnapshot`/`fromData` accept `checksumVerification?: "ignore" | "strict"`.
 
 ## Testing
 
@@ -69,6 +70,6 @@ Defined in the `brain-style` skill. Enforced by ESLint (`@typescript-eslint/nami
 - `scripts/smoke-test.sh` [Public-CLI-API] — Add coverage for new commands, flags, or behaviors
 - `src/lib/core/interfaces/argument-engine.interfaces.ts` [Public-Engine-API] — JSDoc for ArgumentEngine interface methods; update when ArgumentEngine public method signatures, parameters, return types, or thrown errors change
 - `src/lib/core/interfaces/premise-engine.interfaces.ts` [Public-Engine-API] — JSDoc for PremiseEngine interface methods; update when PremiseEngine public method signatures, parameters, return types, or thrown errors change
-- `src/lib/core/interfaces/shared.interfaces.ts` [Public-Engine-API] — JSDoc for shared engine interfaces (TDisplayable, TChecksummable); update when shared method signatures change
+- `src/lib/core/interfaces/shared.interfaces.ts` [Public-Engine-API] — JSDoc for shared engine interfaces (TDisplayable, THierarchicalChecksummable); update when shared method signatures change
 - `src/lib/core/interfaces/library.interfaces.ts` [Public-Engine-API] — JSDoc for TClaimLookup, TSourceLookup, TClaimSourceLookup, and library snapshot interfaces; update when library interface signatures change
 - `examples/arguments/*.yaml` [Argument-Schema] — Example argument YAML files used by `test/examples.test.ts`; update when core argument schemas (`src/lib/schemata/`) or CLI-extended schemas (`src/cli/schemata.ts`, YAML import shape) change

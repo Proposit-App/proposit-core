@@ -64,7 +64,7 @@ import type {
     TArgumentLifecycle,
     TArgumentIdentity,
     TDisplayable,
-    TChecksummable,
+    THierarchicalChecksummable,
     TClaimLookup,
     TSourceLookup,
     TClaimSourceLookup,
@@ -114,7 +114,7 @@ export class ArgumentEngine<
         TArgumentLifecycle<TArg, TPremise, TExpr, TVar>,
         TArgumentIdentity<TArg>,
         TDisplayable,
-        TChecksummable
+        THierarchicalChecksummable<"premises" | "variables">
 {
     private argument: TOptionalChecksum<TArg>
     private premises: Map<string, PremiseEngine<TArg, TPremise, TExpr, TVar>>
@@ -127,7 +127,11 @@ export class ArgumentEngine<
     private positionConfig?: TCorePositionConfig
     private grammarConfig?: TGrammarConfig
     private checksumDirty = true
-    private cachedChecksum: string | undefined
+    private cachedMetaChecksum: string | undefined
+    private cachedDescendantChecksum: string | null | undefined
+    private cachedCombinedChecksum: string | undefined
+    private cachedPremisesCollectionChecksum: string | null | undefined
+    private cachedVariablesCollectionChecksum: string | null | undefined
     private expressionIndex: Map<string, string>
     private listeners = new Set<() => void>()
     private reactiveDirty = {
@@ -405,7 +409,13 @@ export class ArgumentEngine<
     }
 
     public getArgument(): TArg {
-        return { ...this.argument, checksum: this.checksum() } as TArg
+        this.flushChecksums()
+        return {
+            ...this.argument,
+            checksum: this.cachedMetaChecksum!,
+            descendantChecksum: this.cachedDescendantChecksum!,
+            combinedChecksum: this.cachedCombinedChecksum!,
+        } as TArg
     }
 
     public toDisplayString(): string {
@@ -482,6 +492,7 @@ export class ArgumentEngine<
         this.wireCircularityCheck(pm)
         this.wireEmptyBoundPremiseCheck(pm)
         pm.setOnMutate(() => {
+            this.markDirty()
             this.reactiveDirty.premiseIds.add(id)
             this.notifySubscribers()
         })
@@ -947,8 +958,14 @@ export class ArgumentEngine<
     }
 
     public snapshot(): TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar> {
+        this.flushChecksums()
         return {
-            argument: { ...this.argument },
+            argument: {
+                ...this.argument,
+                checksum: this.cachedMetaChecksum!,
+                descendantChecksum: this.cachedDescendantChecksum!,
+                combinedChecksum: this.cachedCombinedChecksum!,
+            } as TArg,
             variables: this.variables.snapshot(),
             premises: this.listPremises().map((pe) => pe.snapshot()),
             ...(this.conclusionPremiseId !== undefined
@@ -978,7 +995,8 @@ export class ArgumentEngine<
         claimLibrary: TClaimLookup<TClaim>,
         sourceLibrary: TSourceLookup<TSource>,
         claimSourceLibrary: TClaimSourceLookup<TAssoc>,
-        grammarConfig?: TGrammarConfig
+        grammarConfig?: TGrammarConfig,
+        checksumVerification?: "ignore" | "strict"
     ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc> {
         const engine = new ArgumentEngine<
             TArg,
@@ -1016,6 +1034,7 @@ export class ArgumentEngine<
             engine.wireEmptyBoundPremiseCheck(pe)
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
+                engine.markDirty()
                 engine.reactiveDirty.premiseIds.add(premiseId)
                 engine.notifySubscribers()
             })
@@ -1037,6 +1056,12 @@ export class ArgumentEngine<
         }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
         engine.conclusionPremiseId = snapshot.conclusionPremiseId
+
+        if (checksumVerification === "strict") {
+            engine.flushChecksums()
+            ArgumentEngine.verifySnapshotChecksums(engine, snapshot)
+        }
+
         return engine
     }
 
@@ -1066,7 +1091,8 @@ export class ArgumentEngine<
         expressions: TExpressionInput<TExpr>[],
         roles: TCoreArgumentRoleState,
         config?: TLogicEngineOptions,
-        grammarConfig?: TGrammarConfig
+        grammarConfig?: TGrammarConfig,
+        checksumVerification?: "ignore" | "strict"
     ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc> {
         const loadingGrammarConfig = grammarConfig ?? PERMISSIVE_GRAMMAR_CONFIG
         const normalizedConfig = config
@@ -1162,7 +1188,202 @@ export class ArgumentEngine<
         // After loading: restore the caller's intended grammar config
         engine.grammarConfig = config?.grammarConfig
 
+        if (checksumVerification === "strict") {
+            engine.flushChecksums()
+            ArgumentEngine.verifyDataChecksums(
+                engine,
+                argument,
+                variables,
+                premises
+            )
+        }
+
         return engine
+    }
+
+    /**
+     * Verifies that all checksum fields in the snapshot match the recomputed
+     * checksums on the restored engine. Throws on the first mismatch.
+     */
+    private static verifySnapshotChecksums<
+        TArg extends TCoreArgument,
+        TPremise extends TCorePremise,
+        TExpr extends TCorePropositionalExpression,
+        TVar extends TCorePropositionalVariable,
+        TSource extends TCoreSource,
+        TClaim extends TCoreClaim,
+        TAssoc extends TCoreClaimSourceAssociation,
+    >(
+        engine: ArgumentEngine<
+            TArg,
+            TPremise,
+            TExpr,
+            TVar,
+            TSource,
+            TClaim,
+            TAssoc
+        >,
+        snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
+    ): void {
+        const checksumFields = [
+            "checksum",
+            "descendantChecksum",
+            "combinedChecksum",
+        ] as const
+
+        // Verify expression checksums
+        for (const pe of engine.listPremises()) {
+            for (const expr of pe.getExpressions()) {
+                const premiseSnap = snapshot.premises.find(
+                    (ps) => ps.premise.id === pe.getId()
+                )
+                const exprSnap = premiseSnap?.expressions.expressions.find(
+                    (e) => e.id === expr.id
+                )
+                if (exprSnap) {
+                    for (const field of checksumFields) {
+                        const stored = String(
+                            (exprSnap as Record<string, unknown>)[field]
+                        )
+                        const computed = String(
+                            (expr as Record<string, unknown>)[field]
+                        )
+                        if (stored !== "undefined" && stored !== computed) {
+                            throw new Error(
+                                `Checksum mismatch on expression "${expr.id}" field "${field}": stored="${stored}", computed="${computed}"`
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Verify variable checksums
+        for (const v of engine.getVariables()) {
+            const varSnap = snapshot.variables.variables.find(
+                (sv) => (sv as Record<string, unknown>).id === v.id
+            )
+            const storedVarChecksum = varSnap
+                ? String((varSnap as Record<string, unknown>).checksum)
+                : undefined
+            if (storedVarChecksum && storedVarChecksum !== "undefined") {
+                if (storedVarChecksum !== v.checksum) {
+                    throw new Error(
+                        `Checksum mismatch on variable "${v.id}": stored="${storedVarChecksum}", computed="${v.checksum}"`
+                    )
+                }
+            }
+        }
+
+        // Verify premise checksums
+        for (const pe of engine.listPremises()) {
+            const premiseSnap = snapshot.premises.find(
+                (ps) => ps.premise.id === pe.getId()
+            )
+            if (premiseSnap?.premise) {
+                const sp = premiseSnap.premise as Record<string, unknown>
+                for (const field of checksumFields) {
+                    const stored = String(sp[field])
+                    const computed = pe[field]()
+                    if (stored !== "undefined" && stored !== computed) {
+                        throw new Error(
+                            `Checksum mismatch on premise "${pe.getId()}" field "${field}": stored="${stored}", computed="${computed}"`
+                        )
+                    }
+                }
+            }
+        }
+
+        // Verify argument checksums
+        const sa = snapshot.argument as Record<string, unknown>
+        for (const field of checksumFields) {
+            const stored = String(sa[field])
+            const computed = engine[field]()
+            if (stored !== "undefined" && stored !== computed) {
+                throw new Error(
+                    `Checksum mismatch on argument "${engine.getArgument().id}" field "${field}": stored="${stored}", computed="${computed}"`
+                )
+            }
+        }
+    }
+
+    /**
+     * Verifies that all checksum fields in the input data match the recomputed
+     * checksums on the restored engine. Throws on the first mismatch.
+     */
+    private static verifyDataChecksums<
+        TArg extends TCoreArgument,
+        TPremise extends TCorePremise,
+        TExpr extends TCorePropositionalExpression,
+        TVar extends TCorePropositionalVariable,
+        TSource extends TCoreSource,
+        TClaim extends TCoreClaim,
+        TAssoc extends TCoreClaimSourceAssociation,
+    >(
+        engine: ArgumentEngine<
+            TArg,
+            TPremise,
+            TExpr,
+            TVar,
+            TSource,
+            TClaim,
+            TAssoc
+        >,
+        argument: TOptionalChecksum<TArg>,
+        variables: TOptionalChecksum<TVar>[],
+        premises: TOptionalChecksum<TPremise>[]
+    ): void {
+        const checksumFields = [
+            "checksum",
+            "descendantChecksum",
+            "combinedChecksum",
+        ] as const
+
+        // Verify variable checksums
+        for (const v of engine.getVariables()) {
+            const inputVar = variables.find(
+                (iv) => (iv as Record<string, unknown>).id === v.id
+            )
+            const storedVarChecksum = inputVar
+                ? String((inputVar as Record<string, unknown>).checksum)
+                : undefined
+            if (storedVarChecksum && storedVarChecksum !== "undefined") {
+                if (storedVarChecksum !== v.checksum) {
+                    throw new Error(
+                        `Checksum mismatch on variable "${v.id}": stored="${storedVarChecksum}", computed="${v.checksum}"`
+                    )
+                }
+            }
+        }
+
+        // Verify premise checksums
+        for (const pe of engine.listPremises()) {
+            const inputPremise = premises.find((p) => p.id === pe.getId())
+            if (inputPremise) {
+                const sp = inputPremise as Record<string, unknown>
+                for (const field of checksumFields) {
+                    const stored = String(sp[field])
+                    const computed = pe[field]()
+                    if (stored !== "undefined" && stored !== computed) {
+                        throw new Error(
+                            `Checksum mismatch on premise "${pe.getId()}" field "${field}": stored="${stored}", computed="${computed}"`
+                        )
+                    }
+                }
+            }
+        }
+
+        // Verify argument checksums
+        const sa = argument as Record<string, unknown>
+        for (const field of checksumFields) {
+            const stored = String(sa[field])
+            const computed = engine[field]()
+            if (stored !== "undefined" && stored !== computed) {
+                throw new Error(
+                    `Checksum mismatch on argument "${engine.getArgument().id}" field "${field}": stored="${stored}", computed="${computed}"`
+                )
+            }
+        }
     }
 
     public rollback(
@@ -1193,6 +1414,7 @@ export class ArgumentEngine<
             this.wireEmptyBoundPremiseCheck(pe)
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
+                this.markDirty()
                 this.reactiveDirty.premiseIds.add(premiseId)
                 this.notifySubscribers()
             })
@@ -1209,40 +1431,106 @@ export class ArgumentEngine<
     }
 
     public checksum(): string {
-        if (this.checksumDirty || this.cachedChecksum === undefined) {
-            this.cachedChecksum = this.computeChecksum()
-            this.checksumDirty = false
+        if (this.checksumDirty || this.cachedMetaChecksum === undefined) {
+            this.flushChecksums()
         }
-        return this.cachedChecksum
+        return this.cachedMetaChecksum!
     }
 
-    private computeChecksum(): string {
+    public descendantChecksum(): string | null {
+        if (this.checksumDirty || this.cachedDescendantChecksum === undefined) {
+            this.flushChecksums()
+        }
+        return this.cachedDescendantChecksum!
+    }
+
+    public combinedChecksum(): string {
+        if (this.checksumDirty || this.cachedCombinedChecksum === undefined) {
+            this.flushChecksums()
+        }
+        return this.cachedCombinedChecksum!
+    }
+
+    public getCollectionChecksum(
+        name: "premises" | "variables"
+    ): string | null {
+        if (this.checksumDirty) {
+            this.flushChecksums()
+        }
+        return name === "premises"
+            ? this.cachedPremisesCollectionChecksum!
+            : this.cachedVariablesCollectionChecksum!
+    }
+
+    public flushChecksums(): void {
         const config = this.checksumConfig
-        const checksumMap: Record<string, string> = {}
 
-        // Argument entity checksum
-        checksumMap[this.argument.id as string] = entityChecksum(
-            this.argument as unknown as Record<string, unknown>,
-            config?.argumentFields ?? DEFAULT_CHECKSUM_CONFIG.argumentFields!
-        )
-
-        // Role state checksum (use fixed key since roles have no ID)
-        checksumMap.__roles__ = entityChecksum(
-            this.getRoleState() as unknown as Record<string, unknown>,
-            config?.roleFields ?? DEFAULT_CHECKSUM_CONFIG.roleFields!
-        )
-
-        // Variable checksums
-        for (const v of this.variables.toArray()) {
-            checksumMap[v.id] = v.checksum
-        }
-
-        // Premise checksums (cumulative, from each PremiseEngine)
+        // 1. Flush all premise checksums (which flush expression checksums)
         for (const pe of this.listPremises()) {
-            checksumMap[pe.getId()] = pe.checksum()
+            pe.flushChecksums()
         }
 
-        return computeHash(canonicalSerialize(checksumMap))
+        // 2. Compute argument meta checksum (entity fields + role state MERGED)
+        const argumentFields =
+            config?.argumentFields ?? DEFAULT_CHECKSUM_CONFIG.argumentFields!
+        const roleFields =
+            config?.roleFields ?? DEFAULT_CHECKSUM_CONFIG.roleFields!
+        const mergedFields = new Set([...argumentFields, ...roleFields])
+        const mergedEntity = {
+            ...(this.argument as unknown as Record<string, unknown>),
+            ...(this.getRoleState() as unknown as Record<string, unknown>),
+        }
+        this.cachedMetaChecksum = entityChecksum(mergedEntity, mergedFields)
+
+        // 3. Compute collection checksums
+        const premiseEntries = this.listPremises()
+        if (premiseEntries.length > 0) {
+            const premiseMap: Record<string, string> = {}
+            for (const pe of premiseEntries) {
+                premiseMap[pe.getId()] = pe.combinedChecksum()
+            }
+            this.cachedPremisesCollectionChecksum = computeHash(
+                canonicalSerialize(premiseMap)
+            )
+        } else {
+            this.cachedPremisesCollectionChecksum = null
+        }
+
+        const vars = this.variables.toArray()
+        if (vars.length > 0) {
+            const varMap: Record<string, string> = {}
+            for (const v of vars) {
+                varMap[v.id] = v.checksum
+            }
+            this.cachedVariablesCollectionChecksum = computeHash(
+                canonicalSerialize(varMap)
+            )
+        } else {
+            this.cachedVariablesCollectionChecksum = null
+        }
+
+        // 4. Compute descendant checksum (exclude null collections)
+        const collectionMap: Record<string, string> = {}
+        if (this.cachedPremisesCollectionChecksum !== null) {
+            collectionMap.premises = this.cachedPremisesCollectionChecksum
+        }
+        if (this.cachedVariablesCollectionChecksum !== null) {
+            collectionMap.variables = this.cachedVariablesCollectionChecksum
+        }
+        this.cachedDescendantChecksum =
+            Object.keys(collectionMap).length > 0
+                ? computeHash(canonicalSerialize(collectionMap))
+                : null
+
+        // 5. Compute combined checksum
+        this.cachedCombinedChecksum =
+            this.cachedDescendantChecksum === null
+                ? this.cachedMetaChecksum
+                : computeHash(
+                      this.cachedMetaChecksum + this.cachedDescendantChecksum
+                  )
+
+        this.checksumDirty = false
     }
 
     private markDirty(): void {
