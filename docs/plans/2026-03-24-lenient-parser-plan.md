@@ -15,6 +15,7 @@
 ### Task 1: Add new types
 
 **Files:**
+
 - Modify: `src/lib/parsing/types.ts`
 - Modify: `src/lib/parsing/index.ts`
 
@@ -73,6 +74,7 @@ git commit -m "feat(parser): add TParserWarning and TParserBuildOptions types"
 ### Task 2: Add `warnings` to result type and update `build()` signature
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts:35-48` (TArgumentParserResult)
 - Modify: `src/lib/parsing/argument-parser.ts:267-277` (build signature)
 - Modify: `src/lib/parsing/argument-parser.ts:466` (return statement)
@@ -189,6 +191,7 @@ git commit -m "feat(parser): add warnings to TArgumentParserResult and options t
 ### Task 3: Lenient handling for `FORMULA_PARSE_ERROR`
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts:288-298` (formula parsing loop)
 - Test: `test/core.test.ts`
 
@@ -292,6 +295,7 @@ git commit -m "feat(parser): lenient handling for FORMULA_PARSE_ERROR"
 ### Task 4: Lenient handling for `FORMULA_STRUCTURE_ERROR`
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts:300-301` (root-only validation)
 - Test: `test/core.test.ts`
 
@@ -330,8 +334,7 @@ In `src/lib/parsing/argument-parser.ts`, wrap the `validateRootOnly` call (line 
 try {
     validateRootOnly(ast, true, premise.miniId)
 } catch (error) {
-    const msg =
-        error instanceof Error ? error.message : String(error)
+    const msg = error instanceof Error ? error.message : String(error)
     if (strict) {
         throw error
     }
@@ -361,6 +364,7 @@ git commit -m "feat(parser): lenient handling for FORMULA_STRUCTURE_ERROR"
 ### Task 5: Lenient handling for `UNRESOLVED_SOURCE_MINIID`
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts:376-381` (source resolution in association wiring)
 - Test: `test/core.test.ts`
 
@@ -447,9 +451,10 @@ git commit -m "feat(parser): lenient handling for UNRESOLVED_SOURCE_MINIID"
 
 ### Task 6: Lenient handling for `UNRESOLVED_CLAIM_MINIID` and `UNDECLARED_VARIABLE_SYMBOL`
 
-This task handles both warning codes together because they require restructuring the undeclared-symbol check. Currently, the symbol check runs in the formula-parsing loop *before* variable creation. But when a variable is skipped (bad claim ref), its symbol must be removed from `declaredSymbols` so downstream formulas are also caught. This requires moving the undeclared-symbol check to *after* variable creation.
+This task handles both warning codes together because they require restructuring the undeclared-symbol check. Currently, the symbol check runs in the formula-parsing loop _before_ variable creation. But when a variable is skipped (bad claim ref), its symbol must be removed from `declaredSymbols` so downstream formulas are also caught. This requires moving the undeclared-symbol check to _after_ variable creation.
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts:303-314` (remove undeclared symbol check from formula loop)
 - Modify: `src/lib/parsing/argument-parser.ts:416-421` (claim resolution in variable creation)
 - Modify: `src/lib/parsing/argument-parser.ts:440` (add post-variable formula filter, use `survivingFormulas`)
@@ -464,7 +469,11 @@ it("skips variable with bad claim ref and emits UNRESOLVED_CLAIM_MINIID", () => 
     const parser = new ArgumentParser()
     const resp = validResponse()
     // V2 references nonexistent claim C99
-    resp.argument!.variables[1] = { miniId: "V2", symbol: "Q", claimMiniId: "C99" }
+    resp.argument!.variables[1] = {
+        miniId: "V2",
+        symbol: "Q",
+        claimMiniId: "C99",
+    }
     // Remove premise P1 that uses Q, keep P2 that uses only P
     resp.argument!.premises = [{ miniId: "P2", formula: "P" }]
     resp.argument!.conclusionPremiseMiniId = "P2"
@@ -520,7 +529,10 @@ if (!claimRef) {
     warnings.push({
         code: "UNRESOLVED_CLAIM_MINIID",
         message: `Variable "${parsedVar.miniId}" references undeclared claim miniId "${parsedVar.claimMiniId}".`,
-        context: { variableMiniId: parsedVar.miniId, claimMiniId: parsedVar.claimMiniId },
+        context: {
+            variableMiniId: parsedVar.miniId,
+            claimMiniId: parsedVar.claimMiniId,
+        },
     })
     declaredSymbols.delete(parsedVar.symbol)
     continue
@@ -591,6 +603,7 @@ git commit -m "feat(parser): lenient handling for UNRESOLVED_CLAIM_MINIID and UN
 ### Task 7: Lenient handling for `UNRESOLVED_CONCLUSION_MINIID`
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts:458-464` (conclusion resolution)
 - Test: `test/core.test.ts`
 
@@ -659,6 +672,7 @@ git commit -m "feat(parser): lenient handling for UNRESOLVED_CONCLUSION_MINIID"
 ### Task 8: Cascade and edge case tests
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write cascade test — variable skip cascades to premise skip**
@@ -670,7 +684,11 @@ it("cascade: skipped variable causes premise skip with both warnings", () => {
     const parser = new ArgumentParser()
     const resp = validResponse()
     // Make V2 (symbol Q) reference a bad claim
-    resp.argument!.variables[1] = { miniId: "V2", symbol: "Q", claimMiniId: "C99" }
+    resp.argument!.variables[1] = {
+        miniId: "V2",
+        symbol: "Q",
+        claimMiniId: "C99",
+    }
     // P1 is "P implies Q" — Q is now undeclared, so P1 gets skipped
     // P2 is "P" — still valid; set it as conclusion so we don't also trigger UNRESOLVED_CONCLUSION_MINIID
     resp.argument!.conclusionPremiseMiniId = "P2"
@@ -698,7 +716,9 @@ it("returns identical result with empty warnings when lenient and no issues", ()
     const strictSnap = strict.engine.snapshot()
     const lenientSnap = lenient.engine.snapshot()
     expect(lenientSnap.premises).toHaveLength(strictSnap.premises.length)
-    expect(lenientSnap.variables.variables).toHaveLength(strictSnap.variables.variables.length)
+    expect(lenientSnap.variables.variables).toHaveLength(
+        strictSnap.variables.variables.length
+    )
     expect(lenient.warnings).toEqual([])
 })
 ```
@@ -765,6 +785,7 @@ git commit -m "test(parser): cascade, edge case, and strict regression tests for
 ### Task 9: MiniId prompt guidance
 
 **Files:**
+
 - Modify: `src/lib/parsing/prompt-builder.ts:26-87` (CORE_PROMPT)
 - Test: `test/core.test.ts`
 
@@ -824,6 +845,7 @@ git commit -m "feat(parser): add miniId prefix conventions to LLM prompt"
 ### Task 10: CLI integration
 
 **Files:**
+
 - Modify: `src/cli/output.ts` (add `printWarning`)
 - Modify: `src/cli/commands/parse.ts:164-173` (build call and warning display)
 
@@ -880,6 +902,7 @@ git commit -m "feat(cli): use lenient parser mode and display warnings"
 ### Task 11: Final checks and documentation sync
 
 **Files:**
+
 - Check: `pnpm run check`
 - Check: docs per CLAUDE.md Documentation Sync section
 
@@ -895,6 +918,7 @@ Run: `pnpm eslint . --fix` if needed, then `pnpm run prettify`.
 - [ ] **Step 3: Check documentation sync triggers**
 
 Per CLAUDE.md Documentation Sync, check:
+
 - `docs/api-reference.md` [Public-API] — update if `TArgumentParserResult`, `build()` signature, or new types are documented there
 - `src/lib/core/interfaces/argument-engine.interfaces.ts` — no change needed (parser is not engine)
 - `CLAUDE.md` — no design rule changes needed

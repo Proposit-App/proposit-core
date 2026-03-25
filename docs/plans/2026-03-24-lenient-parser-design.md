@@ -49,13 +49,13 @@ build(response: TParsedArgumentResponse, options?: TParserBuildOptions): TArgume
 
 #### Recovery behavior per reference type
 
-| Reference | Warning code | Recovery |
-|---|---|---|
-| `claim.sourceMiniIds` → unknown source miniId | `UNRESOLVED_SOURCE_MINIID` | Skip the association; claim still created |
-| `variable.claimMiniId` → unknown claim miniId | `UNRESOLVED_CLAIM_MINIID` | Skip the variable entirely |
-| Formula symbol → undeclared variable symbol | `UNDECLARED_VARIABLE_SYMBOL` | Skip the entire premise |
-| Formula syntax error (malformed expression) | `FORMULA_PARSE_ERROR` | Skip the entire premise |
-| Formula structure error (nested `implies`/`iff`) | `FORMULA_STRUCTURE_ERROR` | Skip the entire premise |
+| Reference                                          | Warning code                   | Recovery                                                                                      |
+| -------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------- |
+| `claim.sourceMiniIds` → unknown source miniId      | `UNRESOLVED_SOURCE_MINIID`     | Skip the association; claim still created                                                     |
+| `variable.claimMiniId` → unknown claim miniId      | `UNRESOLVED_CLAIM_MINIID`      | Skip the variable entirely                                                                    |
+| Formula symbol → undeclared variable symbol        | `UNDECLARED_VARIABLE_SYMBOL`   | Skip the entire premise                                                                       |
+| Formula syntax error (malformed expression)        | `FORMULA_PARSE_ERROR`          | Skip the entire premise                                                                       |
+| Formula structure error (nested `implies`/`iff`)   | `FORMULA_STRUCTURE_ERROR`      | Skip the entire premise                                                                       |
 | `conclusionPremiseMiniId` → unknown premise miniId | `UNRESOLVED_CONCLUSION_MINIID` | Don't set conclusion role explicitly (auto-conclusion from first added premise still applies) |
 
 **Cascade:** Skipping a variable due to `UNRESOLVED_CLAIM_MINIID` removes its symbol from the declared set. Premises referencing that symbol will also be skipped with an `UNDECLARED_VARIABLE_SYMBOL` warning. Both warnings are emitted so the caller sees the full chain.

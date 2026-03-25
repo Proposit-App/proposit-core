@@ -12904,8 +12904,16 @@ describe("Parsing — response schemas", () => {
                 return {
                     argument: {
                         claims: [
-                            { miniId: "C1", role: "premise", sourceMiniIds: [] },
-                            { miniId: "C2", role: "conclusion", sourceMiniIds: [] },
+                            {
+                                miniId: "C1",
+                                role: "premise",
+                                sourceMiniIds: [],
+                            },
+                            {
+                                miniId: "C2",
+                                role: "conclusion",
+                                sourceMiniIds: [],
+                            },
                         ],
                         variables: [
                             { miniId: "V1", symbol: "P", claimMiniId: "C1" },
@@ -12927,7 +12935,10 @@ describe("Parsing — response schemas", () => {
             it("skips premise with malformed formula and emits FORMULA_PARSE_ERROR", () => {
                 const parser = new ArgumentParser()
                 const resp = validResponse()
-                resp.argument!.premises.push({ miniId: "P3", formula: "P &&& Q" })
+                resp.argument!.premises.push({
+                    miniId: "P3",
+                    formula: "P &&& Q",
+                })
                 const result = parser.build(resp, { strict: false })
                 // P1 and P2 survive, P3 skipped
                 const snap = result.engine.snapshot()
@@ -12972,7 +12983,11 @@ describe("Parsing — response schemas", () => {
                 const parser = new ArgumentParser()
                 const resp = validResponse()
                 // V2 references nonexistent claim C99
-                resp.argument!.variables[1] = { miniId: "V2", symbol: "Q", claimMiniId: "C99" }
+                resp.argument!.variables[1] = {
+                    miniId: "V2",
+                    symbol: "Q",
+                    claimMiniId: "C99",
+                }
                 // Remove premise P1 that uses Q, keep P2 that uses only P
                 resp.argument!.premises = [{ miniId: "P2", formula: "P" }]
                 resp.argument!.conclusionPremiseMiniId = "P2"
@@ -12995,7 +13010,9 @@ describe("Parsing — response schemas", () => {
                 const snap = result.engine.snapshot()
                 expect(snap.premises).toHaveLength(2)
                 expect(result.warnings).toHaveLength(1)
-                expect(result.warnings[0].code).toBe("UNDECLARED_VARIABLE_SYMBOL")
+                expect(result.warnings[0].code).toBe(
+                    "UNDECLARED_VARIABLE_SYMBOL"
+                )
                 expect(result.warnings[0].context.premiseMiniId).toBe("P3")
                 expect(result.warnings[0].context.symbol).toBe("X")
             })
@@ -13010,15 +13027,23 @@ describe("Parsing — response schemas", () => {
                 expect(snap.premises).toHaveLength(2)
                 expect(snap.conclusionPremiseId).toBeDefined() // auto-conclusion on first added premise
                 expect(result.warnings).toHaveLength(1)
-                expect(result.warnings[0].code).toBe("UNRESOLVED_CONCLUSION_MINIID")
-                expect(result.warnings[0].context.conclusionPremiseMiniId).toBe("P99")
+                expect(result.warnings[0].code).toBe(
+                    "UNRESOLVED_CONCLUSION_MINIID"
+                )
+                expect(result.warnings[0].context.conclusionPremiseMiniId).toBe(
+                    "P99"
+                )
             })
 
             it("cascade: skipped variable causes premise skip with both warnings", () => {
                 const parser = new ArgumentParser()
                 const resp = validResponse()
                 // Make V2 (symbol Q) reference a bad claim
-                resp.argument!.variables[1] = { miniId: "V2", symbol: "Q", claimMiniId: "C99" }
+                resp.argument!.variables[1] = {
+                    miniId: "V2",
+                    symbol: "Q",
+                    claimMiniId: "C99",
+                }
                 // P1 is "P implies Q" — Q is now undeclared, so P1 gets skipped
                 // P2 is "P" — still valid; set it as conclusion so we don't also trigger UNRESOLVED_CONCLUSION_MINIID
                 resp.argument!.conclusionPremiseMiniId = "P2"
@@ -13041,8 +13066,12 @@ describe("Parsing — response schemas", () => {
                 // Both should produce same structure (different UUIDs, so compare shape)
                 const strictSnap = strictResult.engine.snapshot()
                 const lenientSnap = lenientResult.engine.snapshot()
-                expect(lenientSnap.premises).toHaveLength(strictSnap.premises.length)
-                expect(lenientSnap.variables.variables).toHaveLength(strictSnap.variables.variables.length)
+                expect(lenientSnap.premises).toHaveLength(
+                    strictSnap.premises.length
+                )
+                expect(lenientSnap.variables.variables).toHaveLength(
+                    strictSnap.variables.variables.length
+                )
                 expect(lenientResult.warnings).toEqual([])
             })
 
@@ -13056,7 +13085,9 @@ describe("Parsing — response schemas", () => {
 
                 // FORMULA_STRUCTURE_ERROR
                 const r2 = validResponse()
-                r2.argument!.premises = [{ miniId: "P1", formula: "(P implies Q) and P" }]
+                r2.argument!.premises = [
+                    { miniId: "P1", formula: "(P implies Q) and P" },
+                ]
                 expect(() => parser.build(r2)).toThrow(/implication/i)
 
                 // UNDECLARED_VARIABLE_SYMBOL
@@ -13066,7 +13097,9 @@ describe("Parsing — response schemas", () => {
 
                 // UNRESOLVED_CLAIM_MINIID
                 const r4 = validResponse()
-                r4.argument!.variables = [{ miniId: "V1", symbol: "P", claimMiniId: "C99" }]
+                r4.argument!.variables = [
+                    { miniId: "V1", symbol: "P", claimMiniId: "C99" },
+                ]
                 r4.argument!.premises = [{ miniId: "P1", formula: "P" }]
                 r4.argument!.conclusionPremiseMiniId = "P1"
                 expect(() => parser.build(r4)).toThrow(/C99/)

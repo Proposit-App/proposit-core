@@ -305,7 +305,10 @@ export class ArgumentParser<
                 warnings.push({
                     code: "FORMULA_PARSE_ERROR",
                     message: `Failed to parse formula for premise "${premise.miniId}": ${msg}`,
-                    context: { premiseMiniId: premise.miniId, formula: premise.formula },
+                    context: {
+                        premiseMiniId: premise.miniId,
+                        formula: premise.formula,
+                    },
                 })
                 continue
             }
@@ -322,7 +325,10 @@ export class ArgumentParser<
                 warnings.push({
                     code: "FORMULA_STRUCTURE_ERROR",
                     message: msg,
-                    context: { premiseMiniId: premise.miniId, formula: premise.formula },
+                    context: {
+                        premiseMiniId: premise.miniId,
+                        formula: premise.formula,
+                    },
                 })
                 continue
             }
@@ -399,7 +405,10 @@ export class ArgumentParser<
                     warnings.push({
                         code: "UNRESOLVED_SOURCE_MINIID",
                         message: `Claim "${parsedClaim.miniId}" references undeclared source "${sourceMiniId}".`,
-                        context: { claimMiniId: parsedClaim.miniId, sourceMiniId },
+                        context: {
+                            claimMiniId: parsedClaim.miniId,
+                            sourceMiniId,
+                        },
                     })
                     continue
                 }
@@ -447,7 +456,10 @@ export class ArgumentParser<
                 warnings.push({
                     code: "UNRESOLVED_CLAIM_MINIID",
                     message: `Variable "${parsedVar.miniId}" references undeclared claim miniId "${parsedVar.claimMiniId}".`,
-                    context: { variableMiniId: parsedVar.miniId, claimMiniId: parsedVar.claimMiniId },
+                    context: {
+                        variableMiniId: parsedVar.miniId,
+                        claimMiniId: parsedVar.claimMiniId,
+                    },
                 })
                 declaredSymbols.delete(parsedVar.symbol)
                 continue
@@ -483,7 +495,10 @@ export class ArgumentParser<
                     warnings.push({
                         code: "UNDECLARED_VARIABLE_SYMBOL",
                         message: `Formula for premise "${entry.premise.miniId}" references undeclared variable symbol "${name}". Declared symbols: ${[...declaredSymbols].join(", ")}.`,
-                        context: { premiseMiniId: entry.premise.miniId, symbol: name },
+                        context: {
+                            premiseMiniId: entry.premise.miniId,
+                            symbol: name,
+                        },
                     })
                     hasUndeclared = true
                     break
@@ -523,13 +538,21 @@ export class ArgumentParser<
             warnings.push({
                 code: "UNRESOLVED_CONCLUSION_MINIID",
                 message: `Conclusion premise miniId "${arg.conclusionPremiseMiniId}" could not be resolved to a premise.`,
-                context: { conclusionPremiseMiniId: arg.conclusionPremiseMiniId },
+                context: {
+                    conclusionPremiseMiniId: arg.conclusionPremiseMiniId,
+                },
             })
         } else {
             engine.setConclusionPremise(conclusionId)
         }
 
-        return { engine, claimLibrary, sourceLibrary, claimSourceLibrary, warnings }
+        return {
+            engine,
+            claimLibrary,
+            sourceLibrary,
+            claimSourceLibrary,
+            warnings,
+        }
     }
 
     // -----------------------------------------------------------------------
