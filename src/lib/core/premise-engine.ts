@@ -977,10 +977,7 @@ export class PremiseEngine<
                 const childPositions = new Set(
                     children.map((child) => child.position)
                 )
-                if (
-                    children.length !== 2 ||
-                    childPositions.size !== 2
-                ) {
+                if (children.length !== 2 || childPositions.size !== 2) {
                     issues.push(
                         makeErrorIssue({
                             code: "EXPR_BINARY_POSITIONS_INVALID",
