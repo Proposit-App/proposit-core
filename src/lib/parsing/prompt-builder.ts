@@ -86,6 +86,14 @@ Abbreviations are encouraged to keep symbols short. Aim for under 20 characters 
 
 When formulating claims, write in third person, present tense, active voice. Each claim should be a clear, standalone declarative sentence.
 
+## Sources (External Citations)
+
+Sources are **external citations or references** that support a claim — books, articles, datasets, URLs, etc. They are NOT other claims. Logical relationships between claims are expressed through variables, formulas, and premises.
+
+Each source has a miniId (e.g., "s1") and a text description of the external reference.
+
+A claim's \`sourceMiniIds\` array links that claim to its supporting **sources** (external citations). It must contain only source miniIds (e.g., \`["s1", "s2"]\`). **Never put claim miniIds (c1, c2, …) in sourceMiniIds** — that is a common mistake. If claim A depends on claim B, express that dependency through a premise formula, not through sourceMiniIds.
+
 ## MiniId Conventions
 
 Each entity type uses a distinct prefix for its miniId to avoid cross-reference confusion:
@@ -95,7 +103,12 @@ Each entity type uses a distinct prefix for its miniId to avoid cross-reference 
 - Variables: \`v1\`, \`v2\`, \`v3\`, ...
 - Premises: \`p1\`, \`p2\`, \`p3\`, ...
 
-Always use the correct prefix when referencing entities. For example, a claim's sourceMiniIds array should contain source miniIds (e.g., ["s1", "s2"]), not claim miniIds.`
+Always use the correct prefix when referencing entities. Cross-type references are strict:
+- \`sourceMiniIds\` on a claim → only \`s\`-prefixed miniIds (sources)
+- \`claimMiniId\` on a variable → only \`c\`-prefixed miniIds (claims)
+- \`conclusionPremiseMiniId\` → only \`p\`-prefixed miniIds (premises)
+
+If the input text has no external citations, leave \`sourceMiniIds\` as an empty array \`[]\` and the \`sources\` array empty.`
 
 type TSchemaLike = {
     properties?: Record<string, TSchemaLike>

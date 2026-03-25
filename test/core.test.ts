@@ -12676,6 +12676,15 @@ describe("Parsing — response schemas", () => {
             expect(prompt).toContain("p1")
             expect(prompt).toContain("sourceMiniIds")
         })
+
+        it("clarifies that sourceMiniIds must not contain claim miniIds", () => {
+            const prompt = buildParsingPrompt(ParsedArgumentResponseSchema)
+            expect(prompt).toContain("Sources (External Citations)")
+            expect(prompt).toContain(
+                "Never put claim miniIds (c1, c2, …) in sourceMiniIds"
+            )
+            expect(prompt).toContain("`sources` array empty")
+        })
     })
 
     // -----------------------------------------------------------------------

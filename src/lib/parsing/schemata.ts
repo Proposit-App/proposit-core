@@ -12,7 +12,10 @@ export const ParsedClaimSchema = Type.Object(
     {
         miniId: Type.String(),
         role: ParsedClaimRoleType,
-        sourceMiniIds: Type.Array(Type.String()),
+        sourceMiniIds: Type.Array(Type.String(), {
+            description:
+                "MiniIds of external sources (citations/references from the sources array, e.g. s1, s2). Must NOT contain claim miniIds — logical dependencies between claims are expressed through premises and formulas, not here.",
+        }),
     },
     { additionalProperties: true }
 )
