@@ -12957,6 +12957,38 @@ describe("Parsing — response schemas", () => {
                 expect(result.warnings[0].context.claimMiniId).toBe("C1")
                 expect(result.warnings[0].context.sourceMiniId).toBe("BOGUS")
             })
+
+            it("skips variable with bad claim ref and emits UNRESOLVED_CLAIM_MINIID", () => {
+                const parser = new ArgumentParser()
+                const resp = validResponse()
+                // V2 references nonexistent claim C99
+                resp.argument!.variables[1] = { miniId: "V2", symbol: "Q", claimMiniId: "C99" }
+                // Remove premise P1 that uses Q, keep P2 that uses only P
+                resp.argument!.premises = [{ miniId: "P2", formula: "P" }]
+                resp.argument!.conclusionPremiseMiniId = "P2"
+                const result = parser.build(resp, { strict: false })
+                const snap = result.engine.snapshot()
+                // Only P survives as a variable
+                expect(snap.variables.variables).toHaveLength(1)
+                expect(snap.variables.variables[0].symbol).toBe("P")
+                expect(result.warnings).toHaveLength(1)
+                expect(result.warnings[0].code).toBe("UNRESOLVED_CLAIM_MINIID")
+                expect(result.warnings[0].context.variableMiniId).toBe("V2")
+                expect(result.warnings[0].context.claimMiniId).toBe("C99")
+            })
+
+            it("skips premise with undeclared variable symbol and emits UNDECLARED_VARIABLE_SYMBOL", () => {
+                const parser = new ArgumentParser()
+                const resp = validResponse()
+                resp.argument!.premises.push({ miniId: "P3", formula: "X" })
+                const result = parser.build(resp, { strict: false })
+                const snap = result.engine.snapshot()
+                expect(snap.premises).toHaveLength(2)
+                expect(result.warnings).toHaveLength(1)
+                expect(result.warnings[0].code).toBe("UNDECLARED_VARIABLE_SYMBOL")
+                expect(result.warnings[0].context.premiseMiniId).toBe("P3")
+                expect(result.warnings[0].context.symbol).toBe("X")
+            })
         })
 
         describe("subclass hooks", () => {

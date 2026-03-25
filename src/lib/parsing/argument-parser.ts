@@ -327,17 +327,6 @@ export class ArgumentParser<
                 continue
             }
 
-            // Verify all variable names match declared variables
-            const formulaVarNames = new Set<string>()
-            collectVariableNames(ast, formulaVarNames)
-            for (const name of formulaVarNames) {
-                if (!declaredSymbols.has(name)) {
-                    throw new Error(
-                        `Formula for premise "${premise.miniId}" references undeclared variable symbol "${name}". Declared symbols: ${[...declaredSymbols].join(", ")}.`
-                    )
-                }
-            }
-
             parsedFormulas.push({ ast, premise })
         }
 
@@ -450,9 +439,18 @@ export class ArgumentParser<
         for (const parsedVar of arg.variables) {
             const claimRef = claimMiniIdToId.get(parsedVar.claimMiniId)
             if (!claimRef) {
-                throw new Error(
-                    `Variable "${parsedVar.miniId}" references undeclared claim miniId "${parsedVar.claimMiniId}".`
-                )
+                if (strict) {
+                    throw new Error(
+                        `Variable "${parsedVar.miniId}" references undeclared claim miniId "${parsedVar.claimMiniId}".`
+                    )
+                }
+                warnings.push({
+                    code: "UNRESOLVED_CLAIM_MINIID",
+                    message: `Variable "${parsedVar.miniId}" references undeclared claim miniId "${parsedVar.claimMiniId}".`,
+                    context: { variableMiniId: parsedVar.miniId, claimMiniId: parsedVar.claimMiniId },
+                })
+                declaredSymbols.delete(parsedVar.symbol)
+                continue
             }
             const extras = this.mapVariable(parsedVar)
             const variable: Omit<TClaimBoundVariable, "checksum"> &
@@ -469,10 +467,35 @@ export class ArgumentParser<
             engine.addVariable(variable)
         }
 
+        // 7b. Filter formulas against surviving declared symbols
+        const survivingFormulas: typeof parsedFormulas = []
+        for (const entry of parsedFormulas) {
+            const formulaVarNames = new Set<string>()
+            collectVariableNames(entry.ast, formulaVarNames)
+            let hasUndeclared = false
+            for (const name of formulaVarNames) {
+                if (!declaredSymbols.has(name)) {
+                    if (strict) {
+                        throw new Error(
+                            `Formula for premise "${entry.premise.miniId}" references undeclared variable symbol "${name}". Declared symbols: ${[...declaredSymbols].join(", ")}.`
+                        )
+                    }
+                    warnings.push({
+                        code: "UNDECLARED_VARIABLE_SYMBOL",
+                        message: `Formula for premise "${entry.premise.miniId}" references undeclared variable symbol "${name}". Declared symbols: ${[...declaredSymbols].join(", ")}.`,
+                        context: { premiseMiniId: entry.premise.miniId, symbol: name },
+                    })
+                    hasUndeclared = true
+                    break
+                }
+            }
+            if (!hasUndeclared) survivingFormulas.push(entry)
+        }
+
         // 8. Create premises and build expression trees
         const premiseMiniIdToId = new Map<string, string>()
 
-        for (const { ast, premise: parsedPremise } of parsedFormulas) {
+        for (const { ast, premise: parsedPremise } of survivingFormulas) {
             const extras = this.mapPremise(parsedPremise)
             const { result: pm } = engine.createPremise(extras)
             premiseMiniIdToId.set(parsedPremise.miniId, pm.getId())
