@@ -1101,8 +1101,8 @@ export class PremiseEngine<
                     const left = children[0]
                     const right = children[1]
                     value = kleeneImplies(
-                        evaluateExpression(left!.id),
-                        evaluateExpression(right!.id)
+                        evaluateExpression(left.id),
+                        evaluateExpression(right.id)
                     )
                     break
                 }
@@ -1110,8 +1110,8 @@ export class PremiseEngine<
                     const left = children[0]
                     const right = children[1]
                     value = kleeneIff(
-                        evaluateExpression(left!.id),
-                        evaluateExpression(right!.id)
+                        evaluateExpression(left.id),
+                        evaluateExpression(right.id)
                     )
                     break
                 }
