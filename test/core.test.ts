@@ -12919,6 +12919,21 @@ describe("Parsing — response schemas", () => {
                 expect(result.warnings[0].code).toBe("FORMULA_PARSE_ERROR")
                 expect(result.warnings[0].context.premiseMiniId).toBe("P3")
             })
+
+            it("skips premise with nested implies and emits FORMULA_STRUCTURE_ERROR", () => {
+                const parser = new ArgumentParser()
+                const resp = validResponse()
+                resp.argument!.premises.push({
+                    miniId: "P3",
+                    formula: "(P implies Q) and P",
+                })
+                const result = parser.build(resp, { strict: false })
+                const snap = result.engine.snapshot()
+                expect(snap.premises).toHaveLength(2)
+                expect(result.warnings).toHaveLength(1)
+                expect(result.warnings[0].code).toBe("FORMULA_STRUCTURE_ERROR")
+                expect(result.warnings[0].context.premiseMiniId).toBe("P3")
+            })
         })
 
         describe("subclass hooks", () => {

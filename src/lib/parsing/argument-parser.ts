@@ -311,7 +311,21 @@ export class ArgumentParser<
             }
 
             // Validate root-only constraint
-            validateRootOnly(ast, true, premise.miniId)
+            try {
+                validateRootOnly(ast, true, premise.miniId)
+            } catch (error) {
+                const msg =
+                    error instanceof Error ? error.message : String(error)
+                if (strict) {
+                    throw error
+                }
+                warnings.push({
+                    code: "FORMULA_STRUCTURE_ERROR",
+                    message: msg,
+                    context: { premiseMiniId: premise.miniId, formula: premise.formula },
+                })
+                continue
+            }
 
             // Verify all variable names match declared variables
             const formulaVarNames = new Set<string>()
