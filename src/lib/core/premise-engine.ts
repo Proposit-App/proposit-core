@@ -249,7 +249,7 @@ export class PremiseEngine<
             }
 
             this.markDirty()
-            const changes = collector.toChangeset()
+            const changes = this.flushAndBuildChangeset(collector)
             this.syncExpressionIndex(changes)
             this.onMutate?.()
             return {
@@ -316,7 +316,7 @@ export class PremiseEngine<
             }
 
             this.markDirty()
-            const changes = collector.toChangeset()
+            const changes = this.flushAndBuildChangeset(collector)
             this.syncExpressionIndex(changes)
             this.onMutate?.()
             return {
@@ -377,7 +377,7 @@ export class PremiseEngine<
             }
 
             this.markDirty()
-            const changes = collector.toChangeset()
+            const changes = this.flushAndBuildChangeset(collector)
             this.syncExpressionIndex(changes)
             this.onMutate?.()
             return {
@@ -432,7 +432,7 @@ export class PremiseEngine<
                     .add(expressionId)
             }
 
-            const changeset = collector.toChangeset()
+            const changeset = this.flushAndBuildChangeset(collector)
             if (changeset.expressions !== undefined) {
                 this.markDirty()
                 this.onMutate?.()
@@ -495,7 +495,7 @@ export class PremiseEngine<
             this.syncRootExpressionId()
             this.markDirty()
 
-            const changes = collector.toChangeset()
+            const changes = this.flushAndBuildChangeset(collector)
             this.syncExpressionIndex(changes)
             this.onMutate?.()
             return {
@@ -552,7 +552,7 @@ export class PremiseEngine<
             this.syncRootExpressionId()
             this.markDirty()
 
-            const changes = collector.toChangeset()
+            const changes = this.flushAndBuildChangeset(collector)
             this.syncExpressionIndex(changes)
             this.onMutate?.()
             return {
@@ -615,7 +615,7 @@ export class PremiseEngine<
             this.syncRootExpressionId()
             this.markDirty()
 
-            const changes = collector.toChangeset()
+            const changes = this.flushAndBuildChangeset(collector)
             this.syncExpressionIndex(changes)
             this.onMutate?.()
             return {
@@ -674,7 +674,7 @@ export class PremiseEngine<
                 this.syncRootExpressionId()
                 this.markDirty()
 
-                const changes = collector.toChangeset()
+                const changes = this.flushAndBuildChangeset(collector)
                 this.syncExpressionIndex(changes)
                 this.onMutate?.()
                 return { result: null, changes }
@@ -732,7 +732,7 @@ export class PremiseEngine<
                 this.syncRootExpressionId()
                 this.markDirty()
 
-                const changes = collector.toChangeset()
+                const changes = this.flushAndBuildChangeset(collector)
                 this.syncExpressionIndex(changes)
                 this.onMutate?.()
                 return {
@@ -1478,6 +1478,34 @@ export class PremiseEngine<
             }
         }
         return pe
+    }
+
+    /**
+     * Flushes hierarchical expression checksums and rebuilds the changeset
+     * so that added/modified expressions carry correct `descendantChecksum`
+     * and `combinedChecksum` values (rather than the stale ones captured
+     * at mutation time by the ChangeCollector).
+     */
+    private flushAndBuildChangeset(
+        collector: ChangeCollector<TExpr, TVar, TPremise, TArg>
+    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+        this.expressions.flushExpressionChecksums()
+        const changes = collector.toChangeset()
+        if (changes.expressions) {
+            changes.expressions.added = changes.expressions.added.map(
+                (expr) => {
+                    const current = this.expressions.getExpression(expr.id)
+                    return current ? { ...current } : expr
+                }
+            )
+            changes.expressions.modified = changes.expressions.modified.map(
+                (expr) => {
+                    const current = this.expressions.getExpression(expr.id)
+                    return current ? { ...current } : expr
+                }
+            )
+        }
+        return changes
     }
 
     private syncExpressionIndex(

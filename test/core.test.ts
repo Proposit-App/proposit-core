@@ -16532,3 +16532,214 @@ describe("hierarchical checksum propagation", () => {
         expect(engine.combinedChecksum()).not.toBe(argCombinedBefore)
     })
 })
+
+// ---------------------------------------------------------------------------
+// changeset hierarchical checksums
+// ---------------------------------------------------------------------------
+
+describe("changeset hierarchical checksums", () => {
+    it("wrapExpression changeset has correct hierarchical checksums", () => {
+        const pm = premiseWithVars()
+        const premiseId = pm.getId()
+
+        // Single root variable expression — wrapping it with "and" creates an operator with 2 children
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        // Wrap expr-p with an "and" operator plus a new sibling expr-q
+        const { changes } = pm.wrapExpression(
+            {
+                id: "op-and",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId,
+                type: "operator",
+                operator: "and",
+            } as TExpressionWithoutPosition,
+            {
+                id: "expr-q",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId,
+                type: "variable",
+                variableId: VAR_Q.id,
+            } as TExpressionWithoutPosition,
+            "expr-p"
+        )
+
+        // The new "and" operator should have correct hierarchical checksums
+        const addedAnd = changes.expressions!.added.find(
+            (e) => e.id === "op-and"
+        )!
+        expect(addedAnd).toBeDefined()
+        // Before fix: descendantChecksum is null because attachChecksum always sets it null
+        // After fix: descendantChecksum should reflect children (expr-p, expr-q)
+        expect(addedAnd.descendantChecksum).not.toBeNull()
+        expect(addedAnd.combinedChecksum).not.toBe(addedAnd.checksum)
+
+        // Cross-check: flushed engine state should agree with changeset
+        const flushedAnd = pm.getExpression("op-and")!
+        expect(addedAnd.combinedChecksum).toBe(flushedAnd.combinedChecksum)
+        expect(addedAnd.descendantChecksum).toBe(flushedAnd.descendantChecksum)
+    })
+
+    it("toggleNegation changeset has correct hierarchical checksums", () => {
+        const pm = premiseWithVars()
+
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        const { result: notExpr, changes } = pm.toggleNegation("expr-p")
+
+        // The new NOT operator should have correct hierarchical checksums
+        expect(notExpr).not.toBeNull()
+        const addedNot = changes.expressions!.added.find(
+            (e) => e.id === notExpr!.id
+        )!
+        expect(addedNot).toBeDefined()
+        expect(addedNot.descendantChecksum).not.toBeNull()
+        expect(addedNot.combinedChecksum).not.toBe(addedNot.checksum)
+
+        // Cross-check with flushed engine state
+        const flushedNot = pm.getExpression(notExpr!.id)!
+        expect(addedNot.combinedChecksum).toBe(flushedNot.combinedChecksum)
+        expect(addedNot.descendantChecksum).toBe(flushedNot.descendantChecksum)
+    })
+
+    it("addExpression changeset has correct ancestor checksums", () => {
+        const pm = premiseWithVars()
+
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+
+        // Adding a second child should update the parent's checksums in the changeset
+        const { changes } = pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+
+        // The parent operator should be in modified with updated descendantChecksum
+        const modifiedAnd = changes.expressions?.modified?.find(
+            (e) => e.id === "op-and"
+        )
+        if (modifiedAnd) {
+            const flushedAnd = pm.getExpression("op-and")!
+            expect(modifiedAnd.combinedChecksum).toBe(
+                flushedAnd.combinedChecksum
+            )
+            expect(modifiedAnd.descendantChecksum).toBe(
+                flushedAnd.descendantChecksum
+            )
+        }
+
+        // The added expression itself should match flushed state
+        const addedQ = changes.expressions!.added.find(
+            (e) => e.id === "expr-q"
+        )!
+        const flushedQ = pm.getExpression("expr-q")!
+        expect(addedQ.combinedChecksum).toBe(flushedQ.combinedChecksum)
+    })
+
+    it("insertExpression changeset has correct hierarchical checksums", () => {
+        const pm = premiseWithVars()
+        const premiseId = pm.getId()
+
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        // Insert a NOT operator between root and expr-p
+        const { changes } = pm.insertExpression(
+            {
+                id: "op-not",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId,
+                type: "operator",
+                operator: "not",
+                parentId: null,
+                position: POSITION_INITIAL,
+            },
+            "expr-p"
+        )
+
+        const addedNot = changes.expressions!.added.find(
+            (e) => e.id === "op-not"
+        )!
+        expect(addedNot).toBeDefined()
+        expect(addedNot.descendantChecksum).not.toBeNull()
+        expect(addedNot.combinedChecksum).not.toBe(addedNot.checksum)
+
+        // Cross-check with flushed engine state
+        const flushedNot = pm.getExpression("op-not")!
+        expect(addedNot.combinedChecksum).toBe(flushedNot.combinedChecksum)
+        expect(addedNot.descendantChecksum).toBe(flushedNot.descendantChecksum)
+    })
+
+    it("removeExpression changeset has correct checksums after collapse", () => {
+        const pm = premiseWithVars()
+
+        // Build: and(P, Q)
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+
+        // Remove Q — and collapses, promoting P
+        const { changes } = pm.removeExpression("expr-q", true)
+
+        // P should be modified (promoted to root) — verify checksums match flushed state
+        const modifiedP = changes.expressions?.modified?.find(
+            (e) => e.id === "expr-p"
+        )
+        if (modifiedP) {
+            const flushedP = pm.getExpression("expr-p")!
+            expect(modifiedP.combinedChecksum).toBe(flushedP.combinedChecksum)
+        }
+    })
+
+    it("updateExpression changeset has correct ancestor checksums", () => {
+        const pm = premiseWithVars()
+
+        // Build: and(P, Q)
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+
+        // Change "and" to "or" — this modifies the operator
+        const { changes } = pm.updateExpression("op-and", { operator: "or" })
+
+        const modifiedOr = changes.expressions?.modified?.find(
+            (e) => e.id === "op-and"
+        )
+        if (modifiedOr) {
+            const flushedOr = pm.getExpression("op-and")!
+            expect(modifiedOr.combinedChecksum).toBe(flushedOr.combinedChecksum)
+            expect(modifiedOr.descendantChecksum).toBe(
+                flushedOr.descendantChecksum
+            )
+        }
+    })
+})
