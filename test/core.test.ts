@@ -16745,6 +16745,158 @@ describe("changeset hierarchical checksums", () => {
 })
 
 // ---------------------------------------------------------------------------
+// premise checksum in changeset
+// ---------------------------------------------------------------------------
+
+describe("premise checksum in changeset", () => {
+    it("addExpression changeset includes premise with updated checksum", () => {
+        const pm = premiseWithVars()
+        const premiseBefore = pm.toPremiseData()
+
+        const { changes } = pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        expect(changes.premises?.modified).toHaveLength(1)
+        const premiseInChangeset = changes.premises!.modified[0]
+        expect(premiseInChangeset.id).toBe(pm.getId())
+        // Premise checksum changed because it now has an expression
+        expect(premiseInChangeset.combinedChecksum).not.toBe(
+            premiseBefore.combinedChecksum
+        )
+        // The changeset premise matches the engine's current state
+        expect(premiseInChangeset.combinedChecksum).toBe(pm.combinedChecksum())
+        expect(premiseInChangeset.descendantChecksum).toBe(
+            pm.descendantChecksum()
+        )
+    })
+
+    it("removeExpression changeset includes premise update", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        const { changes } = pm.removeExpression("expr-p", true)
+
+        expect(changes.premises?.modified).toHaveLength(1)
+        expect(changes.premises!.modified[0].combinedChecksum).toBe(
+            pm.combinedChecksum()
+        )
+    })
+
+    it("wrapExpression changeset includes premise update", () => {
+        const pm = premiseWithVars()
+        const premiseId = pm.getId()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        const { changes } = pm.wrapExpression(
+            {
+                id: "op-and",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId,
+                type: "operator",
+                operator: "and",
+            } as TExpressionWithoutPosition,
+            {
+                id: "expr-q",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId,
+                type: "variable",
+                variableId: VAR_Q.id,
+            } as TExpressionWithoutPosition,
+            "expr-p"
+        )
+
+        expect(changes.premises?.modified).toHaveLength(1)
+    })
+
+    it("toggleNegation changeset includes premise update", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        const { changes } = pm.toggleNegation("expr-p")
+
+        expect(changes.premises?.modified).toHaveLength(1)
+        const premiseData = changes.premises!.modified[0]
+        expect(premiseData.checksum).toBe(pm.checksum())
+        expect(premiseData.descendantChecksum).toBe(pm.descendantChecksum())
+        expect(premiseData.combinedChecksum).toBe(pm.combinedChecksum())
+    })
+
+    it("insertExpression changeset includes premise update", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+
+        const { changes } = pm.insertExpression(
+            {
+                id: "op-not",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: pm.getId(),
+                type: "operator",
+                operator: "not",
+                parentId: null,
+                position: POSITION_INITIAL,
+            },
+            "expr-p"
+        )
+
+        expect(changes.premises?.modified).toHaveLength(1)
+        expect(changes.premises!.modified[0].combinedChecksum).toBe(
+            pm.combinedChecksum()
+        )
+    })
+
+    it("updateExpression with no effective change omits premise", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+        // Flush checksums so the "before" snapshot is stable
+        pm.flushChecksums()
+
+        // updateExpression with no actual field changes
+        const { changes } = pm.updateExpression("op-and", {})
+
+        // If nothing changed, no premise entry
+        expect(changes.premises?.modified ?? []).toHaveLength(0)
+    })
+
+    it("changeOperator changeset includes premise update", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+
+        const { changes } = pm.changeOperator("op-and", "or")
+
+        expect(changes.premises?.modified).toHaveLength(1)
+        expect(changes.premises!.modified[0].combinedChecksum).toBe(
+            pm.combinedChecksum()
+        )
+    })
+})
+
+// ---------------------------------------------------------------------------
 // changeOperator
 // ---------------------------------------------------------------------------
 

@@ -1753,6 +1753,9 @@ export class PremiseEngine<
     private flushAndBuildChangeset(
         collector: ChangeCollector<TExpr, TVar, TPremise, TArg>
     ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+        // Snapshot premise combinedChecksum before flush
+        const premiseCombinedBefore = this.cachedCombinedChecksum ?? null
+
         this.expressions.flushExpressionChecksums()
         const changes = collector.toChangeset()
         if (changes.expressions) {
@@ -1769,6 +1772,14 @@ export class PremiseEngine<
                 }
             )
         }
+
+        // Recompute premise checksum and include if changed
+        this.flushChecksums()
+        if (this.cachedCombinedChecksum !== premiseCombinedBefore) {
+            changes.premises ??= { added: [], modified: [], removed: [] }
+            changes.premises.modified.push(this.toPremiseData())
+        }
+
         return changes
     }
 
