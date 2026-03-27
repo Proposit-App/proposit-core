@@ -10,6 +10,7 @@ import type {
     TCorePremiseEvaluationResult,
     TCoreValidationResult,
 } from "../../types/evaluation.js"
+import type { TInvariantValidationResult } from "../../types/validation.js"
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type {
     TExpressionInput,
@@ -414,6 +415,29 @@ export interface TPremiseLifecycle<
      * Invalidates the cached checksum so the next call recomputes it.
      */
     markDirty(): void
+    /**
+     * Run invariant validation on this premise and its expression tree.
+     */
+    validate(): TInvariantValidationResult
+    /**
+     * Sets a callback that returns the full set of variable IDs registered
+     * in the argument. Injected by `ArgumentEngine`.
+     *
+     * @param callback - A function returning the set of registered variable
+     *   IDs, or `undefined` to clear.
+     */
+    setVariableIdsCallback(callback: (() => Set<string>) | undefined): void
+    /**
+     * Sets a callback that runs full argument-level invariant validation.
+     * Injected by `ArgumentEngine` so the premise can delegate to the
+     * argument-level validator.
+     *
+     * @param callback - A function returning the invariant validation result,
+     *   or `undefined` to clear.
+     */
+    setArgumentValidateCallback(
+        callback: (() => TInvariantValidationResult) | undefined
+    ): void
 }
 
 /**

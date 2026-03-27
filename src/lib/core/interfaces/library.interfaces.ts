@@ -3,6 +3,7 @@ import type {
     TCoreClaimSourceAssociation,
     TCoreSource,
 } from "../../schemata/source.js"
+import type { TInvariantValidationResult } from "../../types/validation.js"
 
 /**
  * Narrow read-only interface for claim lookups. Used by `ArgumentEngine` for
@@ -111,6 +112,13 @@ export interface TClaimLibraryManagement<
      * @returns The claim library snapshot.
      */
     snapshot(): TClaimLibrarySnapshot<TClaim>
+
+    /**
+     * Run invariant validation on the claim library.
+     *
+     * @returns The invariant validation result.
+     */
+    validate(): TInvariantValidationResult
 }
 
 /**
@@ -190,6 +198,13 @@ export interface TSourceLibraryManagement<
      * @returns The source library snapshot.
      */
     snapshot(): TSourceLibrarySnapshot<TSource>
+
+    /**
+     * Run invariant validation on the source library.
+     *
+     * @returns The invariant validation result.
+     */
+    validate(): TInvariantValidationResult
 }
 
 /**
@@ -274,6 +289,13 @@ export interface TClaimSourceLibraryManagement<
      * @returns The claim-source library snapshot.
      */
     snapshot(): TClaimSourceLibrarySnapshot<TAssoc>
+
+    /**
+     * Run invariant validation on the claim-source association library.
+     *
+     * @returns The invariant validation result.
+     */
+    validate(): TInvariantValidationResult
 }
 
 /**
