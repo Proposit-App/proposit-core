@@ -258,6 +258,36 @@ Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `cla
 
 ---
 
+### `canFork()` → `boolean` _(protected)_
+
+Returns whether this argument may be forked. Default implementation returns `true`. Override in subclasses to inject validation policy (e.g., only allow forking published arguments). Called by `forkArgument` before any work; throws if `false`.
+
+---
+
+### `forkArgument(newArgumentId, claimLibrary, sourceLibrary, claimSourceLibrary, options?)` → `TForkArgumentResult`
+
+Creates an independent copy of the current argument with new UUIDs for all entities. Every forked entity carries `forkedFrom` provenance metadata pointing back to the original. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. The forked engine starts at version `0`.
+
+Returns `{ engine, remapTable }` where `engine` is the new `ArgumentEngine` and `remapTable` maps original entity IDs to their forked counterparts.
+
+Options (`TForkArgumentOptions`):
+
+- `generateId?: () => string` — custom ID generator (defaults to `crypto.randomUUID`)
+- `checksumConfig?: TCoreChecksumConfig` — override checksum config (defaults to source's config)
+- `positionConfig?: TCorePositionConfig` — override position config (defaults to source's config)
+- `grammarConfig?: TGrammarConfig` — override grammar config (defaults to source's config)
+
+```typescript
+const { engine: forked, remapTable } = sourceEngine.forkArgument(
+    "new-argument-id",
+    claimLibrary,
+    sourceLibrary,
+    claimSourceLibrary
+)
+```
+
+---
+
 ### `toDisplayString()` → `string`
 
 Renders the full argument as a multi-line string. Each premise is prefixed with its role label (`[Conclusion]`, `[Supporting]`, or `[Constraint]`) followed by the premise's `toDisplayString()` output.
@@ -641,6 +671,26 @@ const diff = diffArguments(engineA, engineB, {
 
 Default comparators exported: `defaultCompareArgument`, `defaultCompareVariable`, `defaultComparePremise`, `defaultCompareExpression`.
 
+`TCoreDiffOptions` also accepts optional entity matchers (`premiseMatcher`, `variableMatcher`, `expressionMatcher`) for custom entity pairing. When provided, matchers override the default ID-based pairing — useful for comparing forked arguments where entities have different IDs but carry `forkedFrom` provenance metadata. See `createForkedFromMatcher()`.
+
+---
+
+### `createForkedFromMatcher()` → `{ premiseMatcher, variableMatcher, expressionMatcher }`
+
+Returns entity matchers for fork-aware diffing. Pairs entity A with entity B when B's `forkedFrom*Id` matches A's `id` and the argument identity matches. No remap table required — uses self-describing provenance metadata.
+
+```typescript
+import {
+    diffArguments,
+    createForkedFromMatcher,
+} from "@polintpro/proposit-core"
+
+const diff = diffArguments(originalEngine, forkedEngine, {
+    ...createForkedFromMatcher(),
+})
+// diff.premises.modified shows what changed; .added/.removed show new/deleted premises
+```
+
 ---
 
 ### `analyzePremiseRelationships(engine, focusedPremiseId)` → `TCorePremiseRelationshipAnalysis`
@@ -837,6 +887,18 @@ Variables are a discriminated union (`TCorePropositionalVariable = TClaimBoundVa
 | `isPremiseBound(v)`              | Type guard — returns `true` if variable has `boundPremiseId`                                                      |
 
 Premise-bound variables enable hierarchical argument structure: variable Q bound to premise P1 derives its truth value from P1's evaluation. During `evaluate()` and `checkValidity()`, premise-bound variables are excluded from truth-table generation (they are not free variables); their values are resolved lazily by evaluating the bound premise. Circular bindings (direct or transitive) are rejected at bind time.
+
+---
+
+### Fork Types
+
+| Type                   | Description                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `TForkArgumentOptions` | Options for `forkArgument`: `generateId`, `checksumConfig`, `positionConfig`, `grammarConfig`                |
+| `TForkRemapTable`      | Maps original entity IDs to forked counterparts: `argumentId`, `premises`, `expressions`, `variables` (Maps) |
+| `TForkArgumentResult`  | Return type of `forkArgument`: `{ engine, remapTable }`                                                      |
+
+All entity schemas now carry optional nullable `forkedFrom` provenance fields (e.g., `forkedFromArgumentId`, `forkedFromPremiseId`, etc.). These are `null`/absent on non-forked entities and populated by `forkArgument` on forked entities.
 
 ---
 
