@@ -69,7 +69,21 @@ import {
     canonicalSerialize,
     entityChecksum,
 } from "../src/lib/core/checksum"
-import { PERMISSIVE_GRAMMAR_CONFIG } from "../src/lib/types/grammar"
+import {
+    PERMISSIVE_GRAMMAR_CONFIG,
+    DEFAULT_GRAMMAR_CONFIG,
+} from "../src/lib/types/grammar"
+import {
+    EXPR_SCHEMA_INVALID,
+    EXPR_SELF_REFERENTIAL_PARENT,
+    EXPR_PARENT_NOT_FOUND,
+    EXPR_PARENT_NOT_CONTAINER,
+    EXPR_ROOT_ONLY_VIOLATED,
+    EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED,
+    EXPR_CHILD_LIMIT_EXCEEDED,
+    EXPR_POSITION_DUPLICATE,
+    EXPR_CHECKSUM_MISMATCH,
+} from "../src/lib/types/validation"
 import {
     ParsedClaimSchema,
     ParsedVariableSchema,
@@ -18748,5 +18762,485 @@ describe("cross-argument variable binding", () => {
             rejectedExpressionIds: [],
         })
         expect(result.ok).toBe(true)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ExpressionManager — validate
+// ---------------------------------------------------------------------------
+
+describe("ExpressionManager — validate", () => {
+    it("returns ok for a valid tree", () => {
+        const em = new ExpressionManager()
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-q", "var-q", { parentId: "op-and", position: 1 })
+        )
+        em.flushExpressionChecksums()
+
+        const result = em.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toEqual([])
+    })
+
+    it("returns ok for an empty manager", () => {
+        const em = new ExpressionManager()
+        const result = em.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toEqual([])
+    })
+
+    it("detects schema violation", () => {
+        // Build a valid manager, then directly corrupt an expression's type
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: overwrite with invalid type via internal map
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", { ...expr, type: "INVALID_TYPE" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_SCHEMA_INVALID)
+        ).toBe(true)
+    })
+
+    it("detects self-referential parent", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: set parentId to self via internal map
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", { ...expr, parentId: "v-p" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some(
+                (v) => v.code === EXPR_SELF_REFERENTIAL_PARENT
+            )
+        ).toBe(true)
+    })
+
+    it("detects parent not found", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: change parentId to a nonexistent expression
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", { ...expr, parentId: "nonexistent" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_PARENT_NOT_FOUND)
+        ).toBe(true)
+    })
+
+    it("detects parent not a container", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-q", "var-q", { parentId: "op-and", position: 1 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: set v-q's parentId to v-p (a variable, not operator/formula)
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-q")!
+        map.set("v-q", { ...expr, parentId: "v-p" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_PARENT_NOT_CONTAINER)
+        ).toBe(true)
+    })
+
+    it("detects root-only violation for implies with non-null parent", () => {
+        // Inject implies under and via internal map — addExpression forbids this
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("op-implies", {
+            id: "op-implies",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "operator",
+            operator: "implies",
+            parentId: "op-and",
+            position: 0,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        const andChildren = childIndex.get("op-and")
+        if (andChildren) {
+            andChildren.add("op-implies")
+        } else {
+            childIndex.set("op-and", new Set(["op-implies"]))
+        }
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_ROOT_ONLY_VIOLATED)
+        ).toBe(true)
+    })
+
+    it("detects formula-between-operators violation", () => {
+        // Create with PERMISSIVE config, then switch config to strict for validation
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        // Directly nest or under and (no formula between) — allowed in permissive
+        em.addExpression(
+            makeOpExpr("op-or", "or", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const snap = em.snapshot()
+        // Restore with strict grammar config via fromSnapshot
+        // We need to bypass addExpression's enforcement — use permissive load, then override config
+        const restored = ExpressionManager.fromSnapshot(
+            snap,
+            PERMISSIVE_GRAMMAR_CONFIG
+        )
+        // Now override the config to strict so validate() sees enforcement enabled
+        ;(
+            restored as unknown as {
+                config: { grammarConfig: typeof DEFAULT_GRAMMAR_CONFIG }
+            }
+        ).config = {
+            grammarConfig: { ...DEFAULT_GRAMMAR_CONFIG, autoNormalize: false },
+        }
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some(
+                (v) => v.code === EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED
+            )
+        ).toBe(true)
+    })
+
+    it("does NOT flag formula-between-operators when enforcement is disabled", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeOpExpr("op-or", "or", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const result = em.validate()
+        expect(result.ok).toBe(true)
+    })
+
+    it("detects child limit exceeded for not operator", () => {
+        // not should have at most 1 child — inject second child via internal map
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-not", "not", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-not", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject a second child directly
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-not",
+            position: 1,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-not")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHILD_LIMIT_EXCEEDED)
+        ).toBe(true)
+    })
+
+    it("detects child limit exceeded for formula node", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(makeFormulaExpr("f1", { parentId: null, position: 0 }))
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "f1", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject a second child directly
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "f1",
+            position: 1,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("f1")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHILD_LIMIT_EXCEEDED)
+        ).toBe(true)
+    })
+
+    it("detects position uniqueness violation", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject a second child with duplicate position directly
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-and",
+            position: 0, // duplicate!
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-and")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_POSITION_DUPLICATE)
+        ).toBe(true)
+    })
+
+    it("detects checksum mismatch", () => {
+        const em = new ExpressionManager()
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: corrupt the checksum directly in the internal map
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", {
+            ...expr,
+            checksum: "tampered-checksum",
+            combinedChecksum: "tampered-checksum",
+        })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHECKSUM_MISMATCH)
+        ).toBe(true)
+    })
+
+    it("skips checksum comparison for null/empty checksums", () => {
+        // A freshly-created manager before flush has valid checksums
+        // (attachChecksum sets them), but let's verify validate doesn't
+        // false-positive on a manager with null checksums loaded permissively
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const snap = em.snapshot()
+        // Set checksums to null (simulating pre-flush entities)
+        ;(snap.expressions[0] as Record<string, unknown>).checksum = null
+        ;(snap.expressions[0] as Record<string, unknown>).descendantChecksum =
+            null
+        ;(snap.expressions[0] as Record<string, unknown>).combinedChecksum =
+            null
+        const restored = ExpressionManager.fromSnapshot(
+            snap,
+            PERMISSIVE_GRAMMAR_CONFIG
+        )
+        const result = restored.validate()
+        // Should not flag checksum mismatch for null checksums
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHECKSUM_MISMATCH)
+        ).toBe(false)
+    })
+
+    it("collects multiple violations in one pass", () => {
+        // Build a tree with multiple problems via internal map injection
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeOpExpr("op-not", "not", { parentId: "op-and", position: 1 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-not", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject implies under and (root-only violation) and second child to not (child limit violation)
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("op-implies", {
+            id: "op-implies",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "operator",
+            operator: "implies",
+            parentId: "op-and",
+            position: 0,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-and")!.add("op-implies")
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-not",
+            position: 1,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-not")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        // Should have at least 2 violations (root-only + child limit)
+        expect(result.violations.length).toBeGreaterThanOrEqual(2)
+        expect(
+            result.violations.some((v) => v.code === EXPR_ROOT_ONLY_VIOLATED)
+        ).toBe(true)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHILD_LIMIT_EXCEEDED)
+        ).toBe(true)
     })
 })
