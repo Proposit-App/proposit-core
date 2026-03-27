@@ -19341,11 +19341,17 @@ describe("VariableManager — validate", () => {
         ]
         const vm = new VariableManager()
         const origToArray = vm.toArray.bind(vm)
-        ;(vm as unknown as { toArray: () => TClaimBoundVariable[] }).toArray =
-            () => dupVars
+        ;(
+            vm as unknown as {
+                toArray: () => TCorePropositionalVariable[]
+            }
+        ).toArray = () => dupVars
         const result = vm.validate()
-        ;(vm as unknown as { toArray: () => TClaimBoundVariable[] }).toArray =
-            origToArray
+        ;(
+            vm as unknown as {
+                toArray: () => TCorePropositionalVariable[]
+            }
+        ).toArray = origToArray
         expect(result.ok).toBe(false)
         expect(result.violations.some((v) => v.code === VAR_DUPLICATE_ID)).toBe(
             true
