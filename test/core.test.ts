@@ -15,6 +15,7 @@ import {
     CorePremiseSchema,
     isClaimBound,
     isPremiseBound,
+    isExternallyBound,
     type TClaimBoundVariable,
     type TPremiseBoundVariable,
     type TCoreArgument,
@@ -18392,5 +18393,35 @@ describe("forkArgument", () => {
             )
         )
         expect(operatorChange).toBeDefined()
+    })
+})
+
+describe("cross-argument variable binding", () => {
+    it("isExternallyBound returns true when boundArgumentId differs", () => {
+        const variable: TPremiseBoundVariable = {
+            id: "v-1",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            symbol: "P",
+            checksum: "",
+            boundPremiseId: "p-1",
+            boundArgumentId: "arg-other",
+            boundArgumentVersion: 1,
+        }
+        expect(isExternallyBound(variable, "arg-1")).toBe(true)
+    })
+
+    it("isExternallyBound returns false when boundArgumentId matches", () => {
+        const variable: TPremiseBoundVariable = {
+            id: "v-1",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            symbol: "P",
+            checksum: "",
+            boundPremiseId: "p-1",
+            boundArgumentId: "arg-1",
+            boundArgumentVersion: 0,
+        }
+        expect(isExternallyBound(variable, "arg-1")).toBe(false)
     })
 })

@@ -18,18 +18,18 @@ Additionally, every premise should be automatically referenceable as a variable 
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| Schema approach | Reuse existing `TPremiseBoundVariable` — no new variant | Internal vs external determined at runtime by comparing `boundArgumentId` to engine's `argumentId` |
-| Internal binding method | `bindVariableToPremise` unchanged | Preserves existing API, lazy evaluation, circularity detection |
-| External binding method | New `bindVariableToExternalPremise` | Different validation (no local premise check, calls `canBind`), different evaluation semantics (evaluator-assigned) |
-| Argument-level binding | `bindVariableToArgument(variable, conclusionPremiseId)` convenience | Caller resolves conclusion; method sets `boundPremiseId` and delegates to `bindVariableToExternalPremise` |
-| Validation | `canBind(boundArgumentId, boundArgumentVersion)` protected overridable | Core library agnostic about publish semantics; subclasses inject policy |
-| Default validation | `() => true` | No restrictions at library level |
-| External evaluation | Evaluator-assigned (like claims) | Binding is navigational, not computational; no cross-argument resolution chains |
-| Truth table | External bindings included as free variables | They need assignments like claims do |
-| Auto-variable creation | Always on in `createPremise` / `createPremiseWithId` | Every premise is automatically referenceable as a variable |
-| Auto-variable symbol | Optional parameter; auto-generated if omitted | `"P{n}"` with collision avoidance |
+| Decision                | Choice                                                                 | Rationale                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Schema approach         | Reuse existing `TPremiseBoundVariable` — no new variant                | Internal vs external determined at runtime by comparing `boundArgumentId` to engine's `argumentId`                  |
+| Internal binding method | `bindVariableToPremise` unchanged                                      | Preserves existing API, lazy evaluation, circularity detection                                                      |
+| External binding method | New `bindVariableToExternalPremise`                                    | Different validation (no local premise check, calls `canBind`), different evaluation semantics (evaluator-assigned) |
+| Argument-level binding  | `bindVariableToArgument(variable, conclusionPremiseId)` convenience    | Caller resolves conclusion; method sets `boundPremiseId` and delegates to `bindVariableToExternalPremise`           |
+| Validation              | `canBind(boundArgumentId, boundArgumentVersion)` protected overridable | Core library agnostic about publish semantics; subclasses inject policy                                             |
+| Default validation      | `() => true`                                                           | No restrictions at library level                                                                                    |
+| External evaluation     | Evaluator-assigned (like claims)                                       | Binding is navigational, not computational; no cross-argument resolution chains                                     |
+| Truth table             | External bindings included as free variables                           | They need assignments like claims do                                                                                |
+| Auto-variable creation  | Always on in `createPremise` / `createPremiseWithId`                   | Every premise is automatically referenceable as a variable                                                          |
+| Auto-variable symbol    | Optional parameter; auto-generated if omitted                          | `"P{n}"` with collision avoidance                                                                                   |
 
 ## 1. Utility Function
 
@@ -62,12 +62,12 @@ When a premise is created:
 
 1. Create the premise (existing logic, including auto-conclusion assignment)
 2. Generate a premise-bound variable:
-   - `id`: new UUID
-   - `argumentId` / `argumentVersion`: matches engine's argument
-   - `symbol`: caller-provided, or auto-generated as `"P{n}"` where `n` is the premise count before creation. If `"P{n}"` collides with an existing variable symbol, increment until unique.
-   - `boundPremiseId`: the new premise's ID
-   - `boundArgumentId`: same as engine's `argumentId` (internal binding)
-   - `boundArgumentVersion`: same as engine's `argumentVersion`
+    - `id`: new UUID
+    - `argumentId` / `argumentVersion`: matches engine's argument
+    - `symbol`: caller-provided, or auto-generated as `"P{n}"` where `n` is the premise count before creation. If `"P{n}"` collides with an existing variable symbol, increment until unique.
+    - `boundPremiseId`: the new premise's ID
+    - `boundArgumentId`: same as engine's `argumentId` (internal binding)
+    - `boundArgumentVersion`: same as engine's `argumentVersion`
 3. Register the variable via the existing `bindVariableToPremise` path (checksum, dirty marking, subscribers)
 4. Include both premise and variable in the returned changeset
 
@@ -138,7 +138,11 @@ Called by `bindVariableToExternalPremise` before registration. Throws if `false`
 Current behavior treats all premise-bound variables as lazily resolved. New behavior adds an internal/external check:
 
 ```typescript
-if (variable && isPremiseBound(variable) && variable.boundArgumentId === this.argument.id) {
+if (
+    variable &&
+    isPremiseBound(variable) &&
+    variable.boundArgumentId === this.argument.id
+) {
     // Internal: lazy resolution (existing behavior)
     value = options.resolver(expression.variableId)
 } else {

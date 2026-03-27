@@ -13,6 +13,7 @@
 ### Task 1: Add `isExternallyBound` Utility Function
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts`
 - Modify: `src/lib/index.ts` (if needed — check if schemata barrel re-exports)
 - Test: `test/core.test.ts`
@@ -91,6 +92,7 @@ git commit -m "feat(variables): add isExternallyBound utility function"
 ### Task 2: Auto-Variable Creation in `createPremiseWithId`
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts:452-520`
 - Test: `test/core.test.ts`
 
@@ -268,6 +270,7 @@ git commit -m "feat(variables): auto-create premise-bound variable on createPrem
 ### Task 3: Add `canBind` Protected Method
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Test: `test/core.test.ts`
 
@@ -357,6 +360,7 @@ git commit -m "feat(engine): add canBind protected method and bindVariableToExte
 ### Task 4: Implement `bindVariableToExternalPremise`
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Test: `test/core.test.ts`
 
@@ -481,6 +485,7 @@ git commit -m "feat(engine): implement bindVariableToExternalPremise"
 ### Task 5: Implement `bindVariableToArgument`
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Test: `test/core.test.ts`
 
@@ -558,6 +563,7 @@ git commit -m "feat(engine): add bindVariableToArgument convenience method"
 ### Task 6: Evaluation Changes — External Bindings as Evaluator-Assigned
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts:1773-1805`
 - Modify: `src/lib/core/premise-engine.ts:1318-1335`
 - Test: `test/core.test.ts`
@@ -584,9 +590,13 @@ it("evaluation: internal binding is still lazily resolved", () => {
 
     // pm1's auto-variable is bound to pm1 (internal)
     // Create pm2 that uses pm1's auto-variable
-    const autoVarId = eng.getVariables().find(
-        (v) => isPremiseBound(v) && (v as TPremiseBoundVariable).boundPremiseId === "p1"
-    )!.id
+    const autoVarId = eng
+        .getVariables()
+        .find(
+            (v) =>
+                isPremiseBound(v) &&
+                (v as TPremiseBoundVariable).boundPremiseId === "p1"
+        )!.id
 
     const { result: pm2 } = eng.createPremiseWithId("p2")
     pm2.addExpression({
@@ -633,9 +643,7 @@ it("evaluation: external binding is evaluator-assigned", () => {
     const result = eng.evaluate({ variables: { "v-ext": true } })
     expect(result).toBeDefined()
     // The premise should evaluate to true (single variable expression = true)
-    const premiseResult = result!.premises.find(
-        (p) => p.premiseId === "p1"
-    )
+    const premiseResult = result!.premises.find((p) => p.premiseId === "p1")
     expect(premiseResult?.rootValue).toBe(true)
 })
 
@@ -690,8 +698,7 @@ const referencedVariableIds = allVariableIds.filter((vid) => {
     const v = this.variables.getVariable(vid)
     if (v == null) return false
     if (isClaimBound(v)) return true
-    if (isPremiseBound(v) && v.boundArgumentId !== this.argument.id)
-        return true
+    if (isPremiseBound(v) && v.boundArgumentId !== this.argument.id) return true
     return false
 })
 ```
@@ -738,9 +745,7 @@ In `src/lib/core/premise-engine.ts`, update the variable evaluation block (aroun
 if (expression.type === "variable") {
     let value: TCoreTrivalentValue
     if (options?.resolver) {
-        const variable = this.variables.getVariable(
-            expression.variableId
-        )
+        const variable = this.variables.getVariable(expression.variableId)
         if (
             variable &&
             isPremiseBound(variable) &&
@@ -748,8 +753,7 @@ if (expression.type === "variable") {
         ) {
             value = options.resolver(expression.variableId)
         } else {
-            value =
-                assignment.variables[expression.variableId] ?? null
+            value = assignment.variables[expression.variableId] ?? null
         }
     } else {
         value = assignment.variables[expression.variableId] ?? null
@@ -783,6 +787,7 @@ git commit -m "feat(evaluation): external bindings are evaluator-assigned, inclu
 ### Task 7: Snapshot Restoration for External Bindings
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts:1047-1061` and `1131-1167`
 - Test: `test/core.test.ts`
 
@@ -817,12 +822,7 @@ it("fromSnapshot restores both internal and external bound variables", () => {
     })
 
     const snap = eng.snapshot()
-    const restored = ArgumentEngine.fromSnapshot(
-        snap,
-        aLib(),
-        sLib(),
-        csLib()
-    )
+    const restored = ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib())
 
     // All variables restored
     const vars = restored.getVariables()
@@ -841,7 +841,9 @@ it("fromSnapshot restores both internal and external bound variables", () => {
     expect(pv.boundArgumentId).toBe("arg-other")
 
     // Evaluation still works: external var is evaluator-assigned
-    const result = restored.evaluate({ variables: { "v-ext": true, "v-claim": false } })
+    const result = restored.evaluate({
+        variables: { "v-ext": true, "v-claim": false },
+    })
     expect(result).toBeDefined()
 })
 ```
@@ -898,6 +900,7 @@ git commit -m "feat(restoration): support external bindings in fromSnapshot and 
 ### Task 8: Full Suite Validation and Lint
 
 **Files:**
+
 - All modified files
 
 - [ ] **Step 1: Run full test suite**
@@ -932,6 +935,7 @@ git commit -m "style: lint and format fixes"
 ### Task 9: Update Documentation
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 - Modify: `docs/api-reference.md`
 - Modify: `docs/release-notes/upcoming.md`

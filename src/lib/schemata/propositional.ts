@@ -214,6 +214,14 @@ export function isPremiseBound(
     return "boundPremiseId" in v
 }
 
+/** Returns `true` if the premise-bound variable references a premise in a different argument. */
+export function isExternallyBound(
+    v: TPremiseBoundVariable,
+    argumentId: string
+): boolean {
+    return v.boundArgumentId !== argumentId
+}
+
 export const CorePremiseSchema = Type.Object(
     {
         id: UUID,
