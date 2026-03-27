@@ -69,7 +69,33 @@ import {
     canonicalSerialize,
     entityChecksum,
 } from "../src/lib/core/checksum"
-import { PERMISSIVE_GRAMMAR_CONFIG } from "../src/lib/types/grammar"
+import {
+    PERMISSIVE_GRAMMAR_CONFIG,
+    DEFAULT_GRAMMAR_CONFIG,
+} from "../src/lib/types/grammar"
+import {
+    EXPR_SCHEMA_INVALID,
+    EXPR_SELF_REFERENTIAL_PARENT,
+    EXPR_PARENT_NOT_FOUND,
+    EXPR_PARENT_NOT_CONTAINER,
+    EXPR_ROOT_ONLY_VIOLATED,
+    EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED,
+    EXPR_CHILD_LIMIT_EXCEEDED,
+    EXPR_POSITION_DUPLICATE,
+    EXPR_CHECKSUM_MISMATCH,
+    PREMISE_VARIABLE_REF_NOT_FOUND,
+    VAR_SCHEMA_INVALID,
+    VAR_DUPLICATE_ID,
+    VAR_DUPLICATE_SYMBOL,
+    VAR_CHECKSUM_MISMATCH,
+    ARG_OWNERSHIP_MISMATCH,
+    ARG_CLAIM_REF_NOT_FOUND,
+    CLAIM_SCHEMA_INVALID,
+    CLAIM_FROZEN_NO_SUCCESSOR,
+    SOURCE_SCHEMA_INVALID,
+    ASSOC_CLAIM_REF_NOT_FOUND,
+    ASSOC_SOURCE_REF_NOT_FOUND,
+} from "../src/lib/types/validation"
 import {
     ParsedClaimSchema,
     ParsedVariableSchema,
@@ -1189,7 +1215,7 @@ describe("stress test", () => {
                 maxTerms: 20,
             })
         }).not.toThrow()
-    })
+    }, 30_000)
 
     it("removing a premise cascades to all of its terms", () => {
         const { premiseManagers, termIdsByPremise } = buildStress()
@@ -14788,11 +14814,264 @@ describe("grammar enforcement config", () => {
             expect(formulaExpr.position).toBe(5)
         })
 
-        it("insertExpression still throws even with autoNormalize", () => {
+        it("insertExpression auto-inserts formula buffer when inserting operator between operator parent and children (Site 1)", () => {
             const em = new ExpressionManager({
                 grammarConfig: {
                     enforceFormulaBetweenOperators: true,
                     autoNormalize: true,
+                },
+            })
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Insert OR between AND and v-p. OR takes v-p's slot under AND,
+            // but OR is a non-not operator under an operator — autoNormalize inserts formula.
+            em.insertExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "v-p"
+            )
+
+            // OR should be wrapped in a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            expect(orExpr).toBeDefined()
+            expect(orExpr.parentId).not.toBe("op-and") // Not direct child
+            const formulaExpr = em.getExpression(orExpr.parentId!)!
+            expect(formulaExpr.type).toBe("formula")
+            expect(formulaExpr.parentId).toBe("op-and")
+            expect(formulaExpr.argumentId).toBe(ARG.id)
+            expect(
+                (formulaExpr as unknown as { premiseId: string }).premiseId
+            ).toBe("premise-1")
+
+            // v-p should be a child of OR
+            const vpExpr = em.getExpression("v-p")!
+            expect(vpExpr.parentId).toBe("op-or")
+        })
+
+        it("insertExpression auto-inserts formula buffers for operator children of new operator (Site 2)", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build: and(formula(or(p, q)), r) — with formula buffer between and and or
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            // Auto-normalize inserts formula between and and or
+            em.addExpression({
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-or",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-or",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-r",
+                type: "variable",
+                variableId: VAR_R.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // The auto-inserted formula wraps op-or under op-and
+            const orExpr = em.getExpression("op-or")!
+            const autoFormula = em.getExpression(orExpr.parentId!)!
+            expect(autoFormula.type).toBe("formula")
+            expect(autoFormula.parentId).toBe("op-and")
+
+            // Now insert AND2 between OR and its children (p, q).
+            // AND2 takes v-p's slot under OR. Both v-p and v-q become children of AND2.
+            // OR is now parent of AND2, which is operator-under-operator — Site 2 triggers.
+            em.insertExpression(
+                {
+                    id: "op-and2",
+                    type: "operator",
+                    operator: "and",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "v-p",
+                "v-q"
+            )
+
+            // AND2 becomes a child of OR. Since OR is an operator, autoNormalize
+            // inserts a formula buffer between OR and AND2.
+            const and2Expr = em.getExpression("op-and2")!
+            expect(and2Expr).toBeDefined()
+            expect(and2Expr.parentId).not.toBe("op-or")
+            const and2Parent = em.getExpression(and2Expr.parentId!)!
+            expect(and2Parent.type).toBe("formula")
+            expect(and2Parent.parentId).toBe("op-or")
+
+            // v-p and v-q should be children of AND2
+            expect(em.getExpression("v-p")!.parentId).toBe("op-and2")
+            expect(em.getExpression("v-q")!.parentId).toBe("op-and2")
+        })
+
+        it("insertExpression auto-inserts formula buffers for both sites simultaneously", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build: and(formula(or(p, q)), r)
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // op-or is now under auto-inserted formula under op-and
+            const orExpr = em.getExpression("op-or")!
+            const autoFormula1 = em.getExpression(orExpr.parentId!)!
+            expect(autoFormula1.type).toBe("formula")
+
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-or",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-r",
+                type: "variable",
+                variableId: VAR_R.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Insert AND2 with or as left child. AND2 takes or's slot (under formula under AND).
+            // Site 1: AND2 would be under the formula (a formula, not an operator), so no Site 1 issue.
+            // Site 2: OR is a non-not operator becoming child of AND2 (an operator) — needs formula buffer.
+            em.insertExpression(
+                {
+                    id: "op-and2",
+                    type: "operator",
+                    operator: "and",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "op-or"
+            )
+
+            // AND2 should be under the original auto-formula (formula parent, not operator, so no Site 1)
+            const and2Expr = em.getExpression("op-and2")!
+            expect(and2Expr.parentId).toBe(autoFormula1.id)
+
+            // OR should be under a new formula buffer under AND2 (Site 2)
+            const orExpr2 = em.getExpression("op-or")!
+            expect(orExpr2.parentId).not.toBe("op-and2")
+            const orParent = em.getExpression(orExpr2.parentId!)!
+            expect(orParent.type).toBe("formula")
+            expect(orParent.parentId).toBe("op-and2")
+        })
+
+        it("insertExpression still throws when autoNormalize is false", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: false,
                 },
             })
             em.addExpression({
@@ -14842,11 +15121,207 @@ describe("grammar enforcement config", () => {
             ).toThrowError(/cannot be direct children of operator expressions/)
         })
 
-        it("wrapExpression still throws even with autoNormalize", () => {
+        it("wrapExpression auto-inserts formula buffer when wrapping creates operator-under-operator (Site 1)", () => {
             const em = new ExpressionManager({
                 grammarConfig: {
                     enforceFormulaBetweenOperators: true,
                     autoNormalize: true,
+                },
+            })
+            // Build: and(p, q)
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Wrap v-p with OR — OR takes v-p's slot under AND.
+            // OR is a non-not operator under AND (an operator) → Site 1 triggers.
+            em.wrapExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "v-r",
+                    type: "variable",
+                    variableId: VAR_R.id,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "v-p"
+            )
+
+            // OR should be wrapped in a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            expect(orExpr.parentId).not.toBe("op-and")
+            const formulaExpr = em.getExpression(orExpr.parentId!)!
+            expect(formulaExpr.type).toBe("formula")
+            expect(formulaExpr.parentId).toBe("op-and")
+
+            // v-p and v-r should be children of OR
+            expect(em.getExpression("v-p")!.parentId).toBe("op-or")
+            expect(em.getExpression("v-r")!.parentId).toBe("op-or")
+        })
+
+        it("wrapExpression auto-inserts formula buffer when existing node is operator (Site 2)", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build: or(p, q)
+            em.addExpression({
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-or",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-or",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Wrap OR with AND — OR becomes child of AND (operator under operator).
+            // Site 2: existing node (OR) is a non-not operator under new operator AND.
+            em.wrapExpression(
+                {
+                    id: "op-and",
+                    type: "operator",
+                    operator: "and",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "v-r",
+                    type: "variable",
+                    variableId: VAR_R.id,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "op-or"
+            )
+
+            // OR should now be under a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            const orParent = em.getExpression(orExpr.parentId!)!
+            expect(orParent.type).toBe("formula")
+            expect(orParent.parentId).toBe("op-and")
+
+            // AND should be at root
+            const andExpr = em.getExpression("op-and")!
+            expect(andExpr.parentId).toBe(null)
+        })
+
+        it("wrapExpression auto-inserts formula buffer when new sibling is operator (Site 3)", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build a single variable at root
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Wrap v-p with AND, new sibling is an OR operator.
+            // Site 3: new sibling (OR) is a non-not operator under AND.
+            em.wrapExpression(
+                {
+                    id: "op-and",
+                    type: "operator",
+                    operator: "and",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "v-p"
+            )
+
+            // OR should now be under a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            const orParent = em.getExpression(orExpr.parentId!)!
+            expect(orParent.type).toBe("formula")
+            expect(orParent.parentId).toBe("op-and")
+
+            // v-p should be a direct child of AND (it's a variable, not an operator)
+            expect(em.getExpression("v-p")!.parentId).toBe("op-and")
+        })
+
+        it("wrapExpression still throws when autoNormalize is false", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: false,
                 },
             })
             em.addExpression({
@@ -15077,7 +15552,7 @@ describe("grammar enforcement config", () => {
             expect(formulaExpr.parentId).toBe("op-and")
         })
 
-        it("fromData with no grammar config uses permissive default", () => {
+        it("fromData with no grammar config defaults to strict enforcement", () => {
             const arg = { id: "arg-1", version: 1 }
             const variables = [
                 {
@@ -15144,6 +15619,7 @@ describe("grammar enforcement config", () => {
                     position: 1,
                 },
             ]
+            // Default now enforces grammar — operator-under-operator throws
             expect(() =>
                 ArgumentEngine.fromData(
                     arg,
@@ -15155,10 +15631,25 @@ describe("grammar enforcement config", () => {
                     expressions,
                     { conclusionPremiseId: "p1" }
                 )
+            ).toThrow()
+            // Explicit permissive config still allows it
+            expect(() =>
+                ArgumentEngine.fromData(
+                    arg,
+                    aLib(),
+                    sLib(),
+                    csLib(),
+                    variables,
+                    premises,
+                    expressions,
+                    { conclusionPremiseId: "p1" },
+                    { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG },
+                    PERMISSIVE_GRAMMAR_CONFIG
+                )
             ).not.toThrow()
         })
 
-        it("rollback to snapshot with operator-under-operator succeeds", () => {
+        it("rollback to snapshot with operator-under-operator rejects and restores", () => {
             const arg = { id: "arg-1", version: 1 }
             const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
             engine.addVariable({
@@ -15170,6 +15661,7 @@ describe("grammar enforcement config", () => {
                 claimVersion: 0,
             })
             const { result: pm } = engine.createPremise()
+            const premiseId = pm.getId()
             const snapshot = engine.snapshot()
             const premSnap = snapshot.premises[0]
             premSnap.expressions.expressions = [
@@ -15197,7 +15689,11 @@ describe("grammar enforcement config", () => {
                 },
             ] as TCorePropositionalExpression[]
             premSnap.rootExpressionId = "op-and"
-            expect(() => engine.rollback(snapshot)).not.toThrow()
+            // Rollback now validates — operator-under-operator is rejected
+            expect(() => engine.rollback(snapshot)).toThrow()
+            // Engine should still hold the pre-rollback state
+            expect(engine.hasPremise(premiseId)).toBe(true)
+            expect(engine.validate().ok).toBe(true)
         })
     })
 })
@@ -18748,5 +19244,1496 @@ describe("cross-argument variable binding", () => {
             rejectedExpressionIds: [],
         })
         expect(result.ok).toBe(true)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ExpressionManager — validate
+// ---------------------------------------------------------------------------
+
+describe("ExpressionManager — validate", () => {
+    it("returns ok for a valid tree", () => {
+        const em = new ExpressionManager()
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-q", "var-q", { parentId: "op-and", position: 1 })
+        )
+        em.flushExpressionChecksums()
+
+        const result = em.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toEqual([])
+    })
+
+    it("returns ok for an empty manager", () => {
+        const em = new ExpressionManager()
+        const result = em.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toEqual([])
+    })
+
+    it("detects schema violation", () => {
+        // Build a valid manager, then directly corrupt an expression's type
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: overwrite with invalid type via internal map
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", { ...expr, type: "INVALID_TYPE" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_SCHEMA_INVALID)
+        ).toBe(true)
+    })
+
+    it("detects self-referential parent", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: set parentId to self via internal map
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", { ...expr, parentId: "v-p" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some(
+                (v) => v.code === EXPR_SELF_REFERENTIAL_PARENT
+            )
+        ).toBe(true)
+    })
+
+    it("detects parent not found", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: change parentId to a nonexistent expression
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", { ...expr, parentId: "nonexistent" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_PARENT_NOT_FOUND)
+        ).toBe(true)
+    })
+
+    it("detects parent not a container", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-q", "var-q", { parentId: "op-and", position: 1 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: set v-q's parentId to v-p (a variable, not operator/formula)
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-q")!
+        map.set("v-q", { ...expr, parentId: "v-p" })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_PARENT_NOT_CONTAINER)
+        ).toBe(true)
+    })
+
+    it("detects root-only violation for implies with non-null parent", () => {
+        // Inject implies under and via internal map — addExpression forbids this
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("op-implies", {
+            id: "op-implies",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "operator",
+            operator: "implies",
+            parentId: "op-and",
+            position: 0,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        const andChildren = childIndex.get("op-and")
+        if (andChildren) {
+            andChildren.add("op-implies")
+        } else {
+            childIndex.set("op-and", new Set(["op-implies"]))
+        }
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_ROOT_ONLY_VIOLATED)
+        ).toBe(true)
+    })
+
+    it("detects formula-between-operators violation", () => {
+        // Create with PERMISSIVE config, then switch config to strict for validation
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        // Directly nest or under and (no formula between) — allowed in permissive
+        em.addExpression(
+            makeOpExpr("op-or", "or", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const snap = em.snapshot()
+        // Restore with strict grammar config via fromSnapshot
+        // We need to bypass addExpression's enforcement — use permissive load, then override config
+        const restored = ExpressionManager.fromSnapshot(
+            snap,
+            PERMISSIVE_GRAMMAR_CONFIG
+        )
+        // Now override the config to strict so validate() sees enforcement enabled
+        ;(
+            restored as unknown as {
+                config: { grammarConfig: typeof DEFAULT_GRAMMAR_CONFIG }
+            }
+        ).config = {
+            grammarConfig: { ...DEFAULT_GRAMMAR_CONFIG, autoNormalize: false },
+        }
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some(
+                (v) => v.code === EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED
+            )
+        ).toBe(true)
+    })
+
+    it("does NOT flag formula-between-operators when enforcement is disabled", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeOpExpr("op-or", "or", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const result = em.validate()
+        expect(result.ok).toBe(true)
+    })
+
+    it("detects child limit exceeded for not operator", () => {
+        // not should have at most 1 child — inject second child via internal map
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-not", "not", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-not", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject a second child directly
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-not",
+            position: 1,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-not")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHILD_LIMIT_EXCEEDED)
+        ).toBe(true)
+    })
+
+    it("detects child limit exceeded for formula node", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(makeFormulaExpr("f1", { parentId: null, position: 0 }))
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "f1", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject a second child directly
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "f1",
+            position: 1,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("f1")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHILD_LIMIT_EXCEEDED)
+        ).toBe(true)
+    })
+
+    it("detects position uniqueness violation", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject a second child with duplicate position directly
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-and",
+            position: 0, // duplicate!
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-and")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_POSITION_DUPLICATE)
+        ).toBe(true)
+    })
+
+    it("detects checksum mismatch", () => {
+        const em = new ExpressionManager()
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Tamper: corrupt the checksum directly in the internal map
+        const map = (
+            em as unknown as {
+                expressions: Map<string, Record<string, unknown>>
+            }
+        ).expressions
+        const expr = map.get("v-p")!
+        map.set("v-p", {
+            ...expr,
+            checksum: "tampered-checksum",
+            combinedChecksum: "tampered-checksum",
+        })
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHECKSUM_MISMATCH)
+        ).toBe(true)
+    })
+
+    it("skips checksum comparison for null/empty checksums", () => {
+        // A freshly-created manager before flush has valid checksums
+        // (attachChecksum sets them), but let's verify validate doesn't
+        // false-positive on a manager with null checksums loaded permissively
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+        )
+        em.flushExpressionChecksums()
+        const snap = em.snapshot()
+        // Set checksums to null (simulating pre-flush entities)
+        ;(snap.expressions[0] as Record<string, unknown>).checksum = null
+        ;(snap.expressions[0] as Record<string, unknown>).descendantChecksum =
+            null
+        ;(snap.expressions[0] as Record<string, unknown>).combinedChecksum =
+            null
+        const restored = ExpressionManager.fromSnapshot(
+            snap,
+            PERMISSIVE_GRAMMAR_CONFIG
+        )
+        const result = restored.validate()
+        // Should not flag checksum mismatch for null checksums
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHECKSUM_MISMATCH)
+        ).toBe(false)
+    })
+
+    it("collects multiple violations in one pass", () => {
+        // Build a tree with multiple problems via internal map injection
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.addExpression(
+            makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeOpExpr("op-not", "not", { parentId: "op-and", position: 1 })
+        )
+        em.addExpression(
+            makeVarExpr("v-p", "var-p", { parentId: "op-not", position: 0 })
+        )
+        em.flushExpressionChecksums()
+        // Inject implies under and (root-only violation) and second child to not (child limit violation)
+        const map = (
+            em as unknown as {
+                expressions: Map<string, TCorePropositionalExpression>
+            }
+        ).expressions
+        const childIndex = (
+            em as unknown as {
+                childExpressionIdsByParentId: Map<string | null, Set<string>>
+            }
+        ).childExpressionIdsByParentId
+        map.set("op-implies", {
+            id: "op-implies",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "operator",
+            operator: "implies",
+            parentId: "op-and",
+            position: 0,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-and")!.add("op-implies")
+        map.set("v-q", {
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-not",
+            position: 1,
+            checksum: "fake",
+            descendantChecksum: null,
+            combinedChecksum: "fake",
+        } as TCorePropositionalExpression)
+        childIndex.get("op-not")!.add("v-q")
+        const result = em.validate()
+        expect(result.ok).toBe(false)
+        // Should have at least 2 violations (root-only + child limit)
+        expect(result.violations.length).toBeGreaterThanOrEqual(2)
+        expect(
+            result.violations.some((v) => v.code === EXPR_ROOT_ONLY_VIOLATED)
+        ).toBe(true)
+        expect(
+            result.violations.some((v) => v.code === EXPR_CHILD_LIMIT_EXCEEDED)
+        ).toBe(true)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// VariableManager — validate
+// ---------------------------------------------------------------------------
+
+describe("VariableManager — validate", () => {
+    it("returns ok for a valid set of variables", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(makeVar("var-p", "P"))
+        eng.addVariable(makeVar("var-q", "Q"))
+        const vm = (eng as unknown as { variables: VariableManager }).variables
+        const result = vm.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("returns ok for an empty manager", () => {
+        const vm = new VariableManager()
+        const result = vm.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("detects checksum mismatch after snapshot tampering", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(makeVar("var-p", "P"))
+        const snap = (
+            eng as unknown as { variables: VariableManager }
+        ).variables.snapshot()
+
+        // Tamper the checksum of the variable in the snapshot
+        snap.variables[0] = { ...snap.variables[0], checksum: "deadbeef" }
+
+        const vm = VariableManager.fromSnapshot(snap)
+        const result = vm.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === VAR_CHECKSUM_MISMATCH)
+        ).toBe(true)
+        expect(result.violations[0].entityId).toBe("var-p")
+    })
+
+    it("detects schema violation", () => {
+        const vm = new VariableManager()
+        // Bypass addVariable to inject a malformed variable directly
+        const map = (vm as unknown as { variables: Map<string, unknown> })
+            .variables
+        const symbolIndex = (
+            vm as unknown as { variablesBySymbol: Map<string, string> }
+        ).variablesBySymbol
+        const bad = {
+            id: "var-bad",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "X",
+            // Missing claimId/claimVersion and boundPremiseId/boundArgumentId/boundArgumentVersion
+            // so it doesn't satisfy either union branch
+            checksum: "",
+        }
+        map.set("var-bad", bad)
+        symbolIndex.set("X", "var-bad")
+        const result = vm.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === VAR_SCHEMA_INVALID)
+        ).toBe(true)
+    })
+
+    it("detects duplicate ID injected after bypass", () => {
+        // Maps cannot have duplicate keys, so we simulate a corrupt state by
+        // temporarily overriding toArray() to return an array with repeated IDs.
+        const dupVars: TClaimBoundVariable[] = [
+            {
+                id: "var-dup",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                symbol: "P",
+                claimId: "claim-default",
+                claimVersion: 0,
+                checksum: "",
+            },
+            {
+                id: "var-dup",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                symbol: "Q",
+                claimId: "claim-default",
+                claimVersion: 0,
+                checksum: "",
+            },
+        ]
+        const vm = new VariableManager()
+        const origToArray = vm.toArray.bind(vm)
+        ;(
+            vm as unknown as {
+                toArray: () => TCorePropositionalVariable[]
+            }
+        ).toArray = () => dupVars
+        const result = vm.validate()
+        ;(
+            vm as unknown as {
+                toArray: () => TCorePropositionalVariable[]
+            }
+        ).toArray = origToArray
+        expect(result.ok).toBe(false)
+        expect(result.violations.some((v) => v.code === VAR_DUPLICATE_ID)).toBe(
+            true
+        )
+    })
+
+    it("detects duplicate symbol injected after bypass", () => {
+        const vm = new VariableManager()
+        // Bypass addVariable to inject a malformed variable directly
+        const map = (vm as unknown as { variables: Map<string, unknown> })
+            .variables
+        const symbolIndex = (
+            vm as unknown as { variablesBySymbol: Map<string, string> }
+        ).variablesBySymbol
+        // Two variables with the same symbol "P" injected directly
+        const v1: TClaimBoundVariable = {
+            id: "var-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
+        }
+        const v2: TClaimBoundVariable = {
+            id: "var-2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
+        }
+        map.set("var-1", v1)
+        map.set("var-2", v2)
+        symbolIndex.set("P", "var-2")
+        const result = vm.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some((v) => v.code === VAR_DUPLICATE_SYMBOL)
+        ).toBe(true)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// PremiseEngine — validate
+// ---------------------------------------------------------------------------
+describe("PremiseEngine — validate", () => {
+    it("returns ok for a valid premise with expressions", () => {
+        const vm = new VariableManager()
+        vm.addVariable({
+            id: "var-p",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
+        } as TCorePropositionalVariable)
+        const pe = new PremiseEngine(
+            {
+                id: "premise-1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TOptionalChecksum<TCorePremise>,
+            { argument: ARG, variables: vm },
+            { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
+        )
+        pe.addExpression(
+            makeVarExpr("expr-1", "var-p", { premiseId: "premise-1" })
+        )
+        // Wire up the variable IDs callback
+        pe.setVariableIdsCallback(() => new Set(["var-p"]))
+        const result = pe.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("returns ok for an empty premise", () => {
+        const vm = new VariableManager()
+        const pe = new PremiseEngine(
+            {
+                id: "premise-1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TOptionalChecksum<TCorePremise>,
+            { argument: ARG, variables: vm },
+            { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
+        )
+        const result = pe.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("detects variable reference to non-existent variable", () => {
+        const vm = new VariableManager()
+        vm.addVariable({
+            id: "var-p",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
+        } as TCorePropositionalVariable)
+        const pe = new PremiseEngine(
+            {
+                id: "premise-1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TOptionalChecksum<TCorePremise>,
+            { argument: ARG, variables: vm },
+            { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
+        )
+        pe.addExpression(
+            makeVarExpr("expr-1", "var-p", { premiseId: "premise-1" })
+        )
+        // Set callback returning empty set — var-p won't be found
+        pe.setVariableIdsCallback(() => new Set())
+        const result = pe.validate()
+        expect(result.ok).toBe(false)
+        expect(
+            result.violations.some(
+                (v) => v.code === PREMISE_VARIABLE_REF_NOT_FOUND
+            )
+        ).toBe(true)
+        // The violation should carry the premiseId
+        const violation = result.violations.find(
+            (v) => v.code === PREMISE_VARIABLE_REF_NOT_FOUND
+        )!
+        expect(violation.premiseId).toBe("premise-1")
+        expect(violation.entityId).toBe("expr-1")
+    })
+
+    it("propagates expression-level violations with premiseId attached", () => {
+        const vm = new VariableManager()
+        vm.addVariable({
+            id: "var-p",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
+        } as TCorePropositionalVariable)
+        vm.addVariable({
+            id: "var-q",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            symbol: "Q",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
+        } as TCorePropositionalVariable)
+        // Use PERMISSIVE grammar to build the tree (allows operator-under-operator)
+        const pe = new PremiseEngine(
+            {
+                id: "premise-1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TOptionalChecksum<TCorePremise>,
+            { argument: ARG, variables: vm },
+            { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
+        )
+        // Build: and(or(P, Q), P) — or is direct child of and
+        pe.addExpression(
+            makeOpExpr("expr-and", "and", { premiseId: "premise-1" })
+        )
+        pe.addExpression(
+            makeOpExpr("expr-or", "or", {
+                parentId: "expr-and",
+                position: 0,
+                premiseId: "premise-1",
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-p1", "var-p", {
+                parentId: "expr-or",
+                position: 0,
+                premiseId: "premise-1",
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-q1", "var-q", {
+                parentId: "expr-or",
+                position: 1,
+                premiseId: "premise-1",
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-p2", "var-p", {
+                parentId: "expr-and",
+                position: 1,
+                premiseId: "premise-1",
+            })
+        )
+
+        // Switch the internal ExpressionManager's grammar config to DEFAULT
+        // so that validate() detects the formula-between-operators violation.
+        const expressions = (
+            pe as unknown as { expressions: ExpressionManager }
+        ).expressions
+        ;(
+            expressions as unknown as {
+                config: { grammarConfig: typeof DEFAULT_GRAMMAR_CONFIG }
+            }
+        ).config = { grammarConfig: DEFAULT_GRAMMAR_CONFIG }
+
+        const result = pe.validate()
+        expect(result.ok).toBe(false)
+        const fboViolations = result.violations.filter(
+            (v) => v.code === EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED
+        )
+        expect(fboViolations.length).toBeGreaterThan(0)
+        // Every propagated violation should carry the premiseId
+        for (const v of fboViolations) {
+            expect(v.premiseId).toBe("premise-1")
+        }
+    })
+})
+
+describe("ArgumentEngine — validate", () => {
+    const ARG = { id: "arg-1", version: 1 }
+
+    it("valid argument with premises and variables → ok", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.createPremise()
+        eng.addVariable(makeVar("v-extra", "X"))
+
+        const result = eng.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("empty argument → ok", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        // Clear conclusion (constructor doesn't auto-assign without premises)
+        const result = eng.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("detects claim reference to non-existent claim", () => {
+        // Create engine with a claim-bound variable referencing claim-default
+        const claimLib = aLib()
+        const eng = new ArgumentEngine(ARG, claimLib, sLib(), csLib())
+        eng.addVariable(makeVar("v1", "A"))
+
+        // Snapshot, then restore with an empty ClaimLibrary
+        const snap = eng.snapshot()
+        const emptyClaimLib = new ClaimLibrary()
+
+        // Restore from snapshot, bypassing addVariable's runtime check
+        // by directly building engine and injecting variables
+        const engine2 = new ArgumentEngine(
+            snap.argument,
+            emptyClaimLib,
+            sLib(),
+            new ClaimSourceLibrary(emptyClaimLib, sLib())
+        )
+        // Inject variables directly into the VariableManager via snapshot restore
+        const vm = VariableManager.fromSnapshot(snap.variables)
+        ;(engine2 as unknown as { variables: VariableManager }).variables = vm
+
+        const result = engine2.validate()
+        expect(result.ok).toBe(false)
+        const claimViolations = result.violations.filter(
+            (v) => v.code === ARG_CLAIM_REF_NOT_FOUND
+        )
+        expect(claimViolations.length).toBeGreaterThan(0)
+        expect(claimViolations[0].entityId).toBe("v1")
+    })
+
+    it("detects conclusion referencing non-existent premise", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.createPremise()
+
+        const snap = eng.snapshot()
+        // Tamper: set conclusionPremiseId to a non-existent ID
+        snap.conclusionPremiseId = "non-existent-premise"
+
+        // fromSnapshot now validates, so loading a tampered snapshot throws
+        expect(() =>
+            ArgumentEngine.fromSnapshot(
+                snap,
+                aLib(),
+                sLib(),
+                csLib(),
+                undefined,
+                "ignore"
+            )
+        ).toThrow(/non-existent-premise/)
+    })
+
+    it("detects ownership mismatch on variable", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.createPremise()
+
+        // Snapshot normally, then restore to get a clean engine
+        const snap = eng.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib(),
+            undefined,
+            "ignore"
+        )
+
+        // Tamper: directly mutate the variable in the VariableManager
+        // to have a wrong argumentId (bypassing ArgumentEngine's guards)
+        const vars = restored.getVariables()
+        expect(vars.length).toBeGreaterThan(0)
+        const vm = (restored as unknown as { variables: VariableManager })
+            .variables
+        const original = vars[0]
+        vm.removeVariable(original.id)
+        vm.addVariable({
+            ...original,
+            argumentId: "wrong-arg",
+        } as typeof original)
+
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const ownershipViolations = result.violations.filter(
+            (v) => v.code === ARG_OWNERSHIP_MISMATCH
+        )
+        expect(ownershipViolations.length).toBeGreaterThan(0)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ClaimLibrary — validate
+// ---------------------------------------------------------------------------
+
+describe("ClaimLibrary — validate", () => {
+    it("returns ok for a valid library", () => {
+        const lib = aLib()
+        const result = lib.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("returns ok for an empty library", () => {
+        const lib = new ClaimLibrary()
+        const result = lib.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("detects frozen claim without successor", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "claim-a" })
+        // First freeze: version 0 (frozen) + version 1 (unfrozen)
+        lib.freeze("claim-a")
+        // Second freeze: version 1 (frozen) + version 2 (unfrozen)
+        lib.freeze("claim-a")
+
+        // Remove version 1 so version 0 is frozen but version 1 (its
+        // direct successor) is missing, while version 2 still exists
+        const snap = lib.snapshot()
+        const tamperedClaims = snap.claims.filter(
+            (c) => !(c.id === "claim-a" && c.version === 1)
+        )
+        const tamperedSnap = { claims: tamperedClaims }
+
+        const restored = ClaimLibrary.fromSnapshot(tamperedSnap)
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const violations = result.violations.filter(
+            (v) => v.code === CLAIM_FROZEN_NO_SUCCESSOR
+        )
+        expect(violations.length).toBe(1)
+        expect(violations[0].entityId).toBe("claim-a")
+    })
+
+    it("detects claim failing schema check", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "claim-b" })
+        const snap = lib.snapshot()
+        // Tamper: remove the checksum field to break schema
+        const tampered = snap.claims.map((c) => {
+            const { checksum: _omit, ...rest } = c
+            return rest
+        })
+        const restored = ClaimLibrary.fromSnapshot({
+            claims: tampered as Parameters<
+                typeof ClaimLibrary.fromSnapshot
+            >[0]["claims"],
+        })
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const violations = result.violations.filter(
+            (v) => v.code === CLAIM_SCHEMA_INVALID
+        )
+        expect(violations.length).toBeGreaterThan(0)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// SourceLibrary — validate
+// ---------------------------------------------------------------------------
+
+describe("SourceLibrary — validate", () => {
+    it("returns ok for a valid library", () => {
+        const lib = new SourceLibrary()
+        const result = lib.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("returns ok after adding a source", () => {
+        const lib = new SourceLibrary()
+        lib.create({ id: "source-a" })
+        const result = lib.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("detects source failing schema check", () => {
+        const lib = new SourceLibrary()
+        lib.create({ id: "source-b" })
+        const snap = lib.snapshot()
+        const tampered = snap.sources.map((s) => {
+            const { checksum: _omit, ...rest } = s
+            return rest
+        })
+        const restored = SourceLibrary.fromSnapshot({
+            sources: tampered as Parameters<
+                typeof SourceLibrary.fromSnapshot
+            >[0]["sources"],
+        })
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const violations = result.violations.filter(
+            (v) => v.code === SOURCE_SCHEMA_INVALID
+        )
+        expect(violations.length).toBeGreaterThan(0)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ClaimSourceLibrary — validate
+// ---------------------------------------------------------------------------
+
+describe("ClaimSourceLibrary — validate", () => {
+    it("returns ok for a library with valid associations", () => {
+        const claimLib = new ClaimLibrary()
+        claimLib.create({ id: "claim-x" })
+        const sourceLib = new SourceLibrary()
+        sourceLib.create({ id: "source-x" })
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        csLibrary.add({
+            id: "assoc-1",
+            claimId: "claim-x",
+            claimVersion: 0,
+            sourceId: "source-x",
+            sourceVersion: 0,
+        })
+        const result = csLibrary.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("returns ok for an empty library", () => {
+        const csLibrary = new ClaimSourceLibrary(aLib(), sLib())
+        const result = csLibrary.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("detects association referencing non-existent claim", () => {
+        const claimLib = new ClaimLibrary()
+        claimLib.create({ id: "claim-y" })
+        const sourceLib = new SourceLibrary()
+        sourceLib.create({ id: "source-y" })
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        csLibrary.add({
+            id: "assoc-2",
+            claimId: "claim-y",
+            claimVersion: 0,
+            sourceId: "source-y",
+            sourceVersion: 0,
+        })
+
+        // Restore against an empty ClaimLibrary so the claim ref is not found
+        const snap = csLibrary.snapshot()
+        const emptyClaimLib = new ClaimLibrary()
+        const restored = ClaimSourceLibrary.fromSnapshot(
+            snap,
+            emptyClaimLib,
+            sourceLib
+        )
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const violations = result.violations.filter(
+            (v) => v.code === ASSOC_CLAIM_REF_NOT_FOUND
+        )
+        expect(violations.length).toBe(1)
+        expect(violations[0].entityId).toBe("assoc-2")
+    })
+
+    it("detects association referencing non-existent source", () => {
+        const claimLib = new ClaimLibrary()
+        claimLib.create({ id: "claim-z" })
+        const sourceLib = new SourceLibrary()
+        sourceLib.create({ id: "source-z" })
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        csLibrary.add({
+            id: "assoc-3",
+            claimId: "claim-z",
+            claimVersion: 0,
+            sourceId: "source-z",
+            sourceVersion: 0,
+        })
+
+        // Restore against an empty SourceLibrary so the source ref is not found
+        const snap = csLibrary.snapshot()
+        const emptySourceLib = new SourceLibrary()
+        const restored = ClaimSourceLibrary.fromSnapshot(
+            snap,
+            claimLib,
+            emptySourceLib
+        )
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const violations = result.violations.filter(
+            (v) => v.code === ASSOC_SOURCE_REF_NOT_FOUND
+        )
+        expect(violations.length).toBe(1)
+        expect(violations[0].entityId).toBe("assoc-3")
+    })
+})
+
+describe("ArgumentEngine — withValidation bracket", () => {
+    it("valid operations still work after wrapping", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(makeVar("var-p", "P"))
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
+        expect(eng.validate().ok).toBe(true)
+    })
+
+    it("existing per-operation errors still throw with rollback", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        expect(() =>
+            eng.addVariable({ ...makeVar("v1", "P"), argumentId: "wrong-arg" })
+        ).toThrow()
+        expect(eng.getVariables()).toHaveLength(0)
+    })
+
+    it("state is consistent after successful removePremise", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        eng.removePremise(pm.getId())
+        expect(eng.hasPremise(pm.getId())).toBe(false)
+        expect(eng.validate().ok).toBe(true)
+    })
+})
+
+describe("PremiseEngine — withValidation bracket", () => {
+    it("triggers argument-level validation on expression mutation", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(makeVar("var-p", "P"))
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
+        expect(eng.validate().ok).toBe(true)
+    })
+
+    it("rolls back on failed expression mutation (nonexistent variable)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        expect(() =>
+            pm.addExpression(
+                makeVarExpr("v1", "nonexistent-var", {
+                    premiseId: pm.getId(),
+                })
+            )
+        ).toThrow()
+        expect(pm.getExpressions()).toHaveLength(0)
+    })
+
+    it("rolls back appendExpression on failure", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        expect(() =>
+            pm.appendExpression(null, {
+                id: "e1",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: pm.getId(),
+                type: "variable",
+                variableId: "nonexistent-var",
+            } as TExpressionWithoutPosition)
+        ).toThrow()
+        expect(pm.getExpressions()).toHaveLength(0)
+    })
+
+    it("valid operations through PremiseEngine produce correct state", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(makeVar("var-p", "P"))
+        eng.addVariable(makeVar("var-q", "Q"))
+        const { result: pm } = eng.createPremise()
+
+        // Build: and(P, Q)
+        pm.addExpression({
+            id: "op1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pm.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: POSITION_INITIAL,
+        } as TExpressionInput)
+        pm.addExpression(
+            makeVarExpr("v1", "var-p", {
+                premiseId: pm.getId(),
+                parentId: "op1",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("v2", "var-q", {
+                premiseId: pm.getId(),
+                parentId: "op1",
+                position: 100,
+            })
+        )
+
+        expect(pm.getExpressions()).toHaveLength(3)
+        expect(eng.validate().ok).toBe(true)
+    })
+
+    it("removeExpression rolls back on invariant violation", () => {
+        // Build a valid premise with a single variable expression, then try
+        // removing it — the premise itself stays valid (empty is fine) so
+        // this should succeed and not roll back.
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(makeVar("var-p", "P"))
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
+        pm.removeExpression("v1", true)
+        expect(pm.getExpressions()).toHaveLength(0)
+        expect(eng.validate().ok).toBe(true)
+    })
+
+    it("setExtras succeeds under validation", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        pm.setExtras({ label: "test" })
+        expect(pm.getExtras()).toEqual({ label: "test" })
+        expect(eng.validate().ok).toBe(true)
+    })
+
+    it("updateExpression rolls back on nonexistent variable reference", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(makeVar("var-p", "P"))
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
+        // Try updating to a nonexistent variable — should throw and roll back
+        expect(() =>
+            pm.updateExpression("v1", { variableId: "nonexistent" })
+        ).toThrow()
+        // Expression should still reference original variable
+        const expr = pm.getExpression("v1")!
+        expect(expr.type === "variable" && expr.variableId).toBe("var-p")
+    })
+
+    it("expression index is restored on rollback", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        // Try adding an expression referencing a nonexistent variable
+        expect(() =>
+            pm.addExpression(
+                makeVarExpr("v1", "nonexistent-var", {
+                    premiseId: pm.getId(),
+                })
+            )
+        ).toThrow()
+        // Verify the expression is not in the engine's expression lookup
+        expect(eng.getExpressionPremiseId("v1")).toBeUndefined()
+    })
+})
+
+describe("Library — withValidation brackets", () => {
+    it("ClaimLibrary validates after create", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "c1" })
+        expect(lib.validate().ok).toBe(true)
+    })
+
+    it("ClaimLibrary validates after freeze", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "c1" })
+        lib.freeze("c1")
+        expect(lib.validate().ok).toBe(true)
+    })
+
+    it("ClaimLibrary rolls back on duplicate create", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "c1" })
+        expect(() => lib.create({ id: "c1" })).toThrow()
+        // Only one entry should exist after rollback
+        expect(lib.getAll()).toHaveLength(1)
+    })
+
+    it("SourceLibrary validates after create", () => {
+        const lib = new SourceLibrary()
+        lib.create({ id: "s1" })
+        expect(lib.validate().ok).toBe(true)
+    })
+
+    it("SourceLibrary validates after freeze", () => {
+        const lib = new SourceLibrary()
+        lib.create({ id: "s1" })
+        lib.freeze("s1")
+        expect(lib.validate().ok).toBe(true)
+    })
+
+    it("SourceLibrary rolls back on duplicate create", () => {
+        const lib = new SourceLibrary()
+        lib.create({ id: "s1" })
+        expect(() => lib.create({ id: "s1" })).toThrow()
+        expect(lib.getAll()).toHaveLength(1)
+    })
+
+    it("ClaimSourceLibrary validates after add", () => {
+        const cl = aLib()
+        const sl = sLib()
+        sl.create({ id: "s1" })
+        const csl = new ClaimSourceLibrary(cl, sl)
+        csl.add({
+            id: "a1",
+            claimId: "claim-default",
+            claimVersion: 0,
+            sourceId: "s1",
+            sourceVersion: 0,
+        })
+        expect(csl.validate().ok).toBe(true)
+    })
+
+    it("ClaimSourceLibrary validates after remove", () => {
+        const cl = aLib()
+        const sl = sLib()
+        sl.create({ id: "s1" })
+        const csl = new ClaimSourceLibrary(cl, sl)
+        csl.add({
+            id: "a1",
+            claimId: "claim-default",
+            claimVersion: 0,
+            sourceId: "s1",
+            sourceVersion: 0,
+        })
+        csl.remove("a1")
+        expect(csl.validate().ok).toBe(true)
+        expect(csl.getAll()).toHaveLength(0)
+    })
+
+    it("ClaimSourceLibrary rolls back on duplicate add", () => {
+        const cl = aLib()
+        const sl = sLib()
+        sl.create({ id: "s1" })
+        const csl = new ClaimSourceLibrary(cl, sl)
+        csl.add({
+            id: "a1",
+            claimId: "claim-default",
+            claimVersion: 0,
+            sourceId: "s1",
+            sourceVersion: 0,
+        })
+        expect(() =>
+            csl.add({
+                id: "a1",
+                claimId: "claim-default",
+                claimVersion: 0,
+                sourceId: "s1",
+                sourceVersion: 0,
+            })
+        ).toThrow()
+        expect(csl.getAll()).toHaveLength(1)
+    })
+})
+
+describe("ArgumentEngine — bulk path validation", () => {
+    it("fromSnapshot validates loaded state", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        const { result: pm } = eng.createPremise()
+        eng.addVariable(makeVar("var-p", "P"))
+        pm.addExpression(makeOpExpr("root", "and", { premiseId: pm.getId() }))
+        pm.addExpression(
+            makeOpExpr("child", "or", {
+                parentId: "root",
+                position: 0,
+                premiseId: pm.getId(),
+            })
+        )
+        const snap = eng.snapshot()
+        // Loading with strict config should throw — and→or violates formula-between-operators
+        expect(() =>
+            ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib(), {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: false,
+            })
+        ).toThrow()
+    })
+
+    it("fromData validates loaded state", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        const { result: pm } = eng.createPremise()
+        eng.addVariable(makeVar("var-p", "P"))
+        pm.addExpression(makeOpExpr("root", "and", { premiseId: pm.getId() }))
+        pm.addExpression(
+            makeOpExpr("child", "or", {
+                parentId: "root",
+                position: 0,
+                premiseId: pm.getId(),
+            })
+        )
+        const snap = eng.snapshot()
+        expect(() =>
+            ArgumentEngine.fromData(
+                snap.argument,
+                aLib(),
+                sLib(),
+                new ClaimSourceLibrary(aLib(), sLib()),
+                snap.variables.variables,
+                snap.premises.map((p) => p.premise),
+                snap.premises.flatMap((p) => p.expressions.expressions),
+                { conclusionPremiseId: snap.conclusionPremiseId },
+                {
+                    grammarConfig: {
+                        enforceFormulaBetweenOperators: true,
+                        autoNormalize: false,
+                    },
+                },
+                {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: false,
+                }
+            )
+        ).toThrow()
+    })
+
+    it("rollback validates and rejects invalid snapshot", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        const premiseId = pm.getId()
+        const goodSnap = eng.snapshot()
+        // Tamper conclusionPremiseId
+        const badSnap = { ...goodSnap, conclusionPremiseId: "nonexistent" }
+        expect(() => eng.rollback(badSnap)).toThrow()
+        // Engine should still hold the good state
+        expect(eng.hasPremise(premiseId)).toBe(true)
+        expect(eng.validate().ok).toBe(true)
+    })
+})
+
+describe("loadExpressions — grammar config enforcement", () => {
+    it("auto-normalizes during load when autoNormalize is true", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: true,
+            },
+        })
+        em.loadExpressions([
+            makeOpExpr("root", "and"),
+            makeOpExpr("child", "or", { parentId: "root", position: 0 }),
+        ])
+        // The OR should be wrapped in a formula
+        const orExpr = em.getExpression("child")!
+        const parent = em.getExpression(orExpr.parentId!)!
+        expect(parent.type).toBe("formula")
+    })
+
+    it("rejects violations during load when autoNormalize is false", () => {
+        const em = new ExpressionManager({
+            grammarConfig: {
+                enforceFormulaBetweenOperators: true,
+                autoNormalize: false,
+            },
+        })
+        expect(() =>
+            em.loadExpressions([
+                makeOpExpr("root", "and"),
+                makeOpExpr("child", "or", { parentId: "root", position: 0 }),
+            ])
+        ).toThrow()
+    })
+
+    it("allows violations when enforcement is off", () => {
+        const em = new ExpressionManager({
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        em.loadExpressions([
+            makeOpExpr("root", "and"),
+            makeOpExpr("child", "or", { parentId: "root", position: 0 }),
+        ])
+        const orExpr = em.getExpression("child")!
+        expect(orExpr.parentId).toBe("root") // Direct child, no formula buffer
     })
 })

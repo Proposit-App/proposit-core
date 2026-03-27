@@ -18,6 +18,7 @@ import type {
 } from "../../types/evaluation.js"
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type { TReactiveSnapshot } from "../../types/reactive.js"
+import type { TInvariantValidationResult } from "../../types/validation.js"
 import type { PremiseEngine } from "../premise-engine.js"
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
 
@@ -435,6 +436,12 @@ export interface TArgumentLifecycle<
     rollback(
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
     ): void
+    /**
+     * Run a comprehensive invariant validation sweep on the entire argument.
+     * Checks schema conformance, structural invariants, grammar rules,
+     * reference integrity, and checksum consistency.
+     */
+    validate(): TInvariantValidationResult
 }
 
 /**

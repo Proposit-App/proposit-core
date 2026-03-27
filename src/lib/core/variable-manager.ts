@@ -1,6 +1,19 @@
 import type { TCorePropositionalVariable } from "../schemata/index.js"
-import { serializeChecksumConfig } from "../consts.js"
+import { CorePropositionalVariableSchema } from "../schemata/index.js"
+import { DEFAULT_CHECKSUM_CONFIG, serializeChecksumConfig } from "../consts.js"
 import type { TLogicEngineOptions } from "./argument-engine.js"
+import { entityChecksum } from "./checksum.js"
+import { Value } from "typebox/value"
+import type {
+    TInvariantViolation,
+    TInvariantValidationResult,
+} from "../types/validation.js"
+import {
+    VAR_SCHEMA_INVALID,
+    VAR_DUPLICATE_ID,
+    VAR_DUPLICATE_SYMBOL,
+    VAR_CHECKSUM_MISMATCH,
+} from "../types/validation.js"
 
 export type TVariableManagerSnapshot<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
@@ -144,6 +157,83 @@ export class VariableManager<
         }
 
         return this.variables.get(variableId)
+    }
+
+    /**
+     * Validates all managed variables, collecting every invariant violation.
+     * Checks: schema conformance, duplicate IDs, duplicate symbols, and
+     * checksum integrity.
+     */
+    public validate(): TInvariantValidationResult {
+        const violations: TInvariantViolation[] = []
+        const seenIds = new Set<string>()
+        const seenSymbols = new Set<string>()
+
+        const fields =
+            this.config?.checksumConfig?.variableFields ??
+            DEFAULT_CHECKSUM_CONFIG.variableFields!
+
+        for (const variable of this.toArray()) {
+            const id = variable.id
+
+            // 1. Schema check
+            if (
+                !Value.Check(
+                    CorePropositionalVariableSchema,
+                    variable as unknown as TCorePropositionalVariable
+                )
+            ) {
+                violations.push({
+                    code: VAR_SCHEMA_INVALID,
+                    message: `Variable "${id}" does not conform to CorePropositionalVariableSchema.`,
+                    entityType: "variable",
+                    entityId: id,
+                })
+            }
+
+            // 2. Duplicate ID
+            if (seenIds.has(id)) {
+                violations.push({
+                    code: VAR_DUPLICATE_ID,
+                    message: `Duplicate variable ID "${id}".`,
+                    entityType: "variable",
+                    entityId: id,
+                })
+            }
+            seenIds.add(id)
+
+            // 3. Duplicate symbol
+            if (seenSymbols.has(variable.symbol)) {
+                violations.push({
+                    code: VAR_DUPLICATE_SYMBOL,
+                    message: `Duplicate variable symbol "${variable.symbol}".`,
+                    entityType: "variable",
+                    entityId: id,
+                })
+            }
+            seenSymbols.add(variable.symbol)
+
+            // 4. Checksum integrity (skip empty string — before first computation)
+            if (variable.checksum !== "") {
+                const computed = entityChecksum(
+                    variable as unknown as Record<string, unknown>,
+                    fields
+                )
+                if (variable.checksum !== computed) {
+                    violations.push({
+                        code: VAR_CHECKSUM_MISMATCH,
+                        message: `Variable "${id}" checksum mismatch: stored="${variable.checksum}", computed="${computed}".`,
+                        entityType: "variable",
+                        entityId: id,
+                    })
+                }
+            }
+        }
+
+        return {
+            ok: violations.length === 0,
+            violations,
+        }
     }
 
     /** Returns a serializable snapshot of the current state. */

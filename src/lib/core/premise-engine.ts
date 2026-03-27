@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import {
+    CorePremiseSchema,
     isExternallyBound,
     isPremiseBound,
     type TCoreArgument,
@@ -7,6 +8,7 @@ import {
     type TCorePremise,
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
+    type TCorePropositionalVariableExpression,
     type TOptionalChecksum,
 } from "../schemata/index.js"
 import { DefaultMap } from "../utils/default-map.js"
@@ -33,6 +35,16 @@ import {
     makeErrorIssue,
     makeValidationResult,
 } from "./evaluation/validation.js"
+import { Value } from "typebox/value"
+import type {
+    TInvariantViolation,
+    TInvariantValidationResult,
+} from "../types/validation.js"
+import {
+    PREMISE_SCHEMA_INVALID,
+    PREMISE_ROOT_EXPRESSION_INVALID,
+    PREMISE_VARIABLE_REF_NOT_FOUND,
+} from "../types/validation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TLogicEngineOptions } from "./argument-engine.js"
 import type { TGrammarConfig } from "../types/grammar.js"
@@ -43,6 +55,7 @@ import {
 } from "../consts.js"
 import { ChangeCollector } from "./change-collector.js"
 import { computeHash, entityChecksum } from "./checksum.js"
+import { InvariantViolationError } from "./invariant-violation-error.js"
 import type {
     TExpressionInput,
     TExpressionManagerSnapshot,
@@ -108,6 +121,9 @@ export class PremiseEngine<
         premiseId: string
     ) => boolean
     private emptyBoundPremiseCheck?: (variableId: string) => boolean
+    private variableIdsCallback?: () => Set<string>
+    private argumentValidateCallback?: () => TInvariantValidationResult
+    private insideValidation = false
 
     constructor(
         premise: TOptionalChecksum<TPremise>,
@@ -144,190 +160,285 @@ export class PremiseEngine<
         this.emptyBoundPremiseCheck = check
     }
 
+    public setVariableIdsCallback(
+        callback: (() => Set<string>) | undefined
+    ): void {
+        this.variableIdsCallback = callback
+    }
+
+    public setArgumentValidateCallback(
+        callback: (() => TInvariantValidationResult) | undefined
+    ): void {
+        this.argumentValidateCallback = callback
+    }
+
+    private premiseSnapshot() {
+        const expressionIndexEntries: [string, string][] = []
+        if (this.expressionIndex) {
+            for (const [exprId, premiseId] of this.expressionIndex) {
+                if (premiseId === this.premise.id) {
+                    expressionIndexEntries.push([exprId, premiseId])
+                }
+            }
+        }
+        return {
+            premiseData: { ...this.premise },
+            rootExpressionId: this.rootExpressionId,
+            expressionSnapshot: this.expressions.snapshot(),
+            expressionIndexEntries,
+        }
+    }
+
+    private restoreFromPremiseSnapshot(
+        snap: ReturnType<PremiseEngine["premiseSnapshot"]>
+    ): void {
+        this.premise = snap.premiseData as TOptionalChecksum<TPremise>
+        this.rootExpressionId = snap.rootExpressionId
+        this.expressions = ExpressionManager.fromSnapshot<TExpr>(
+            snap.expressionSnapshot as TExpressionManagerSnapshot<TExpr>
+        )
+        // Restore expression index entries
+        if (this.expressionIndex) {
+            for (const [exprId, premiseId] of [...this.expressionIndex]) {
+                if (premiseId === this.premise.id) {
+                    this.expressionIndex.delete(exprId)
+                }
+            }
+            for (const [exprId, premiseId] of snap.expressionIndexEntries) {
+                this.expressionIndex.set(exprId, premiseId)
+            }
+        }
+        this.rebuildVariableIndex()
+    }
+
+    protected withValidation<T>(fn: () => T): T {
+        if (this.insideValidation) {
+            return fn()
+        }
+        const snap = this.premiseSnapshot()
+        this.insideValidation = true
+        try {
+            const result = fn()
+            const validation =
+                this.argumentValidateCallback?.() ?? this.validate()
+            if (!validation.ok) {
+                this.restoreFromPremiseSnapshot(snap)
+                throw new InvariantViolationError(validation.violations)
+            }
+            return result
+        } catch (e) {
+            if (!(e instanceof InvariantViolationError)) {
+                this.restoreFromPremiseSnapshot(snap)
+            }
+            throw e
+        } finally {
+            this.insideValidation = false
+        }
+    }
+
     public deleteExpressionsUsingVariable(
         variableId: string
     ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg> {
-        const expressionIds = this.expressionsByVariableId.get(variableId)
-        if (expressionIds.size === 0) {
-            return { result: [], changes: {} }
-        }
+        return this.withValidation(() => {
+            const expressionIds = this.expressionsByVariableId.get(variableId)
+            if (expressionIds.size === 0) {
+                return { result: [], changes: {} }
+            }
 
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
 
-        // Suppress onMutate during the loop to avoid redundant notifications
-        const savedOnMutate = this.onMutate
-        this.onMutate = undefined
-        try {
-            // Copy the set since removeExpression mutates expressionsByVariableId
-            const removed: TExpr[] = []
-            for (const exprId of [...expressionIds]) {
-                // The expression may already have been removed as part of a
-                // prior subtree deletion or operator collapse in this loop.
-                if (!this.expressions.getExpression(exprId)) continue
+            // Suppress onMutate during the loop to avoid redundant notifications
+            const savedOnMutate = this.onMutate
+            this.onMutate = undefined
+            try {
+                // Copy the set since removeExpression mutates expressionsByVariableId
+                const removed: TExpr[] = []
+                for (const exprId of [...expressionIds]) {
+                    // The expression may already have been removed as part of a
+                    // prior subtree deletion or operator collapse in this loop.
+                    if (!this.expressions.getExpression(exprId)) continue
 
-                const { result, changes } = this.removeExpression(exprId, true)
-                if (result) removed.push(result)
-                if (changes.expressions) {
-                    for (const e of changes.expressions.removed) {
-                        collector.removedExpression(e)
+                    const { result, changes } = this.removeExpression(
+                        exprId,
+                        true
+                    )
+                    if (result) removed.push(result)
+                    if (changes.expressions) {
+                        for (const e of changes.expressions.removed) {
+                            collector.removedExpression(e)
+                        }
                     }
                 }
-            }
 
-            // Expressions in the collector already have checksums attached
-            // (from ExpressionManager which stores expressions with checksums).
-            const changes = collector.toChangeset()
-            this.syncExpressionIndex(changes)
+                // Expressions in the collector already have checksums attached
+                // (from ExpressionManager which stores expressions with checksums).
+                const changes = collector.toChangeset()
+                this.syncExpressionIndex(changes)
 
-            // Restore and fire once if something was removed
-            this.onMutate = savedOnMutate
-            if (removed.length > 0) {
-                this.onMutate?.()
-            }
+                // Restore and fire once if something was removed
+                this.onMutate = savedOnMutate
+                if (removed.length > 0) {
+                    this.onMutate?.()
+                }
 
-            return {
-                result: removed,
-                changes,
+                return {
+                    result: removed,
+                    changes,
+                }
+            } catch (e) {
+                this.onMutate = savedOnMutate
+                throw e
             }
-        } catch (e) {
-            this.onMutate = savedOnMutate
-            throw e
-        }
+        })
     }
 
     public addExpression(
         expression: TExpressionInput<TExpr>
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        this.assertBelongsToArgument(
-            expression.argumentId,
-            expression.argumentVersion
-        )
-
-        if (
-            expression.type === "variable" &&
-            !this.variables.hasVariable(expression.variableId)
-        ) {
-            throw new Error(
-                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+        return this.withValidation(() => {
+            this.assertBelongsToArgument(
+                expression.argumentId,
+                expression.argumentVersion
             )
-        }
 
-        if (expression.type === "variable" && this.circularityCheck) {
-            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+            if (
+                expression.type === "variable" &&
+                !this.variables.hasVariable(expression.variableId)
+            ) {
                 throw new Error(
-                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
                 )
             }
-        }
 
-        if (expression.parentId === null) {
-            if (this.rootExpressionId !== undefined) {
-                throw new Error(
-                    `Premise "${this.premise.id}" already has a root expression.`
-                )
+            if (expression.type === "variable" && this.circularityCheck) {
+                if (
+                    this.circularityCheck(
+                        expression.variableId,
+                        this.premise.id
+                    )
+                ) {
+                    throw new Error(
+                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    )
+                }
             }
-        } else {
-            if (!this.expressions.getExpression(expression.parentId)) {
-                throw new Error(
-                    `Parent expression "${expression.parentId}" does not exist in this premise.`
-                )
-            }
-        }
-
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            // Delegate structural validation (operator type checks, position
-            // uniqueness, child limits) to ExpressionManager.
-            this.expressions.addExpression(expression)
 
             if (expression.parentId === null) {
-                this.rootExpressionId = expression.id
-            }
-            if (expression.type === "variable") {
-                this.expressionsByVariableId
-                    .get(expression.variableId)
-                    .add(expression.id)
+                if (this.rootExpressionId !== undefined) {
+                    throw new Error(
+                        `Premise "${this.premise.id}" already has a root expression.`
+                    )
+                }
+            } else {
+                if (!this.expressions.getExpression(expression.parentId)) {
+                    throw new Error(
+                        `Parent expression "${expression.parentId}" does not exist in this premise.`
+                    )
+                }
             }
 
-            this.markDirty()
-            const changes = this.flushAndBuildChangeset(collector)
-            this.syncExpressionIndex(changes)
-            this.onMutate?.()
-            return {
-                result: this.expressions.getExpression(expression.id)!,
-                changes,
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                // Delegate structural validation (operator type checks, position
+                // uniqueness, child limits) to ExpressionManager.
+                this.expressions.addExpression(expression)
+
+                if (expression.parentId === null) {
+                    this.rootExpressionId = expression.id
+                }
+                if (expression.type === "variable") {
+                    this.expressionsByVariableId
+                        .get(expression.variableId)
+                        .add(expression.id)
+                }
+
+                this.markDirty()
+                const changes = this.flushAndBuildChangeset(collector)
+                this.syncExpressionIndex(changes)
+                this.onMutate?.()
+                return {
+                    result: this.expressions.getExpression(expression.id)!,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+        })
     }
 
     public appendExpression(
         parentId: string | null,
         expression: TExpressionWithoutPosition<TExpr>
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        this.assertBelongsToArgument(
-            expression.argumentId,
-            expression.argumentVersion
-        )
-
-        if (
-            expression.type === "variable" &&
-            !this.variables.hasVariable(expression.variableId)
-        ) {
-            throw new Error(
-                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+        return this.withValidation(() => {
+            this.assertBelongsToArgument(
+                expression.argumentId,
+                expression.argumentVersion
             )
-        }
 
-        if (expression.type === "variable" && this.circularityCheck) {
-            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+            if (
+                expression.type === "variable" &&
+                !this.variables.hasVariable(expression.variableId)
+            ) {
                 throw new Error(
-                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
                 )
             }
-        }
 
-        if (parentId === null) {
-            if (this.rootExpressionId !== undefined) {
-                throw new Error(
-                    `Premise "${this.premise.id}" already has a root expression.`
-                )
+            if (expression.type === "variable" && this.circularityCheck) {
+                if (
+                    this.circularityCheck(
+                        expression.variableId,
+                        this.premise.id
+                    )
+                ) {
+                    throw new Error(
+                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    )
+                }
             }
-        } else {
-            if (!this.expressions.getExpression(parentId)) {
-                throw new Error(
-                    `Parent expression "${parentId}" does not exist in this premise.`
-                )
-            }
-        }
-
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            this.expressions.appendExpression(parentId, expression)
 
             if (parentId === null) {
-                this.syncRootExpressionId()
-            }
-            if (expression.type === "variable") {
-                this.expressionsByVariableId
-                    .get(expression.variableId)
-                    .add(expression.id)
+                if (this.rootExpressionId !== undefined) {
+                    throw new Error(
+                        `Premise "${this.premise.id}" already has a root expression.`
+                    )
+                }
+            } else {
+                if (!this.expressions.getExpression(parentId)) {
+                    throw new Error(
+                        `Parent expression "${parentId}" does not exist in this premise.`
+                    )
+                }
             }
 
-            this.markDirty()
-            const changes = this.flushAndBuildChangeset(collector)
-            this.syncExpressionIndex(changes)
-            this.onMutate?.()
-            return {
-                result: this.expressions.getExpression(expression.id)!,
-                changes,
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.appendExpression(parentId, expression)
+
+                if (parentId === null) {
+                    this.syncRootExpressionId()
+                }
+                if (expression.type === "variable") {
+                    this.expressionsByVariableId
+                        .get(expression.variableId)
+                        .add(expression.id)
+                }
+
+                this.markDirty()
+                const changes = this.flushAndBuildChangeset(collector)
+                this.syncExpressionIndex(changes)
+                this.onMutate?.()
+                return {
+                    result: this.expressions.getExpression(expression.id)!,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+        })
     }
 
     public addExpressionRelative(
@@ -335,178 +446,191 @@ export class PremiseEngine<
         relativePosition: "before" | "after",
         expression: TExpressionWithoutPosition<TExpr>
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        this.assertBelongsToArgument(
-            expression.argumentId,
-            expression.argumentVersion
-        )
-
-        if (
-            expression.type === "variable" &&
-            !this.variables.hasVariable(expression.variableId)
-        ) {
-            throw new Error(
-                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+        return this.withValidation(() => {
+            this.assertBelongsToArgument(
+                expression.argumentId,
+                expression.argumentVersion
             )
-        }
 
-        if (expression.type === "variable" && this.circularityCheck) {
-            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+            if (
+                expression.type === "variable" &&
+                !this.variables.hasVariable(expression.variableId)
+            ) {
                 throw new Error(
-                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
                 )
             }
-        }
 
-        if (!this.expressions.getExpression(siblingId)) {
-            throw new Error(
-                `Expression "${siblingId}" not found in this premise.`
-            )
-        }
-
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            this.expressions.addExpressionRelative(
-                siblingId,
-                relativePosition,
-                expression
-            )
-
-            if (expression.type === "variable") {
-                this.expressionsByVariableId
-                    .get(expression.variableId)
-                    .add(expression.id)
+            if (expression.type === "variable" && this.circularityCheck) {
+                if (
+                    this.circularityCheck(
+                        expression.variableId,
+                        this.premise.id
+                    )
+                ) {
+                    throw new Error(
+                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    )
+                }
             }
 
-            this.markDirty()
-            const changes = this.flushAndBuildChangeset(collector)
-            this.syncExpressionIndex(changes)
-            this.onMutate?.()
-            return {
-                result: this.expressions.getExpression(expression.id)!,
-                changes,
+            if (!this.expressions.getExpression(siblingId)) {
+                throw new Error(
+                    `Expression "${siblingId}" not found in this premise.`
+                )
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.addExpressionRelative(
+                    siblingId,
+                    relativePosition,
+                    expression
+                )
+
+                if (expression.type === "variable") {
+                    this.expressionsByVariableId
+                        .get(expression.variableId)
+                        .add(expression.id)
+                }
+
+                this.markDirty()
+                const changes = this.flushAndBuildChangeset(collector)
+                this.syncExpressionIndex(changes)
+                this.onMutate?.()
+                return {
+                    result: this.expressions.getExpression(expression.id)!,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
+            }
+        })
     }
 
     public updateExpression(
         expressionId: string,
         updates: TExpressionUpdate
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        const existing = this.expressions.getExpression(expressionId)
-        if (!existing) {
-            throw new Error(
-                `Expression "${expressionId}" not found in premise "${this.premise.id}".`
-            )
-        }
-
-        if (updates.variableId !== undefined) {
-            if (!this.variables.hasVariable(updates.variableId)) {
+        return this.withValidation(() => {
+            const existing = this.expressions.getExpression(expressionId)
+            if (!existing) {
                 throw new Error(
-                    `Variable expression "${expressionId}" references non-existent variable "${updates.variableId}".`
+                    `Expression "${expressionId}" not found in premise "${this.premise.id}".`
                 )
             }
-        }
 
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            const oldVariableId =
-                existing.type === "variable" ? existing.variableId : undefined
-
-            const updated = this.expressions.updateExpression(
-                expressionId,
-                updates
-            )
-
-            if (
-                updates.variableId !== undefined &&
-                oldVariableId !== undefined &&
-                oldVariableId !== updates.variableId
-            ) {
-                this.expressionsByVariableId
-                    .get(oldVariableId)
-                    ?.delete(expressionId)
-                this.expressionsByVariableId
-                    .get(updates.variableId)
-                    .add(expressionId)
+            if (updates.variableId !== undefined) {
+                if (!this.variables.hasVariable(updates.variableId)) {
+                    throw new Error(
+                        `Variable expression "${expressionId}" references non-existent variable "${updates.variableId}".`
+                    )
+                }
             }
 
-            const changeset = this.flushAndBuildChangeset(collector)
-            if (changeset.expressions !== undefined) {
-                this.markDirty()
-                this.onMutate?.()
-            }
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                const oldVariableId =
+                    existing.type === "variable"
+                        ? existing.variableId
+                        : undefined
 
-            this.syncExpressionIndex(changeset)
-            return {
-                result: updated,
-                changes: changeset,
+                const updated = this.expressions.updateExpression(
+                    expressionId,
+                    updates
+                )
+
+                if (
+                    updates.variableId !== undefined &&
+                    oldVariableId !== undefined &&
+                    oldVariableId !== updates.variableId
+                ) {
+                    this.expressionsByVariableId
+                        .get(oldVariableId)
+                        ?.delete(expressionId)
+                    this.expressionsByVariableId
+                        .get(updates.variableId)
+                        .add(expressionId)
+                }
+
+                const changeset = this.flushAndBuildChangeset(collector)
+                if (changeset.expressions !== undefined) {
+                    this.markDirty()
+                    this.onMutate?.()
+                }
+
+                this.syncExpressionIndex(changeset)
+                return {
+                    result: updated,
+                    changes: changeset,
+                }
+            } finally {
+                this.expressions.setCollector(null)
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+        })
     }
 
     public removeExpression(
         expressionId: string,
         deleteSubtree: boolean
     ): TCoreMutationResult<TExpr | undefined, TExpr, TVar, TPremise, TArg> {
-        // Snapshot the expression before removal (for result).
-        const snapshot = this.expressions.getExpression(expressionId)
+        return this.withValidation(() => {
+            // Snapshot the expression before removal (for result).
+            const snapshot = this.expressions.getExpression(expressionId)
 
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            if (!snapshot) {
-                return {
-                    result: undefined,
-                    changes: collector.toChangeset(),
-                }
-            }
-
-            if (deleteSubtree) {
-                // Snapshot the subtree before deletion so we can clean up
-                // expressionsByVariableId for cascade-deleted descendants — they are
-                // not individually surfaced by ExpressionManager.removeExpression.
-                const subtree = this.collectSubtree(expressionId)
-
-                this.expressions.removeExpression(expressionId, true)
-
-                for (const expr of subtree) {
-                    if (expr.type === "variable") {
-                        this.expressionsByVariableId
-                            .get(expr.variableId)
-                            ?.delete(expr.id)
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                if (!snapshot) {
+                    return {
+                        result: undefined,
+                        changes: collector.toChangeset(),
                     }
                 }
-            } else {
-                // Only clean up expressionsByVariableId for the removed
-                // expression itself — children survive promotion.
-                if (snapshot.type === "variable") {
-                    this.expressionsByVariableId
-                        .get(snapshot.variableId)
-                        ?.delete(snapshot.id)
+
+                if (deleteSubtree) {
+                    // Snapshot the subtree before deletion so we can clean up
+                    // expressionsByVariableId for cascade-deleted descendants — they are
+                    // not individually surfaced by ExpressionManager.removeExpression.
+                    const subtree = this.collectSubtree(expressionId)
+
+                    this.expressions.removeExpression(expressionId, true)
+
+                    for (const expr of subtree) {
+                        if (expr.type === "variable") {
+                            this.expressionsByVariableId
+                                .get(expr.variableId)
+                                ?.delete(expr.id)
+                        }
+                    }
+                } else {
+                    // Only clean up expressionsByVariableId for the removed
+                    // expression itself — children survive promotion.
+                    if (snapshot.type === "variable") {
+                        this.expressionsByVariableId
+                            .get(snapshot.variableId)
+                            ?.delete(snapshot.id)
+                    }
+
+                    this.expressions.removeExpression(expressionId, false)
                 }
 
-                this.expressions.removeExpression(expressionId, false)
-            }
+                this.syncRootExpressionId()
+                this.markDirty()
 
-            this.syncRootExpressionId()
-            this.markDirty()
-
-            const changes = this.flushAndBuildChangeset(collector)
-            this.syncExpressionIndex(changes)
-            this.onMutate?.()
-            return {
-                result: snapshot,
-                changes,
+                const changes = this.flushAndBuildChangeset(collector)
+                this.syncExpressionIndex(changes)
+                this.onMutate?.()
+                return {
+                    result: snapshot,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+        })
     }
 
     public insertExpression(
@@ -514,56 +638,63 @@ export class PremiseEngine<
         leftNodeId?: string,
         rightNodeId?: string
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        this.assertBelongsToArgument(
-            expression.argumentId,
-            expression.argumentVersion
-        )
-
-        if (
-            expression.type === "variable" &&
-            !this.variables.hasVariable(expression.variableId)
-        ) {
-            throw new Error(
-                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+        return this.withValidation(() => {
+            this.assertBelongsToArgument(
+                expression.argumentId,
+                expression.argumentVersion
             )
-        }
 
-        if (expression.type === "variable" && this.circularityCheck) {
-            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+            if (
+                expression.type === "variable" &&
+                !this.variables.hasVariable(expression.variableId)
+            ) {
                 throw new Error(
-                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
                 )
             }
-        }
 
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            this.expressions.insertExpression(
-                expression,
-                leftNodeId,
-                rightNodeId
-            )
-
-            if (expression.type === "variable") {
-                this.expressionsByVariableId
-                    .get(expression.variableId)
-                    .add(expression.id)
+            if (expression.type === "variable" && this.circularityCheck) {
+                if (
+                    this.circularityCheck(
+                        expression.variableId,
+                        this.premise.id
+                    )
+                ) {
+                    throw new Error(
+                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                    )
+                }
             }
 
-            this.syncRootExpressionId()
-            this.markDirty()
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.insertExpression(
+                    expression,
+                    leftNodeId,
+                    rightNodeId
+                )
 
-            const changes = this.flushAndBuildChangeset(collector)
-            this.syncExpressionIndex(changes)
-            this.onMutate?.()
-            return {
-                result: this.expressions.getExpression(expression.id)!,
-                changes,
+                if (expression.type === "variable") {
+                    this.expressionsByVariableId
+                        .get(expression.variableId)
+                        .add(expression.id)
+                }
+
+                this.syncRootExpressionId()
+                this.markDirty()
+
+                const changes = this.flushAndBuildChangeset(collector)
+                this.syncExpressionIndex(changes)
+                this.onMutate?.()
+                return {
+                    result: this.expressions.getExpression(expression.id)!,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+        })
     }
 
     public wrapExpression(
@@ -572,167 +703,52 @@ export class PremiseEngine<
         leftNodeId?: string,
         rightNodeId?: string
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        this.assertBelongsToArgument(
-            operator.argumentId,
-            operator.argumentVersion
-        )
-        this.assertBelongsToArgument(
-            newSibling.argumentId,
-            newSibling.argumentVersion
-        )
-
-        if (
-            newSibling.type === "variable" &&
-            !this.variables.hasVariable(newSibling.variableId)
-        ) {
-            throw new Error(
-                `Variable expression "${newSibling.id}" references non-existent variable "${newSibling.variableId}".`
+        return this.withValidation(() => {
+            this.assertBelongsToArgument(
+                operator.argumentId,
+                operator.argumentVersion
             )
-        }
+            this.assertBelongsToArgument(
+                newSibling.argumentId,
+                newSibling.argumentVersion
+            )
 
-        if (newSibling.type === "variable" && this.circularityCheck) {
-            if (this.circularityCheck(newSibling.variableId, this.premise.id)) {
+            if (
+                newSibling.type === "variable" &&
+                !this.variables.hasVariable(newSibling.variableId)
+            ) {
                 throw new Error(
-                    `Circular binding: variable "${newSibling.variableId}" is bound to this premise (directly or transitively)`
+                    `Variable expression "${newSibling.id}" references non-existent variable "${newSibling.variableId}".`
                 )
             }
-        }
 
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            this.expressions.wrapExpression(
-                operator,
-                newSibling,
-                leftNodeId,
-                rightNodeId
-            )
-
-            if (newSibling.type === "variable") {
-                this.expressionsByVariableId
-                    .get(newSibling.variableId)
-                    .add(newSibling.id)
-            }
-
-            this.syncRootExpressionId()
-            this.markDirty()
-
-            const changes = this.flushAndBuildChangeset(collector)
-            this.syncExpressionIndex(changes)
-            this.onMutate?.()
-            return {
-                result: this.expressions.getExpression(operator.id)!,
-                changes,
-            }
-        } finally {
-            this.expressions.setCollector(null)
-        }
-    }
-
-    public toggleNegation(
-        expressionId: string,
-        extraFields?: Partial<TExpr>
-    ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
-        const target = this.expressions.getExpression(expressionId)
-        if (!target) {
-            throw new Error(
-                `Expression "${expressionId}" not found in this premise.`
-            )
-        }
-
-        this.assertBelongsToArgument(target.argumentId, target.argumentVersion)
-
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            const parent = target.parentId
-                ? this.expressions.getExpression(target.parentId)
-                : undefined
-
-            // Check for direct not parent: not(target)
-            const isDirectNot =
-                parent?.type === "operator" && parent.operator === "not"
-
-            // Check for formula-buffered not: not(formula(target))
-            const grandparent =
-                parent?.type === "formula" && parent.parentId
-                    ? this.expressions.getExpression(parent.parentId)
-                    : undefined
-            const isBufferedNot =
-                parent?.type === "formula" &&
-                grandparent?.type === "operator" &&
-                grandparent.operator === "not"
-
-            if (isDirectNot || isBufferedNot) {
-                if (isBufferedNot) {
-                    // Structure is not → formula → target.
-                    // Remove just the not (promotes formula into its slot).
-                    // The formula remains as a transparent wrapper.
-                    this.expressions.removeExpression(grandparent.id, false)
-                } else {
-                    // Remove the NOT operator, promoting target into its slot
-                    this.expressions.removeExpression(parent.id, false)
+            if (newSibling.type === "variable" && this.circularityCheck) {
+                if (
+                    this.circularityCheck(
+                        newSibling.variableId,
+                        this.premise.id
+                    )
+                ) {
+                    throw new Error(
+                        `Circular binding: variable "${newSibling.variableId}" is bound to this premise (directly or transitively)`
+                    )
                 }
+            }
 
-                this.syncRootExpressionId()
-                this.markDirty()
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.wrapExpression(
+                    operator,
+                    newSibling,
+                    leftNodeId,
+                    rightNodeId
+                )
 
-                const changes = this.flushAndBuildChangeset(collector)
-                this.syncExpressionIndex(changes)
-                this.onMutate?.()
-                return { result: null, changes }
-            } else {
-                // When the target is a non-not operator, insert a formula
-                // buffer between the new not and the target so the tree
-                // satisfies the operator nesting restriction.
-                const needsFormula =
-                    target.type === "operator" && target.operator !== "not"
-
-                let notExprId: string
-
-                if (needsFormula) {
-                    // Build not → formula → target
-                    const formulaExpr = {
-                        ...extraFields,
-                        id: randomUUID(),
-                        argumentId: target.argumentId,
-                        argumentVersion: target.argumentVersion,
-                        premiseId: target.premiseId,
-                        type: "formula",
-                        parentId: target.parentId,
-                        position: target.position,
-                    } as TExpressionInput<TExpr>
-                    this.expressions.insertExpression(formulaExpr, expressionId)
-
-                    const notExpr = {
-                        ...extraFields,
-                        id: randomUUID(),
-                        argumentId: target.argumentId,
-                        argumentVersion: target.argumentVersion,
-                        premiseId: target.premiseId,
-                        type: "operator",
-                        operator: "not",
-                        parentId: target.parentId,
-                        position: target.position,
-                    } as TExpressionInput<TExpr>
-                    this.expressions.insertExpression(notExpr, formulaExpr.id)
-                    notExprId = notExpr.id
-                } else {
-                    // Wrap target with a new NOT operator
-                    const notExpr = {
-                        ...extraFields,
-                        id: randomUUID(),
-                        argumentId: target.argumentId,
-                        argumentVersion: target.argumentVersion,
-                        premiseId: target.premiseId,
-                        type: "operator",
-                        operator: "not",
-                        parentId: target.parentId,
-                        position: target.position,
-                    } as TExpressionInput<TExpr>
-
-                    this.expressions.insertExpression(notExpr, expressionId)
-                    notExprId = notExpr.id
+                if (newSibling.type === "variable") {
+                    this.expressionsByVariableId
+                        .get(newSibling.variableId)
+                        .add(newSibling.id)
                 }
 
                 this.syncRootExpressionId()
@@ -742,130 +758,62 @@ export class PremiseEngine<
                 this.syncExpressionIndex(changes)
                 this.onMutate?.()
                 return {
-                    result: this.expressions.getExpression(notExprId)!,
+                    result: this.expressions.getExpression(operator.id)!,
                     changes,
                 }
+            } finally {
+                this.expressions.setCollector(null)
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+        })
     }
 
-    public changeOperator(
+    public toggleNegation(
         expressionId: string,
-        newOperator: TCoreLogicalOperatorType,
-        sourceChildId?: string,
-        targetChildId?: string,
         extraFields?: Partial<TExpr>
     ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
-        const target = this.expressions.getExpression(expressionId)
-        if (!target) {
-            throw new Error(
-                `Expression "${expressionId}" not found in this premise.`
+        return this.withValidation(() => {
+            const target = this.expressions.getExpression(expressionId)
+            if (!target) {
+                throw new Error(
+                    `Expression "${expressionId}" not found in this premise.`
+                )
+            }
+
+            this.assertBelongsToArgument(
+                target.argumentId,
+                target.argumentVersion
             )
-        }
-        if (target.type !== "operator") {
-            throw new Error(
-                `Expression "${expressionId}" is not an operator expression (type: "${target.type}").`
-            )
-        }
-        if (target.type === "operator" && target.operator === "not") {
-            throw new Error(
-                `Cannot change a "not" operator. Use toggleNegation instead.`
-            )
-        }
 
-        this.assertBelongsToArgument(target.argumentId, target.argumentVersion)
-
-        // No-op: already the requested operator
-        if (target.type === "operator" && target.operator === newOperator) {
-            return { result: target, changes: {} }
-        }
-
-        const children = this.expressions.getChildExpressions(expressionId)
-        const childCount = children.length
-
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-        this.expressions.setCollector(collector)
-        try {
-            if (childCount <= 2) {
-                // Check for merge condition: parent is same type as newOperator
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
                 const parent = target.parentId
                     ? this.expressions.getExpression(target.parentId)
                     : undefined
 
-                // Look through formula buffer: if parent is formula, check grandparent
-                let mergeTarget: TExpr | undefined
-                if (parent?.type === "formula" && parent.parentId) {
-                    const grandparent = this.expressions.getExpression(
-                        parent.parentId
-                    )
-                    if (
-                        grandparent?.type === "operator" &&
-                        grandparent.operator === newOperator
-                    ) {
-                        mergeTarget = grandparent
-                    }
-                } else if (
-                    parent?.type === "operator" &&
-                    parent.operator === newOperator
-                ) {
-                    mergeTarget = parent
-                }
+                // Check for direct not parent: not(target)
+                const isDirectNot =
+                    parent?.type === "operator" && parent.operator === "not"
 
-                if (mergeTarget) {
-                    // --- MERGE ---
-                    // Reparent children of the dissolving operator under the merge target.
-                    // Use the dissolving operator's position slot for the first child,
-                    // compute midpoint positions for subsequent children.
+                // Check for formula-buffered not: not(formula(target))
+                const grandparent =
+                    parent?.type === "formula" && parent.parentId
+                        ? this.expressions.getExpression(parent.parentId)
+                        : undefined
+                const isBufferedNot =
+                    parent?.type === "formula" &&
+                    grandparent?.type === "operator" &&
+                    grandparent.operator === "not"
 
-                    // If parent was a formula buffer, we'll dissolve that too
-                    const formulaToDissolve =
-                        parent?.type === "formula" ? parent : undefined
-
-                    // The position slot we're replacing
-                    const slotPosition = formulaToDissolve
-                        ? formulaToDissolve.position
-                        : target.position
-
-                    // Get the merge target's existing children sorted by position to find neighbors
-                    const mergeChildren = this.expressions.getChildExpressions(
-                        mergeTarget.id
-                    )
-
-                    // Find the position of the next sibling after the slot
-                    const slotIndex = mergeChildren.findIndex(
-                        (c) => c.id === (formulaToDissolve?.id ?? expressionId)
-                    )
-                    const nextSibling = mergeChildren[slotIndex + 1]
-                    const nextPosition = nextSibling
-                        ? nextSibling.position
-                        : POSITION_MAX
-
-                    // Reparent each child
-                    for (let i = 0; i < children.length; i++) {
-                        const childPosition =
-                            i === 0
-                                ? slotPosition
-                                : midpoint(
-                                      i === 1
-                                          ? slotPosition
-                                          : children[i - 1].position,
-                                      nextPosition
-                                  )
-                        this.expressions.reparentExpression(
-                            children[i].id,
-                            mergeTarget.id,
-                            childPosition
-                        )
-                    }
-
-                    // Delete the dissolving operator (now has no children)
-                    this.expressions.deleteExpression(expressionId)
-
-                    // Delete the formula buffer if it existed (now has no children)
-                    if (formulaToDissolve) {
-                        this.expressions.deleteExpression(formulaToDissolve.id)
+                if (isDirectNot || isBufferedNot) {
+                    if (isBufferedNot) {
+                        // Structure is not → formula → target.
+                        // Remove just the not (promotes formula into its slot).
+                        // The formula remains as a transparent wrapper.
+                        this.expressions.removeExpression(grandparent.id, false)
+                    } else {
+                        // Remove the NOT operator, promoting target into its slot
+                        this.expressions.removeExpression(parent.id, false)
                     }
 
                     this.syncRootExpressionId()
@@ -876,10 +824,331 @@ export class PremiseEngine<
                     this.onMutate?.()
                     return { result: null, changes }
                 } else {
-                    // --- SIMPLE CHANGE ---
-                    this.expressions.changeOperatorType(
-                        expressionId,
-                        newOperator
+                    // When the target is a non-not operator, insert a formula
+                    // buffer between the new not and the target so the tree
+                    // satisfies the operator nesting restriction.
+                    const needsFormula =
+                        target.type === "operator" && target.operator !== "not"
+
+                    let notExprId: string
+
+                    if (needsFormula) {
+                        // Build not → formula → target
+                        const formulaExpr = {
+                            ...extraFields,
+                            id: randomUUID(),
+                            argumentId: target.argumentId,
+                            argumentVersion: target.argumentVersion,
+                            premiseId: target.premiseId,
+                            type: "formula",
+                            parentId: target.parentId,
+                            position: target.position,
+                        } as TExpressionInput<TExpr>
+                        this.expressions.insertExpression(
+                            formulaExpr,
+                            expressionId
+                        )
+
+                        const notExpr = {
+                            ...extraFields,
+                            id: randomUUID(),
+                            argumentId: target.argumentId,
+                            argumentVersion: target.argumentVersion,
+                            premiseId: target.premiseId,
+                            type: "operator",
+                            operator: "not",
+                            parentId: target.parentId,
+                            position: target.position,
+                        } as TExpressionInput<TExpr>
+                        this.expressions.insertExpression(
+                            notExpr,
+                            formulaExpr.id
+                        )
+                        notExprId = notExpr.id
+                    } else {
+                        // Wrap target with a new NOT operator
+                        const notExpr = {
+                            ...extraFields,
+                            id: randomUUID(),
+                            argumentId: target.argumentId,
+                            argumentVersion: target.argumentVersion,
+                            premiseId: target.premiseId,
+                            type: "operator",
+                            operator: "not",
+                            parentId: target.parentId,
+                            position: target.position,
+                        } as TExpressionInput<TExpr>
+
+                        this.expressions.insertExpression(notExpr, expressionId)
+                        notExprId = notExpr.id
+                    }
+
+                    this.syncRootExpressionId()
+                    this.markDirty()
+
+                    const changes = this.flushAndBuildChangeset(collector)
+                    this.syncExpressionIndex(changes)
+                    this.onMutate?.()
+                    return {
+                        result: this.expressions.getExpression(notExprId)!,
+                        changes,
+                    }
+                }
+            } finally {
+                this.expressions.setCollector(null)
+            }
+        })
+    }
+
+    public changeOperator(
+        expressionId: string,
+        newOperator: TCoreLogicalOperatorType,
+        sourceChildId?: string,
+        targetChildId?: string,
+        extraFields?: Partial<TExpr>
+    ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
+        return this.withValidation(() => {
+            const target = this.expressions.getExpression(expressionId)
+            if (!target) {
+                throw new Error(
+                    `Expression "${expressionId}" not found in this premise.`
+                )
+            }
+            if (target.type !== "operator") {
+                throw new Error(
+                    `Expression "${expressionId}" is not an operator expression (type: "${target.type}").`
+                )
+            }
+            if (target.type === "operator" && target.operator === "not") {
+                throw new Error(
+                    `Cannot change a "not" operator. Use toggleNegation instead.`
+                )
+            }
+
+            this.assertBelongsToArgument(
+                target.argumentId,
+                target.argumentVersion
+            )
+
+            // No-op: already the requested operator
+            if (target.type === "operator" && target.operator === newOperator) {
+                return { result: target, changes: {} }
+            }
+
+            const children = this.expressions.getChildExpressions(expressionId)
+            const childCount = children.length
+
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                if (childCount <= 2) {
+                    // Check for merge condition: parent is same type as newOperator
+                    const parent = target.parentId
+                        ? this.expressions.getExpression(target.parentId)
+                        : undefined
+
+                    // Look through formula buffer: if parent is formula, check grandparent
+                    let mergeTarget: TExpr | undefined
+                    if (parent?.type === "formula" && parent.parentId) {
+                        const grandparent = this.expressions.getExpression(
+                            parent.parentId
+                        )
+                        if (
+                            grandparent?.type === "operator" &&
+                            grandparent.operator === newOperator
+                        ) {
+                            mergeTarget = grandparent
+                        }
+                    } else if (
+                        parent?.type === "operator" &&
+                        parent.operator === newOperator
+                    ) {
+                        mergeTarget = parent
+                    }
+
+                    if (mergeTarget) {
+                        // --- MERGE ---
+                        // Reparent children of the dissolving operator under the merge target.
+                        // Use the dissolving operator's position slot for the first child,
+                        // compute midpoint positions for subsequent children.
+
+                        // If parent was a formula buffer, we'll dissolve that too
+                        const formulaToDissolve =
+                            parent?.type === "formula" ? parent : undefined
+
+                        // The position slot we're replacing
+                        const slotPosition = formulaToDissolve
+                            ? formulaToDissolve.position
+                            : target.position
+
+                        // Get the merge target's existing children sorted by position to find neighbors
+                        const mergeChildren =
+                            this.expressions.getChildExpressions(mergeTarget.id)
+
+                        // Find the position of the next sibling after the slot
+                        const slotIndex = mergeChildren.findIndex(
+                            (c) =>
+                                c.id === (formulaToDissolve?.id ?? expressionId)
+                        )
+                        const nextSibling = mergeChildren[slotIndex + 1]
+                        const nextPosition = nextSibling
+                            ? nextSibling.position
+                            : POSITION_MAX
+
+                        // Reparent each child
+                        for (let i = 0; i < children.length; i++) {
+                            const childPosition =
+                                i === 0
+                                    ? slotPosition
+                                    : midpoint(
+                                          i === 1
+                                              ? slotPosition
+                                              : children[i - 1].position,
+                                          nextPosition
+                                      )
+                            this.expressions.reparentExpression(
+                                children[i].id,
+                                mergeTarget.id,
+                                childPosition
+                            )
+                        }
+
+                        // Delete the dissolving operator (now has no children)
+                        this.expressions.deleteExpression(expressionId)
+
+                        // Delete the formula buffer if it existed (now has no children)
+                        if (formulaToDissolve) {
+                            this.expressions.deleteExpression(
+                                formulaToDissolve.id
+                            )
+                        }
+
+                        this.syncRootExpressionId()
+                        this.markDirty()
+
+                        const changes = this.flushAndBuildChangeset(collector)
+                        this.syncExpressionIndex(changes)
+                        this.onMutate?.()
+                        return { result: null, changes }
+                    } else {
+                        // --- SIMPLE CHANGE ---
+                        this.expressions.changeOperatorType(
+                            expressionId,
+                            newOperator
+                        )
+
+                        this.syncRootExpressionId()
+                        this.markDirty()
+
+                        const changes = this.flushAndBuildChangeset(collector)
+                        this.syncExpressionIndex(changes)
+                        this.onMutate?.()
+                        return {
+                            result: this.expressions.getExpression(
+                                expressionId
+                            )!,
+                            changes,
+                        }
+                    }
+                } else {
+                    // --- SPLIT (>2 children) ---
+                    if (!sourceChildId || !targetChildId) {
+                        throw new Error(
+                            `Operator "${expressionId}" has ${childCount} children — sourceChildId and targetChildId are required for split.`
+                        )
+                    }
+
+                    // Validate source and target are children of the operator
+                    const sourceChild =
+                        this.expressions.getExpression(sourceChildId)
+                    const targetChild =
+                        this.expressions.getExpression(targetChildId)
+                    if (!sourceChild || sourceChild.parentId !== expressionId) {
+                        throw new Error(
+                            `Expression "${sourceChildId}" is not a child of operator "${expressionId}".`
+                        )
+                    }
+                    if (!targetChild || targetChild.parentId !== expressionId) {
+                        throw new Error(
+                            `Expression "${targetChildId}" is not a child of operator "${expressionId}".`
+                        )
+                    }
+
+                    // Determine position for the formula buffer (min of the two children)
+                    const formulaPosition = Math.min(
+                        sourceChild.position,
+                        targetChild.position
+                    )
+
+                    // Create the sub-operator and formula first as detached nodes,
+                    // then reparent children away from the parent (freeing their
+                    // position slots), and finally add formula + sub-operator.
+                    const formulaId = randomUUID()
+                    const newOpId = randomUUID()
+
+                    // Reparent source and target children to a temporary holding
+                    // position under the new sub-operator. We must reparent them
+                    // away from the parent BEFORE adding the formula at their old
+                    // position slot.
+                    const firstChild =
+                        sourceChild.position <= targetChild.position
+                            ? sourceChild
+                            : targetChild
+                    const secondChild =
+                        sourceChild.position <= targetChild.position
+                            ? targetChild
+                            : sourceChild
+
+                    // Reparent children to null temporarily (detach from parent)
+                    // so their position slots are freed.
+                    this.expressions.reparentExpression(
+                        firstChild.id,
+                        null,
+                        firstChild.position
+                    )
+                    this.expressions.reparentExpression(
+                        secondChild.id,
+                        null,
+                        secondChild.position
+                    )
+
+                    // Now add the formula buffer at the freed position
+                    const formulaExpr = {
+                        ...extraFields,
+                        id: formulaId,
+                        argumentId: target.argumentId,
+                        argumentVersion: target.argumentVersion,
+                        premiseId: target.premiseId,
+                        type: "formula",
+                        parentId: expressionId,
+                        position: formulaPosition,
+                    } as TExpressionInput<TExpr>
+                    this.expressions.addExpression(formulaExpr)
+
+                    // Add the new sub-operator under the formula
+                    const newOpExpr = {
+                        ...extraFields,
+                        id: newOpId,
+                        argumentId: target.argumentId,
+                        argumentVersion: target.argumentVersion,
+                        premiseId: target.premiseId,
+                        type: "operator",
+                        operator: newOperator,
+                        parentId: formulaId,
+                        position: POSITION_INITIAL,
+                    } as TExpressionInput<TExpr>
+                    this.expressions.addExpression(newOpExpr)
+
+                    // Now reparent the children under the new sub-operator
+                    this.expressions.reparentExpression(
+                        firstChild.id,
+                        newOpId,
+                        POSITION_INITIAL
+                    )
+                    this.expressions.reparentExpression(
+                        secondChild.id,
+                        newOpId,
+                        midpoint(POSITION_INITIAL, POSITION_MAX)
                     )
 
                     this.syncRootExpressionId()
@@ -889,125 +1158,14 @@ export class PremiseEngine<
                     this.syncExpressionIndex(changes)
                     this.onMutate?.()
                     return {
-                        result: this.expressions.getExpression(expressionId)!,
+                        result: this.expressions.getExpression(newOpId)!,
                         changes,
                     }
                 }
-            } else {
-                // --- SPLIT (>2 children) ---
-                if (!sourceChildId || !targetChildId) {
-                    throw new Error(
-                        `Operator "${expressionId}" has ${childCount} children — sourceChildId and targetChildId are required for split.`
-                    )
-                }
-
-                // Validate source and target are children of the operator
-                const sourceChild =
-                    this.expressions.getExpression(sourceChildId)
-                const targetChild =
-                    this.expressions.getExpression(targetChildId)
-                if (!sourceChild || sourceChild.parentId !== expressionId) {
-                    throw new Error(
-                        `Expression "${sourceChildId}" is not a child of operator "${expressionId}".`
-                    )
-                }
-                if (!targetChild || targetChild.parentId !== expressionId) {
-                    throw new Error(
-                        `Expression "${targetChildId}" is not a child of operator "${expressionId}".`
-                    )
-                }
-
-                // Determine position for the formula buffer (min of the two children)
-                const formulaPosition = Math.min(
-                    sourceChild.position,
-                    targetChild.position
-                )
-
-                // Create the sub-operator and formula first as detached nodes,
-                // then reparent children away from the parent (freeing their
-                // position slots), and finally add formula + sub-operator.
-                const formulaId = randomUUID()
-                const newOpId = randomUUID()
-
-                // Reparent source and target children to a temporary holding
-                // position under the new sub-operator. We must reparent them
-                // away from the parent BEFORE adding the formula at their old
-                // position slot.
-                const firstChild =
-                    sourceChild.position <= targetChild.position
-                        ? sourceChild
-                        : targetChild
-                const secondChild =
-                    sourceChild.position <= targetChild.position
-                        ? targetChild
-                        : sourceChild
-
-                // Reparent children to null temporarily (detach from parent)
-                // so their position slots are freed.
-                this.expressions.reparentExpression(
-                    firstChild.id,
-                    null,
-                    firstChild.position
-                )
-                this.expressions.reparentExpression(
-                    secondChild.id,
-                    null,
-                    secondChild.position
-                )
-
-                // Now add the formula buffer at the freed position
-                const formulaExpr = {
-                    ...extraFields,
-                    id: formulaId,
-                    argumentId: target.argumentId,
-                    argumentVersion: target.argumentVersion,
-                    premiseId: target.premiseId,
-                    type: "formula",
-                    parentId: expressionId,
-                    position: formulaPosition,
-                } as TExpressionInput<TExpr>
-                this.expressions.addExpression(formulaExpr)
-
-                // Add the new sub-operator under the formula
-                const newOpExpr = {
-                    ...extraFields,
-                    id: newOpId,
-                    argumentId: target.argumentId,
-                    argumentVersion: target.argumentVersion,
-                    premiseId: target.premiseId,
-                    type: "operator",
-                    operator: newOperator,
-                    parentId: formulaId,
-                    position: POSITION_INITIAL,
-                } as TExpressionInput<TExpr>
-                this.expressions.addExpression(newOpExpr)
-
-                // Now reparent the children under the new sub-operator
-                this.expressions.reparentExpression(
-                    firstChild.id,
-                    newOpId,
-                    POSITION_INITIAL
-                )
-                this.expressions.reparentExpression(
-                    secondChild.id,
-                    newOpId,
-                    midpoint(POSITION_INITIAL, POSITION_MAX)
-                )
-
-                this.syncRootExpressionId()
-                this.markDirty()
-
-                const changes = this.flushAndBuildChangeset(collector)
-                this.syncExpressionIndex(changes)
-                this.onMutate?.()
-                return {
-                    result: this.expressions.getExpression(newOpId)!,
-                    changes,
-                }
+            } finally {
+                this.expressions.setCollector(null)
             }
-        } finally {
-            this.expressions.setCollector(null)
-        }
+        })
     }
 
     public getExpression(id: string): TExpr | undefined {
@@ -1040,27 +1198,31 @@ export class PremiseEngine<
         TPremise,
         TArg
     > {
-        // Strip old extras and replace with new ones
-        const {
-            id,
-            argumentId,
-            argumentVersion,
-            checksum,
-            descendantChecksum,
-            combinedChecksum,
-        } = this.premise as Record<string, unknown>
-        this.premise = {
-            ...extras,
-            id,
-            argumentId,
-            argumentVersion,
-            ...(checksum !== undefined ? { checksum } : {}),
-            ...(descendantChecksum !== undefined ? { descendantChecksum } : {}),
-            ...(combinedChecksum !== undefined ? { combinedChecksum } : {}),
-        } as TOptionalChecksum<TPremise>
-        this.markDirty()
-        this.onMutate?.()
-        return { result: this.getExtras(), changes: {} }
+        return this.withValidation(() => {
+            // Strip old extras and replace with new ones
+            const {
+                id,
+                argumentId,
+                argumentVersion,
+                checksum,
+                descendantChecksum,
+                combinedChecksum,
+            } = this.premise as Record<string, unknown>
+            this.premise = {
+                ...extras,
+                id,
+                argumentId,
+                argumentVersion,
+                ...(checksum !== undefined ? { checksum } : {}),
+                ...(descendantChecksum !== undefined
+                    ? { descendantChecksum }
+                    : {}),
+                ...(combinedChecksum !== undefined ? { combinedChecksum } : {}),
+            } as TOptionalChecksum<TPremise>
+            this.markDirty()
+            this.onMutate?.()
+            return { result: this.getExtras(), changes: {} }
+        })
     }
 
     public getRootExpressionId(): string | undefined {
@@ -1552,6 +1714,84 @@ export class PremiseEngine<
                   )
 
         this.checksumDirty = false
+    }
+
+    public validate(): TInvariantValidationResult {
+        const violations: TInvariantViolation[] = []
+        const premiseId = this.premise.id
+
+        // 1. Schema check (use toPremiseData() to include computed checksums)
+        const premiseData = this.toPremiseData()
+        if (
+            !Value.Check(
+                CorePremiseSchema,
+                premiseData as unknown as TCorePremise
+            )
+        ) {
+            violations.push({
+                code: PREMISE_SCHEMA_INVALID,
+                message: `Premise "${premiseId}" does not conform to CorePremiseSchema.`,
+                entityType: "premise",
+                entityId: premiseId,
+                premiseId,
+            })
+        }
+
+        // 2. Delegate to expression-level validation, attaching premiseId
+        const exprResult = this.expressions.validate()
+        for (const v of exprResult.violations) {
+            violations.push({ ...v, premiseId })
+        }
+
+        // 3. Root expression consistency
+        if (this.rootExpressionId !== undefined) {
+            const rootExpr = this.expressions.getExpression(
+                this.rootExpressionId
+            )
+            if (!rootExpr) {
+                violations.push({
+                    code: PREMISE_ROOT_EXPRESSION_INVALID,
+                    message: `Premise "${premiseId}" rootExpressionId "${this.rootExpressionId}" does not exist in expression store.`,
+                    entityType: "premise",
+                    entityId: premiseId,
+                    premiseId,
+                })
+            } else if (rootExpr.parentId !== null) {
+                violations.push({
+                    code: PREMISE_ROOT_EXPRESSION_INVALID,
+                    message: `Premise "${premiseId}" rootExpressionId "${this.rootExpressionId}" has non-null parentId "${rootExpr.parentId}".`,
+                    entityType: "premise",
+                    entityId: premiseId,
+                    premiseId,
+                })
+            }
+        }
+
+        // 4. Variable references: every variable-type expression must
+        //    reference a variableId that exists in the argument's variable set
+        if (this.variableIdsCallback) {
+            const variableIds = this.variableIdsCallback()
+            for (const expr of this.expressions.toArray()) {
+                if (expr.type === "variable") {
+                    const varExpr =
+                        expr as unknown as TCorePropositionalVariableExpression
+                    if (!variableIds.has(varExpr.variableId)) {
+                        violations.push({
+                            code: PREMISE_VARIABLE_REF_NOT_FOUND,
+                            message: `Expression "${expr.id}" in premise "${premiseId}" references non-existent variable "${varExpr.variableId}".`,
+                            entityType: "expression",
+                            entityId: expr.id,
+                            premiseId,
+                        })
+                    }
+                }
+            }
+        }
+
+        return {
+            ok: violations.length === 0,
+            violations,
+        }
     }
 
     // -------------------------------------------------------------------------

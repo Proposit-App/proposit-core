@@ -3,6 +3,7 @@ import type {
     TCoreLogicalOperatorType,
     TCorePropositionalExpression,
 } from "../schemata/index.js"
+import { CorePropositionalExpressionSchema } from "../schemata/index.js"
 import type { ChangeCollector } from "./change-collector.js"
 import { getOrCreate } from "../utils/collections.js"
 import {
@@ -21,6 +22,23 @@ import {
     DEFAULT_GRAMMAR_CONFIG,
     type TGrammarConfig,
 } from "../types/grammar.js"
+import { Value } from "typebox/value"
+import type {
+    TInvariantViolation,
+    TInvariantValidationResult,
+} from "../types/validation.js"
+import {
+    EXPR_SCHEMA_INVALID,
+    EXPR_DUPLICATE_ID,
+    EXPR_SELF_REFERENTIAL_PARENT,
+    EXPR_PARENT_NOT_FOUND,
+    EXPR_PARENT_NOT_CONTAINER,
+    EXPR_ROOT_ONLY_VIOLATED,
+    EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED,
+    EXPR_CHILD_LIMIT_EXCEEDED,
+    EXPR_POSITION_DUPLICATE,
+    EXPR_CHECKSUM_MISMATCH,
+} from "../types/validation.js"
 
 // Distribute Omit across the union to preserve discriminated-union narrowing.
 export type TExpressionInput<
@@ -1260,8 +1278,12 @@ export class ExpressionManager<
         }
 
         // 10a. Non-not operators cannot be direct children of operators.
+        // Track which children need formula buffers (Site 2) for post-reparent insertion.
+        let needsParentFormulaBuffer = false
+        const childrenNeedingFormulaBuffer: string[] = []
+
         if (this.grammarConfig.enforceFormulaBetweenOperators) {
-            // Check 1: new expression as child of anchor's parent.
+            // Check 1 (Site 1): new expression as child of anchor's parent.
             if (
                 anchor.parentId !== null &&
                 expression.type === "operator" &&
@@ -1269,29 +1291,41 @@ export class ExpressionManager<
             ) {
                 const anchorParent = this.expressions.get(anchor.parentId)
                 if (anchorParent && anchorParent.type === "operator") {
-                    throw new Error(
-                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                    )
+                    if (this.grammarConfig.autoNormalize) {
+                        needsParentFormulaBuffer = true
+                    } else {
+                        throw new Error(
+                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                        )
+                    }
                 }
             }
 
-            // Check 2: left/right nodes as children of the new expression.
+            // Check 2 (Site 2): left/right nodes as children of the new expression.
             if (expression.type === "operator") {
                 if (
                     leftNode?.type === "operator" &&
                     leftNode.operator !== "not"
                 ) {
-                    throw new Error(
-                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                    )
+                    if (this.grammarConfig.autoNormalize) {
+                        childrenNeedingFormulaBuffer.push(leftNodeId!)
+                    } else {
+                        throw new Error(
+                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                        )
+                    }
                 }
                 if (
                     rightNode?.type === "operator" &&
                     rightNode.operator !== "not"
                 ) {
-                    throw new Error(
-                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                    )
+                    if (this.grammarConfig.autoNormalize) {
+                        childrenNeedingFormulaBuffer.push(rightNodeId!)
+                    } else {
+                        throw new Error(
+                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                        )
+                    }
                 }
             }
         }
@@ -1307,11 +1341,48 @@ export class ExpressionManager<
             this.reparent(leftNodeId, expression.id, 0)
         }
 
-        // Store the new expression in the freed anchor slot.
+        // Determine the slot for the new expression. If a parent formula buffer
+        // is needed, the formula takes the anchor slot and the expression goes under it.
+        let finalParentId = anchorParentId
+        let finalPosition = anchorPosition
+
+        if (needsParentFormulaBuffer) {
+            const formulaId = randomUUID()
+            const formulaExpr = this.attachChecksum({
+                id: formulaId,
+                type: "formula",
+                argumentId: expression.argumentId,
+                argumentVersion: expression.argumentVersion,
+                premiseId: (expression as unknown as { premiseId: string })
+                    .premiseId,
+                parentId: anchorParentId,
+                position: anchorPosition,
+            } as TExpressionInput<TExpr>)
+
+            this.expressions.set(formulaId, formulaExpr)
+            this.collector?.addedExpression({
+                ...formulaExpr,
+            } as unknown as TCorePropositionalExpression)
+            getOrCreate(
+                this.childExpressionIdsByParentId,
+                anchorParentId,
+                () => new Set()
+            ).add(formulaId)
+            getOrCreate(
+                this.childPositionsByParentId,
+                anchorParentId,
+                () => new Set()
+            ).add(anchorPosition)
+
+            finalParentId = formulaId
+            finalPosition = 0
+        }
+
+        // Store the new expression in its slot.
         const stored = this.attachChecksum({
             ...expression,
-            parentId: anchorParentId,
-            position: anchorPosition,
+            parentId: finalParentId,
+            position: finalPosition,
         } as TExpressionInput<TExpr>)
         this.expressions.set(expression.id, stored)
         this.collector?.addedExpression({
@@ -1319,14 +1390,53 @@ export class ExpressionManager<
         } as unknown as TCorePropositionalExpression)
         getOrCreate(
             this.childExpressionIdsByParentId,
-            anchorParentId,
+            finalParentId,
             () => new Set()
         ).add(expression.id)
         getOrCreate(
             this.childPositionsByParentId,
-            anchorParentId,
+            finalParentId,
             () => new Set()
-        ).add(anchorPosition)
+        ).add(finalPosition)
+
+        // Site 2: auto-insert formula buffers between the new expression and
+        // any offending operator children.
+        for (const childId of childrenNeedingFormulaBuffer) {
+            const child = this.expressions.get(childId)!
+            const childPosition = child.position
+            const formulaId = randomUUID()
+
+            // Reparent the child under the formula first. This detaches the child
+            // from expression.id's tracking (removing its position from the set).
+            this.reparent(childId, formulaId, 0)
+
+            // Now create and register the formula at the freed position under expression.id.
+            const formulaExpr = this.attachChecksum({
+                id: formulaId,
+                type: "formula",
+                argumentId: expression.argumentId,
+                argumentVersion: expression.argumentVersion,
+                premiseId: (expression as unknown as { premiseId: string })
+                    .premiseId,
+                parentId: expression.id,
+                position: childPosition,
+            } as TExpressionInput<TExpr>)
+
+            this.expressions.set(formulaId, formulaExpr)
+            this.collector?.addedExpression({
+                ...formulaExpr,
+            } as unknown as TCorePropositionalExpression)
+            getOrCreate(
+                this.childExpressionIdsByParentId,
+                expression.id,
+                () => new Set()
+            ).add(formulaId)
+            getOrCreate(
+                this.childPositionsByParentId,
+                expression.id,
+                () => new Set()
+            ).add(childPosition)
+        }
 
         // Mark the new expression and its ancestors dirty for hierarchical checksum recomputation.
         // Note: reparent() already marks children dirty, so this propagates from the new expression up.
@@ -1447,36 +1557,55 @@ export class ExpressionManager<
         }
 
         // 10a. Non-not operators cannot be direct children of operators.
+        // Track which sites need formula buffers for post-mutation insertion.
+        let needsParentFormulaBuffer = false
+        let existingNodeNeedsFormulaBuffer = false
+        let siblingNeedsFormulaBuffer = false
+
         if (this.grammarConfig.enforceFormulaBetweenOperators) {
-            // Check 1: new operator as child of existing node's parent.
+            // Check 1 (Site 1): new operator as child of existing node's parent.
             // Note: step 7 already rejects `not`, so operator.operator is always non-not here.
             if (existingNode.parentId !== null) {
                 const existingParent = this.expressions.get(
                     existingNode.parentId
                 )
                 if (existingParent && existingParent.type === "operator") {
+                    if (this.grammarConfig.autoNormalize) {
+                        needsParentFormulaBuffer = true
+                    } else {
+                        throw new Error(
+                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                        )
+                    }
+                }
+            }
+
+            // Check 2 (Site 2): existing node as child of new operator.
+            if (
+                existingNode.type === "operator" &&
+                existingNode.operator !== "not"
+            ) {
+                if (this.grammarConfig.autoNormalize) {
+                    existingNodeNeedsFormulaBuffer = true
+                } else {
                     throw new Error(
                         `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
                     )
                 }
             }
 
-            // Check 2: existing node and new sibling as children of the new operator.
-            if (
-                existingNode.type === "operator" &&
-                existingNode.operator !== "not"
-            ) {
-                throw new Error(
-                    `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                )
-            }
+            // Check 3 (Site 3): new sibling as child of new operator.
             if (
                 newSibling.type === "operator" &&
                 newSibling.operator !== "not"
             ) {
-                throw new Error(
-                    `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                )
+                if (this.grammarConfig.autoNormalize) {
+                    siblingNeedsFormulaBuffer = true
+                } else {
+                    throw new Error(
+                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
+                    )
+                }
             }
         }
 
@@ -1518,11 +1647,48 @@ export class ExpressionManager<
             () => new Set()
         ).add(siblingPosition)
 
-        // Store operator in the existing node's former slot.
+        // Determine the operator's slot. If a parent formula buffer is needed,
+        // the formula takes the anchor slot and the operator goes under it.
+        let operatorParentId = anchorParentId
+        let operatorPosition = anchorPosition
+
+        if (needsParentFormulaBuffer) {
+            const formulaId = randomUUID()
+            const formulaExpr = this.attachChecksum({
+                id: formulaId,
+                type: "formula",
+                argumentId: operator.argumentId,
+                argumentVersion: operator.argumentVersion,
+                premiseId: (operator as unknown as { premiseId: string })
+                    .premiseId,
+                parentId: anchorParentId,
+                position: anchorPosition,
+            } as TExpressionInput<TExpr>)
+
+            this.expressions.set(formulaId, formulaExpr)
+            this.collector?.addedExpression({
+                ...formulaExpr,
+            } as unknown as TCorePropositionalExpression)
+            getOrCreate(
+                this.childExpressionIdsByParentId,
+                anchorParentId,
+                () => new Set()
+            ).add(formulaId)
+            getOrCreate(
+                this.childPositionsByParentId,
+                anchorParentId,
+                () => new Set()
+            ).add(anchorPosition)
+
+            operatorParentId = formulaId
+            operatorPosition = 0
+        }
+
+        // Store operator in its slot.
         const storedOperator = this.attachChecksum({
             ...operator,
-            parentId: anchorParentId,
-            position: anchorPosition,
+            parentId: operatorParentId,
+            position: operatorPosition,
         } as TExpressionInput<TExpr>)
         this.expressions.set(operator.id, storedOperator)
         this.collector?.addedExpression({
@@ -1530,14 +1696,88 @@ export class ExpressionManager<
         } as unknown as TCorePropositionalExpression)
         getOrCreate(
             this.childExpressionIdsByParentId,
-            anchorParentId,
+            operatorParentId,
             () => new Set()
         ).add(operator.id)
         getOrCreate(
             this.childPositionsByParentId,
-            anchorParentId,
+            operatorParentId,
             () => new Set()
-        ).add(anchorPosition)
+        ).add(operatorPosition)
+
+        // Site 2: auto-insert formula buffer between operator and existing node.
+        if (existingNodeNeedsFormulaBuffer) {
+            const existingChild = this.expressions.get(existingNodeId)!
+            const childPosition = existingChild.position
+            const formulaId = randomUUID()
+
+            // Reparent existing node under formula first (frees position in operator's tracking).
+            this.reparent(existingNodeId, formulaId, 0)
+
+            // Register formula at the freed position under operator.
+            const formulaExpr = this.attachChecksum({
+                id: formulaId,
+                type: "formula",
+                argumentId: operator.argumentId,
+                argumentVersion: operator.argumentVersion,
+                premiseId: (operator as unknown as { premiseId: string })
+                    .premiseId,
+                parentId: operator.id,
+                position: childPosition,
+            } as TExpressionInput<TExpr>)
+
+            this.expressions.set(formulaId, formulaExpr)
+            this.collector?.addedExpression({
+                ...formulaExpr,
+            } as unknown as TCorePropositionalExpression)
+            getOrCreate(
+                this.childExpressionIdsByParentId,
+                operator.id,
+                () => new Set()
+            ).add(formulaId)
+            getOrCreate(
+                this.childPositionsByParentId,
+                operator.id,
+                () => new Set()
+            ).add(childPosition)
+        }
+
+        // Site 3: auto-insert formula buffer between operator and new sibling.
+        if (siblingNeedsFormulaBuffer) {
+            const siblingChild = this.expressions.get(newSibling.id)!
+            const childPosition = siblingChild.position
+            const formulaId = randomUUID()
+
+            // Reparent sibling under formula first (frees position in operator's tracking).
+            this.reparent(newSibling.id, formulaId, 0)
+
+            // Register formula at the freed position under operator.
+            const formulaExpr = this.attachChecksum({
+                id: formulaId,
+                type: "formula",
+                argumentId: operator.argumentId,
+                argumentVersion: operator.argumentVersion,
+                premiseId: (operator as unknown as { premiseId: string })
+                    .premiseId,
+                parentId: operator.id,
+                position: childPosition,
+            } as TExpressionInput<TExpr>)
+
+            this.expressions.set(formulaId, formulaExpr)
+            this.collector?.addedExpression({
+                ...formulaExpr,
+            } as unknown as TCorePropositionalExpression)
+            getOrCreate(
+                this.childExpressionIdsByParentId,
+                operator.id,
+                () => new Set()
+            ).add(formulaId)
+            getOrCreate(
+                this.childPositionsByParentId,
+                operator.id,
+                () => new Set()
+            ).add(childPosition)
+        }
 
         // Mark the new operator (and ancestors), the new sibling, and the reparented existing node dirty.
         // reparent() already marks the existing node dirty; mark the operator and sibling as well.
@@ -1657,6 +1897,223 @@ export class ExpressionManager<
      */
     public loadExpressions(expressions: TExpressionInput<TExpr>[]): void {
         this.loadInitialExpressions(expressions)
+    }
+
+    /**
+     * Performs a comprehensive validation sweep on all managed expressions.
+     *
+     * Collects ALL violations rather than failing on the first one. Checks:
+     * schema validity, duplicate IDs, self-referential parents, parent
+     * existence, parent container type, root-only operators, formula-between-
+     * operators (when enabled), child limits, position uniqueness, and
+     * checksum integrity.
+     */
+    public validate(): TInvariantValidationResult {
+        const violations: TInvariantViolation[] = []
+        const seenIds = new Set<string>()
+
+        // ── 1. Save pre-flush checksums for later comparison ──
+        const preFlushChecksums = new Map<
+            string,
+            {
+                checksum: string
+                descendantChecksum: string | null
+                combinedChecksum: string
+            }
+        >()
+        for (const [id, expr] of this.expressions) {
+            if (expr.checksum != null) {
+                preFlushChecksums.set(id, {
+                    checksum: expr.checksum,
+                    descendantChecksum: expr.descendantChecksum,
+                    combinedChecksum: expr.combinedChecksum,
+                })
+            }
+        }
+
+        // ── 2. Flush checksums to get fresh values ──
+        // Mark all expressions dirty so flush recomputes everything
+        for (const id of this.expressions.keys()) {
+            this.dirtyExpressionIds.add(id)
+        }
+        this.flushExpressionChecksums()
+
+        // ── 3. Per-expression checks ──
+        // Build a sibling-position map for position uniqueness checks
+        const positionsByParent = new Map<
+            string | null,
+            Map<number, string[]>
+        >()
+
+        for (const [id, expr] of this.expressions) {
+            // 3a. Schema check
+            if (
+                !Value.Check(
+                    CorePropositionalExpressionSchema,
+                    expr as unknown as TCorePropositionalExpression
+                )
+            ) {
+                violations.push({
+                    code: EXPR_SCHEMA_INVALID,
+                    message: `Expression "${id}" does not conform to CorePropositionalExpressionSchema.`,
+                    entityType: "expression",
+                    entityId: id,
+                })
+            }
+
+            // 3b. Duplicate ID
+            if (seenIds.has(id)) {
+                violations.push({
+                    code: EXPR_DUPLICATE_ID,
+                    message: `Duplicate expression ID "${id}".`,
+                    entityType: "expression",
+                    entityId: id,
+                })
+            }
+            seenIds.add(id)
+
+            // 3c. Self-referential parent
+            if (expr.parentId === id) {
+                violations.push({
+                    code: EXPR_SELF_REFERENTIAL_PARENT,
+                    message: `Expression "${id}" references itself as parent.`,
+                    entityType: "expression",
+                    entityId: id,
+                })
+            }
+
+            // 3d. Parent existence
+            if (
+                expr.parentId !== null &&
+                !this.expressions.has(expr.parentId)
+            ) {
+                violations.push({
+                    code: EXPR_PARENT_NOT_FOUND,
+                    message: `Expression "${id}" references non-existent parent "${expr.parentId}".`,
+                    entityType: "expression",
+                    entityId: id,
+                })
+            }
+
+            // 3e. Parent is container (operator or formula)
+            if (expr.parentId !== null && this.expressions.has(expr.parentId)) {
+                const parent = this.expressions.get(expr.parentId)!
+                if (parent.type !== "operator" && parent.type !== "formula") {
+                    violations.push({
+                        code: EXPR_PARENT_NOT_CONTAINER,
+                        message: `Expression "${id}" has parent "${expr.parentId}" of type "${parent.type}" (expected operator or formula).`,
+                        entityType: "expression",
+                        entityId: id,
+                    })
+                }
+            }
+
+            // 3f. Root-only: implies/iff must have parentId === null
+            if (
+                expr.type === "operator" &&
+                (expr.operator === "implies" || expr.operator === "iff") &&
+                expr.parentId !== null
+            ) {
+                violations.push({
+                    code: EXPR_ROOT_ONLY_VIOLATED,
+                    message: `Root-only operator "${expr.operator}" expression "${id}" has non-null parentId "${expr.parentId}".`,
+                    entityType: "expression",
+                    entityId: id,
+                })
+            }
+
+            // 3g. Formula-between-operators
+            if (
+                this.grammarConfig.enforceFormulaBetweenOperators &&
+                expr.parentId !== null &&
+                expr.type === "operator" &&
+                expr.operator !== "not"
+            ) {
+                const parent = this.expressions.get(expr.parentId)
+                if (parent && parent.type === "operator") {
+                    violations.push({
+                        code: EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED,
+                        message: `Non-not operator "${expr.operator}" expression "${id}" is a direct child of operator "${expr.parentId}".`,
+                        entityType: "expression",
+                        entityId: id,
+                    })
+                }
+            }
+
+            // Collect positions for uniqueness check
+            const parentKey = expr.parentId
+            let parentPositions = positionsByParent.get(parentKey)
+            if (!parentPositions) {
+                parentPositions = new Map()
+                positionsByParent.set(parentKey, parentPositions)
+            }
+            const idsAtPosition = parentPositions.get(expr.position)
+            if (idsAtPosition) {
+                idsAtPosition.push(id)
+            } else {
+                parentPositions.set(expr.position, [id])
+            }
+
+            // 3j. Checksum comparison
+            const pre = preFlushChecksums.get(id)
+            if (pre) {
+                const fresh = this.expressions.get(id)!
+                if (
+                    pre.checksum !== fresh.checksum ||
+                    pre.descendantChecksum !== fresh.descendantChecksum ||
+                    pre.combinedChecksum !== fresh.combinedChecksum
+                ) {
+                    violations.push({
+                        code: EXPR_CHECKSUM_MISMATCH,
+                        message: `Expression "${id}" checksum mismatch: stored does not match recomputed.`,
+                        entityType: "expression",
+                        entityId: id,
+                    })
+                }
+            }
+        }
+
+        // ── 4. Child limit checks (not/formula: max 1 child) ──
+        for (const [id, expr] of this.expressions) {
+            if (
+                (expr.type === "operator" && expr.operator === "not") ||
+                expr.type === "formula"
+            ) {
+                const childIds = this.childExpressionIdsByParentId.get(id)
+                const childCount = childIds?.size ?? 0
+                if (childCount > 1) {
+                    const label =
+                        expr.type === "formula" ? "Formula" : `Operator "not"`
+                    violations.push({
+                        code: EXPR_CHILD_LIMIT_EXCEEDED,
+                        message: `${label} expression "${id}" has ${childCount} children (max 1).`,
+                        entityType: "expression",
+                        entityId: id,
+                    })
+                }
+            }
+        }
+
+        // ── 5. Position uniqueness ──
+        for (const [, posMap] of positionsByParent) {
+            for (const [position, ids] of posMap) {
+                if (ids.length > 1) {
+                    for (const id of ids) {
+                        violations.push({
+                            code: EXPR_POSITION_DUPLICATE,
+                            message: `Position ${position} is shared by expressions [${ids.join(", ")}].`,
+                            entityType: "expression",
+                            entityId: id,
+                        })
+                    }
+                }
+            }
+        }
+
+        return {
+            ok: violations.length === 0,
+            violations,
+        }
     }
 
     /** Returns a serializable snapshot of the current state. */

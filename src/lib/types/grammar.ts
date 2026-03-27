@@ -16,10 +16,11 @@ export type TGrammarOptions = {
  * Controls which structural rules are enforced and whether violations are
  * automatically corrected.
  *
- * **`autoNormalize` scope:** Auto-normalization is only supported by `addExpression`
- * and bulk-loading paths (`loadInitialExpressions`). Compound operations
- * (`insertExpression`, `wrapExpression`) and `removeExpression` always throw on
- * violations regardless of this flag.
+ * **`autoNormalize` scope:** Supported in all expression mutation operations
+ * including `addExpression`, `insertExpression`, `wrapExpression`, and
+ * bulk-loading paths (`loadInitialExpressions`). `removeExpression` always
+ * throws on violations regardless of this flag (there is no meaningful
+ * auto-normalization for removal).
  */
 export type TGrammarConfig = TGrammarOptions & {
     /** When `true`, auto-fix violations where possible instead of throwing. */
