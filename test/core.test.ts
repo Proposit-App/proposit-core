@@ -2499,7 +2499,11 @@ describe("diffArguments", () => {
         it("returns empty diff for identical engines", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const { engine: engineB } = buildSimpleEngine(ARG)
-            const diff = diffArguments(engineA, engineB)
+            // Use a symbol-based variable matcher because auto-created
+            // premise-bound variables have random IDs that differ between engines
+            const diff = diffArguments(engineA, engineB, {
+                variableMatcher: (a, b) => a.symbol === b.symbol,
+            })
 
             expect(diff.argument.changes).toEqual([])
             expect(diff.variables.added).toEqual([])
@@ -5629,10 +5633,12 @@ describe("entity checksum fields", () => {
     it("getVariables returns variables with checksums", () => {
         const { pm } = setupPremise()
         const vars = pm.getVariables()
-        expect(vars).toHaveLength(1)
-        expect(vars[0].checksum).toBeDefined()
-        expect(typeof vars[0].checksum).toBe("string")
-        expect(vars[0].checksum).toMatch(/^[0-9a-f]{8}$/)
+        expect(vars).toHaveLength(2) // 1 claim-bound + 1 auto premise-bound
+        for (const v of vars) {
+            expect(v.checksum).toBeDefined()
+            expect(typeof v.checksum).toBe("string")
+            expect(v.checksum).toMatch(/^[0-9a-f]{8}$/)
+        }
     })
 
     it("toData includes premise-level checksum", () => {
@@ -5935,8 +5941,8 @@ describe("ArgumentEngine — variable management", () => {
             makeVarExpr("e-p2", VAR_P.id, { parentId: null, position: 1 })
         )
 
-        expect(pm1.getVariables()).toHaveLength(1)
-        expect(pm2.getVariables()).toHaveLength(1)
+        expect(pm1.getVariables()).toHaveLength(3) // 1 claim-bound + 2 auto premise-bound
+        expect(pm2.getVariables()).toHaveLength(3)
     })
 
     it("addVariable throws for duplicate symbol", () => {
@@ -6003,7 +6009,8 @@ describe("ArgumentEngine — variable management", () => {
         expect(result?.symbol).toBe("P_new")
 
         const { result: pm } = eng.createPremise()
-        expect(pm.getVariables()[0].symbol).toBe("P_new")
+        const renamedVar = pm.getVariables().find((v) => v.id === VAR_P.id)
+        expect(renamedVar?.symbol).toBe("P_new")
     })
 
     it("updateVariable returns undefined for non-existent variable", () => {
@@ -7924,7 +7931,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         )
 
         expect(restored.listPremiseIds()).toEqual(["p1"])
-        expect(restored.getVariables()).toHaveLength(2)
+        expect(restored.getVariables()).toHaveLength(3) // 2 claim-bound + 1 auto premise-bound
         const restoredPm = restored.getPremise("p1")!
         expect(restoredPm.getExpressions()).toHaveLength(1)
         expect(restoredPm.getExpressions()[0].id).toBe("e1")
@@ -7989,14 +7996,16 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         engine.createPremiseWithId("p2")
 
         expect(engine.listPremiseIds()).toEqual(["p1", "p2"])
-        expect(engine.getVariables()).toHaveLength(2)
+        expect(engine.getVariables()).toHaveLength(4) // v1 + v2 + 2 auto premise-bound
 
         // Rollback
         engine.rollback(snap)
 
         expect(engine.listPremiseIds()).toEqual(["p1"])
-        expect(engine.getVariables()).toHaveLength(1)
-        expect(engine.getVariables()[0].symbol).toBe("P")
+        expect(engine.getVariables()).toHaveLength(2) // v1 + 1 auto premise-bound
+        expect(engine.getVariables().find((v) => v.id === "v1")?.symbol).toBe(
+            "P"
+        )
     })
 
     it("rollback after multiple mutations restores correct state", () => {
@@ -8027,8 +8036,8 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         engine.rollback(snap)
 
         expect(engine.listPremiseIds()).toEqual(["p1"])
-        expect(engine.getVariables()).toHaveLength(1)
-        expect(engine.getVariables()[0].id).toBe("v1")
+        expect(engine.getVariables()).toHaveLength(2) // v1 + 1 auto premise-bound
+        expect(engine.getVariables().find((v) => v.id === "v1")).toBeDefined()
         expect(engine.getRoleState().conclusionPremiseId).toBe("p1")
         const restoredPm = engine.getPremise("p1")!
         expect(restoredPm.getExpressions()).toHaveLength(1)
@@ -8840,7 +8849,7 @@ describe("ArgumentEngine — lookup methods", () => {
             const bySymbol = engine.buildVariableIndex((v) => v.symbol)
             expect(bySymbol.get("P")?.id).toBe("v1")
             expect(bySymbol.get("Q")?.id).toBe("v2")
-            expect(bySymbol.size).toBe(2)
+            expect(bySymbol.size).toBe(4) // 2 claim-bound + 2 auto premise-bound
         })
     })
 
@@ -10909,9 +10918,10 @@ describe("Premise-variable associations — getVariablesBoundToPremise", () => {
         })
 
         const bound = engine.getVariablesBoundToPremise("p1")
-        expect(bound).toHaveLength(2)
-        expect(bound.map((v) => v.id).sort()).toEqual(["vQ", "vR"])
-        expect(engine.getVariablesBoundToPremise("p2")).toHaveLength(0)
+        expect(bound).toHaveLength(3) // auto-P0 + vQ + vR
+        expect(bound.map((v) => v.id).sort()).toContain("vQ")
+        expect(bound.map((v) => v.id).sort()).toContain("vR")
+        expect(engine.getVariablesBoundToPremise("p2")).toHaveLength(1) // auto-P1
     })
 })
 
@@ -12817,13 +12827,12 @@ describe("Parsing — response schemas", () => {
                 const result = parser.build(validResponse())
                 const snap = result.engine.snapshot()
                 const vars = snap.variables.variables
-                expect(vars).toHaveLength(2)
-                const symbols = vars.map((v) => v.symbol).sort()
-                expect(symbols).toEqual(["P", "Q"])
-                // Each should be claim-bound
-                for (const v of vars) {
-                    expect(isClaimBound(v)).toBe(true)
-                }
+                const claimBoundVars = vars.filter((v) => isClaimBound(v))
+                const premiseBoundVars = vars.filter((v) => isPremiseBound(v))
+                expect(claimBoundVars).toHaveLength(2)
+                expect(premiseBoundVars).toHaveLength(2) // auto-created for each premise
+                const claimSymbols = claimBoundVars.map((v) => v.symbol).sort()
+                expect(claimSymbols).toEqual(["P", "Q"])
             })
 
             it("creates premises with expression trees", () => {
@@ -13073,9 +13082,13 @@ describe("Parsing — response schemas", () => {
                 resp.argument!.conclusionPremiseMiniId = "P2"
                 const result = parser.build(resp, { strict: false })
                 const snap = result.engine.snapshot()
-                // Only P survives as a variable
-                expect(snap.variables.variables).toHaveLength(1)
-                expect(snap.variables.variables[0].symbol).toBe("P")
+                // P survives as a claim-bound variable; 1 auto premise-bound var from 1 premise
+                const claimBound = snap.variables.variables.filter((v) =>
+                    isClaimBound(v)
+                )
+                expect(claimBound).toHaveLength(1)
+                expect(claimBound[0].symbol).toBe("P")
+                expect(snap.variables.variables).toHaveLength(2)
                 expect(result.warnings).toHaveLength(1)
                 expect(result.warnings[0].code).toBe("UNRESOLVED_CLAIM_MINIID")
                 expect(result.warnings[0].context.variableMiniId).toBe("V2")
@@ -13130,8 +13143,12 @@ describe("Parsing — response schemas", () => {
                 const result = parser.build(resp, { strict: false })
                 const snap = result.engine.snapshot()
                 expect(snap.premises).toHaveLength(1)
-                expect(snap.variables.variables).toHaveLength(1)
-                expect(snap.variables.variables[0].symbol).toBe("P")
+                const claimBound = snap.variables.variables.filter((v) =>
+                    isClaimBound(v)
+                )
+                expect(claimBound).toHaveLength(1)
+                expect(claimBound[0].symbol).toBe("P")
+                expect(snap.variables.variables).toHaveLength(2) // 1 claim-bound + 1 auto
                 expect(result.warnings).toHaveLength(2)
                 const codes = result.warnings.map((w) => w.code)
                 expect(codes).toContain("UNRESOLVED_CLAIM_MINIID")
@@ -13245,9 +13262,14 @@ describe("Parsing — response schemas", () => {
                 const parser = new Custom()
                 const result = parser.build(validResponse())
                 const snap = result.engine.snapshot()
-                for (const v of snap.variables.variables) {
+                // Only claim-bound variables go through mapVariable; auto-created premise-bound ones do not
+                const claimBound = snap.variables.variables.filter((v) =>
+                    isClaimBound(v)
+                )
+                for (const v of claimBound) {
                     expect((v as Record<string, unknown>).tag).toBeDefined()
                 }
+                expect(claimBound.length).toBeGreaterThan(0)
             })
 
             it("mapArgument reflects on argument snapshot", () => {
@@ -15949,17 +15971,18 @@ describe("argument hierarchical checksums", () => {
         expect(engine.descendantChecksum()).toBeNull()
         expect(engine.combinedChecksum()).toBe(engine.checksum())
 
-        // Add a premise — descendant becomes non-null
+        // Add a premise — descendant becomes non-null (auto-creates a premise-bound variable too)
         engine.createPremise()
         engine.flushChecksums()
         expect(engine.descendantChecksum()).not.toBeNull()
         expect(engine.getCollectionChecksum("premises")).not.toBeNull()
-        expect(engine.getCollectionChecksum("variables")).toBeNull()
+        expect(engine.getCollectionChecksum("variables")).not.toBeNull() // auto-created variable
 
-        // Verify descendant is based only on premises collection (variables is null)
+        // Verify descendant is based on both premises and variables collections
         const expectedDescendant = computeHash(
             canonicalSerialize({
                 premises: engine.getCollectionChecksum("premises"),
+                variables: engine.getCollectionChecksum("variables"),
             })
         )
         expect(engine.descendantChecksum()).toBe(expectedDescendant)
@@ -17720,7 +17743,7 @@ describe("forkArgument", () => {
         })
         expect(remapTable.premises.size).toBe(1)
         expect(remapTable.expressions.size).toBe(1)
-        expect(remapTable.variables.size).toBe(1)
+        expect(remapTable.variables.size).toBe(2) // VAR_P + 1 auto premise-bound
 
         // Verify premise was remapped
         const forkedPremises = forked.listPremises()
@@ -17760,8 +17783,11 @@ describe("forkArgument", () => {
 
         // Verify variable was remapped
         const forkedVars = forked.getVariables()
-        expect(forkedVars).toHaveLength(1)
-        const forkedVar = forkedVars[0]
+        expect(forkedVars).toHaveLength(2) // VAR_P + 1 auto premise-bound
+        const forkedVar = forkedVars.find(
+            (v) => remapTable.variables.get("var-p") === v.id
+        )!
+        expect(forkedVar).toBeDefined()
         expect(forkedVar.id).not.toBe("var-p")
         expect(remapTable.variables.get("var-p")).toBe(forkedVar.id)
         expect(forkedVar.forkedFromVariableId).toBe("var-p")
@@ -18002,7 +18028,7 @@ describe("forkArgument", () => {
         )
 
         // Remap table has correct counts
-        expect(remapTable.variables.size).toBe(2)
+        expect(remapTable.variables.size).toBe(4) // 2 claim-bound + 2 auto premise-bound
         expect(remapTable.premises.size).toBe(2)
         expect(remapTable.expressions.size).toBe(2)
 
@@ -18239,8 +18265,8 @@ describe("forkArgument", () => {
         expect(diff.premises.removed).toHaveLength(1)
         expect(diff.premises.added).toHaveLength(1)
         expect(diff.premises.modified).toHaveLength(0)
-        expect(diff.variables.removed).toHaveLength(1)
-        expect(diff.variables.added).toHaveLength(1)
+        expect(diff.variables.removed).toHaveLength(2) // VAR_P + 1 auto
+        expect(diff.variables.added).toHaveLength(2)
     })
 
     it("diffArguments with createForkedFromMatcher pairs forked entities", () => {
@@ -18423,5 +18449,54 @@ describe("cross-argument variable binding", () => {
             boundArgumentVersion: 0,
         }
         expect(isExternallyBound(variable, "arg-1")).toBe(false)
+    })
+
+    it("createPremise auto-creates a premise-bound variable", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm, changes } = eng.createPremise()
+
+        // Changeset includes a variable addition
+        expect(changes.variables?.added).toBeDefined()
+        expect(changes.variables!.added.length).toBeGreaterThanOrEqual(1)
+
+        const autoVar = changes.variables!.added.find((v) => isPremiseBound(v))!
+        expect(autoVar).toBeDefined()
+
+        // Variable is bound to the new premise
+        const pmVar = autoVar as unknown as TPremiseBoundVariable
+        expect(pmVar.boundPremiseId).toBe(pm.getId())
+        expect(pmVar.boundArgumentId).toBe(ARG.id)
+        expect(pmVar.boundArgumentVersion).toBe(ARG.version)
+
+        // Auto-generated symbol
+        expect(pmVar.symbol).toBe("P0")
+    })
+
+    it("createPremise accepts a custom symbol for the auto-variable", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { changes } = eng.createPremise(undefined, "MyPremise")
+        const autoVar = changes.variables!.added.find((v) => isPremiseBound(v))!
+        expect((autoVar as unknown as TPremiseBoundVariable).symbol).toBe(
+            "MyPremise"
+        )
+    })
+
+    it("createPremise auto-generates unique symbols on collision", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { changes: c1 } = eng.createPremise()
+        const { changes: c2 } = eng.createPremise()
+        const sym1 = (
+            c1.variables!.added.find((v) =>
+                isPremiseBound(v)
+            )! as unknown as TPremiseBoundVariable
+        ).symbol
+        const sym2 = (
+            c2.variables!.added.find((v) =>
+                isPremiseBound(v)
+            )! as unknown as TPremiseBoundVariable
+        ).symbol
+        expect(sym1).not.toBe(sym2)
+        expect(sym1).toBe("P0")
+        expect(sym2).toBe("P1")
     })
 })

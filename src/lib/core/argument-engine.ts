@@ -131,6 +131,7 @@ export class ArgumentEngine<
     private checksumConfig?: TCoreChecksumConfig
     private positionConfig?: TCorePositionConfig
     private grammarConfig?: TGrammarConfig
+    private restoringFromSnapshot = false
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -245,6 +246,16 @@ export class ArgumentEngine<
             )
             return !boundPremise?.getRootExpressionId()
         })
+    }
+
+    private generateUniqueSymbol(): string {
+        let n = this.premises.size - 1
+        let candidate = `P${n}`
+        while (this.variables.getVariableBySymbol(candidate) !== undefined) {
+            n++
+            candidate = `P${n}`
+        }
+        return candidate
     }
 
     public subscribe = (listener: () => void): (() => void) => {
@@ -450,7 +461,8 @@ export class ArgumentEngine<
     }
 
     public createPremise(
-        extras?: Record<string, unknown>
+        extras?: Record<string, unknown>,
+        symbol?: string
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
@@ -458,12 +470,13 @@ export class ArgumentEngine<
         TPremise,
         TArg
     > {
-        return this.createPremiseWithId(randomUUID(), extras)
+        return this.createPremiseWithId(randomUUID(), extras, symbol)
     }
 
     public createPremiseWithId(
         id: string,
-        extras?: Record<string, unknown>
+        extras?: Record<string, unknown>,
+        symbol?: string
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
@@ -508,6 +521,26 @@ export class ArgumentEngine<
         if (this.conclusionPremiseId === undefined) {
             this.conclusionPremiseId = id
             collector.setRoles(this.getRoleState())
+        }
+
+        // Auto-create a premise-bound variable for this premise
+        if (!this.restoringFromSnapshot) {
+            const autoSymbol = symbol ?? this.generateUniqueSymbol()
+            const autoVariable = {
+                id: randomUUID(),
+                argumentId: this.argument.id,
+                argumentVersion: this.argument.version as number,
+                symbol: autoSymbol,
+                boundPremiseId: id,
+                boundArgumentId: this.argument.id,
+                boundArgumentVersion: this.argument.version as number,
+            } as TOptionalChecksum<TPremiseBoundVariable>
+            const withChecksum = this.attachVariableChecksum({
+                ...autoVariable,
+            } as unknown as TOptionalChecksum<TVar>)
+            this.variables.addVariable(withChecksum)
+            collector.addedVariable(withChecksum)
+            this.markAllPremisesDirty()
         }
 
         const changes = collector.toChangeset()
@@ -1025,6 +1058,7 @@ export class ArgumentEngine<
                   }
                 : undefined
         )
+        engine.restoringFromSnapshot = true
         // Restore premises first (premise-bound variables reference them)
         for (const premiseSnap of snapshot.premises) {
             const pe = PremiseEngine.fromSnapshot<TArg, TPremise, TExpr, TVar>(
@@ -1061,6 +1095,8 @@ export class ArgumentEngine<
         }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
         engine.conclusionPremiseId = snapshot.conclusionPremiseId
+
+        engine.restoringFromSnapshot = false
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
@@ -1127,6 +1163,7 @@ export class ArgumentEngine<
             claimSourceLibrary,
             loadingConfig
         )
+        engine.restoringFromSnapshot = true
 
         // Register claim-bound variables first (no dependencies)
         for (const v of variables) {
@@ -1192,6 +1229,8 @@ export class ArgumentEngine<
 
         // After loading: restore the caller's intended grammar config
         engine.grammarConfig = config?.grammarConfig
+
+        engine.restoringFromSnapshot = false
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()

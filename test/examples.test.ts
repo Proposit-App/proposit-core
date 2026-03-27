@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { importArgumentFromYaml } from "../src/cli/import"
+import { isClaimBound } from "../src/lib/schemata"
 import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -49,10 +50,11 @@ describe("monopoly-regulation.yaml", () => {
         expect(arg.description).toContain("market dominance")
     })
 
-    it("has 5 premises with 4 variables", () => {
+    it("has 5 premises with 4 claim-bound variables", () => {
         expect(engine.listPremises()).toHaveLength(5)
         const vars = engine.listPremises()[0].getVariables()
-        const symbols = vars.map((v) => v.symbol).sort()
+        const claimBound = vars.filter((v) => isClaimBound(v))
+        const symbols = claimBound.map((v) => v.symbol).sort()
         expect(symbols).toEqual([
             "Competition",
             "ConsumerHarm",
@@ -119,11 +121,12 @@ describe("education-reform.yaml", () => {
         )
     })
 
-    it("has 5 premises with 5 variables", () => {
+    it("has 5 premises with 5 claim-bound variables", () => {
         expect(engine.listPremises()).toHaveLength(5)
         const symbols = engine
             .listPremises()[0]
             .getVariables()
+            .filter((v) => isClaimBound(v))
             .map((v) => v.symbol)
             .sort()
         expect(symbols).toEqual([
@@ -181,11 +184,12 @@ describe("exam-performance.yaml", () => {
         )
     })
 
-    it("has 4 premises with 4 variables", () => {
+    it("has 4 premises with 4 claim-bound variables", () => {
         expect(engine.listPremises()).toHaveLength(4)
         const symbols = engine
             .listPremises()[0]
             .getVariables()
+            .filter((v) => isClaimBound(v))
             .map((v) => v.symbol)
             .sort()
         expect(symbols).toEqual([
@@ -253,11 +257,12 @@ describe("free-speech-misinformation.yaml", () => {
         )
     })
 
-    it("has 5 premises with 4 variables", () => {
+    it("has 5 premises with 4 claim-bound variables", () => {
         expect(engine.listPremises()).toHaveLength(5)
         const symbols = engine
             .listPremises()[0]
             .getVariables()
+            .filter((v) => isClaimBound(v))
             .map((v) => v.symbol)
             .sort()
         expect(symbols).toEqual([

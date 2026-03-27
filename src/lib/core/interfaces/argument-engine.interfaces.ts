@@ -38,7 +38,8 @@ export interface TPremiseCrud<
      * @returns The newly created PremiseEngine instance and changeset.
      */
     createPremise(
-        extras?: Record<string, unknown>
+        extras?: Record<string, unknown>,
+        symbol?: string
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
@@ -57,7 +58,8 @@ export interface TPremiseCrud<
      */
     createPremiseWithId(
         id: string,
-        extras?: Record<string, unknown>
+        extras?: Record<string, unknown>,
+        symbol?: string
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
