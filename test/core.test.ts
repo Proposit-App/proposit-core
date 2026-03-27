@@ -17769,4 +17769,440 @@ describe("forkArgument", () => {
         // Verify conclusion role was remapped
         expect(forked.getConclusionPremise()?.getId()).toBe(forkedPremiseId)
     })
+
+    // -----------------------------------------------------------------------
+    // Task 9: Internal reference remapping
+    // -----------------------------------------------------------------------
+
+    it("remaps parentId chains, variableIds, boundPremiseId, rootExpressionId, and conclusion", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 2 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
+
+        // Add two claim-bound variables
+        eng.addVariable({
+            id: "var-p",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        eng.addVariable({
+            id: "var-q",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            symbol: "Q",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        // Premise 1: P and Q
+        const { result: pm1 } = eng.createPremiseWithId("prem-1")
+        pm1.addExpression({
+            id: "op-and",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            premiseId: "prem-1",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+        pm1.addExpression({
+            id: "expr-p",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            premiseId: "prem-1",
+            type: "variable",
+            variableId: "var-p",
+            parentId: "op-and",
+            position: POSITION_INITIAL - 1,
+        })
+        pm1.addExpression({
+            id: "expr-q",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            premiseId: "prem-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-and",
+            position: POSITION_INITIAL + 1,
+        })
+
+        // Premise 2: premise-bound variable referencing prem-1
+        const { result: pm2 } = eng.createPremiseWithId("prem-2")
+        eng.bindVariableToPremise({
+            id: "var-r",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            symbol: "R",
+            boundPremiseId: "prem-1",
+            boundArgumentId: "src-arg",
+            boundArgumentVersion: 2,
+        } as TPremiseBoundVariable)
+        pm2.addExpression({
+            id: "expr-r",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            premiseId: "prem-2",
+            type: "variable",
+            variableId: "var-r",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+
+        // Set premise 2 as conclusion
+        eng.setConclusionPremise("prem-2")
+
+        // Fork
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        let counter = 0
+        const { engine: forked, remapTable } = eng.forkArgument(
+            "fork-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib,
+            { generateId: () => `fk-${counter++}` }
+        )
+
+        // Resolve forked premise IDs from remap table
+        const forkPrem1Id = remapTable.premises.get("prem-1")!
+        const forkPrem2Id = remapTable.premises.get("prem-2")!
+        expect(forkPrem1Id).toBeDefined()
+        expect(forkPrem2Id).toBeDefined()
+
+        // Verify forked premise 1 exists and getRootExpressionId is remapped
+        const forkedPm1 = forked
+            .listPremises()
+            .find((p) => p.getId() === forkPrem1Id)!
+        expect(forkedPm1).toBeDefined()
+        const forkRootExprId = forkedPm1.getRootExpressionId()
+        expect(forkRootExprId).not.toBeNull()
+        expect(forkRootExprId).not.toBe("op-and")
+        expect(remapTable.expressions.get("op-and")).toBe(forkRootExprId)
+
+        // Verify parentId chains are remapped inside forked prem-1
+        const forkExprs1 = forkedPm1.getExpressions()
+        const forkOpExpr = forkExprs1.find((e) => e.type === "operator")!
+        expect(forkOpExpr).toBeDefined()
+        expect(forkOpExpr.parentId).toBeNull()
+        const forkChildren = forkExprs1.filter(
+            (e) => e.parentId === forkOpExpr.id
+        )
+        expect(forkChildren).toHaveLength(2)
+        // Each child's parentId should point to the forked operator, not original
+        for (const child of forkChildren) {
+            expect(child.parentId).toBe(forkOpExpr.id)
+            expect(child.parentId).not.toBe("op-and")
+        }
+
+        // Verify variableId references are remapped
+        const forkVarPId = remapTable.variables.get("var-p")!
+        const forkVarQId = remapTable.variables.get("var-q")!
+        expect(forkVarPId).toBeDefined()
+        expect(forkVarQId).toBeDefined()
+        for (const child of forkChildren) {
+            expect(child.type).toBe("variable")
+            if (child.type === "variable") {
+                expect([forkVarPId, forkVarQId]).toContain(child.variableId)
+                expect(child.variableId).not.toBe("var-p")
+                expect(child.variableId).not.toBe("var-q")
+            }
+        }
+
+        // Verify premise-bound variable's boundPremiseId is remapped
+        const forkVarR = forked.getVariables().find((v) => v.symbol === "R")!
+        expect(forkVarR).toBeDefined()
+        expect(isPremiseBound(forkVarR)).toBe(true)
+        if (isPremiseBound(forkVarR)) {
+            expect(forkVarR.boundPremiseId).toBe(forkPrem1Id)
+            expect(forkVarR.boundPremiseId).not.toBe("prem-1")
+        }
+
+        // Verify conclusion is remapped to forked prem-2
+        expect(forked.getConclusionPremise()?.getId()).toBe(forkPrem2Id)
+        expect(forked.getConclusionPremise()?.getId()).not.toBe("prem-2")
+    })
+
+    // -----------------------------------------------------------------------
+    // Task 10: Remap table accuracy and engine independence
+    // -----------------------------------------------------------------------
+
+    it("remap table covers all entities and all mapped IDs differ from originals", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
+
+        eng.addVariable({
+            id: "v1",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        eng.addVariable({
+            id: "v2",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            symbol: "Q",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        const { result: pm1 } = eng.createPremiseWithId("pr1")
+        pm1.addExpression({
+            id: "e1",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "pr1",
+            type: "variable",
+            variableId: "v1",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+
+        const { result: pm2 } = eng.createPremiseWithId("pr2")
+        pm2.addExpression({
+            id: "e2",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "pr2",
+            type: "variable",
+            variableId: "v2",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const { remapTable } = eng.forkArgument(
+            "forked-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib
+        )
+
+        // Remap table has correct counts
+        expect(remapTable.variables.size).toBe(2)
+        expect(remapTable.premises.size).toBe(2)
+        expect(remapTable.expressions.size).toBe(2)
+
+        // All mapped IDs differ from originals
+        for (const [origId, newId] of remapTable.variables) {
+            expect(newId).not.toBe(origId)
+        }
+        for (const [origId, newId] of remapTable.premises) {
+            expect(newId).not.toBe(origId)
+        }
+        for (const [origId, newId] of remapTable.expressions) {
+            expect(newId).not.toBe(origId)
+        }
+    })
+
+    it("forked engine is independent from source engine", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
+        eng.createPremiseWithId("prem-only")
+
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const { engine: forked } = eng.forkArgument(
+            "forked-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib
+        )
+
+        // Mutate the fork
+        forked.createPremise()
+
+        // Source is unaffected
+        expect(eng.listPremises()).toHaveLength(1)
+        expect(forked.listPremises()).toHaveLength(2)
+    })
+
+    // -----------------------------------------------------------------------
+    // Task 11: Mutability and checksum divergence
+    // -----------------------------------------------------------------------
+
+    it("forked entities are fully mutable", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
+
+        eng.addVariable({
+            id: "var-p",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        eng.addVariable({
+            id: "var-q",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            symbol: "Q",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        const { result: pm } = eng.createPremiseWithId("prem-src")
+        pm.addExpression({
+            id: "op-and",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "prem-src",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+        pm.addExpression({
+            id: "expr-p",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "prem-src",
+            type: "variable",
+            variableId: "var-p",
+            parentId: "op-and",
+            position: POSITION_INITIAL - 1,
+        })
+        pm.addExpression({
+            id: "expr-q",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "prem-src",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-and",
+            position: POSITION_INITIAL + 1,
+        })
+
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const { engine: forked, remapTable } = eng.forkArgument(
+            "forked-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib
+        )
+
+        const forkedPremise = forked.listPremises()[0]
+        const forkedOpId = remapTable.expressions.get("op-and")!
+
+        // Change and → or on the forked premise
+        expect(() =>
+            forkedPremise.changeOperator(forkedOpId, "or")
+        ).not.toThrow()
+
+        // Add a new premise to the fork
+        expect(() => forked.createPremise()).not.toThrow()
+
+        // Remove the original forked premise
+        expect(() => forked.removePremise(forkedPremise.getId())).not.toThrow()
+
+        // Fork ends up with just the newly added premise
+        expect(forked.listPremises()).toHaveLength(1)
+    })
+
+    it("forked entity checksums diverge from source checksums", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
+
+        eng.addVariable({
+            id: "var-p",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        const { result: pm } = eng.createPremiseWithId("prem-src")
+        pm.addExpression({
+            id: "expr-p",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "prem-src",
+            type: "variable",
+            variableId: "var-p",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const { engine: forked } = eng.forkArgument(
+            "forked-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib
+        )
+
+        const srcSnapshot = eng.snapshot()
+        const forkSnapshot = forked.snapshot()
+
+        // Argument checksums differ (IDs and forkedFrom fields differ)
+        expect(forkSnapshot.argument.checksum).not.toBe(
+            srcSnapshot.argument.checksum
+        )
+        expect(forkSnapshot.argument.combinedChecksum).not.toBe(
+            srcSnapshot.argument.combinedChecksum
+        )
+
+        // Premise checksums differ
+        const srcPremise = srcSnapshot.premises[0]
+        const forkPremise = forkSnapshot.premises[0]
+        expect(forkPremise).toBeDefined()
+        expect(forkPremise.premise.checksum).not.toBe(
+            srcPremise.premise.checksum
+        )
+
+        // Expression checksums differ
+        const srcExprs = srcSnapshot.premises[0]!.expressions.expressions
+        const forkExprs = forkSnapshot.premises[0]!.expressions.expressions
+        expect(forkExprs[0]).toBeDefined()
+        expect(forkExprs[0]!.checksum).not.toBe(srcExprs[0]!.checksum)
+    })
 })
