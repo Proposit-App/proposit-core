@@ -31,6 +31,7 @@ export {
     defaultCompareVariable,
     defaultComparePremise,
     defaultCompareExpression,
+    createForkedFromMatcher,
 } from "./core/diff.js"
 export * from "./types/relationships.js"
 export {

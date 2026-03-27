@@ -50,6 +50,7 @@ import {
     defaultComparePremise,
     defaultCompareExpression,
     diffArguments,
+    createForkedFromMatcher,
 } from "../src/lib/core/diff"
 import {
     kleeneNot,
@@ -18200,9 +18201,196 @@ describe("forkArgument", () => {
         )
 
         // Expression checksums differ
-        const srcExprs = srcSnapshot.premises[0]!.expressions.expressions
-        const forkExprs = forkSnapshot.premises[0]!.expressions.expressions
+        const srcExprs = srcSnapshot.premises[0].expressions.expressions
+        const forkExprs = forkSnapshot.premises[0].expressions.expressions
         expect(forkExprs[0]).toBeDefined()
-        expect(forkExprs[0]!.checksum).not.toBe(srcExprs[0]!.checksum)
+        expect(forkExprs[0].checksum).not.toBe(srcExprs[0].checksum)
+    })
+
+    // -----------------------------------------------------------------------
+    // Task 12: diffArguments with fork-aware matchers
+    // -----------------------------------------------------------------------
+
+    it("diffArguments without matchers sees forked entities as removed + added", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(ARG, claimLib, sourceLib, csLibrary)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(
+            makeVarExpr("expr-1", "var-p", { premiseId: pm.getId() })
+        )
+
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const { engine: forked } = eng.forkArgument(
+            "forked-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib
+        )
+
+        const diff = diffArguments(eng, forked)
+
+        // Without matchers, IDs differ → removed + added
+        expect(diff.premises.removed).toHaveLength(1)
+        expect(diff.premises.added).toHaveLength(1)
+        expect(diff.premises.modified).toHaveLength(0)
+        expect(diff.variables.removed).toHaveLength(1)
+        expect(diff.variables.added).toHaveLength(1)
+    })
+
+    it("diffArguments with createForkedFromMatcher pairs forked entities", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(ARG, claimLib, sourceLib, csLibrary)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(
+            makeVarExpr("expr-1", "var-p", { premiseId: pm.getId() })
+        )
+
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const { engine: forked } = eng.forkArgument(
+            "forked-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib
+        )
+
+        const matchers = createForkedFromMatcher()
+        const diff = diffArguments(eng, forked, { ...matchers })
+
+        // With matchers, entities are paired (not removed + added)
+        expect(diff.premises.removed).toHaveLength(0)
+        expect(diff.premises.added).toHaveLength(0)
+        expect(diff.variables.removed).toHaveLength(0)
+        expect(diff.variables.added).toHaveLength(0)
+    })
+
+    it("fork-aware diff detects mutations after fork", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
+
+        // Add P and Q variables
+        eng.addVariable({
+            id: "var-p",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        eng.addVariable({
+            id: "var-q",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            symbol: "Q",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+
+        // Premise 1: P and Q (using and operator)
+        const { result: pm1 } = eng.createPremiseWithId("prem-1")
+        pm1.addExpression({
+            id: "op-and",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "prem-1",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+        pm1.addExpression({
+            id: "expr-p",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "prem-1",
+            type: "variable",
+            variableId: "var-p",
+            parentId: "op-and",
+            position: POSITION_INITIAL,
+        })
+        pm1.addExpression({
+            id: "expr-q",
+            argumentId: "src-arg",
+            argumentVersion: 0,
+            premiseId: "prem-1",
+            type: "variable",
+            variableId: "var-q",
+            parentId: "op-and",
+            position: midpoint(POSITION_INITIAL, POSITION_MAX),
+        })
+
+        // Fork
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const { engine: forked } = eng.forkArgument(
+            "fork-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib
+        )
+
+        // Mutate the fork: change and → or
+        const forkedPm1 = forked.listPremises()[0]
+        const exprs = forkedPm1.getExpressions()
+        const opExpr = exprs.find((e) => e.type === "operator")!
+        forkedPm1.updateExpression(opExpr.id, { operator: "or" })
+
+        // Add a new premise to the fork
+        forked.addVariable({
+            id: "var-r",
+            argumentId: "fork-arg",
+            argumentVersion: 0,
+            symbol: "R",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
+        const { result: forkedPm2 } = forked.createPremise()
+        forkedPm2.addExpression({
+            id: "expr-r",
+            argumentId: "fork-arg",
+            argumentVersion: 0,
+            premiseId: forkedPm2.getId(),
+            type: "variable",
+            variableId: "var-r",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
+
+        // Diff with fork-aware matchers
+        const matchers = createForkedFromMatcher()
+        const diff = diffArguments(eng, forked, { ...matchers })
+
+        // The original premise should be paired and show expression changes
+        expect(diff.premises.removed).toHaveLength(0)
+        expect(diff.premises.added).toHaveLength(1)
+        expect(diff.premises.modified).toHaveLength(1)
+
+        const modifiedPremise = diff.premises.modified[0]
+        const operatorChange = modifiedPremise.expressions.modified.find((ed) =>
+            ed.changes.some(
+                (c) =>
+                    c.field === "operator" &&
+                    c.before === "and" &&
+                    c.after === "or"
+            )
+        )
+        expect(operatorChange).toBeDefined()
     })
 })

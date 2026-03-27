@@ -78,4 +78,10 @@ export interface TCoreDiffOptions<
     compareVariable?: TCoreFieldComparator<TVar>
     comparePremise?: TCoreFieldComparator<TPremise>
     compareExpression?: TCoreFieldComparator<TExpr>
+    /** Custom entity matcher for pairing premises. Default: match by ID. */
+    premiseMatcher?: (a: TPremise, b: TPremise) => boolean
+    /** Custom entity matcher for pairing variables. Default: match by ID. */
+    variableMatcher?: (a: TVar, b: TVar) => boolean
+    /** Custom entity matcher for pairing expressions. Default: match by ID. */
+    expressionMatcher?: (a: TExpr, b: TExpr) => boolean
 }
