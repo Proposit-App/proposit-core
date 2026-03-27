@@ -27,6 +27,11 @@ import type {
     TCoreValidityCheckResult,
 } from "../types/evaluation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
+import type {
+    TForkArgumentOptions,
+    TForkArgumentResult,
+    TForkRemapTable,
+} from "../types/fork.js"
 import {
     PERMISSIVE_GRAMMAR_CONFIG,
     type TGrammarConfig,
@@ -126,6 +131,7 @@ export class ArgumentEngine<
     private checksumConfig?: TCoreChecksumConfig
     private positionConfig?: TCorePositionConfig
     private grammarConfig?: TGrammarConfig
+    private restoringFromSnapshot = false
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -240,6 +246,16 @@ export class ArgumentEngine<
             )
             return !boundPremise?.getRootExpressionId()
         })
+    }
+
+    private generateUniqueSymbol(): string {
+        let n = this.premises.size - 1
+        let candidate = `P${n}`
+        while (this.variables.getVariableBySymbol(candidate) !== undefined) {
+            n++
+            candidate = `P${n}`
+        }
+        return candidate
     }
 
     public subscribe = (listener: () => void): (() => void) => {
@@ -445,7 +461,8 @@ export class ArgumentEngine<
     }
 
     public createPremise(
-        extras?: Record<string, unknown>
+        extras?: Record<string, unknown>,
+        symbol?: string
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
@@ -453,12 +470,13 @@ export class ArgumentEngine<
         TPremise,
         TArg
     > {
-        return this.createPremiseWithId(randomUUID(), extras)
+        return this.createPremiseWithId(randomUUID(), extras, symbol)
     }
 
     public createPremiseWithId(
         id: string,
-        extras?: Record<string, unknown>
+        extras?: Record<string, unknown>,
+        symbol?: string
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
@@ -503,6 +521,26 @@ export class ArgumentEngine<
         if (this.conclusionPremiseId === undefined) {
             this.conclusionPremiseId = id
             collector.setRoles(this.getRoleState())
+        }
+
+        // Auto-create a premise-bound variable for this premise
+        if (!this.restoringFromSnapshot) {
+            const autoSymbol = symbol ?? this.generateUniqueSymbol()
+            const autoVariable = {
+                id: randomUUID(),
+                argumentId: this.argument.id,
+                argumentVersion: this.argument.version as number,
+                symbol: autoSymbol,
+                boundPremiseId: id,
+                boundArgumentId: this.argument.id,
+                boundArgumentVersion: this.argument.version as number,
+            } as TOptionalChecksum<TPremiseBoundVariable>
+            const withChecksum = this.attachVariableChecksum({
+                ...autoVariable,
+            } as unknown as TOptionalChecksum<TVar>)
+            this.variables.addVariable(withChecksum)
+            collector.addedVariable(withChecksum)
+            this.markAllPremisesDirty()
         }
 
         const changes = collector.toChangeset()
@@ -664,6 +702,66 @@ export class ArgumentEngine<
             result: withChecksum,
             changes,
         }
+    }
+
+    public bindVariableToExternalPremise(
+        variable: TOptionalChecksum<TPremiseBoundVariable> &
+            Record<string, unknown>
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
+        if (variable.argumentId !== this.argument.id) {
+            throw new Error(
+                `Variable argumentId "${variable.argumentId}" does not match engine argument ID "${this.argument.id}".`
+            )
+        }
+        if (variable.argumentVersion !== this.argument.version) {
+            throw new Error(
+                `Variable argumentVersion "${variable.argumentVersion}" does not match engine argument version "${this.argument.version}".`
+            )
+        }
+        if (variable.boundArgumentId === this.argument.id) {
+            throw new Error(
+                `boundArgumentId matches this engine's argument — use bindVariableToPremise for internal bindings.`
+            )
+        }
+        if (
+            !this.canBind(
+                variable.boundArgumentId,
+                variable.boundArgumentVersion
+            )
+        ) {
+            throw new Error(
+                `Binding to argument "${variable.boundArgumentId}" version ${variable.boundArgumentVersion} is not allowed.`
+            )
+        }
+        const withChecksum = this.attachVariableChecksum({
+            ...variable,
+        } as unknown as TOptionalChecksum<TVar>)
+        this.variables.addVariable(withChecksum)
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+        collector.addedVariable(withChecksum)
+        this.markDirty()
+        this.markAllPremisesDirty()
+        const changes = collector.toChangeset()
+        this.markReactiveDirty(changes)
+        this.notifySubscribers()
+        return {
+            result: withChecksum,
+            changes,
+        }
+    }
+
+    public bindVariableToArgument(
+        variable: Omit<
+            TOptionalChecksum<TPremiseBoundVariable>,
+            "boundPremiseId"
+        > &
+            Record<string, unknown>,
+        conclusionPremiseId: string
+    ): TCoreMutationResult<TVar, TExpr, TVar, TPremise, TArg> {
+        return this.bindVariableToExternalPremise({
+            ...variable,
+            boundPremiseId: conclusionPremiseId,
+        } as TOptionalChecksum<TPremiseBoundVariable> & Record<string, unknown>)
     }
 
     public updateVariable(
@@ -1020,6 +1118,7 @@ export class ArgumentEngine<
                   }
                 : undefined
         )
+        engine.restoringFromSnapshot = true
         // Restore premises first (premise-bound variables reference them)
         for (const premiseSnap of snapshot.premises) {
             const pe = PremiseEngine.fromSnapshot<TArg, TPremise, TExpr, TVar>(
@@ -1049,13 +1148,22 @@ export class ArgumentEngine<
         }
         for (const v of snapshot.variables.variables) {
             if (isPremiseBound(v as unknown as TCorePropositionalVariable)) {
-                engine.bindVariableToPremise(
-                    v as unknown as TOptionalChecksum<TPremiseBoundVariable>
-                )
+                const pbv = v as unknown as TPremiseBoundVariable
+                if (pbv.boundArgumentId === engine.argument.id) {
+                    engine.bindVariableToPremise(
+                        v as unknown as TOptionalChecksum<TPremiseBoundVariable>
+                    )
+                } else {
+                    engine.bindVariableToExternalPremise(
+                        v as unknown as TOptionalChecksum<TPremiseBoundVariable>
+                    )
+                }
             }
         }
         // Restore conclusion role (don't use setConclusionPremise to avoid auto-assign logic)
         engine.conclusionPremiseId = snapshot.conclusionPremiseId
+
+        engine.restoringFromSnapshot = false
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
@@ -1122,6 +1230,7 @@ export class ArgumentEngine<
             claimSourceLibrary,
             loadingConfig
         )
+        engine.restoringFromSnapshot = true
 
         // Register claim-bound variables first (no dependencies)
         for (const v of variables) {
@@ -1155,9 +1264,16 @@ export class ArgumentEngine<
         // Register premise-bound variables (depend on premises)
         for (const v of variables) {
             if (isPremiseBound(v as unknown as TCorePropositionalVariable)) {
-                engine.bindVariableToPremise(
-                    v as unknown as TOptionalChecksum<TPremiseBoundVariable>
-                )
+                const pbv = v as unknown as TPremiseBoundVariable
+                if (pbv.boundArgumentId === engine.argument.id) {
+                    engine.bindVariableToPremise(
+                        v as unknown as TOptionalChecksum<TPremiseBoundVariable>
+                    )
+                } else {
+                    engine.bindVariableToExternalPremise(
+                        v as unknown as TOptionalChecksum<TPremiseBoundVariable>
+                    )
+                }
             }
         }
 
@@ -1187,6 +1303,8 @@ export class ArgumentEngine<
 
         // After loading: restore the caller's intended grammar config
         engine.grammarConfig = config?.grammarConfig
+
+        engine.restoringFromSnapshot = false
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
@@ -1765,11 +1883,15 @@ export class ArgumentEngine<
             ),
         ].sort()
 
-        // Only claim-bound variables get truth-table columns;
-        // premise-bound variables are resolved lazily from their bound premise.
+        // Claim-bound and externally-bound premise variables get truth-table columns;
+        // internally-bound premise variables are resolved lazily.
         const referencedVariableIds = allVariableIds.filter((vid) => {
             const v = this.variables.getVariable(vid)
-            return v != null && isClaimBound(v)
+            if (v == null) return false
+            if (isClaimBound(v)) return true
+            if (isPremiseBound(v) && v.boundArgumentId !== this.argument.id)
+                return true
+            return false
         })
 
         try {
@@ -1782,9 +1904,15 @@ export class ArgumentEngine<
                     return resolverCache.get(variableId)!
                 }
                 const variable = this.variables.getVariable(variableId)
-                if (!variable || !isPremiseBound(variable)) {
+                if (
+                    !variable ||
+                    !isPremiseBound(variable) ||
+                    variable.boundArgumentId !== this.argument.id
+                ) {
+                    // Claim-bound or externally-bound: read from assignment
                     return assignment.variables[variableId] ?? null
                 }
+                // Internal premise-bound: lazy resolution
                 const boundPremiseId = variable.boundPremiseId
                 const boundPremise = this.premises.get(boundPremiseId)
                 if (!boundPremise) {
@@ -1939,11 +2067,15 @@ export class ArgumentEngine<
             ),
         ].sort()
 
-        // Only claim-bound variables get truth-table columns;
-        // premise-bound variables are resolved lazily from their bound premise.
+        // Claim-bound and externally-bound premise variables get truth-table columns;
+        // internally-bound premise variables are resolved lazily.
         const checkedVariableIds = allVariableIdsForCheck.filter((vid) => {
             const v = this.variables.getVariable(vid)
-            return v != null && isClaimBound(v)
+            if (v == null) return false
+            if (isClaimBound(v)) return true
+            if (isPremiseBound(v) && v.boundArgumentId !== this.argument.id)
+                return true
+            return false
         })
 
         if (
@@ -2039,5 +2171,223 @@ export class ArgumentEngine<
             counterexamples,
             truncated,
         }
+    }
+
+    // -----------------------------------------------------------------
+    // Forking
+    // -----------------------------------------------------------------
+
+    /**
+     * Override point for subclasses to prevent forking. When this returns
+     * `false`, `forkArgument` will throw.
+     */
+    protected canFork(): boolean {
+        return true
+    }
+
+    /**
+     * Override point for subclasses to restrict cross-argument bindings.
+     * When this returns `false`, `bindVariableToExternalPremise` will throw.
+     */
+    protected canBind(
+        _boundArgumentId: string,
+        _boundArgumentVersion: number
+    ): boolean {
+        return true
+    }
+
+    /**
+     * Creates an independent copy of this argument under a new argument ID.
+     *
+     * Every premise, expression, and variable receives a fresh ID (via
+     * `options.generateId`, defaulting to `crypto.randomUUID`). All internal
+     * cross-references are remapped to the new IDs. Each forked entity carries
+     * `forkedFrom*` metadata pointing back to the originals.
+     *
+     * The returned engine is fully independent — mutations on either the
+     * source or the fork do not affect the other.
+     */
+    public forkArgument(
+        newArgumentId: string,
+        claimLibrary: TClaimLookup<TClaim>,
+        sourceLibrary: TSourceLookup<TSource>,
+        claimSourceLibrary: TClaimSourceLookup<TAssoc>,
+        options?: TForkArgumentOptions
+    ): TForkArgumentResult<TArg, TPremise, TExpr, TVar> {
+        // 1. Guard
+        if (!this.canFork()) {
+            throw new Error("Forking is not allowed for this engine.")
+        }
+
+        const generateId = options?.generateId ?? randomUUID
+
+        // 2. Snapshot the current engine state
+        const snap = this.snapshot()
+
+        const originalArgumentId = snap.argument.id
+        const originalArgumentVersion = snap.argument.version
+
+        // 3. Build remap tables  (old ID → new ID)
+        const premiseRemap = new Map<string, string>()
+        const expressionRemap = new Map<string, string>()
+        const variableRemap = new Map<string, string>()
+
+        for (const ps of snap.premises) {
+            premiseRemap.set(ps.premise.id, generateId())
+            for (const expr of ps.expressions.expressions) {
+                expressionRemap.set(expr.id, generateId())
+            }
+        }
+        for (const v of snap.variables.variables) {
+            variableRemap.set(v.id, generateId())
+        }
+
+        const remapTable: TForkRemapTable = {
+            argumentId: { from: originalArgumentId, to: newArgumentId },
+            premises: premiseRemap,
+            expressions: expressionRemap,
+            variables: variableRemap,
+        }
+
+        // 4. Remap the argument entity
+        snap.argument = {
+            ...snap.argument,
+            id: newArgumentId,
+            version: 0,
+            forkedFromArgumentId: originalArgumentId,
+            forkedFromArgumentVersion: originalArgumentVersion,
+        } as TOptionalChecksum<TArg>
+
+        // 5. Remap premises and their expressions
+        for (const ps of snap.premises) {
+            const originalPremiseId = ps.premise.id
+            const newPremiseId = premiseRemap.get(originalPremiseId)!
+
+            ps.premise = {
+                ...ps.premise,
+                id: newPremiseId,
+                argumentId: newArgumentId,
+                argumentVersion: 0,
+                forkedFromPremiseId: originalPremiseId,
+                forkedFromArgumentId: originalArgumentId,
+                forkedFromArgumentVersion: originalArgumentVersion,
+            } as TOptionalChecksum<TPremise>
+
+            // Remap rootExpressionId
+            if (ps.rootExpressionId) {
+                ps.rootExpressionId = expressionRemap.get(ps.rootExpressionId)!
+            }
+
+            // Remap each expression
+            ps.expressions.expressions = ps.expressions.expressions.map(
+                (expr) => {
+                    const originalExprId = expr.id
+                    const newExprId = expressionRemap.get(originalExprId)!
+
+                    const remapped = {
+                        ...expr,
+                        id: newExprId,
+                        argumentId: newArgumentId,
+                        argumentVersion: 0,
+                        premiseId: newPremiseId,
+                        parentId: expr.parentId
+                            ? (expressionRemap.get(expr.parentId) ?? null)
+                            : null,
+                        forkedFromExpressionId: originalExprId,
+                        forkedFromPremiseId: originalPremiseId,
+                        forkedFromArgumentId: originalArgumentId,
+                        forkedFromArgumentVersion: originalArgumentVersion,
+                    } as TExpr
+
+                    // Remap variableId on variable-type expressions
+                    if (
+                        (remapped as { type: string }).type === "variable" &&
+                        "variableId" in remapped
+                    ) {
+                        const origVarId = (
+                            remapped as unknown as { variableId: string }
+                        ).variableId
+                        ;(
+                            remapped as unknown as { variableId: string }
+                        ).variableId = variableRemap.get(origVarId)!
+                    }
+
+                    return remapped
+                }
+            )
+        }
+
+        // 6. Remap variables
+        snap.variables.variables = snap.variables.variables.map((v) => {
+            const originalVarId = v.id
+            const newVarId = variableRemap.get(originalVarId)!
+
+            const remapped = {
+                ...v,
+                id: newVarId,
+                argumentId: newArgumentId,
+                argumentVersion: 0,
+                forkedFromVariableId: originalVarId,
+                forkedFromArgumentId: originalArgumentId,
+                forkedFromArgumentVersion: originalArgumentVersion,
+            }
+
+            // Remap premise-bound variable references
+            if (
+                isPremiseBound(
+                    remapped as unknown as TCorePropositionalVariable
+                )
+            ) {
+                const premiseBound =
+                    remapped as unknown as TPremiseBoundVariable & {
+                        boundPremiseId: string
+                        boundArgumentId: string
+                        boundArgumentVersion: number
+                    }
+                premiseBound.boundPremiseId = premiseRemap.get(
+                    premiseBound.boundPremiseId
+                )!
+                premiseBound.boundArgumentId = newArgumentId
+                premiseBound.boundArgumentVersion = 0
+            }
+
+            return remapped as TVar
+        })
+
+        // 7. Remap conclusion role
+        if (snap.conclusionPremiseId) {
+            snap.conclusionPremiseId = premiseRemap.get(
+                snap.conclusionPremiseId
+            )
+        }
+
+        // 8. Carry config from options or source engine
+        snap.config = {
+            checksumConfig: serializeChecksumConfig(
+                options?.checksumConfig ?? this.checksumConfig
+            ),
+            positionConfig: options?.positionConfig ?? this.positionConfig,
+            grammarConfig: options?.grammarConfig ?? this.grammarConfig,
+        }
+
+        // 9. Construct the new engine from the remapped snapshot
+        const engine = ArgumentEngine.fromSnapshot<
+            TArg,
+            TPremise,
+            TExpr,
+            TVar,
+            TSource,
+            TClaim,
+            TAssoc
+        >(
+            snap,
+            claimLibrary,
+            sourceLibrary,
+            claimSourceLibrary,
+            options?.grammarConfig ?? this.grammarConfig,
+            "ignore"
+        )
+
+        return { engine, remapTable }
     }
 }

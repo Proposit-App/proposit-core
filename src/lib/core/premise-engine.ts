@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import {
+    isExternallyBound,
     isPremiseBound,
     type TCoreArgument,
     type TCoreLogicalOperatorType,
@@ -1321,7 +1322,11 @@ export class PremiseEngine<
                     const variable = this.variables.getVariable(
                         expression.variableId
                     )
-                    if (variable && isPremiseBound(variable)) {
+                    if (
+                        variable &&
+                        isPremiseBound(variable) &&
+                        !isExternallyBound(variable, this.argument.id as string)
+                    ) {
                         value = options.resolver(expression.variableId)
                     } else {
                         value =

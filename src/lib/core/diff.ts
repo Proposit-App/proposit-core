@@ -121,30 +121,64 @@ export function defaultCompareExpression(
 function diffEntitySet<T extends { id: string }>(
     beforeItems: T[],
     afterItems: T[],
-    compare: TCoreFieldComparator<T>
+    compare: TCoreFieldComparator<T>,
+    matcher?: (a: T, b: T) => boolean
 ): TCoreEntitySetDiff<T> {
-    const beforeById = new Map(beforeItems.map((item) => [item.id, item]))
-    const afterById = new Map(afterItems.map((item) => [item.id, item]))
+    if (!matcher) {
+        const beforeById = new Map(beforeItems.map((item) => [item.id, item]))
+        const afterById = new Map(afterItems.map((item) => [item.id, item]))
 
+        const added: T[] = []
+        const removed: T[] = []
+        const modified: TCoreEntityFieldDiff<T>[] = []
+
+        for (const [id, beforeItem] of beforeById) {
+            const afterItem = afterById.get(id)
+            if (!afterItem) {
+                removed.push(beforeItem)
+                continue
+            }
+            const changes = compare(beforeItem, afterItem)
+            if (changes.length > 0) {
+                modified.push({ before: beforeItem, after: afterItem, changes })
+            }
+        }
+
+        for (const [id, afterItem] of afterById) {
+            if (!beforeById.has(id)) {
+                added.push(afterItem)
+            }
+        }
+
+        return { added, removed, modified }
+    }
+
+    // Custom matcher-based pairing
     const added: T[] = []
     const removed: T[] = []
     const modified: TCoreEntityFieldDiff<T>[] = []
+    const matchedAfterIndices = new Set<number>()
 
-    for (const [id, beforeItem] of beforeById) {
-        const afterItem = afterById.get(id)
-        if (!afterItem) {
+    for (const beforeItem of beforeItems) {
+        const afterIndex = afterItems.findIndex(
+            (afterItem, i) =>
+                !matchedAfterIndices.has(i) && matcher(beforeItem, afterItem)
+        )
+        if (afterIndex === -1) {
             removed.push(beforeItem)
             continue
         }
+        matchedAfterIndices.add(afterIndex)
+        const afterItem = afterItems[afterIndex]
         const changes = compare(beforeItem, afterItem)
         if (changes.length > 0) {
             modified.push({ before: beforeItem, after: afterItem, changes })
         }
     }
 
-    for (const [id, afterItem] of afterById) {
-        if (!beforeById.has(id)) {
-            added.push(afterItem)
+    for (let i = 0; i < afterItems.length; i++) {
+        if (!matchedAfterIndices.has(i)) {
+            added.push(afterItems[i])
         }
     }
 
@@ -160,26 +194,78 @@ function diffPremiseSet<
     beforeExpressions: Map<string, TExpr[]>,
     afterExpressions: Map<string, TExpr[]>,
     comparePremise: TCoreFieldComparator<TPremise>,
-    compareExpression: TCoreFieldComparator<TExpr>
+    compareExpression: TCoreFieldComparator<TExpr>,
+    premiseMatcher?: (a: TPremise, b: TPremise) => boolean,
+    expressionMatcher?: (a: TExpr, b: TExpr) => boolean
 ): TCorePremiseSetDiff<TPremise, TExpr> {
-    const beforeById = new Map(beforePremises.map((p) => [p.id, p]))
-    const afterById = new Map(afterPremises.map((p) => [p.id, p]))
+    if (!premiseMatcher) {
+        const beforeById = new Map(beforePremises.map((p) => [p.id, p]))
+        const afterById = new Map(afterPremises.map((p) => [p.id, p]))
 
+        const added: TPremise[] = []
+        const removed: TPremise[] = []
+        const modified: TCorePremiseDiff<TPremise, TExpr>[] = []
+
+        for (const [id, beforePremise] of beforeById) {
+            const afterPremise = afterById.get(id)
+            if (!afterPremise) {
+                removed.push(beforePremise)
+                continue
+            }
+            const premiseChanges = comparePremise(beforePremise, afterPremise)
+            const expressionsDiff = diffEntitySet(
+                beforeExpressions.get(id) ?? [],
+                afterExpressions.get(id) ?? [],
+                compareExpression,
+                expressionMatcher
+            )
+            const hasExpressionChanges =
+                expressionsDiff.added.length > 0 ||
+                expressionsDiff.removed.length > 0 ||
+                expressionsDiff.modified.length > 0
+            if (premiseChanges.length > 0 || hasExpressionChanges) {
+                modified.push({
+                    before: beforePremise,
+                    after: afterPremise,
+                    changes: premiseChanges,
+                    expressions: expressionsDiff,
+                })
+            }
+        }
+
+        for (const [id, afterPremise] of afterById) {
+            if (!beforeById.has(id)) {
+                added.push(afterPremise)
+            }
+        }
+
+        return { added, removed, modified }
+    }
+
+    // Custom matcher-based pairing for premises
     const added: TPremise[] = []
     const removed: TPremise[] = []
     const modified: TCorePremiseDiff<TPremise, TExpr>[] = []
+    const matchedAfterIndices = new Set<number>()
 
-    for (const [id, beforePremise] of beforeById) {
-        const afterPremise = afterById.get(id)
-        if (!afterPremise) {
+    for (const beforePremise of beforePremises) {
+        const afterIndex = afterPremises.findIndex(
+            (afterPremise, i) =>
+                !matchedAfterIndices.has(i) &&
+                premiseMatcher(beforePremise, afterPremise)
+        )
+        if (afterIndex === -1) {
             removed.push(beforePremise)
             continue
         }
+        matchedAfterIndices.add(afterIndex)
+        const afterPremise = afterPremises[afterIndex]
         const premiseChanges = comparePremise(beforePremise, afterPremise)
         const expressionsDiff = diffEntitySet(
-            beforeExpressions.get(id) ?? [],
-            afterExpressions.get(id) ?? [],
-            compareExpression
+            beforeExpressions.get(beforePremise.id) ?? [],
+            afterExpressions.get(afterPremise.id) ?? [],
+            compareExpression,
+            expressionMatcher
         )
         const hasExpressionChanges =
             expressionsDiff.added.length > 0 ||
@@ -195,9 +281,9 @@ function diffPremiseSet<
         }
     }
 
-    for (const [id, afterPremise] of afterById) {
-        if (!beforeById.has(id)) {
-            added.push(afterPremise)
+    for (let i = 0; i < afterPremises.length; i++) {
+        if (!matchedAfterIndices.has(i)) {
+            added.push(afterPremises[i])
         }
     }
 
@@ -292,7 +378,8 @@ export function diffArguments<
         variables: diffEntitySet(
             collectVariables(engineA),
             collectVariables(engineB),
-            compareVar
+            compareVar,
+            options?.variableMatcher
         ),
         premises: diffPremiseSet(
             premisesA,
@@ -300,11 +387,60 @@ export function diffArguments<
             expressionsA,
             expressionsB,
             comparePrem,
-            compareExpr
+            compareExpr,
+            options?.premiseMatcher,
+            options?.expressionMatcher
         ),
         roles: diffRoles(
             rolesA.conclusionPremiseId,
             rolesB.conclusionPremiseId
         ),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Fork-aware matchers
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates entity matchers for fork-aware diffing.
+ * Pairs entity A with entity B when B was forked from A
+ * (B's forkedFrom*Id matches A's id and argument identity).
+ */
+export function createForkedFromMatcher<
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+>(): {
+    premiseMatcher: (a: TPremise, b: TPremise) => boolean
+    variableMatcher: (a: TVar, b: TVar) => boolean
+    expressionMatcher: (a: TExpr, b: TExpr) => boolean
+} {
+    return {
+        premiseMatcher: (a, b) => {
+            const bRec = b as Record<string, unknown>
+            return (
+                bRec.forkedFromPremiseId === a.id &&
+                bRec.forkedFromArgumentId === a.argumentId &&
+                bRec.forkedFromArgumentVersion === a.argumentVersion
+            )
+        },
+        variableMatcher: (a, b) => {
+            const bRec = b as Record<string, unknown>
+            return (
+                bRec.forkedFromVariableId === a.id &&
+                bRec.forkedFromArgumentId === a.argumentId &&
+                bRec.forkedFromArgumentVersion === a.argumentVersion
+            )
+        },
+        expressionMatcher: (a, b) => {
+            const bRec = b as Record<string, unknown>
+            return (
+                bRec.forkedFromExpressionId === a.id &&
+                bRec.forkedFromPremiseId === a.premiseId &&
+                bRec.forkedFromArgumentId === a.argumentId &&
+                bRec.forkedFromArgumentVersion === a.argumentVersion
+            )
+        },
     }
 }

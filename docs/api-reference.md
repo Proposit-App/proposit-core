@@ -8,9 +8,11 @@ Creates an engine scoped to `argument` (`{ id, version, title, description }`, w
 
 ---
 
-### `createPremise(title?)` → `TCoreMutationResult<PremiseEngine>`
+### `createPremise(extras?, symbol?)` → `TCoreMutationResult<PremiseEngine>`
 
 Creates a new `PremiseEngine`, registers it with the engine, and returns it wrapped in a mutation result with the changeset. If no conclusion is currently set, the new premise is automatically designated as the conclusion (reflected in the changeset's `roles` field).
+
+Also auto-creates a premise-bound variable for the new premise, included in the changeset's `variables.added`. The optional `symbol` parameter sets the variable's symbol; if omitted, an auto-generated symbol (`"P0"`, `"P1"`, ...) is used with collision avoidance.
 
 ---
 
@@ -55,6 +57,26 @@ Registers a claim-bound variable (without `checksum` — it is computed lazily) 
 Registers a premise-bound variable whose truth value is derived from another premise's evaluation. The variable must include `boundPremiseId`, `boundArgumentId`, and `boundArgumentVersion` fields. Throws if the `id` or `symbol` already exists, if `boundPremiseId` does not reference an existing premise, if `boundArgumentId` does not match this argument, or if binding would create a circular dependency.
 
 Premise-bound variables are resolved lazily during evaluation: the bound premise is evaluated first, and its root value becomes the variable's truth value. If the bound premise is empty, the variable resolves to `null` (unknown). Circularity detection is transitive — if premise A's variable Q is bound to premise B, and premise B uses a variable R bound to premise A, the binding is rejected.
+
+---
+
+### `bindVariableToExternalPremise(variable)` → `TCoreMutationResult<TPropositionalVariable>`
+
+Registers a premise-bound variable that references a premise in a **different** argument. The variable must include `boundPremiseId`, `boundArgumentId`, and `boundArgumentVersion` fields, where `boundArgumentId` does NOT match this engine's argument (use `bindVariableToPremise` for internal bindings). Calls `canBind(boundArgumentId, boundArgumentVersion)` for validation.
+
+External bindings are evaluator-assigned during evaluation — they are NOT lazily resolved. They appear as free variables in truth-table generation (like claim-bound variables). The binding is navigational: it tells the reader where the proposition is defined, but the evaluator assigns the truth value.
+
+---
+
+### `bindVariableToArgument(variable, conclusionPremiseId)` → `TCoreMutationResult<TPropositionalVariable>`
+
+Convenience method for binding a variable to another argument's conclusion. Sets `boundPremiseId` to the provided `conclusionPremiseId` and delegates to `bindVariableToExternalPremise`. The caller resolves the conclusion premise ID from their knowledge of the target argument.
+
+---
+
+### `canBind(boundArgumentId, boundArgumentVersion)` → `boolean` _(protected)_
+
+Returns whether this engine allows binding to the specified external argument version. Default returns `true`. Override in subclasses to inject validation policy (e.g., only allow binding to published argument versions). Called by `bindVariableToExternalPremise` before registration; throws if `false`.
 
 ---
 
@@ -255,6 +277,36 @@ Restores the engine's internal state in place from a previously captured snapsho
 ### `static fromData(argument, claimLibrary, sourceLibrary, claimSourceLibrary, variables, premises, expressions, roles, config?, grammarConfig?)` → `ArgumentEngine`
 
 Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `claimLibrary`, `sourceLibrary`, and `claimSourceLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments. The optional `grammarConfig` parameter controls grammar enforcement during loading — defaults to `PERMISSIVE_GRAMMAR_CONFIG` so that data from the database loads without validation errors regardless of how it was originally constructed.
+
+---
+
+### `canFork()` → `boolean` _(protected)_
+
+Returns whether this argument may be forked. Default implementation returns `true`. Override in subclasses to inject validation policy (e.g., only allow forking published arguments). Called by `forkArgument` before any work; throws if `false`.
+
+---
+
+### `forkArgument(newArgumentId, claimLibrary, sourceLibrary, claimSourceLibrary, options?)` → `TForkArgumentResult`
+
+Creates an independent copy of the current argument with new UUIDs for all entities. Every forked entity carries `forkedFrom` provenance metadata pointing back to the original. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. The forked engine starts at version `0`.
+
+Returns `{ engine, remapTable }` where `engine` is the new `ArgumentEngine` and `remapTable` maps original entity IDs to their forked counterparts.
+
+Options (`TForkArgumentOptions`):
+
+- `generateId?: () => string` — custom ID generator (defaults to `crypto.randomUUID`)
+- `checksumConfig?: TCoreChecksumConfig` — override checksum config (defaults to source's config)
+- `positionConfig?: TCorePositionConfig` — override position config (defaults to source's config)
+- `grammarConfig?: TGrammarConfig` — override grammar config (defaults to source's config)
+
+```typescript
+const { engine: forked, remapTable } = sourceEngine.forkArgument(
+    "new-argument-id",
+    claimLibrary,
+    sourceLibrary,
+    claimSourceLibrary
+)
+```
 
 ---
 
@@ -641,6 +693,26 @@ const diff = diffArguments(engineA, engineB, {
 
 Default comparators exported: `defaultCompareArgument`, `defaultCompareVariable`, `defaultComparePremise`, `defaultCompareExpression`.
 
+`TCoreDiffOptions` also accepts optional entity matchers (`premiseMatcher`, `variableMatcher`, `expressionMatcher`) for custom entity pairing. When provided, matchers override the default ID-based pairing — useful for comparing forked arguments where entities have different IDs but carry `forkedFrom` provenance metadata. See `createForkedFromMatcher()`.
+
+---
+
+### `createForkedFromMatcher()` → `{ premiseMatcher, variableMatcher, expressionMatcher }`
+
+Returns entity matchers for fork-aware diffing. Pairs entity A with entity B when B's `forkedFrom*Id` matches A's `id` and the argument identity matches. No remap table required — uses self-describing provenance metadata.
+
+```typescript
+import {
+    diffArguments,
+    createForkedFromMatcher,
+} from "@polintpro/proposit-core"
+
+const diff = diffArguments(originalEngine, forkedEngine, {
+    ...createForkedFromMatcher(),
+})
+// diff.premises.modified shows what changed; .added/.removed show new/deleted premises
+```
+
 ---
 
 ### `analyzePremiseRelationships(engine, focusedPremiseId)` → `TCorePremiseRelationshipAnalysis`
@@ -836,7 +908,19 @@ Variables are a discriminated union (`TCorePropositionalVariable = TClaimBoundVa
 | `isClaimBound(v)`                | Type guard — returns `true` if variable has `claimId`                                                             |
 | `isPremiseBound(v)`              | Type guard — returns `true` if variable has `boundPremiseId`                                                      |
 
-Premise-bound variables enable hierarchical argument structure: variable Q bound to premise P1 derives its truth value from P1's evaluation. During `evaluate()` and `checkValidity()`, premise-bound variables are excluded from truth-table generation (they are not free variables); their values are resolved lazily by evaluating the bound premise. Circular bindings (direct or transitive) are rejected at bind time.
+Premise-bound variables enable hierarchical argument structure: variable Q bound to premise P1 derives its truth value from P1's evaluation. **Internal bindings** (same argument) are resolved lazily during `evaluate()` and `checkValidity()` — they are NOT free variables. **External bindings** (different argument, created via `bindVariableToExternalPremise`) are evaluator-assigned and ARE included in truth-table generation as free variables. `isExternallyBound(v, argumentId)` distinguishes the two at runtime. Circular bindings (direct or transitive) are rejected at bind time for internal bindings; external bindings have no cycle concern since they're evaluator-assigned.
+
+---
+
+### Fork Types
+
+| Type                   | Description                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `TForkArgumentOptions` | Options for `forkArgument`: `generateId`, `checksumConfig`, `positionConfig`, `grammarConfig`                |
+| `TForkRemapTable`      | Maps original entity IDs to forked counterparts: `argumentId`, `premises`, `expressions`, `variables` (Maps) |
+| `TForkArgumentResult`  | Return type of `forkArgument`: `{ engine, remapTable }`                                                      |
+
+All entity schemas now carry optional nullable `forkedFrom` provenance fields (e.g., `forkedFromArgumentId`, `forkedFromPremiseId`, etc.). These are `null`/absent on non-forked entities and populated by `forkArgument` on forked entities.
 
 ---
 

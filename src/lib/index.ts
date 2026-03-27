@@ -31,6 +31,7 @@ export {
     defaultCompareVariable,
     defaultComparePremise,
     defaultCompareExpression,
+    createForkedFromMatcher,
 } from "./core/diff.js"
 export * from "./types/relationships.js"
 export {
@@ -60,4 +61,5 @@ export {
 export type { TCorePositionConfig } from "./utils/position.js"
 export * from "./types/reactive.js"
 export * from "./types/grammar.js"
+export * from "./types/fork.js"
 export * from "./parsing/index.js"

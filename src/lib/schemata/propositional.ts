@@ -41,6 +41,30 @@ const BasePropositionalExpressionSchema = Type.Object({
         description:
             "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
     }),
+    forkedFromExpressionId: Type.Optional(
+        Nullable(UUID, {
+            description:
+                "The ID of the expression this was forked from, or null if not a fork.",
+        })
+    ),
+    forkedFromPremiseId: Type.Optional(
+        Nullable(UUID, {
+            description:
+                "The premise ID of the expression this was forked from, or null if not a fork.",
+        })
+    ),
+    forkedFromArgumentId: Type.Optional(
+        Nullable(UUID, {
+            description:
+                "The argument ID of the expression this was forked from, or null if not a fork.",
+        })
+    ),
+    forkedFromArgumentVersion: Type.Optional(
+        Nullable(Type.Number(), {
+            description:
+                "The argument version of the expression this was forked from, or null if not a fork.",
+        })
+    ),
 })
 
 export const CorePropositionalVariableExpressionSchema = Type.Interface(
@@ -109,6 +133,24 @@ const CoreVariableBaseFields = {
     checksum: Type.String({
         description: "Entity-level checksum for sync detection.",
     }),
+    forkedFromVariableId: Type.Optional(
+        Nullable(UUID, {
+            description:
+                "The ID of the variable this was forked from, or null if not a fork.",
+        })
+    ),
+    forkedFromArgumentId: Type.Optional(
+        Nullable(UUID, {
+            description:
+                "The argument ID of the variable this was forked from, or null if not a fork.",
+        })
+    ),
+    forkedFromArgumentVersion: Type.Optional(
+        Nullable(Type.Number(), {
+            description:
+                "The argument version of the variable this was forked from, or null if not a fork.",
+        })
+    ),
 }
 
 export const CoreClaimBoundVariableSchema = Type.Object(
@@ -172,6 +214,14 @@ export function isPremiseBound(
     return "boundPremiseId" in v
 }
 
+/** Returns `true` if the premise-bound variable references a premise in a different argument. */
+export function isExternallyBound(
+    v: TPremiseBoundVariable,
+    argumentId: string
+): boolean {
+    return v.boundArgumentId !== argumentId
+}
+
 export const CorePremiseSchema = Type.Object(
     {
         id: UUID,
@@ -188,6 +238,24 @@ export const CorePremiseSchema = Type.Object(
             description:
                 "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
         }),
+        forkedFromPremiseId: Type.Optional(
+            Nullable(UUID, {
+                description:
+                    "The ID of the premise this was forked from, or null if not a fork.",
+            })
+        ),
+        forkedFromArgumentId: Type.Optional(
+            Nullable(UUID, {
+                description:
+                    "The argument ID of the premise this was forked from, or null if not a fork.",
+            })
+        ),
+        forkedFromArgumentVersion: Type.Optional(
+            Nullable(Type.Number(), {
+                description:
+                    "The argument version of the premise this was forked from, or null if not a fork.",
+            })
+        ),
     },
     {
         additionalProperties: true,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { Value } from "typebox/value"
+import { isClaimBound } from "../../src/lib/schemata"
 import {
     BasicsArgumentParser,
     BasicsParsingSchema,
@@ -141,8 +142,11 @@ describe("Basics extension", () => {
             expect(snap.argument).toHaveProperty("title")
             expect(snap.premises).toHaveLength(1)
             expect(snap.premises[0].premise).toHaveProperty("title")
-            expect(snap.variables.variables).toHaveLength(2)
-            const symbols = snap.variables.variables.map((v) => v.symbol).sort()
+            const claimBound = snap.variables.variables.filter((v) =>
+                isClaimBound(v)
+            )
+            expect(claimBound).toHaveLength(2)
+            const symbols = claimBound.map((v) => v.symbol).sort()
             expect(symbols).toEqual(["P", "Q"])
             expect(snap.premises[0].rootExpressionId).toBeDefined()
             expect(
