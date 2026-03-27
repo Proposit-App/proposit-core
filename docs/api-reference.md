@@ -268,15 +268,21 @@ Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires t
 
 ---
 
+### `validate()` → `TInvariantValidationResult`
+
+Runs a comprehensive invariant validation sweep on the entire argument. Delegates to `VariableManager.validate()` and each `PremiseEngine.validate()` (which delegates to `ExpressionManager.validate()`), then checks argument-level invariants: schema conformance, argument ownership on all entities, claim-bound variable references, internal premise-bound variable references, circularity detection, conclusion premise existence, and checksum consistency. Returns `{ ok: boolean, violations: TInvariantViolation[] }`. Called automatically after every mutation via the `withValidation` bracket — can also be called explicitly at any time.
+
+---
+
 ### `rollback(snapshot)` → `void`
 
-Restores the engine's internal state in place from a previously captured snapshot. Equivalent to reconstructing via `fromSnapshot` but mutates the existing instance (preserving references held by callers).
+Restores the engine's internal state in place from a previously captured snapshot. Validates the restored state against the engine's grammar config; if validation fails, the pre-rollback state is restored and `InvariantViolationError` is thrown. Equivalent to reconstructing via `fromSnapshot` but mutates the existing instance (preserving references held by callers).
 
 ---
 
 ### `static fromData(argument, claimLibrary, sourceLibrary, claimSourceLibrary, variables, premises, expressions, roles, config?, grammarConfig?)` → `ArgumentEngine`
 
-Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `claimLibrary`, `sourceLibrary`, and `claimSourceLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments. The optional `grammarConfig` parameter controls grammar enforcement during loading — defaults to `PERMISSIVE_GRAMMAR_CONFIG` so that data from the database loads without validation errors regardless of how it was originally constructed.
+Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `claimLibrary`, `sourceLibrary`, and `claimSourceLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments. The optional `grammarConfig` parameter controls grammar enforcement during loading — defaults to the config in `options`, or `DEFAULT_GRAMMAR_CONFIG` if none is provided. Validates the loaded state; throws `InvariantViolationError` if the data is invalid under the grammar config.
 
 ---
 
@@ -370,6 +376,12 @@ Returns associations matching the given predicate.
 
 ---
 
+### `validate()` → `TInvariantValidationResult`
+
+Validates all associations: schema conformance, claim reference integrity, source reference integrity. Called automatically after every mutation.
+
+---
+
 ### `snapshot()` → `TClaimSourceLibrarySnapshot<TAssoc>`
 
 Returns a serialisable snapshot `{ claimSourceAssociations: TAssoc[] }`.
@@ -436,6 +448,12 @@ Returns all versions of a given claim ID, sorted by version number ascending.
 
 ---
 
+### `validate()` → `TInvariantValidationResult`
+
+Validates all claims: schema conformance, frozen claims have successor versions. Called automatically after every mutation.
+
+---
+
 ### `snapshot()` → `TClaimLibrarySnapshot<TClaim>`
 
 Returns a serialisable snapshot `{ claims: TClaim[] }` containing all claim entities across all versions.
@@ -499,6 +517,12 @@ Returns all source entities across all versions and IDs.
 ### `getVersions(id)` → `TSource[]`
 
 Returns all versions of a given source ID, sorted by version number ascending.
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Validates all sources: schema conformance, frozen sources have successor versions. Called automatically after every mutation.
 
 ---
 
@@ -657,6 +681,12 @@ Returns the expression tree rendered with standard logical notation (¬ ∧ ∨ 
 ### `toPremiseData()` → `TPremise`
 
 Returns a serialisable premise object (`{ id, argumentId, argumentVersion, checksum }` plus any extension fields). Does not include `rootExpressionId`, expressions, or variables — use `getRootExpressionId()`, `getExpressions()`, and `getReferencedVariableIds()` for those.
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Runs invariant validation on this premise and its expression tree. Delegates to `ExpressionManager.validate()` for structural checks, then verifies premise schema, root expression consistency, and variable references (via callback from ArgumentEngine). Called automatically after every mutation.
 
 ---
 
