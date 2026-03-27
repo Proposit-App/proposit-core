@@ -90,6 +90,13 @@ import {
     VAR_DUPLICATE_ID,
     VAR_DUPLICATE_SYMBOL,
     VAR_CHECKSUM_MISMATCH,
+    ARG_SCHEMA_INVALID,
+    ARG_OWNERSHIP_MISMATCH,
+    ARG_CLAIM_REF_NOT_FOUND,
+    ARG_PREMISE_REF_NOT_FOUND,
+    ARG_CIRCULARITY_DETECTED,
+    ARG_CONCLUSION_NOT_FOUND,
+    ARG_CHECKSUM_MISMATCH,
 } from "../src/lib/types/validation"
 import {
     ParsedClaimSchema,
@@ -19573,5 +19580,119 @@ describe("PremiseEngine — validate", () => {
         for (const v of fboViolations) {
             expect(v.premiseId).toBe("premise-1")
         }
+    })
+})
+
+describe("ArgumentEngine — validate", () => {
+    const ARG = { id: "arg-1", version: 1 }
+
+    it("valid argument with premises and variables → ok", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.createPremise()
+        eng.addVariable(makeVar("v-extra", "X"))
+
+        const result = eng.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("empty argument → ok", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        // Clear conclusion (constructor doesn't auto-assign without premises)
+        const result = eng.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("detects claim reference to non-existent claim", () => {
+        // Create engine with a claim-bound variable referencing claim-default
+        const claimLib = aLib()
+        const eng = new ArgumentEngine(ARG, claimLib, sLib(), csLib())
+        eng.addVariable(makeVar("v1", "A"))
+
+        // Snapshot, then restore with an empty ClaimLibrary
+        const snap = eng.snapshot()
+        const emptyClaimLib = new ClaimLibrary()
+
+        // Restore from snapshot, bypassing addVariable's runtime check
+        // by directly building engine and injecting variables
+        const engine2 = new ArgumentEngine(
+            snap.argument,
+            emptyClaimLib,
+            sLib(),
+            new ClaimSourceLibrary(emptyClaimLib, sLib())
+        )
+        // Inject variables directly into the VariableManager via snapshot restore
+        const vm = VariableManager.fromSnapshot(snap.variables)
+        ;(engine2 as unknown as { variables: VariableManager }).variables = vm
+
+        const result = engine2.validate()
+        expect(result.ok).toBe(false)
+        const claimViolations = result.violations.filter(
+            (v) => v.code === ARG_CLAIM_REF_NOT_FOUND
+        )
+        expect(claimViolations.length).toBeGreaterThan(0)
+        expect(claimViolations[0].entityId).toBe("v1")
+    })
+
+    it("detects conclusion referencing non-existent premise", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.createPremise()
+
+        const snap = eng.snapshot()
+        // Tamper: set conclusionPremiseId to a non-existent ID
+        snap.conclusionPremiseId = "non-existent-premise"
+
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib(),
+            undefined,
+            "ignore"
+        )
+
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const conclusionViolations = result.violations.filter(
+            (v) => v.code === ARG_CONCLUSION_NOT_FOUND
+        )
+        expect(conclusionViolations.length).toBe(1)
+    })
+
+    it("detects ownership mismatch on variable", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.createPremise()
+
+        // Snapshot normally, then restore to get a clean engine
+        const snap = eng.snapshot()
+        const restored = ArgumentEngine.fromSnapshot(
+            snap,
+            aLib(),
+            sLib(),
+            csLib(),
+            undefined,
+            "ignore"
+        )
+
+        // Tamper: directly mutate the variable in the VariableManager
+        // to have a wrong argumentId (bypassing ArgumentEngine's guards)
+        const vars = restored.getVariables()
+        expect(vars.length).toBeGreaterThan(0)
+        const vm = (restored as unknown as { variables: VariableManager })
+            .variables
+        const original = vars[0]
+        vm.removeVariable(original.id)
+        vm.addVariable({
+            ...original,
+            argumentId: "wrong-arg",
+        } as typeof original)
+
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        const ownershipViolations = result.violations.filter(
+            (v) => v.code === ARG_OWNERSHIP_MISMATCH
+        )
+        expect(ownershipViolations.length).toBeGreaterThan(0)
     })
 })

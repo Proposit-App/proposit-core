@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto"
+import { Value } from "typebox/value"
 import {
+    CoreArgumentSchema,
     isClaimBound,
     isPremiseBound,
     type TClaimBoundVariable,
@@ -37,6 +39,19 @@ import {
     type TGrammarConfig,
 } from "../types/grammar.js"
 import type { TCorePositionConfig } from "../utils/position.js"
+import type {
+    TInvariantValidationResult,
+    TInvariantViolation,
+} from "../types/validation.js"
+import {
+    ARG_SCHEMA_INVALID,
+    ARG_OWNERSHIP_MISMATCH,
+    ARG_CLAIM_REF_NOT_FOUND,
+    ARG_PREMISE_REF_NOT_FOUND,
+    ARG_CIRCULARITY_DETECTED,
+    ARG_CONCLUSION_NOT_FOUND,
+    ARG_CHECKSUM_MISMATCH,
+} from "../types/validation.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
@@ -509,6 +524,9 @@ export class ArgumentEngine<
         this.premises.set(id, pm)
         this.wireCircularityCheck(pm)
         this.wireEmptyBoundPremiseCheck(pm)
+        pm.setVariableIdsCallback(
+            () => new Set(this.variables.toArray().map((v) => v.id))
+        )
         pm.setOnMutate(() => {
             this.markDirty()
             this.reactiveDirty.premiseIds.add(id)
@@ -1131,6 +1149,9 @@ export class ArgumentEngine<
             engine.premises.set(pe.getId(), pe)
             engine.wireCircularityCheck(pe)
             engine.wireEmptyBoundPremiseCheck(pe)
+            pe.setVariableIdsCallback(
+                () => new Set(engine.variables.toArray().map((v) => v.id))
+            )
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
                 engine.markDirty()
@@ -1530,6 +1551,9 @@ export class ArgumentEngine<
         for (const pe of this.premises.values()) {
             this.wireCircularityCheck(pe)
             this.wireEmptyBoundPremiseCheck(pe)
+            pe.setVariableIdsCallback(
+                () => new Set(this.variables.toArray().map((v) => v.id))
+            )
             const premiseId = pe.getId()
             pe.setOnMutate(() => {
                 this.markDirty()
@@ -1750,6 +1774,182 @@ export class ArgumentEngine<
             variableIds: sortedUnique(byIdTmp.keys()),
             byId,
             bySymbol,
+        }
+    }
+
+    public validate(): TInvariantValidationResult {
+        const violations: TInvariantViolation[] = []
+
+        // 1. Schema check — flush checksums first so fields are populated
+        const savedMeta = this.cachedMetaChecksum
+        const savedDescendant = this.cachedDescendantChecksum
+        const savedCombined = this.cachedCombinedChecksum
+        this.flushChecksums()
+        const arg = this.getArgument()
+        if (!Value.Check(CoreArgumentSchema, arg as unknown as TCoreArgument)) {
+            violations.push({
+                code: ARG_SCHEMA_INVALID,
+                message: `Argument "${arg.id}" does not conform to CoreArgumentSchema.`,
+                entityType: "argument",
+                entityId: arg.id,
+            })
+        }
+
+        // 2. Delegate to VariableManager.validate()
+        const varResult = this.variables.validate()
+        violations.push(...varResult.violations)
+
+        // 3. Delegate to each PremiseEngine.validate()
+        for (const pe of this.listPremises()) {
+            const premiseResult = pe.validate()
+            violations.push(...premiseResult.violations)
+        }
+
+        // 4. Variable ownership: all variables must belong to this argument
+        for (const v of this.variables.toArray()) {
+            const base = v as unknown as TCorePropositionalVariable
+            if (
+                base.argumentId !== this.argument.id ||
+                base.argumentVersion !== this.argument.version
+            ) {
+                violations.push({
+                    code: ARG_OWNERSHIP_MISMATCH,
+                    message: `Variable "${base.id}" has argumentId/version "${base.argumentId}/${base.argumentVersion}" but engine is "${this.argument.id}/${this.argument.version}".`,
+                    entityType: "variable",
+                    entityId: base.id,
+                })
+            }
+        }
+
+        // 5. Claim-bound variable references
+        for (const v of this.variables.toArray()) {
+            const base = v as unknown as TCorePropositionalVariable
+            if (isClaimBound(base)) {
+                const cb = base as unknown as TClaimBoundVariable
+                if (!this.claimLibrary.get(cb.claimId, cb.claimVersion)) {
+                    violations.push({
+                        code: ARG_CLAIM_REF_NOT_FOUND,
+                        message: `Variable "${cb.id}" references claim "${cb.claimId}" version ${cb.claimVersion} which does not exist in the claim library.`,
+                        entityType: "variable",
+                        entityId: cb.id,
+                    })
+                }
+            }
+        }
+
+        // 6. Premise-bound internal variable references
+        for (const v of this.variables.toArray()) {
+            const base = v as unknown as TCorePropositionalVariable
+            if (isPremiseBound(base)) {
+                const pb = base as unknown as TPremiseBoundVariable
+                if (pb.boundArgumentId === this.argument.id) {
+                    if (!this.premises.has(pb.boundPremiseId)) {
+                        violations.push({
+                            code: ARG_PREMISE_REF_NOT_FOUND,
+                            message: `Premise-bound variable "${pb.id}" references non-existent premise "${pb.boundPremiseId}".`,
+                            entityType: "variable",
+                            entityId: pb.id,
+                        })
+                    }
+                }
+            }
+        }
+
+        // 7. Circularity detection for internal premise-bound variables.
+        //    A cycle exists when a premise-bound variable's bound premise
+        //    transitively references back to itself through other
+        //    premise-bound variables.
+        for (const v of this.variables.toArray()) {
+            const base = v as unknown as TCorePropositionalVariable
+            if (isPremiseBound(base)) {
+                const pb = base as unknown as TPremiseBoundVariable
+                if (pb.boundArgumentId === this.argument.id) {
+                    // Trace from the bound premise through expressions'
+                    // variable references to see if we reach back to the
+                    // same premise.
+                    const boundPremise = this.premises.get(pb.boundPremiseId)
+                    if (boundPremise) {
+                        let hasCycle = false
+                        for (const expr of boundPremise.getExpressions()) {
+                            if (expr.type === "variable") {
+                                try {
+                                    if (
+                                        this.wouldCreateCycle(
+                                            expr.variableId,
+                                            pb.boundPremiseId,
+                                            new Set()
+                                        )
+                                    ) {
+                                        hasCycle = true
+                                        break
+                                    }
+                                } catch {
+                                    hasCycle = true
+                                    break
+                                }
+                            }
+                        }
+                        if (hasCycle) {
+                            violations.push({
+                                code: ARG_CIRCULARITY_DETECTED,
+                                message: `Premise-bound variable "${pb.id}" creates a circular dependency through premise "${pb.boundPremiseId}".`,
+                                entityType: "variable",
+                                entityId: pb.id,
+                            })
+                        }
+                    }
+                }
+            }
+        }
+
+        // 8. Conclusion premise reference
+        if (
+            this.conclusionPremiseId !== undefined &&
+            !this.premises.has(this.conclusionPremiseId)
+        ) {
+            violations.push({
+                code: ARG_CONCLUSION_NOT_FOUND,
+                message: `Conclusion premise "${this.conclusionPremiseId}" does not exist in this argument.`,
+                entityType: "argument",
+                entityId: this.argument.id,
+            })
+        }
+
+        // 9. Argument-level checksum verification
+        if (savedMeta !== undefined && savedMeta !== this.cachedMetaChecksum) {
+            violations.push({
+                code: ARG_CHECKSUM_MISMATCH,
+                message: `Argument "${this.argument.id}" meta checksum changed after flush: "${savedMeta}" → "${this.cachedMetaChecksum}".`,
+                entityType: "argument",
+                entityId: this.argument.id,
+            })
+        }
+        if (
+            savedDescendant !== undefined &&
+            savedDescendant !== this.cachedDescendantChecksum
+        ) {
+            violations.push({
+                code: ARG_CHECKSUM_MISMATCH,
+                message: `Argument "${this.argument.id}" descendant checksum changed after flush: "${String(savedDescendant)}" → "${String(this.cachedDescendantChecksum)}".`,
+                entityType: "argument",
+                entityId: this.argument.id,
+            })
+        }
+        if (
+            savedCombined !== undefined &&
+            savedCombined !== this.cachedCombinedChecksum
+        ) {
+            violations.push({
+                code: ARG_CHECKSUM_MISMATCH,
+                message: `Argument "${this.argument.id}" combined checksum changed after flush: "${savedCombined}" → "${this.cachedCombinedChecksum}".`,
+                entityType: "argument",
+                entityId: this.argument.id,
+            })
+        }
+
+        return {
+            ok: violations.length === 0,
+            violations,
         }
     }
 
