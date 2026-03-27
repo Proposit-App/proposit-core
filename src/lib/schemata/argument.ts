@@ -16,6 +16,18 @@ export const CoreArgumentSchema = Type.Object(
             description:
                 "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
         }),
+        forkedFromArgumentId: Type.Optional(
+            Nullable(UUID, {
+                description:
+                    "The ID of the argument this was forked from, or null if not a fork.",
+            })
+        ),
+        forkedFromArgumentVersion: Type.Optional(
+            Nullable(Type.Number(), {
+                description:
+                    "The version of the argument this was forked from, or null if not a fork.",
+            })
+        ),
     },
     {
         additionalProperties: true,

@@ -17445,3 +17445,217 @@ describe("toggleNegation extraFields", () => {
         }
     })
 })
+
+describe("forkArgument", () => {
+    it("CoreArgumentSchema accepts forkedFrom fields with values", () => {
+        const arg = {
+            id: "arg-fork",
+            version: 0,
+            checksum: "cs1",
+            descendantChecksum: null,
+            combinedChecksum: "cs1",
+            forkedFromArgumentId: "arg-original",
+            forkedFromArgumentVersion: 3,
+        }
+        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
+    })
+
+    it("CoreArgumentSchema accepts forkedFrom fields as null", () => {
+        const arg = {
+            id: "arg-fork",
+            version: 0,
+            checksum: "cs1",
+            descendantChecksum: null,
+            combinedChecksum: "cs1",
+            forkedFromArgumentId: null,
+            forkedFromArgumentVersion: null,
+        }
+        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
+    })
+
+    it("CoreArgumentSchema accepts objects without forkedFrom fields (backward compat)", () => {
+        const arg = {
+            id: "arg-original",
+            version: 0,
+            checksum: "cs1",
+            descendantChecksum: null,
+            combinedChecksum: "cs1",
+        }
+        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
+    })
+
+    it("CorePremiseSchema accepts forkedFrom fields with values", () => {
+        const premise = {
+            id: "prem-fork",
+            argumentId: "arg-fork",
+            argumentVersion: 0,
+            checksum: "cs2",
+            descendantChecksum: null,
+            combinedChecksum: "cs2",
+            forkedFromPremiseId: "prem-original",
+            forkedFromArgumentId: "arg-original",
+            forkedFromArgumentVersion: 3,
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
+    })
+
+    it("CorePremiseSchema accepts forkedFrom fields as null", () => {
+        const premise = {
+            id: "prem-fork",
+            argumentId: "arg-fork",
+            argumentVersion: 0,
+            checksum: "cs2",
+            descendantChecksum: null,
+            combinedChecksum: "cs2",
+            forkedFromPremiseId: null,
+            forkedFromArgumentId: null,
+            forkedFromArgumentVersion: null,
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
+    })
+
+    it("CorePropositionalExpressionSchema accepts forkedFrom fields with values", () => {
+        const expr = {
+            id: "expr-fork",
+            argumentId: "arg-fork",
+            argumentVersion: 0,
+            premiseId: "prem-fork",
+            parentId: null,
+            position: 0,
+            checksum: "cs3",
+            descendantChecksum: null,
+            combinedChecksum: "cs3",
+            type: "variable" as const,
+            variableId: "var-1",
+            forkedFromExpressionId: "expr-original",
+            forkedFromPremiseId: "prem-original",
+            forkedFromArgumentId: "arg-original",
+            forkedFromArgumentVersion: 3,
+        }
+        expect(Value.Check(CorePropositionalExpressionSchema, expr)).toBe(true)
+    })
+
+    it("CorePropositionalExpressionSchema accepts forkedFrom fields as null", () => {
+        const expr = {
+            id: "expr-fork",
+            argumentId: "arg-fork",
+            argumentVersion: 0,
+            premiseId: "prem-fork",
+            parentId: null,
+            position: 0,
+            checksum: "cs3",
+            descendantChecksum: null,
+            combinedChecksum: "cs3",
+            type: "variable" as const,
+            variableId: "var-1",
+            forkedFromExpressionId: null,
+            forkedFromPremiseId: null,
+            forkedFromArgumentId: null,
+            forkedFromArgumentVersion: null,
+        }
+        expect(Value.Check(CorePropositionalExpressionSchema, expr)).toBe(true)
+    })
+
+    it("CorePropositionalVariableSchema (claim-bound) accepts forkedFrom fields with values", () => {
+        const variable = {
+            id: "var-fork",
+            argumentId: "arg-fork",
+            argumentVersion: 0,
+            symbol: "P",
+            checksum: "cs4",
+            claimId: "claim-1",
+            claimVersion: 1,
+            forkedFromVariableId: "var-original",
+            forkedFromArgumentId: "arg-original",
+            forkedFromArgumentVersion: 3,
+        }
+        expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(
+            true
+        )
+    })
+
+    it("CorePropositionalVariableSchema (claim-bound) accepts forkedFrom fields as null", () => {
+        const variable = {
+            id: "var-fork",
+            argumentId: "arg-fork",
+            argumentVersion: 0,
+            symbol: "P",
+            checksum: "cs4",
+            claimId: "claim-1",
+            claimVersion: 1,
+            forkedFromVariableId: null,
+            forkedFromArgumentId: null,
+            forkedFromArgumentVersion: null,
+        }
+        expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(
+            true
+        )
+    })
+
+    it("CorePropositionalVariableSchema (premise-bound) accepts forkedFrom fields with values", () => {
+        const variable = {
+            id: "var-fork",
+            argumentId: "arg-fork",
+            argumentVersion: 0,
+            symbol: "Q",
+            checksum: "cs5",
+            boundPremiseId: "prem-original",
+            boundArgumentId: "arg-original",
+            boundArgumentVersion: 3,
+            forkedFromVariableId: "var-original",
+            forkedFromArgumentId: "arg-original",
+            forkedFromArgumentVersion: 3,
+        }
+        expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(
+            true
+        )
+    })
+
+    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for argument", () => {
+        expect(DEFAULT_CHECKSUM_CONFIG.argumentFields).toContain(
+            "forkedFromArgumentId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.argumentFields).toContain(
+            "forkedFromArgumentVersion"
+        )
+    })
+
+    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for premise", () => {
+        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain(
+            "forkedFromPremiseId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain(
+            "forkedFromArgumentId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain(
+            "forkedFromArgumentVersion"
+        )
+    })
+
+    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for expression", () => {
+        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
+            "forkedFromExpressionId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
+            "forkedFromPremiseId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
+            "forkedFromArgumentId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
+            "forkedFromArgumentVersion"
+        )
+    })
+
+    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for variable", () => {
+        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain(
+            "forkedFromVariableId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain(
+            "forkedFromArgumentId"
+        )
+        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain(
+            "forkedFromArgumentVersion"
+        )
+    })
+})
