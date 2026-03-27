@@ -13,6 +13,7 @@
 ### Task 1: Add `forkedFrom` Fields to Argument Schema
 
 **Files:**
+
 - Modify: `src/lib/schemata/argument.ts:4-24`
 - Test: `test/core.test.ts`
 
@@ -89,6 +90,7 @@ git commit -m "feat(schema): add forkedFrom fields to CoreArgumentSchema"
 ### Task 2: Add `forkedFrom` Fields to Premise Schema
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts:175-199`
 - Test: `test/core.test.ts`
 
@@ -155,6 +157,7 @@ git commit -m "feat(schema): add forkedFrom fields to CorePremiseSchema"
 ### Task 3: Add `forkedFrom` Fields to Expression Schema
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts:17-44`
 - Test: `test/core.test.ts`
 
@@ -230,6 +233,7 @@ git commit -m "feat(schema): add forkedFrom fields to BasePropositionalExpressio
 ### Task 4: Add `forkedFrom` Fields to Variable Schema
 
 **Files:**
+
 - Modify: `src/lib/schemata/propositional.ts:102-112`
 - Test: `test/core.test.ts`
 
@@ -322,6 +326,7 @@ git commit -m "feat(schema): add forkedFrom fields to variable base schema"
 ### Task 5: Update Default Checksum Config
 
 **Files:**
+
 - Modify: `src/lib/consts.ts:3-38`
 - Test: `test/core.test.ts`
 
@@ -332,44 +337,30 @@ Add inside the `forkArgument` describe block:
 ```typescript
 it("default checksum config includes forkedFrom fields", () => {
     expect(
-        DEFAULT_CHECKSUM_CONFIG.argumentFields!.has(
-            "forkedFromArgumentId"
-        )
+        DEFAULT_CHECKSUM_CONFIG.argumentFields!.has("forkedFromArgumentId")
     ).toBe(true)
     expect(
-        DEFAULT_CHECKSUM_CONFIG.argumentFields!.has(
-            "forkedFromArgumentVersion"
-        )
+        DEFAULT_CHECKSUM_CONFIG.argumentFields!.has("forkedFromArgumentVersion")
     ).toBe(true)
 
     expect(
         DEFAULT_CHECKSUM_CONFIG.premiseFields!.has("forkedFromPremiseId")
     ).toBe(true)
     expect(
-        DEFAULT_CHECKSUM_CONFIG.premiseFields!.has(
-            "forkedFromArgumentId"
-        )
+        DEFAULT_CHECKSUM_CONFIG.premiseFields!.has("forkedFromArgumentId")
     ).toBe(true)
     expect(
-        DEFAULT_CHECKSUM_CONFIG.premiseFields!.has(
-            "forkedFromArgumentVersion"
-        )
+        DEFAULT_CHECKSUM_CONFIG.premiseFields!.has("forkedFromArgumentVersion")
     ).toBe(true)
 
     expect(
-        DEFAULT_CHECKSUM_CONFIG.expressionFields!.has(
-            "forkedFromExpressionId"
-        )
+        DEFAULT_CHECKSUM_CONFIG.expressionFields!.has("forkedFromExpressionId")
     ).toBe(true)
     expect(
-        DEFAULT_CHECKSUM_CONFIG.expressionFields!.has(
-            "forkedFromPremiseId"
-        )
+        DEFAULT_CHECKSUM_CONFIG.expressionFields!.has("forkedFromPremiseId")
     ).toBe(true)
     expect(
-        DEFAULT_CHECKSUM_CONFIG.expressionFields!.has(
-            "forkedFromArgumentId"
-        )
+        DEFAULT_CHECKSUM_CONFIG.expressionFields!.has("forkedFromArgumentId")
     ).toBe(true)
     expect(
         DEFAULT_CHECKSUM_CONFIG.expressionFields!.has(
@@ -378,19 +369,13 @@ it("default checksum config includes forkedFrom fields", () => {
     ).toBe(true)
 
     expect(
-        DEFAULT_CHECKSUM_CONFIG.variableFields!.has(
-            "forkedFromVariableId"
-        )
+        DEFAULT_CHECKSUM_CONFIG.variableFields!.has("forkedFromVariableId")
     ).toBe(true)
     expect(
-        DEFAULT_CHECKSUM_CONFIG.variableFields!.has(
-            "forkedFromArgumentId"
-        )
+        DEFAULT_CHECKSUM_CONFIG.variableFields!.has("forkedFromArgumentId")
     ).toBe(true)
     expect(
-        DEFAULT_CHECKSUM_CONFIG.variableFields!.has(
-            "forkedFromArgumentVersion"
-        )
+        DEFAULT_CHECKSUM_CONFIG.variableFields!.has("forkedFromArgumentVersion")
     ).toBe(true)
 })
 ```
@@ -489,6 +474,7 @@ git commit -m "feat(checksums): include forkedFrom fields in default checksum co
 ### Task 6: Add `canFork` and `forkArgument` Types
 
 **Files:**
+
 - Create: `src/lib/types/fork.ts`
 - Modify: `src/lib/index.ts`
 
@@ -565,6 +551,7 @@ git commit -m "feat(types): add TForkArgumentOptions, TForkRemapTable, TForkArgu
 ### Task 7: Implement `canFork` Method
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Test: `test/core.test.ts`
 
@@ -665,6 +652,7 @@ git commit -m "feat(engine): add canFork protected method and forkArgument stub"
 ### Task 8: Implement `forkArgument` Core Logic
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Test: `test/core.test.ts`
 
@@ -952,6 +940,7 @@ git commit -m "feat(engine): implement forkArgument core logic"
 ### Task 9: Test Internal Reference Remapping
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write the remapping test**
@@ -1093,6 +1082,7 @@ git commit -m "test(fork): verify internal reference remapping"
 ### Task 10: Test Remap Table Accuracy and Independence
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write the remap table and independence tests**
@@ -1137,12 +1127,7 @@ it("remap table covers all entities", () => {
         premiseId: "p2",
     })
 
-    const { remapTable } = eng.forkArgument(
-        "arg-f",
-        aLib(),
-        sLib(),
-        csLib()
-    )
+    const { remapTable } = eng.forkArgument("arg-f", aLib(), sLib(), csLib())
 
     expect(remapTable.premises.size).toBe(2)
     expect(remapTable.expressions.size).toBe(2)
@@ -1198,9 +1183,7 @@ it("forked engine is independent from source", () => {
 
     // Source is unaffected
     expect(eng.listPremises()).toHaveLength(1)
-    expect(
-        eng.listPremises()[0]!.getExpressions()
-    ).toHaveLength(1)
+    expect(eng.listPremises()[0]!.getExpressions()).toHaveLength(1)
 })
 ```
 
@@ -1221,6 +1204,7 @@ git commit -m "test(fork): verify remap table accuracy and engine independence"
 ### Task 11: Test Forked Entity Mutability and Checksum Divergence
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write the mutability and checksum tests**
@@ -1332,9 +1316,7 @@ it("forked entity checksums diverge from source", () => {
     const forkedSnap = forked.snapshot()
 
     // Argument checksums differ (different id, version, forkedFrom fields)
-    expect(forkedSnap.argument.checksum).not.toBe(
-        sourceSnap.argument.checksum
-    )
+    expect(forkedSnap.argument.checksum).not.toBe(sourceSnap.argument.checksum)
 
     // Premise checksums differ
     expect(forkedSnap.premises[0]!.premise.checksum).not.toBe(
@@ -1360,6 +1342,7 @@ git commit -m "test(fork): verify mutability and checksum divergence"
 ### Task 12: Add Pluggable Entity Matchers to Diff Options
 
 **Files:**
+
 - Modify: `src/lib/types/diff.ts:71-81`
 - Modify: `src/lib/core/diff.ts`
 - Test: `test/core.test.ts`
@@ -1500,7 +1483,8 @@ function diffEntitySet<T extends { id: string }>(
 
     for (const beforeItem of beforeItems) {
         const afterIndex = afterItems.findIndex(
-            (afterItem, i) => !matchedAfterIndices.has(i) && matcher(beforeItem, afterItem)
+            (afterItem, i) =>
+                !matchedAfterIndices.has(i) && matcher(beforeItem, afterItem)
         )
         if (afterIndex === -1) {
             removed.push(beforeItem)
@@ -1595,7 +1579,8 @@ function diffPremiseSet<
 
     for (const beforePremise of beforePremises) {
         const afterIndex = afterPremises.findIndex(
-            (ap, i) => !matchedAfterIndices.has(i) && premiseMatcher(beforePremise, ap)
+            (ap, i) =>
+                !matchedAfterIndices.has(i) && premiseMatcher(beforePremise, ap)
         )
         if (afterIndex === -1) {
             removed.push(beforePremise)
@@ -1740,6 +1725,7 @@ git commit -m "feat(diff): add pluggable entity matchers and createForkedFromMat
 ### Task 13: Test Fork-Aware Diff With Mutations
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write the fork-diff-with-mutations test**
@@ -1845,6 +1831,7 @@ git commit -m "test(fork): verify fork-aware diff detects mutations"
 ### Task 14: Full Suite Validation and Lint
 
 **Files:**
+
 - All modified files
 
 - [ ] **Step 1: Run full test suite**
@@ -1884,6 +1871,7 @@ git commit -m "style: lint and format fixes"
 ### Task 15: Update Documentation
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 - Modify: `docs/release-notes/upcoming.md`
 - Modify: `docs/changelogs/upcoming.md`

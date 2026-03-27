@@ -16,17 +16,17 @@ An instance method `forkArgument` on `ArgumentEngine` that duplicates the curren
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| Fork target | Instance method on ArgumentEngine | "Fork the argument managed by this engine" — natural ownership |
-| Entity IDs | New UUIDs for all entities | Clean separation; provenance is explicit via `forkedFrom`, not implicit via shared IDs |
-| Fork provenance | Each entity type carries full `forkedFrom` identity tuple | Every entity is independently traceable to its source |
-| Forked entity mutability | Fully mutable | Responders may modify, add, or remove any entity; changes are tracked via diff |
-| Validation | `canFork()` protected overridable method | Core library is agnostic about publish semantics; subclasses inject policy |
-| Default validation | `() => true` | No restrictions at library level |
-| New engine independence | Fully independent | Mutations to the fork do not affect the source engine |
-| Checksum handling | `forkedFrom` fields included in checksums by default | Forked entities are distinct from their sources; checksums should reflect this |
-| Diff integration | Pluggable entity matchers on `TCoreDiffOptions` | Enables fork-aware diffing via `forkedFrom` field matching |
+| Decision                 | Choice                                                    | Rationale                                                                              |
+| ------------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Fork target              | Instance method on ArgumentEngine                         | "Fork the argument managed by this engine" — natural ownership                         |
+| Entity IDs               | New UUIDs for all entities                                | Clean separation; provenance is explicit via `forkedFrom`, not implicit via shared IDs |
+| Fork provenance          | Each entity type carries full `forkedFrom` identity tuple | Every entity is independently traceable to its source                                  |
+| Forked entity mutability | Fully mutable                                             | Responders may modify, add, or remove any entity; changes are tracked via diff         |
+| Validation               | `canFork()` protected overridable method                  | Core library is agnostic about publish semantics; subclasses inject policy             |
+| Default validation       | `() => true`                                              | No restrictions at library level                                                       |
+| New engine independence  | Fully independent                                         | Mutations to the fork do not affect the source engine                                  |
+| Checksum handling        | `forkedFrom` fields included in checksums by default      | Forked entities are distinct from their sources; checksums should reflect this         |
+| Diff integration         | Pluggable entity matchers on `TCoreDiffOptions`           | Enables fork-aware diffing via `forkedFrom` field matching                             |
 
 ## 1. Schema Changes
 
@@ -103,7 +103,7 @@ The caller provides `newArgumentId` (consistent with existing API patterns where
 
 ```typescript
 interface TForkArgumentOptions {
-    generateId?: () => UUID          // defaults to crypto.randomUUID
+    generateId?: () => UUID // defaults to crypto.randomUUID
     checksumConfig?: TChecksumConfig
     positionConfig?: TCorePositionConfig
     grammarConfig?: TGrammarConfig
@@ -122,9 +122,9 @@ interface TForkArgumentResult<TArg, TPremise, TExpr, TVar> {
 
 interface TForkRemapTable {
     argumentId: { from: UUID; to: UUID }
-    premises: Map<UUID, UUID>       // original premise ID -> new premise ID
-    expressions: Map<UUID, UUID>    // original expression ID -> new expression ID
-    variables: Map<UUID, UUID>      // original variable ID -> new variable ID
+    premises: Map<UUID, UUID> // original premise ID -> new premise ID
+    expressions: Map<UUID, UUID> // original expression ID -> new expression ID
+    variables: Map<UUID, UUID> // original variable ID -> new variable ID
 }
 ```
 
@@ -135,10 +135,10 @@ interface TForkRemapTable {
 3. Generate new UUIDs for all premises, expressions, and variables via `generateId()`
 4. Build the remap table mapping original IDs to new IDs
 5. Walk the snapshot and apply remaps to all internal references:
-   - Expression `premiseId` -> remapped premise ID
-   - Expression `parentId` -> remapped expression ID (`null` stays `null`)
-   - Premise-bound variable `boundPremiseId` -> remapped premise ID
-   - Conclusion premise ID in role state -> remapped premise ID
+    - Expression `premiseId` -> remapped premise ID
+    - Expression `parentId` -> remapped expression ID (`null` stays `null`)
+    - Premise-bound variable `boundPremiseId` -> remapped premise ID
+    - Conclusion premise ID in role state -> remapped premise ID
 6. Stamp `forkedFrom` fields on every entity using the original IDs and argument identity
 7. Set argument to `newArgumentId`, version `0`
 8. Set all entity `argumentId` and `argumentVersion` fields to match the new argument

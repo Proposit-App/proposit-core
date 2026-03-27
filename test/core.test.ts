@@ -17658,4 +17658,115 @@ describe("forkArgument", () => {
             "forkedFromArgumentVersion"
         )
     })
+
+    it("canFork rejects when overridden to return false", () => {
+        class NoForkEngine extends ArgumentEngine {
+            protected override canFork(): boolean {
+                return false
+            }
+        }
+        const eng = new NoForkEngine(ARG, aLib(), sLib(), csLib())
+        expect(() =>
+            eng.forkArgument("new-arg", aLib(), sLib(), csLib())
+        ).toThrow("Forking is not allowed")
+    })
+
+    it("forks a simple argument with new IDs and forkedFrom metadata", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+
+        const eng = new ArgumentEngine(ARG, claimLib, sourceLib, csLibrary)
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise()
+        const premiseId = pm.getId()
+
+        // Add a root variable expression
+        const exprInput = makeVarExpr("expr-1", "var-p", {
+            premiseId,
+        })
+        pm.addExpression(exprInput)
+
+        // Set conclusion
+        eng.setConclusionPremise(premiseId)
+
+        // Fork
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+
+        let idCounter = 0
+        const { engine: forked, remapTable } = eng.forkArgument(
+            "forked-arg",
+            forkClaimLib,
+            forkSourceLib,
+            forkCsLib,
+            { generateId: () => `gen-${++idCounter}` }
+        )
+
+        // Verify argument identity
+        const forkedArg = forked.getArgument()
+        expect(forkedArg.id).toBe("forked-arg")
+        expect(forkedArg.version).toBe(0)
+        expect(forkedArg.forkedFromArgumentId).toBe(ARG.id)
+        expect(forkedArg.forkedFromArgumentVersion).toBe(ARG.version)
+
+        // Verify remap table
+        expect(remapTable.argumentId).toEqual({
+            from: ARG.id,
+            to: "forked-arg",
+        })
+        expect(remapTable.premises.size).toBe(1)
+        expect(remapTable.expressions.size).toBe(1)
+        expect(remapTable.variables.size).toBe(1)
+
+        // Verify premise was remapped
+        const forkedPremises = forked.listPremises()
+        expect(forkedPremises).toHaveLength(1)
+        const forkedPremise = forkedPremises[0]
+        const forkedPremiseId = forkedPremise.getId()
+        expect(forkedPremiseId).not.toBe(premiseId)
+        expect(remapTable.premises.get(premiseId)).toBe(forkedPremiseId)
+
+        // Verify premise forkedFrom metadata
+        const forkedPremiseData = forkedPremise.snapshot().premise
+        expect(forkedPremiseData.forkedFromPremiseId).toBe(premiseId)
+        expect(forkedPremiseData.forkedFromArgumentId).toBe(ARG.id)
+        expect(forkedPremiseData.forkedFromArgumentVersion).toBe(ARG.version)
+
+        // Verify expression was remapped
+        const forkedExprs = forkedPremise.getExpressions()
+        expect(forkedExprs).toHaveLength(1)
+        const forkedExpr = forkedExprs[0]
+        expect(forkedExpr.id).not.toBe("expr-1")
+        expect(remapTable.expressions.get("expr-1")).toBe(forkedExpr.id)
+
+        // Verify expression forkedFrom metadata
+        expect(forkedExpr.forkedFromExpressionId).toBe("expr-1")
+        expect(forkedExpr.forkedFromPremiseId).toBe(premiseId)
+        expect(forkedExpr.forkedFromArgumentId).toBe(ARG.id)
+        expect(forkedExpr.forkedFromArgumentVersion).toBe(ARG.version)
+
+        // Verify expression's variableId was remapped
+        expect(forkedExpr.type).toBe("variable")
+        if (forkedExpr.type === "variable") {
+            expect(forkedExpr.variableId).not.toBe("var-p")
+            expect(remapTable.variables.get("var-p")).toBe(
+                forkedExpr.variableId
+            )
+        }
+
+        // Verify variable was remapped
+        const forkedVars = forked.getVariables()
+        expect(forkedVars).toHaveLength(1)
+        const forkedVar = forkedVars[0]
+        expect(forkedVar.id).not.toBe("var-p")
+        expect(remapTable.variables.get("var-p")).toBe(forkedVar.id)
+        expect(forkedVar.forkedFromVariableId).toBe("var-p")
+        expect(forkedVar.forkedFromArgumentId).toBe(ARG.id)
+        expect(forkedVar.forkedFromArgumentVersion).toBe(ARG.version)
+
+        // Verify conclusion role was remapped
+        expect(forked.getConclusionPremise()?.getId()).toBe(forkedPremiseId)
+    })
 })
