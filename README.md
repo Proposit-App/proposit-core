@@ -168,6 +168,36 @@ Claim-source associations are managed by `ClaimSourceLibrary<TAssoc>` — a stan
 
 The `@polintpro/proposit-core/extensions/ieee` subpath export provides `IEEESourceSchema` — an extended source type with IEEE citation reference schemas covering 33 reference types.
 
+### Auto-variable creation
+
+When a premise is created via `createPremise()` or `createPremiseWithId()`, the engine automatically creates a **premise-bound variable** for it. This variable allows other premises in the same argument to reference the premise's truth value in their expression trees without manual variable setup.
+
+The auto-created variable gets a symbol from an optional `symbol` parameter, or an auto-generated one (`"P0"`, `"P1"`, ...) with collision avoidance. The variable is included in the returned changeset.
+
+### Argument forking
+
+An argument can be **forked** via `forkArgument()` to create an independent copy — useful for responding to, critiquing, or expanding on another author's argument. Forking:
+
+- Creates a new argument with a new ID (version 0)
+- Assigns new UUIDs to all premises, expressions, and variables
+- Stamps `forkedFrom` provenance metadata on every entity, pointing back to the originals
+- Remaps all internal references (expression parent chains, variable bindings, conclusion role)
+- Returns the new engine and a remap table mapping original IDs to new IDs
+
+The forked argument is fully independent — mutations don't affect the source. The `createForkedFromMatcher()` helper enables fork-aware diffing via `diffArguments()`, pairing entities by their provenance metadata rather than by ID.
+
+Subclasses can override the protected `canFork()` method to restrict which arguments may be forked (e.g., only published versions).
+
+### Cross-argument variable binding
+
+A variable can reference a premise in a **different** argument via `bindVariableToExternalPremise()`. This enables structured inter-argument reasoning — for example, Rich's response to John's argument can reference John's premises as variables.
+
+External bindings are **evaluator-assigned**: during evaluation they behave like claim-bound variables (the evaluator provides truth values in the assignment). The binding is navigational — it tells readers where the proposition is defined, but the engine doesn't resolve across argument boundaries. External bindings are included as free variables in truth-table generation.
+
+`bindVariableToArgument()` is a convenience for binding to another argument's conclusion premise — the caller provides the conclusion premise ID and the method delegates to `bindVariableToExternalPremise()`.
+
+Subclasses can override the protected `canBind()` method to restrict which external arguments may be referenced (e.g., only published versions).
+
 Each expression carries:
 
 | Field             | Type             | Description                                                |
@@ -518,6 +548,70 @@ Removing an expression also removes its entire descendant subtree. After the sub
 premise1.removeExpression("expr-r")
 
 console.log(premise1.toDisplayString()) // (P → Q)
+```
+
+### Forking an argument
+
+```typescript
+// Fork John's argument to create Rich's response
+const { engine: richArg, remapTable } = johnEngine.forkArgument(
+    "rich-arg-id",
+    claimLibrary,
+    sourceLibrary,
+    claimSourceLibrary
+)
+
+// Rich now has a mutable copy — modify, add, or remove premises
+const forkedPremiseId = remapTable.premises.get(originalPremiseId)!
+richArg.removePremise(forkedPremiseId) // reject a premise
+richArg.createPremise(undefined, "RichNewPremise") // add a new one
+
+// See what Rich changed relative to John's original
+import {
+    diffArguments,
+    createForkedFromMatcher,
+} from "@polintpro/proposit-core"
+
+const diff = diffArguments(johnEngine, richArg, {
+    ...createForkedFromMatcher(),
+})
+// diff.premises.removed — premises Rich rejected
+// diff.premises.added — premises Rich introduced
+// diff.premises.modified — premises Rich altered
+```
+
+### Cross-argument variable binding
+
+```typescript
+// Rich's argument references a premise from John's argument
+richArg.bindVariableToExternalPremise({
+    id: "v-john-p2",
+    argumentId: "rich-arg-id",
+    argumentVersion: 0,
+    symbol: "JohnP2",
+    boundPremiseId: "johns-premise-2-id",
+    boundArgumentId: "johns-arg-id",
+    boundArgumentVersion: 2, // must be a published version
+})
+
+// Or reference John's conclusion directly
+richArg.bindVariableToArgument(
+    {
+        id: "v-john-conclusion",
+        argumentId: "rich-arg-id",
+        argumentVersion: 0,
+        symbol: "JohnConclusion",
+        boundArgumentId: "johns-arg-id",
+        boundArgumentVersion: 2,
+    },
+    "johns-conclusion-premise-id" // caller resolves the conclusion
+)
+
+// External bindings are evaluator-assigned — provide truth values in the assignment
+const result = richArg.evaluate({
+    variables: { "v-john-p2": true, "v-john-conclusion": false },
+    rejectedExpressionIds: [],
+})
 ```
 
 ## API Reference
