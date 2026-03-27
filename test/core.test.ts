@@ -14821,11 +14821,264 @@ describe("grammar enforcement config", () => {
             expect(formulaExpr.position).toBe(5)
         })
 
-        it("insertExpression still throws even with autoNormalize", () => {
+        it("insertExpression auto-inserts formula buffer when inserting operator between operator parent and children (Site 1)", () => {
             const em = new ExpressionManager({
                 grammarConfig: {
                     enforceFormulaBetweenOperators: true,
                     autoNormalize: true,
+                },
+            })
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Insert OR between AND and v-p. OR takes v-p's slot under AND,
+            // but OR is a non-not operator under an operator — autoNormalize inserts formula.
+            em.insertExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "v-p"
+            )
+
+            // OR should be wrapped in a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            expect(orExpr).toBeDefined()
+            expect(orExpr.parentId).not.toBe("op-and") // Not direct child
+            const formulaExpr = em.getExpression(orExpr.parentId!)!
+            expect(formulaExpr.type).toBe("formula")
+            expect(formulaExpr.parentId).toBe("op-and")
+            expect(formulaExpr.argumentId).toBe(ARG.id)
+            expect(
+                (formulaExpr as unknown as { premiseId: string }).premiseId
+            ).toBe("premise-1")
+
+            // v-p should be a child of OR
+            const vpExpr = em.getExpression("v-p")!
+            expect(vpExpr.parentId).toBe("op-or")
+        })
+
+        it("insertExpression auto-inserts formula buffers for operator children of new operator (Site 2)", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build: and(formula(or(p, q)), r) — with formula buffer between and and or
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            // Auto-normalize inserts formula between and and or
+            em.addExpression({
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-or",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-or",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-r",
+                type: "variable",
+                variableId: VAR_R.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // The auto-inserted formula wraps op-or under op-and
+            const orExpr = em.getExpression("op-or")!
+            const autoFormula = em.getExpression(orExpr.parentId!)!
+            expect(autoFormula.type).toBe("formula")
+            expect(autoFormula.parentId).toBe("op-and")
+
+            // Now insert AND2 between OR and its children (p, q).
+            // AND2 takes v-p's slot under OR. Both v-p and v-q become children of AND2.
+            // OR is now parent of AND2, which is operator-under-operator — Site 2 triggers.
+            em.insertExpression(
+                {
+                    id: "op-and2",
+                    type: "operator",
+                    operator: "and",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "v-p",
+                "v-q"
+            )
+
+            // AND2 becomes a child of OR. Since OR is an operator, autoNormalize
+            // inserts a formula buffer between OR and AND2.
+            const and2Expr = em.getExpression("op-and2")!
+            expect(and2Expr).toBeDefined()
+            expect(and2Expr.parentId).not.toBe("op-or")
+            const and2Parent = em.getExpression(and2Expr.parentId!)!
+            expect(and2Parent.type).toBe("formula")
+            expect(and2Parent.parentId).toBe("op-or")
+
+            // v-p and v-q should be children of AND2
+            expect(em.getExpression("v-p")!.parentId).toBe("op-and2")
+            expect(em.getExpression("v-q")!.parentId).toBe("op-and2")
+        })
+
+        it("insertExpression auto-inserts formula buffers for both sites simultaneously", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build: and(formula(or(p, q)), r)
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // op-or is now under auto-inserted formula under op-and
+            const orExpr = em.getExpression("op-or")!
+            const autoFormula1 = em.getExpression(orExpr.parentId!)!
+            expect(autoFormula1.type).toBe("formula")
+
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-or",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-r",
+                type: "variable",
+                variableId: VAR_R.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Insert AND2 with or as left child. AND2 takes or's slot (under formula under AND).
+            // Site 1: AND2 would be under the formula (a formula, not an operator), so no Site 1 issue.
+            // Site 2: OR is a non-not operator becoming child of AND2 (an operator) — needs formula buffer.
+            em.insertExpression(
+                {
+                    id: "op-and2",
+                    type: "operator",
+                    operator: "and",
+                    parentId: null,
+                    position: 0,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionInput,
+                "op-or"
+            )
+
+            // AND2 should be under the original auto-formula (formula parent, not operator, so no Site 1)
+            const and2Expr = em.getExpression("op-and2")!
+            expect(and2Expr.parentId).toBe(autoFormula1.id)
+
+            // OR should be under a new formula buffer under AND2 (Site 2)
+            const orExpr2 = em.getExpression("op-or")!
+            expect(orExpr2.parentId).not.toBe("op-and2")
+            const orParent = em.getExpression(orExpr2.parentId!)!
+            expect(orParent.type).toBe("formula")
+            expect(orParent.parentId).toBe("op-and2")
+        })
+
+        it("insertExpression still throws when autoNormalize is false", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: false,
                 },
             })
             em.addExpression({
@@ -14875,11 +15128,207 @@ describe("grammar enforcement config", () => {
             ).toThrowError(/cannot be direct children of operator expressions/)
         })
 
-        it("wrapExpression still throws even with autoNormalize", () => {
+        it("wrapExpression auto-inserts formula buffer when wrapping creates operator-under-operator (Site 1)", () => {
             const em = new ExpressionManager({
                 grammarConfig: {
                     enforceFormulaBetweenOperators: true,
                     autoNormalize: true,
+                },
+            })
+            // Build: and(p, q)
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Wrap v-p with OR — OR takes v-p's slot under AND.
+            // OR is a non-not operator under AND (an operator) → Site 1 triggers.
+            em.wrapExpression(
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "v-r",
+                    type: "variable",
+                    variableId: VAR_R.id,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "v-p"
+            )
+
+            // OR should be wrapped in a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            expect(orExpr.parentId).not.toBe("op-and")
+            const formulaExpr = em.getExpression(orExpr.parentId!)!
+            expect(formulaExpr.type).toBe("formula")
+            expect(formulaExpr.parentId).toBe("op-and")
+
+            // v-p and v-r should be children of OR
+            expect(em.getExpression("v-p")!.parentId).toBe("op-or")
+            expect(em.getExpression("v-r")!.parentId).toBe("op-or")
+        })
+
+        it("wrapExpression auto-inserts formula buffer when existing node is operator (Site 2)", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build: or(p, q)
+            em.addExpression({
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-or",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-or",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Wrap OR with AND — OR becomes child of AND (operator under operator).
+            // Site 2: existing node (OR) is a non-not operator under new operator AND.
+            em.wrapExpression(
+                {
+                    id: "op-and",
+                    type: "operator",
+                    operator: "and",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "v-r",
+                    type: "variable",
+                    variableId: VAR_R.id,
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "op-or"
+            )
+
+            // OR should now be under a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            const orParent = em.getExpression(orExpr.parentId!)!
+            expect(orParent.type).toBe("formula")
+            expect(orParent.parentId).toBe("op-and")
+
+            // AND should be at root
+            const andExpr = em.getExpression("op-and")!
+            expect(andExpr.parentId).toBe(null)
+        })
+
+        it("wrapExpression auto-inserts formula buffer when new sibling is operator (Site 3)", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+            // Build a single variable at root
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Wrap v-p with AND, new sibling is an OR operator.
+            // Site 3: new sibling (OR) is a non-not operator under AND.
+            em.wrapExpression(
+                {
+                    id: "op-and",
+                    type: "operator",
+                    operator: "and",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                {
+                    id: "op-or",
+                    type: "operator",
+                    operator: "or",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: "premise-1",
+                } as TExpressionWithoutPosition,
+                "v-p"
+            )
+
+            // OR should now be under a formula under AND
+            const orExpr = em.getExpression("op-or")!
+            const orParent = em.getExpression(orExpr.parentId!)!
+            expect(orParent.type).toBe("formula")
+            expect(orParent.parentId).toBe("op-and")
+
+            // v-p should be a direct child of AND (it's a variable, not an operator)
+            expect(em.getExpression("v-p")!.parentId).toBe("op-and")
+        })
+
+        it("wrapExpression still throws when autoNormalize is false", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: false,
                 },
             })
             em.addExpression({
