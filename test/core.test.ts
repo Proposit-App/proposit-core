@@ -20,6 +20,7 @@ import {
     CorePropositionalVariableSchema,
     CorePropositionalExpressionSchema,
     CorePremiseSchema,
+    CoreForkSchema,
     isClaimBound,
     isPremiseBound,
     isExternallyBound,
@@ -21860,5 +21861,39 @@ describe("empty lookup constants", () => {
 
     it("EMPTY_CLAIM_SOURCE_LOOKUP.getForSource returns empty array", () => {
         expect(EMPTY_CLAIM_SOURCE_LOOKUP.getForSource("any")).toEqual([])
+    })
+})
+
+describe("ForksLibrary", () => {
+    it("CoreForkSchema validates a complete fork record", () => {
+        const fork = {
+            id: "fork-1",
+            sourceArgumentId: "arg-1",
+            sourceArgumentVersion: 3,
+            createdOn: "2026-03-28T12:00:00.000Z",
+            checksum: "abc123",
+        }
+        expect(Value.Check(CoreForkSchema, fork)).toBe(true)
+    })
+
+    it("CoreForkSchema validates a fork with optional creatorId", () => {
+        const fork = {
+            id: "fork-1",
+            sourceArgumentId: "arg-1",
+            sourceArgumentVersion: 3,
+            createdOn: "2026-03-28T12:00:00.000Z",
+            creatorId: "user-42",
+            checksum: "abc123",
+        }
+        expect(Value.Check(CoreForkSchema, fork)).toBe(true)
+    })
+
+    it("CoreForkSchema rejects a fork missing required fields", () => {
+        const fork = {
+            id: "fork-1",
+            sourceArgumentId: "arg-1",
+            // missing sourceArgumentVersion, createdOn, checksum
+        }
+        expect(Value.Check(CoreForkSchema, fork)).toBe(false)
     })
 })
