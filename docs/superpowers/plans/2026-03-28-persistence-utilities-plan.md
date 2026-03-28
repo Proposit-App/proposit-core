@@ -12,19 +12,20 @@
 
 ## File Structure
 
-| Action | Path | Responsibility |
-|--------|------|----------------|
-| Create | `src/lib/utils/changeset.ts` | `mergeChangesets`, `orderChangeset`, `TOrderedOperation` type |
-| Create | `src/lib/utils/lookup.ts` | `createLookup`, `EMPTY_CLAIM_LOOKUP`, `EMPTY_SOURCE_LOOKUP`, `EMPTY_CLAIM_SOURCE_LOOKUP` |
-| Modify | `src/lib/index.ts` | Re-export new utilities |
-| Modify | `test/core.test.ts` | Tests for all new functions + bug verification |
-| Modify | `CLAUDE.md` | Design rule for `orderChangeset` ordering invariant |
+| Action | Path                         | Responsibility                                                                           |
+| ------ | ---------------------------- | ---------------------------------------------------------------------------------------- |
+| Create | `src/lib/utils/changeset.ts` | `mergeChangesets`, `orderChangeset`, `TOrderedOperation` type                            |
+| Create | `src/lib/utils/lookup.ts`    | `createLookup`, `EMPTY_CLAIM_LOOKUP`, `EMPTY_SOURCE_LOOKUP`, `EMPTY_CLAIM_SOURCE_LOOKUP` |
+| Modify | `src/lib/index.ts`           | Re-export new utilities                                                                  |
+| Modify | `test/core.test.ts`          | Tests for all new functions + bug verification                                           |
+| Modify | `CLAUDE.md`                  | Design rule for `orderChangeset` ordering invariant                                      |
 
 ---
 
 ### Task 1: `mergeChangesets` — failing tests
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
@@ -44,7 +45,19 @@ describe("mergeChangesets", () => {
         const a: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "old", descendantChecksum: null, combinedChecksum: "old" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "old",
+                        descendantChecksum: null,
+                        combinedChecksum: "old",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -53,7 +66,19 @@ describe("mergeChangesets", () => {
         const b: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "new", descendantChecksum: null, combinedChecksum: "new" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "new",
+                        descendantChecksum: null,
+                        combinedChecksum: "new",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -68,7 +93,19 @@ describe("mergeChangesets", () => {
         const a: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -77,7 +114,15 @@ describe("mergeChangesets", () => {
         const b: TCoreChangeset = {
             variables: {
                 added: [
-                    { id: "var1", symbol: "P", argumentId: "a", argumentVersion: 0, claimId: "cl", claimVersion: 0, checksum: "c" },
+                    {
+                        id: "var1",
+                        symbol: "P",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        claimId: "cl",
+                        claimVersion: 0,
+                        checksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -92,7 +137,19 @@ describe("mergeChangesets", () => {
         const a: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -103,7 +160,19 @@ describe("mergeChangesets", () => {
                 added: [],
                 modified: [],
                 removed: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
             },
         }
@@ -114,7 +183,19 @@ describe("mergeChangesets", () => {
         const a: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -124,7 +205,19 @@ describe("mergeChangesets", () => {
             expressions: {
                 added: [],
                 modified: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c2", descendantChecksum: null, combinedChecksum: "c2" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c2",
+                        descendantChecksum: null,
+                        combinedChecksum: "c2",
+                    },
                 ],
                 removed: [],
             },
@@ -137,7 +230,19 @@ describe("mergeChangesets", () => {
             expressions: {
                 added: [],
                 modified: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
                 removed: [],
             },
@@ -147,7 +252,19 @@ describe("mergeChangesets", () => {
                 added: [],
                 modified: [],
                 removed: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
             },
         }
@@ -169,8 +286,12 @@ describe("mergeChangesets", () => {
     })
 
     it("takes argument from b when present", () => {
-        const a: TCoreChangeset = { argument: { id: "a1", version: 0 } as TCoreArgument }
-        const b: TCoreChangeset = { argument: { id: "a1", version: 1 } as TCoreArgument }
+        const a: TCoreChangeset = {
+            argument: { id: "a1", version: 0 } as TCoreArgument,
+        }
+        const b: TCoreChangeset = {
+            argument: { id: "a1", version: 1 } as TCoreArgument,
+        }
         const result = mergeChangesets(a, b)
         expect(result.argument?.version).toBe(1)
     })
@@ -200,12 +321,13 @@ Expected: Compilation error — `mergeChangesets` is not exported.
 ### Task 2: `mergeChangesets` — implementation
 
 **Files:**
+
 - Create: `src/lib/utils/changeset.ts`
 - Modify: `src/lib/index.ts`
 
 - [ ] **Step 1: Create `src/lib/utils/changeset.ts` with `mergeChangesets`**
 
-```typescript
+````typescript
 import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
@@ -340,7 +462,7 @@ function mergeEntityChanges<T extends { id: string }>(
 
     return { added, modified, removed }
 }
-```
+````
 
 - [ ] **Step 2: Add export to `src/lib/index.ts`**
 
@@ -372,6 +494,7 @@ git commit -m "feat: add mergeChangesets utility for combining changesets"
 ### Task 3: `orderChangeset` — failing tests
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
@@ -395,21 +518,48 @@ describe("orderChangeset", () => {
                 added: [],
                 modified: [],
                 removed: [
-                    { id: "p1", argumentId: "a", argumentVersion: 0, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "p1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
             },
             variables: {
                 added: [],
                 modified: [],
                 removed: [
-                    { id: "v1", symbol: "P", argumentId: "a", argumentVersion: 0, claimId: "cl", claimVersion: 0, checksum: "c" },
+                    {
+                        id: "v1",
+                        symbol: "P",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        claimId: "cl",
+                        claimVersion: 0,
+                        checksum: "c",
+                    },
                 ],
             },
             expressions: {
                 added: [],
                 modified: [],
                 removed: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
             },
         }
@@ -426,21 +576,48 @@ describe("orderChangeset", () => {
         const changeset: TCoreChangeset = {
             premises: {
                 added: [
-                    { id: "p1", argumentId: "a", argumentVersion: 0, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "p1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
             },
             variables: {
                 added: [
-                    { id: "v1", symbol: "P", argumentId: "a", argumentVersion: 0, claimId: "cl", claimVersion: 0, checksum: "c" },
+                    {
+                        id: "v1",
+                        symbol: "P",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        claimId: "cl",
+                        claimVersion: 0,
+                        checksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
             },
             expressions: {
                 added: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -460,17 +637,43 @@ describe("orderChangeset", () => {
             premises: {
                 added: [],
                 modified: [
-                    { id: "p1", argumentId: "a", argumentVersion: 0, checksum: "c2", descendantChecksum: null, combinedChecksum: "c2" },
+                    {
+                        id: "p1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        checksum: "c2",
+                        descendantChecksum: null,
+                        combinedChecksum: "c2",
+                    },
                 ],
                 removed: [
-                    { id: "p2", argumentId: "a", argumentVersion: 0, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "p2",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
             },
             expressions: {
                 added: [],
                 modified: [],
                 removed: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p2", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p2",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
             },
         }
@@ -485,8 +688,32 @@ describe("orderChangeset", () => {
         const changeset: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "child", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: "parent", position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
-                    { id: "parent", type: "operator", operator: "and", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: "d", combinedChecksum: "cd" },
+                    {
+                        id: "child",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "parent",
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
+                    {
+                        id: "parent",
+                        type: "operator",
+                        operator: "and",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: "d",
+                        combinedChecksum: "cd",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -505,9 +732,44 @@ describe("orderChangeset", () => {
         const changeset: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "grandchild", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: "child", position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
-                    { id: "root", type: "operator", operator: "and", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: "d", combinedChecksum: "cd" },
-                    { id: "child", type: "formula", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: "root", position: 1, checksum: "c", descendantChecksum: "d", combinedChecksum: "cd" },
+                    {
+                        id: "grandchild",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "child",
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
+                    {
+                        id: "root",
+                        type: "operator",
+                        operator: "and",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: "d",
+                        combinedChecksum: "cd",
+                    },
+                    {
+                        id: "child",
+                        type: "formula",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "root",
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: "d",
+                        combinedChecksum: "cd",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -528,11 +790,35 @@ describe("orderChangeset", () => {
         const changeset: TCoreChangeset = {
             expressions: {
                 added: [
-                    { id: "e2", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e2",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [
-                    { id: "e1", type: "variable", variableId: "v1", argumentId: "a", argumentVersion: 0, premiseId: "p1", parentId: null, position: 1, checksum: "c", descendantChecksum: null, combinedChecksum: "c" },
+                    {
+                        id: "e1",
+                        type: "variable",
+                        variableId: "v1",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
                 ],
             },
         }
@@ -549,7 +835,15 @@ describe("orderChangeset", () => {
             argument: { id: "a1", version: 1 } as TCoreArgument,
             variables: {
                 added: [
-                    { id: "v1", symbol: "P", argumentId: "a", argumentVersion: 0, claimId: "cl", claimVersion: 0, checksum: "c" },
+                    {
+                        id: "v1",
+                        symbol: "P",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        claimId: "cl",
+                        claimVersion: 0,
+                        checksum: "c",
+                    },
                 ],
                 modified: [],
                 removed: [],
@@ -580,6 +874,7 @@ Expected: Compilation error — `orderChangeset` / `TOrderedOperation` not expor
 ### Task 4: `orderChangeset` — implementation
 
 **Files:**
+
 - Modify: `src/lib/utils/changeset.ts`
 - Modify: `src/lib/index.ts`
 
@@ -720,7 +1015,11 @@ export function orderChangeset<
 
     // Phase 10: Update argument metadata.
     if (changeset.argument) {
-        ops.push({ type: "update", entity: "argument", data: changeset.argument })
+        ops.push({
+            type: "update",
+            entity: "argument",
+            data: changeset.argument,
+        })
     }
 
     // Phase 11: Update role state.
@@ -736,9 +1035,9 @@ export function orderChangeset<
  * Expressions whose `parentId` is `null` or references an expression
  * not in the input array are treated as roots.
  */
-function topologicalSortExpressions<
-    TExpr extends TCorePropositionalExpression,
->(exprs: TExpr[]): TExpr[] {
+function topologicalSortExpressions<TExpr extends TCorePropositionalExpression>(
+    exprs: TExpr[]
+): TExpr[] {
     const byId = new Map(exprs.map((e) => [e.id, e]))
     const addedIds = new Set(exprs.map((e) => e.id))
     const sorted: TExpr[] = []
@@ -798,6 +1097,7 @@ git commit -m "feat: add orderChangeset utility for FK-safe persistence ordering
 ### Task 5: `createLookup` and empty lookup constants — failing tests
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
@@ -870,18 +1170,23 @@ Expected: Compilation error — exports don't exist yet.
 ### Task 6: `createLookup` and empty lookup constants — implementation
 
 **Files:**
+
 - Create: `src/lib/utils/lookup.ts`
 - Modify: `src/lib/index.ts`
 
 - [ ] **Step 1: Create `src/lib/utils/lookup.ts`**
 
-```typescript
+````typescript
 import type { TCoreClaim } from "../schemata/claim.js"
 import type {
     TCoreClaimSourceAssociation,
     TCoreSource,
 } from "../schemata/source.js"
-import type { TClaimLookup, TSourceLookup, TClaimSourceLookup } from "../core/interfaces/library.interfaces.js"
+import type {
+    TClaimLookup,
+    TSourceLookup,
+    TClaimSourceLookup,
+} from "../core/interfaces/library.interfaces.js"
 
 /**
  * Creates a keyed lookup from an array of items. Items are indexed by a
@@ -950,7 +1255,7 @@ export const EMPTY_CLAIM_SOURCE_LOOKUP: TClaimSourceLookup = {
     getForSource: () => [],
     get: () => undefined,
 }
-```
+````
 
 - [ ] **Step 2: Add exports to `src/lib/index.ts`**
 
@@ -991,11 +1296,13 @@ The `proposit-server` has a workaround for a reported bug where `addExpression`/
 This task verifies whether the bug exists. If it does, we fix it. If it doesn't, we skip it.
 
 **Files:**
+
 - Test: `test/core.test.ts`
 
 - [ ] **Step 1: Review existing ancestor checksum tests**
 
 Read `test/core.test.ts` lines 20753-21092. These tests cover:
+
 - `addExpression` includes parent in modified
 - `addExpression` includes all ancestors up to root in modified
 - `appendExpression` includes parent in modified
@@ -1033,6 +1340,7 @@ git commit -m "fix: ensure ancestor checksums appear in changeset after expressi
 ### Task 8: CLAUDE.md design rule
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Add `orderChangeset` ordering invariant to "Key design rules"**
@@ -1067,6 +1375,7 @@ Expected: `function function function object object object`
 - [ ] **Step 3: Review all new exports against spec**
 
 Verify every item listed in the spec's "Exports" section is available:
+
 - `mergeChangesets` — function
 - `orderChangeset` — function
 - `TOrderedOperation` — type (verify via typecheck, not runtime)

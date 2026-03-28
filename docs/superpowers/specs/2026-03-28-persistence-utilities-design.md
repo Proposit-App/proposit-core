@@ -37,7 +37,7 @@ function mergeChangesets<
     TArg extends TCoreArgument,
 >(
     a: TCoreChangeset<TExpr, TVar, TPremise, TArg>,
-    b: TCoreChangeset<TExpr, TVar, TPremise, TArg>,
+    b: TCoreChangeset<TExpr, TVar, TPremise, TArg>
 ): TCoreChangeset<TExpr, TVar, TPremise, TArg>
 ```
 
@@ -91,7 +91,7 @@ Generic factory for building `TClaimLookup` or `TSourceLookup` from an array. It
 ```ts
 function createLookup<T>(
     items: T[],
-    getKey: (item: T) => string,
+    getKey: (item: T) => string
 ): { get(id: string, version: number): T | undefined }
 ```
 
@@ -133,7 +133,7 @@ const EMPTY_CLAIM_SOURCE_LOOKUP: TClaimSourceLookup = {
 ## Documentation Requirements
 
 1. **Every exported function and constant** must have a full JSDoc docstring with `@param`, `@returns`, `@throws` (where applicable), and `@example` (where illustrative).
-2. **`orderChangeset` code comments:** The implementation must have inline comments on each phase of the ordering explaining *why* that phase appears in its position, referencing the FK dependency chain. This is critical for preventing accidental reordering in future refactors.
+2. **`orderChangeset` code comments:** The implementation must have inline comments on each phase of the ordering explaining _why_ that phase appears in its position, referencing the FK dependency chain. This is critical for preventing accidental reordering in future refactors.
 3. **CLAUDE.md design rule:** Add an entry to the "Key design rules" section documenting the `orderChangeset` operation ordering as an invariant. Any future work that would change entity relationships or add new entity types must preserve or extend this ordering. Planned changes that would violate this guarantee must be flagged to the user before implementation.
 4. **`mergeChangesets` example:** The JSDoc must include an `@example` showing a concrete use case (e.g., merging the changeset from `createPremiseWithId` with the changeset from `setConclusionPremise`).
 
