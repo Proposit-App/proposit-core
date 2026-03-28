@@ -16,34 +16,35 @@
 
 ### New Files
 
-| File | Responsibility |
-|------|---------------|
-| `src/lib/types/validation.ts` | `TInvariantViolation`, `TInvariantValidationResult`, violation code string constants |
-| `src/lib/core/invariant-violation-error.ts` | `InvariantViolationError` Error subclass |
+| File                                        | Responsibility                                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `src/lib/types/validation.ts`               | `TInvariantViolation`, `TInvariantValidationResult`, violation code string constants |
+| `src/lib/core/invariant-violation-error.ts` | `InvariantViolationError` Error subclass                                             |
 
 ### Modified Files
 
-| File | Changes |
-|------|---------|
-| `src/lib/core/expression-manager.ts` | Add `validate()`, add autoNormalize to `insertExpression`/`wrapExpression`/`loadInitialExpressions` |
-| `src/lib/core/variable-manager.ts` | Add `validate()` |
-| `src/lib/core/premise-engine.ts` | Add `validate()`, `withValidation`, `setArgumentValidateCallback`, `setVariableIdsCallback`, `premiseSnapshot`/`restoreFromPremiseSnapshot`, wrap all mutations |
-| `src/lib/core/argument-engine.ts` | Add `validate()`, `withValidation`, wire callbacks, wrap all mutations, update `fromSnapshot`/`fromData`/`rollback` |
-| `src/lib/core/claim-library.ts` | Add `validate()`, `withValidation`, wrap mutations |
-| `src/lib/core/source-library.ts` | Add `validate()`, `withValidation`, wrap mutations |
-| `src/lib/core/claim-source-library.ts` | Add `validate()`, `withValidation`, wrap mutations |
-| `src/lib/core/interfaces/argument-engine.interfaces.ts` | Add `validate()` to `TArgumentLifecycle` |
-| `src/lib/core/interfaces/premise-engine.interfaces.ts` | Add `validate()` to `TPremiseLifecycle` |
-| `src/lib/core/interfaces/library.interfaces.ts` | Add `validate()` to library management interfaces |
-| `src/lib/types/grammar.ts` | Update `autoNormalize` JSDoc to reflect expanded scope |
-| `src/lib/index.ts` | Export new types and error class |
-| `test/core.test.ts` | Add validation test describe blocks |
+| File                                                    | Changes                                                                                                                                                         |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/core/expression-manager.ts`                    | Add `validate()`, add autoNormalize to `insertExpression`/`wrapExpression`/`loadInitialExpressions`                                                             |
+| `src/lib/core/variable-manager.ts`                      | Add `validate()`                                                                                                                                                |
+| `src/lib/core/premise-engine.ts`                        | Add `validate()`, `withValidation`, `setArgumentValidateCallback`, `setVariableIdsCallback`, `premiseSnapshot`/`restoreFromPremiseSnapshot`, wrap all mutations |
+| `src/lib/core/argument-engine.ts`                       | Add `validate()`, `withValidation`, wire callbacks, wrap all mutations, update `fromSnapshot`/`fromData`/`rollback`                                             |
+| `src/lib/core/claim-library.ts`                         | Add `validate()`, `withValidation`, wrap mutations                                                                                                              |
+| `src/lib/core/source-library.ts`                        | Add `validate()`, `withValidation`, wrap mutations                                                                                                              |
+| `src/lib/core/claim-source-library.ts`                  | Add `validate()`, `withValidation`, wrap mutations                                                                                                              |
+| `src/lib/core/interfaces/argument-engine.interfaces.ts` | Add `validate()` to `TArgumentLifecycle`                                                                                                                        |
+| `src/lib/core/interfaces/premise-engine.interfaces.ts`  | Add `validate()` to `TPremiseLifecycle`                                                                                                                         |
+| `src/lib/core/interfaces/library.interfaces.ts`         | Add `validate()` to library management interfaces                                                                                                               |
+| `src/lib/types/grammar.ts`                              | Update `autoNormalize` JSDoc to reflect expanded scope                                                                                                          |
+| `src/lib/index.ts`                                      | Export new types and error class                                                                                                                                |
+| `test/core.test.ts`                                     | Add validation test describe blocks                                                                                                                             |
 
 ---
 
 ## Task 1: Validation Types and Error Class
 
 **Files:**
+
 - Create: `src/lib/types/validation.ts`
 - Create: `src/lib/core/invariant-violation-error.ts`
 - Modify: `src/lib/index.ts`
@@ -171,6 +172,7 @@ git commit -m "feat: add invariant validation types and error class"
 ## Task 2: ExpressionManager.validate()
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts`
 - Modify: `test/core.test.ts`
 
@@ -221,7 +223,11 @@ describe("ExpressionManager — validate", () => {
         strict.flushExpressionChecksums()
         const result = strict.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED")).toBe(true)
+        expect(
+            result.violations.some(
+                (v) => v.code === "EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED"
+            )
+        ).toBe(true)
     })
 
     it("detects checksum mismatch", () => {
@@ -235,10 +241,15 @@ describe("ExpressionManager — validate", () => {
             ...snap.expressions[0],
             checksum: "deadbeef",
         }
-        const tampered = ExpressionManager.fromSnapshot(snap, PERMISSIVE_GRAMMAR_CONFIG)
+        const tampered = ExpressionManager.fromSnapshot(
+            snap,
+            PERMISSIVE_GRAMMAR_CONFIG
+        )
         const result = tampered.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "EXPR_CHECKSUM_MISMATCH")).toBe(true)
+        expect(
+            result.violations.some((v) => v.code === "EXPR_CHECKSUM_MISMATCH")
+        ).toBe(true)
     })
 })
 ```
@@ -410,13 +421,28 @@ Adjust the checksum verification to:
 ```typescript
 // 9. Checksum verification — save pre-flush, compute fresh, compare
 const preFlushed = new Map(
-    this.toArray().map((e) => [e.id, { checksum: e.checksum, descendantChecksum: e.descendantChecksum, combinedChecksum: e.combinedChecksum }])
+    this.toArray().map((e) => [
+        e.id,
+        {
+            checksum: e.checksum,
+            descendantChecksum: e.descendantChecksum,
+            combinedChecksum: e.combinedChecksum,
+        },
+    ])
 )
 this.flushExpressionChecksums()
 for (const expr of this.toArray()) {
     const saved = preFlushed.get(expr.id)!
-    for (const field of ["checksum", "descendantChecksum", "combinedChecksum"] as const) {
-        if (saved[field] !== null && saved[field] !== "" && saved[field] !== expr[field]) {
+    for (const field of [
+        "checksum",
+        "descendantChecksum",
+        "combinedChecksum",
+    ] as const) {
+        if (
+            saved[field] !== null &&
+            saved[field] !== "" &&
+            saved[field] !== expr[field]
+        ) {
             violations.push({
                 code: EXPR_CHECKSUM_MISMATCH,
                 message: `Expression "${expr.id}" ${field} mismatch: stored="${saved[field]}", computed="${expr[field]}"`,
@@ -452,6 +478,7 @@ git commit -m "feat: add ExpressionManager.validate()"
 ## Task 3: VariableManager.validate()
 
 **Files:**
+
 - Modify: `src/lib/core/variable-manager.ts`
 - Modify: `test/core.test.ts`
 
@@ -498,7 +525,9 @@ describe("VariableManager — validate", () => {
         const tampered = VariableManager.fromSnapshot(snap)
         const result = tampered.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "VAR_CHECKSUM_MISMATCH")).toBe(true)
+        expect(
+            result.violations.some((v) => v.code === "VAR_CHECKSUM_MISMATCH")
+        ).toBe(true)
     })
 })
 ```
@@ -593,6 +622,7 @@ git commit -m "feat: add VariableManager.validate()"
 ## Task 4: PremiseEngine.validate()
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts`
 - Modify: `test/core.test.ts`
 
@@ -600,20 +630,32 @@ git commit -m "feat: add VariableManager.validate()"
 
 ```typescript
 describe("PremiseEngine — validate", () => {
-    function makePremiseEngine(
-        grammarConfig = PERMISSIVE_GRAMMAR_CONFIG
-    ) {
+    function makePremiseEngine(grammarConfig = PERMISSIVE_GRAMMAR_CONFIG) {
         const vm = new VariableManager()
         vm.addVariable({
-            id: "var-p", argumentId: "arg-1", argumentVersion: 1,
-            symbol: "P", claimId: "claim-default", claimVersion: 0, checksum: "",
+            id: "var-p",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
         } as TCorePropositionalVariable)
         vm.addVariable({
-            id: "var-q", argumentId: "arg-1", argumentVersion: 1,
-            symbol: "Q", claimId: "claim-default", claimVersion: 0, checksum: "",
+            id: "var-q",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            symbol: "Q",
+            claimId: "claim-default",
+            claimVersion: 0,
+            checksum: "",
         } as TCorePropositionalVariable)
         const pe = new PremiseEngine(
-            { id: "premise-1", argumentId: "arg-1", argumentVersion: 1 } as TOptionalChecksum<TCorePremise>,
+            {
+                id: "premise-1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+            } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig }
         )
@@ -642,7 +684,11 @@ describe("PremiseEngine — validate", () => {
         pe.setVariableIdsCallback(() => new Set())
         const result = pe.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "PREMISE_VARIABLE_REF_NOT_FOUND")).toBe(true)
+        expect(
+            result.violations.some(
+                (v) => v.code === "PREMISE_VARIABLE_REF_NOT_FOUND"
+            )
+        ).toBe(true)
     })
 
     it("delegates expression validation to ExpressionManager", () => {
@@ -658,13 +704,20 @@ describe("PremiseEngine — validate", () => {
         )
         const snap = permissive.pe.snapshot()
         const strict = PremiseEngine.fromSnapshot(
-            snap, ARG, permissive.vm, undefined,
+            snap,
+            ARG,
+            permissive.vm,
+            undefined,
             { enforceFormulaBetweenOperators: true, autoNormalize: false }
         )
         strict.setVariableIdsCallback(() => new Set(["var-p", "var-q"]))
         const result = strict.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED")).toBe(true)
+        expect(
+            result.violations.some(
+                (v) => v.code === "EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED"
+            )
+        ).toBe(true)
     })
 })
 ```
@@ -772,6 +825,7 @@ git commit -m "feat: add PremiseEngine.validate() with variable ID callback"
 ## Task 5: ArgumentEngine.validate()
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Modify: `test/core.test.ts`
 
@@ -783,9 +837,7 @@ describe("ArgumentEngine — validate", () => {
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         const { result: pm } = eng.createPremise()
         eng.addVariable(makeVar("var-p", "P"))
-        pm.addExpression(
-            makeVarExpr("v1", "var-p", { premiseId: pm.getId() })
-        )
+        pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
         const result = eng.validate()
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
@@ -806,13 +858,17 @@ describe("ArgumentEngine — validate", () => {
         const snap = eng.snapshot()
         const emptyLib = new ClaimLibrary()
         const restored = ArgumentEngine.fromSnapshot(
-            snap, emptyLib, sLib(),
+            snap,
+            emptyLib,
+            sLib(),
             new ClaimSourceLibrary(emptyLib, sLib()),
             PERMISSIVE_GRAMMAR_CONFIG
         )
         const result = restored.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "ARG_CLAIM_REF_NOT_FOUND")).toBe(true)
+        expect(
+            result.violations.some((v) => v.code === "ARG_CLAIM_REF_NOT_FOUND")
+        ).toBe(true)
     })
 
     it("detects conclusion referencing non-existent premise", () => {
@@ -824,11 +880,17 @@ describe("ArgumentEngine — validate", () => {
         const snap = eng.snapshot()
         snap.conclusionPremiseId = "nonexistent-premise"
         const restored = ArgumentEngine.fromSnapshot(
-            snap, aLib(), sLib(), csLib(), PERMISSIVE_GRAMMAR_CONFIG
+            snap,
+            aLib(),
+            sLib(),
+            csLib(),
+            PERMISSIVE_GRAMMAR_CONFIG
         )
         const result = restored.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "ARG_CONCLUSION_NOT_FOUND")).toBe(true)
+        expect(
+            result.violations.some((v) => v.code === "ARG_CONCLUSION_NOT_FOUND")
+        ).toBe(true)
     })
 
     it("detects ownership mismatch on variable", () => {
@@ -845,11 +907,17 @@ describe("ArgumentEngine — validate", () => {
             checksum: "",
         } as TCorePropositionalVariable)
         const restored = ArgumentEngine.fromSnapshot(
-            snap, aLib(), sLib(), csLib(), PERMISSIVE_GRAMMAR_CONFIG
+            snap,
+            aLib(),
+            sLib(),
+            csLib(),
+            PERMISSIVE_GRAMMAR_CONFIG
         )
         const result = restored.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "ARG_OWNERSHIP_MISMATCH")).toBe(true)
+        expect(
+            result.violations.some((v) => v.code === "ARG_OWNERSHIP_MISMATCH")
+        ).toBe(true)
     })
 })
 ```
@@ -974,7 +1042,9 @@ public validate(): TInvariantValidationResult {
 Also wire the `variableIdsCallback` on each PremiseEngine. In the method that wires callbacks onto new PremiseEngines (near where `wireCircularityCheck` and `wireEmptyBoundPremiseCheck` are called), add:
 
 ```typescript
-pe.setVariableIdsCallback(() => new Set(this.variables.toArray().map((v) => v.id)))
+pe.setVariableIdsCallback(
+    () => new Set(this.variables.toArray().map((v) => v.id))
+)
 ```
 
 This should be called wherever PremiseEngines are created: `createPremiseWithId`, `fromSnapshot` (in the premise restoration loop), `fromData`, and `rollback`.
@@ -1001,6 +1071,7 @@ git commit -m "feat: add ArgumentEngine.validate() with hierarchical delegation"
 ## Task 6: Library validate() Methods
 
 **Files:**
+
 - Modify: `src/lib/core/claim-library.ts`
 - Modify: `src/lib/core/source-library.ts`
 - Modify: `src/lib/core/claim-source-library.ts`
@@ -1037,7 +1108,11 @@ describe("ClaimLibrary — validate", () => {
         const restored = ClaimLibrary.fromSnapshot(snap)
         const result = restored.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "CLAIM_FROZEN_NO_SUCCESSOR")).toBe(true)
+        expect(
+            result.violations.some(
+                (v) => v.code === "CLAIM_FROZEN_NO_SUCCESSOR"
+            )
+        ).toBe(true)
     })
 })
 
@@ -1085,7 +1160,11 @@ describe("ClaimSourceLibrary — validate", () => {
         const restored = ClaimSourceLibrary.fromSnapshot(snap, emptyLib, sl)
         const result = restored.validate()
         expect(result.ok).toBe(false)
-        expect(result.violations.some((v) => v.code === "ASSOC_CLAIM_REF_NOT_FOUND")).toBe(true)
+        expect(
+            result.violations.some(
+                (v) => v.code === "ASSOC_CLAIM_REF_NOT_FOUND"
+            )
+        ).toBe(true)
     })
 })
 ```
@@ -1197,6 +1276,7 @@ git commit -m "feat: add validate() to ClaimLibrary, SourceLibrary, ClaimSourceL
 ## Task 7: ArgumentEngine.withValidation Bracket
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Modify: `test/core.test.ts`
 
@@ -1268,6 +1348,7 @@ protected withValidation<T>(fn: () => T): T {
 For each mutation method, wrap the body in `this.withValidation(() => { ... })`. Example for `createPremiseWithId`:
 
 Before:
+
 ```typescript
 public createPremiseWithId(id, extras?, symbol?) {
     // ... existing body ...
@@ -1276,6 +1357,7 @@ public createPremiseWithId(id, extras?, symbol?) {
 ```
 
 After:
+
 ```typescript
 public createPremiseWithId(id, extras?, symbol?) {
     return this.withValidation(() => {
@@ -1286,6 +1368,7 @@ public createPremiseWithId(id, extras?, symbol?) {
 ```
 
 Apply this pattern to all ArgumentEngine mutation methods:
+
 - `createPremiseWithId`
 - `removePremise`
 - `addVariable`
@@ -1320,6 +1403,7 @@ git commit -m "feat: add withValidation bracket to ArgumentEngine mutations"
 ## Task 8: PremiseEngine.withValidation Bracket
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts`
 - Modify: `src/lib/core/argument-engine.ts`
 - Modify: `test/core.test.ts`
@@ -1332,9 +1416,7 @@ describe("PremiseEngine — withValidation bracket", () => {
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
-        pm.addExpression(
-            makeVarExpr("v1", "var-p", { premiseId: pm.getId() })
-        )
+        pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
         expect(eng.validate().ok).toBe(true)
     })
 
@@ -1446,6 +1528,7 @@ pe.setArgumentValidateCallback(() => this.validate())
 ```
 
 Add this in the same locations where `wireCircularityCheck`, `wireEmptyBoundPremiseCheck`, and `setOnMutate` are called:
+
 - `createPremiseWithId()` (after the existing callback wiring)
 - `fromSnapshot()` (in the premise restoration loop)
 - `fromData()` (after premise creation)
@@ -1454,6 +1537,7 @@ Add this in the same locations where `wireCircularityCheck`, `wireEmptyBoundPrem
 - [ ] **Step 5: Wrap all PremiseEngine mutation methods**
 
 Wrap each mutation method body in `this.withValidation(() => { ... })`:
+
 - `addExpression`
 - `appendExpression`
 - `addExpressionRelative`
@@ -1488,6 +1572,7 @@ git commit -m "feat: add withValidation bracket to PremiseEngine with argument-l
 ## Task 9: Library withValidation Brackets
 
 **Files:**
+
 - Modify: `src/lib/core/claim-library.ts`
 - Modify: `src/lib/core/source-library.ts`
 - Modify: `src/lib/core/claim-source-library.ts`
@@ -1574,6 +1659,7 @@ git commit -m "feat: add withValidation brackets to library classes"
 ## Task 10: Bulk Path Changes
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Modify: `test/core.test.ts`
 
@@ -1589,7 +1675,11 @@ describe("ArgumentEngine — bulk path validation", () => {
         eng.addVariable(makeVar("var-p", "P"))
         pm.addExpression(makeOpExpr("root", "and", { premiseId: pm.getId() }))
         pm.addExpression(
-            makeOpExpr("child", "or", { parentId: "root", position: 0, premiseId: pm.getId() })
+            makeOpExpr("child", "or", {
+                parentId: "root",
+                position: 0,
+                premiseId: pm.getId(),
+            })
         )
         // This tree has and→or which violates formula-between-operators.
         // Loading with strict config should throw.
@@ -1611,7 +1701,11 @@ describe("ArgumentEngine — bulk path validation", () => {
         eng.addVariable(makeVar("var-p", "P"))
         pm.addExpression(makeOpExpr("root", "and", { premiseId: pm.getId() }))
         pm.addExpression(
-            makeOpExpr("child", "or", { parentId: "root", position: 0, premiseId: pm.getId() })
+            makeOpExpr("child", "or", {
+                parentId: "root",
+                position: 0,
+                premiseId: pm.getId(),
+            })
         )
 
         const snap = eng.snapshot()
@@ -1619,12 +1713,19 @@ describe("ArgumentEngine — bulk path validation", () => {
         expect(() =>
             ArgumentEngine.fromData(
                 snap.argument,
-                aLib(), sLib(), csLib(),
+                aLib(),
+                sLib(),
+                csLib(),
                 snap.variables.variables,
                 snap.premises.map((p) => p.premise),
                 snap.premises.flatMap((p) => p.expressions.expressions),
                 { conclusionPremiseId: snap.conclusionPremiseId },
-                { grammarConfig: { enforceFormulaBetweenOperators: true, autoNormalize: false } },
+                {
+                    grammarConfig: {
+                        enforceFormulaBetweenOperators: true,
+                        autoNormalize: false,
+                    },
+                },
                 { enforceFormulaBetweenOperators: true, autoNormalize: false }
             )
         ).toThrow(InvariantViolationError)
@@ -1634,9 +1735,7 @@ describe("ArgumentEngine — bulk path validation", () => {
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         const { result: pm } = eng.createPremise()
         eng.addVariable(makeVar("var-p", "P"))
-        pm.addExpression(
-            makeVarExpr("v1", "var-p", { premiseId: pm.getId() })
-        )
+        pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
         const goodSnap = eng.snapshot()
 
         // Create a bad snapshot (tamper conclusionPremiseId)
@@ -1711,6 +1810,7 @@ git commit -m "feat: validate state after fromSnapshot, fromData, and rollback"
 ## Task 11: autoNormalize in insertExpression and wrapExpression
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts`
 - Modify: `test/core.test.ts`
 
@@ -1729,10 +1829,7 @@ describe("insertExpression — autoNormalize", () => {
         em.addExpression(makeVarExpr("p", "var-p"))
 
         // Insert an AND operator that takes p as left child
-        em.insertExpression(
-            makeOpExpr("and1", "and"),
-            "p"
-        )
+        em.insertExpression(makeOpExpr("and1", "and"), "p")
         // Now insert an OR operator as right child of AND — this would violate
         // formula-between-operators. With autoNormalize, a formula buffer should
         // be auto-inserted.
@@ -1824,6 +1921,7 @@ git commit -m "feat: add autoNormalize support to insertExpression and wrapExpre
 ## Task 12: autoNormalize in loadExpressions
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts`
 - Modify: `src/lib/types/grammar.ts`
 - Modify: `test/core.test.ts`
@@ -1912,6 +2010,7 @@ git commit -m "feat: enforce grammar config in loadExpressions, update autoNorma
 ## Task 13: Interface Updates and Final Exports
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts`
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts`
 - Modify: `src/lib/core/interfaces/library.interfaces.ts`
@@ -1947,6 +2046,7 @@ Also add `setVariableIdsCallback` and `setArgumentValidateCallback` to the inter
 - [ ] **Step 3: Add validate() to library interfaces**
 
 In `src/lib/core/interfaces/library.interfaces.ts`, add `validate(): TInvariantValidationResult` to:
+
 - `TClaimLibraryManagement`
 - `TSourceLibraryManagement`
 - `TClaimSourceLibraryManagement`

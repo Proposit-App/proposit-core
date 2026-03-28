@@ -15,16 +15,16 @@ This means an engine can hold data that violates its own grammar config and stru
 
 ### Gap Matrix (Current State)
 
-| Rule | Atomic | Combination | Bulk |
-|---|---|---|---|
-| Root-only (`implies`/`iff`) | Enforced | Enforced | Skipped |
-| Formula-between-operators | Enforced (+ autoNormalize) | Enforced (autoNormalize NOT supported) | Skipped |
-| Child limits (`not`/`formula` max 1) | Enforced | Enforced | Skipped |
-| Position uniqueness | Enforced | Enforced | Skipped |
-| Variable reference existence | Enforced | Enforced | Skipped |
-| Circularity prevention | Enforced | Enforced | Skipped |
-| Claim library reference | Enforced | N/A | Skipped |
-| Argument ownership | Enforced | Enforced | Skipped |
+| Rule                                 | Atomic                     | Combination                            | Bulk    |
+| ------------------------------------ | -------------------------- | -------------------------------------- | ------- |
+| Root-only (`implies`/`iff`)          | Enforced                   | Enforced                               | Skipped |
+| Formula-between-operators            | Enforced (+ autoNormalize) | Enforced (autoNormalize NOT supported) | Skipped |
+| Child limits (`not`/`formula` max 1) | Enforced                   | Enforced                               | Skipped |
+| Position uniqueness                  | Enforced                   | Enforced                               | Skipped |
+| Variable reference existence         | Enforced                   | Enforced                               | Skipped |
+| Circularity prevention               | Enforced                   | Enforced                               | Skipped |
+| Claim library reference              | Enforced                   | N/A                                    | Skipped |
+| Argument ownership                   | Enforced                   | Enforced                               | Skipped |
 
 ## Design Principles
 
@@ -44,16 +44,23 @@ New file: `src/lib/types/validation.ts`
 
 ```typescript
 type TInvariantViolation = {
-  code: string
-  message: string
-  entityType: "expression" | "variable" | "premise" | "argument" | "claim" | "source" | "association"
-  entityId: string
-  premiseId?: string
+    code: string
+    message: string
+    entityType:
+        | "expression"
+        | "variable"
+        | "premise"
+        | "argument"
+        | "claim"
+        | "source"
+        | "association"
+    entityId: string
+    premiseId?: string
 }
 
 type TInvariantValidationResult = {
-  ok: boolean
-  violations: TInvariantViolation[]
+    ok: boolean
+    violations: TInvariantViolation[]
 }
 ```
 
