@@ -6,6 +6,10 @@ import {
     SourceLibrary,
     mergeChangesets,
     orderChangeset,
+    createLookup,
+    EMPTY_CLAIM_LOOKUP,
+    EMPTY_SOURCE_LOOKUP,
+    EMPTY_CLAIM_SOURCE_LOOKUP,
 } from "../src/lib/index"
 import type { TOrderedOperation } from "../src/lib/index"
 import { ClaimSourceLibrary } from "../src/lib/core/claim-source-library"
@@ -21803,5 +21807,58 @@ describe("orderChangeset", () => {
         const updateRoles = summary.indexOf("update:roles")
         expect(insertVar).toBeLessThan(updateArg)
         expect(insertVar).toBeLessThan(updateRoles)
+    })
+})
+
+describe("createLookup", () => {
+    it("builds a lookup from an array", () => {
+        const items = [
+            { id: "c1", version: 0, frozen: false, checksum: "" },
+            { id: "c1", version: 1, frozen: true, checksum: "abc" },
+            { id: "c2", version: 0, frozen: false, checksum: "" },
+        ]
+        const lookup = createLookup(items, (c) => `${c.id}:${c.version}`)
+        expect(lookup.get("c1", 0)).toEqual(items[0])
+        expect(lookup.get("c1", 1)).toEqual(items[1])
+        expect(lookup.get("c2", 0)).toEqual(items[2])
+    })
+
+    it("returns undefined for missing keys", () => {
+        const lookup = createLookup(
+            [] as { id: string; version: number }[],
+            (c) => `${c.id}:${c.version}`
+        )
+        expect(lookup.get("missing", 0)).toBeUndefined()
+    })
+
+    it("last item wins when keys collide", () => {
+        const items = [
+            { id: "c1", version: 0, frozen: false, checksum: "first" },
+            { id: "c1", version: 0, frozen: false, checksum: "second" },
+        ]
+        const lookup = createLookup(items, (c) => `${c.id}:${c.version}`)
+        expect(lookup.get("c1", 0)?.checksum).toBe("second")
+    })
+})
+
+describe("empty lookup constants", () => {
+    it("EMPTY_CLAIM_LOOKUP.get returns undefined", () => {
+        expect(EMPTY_CLAIM_LOOKUP.get("any", 0)).toBeUndefined()
+    })
+
+    it("EMPTY_SOURCE_LOOKUP.get returns undefined", () => {
+        expect(EMPTY_SOURCE_LOOKUP.get("any", 0)).toBeUndefined()
+    })
+
+    it("EMPTY_CLAIM_SOURCE_LOOKUP.get returns undefined", () => {
+        expect(EMPTY_CLAIM_SOURCE_LOOKUP.get("any")).toBeUndefined()
+    })
+
+    it("EMPTY_CLAIM_SOURCE_LOOKUP.getForClaim returns empty array", () => {
+        expect(EMPTY_CLAIM_SOURCE_LOOKUP.getForClaim("any")).toEqual([])
+    })
+
+    it("EMPTY_CLAIM_SOURCE_LOOKUP.getForSource returns empty array", () => {
+        expect(EMPTY_CLAIM_SOURCE_LOOKUP.getForSource("any")).toEqual([])
     })
 })

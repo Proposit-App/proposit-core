@@ -21,6 +21,12 @@ export * from "./types/diff.js"
 export * from "./types/mutation.js"
 export { mergeChangesets, orderChangeset } from "./utils/changeset.js"
 export type { TOrderedOperation } from "./utils/changeset.js"
+export {
+    createLookup,
+    EMPTY_CLAIM_LOOKUP,
+    EMPTY_SOURCE_LOOKUP,
+    EMPTY_CLAIM_SOURCE_LOOKUP,
+} from "./utils/lookup.js"
 export * from "./types/checksum.js"
 export {
     computeHash,
