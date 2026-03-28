@@ -33,4 +33,6 @@ export type {
     TClaimSourceLookup,
     TClaimSourceLibraryManagement,
     TClaimSourceLibrarySnapshot,
+    TForkLookup,
+    TForksLibrarySnapshot,
 } from "./library.interfaces.js"

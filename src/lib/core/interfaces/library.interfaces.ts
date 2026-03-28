@@ -3,6 +3,7 @@ import type {
     TCoreClaimSourceAssociation,
     TCoreSource,
 } from "../../schemata/source.js"
+import type { TCoreFork } from "../../schemata/fork.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
 
 /**
@@ -326,4 +327,35 @@ export type TClaimSourceLibrarySnapshot<
 > = {
     /** All claim-source association entities in the library. */
     claimSourceAssociations: TAssoc[]
+}
+
+/**
+ * Narrow read-only interface for fork record lookups. Implemented by
+ * `ForksLibrary`. Use this interface for consumers that only need to
+ * query fork records without mutation access.
+ */
+export interface TForkLookup<TFork extends TCoreFork = TCoreFork> {
+    /**
+     * Returns a fork record by ID, or `undefined` if not found.
+     *
+     * @param id - The fork record ID.
+     * @returns The fork entity, or `undefined`.
+     */
+    get(id: string): TFork | undefined
+
+    /**
+     * Returns all fork records in the library.
+     *
+     * @returns An array of all fork entities.
+     */
+    getAll(): TFork[]
+}
+
+/**
+ * Serializable snapshot of a `ForksLibrary`. Contains all fork record
+ * entities.
+ */
+export type TForksLibrarySnapshot<TFork extends TCoreFork = TCoreFork> = {
+    /** All fork record entities in the library. */
+    forks: TFork[]
 }
