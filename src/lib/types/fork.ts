@@ -1,10 +1,3 @@
-import type {
-    TCoreArgument,
-    TCorePremise,
-    TCorePropositionalExpression,
-    TCorePropositionalVariable,
-} from "../schemata/index.js"
-import type { ArgumentEngine } from "../core/argument-engine.js"
 import type { TCoreChecksumConfig } from "./checksum.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import type { TGrammarConfig } from "./grammar.js"
@@ -27,15 +20,4 @@ export interface TForkRemapTable {
     premises: Map<string, string>
     expressions: Map<string, string>
     variables: Map<string, string>
-}
-
-/** Result of `forkArgument`. */
-export interface TForkArgumentResult<
-    TArg extends TCoreArgument = TCoreArgument,
-    TPremise extends TCorePremise = TCorePremise,
-    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
-    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-> {
-    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar>
-    remapTable: TForkRemapTable
 }

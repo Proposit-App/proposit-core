@@ -1,10 +1,28 @@
+import { randomUUID } from "node:crypto"
 import { Value } from "typebox/value"
 import type { TCoreFork } from "../schemata/fork.js"
 import { CoreForkSchema } from "../schemata/fork.js"
+import type {
+    TCoreArgument,
+    TCorePremise,
+    TCorePropositionalExpression,
+    TCorePropositionalVariable,
+} from "../schemata/index.js"
+import type { TCoreClaim } from "../schemata/claim.js"
+import type {
+    TCoreSource,
+    TCoreClaimSourceAssociation,
+} from "../schemata/source.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
+import type { TForkArgumentOptions, TForkRemapTable } from "../types/fork.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
+import { ArgumentEngine } from "./argument-engine.js"
+import { forkArgumentEngine } from "./fork.js"
 import type {
+    TClaimLookup,
+    TSourceLookup,
+    TClaimSourceLookup,
     TForkLookup,
     TForksLibrarySnapshot,
 } from "./interfaces/library.interfaces.js"
@@ -116,6 +134,123 @@ export class ForksLibrary<
             }
         }
         return { ok: violations.length === 0, violations }
+    }
+
+    /**
+     * Creates an independent copy of an argument engine under a new argument ID,
+     * with a fork record tracking the operation.
+     *
+     * Calls `engine.canFork()` as a guard. Delegates engine forking to
+     * `forkArgumentEngine()`, creates the fork record, and sets `forkId` on
+     * all entities in the forked engine.
+     *
+     * @param engine - The source engine to fork.
+     * @param newArgumentId - The ID for the forked argument.
+     * @param libraries - Claim, source, and claim-source libraries for the fork.
+     * @param options - Fork options plus optional `forkId` and `creatorId`.
+     * @returns The forked engine, remap table, and fork record.
+     * @throws If `engine.canFork()` returns false.
+     */
+    forkArgument<
+        TArg extends TCoreArgument = TCoreArgument,
+        TPremise extends TCorePremise = TCorePremise,
+        TExpr extends TCorePropositionalExpression =
+            TCorePropositionalExpression,
+        TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+        TSource extends TCoreSource = TCoreSource,
+        TClaim extends TCoreClaim = TCoreClaim,
+        TAssoc extends TCoreClaimSourceAssociation =
+            TCoreClaimSourceAssociation,
+    >(
+        engine: ArgumentEngine<
+            TArg,
+            TPremise,
+            TExpr,
+            TVar,
+            TSource,
+            TClaim,
+            TAssoc
+        >,
+        newArgumentId: string,
+        libraries: {
+            claimLibrary: TClaimLookup<TClaim>
+            sourceLibrary: TSourceLookup<TSource>
+            claimSourceLibrary: TClaimSourceLookup<TAssoc>
+        },
+        options?: TForkArgumentOptions & {
+            forkId?: string
+            creatorId?: string
+        }
+    ): {
+        engine: ArgumentEngine<
+            TArg,
+            TPremise,
+            TExpr,
+            TVar,
+            TSource,
+            TClaim,
+            TAssoc
+        >
+        remapTable: TForkRemapTable
+        fork: TFork
+    } {
+        // 1. Guard
+        if (!engine.canFork()) {
+            throw new Error("Forking is not allowed for this engine.")
+        }
+
+        // 2. Snapshot source argument metadata for the fork record
+        const sourceArg = engine.getArgument()
+
+        // 3. Fork the engine
+        const { engine: forkedEngine, remapTable } = forkArgumentEngine(
+            engine,
+            newArgumentId,
+            libraries,
+            options
+        )
+
+        // 4. Create fork record
+        const forkId = options?.forkId ?? randomUUID()
+        const fork = this.create({
+            id: forkId,
+            sourceArgumentId: sourceArg.id,
+            sourceArgumentVersion: sourceArg.version,
+            createdOn: new Date().toISOString(),
+            ...(options?.creatorId ? { creatorId: options.creatorId } : {}),
+        } as Omit<TFork, "checksum">)
+
+        // 5. Set forkId on all entities via snapshot → inject → reconstruct
+        const snap = forkedEngine.snapshot()
+        snap.argument = { ...snap.argument, forkId } as typeof snap.argument
+        for (const ps of snap.premises) {
+            ps.premise = { ...ps.premise, forkId } as typeof ps.premise
+            ps.expressions.expressions = ps.expressions.expressions.map(
+                (expr) => ({ ...expr, forkId }) as typeof expr
+            )
+        }
+        snap.variables.variables = snap.variables.variables.map(
+            (v) => ({ ...v, forkId }) as typeof v
+        )
+
+        const finalEngine = ArgumentEngine.fromSnapshot<
+            TArg,
+            TPremise,
+            TExpr,
+            TVar,
+            TSource,
+            TClaim,
+            TAssoc
+        >(
+            snap,
+            libraries.claimLibrary,
+            libraries.sourceLibrary,
+            libraries.claimSourceLibrary,
+            snap.config?.grammarConfig,
+            "ignore"
+        )
+
+        return { engine: finalEngine, remapTable, fork }
     }
 
     public static fromSnapshot<TFork extends TCoreFork = TCoreFork>(
