@@ -18200,7 +18200,7 @@ describe("forkArgument", () => {
 
     it("canFork rejects when overridden to return false", () => {
         class NoForkEngine extends ArgumentEngine {
-            protected override canFork(): boolean {
+            public override canFork(): boolean {
                 return false
             }
         }
@@ -22041,6 +22041,21 @@ describe("ForksLibrary", () => {
         expect(f2.creatorId).toBe("user-42")
         expect(f2.checksum).toBe(lib.get("fork-2")!.checksum)
     })
+
+    it("canFork() is publicly accessible", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        expect(eng.canFork()).toBe(true)
+    })
+
+    it("canFork() override still works on subclass", () => {
+        class RestrictedEngine extends ArgumentEngine {
+            public override canFork(): boolean {
+                return false
+            }
+        }
+        const eng = new RestrictedEngine(ARG, aLib(), sLib(), csLib())
+        expect(eng.canFork()).toBe(false)
+    })
 })
 
 describe("forkArgumentEngine", () => {
@@ -22139,7 +22154,7 @@ describe("forkArgumentEngine", () => {
 
     it("does not call canFork()", () => {
         class NoForkEngine extends ArgumentEngine {
-            protected override canFork(): boolean {
+            public override canFork(): boolean {
                 return false
             }
         }

@@ -2553,7 +2553,7 @@ export class ArgumentEngine<
      * Override point for subclasses to prevent forking. When this returns
      * `false`, `forkArgument` will throw.
      */
-    protected canFork(): boolean {
+    public canFork(): boolean {
         return true
     }
 
