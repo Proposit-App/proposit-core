@@ -9,6 +9,8 @@ export type TFormulaAST =
     | { type: "implies"; left: TFormulaAST; right: TFormulaAST }
     | { type: "iff"; left: TFormulaAST; right: TFormulaAST }
 
+const typedParse = pegParse as (input: string) => TFormulaAST
+
 export function parseFormula(input: string): TFormulaAST {
-    return pegParse(input) as TFormulaAST
+    return typedParse(input)
 }
