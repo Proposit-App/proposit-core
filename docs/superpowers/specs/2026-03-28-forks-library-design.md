@@ -24,12 +24,12 @@ New schema in `src/lib/schemata/fork.ts`:
 
 ```typescript
 type TCoreFork = {
-    id: string                    // UUID
-    sourceArgumentId: string      // argument that was forked
+    id: string // UUID
+    sourceArgumentId: string // argument that was forked
     sourceArgumentVersion: number // version at fork time
-    createdOn: string             // ISO 8601 timestamp
-    creatorId?: string            // optional, application-provided
-    checksum?: string             // computed by library
+    createdOn: string // ISO 8601 timestamp
+    creatorId?: string // optional, application-provided
+    checksum?: string // computed by library
 }
 ```
 
@@ -60,14 +60,14 @@ constructor(options?: { checksumConfig?: TCoreChecksumConfig })
 
 **API:**
 
-| Method | Description |
-|--------|-------------|
-| `create(fork: TFork): void` | Validates and stores. Throws if ID already exists. Computes checksum. |
-| `get(id: string): TFork \| undefined` | Returns fork record by ID. |
-| `getAll(): TFork[]` | Returns all fork records. |
-| `remove(id: string): void` | Removes fork record. Throws if ID not found. Does not cascade-delete forked entities. |
-| `snapshot(): TForksLibrarySnapshot<TFork>` | Returns `{ forks: TFork[] }`. |
-| `static fromSnapshot<T>(snapshot, options?): ForksLibrary<T>` | Reconstructs library from snapshot. |
+| Method                                                        | Description                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `create(fork: TFork): void`                                   | Validates and stores. Throws if ID already exists. Computes checksum.                 |
+| `get(id: string): TFork \| undefined`                         | Returns fork record by ID.                                                            |
+| `getAll(): TFork[]`                                           | Returns all fork records.                                                             |
+| `remove(id: string): void`                                    | Removes fork record. Throws if ID not found. Does not cascade-delete forked entities. |
+| `snapshot(): TForksLibrarySnapshot<TFork>`                    | Returns `{ forks: TFork[] }`.                                                         |
+| `static fromSnapshot<T>(snapshot, options?): ForksLibrary<T>` | Reconstructs library from snapshot.                                                   |
 
 **Snapshot type:**
 
@@ -93,8 +93,24 @@ ForksLibrary implements `TForkLookup`. The lookup interface is available for rea
 Extract the current `ArgumentEngine.forkArgument()` remap/reconstruct logic into a standalone function in `src/lib/core/fork.ts`:
 
 ```typescript
-function forkArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>(
-    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>,
+function forkArgumentEngine<
+    TArg,
+    TPremise,
+    TExpr,
+    TVar,
+    TSource,
+    TClaim,
+    TAssoc,
+>(
+    engine: ArgumentEngine<
+        TArg,
+        TPremise,
+        TExpr,
+        TVar,
+        TSource,
+        TClaim,
+        TAssoc
+    >,
     newArgumentId: string,
     libraries: {
         claimLibrary: TClaimLookup<TClaim>
@@ -102,7 +118,10 @@ function forkArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc
         claimSourceLibrary: TClaimSourceLookup<TAssoc>
     },
     options?: TForkArgumentOptions
-): { engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>; remapTable: TForkRemapTable }
+): {
+    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>
+    remapTable: TForkRemapTable
+}
 ```
 
 This is a pure extraction — same snapshot/remap/reconstruct logic, same `forkedFrom` assignment. Does not create fork records or set `forkId`. Does not call `canFork()`.

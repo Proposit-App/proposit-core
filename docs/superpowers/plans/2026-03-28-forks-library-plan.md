@@ -13,6 +13,7 @@
 ### Task 1: Add `CoreForkSchema` and `TCoreFork` type
 
 **Files:**
+
 - Create: `src/lib/schemata/fork.ts`
 - Modify: `src/lib/schemata/index.ts`
 
@@ -90,8 +91,7 @@ export const CoreForkSchema = Type.Object(
         }),
         creatorId: Type.Optional(
             Type.String({
-                description:
-                    "Optional application-provided ID of the creator.",
+                description: "Optional application-provided ID of the creator.",
             })
         ),
         checksum: Type.String({
@@ -134,6 +134,7 @@ git commit -m "feat: add CoreForkSchema and TCoreFork type"
 ### Task 2: Add `forkId` field to entity schemas
 
 **Files:**
+
 - Modify: `src/lib/schemata/argument.ts`
 - Modify: `src/lib/schemata/propositional.ts`
 
@@ -142,74 +143,74 @@ git commit -m "feat: add CoreForkSchema and TCoreFork type"
 Add inside the `ForksLibrary` describe block in `test/core.test.ts`:
 
 ```typescript
-    it("CoreArgumentSchema accepts forkId field", () => {
-        const arg = {
-            id: "arg-1",
-            version: 0,
-            checksum: "cs1",
-            descendantChecksum: null,
-            combinedChecksum: "cs1",
-            forkId: "fork-1",
-        }
-        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
-    })
+it("CoreArgumentSchema accepts forkId field", () => {
+    const arg = {
+        id: "arg-1",
+        version: 0,
+        checksum: "cs1",
+        descendantChecksum: null,
+        combinedChecksum: "cs1",
+        forkId: "fork-1",
+    }
+    expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
+})
 
-    it("CoreArgumentSchema accepts forkId as null", () => {
-        const arg = {
-            id: "arg-1",
-            version: 0,
-            checksum: "cs1",
-            descendantChecksum: null,
-            combinedChecksum: "cs1",
-            forkId: null,
-        }
-        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
-    })
+it("CoreArgumentSchema accepts forkId as null", () => {
+    const arg = {
+        id: "arg-1",
+        version: 0,
+        checksum: "cs1",
+        descendantChecksum: null,
+        combinedChecksum: "cs1",
+        forkId: null,
+    }
+    expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
+})
 
-    it("CorePremiseSchema accepts forkId field", () => {
-        const premise = {
-            id: "prem-1",
-            argumentId: "arg-1",
-            argumentVersion: 0,
-            checksum: "cs2",
-            descendantChecksum: null,
-            combinedChecksum: "cs2",
-            forkId: "fork-1",
-        }
-        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
-    })
+it("CorePremiseSchema accepts forkId field", () => {
+    const premise = {
+        id: "prem-1",
+        argumentId: "arg-1",
+        argumentVersion: 0,
+        checksum: "cs2",
+        descendantChecksum: null,
+        combinedChecksum: "cs2",
+        forkId: "fork-1",
+    }
+    expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
+})
 
-    it("CorePropositionalExpressionSchema accepts forkId field", () => {
-        const expr = {
-            id: "expr-1",
-            argumentId: "arg-1",
-            argumentVersion: 0,
-            premiseId: "prem-1",
-            parentId: null,
-            position: 0,
-            checksum: "cs3",
-            descendantChecksum: null,
-            combinedChecksum: "cs3",
-            type: "variable" as const,
-            variableId: "var-1",
-            forkId: "fork-1",
-        }
-        expect(Value.Check(CorePropositionalExpressionSchema, expr)).toBe(true)
-    })
+it("CorePropositionalExpressionSchema accepts forkId field", () => {
+    const expr = {
+        id: "expr-1",
+        argumentId: "arg-1",
+        argumentVersion: 0,
+        premiseId: "prem-1",
+        parentId: null,
+        position: 0,
+        checksum: "cs3",
+        descendantChecksum: null,
+        combinedChecksum: "cs3",
+        type: "variable" as const,
+        variableId: "var-1",
+        forkId: "fork-1",
+    }
+    expect(Value.Check(CorePropositionalExpressionSchema, expr)).toBe(true)
+})
 
-    it("CorePropositionalVariableSchema accepts forkId field", () => {
-        const variable = {
-            id: "var-1",
-            argumentId: "arg-1",
-            argumentVersion: 0,
-            symbol: "P",
-            checksum: "cs4",
-            claimId: "claim-1",
-            claimVersion: 1,
-            forkId: "fork-1",
-        }
-        expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(true)
-    })
+it("CorePropositionalVariableSchema accepts forkId field", () => {
+    const variable = {
+        id: "var-1",
+        argumentId: "arg-1",
+        argumentVersion: 0,
+        symbol: "P",
+        checksum: "cs4",
+        claimId: "claim-1",
+        claimVersion: 1,
+        forkId: "fork-1",
+    }
+    expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(true)
+})
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -302,29 +303,31 @@ Also add `"forkFields"` to the `keys` arrays in `normalizeChecksumConfig`, `seri
 Add inside the `ForksLibrary` describe block in `test/core.test.ts`:
 
 ```typescript
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in argument fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.argumentFields).toContain("forkId")
-    })
+it("DEFAULT_CHECKSUM_CONFIG includes forkId in argument fields", () => {
+    expect(DEFAULT_CHECKSUM_CONFIG.argumentFields).toContain("forkId")
+})
 
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in premise fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain("forkId")
-    })
+it("DEFAULT_CHECKSUM_CONFIG includes forkId in premise fields", () => {
+    expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain("forkId")
+})
 
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in expression fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain("forkId")
-    })
+it("DEFAULT_CHECKSUM_CONFIG includes forkId in expression fields", () => {
+    expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain("forkId")
+})
 
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in variable fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain("forkId")
-    })
+it("DEFAULT_CHECKSUM_CONFIG includes forkId in variable fields", () => {
+    expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain("forkId")
+})
 
-    it("DEFAULT_CHECKSUM_CONFIG has forkFields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toBeDefined()
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("id")
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("sourceArgumentId")
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("sourceArgumentVersion")
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("createdOn")
-    })
+it("DEFAULT_CHECKSUM_CONFIG has forkFields", () => {
+    expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toBeDefined()
+    expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("id")
+    expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("sourceArgumentId")
+    expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain(
+        "sourceArgumentVersion"
+    )
+    expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("createdOn")
+})
 ```
 
 - [ ] **Step 10: Run tests and typecheck**
@@ -344,6 +347,7 @@ git commit -m "feat: add forkId field to entity schemas and forkFields to checks
 ### Task 3: Add `TForkLookup` and `TForksLibrarySnapshot` interfaces
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/library.interfaces.ts`
 - Modify: `src/lib/core/interfaces/index.ts`
 
@@ -427,6 +431,7 @@ git commit -m "feat: add TForkLookup and TForksLibrarySnapshot interfaces"
 ### Task 4: Implement `ForksLibrary` class
 
 **Files:**
+
 - Create: `src/lib/core/forks-library.ts`
 - Modify: `src/lib/index.ts`
 
@@ -435,122 +440,122 @@ git commit -m "feat: add TForkLookup and TForksLibrarySnapshot interfaces"
 Add inside the `ForksLibrary` describe block in `test/core.test.ts`. Import `ForksLibrary` from `../src/lib/core/forks-library` at the top of the test file.
 
 ```typescript
-    it("create() stores a fork record and computes checksum", () => {
-        const lib = new ForksLibrary()
+it("create() stores a fork record and computes checksum", () => {
+    const lib = new ForksLibrary()
+    lib.create({
+        id: "fork-1",
+        sourceArgumentId: "arg-1",
+        sourceArgumentVersion: 3,
+        createdOn: "2026-03-28T12:00:00.000Z",
+    })
+    const fork = lib.get("fork-1")
+    expect(fork).toBeDefined()
+    expect(fork!.id).toBe("fork-1")
+    expect(fork!.sourceArgumentId).toBe("arg-1")
+    expect(fork!.sourceArgumentVersion).toBe(3)
+    expect(fork!.checksum).toBeDefined()
+    expect(typeof fork!.checksum).toBe("string")
+    expect(fork!.checksum.length).toBeGreaterThan(0)
+})
+
+it("create() stores a fork with optional creatorId", () => {
+    const lib = new ForksLibrary()
+    lib.create({
+        id: "fork-1",
+        sourceArgumentId: "arg-1",
+        sourceArgumentVersion: 0,
+        createdOn: "2026-03-28T12:00:00.000Z",
+        creatorId: "user-42",
+    })
+    const fork = lib.get("fork-1")
+    expect(fork!.creatorId).toBe("user-42")
+})
+
+it("create() throws on duplicate ID", () => {
+    const lib = new ForksLibrary()
+    lib.create({
+        id: "fork-1",
+        sourceArgumentId: "arg-1",
+        sourceArgumentVersion: 0,
+        createdOn: "2026-03-28T12:00:00.000Z",
+    })
+    expect(() =>
         lib.create({
             id: "fork-1",
-            sourceArgumentId: "arg-1",
-            sourceArgumentVersion: 3,
-            createdOn: "2026-03-28T12:00:00.000Z",
-        })
-        const fork = lib.get("fork-1")
-        expect(fork).toBeDefined()
-        expect(fork!.id).toBe("fork-1")
-        expect(fork!.sourceArgumentId).toBe("arg-1")
-        expect(fork!.sourceArgumentVersion).toBe(3)
-        expect(fork!.checksum).toBeDefined()
-        expect(typeof fork!.checksum).toBe("string")
-        expect(fork!.checksum.length).toBeGreaterThan(0)
-    })
-
-    it("create() stores a fork with optional creatorId", () => {
-        const lib = new ForksLibrary()
-        lib.create({
-            id: "fork-1",
-            sourceArgumentId: "arg-1",
-            sourceArgumentVersion: 0,
-            createdOn: "2026-03-28T12:00:00.000Z",
-            creatorId: "user-42",
-        })
-        const fork = lib.get("fork-1")
-        expect(fork!.creatorId).toBe("user-42")
-    })
-
-    it("create() throws on duplicate ID", () => {
-        const lib = new ForksLibrary()
-        lib.create({
-            id: "fork-1",
-            sourceArgumentId: "arg-1",
-            sourceArgumentVersion: 0,
-            createdOn: "2026-03-28T12:00:00.000Z",
-        })
-        expect(() =>
-            lib.create({
-                id: "fork-1",
-                sourceArgumentId: "arg-2",
-                sourceArgumentVersion: 1,
-                createdOn: "2026-03-28T13:00:00.000Z",
-            })
-        ).toThrow()
-    })
-
-    it("get() returns undefined for missing ID", () => {
-        const lib = new ForksLibrary()
-        expect(lib.get("nonexistent")).toBeUndefined()
-    })
-
-    it("getAll() returns all fork records", () => {
-        const lib = new ForksLibrary()
-        lib.create({
-            id: "fork-1",
-            sourceArgumentId: "arg-1",
-            sourceArgumentVersion: 0,
-            createdOn: "2026-03-28T12:00:00.000Z",
-        })
-        lib.create({
-            id: "fork-2",
-            sourceArgumentId: "arg-1",
-            sourceArgumentVersion: 1,
-            createdOn: "2026-03-28T13:00:00.000Z",
-        })
-        expect(lib.getAll()).toHaveLength(2)
-    })
-
-    it("remove() deletes a fork record", () => {
-        const lib = new ForksLibrary()
-        lib.create({
-            id: "fork-1",
-            sourceArgumentId: "arg-1",
-            sourceArgumentVersion: 0,
-            createdOn: "2026-03-28T12:00:00.000Z",
-        })
-        lib.remove("fork-1")
-        expect(lib.get("fork-1")).toBeUndefined()
-        expect(lib.getAll()).toHaveLength(0)
-    })
-
-    it("remove() throws for missing ID", () => {
-        const lib = new ForksLibrary()
-        expect(() => lib.remove("nonexistent")).toThrow()
-    })
-
-    it("snapshot() and fromSnapshot() round-trip preserves records", () => {
-        const lib = new ForksLibrary()
-        lib.create({
-            id: "fork-1",
-            sourceArgumentId: "arg-1",
-            sourceArgumentVersion: 0,
-            createdOn: "2026-03-28T12:00:00.000Z",
-        })
-        lib.create({
-            id: "fork-2",
             sourceArgumentId: "arg-2",
             sourceArgumentVersion: 1,
             createdOn: "2026-03-28T13:00:00.000Z",
-            creatorId: "user-42",
         })
+    ).toThrow()
+})
 
-        const snap = lib.snapshot()
-        const restored = ForksLibrary.fromSnapshot(snap)
+it("get() returns undefined for missing ID", () => {
+    const lib = new ForksLibrary()
+    expect(lib.get("nonexistent")).toBeUndefined()
+})
 
-        expect(restored.getAll()).toHaveLength(2)
-        const f1 = restored.get("fork-1")!
-        expect(f1.sourceArgumentId).toBe("arg-1")
-        expect(f1.checksum).toBe(lib.get("fork-1")!.checksum)
-        const f2 = restored.get("fork-2")!
-        expect(f2.creatorId).toBe("user-42")
-        expect(f2.checksum).toBe(lib.get("fork-2")!.checksum)
+it("getAll() returns all fork records", () => {
+    const lib = new ForksLibrary()
+    lib.create({
+        id: "fork-1",
+        sourceArgumentId: "arg-1",
+        sourceArgumentVersion: 0,
+        createdOn: "2026-03-28T12:00:00.000Z",
     })
+    lib.create({
+        id: "fork-2",
+        sourceArgumentId: "arg-1",
+        sourceArgumentVersion: 1,
+        createdOn: "2026-03-28T13:00:00.000Z",
+    })
+    expect(lib.getAll()).toHaveLength(2)
+})
+
+it("remove() deletes a fork record", () => {
+    const lib = new ForksLibrary()
+    lib.create({
+        id: "fork-1",
+        sourceArgumentId: "arg-1",
+        sourceArgumentVersion: 0,
+        createdOn: "2026-03-28T12:00:00.000Z",
+    })
+    lib.remove("fork-1")
+    expect(lib.get("fork-1")).toBeUndefined()
+    expect(lib.getAll()).toHaveLength(0)
+})
+
+it("remove() throws for missing ID", () => {
+    const lib = new ForksLibrary()
+    expect(() => lib.remove("nonexistent")).toThrow()
+})
+
+it("snapshot() and fromSnapshot() round-trip preserves records", () => {
+    const lib = new ForksLibrary()
+    lib.create({
+        id: "fork-1",
+        sourceArgumentId: "arg-1",
+        sourceArgumentVersion: 0,
+        createdOn: "2026-03-28T12:00:00.000Z",
+    })
+    lib.create({
+        id: "fork-2",
+        sourceArgumentId: "arg-2",
+        sourceArgumentVersion: 1,
+        createdOn: "2026-03-28T13:00:00.000Z",
+        creatorId: "user-42",
+    })
+
+    const snap = lib.snapshot()
+    const restored = ForksLibrary.fromSnapshot(snap)
+
+    expect(restored.getAll()).toHaveLength(2)
+    const f1 = restored.get("fork-1")!
+    expect(f1.sourceArgumentId).toBe("arg-1")
+    expect(f1.checksum).toBe(lib.get("fork-1")!.checksum)
+    const f2 = restored.get("fork-2")!
+    expect(f2.creatorId).toBe("user-42")
+    expect(f2.checksum).toBe(lib.get("fork-2")!.checksum)
+})
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -583,9 +588,9 @@ import { InvariantViolationError } from "./invariant-violation-error.js"
  *
  * @typeParam TFork - Fork entity type, defaults to `TCoreFork`.
  */
-export class ForksLibrary<TFork extends TCoreFork = TCoreFork>
-    implements TForkLookup<TFork>
-{
+export class ForksLibrary<
+    TFork extends TCoreFork = TCoreFork,
+> implements TForkLookup<TFork> {
     private forks: Map<string, TFork>
     private checksumConfig?: TCoreChecksumConfig
 
@@ -635,9 +640,7 @@ export class ForksLibrary<TFork extends TCoreFork = TCoreFork>
     create(fork: Omit<TFork, "checksum"> & { checksum?: string }): TFork {
         return this.withValidation(() => {
             if (this.forks.has(fork.id)) {
-                throw new Error(
-                    `Fork with ID "${fork.id}" already exists.`
-                )
+                throw new Error(`Fork with ID "${fork.id}" already exists.`)
             }
             const complete = {
                 ...fork,
@@ -752,6 +755,7 @@ git commit -m "feat: implement ForksLibrary class"
 ### Task 5: Extract standalone `forkArgumentEngine()` function
 
 **Files:**
+
 - Create: `src/lib/core/fork.ts`
 - Modify: `src/lib/core/argument-engine.ts`
 - Modify: `src/lib/types/fork.ts`
@@ -764,119 +768,117 @@ This task extracts the remap/reconstruct logic from `ArgumentEngine.forkArgument
 Add inside the `ForksLibrary` describe block in `test/core.test.ts`. Import `forkArgumentEngine` from `../src/lib/index`.
 
 ```typescript
-    describe("forkArgumentEngine", () => {
-        it("produces identical results to the former engine method", () => {
-            const claimLib = aLib()
-            const sourceLib = sLib()
-            const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+describe("forkArgumentEngine", () => {
+    it("produces identical results to the former engine method", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
 
-            const eng = new ArgumentEngine(
-                { id: "src-arg", version: 2 },
-                claimLib,
-                sourceLib,
-                csLibrary
-            )
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 2 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
 
-            eng.addVariable({
-                id: "var-p",
-                argumentId: "src-arg",
-                argumentVersion: 2,
-                symbol: "P",
-                claimId: "claim-default",
-                claimVersion: 0,
-            } as TClaimBoundVariable)
+        eng.addVariable({
+            id: "var-p",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
 
-            const { result: pm } = eng.createPremiseWithId("prem-1")
-            pm.addExpression({
-                id: "expr-1",
-                argumentId: "src-arg",
-                argumentVersion: 2,
-                premiseId: "prem-1",
-                type: "variable",
-                variableId: "var-p",
-                parentId: null,
-                position: POSITION_INITIAL,
-            })
-
-            eng.setConclusionPremise("prem-1")
-
-            const forkClaimLib = aLib()
-            const forkSourceLib = sLib()
-            const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
-
-            let counter = 0
-            const { engine: forked, remapTable } = forkArgumentEngine(
-                eng,
-                "fork-arg",
-                {
-                    claimLibrary: forkClaimLib,
-                    sourceLibrary: forkSourceLib,
-                    claimSourceLibrary: forkCsLib,
-                },
-                { generateId: () => `fk-${counter++}` }
-            )
-
-            // Verify argument identity and forkedFrom
-            const forkedArg = forked.getArgument()
-            expect(forkedArg.id).toBe("fork-arg")
-            expect(forkedArg.version).toBe(0)
-            expect(forkedArg.forkedFromArgumentId).toBe("src-arg")
-            expect(forkedArg.forkedFromArgumentVersion).toBe(2)
-
-            // Verify remap table
-            expect(remapTable.argumentId).toEqual({
-                from: "src-arg",
-                to: "fork-arg",
-            })
-            expect(remapTable.premises.size).toBe(1)
-            expect(remapTable.expressions.size).toBe(1)
-            expect(remapTable.variables.size).toBe(2) // var-p + auto premise-bound
-
-            // Verify premise forkedFrom
-            const forkedPremise = forked.listPremises()[0]
-            const forkedPremiseData = forkedPremise.snapshot().premise
-            expect(forkedPremiseData.forkedFromPremiseId).toBe("prem-1")
-
-            // Verify expression forkedFrom
-            const forkedExpr = forkedPremise.getExpressions()[0]
-            expect(forkedExpr.forkedFromExpressionId).toBe("expr-1")
-
-            // Verify variable forkedFrom
-            const forkedVar = forked
-                .getVariables()
-                .find(
-                    (v) => v.id === remapTable.variables.get("var-p")
-                )!
-            expect(forkedVar.forkedFromVariableId).toBe("var-p")
-
-            // Verify conclusion remapped
-            expect(forked.getConclusionPremise()?.getId()).toBe(
-                remapTable.premises.get("prem-1")
-            )
-
-            // Verify independence
-            forked.createPremise()
-            expect(eng.listPremises()).toHaveLength(1)
-            expect(forked.listPremises()).toHaveLength(2)
+        const { result: pm } = eng.createPremiseWithId("prem-1")
+        pm.addExpression({
+            id: "expr-1",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            premiseId: "prem-1",
+            type: "variable",
+            variableId: "var-p",
+            parentId: null,
+            position: POSITION_INITIAL,
         })
 
-        it("does not call canFork()", () => {
-            class NoForkEngine extends ArgumentEngine {
-                public override canFork(): boolean {
-                    return false
-                }
-            }
-            const eng = new NoForkEngine(ARG, aLib(), sLib(), csLib())
-            // Standalone function should NOT check canFork
-            expect(() =>
-                forkArgumentEngine(eng, "new-arg", {
-                    claimLibrary: aLib(),
-                    sourceLibrary: sLib(),
-                    claimSourceLibrary: csLib(),
-                })
-            ).not.toThrow()
+        eng.setConclusionPremise("prem-1")
+
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+
+        let counter = 0
+        const { engine: forked, remapTable } = forkArgumentEngine(
+            eng,
+            "fork-arg",
+            {
+                claimLibrary: forkClaimLib,
+                sourceLibrary: forkSourceLib,
+                claimSourceLibrary: forkCsLib,
+            },
+            { generateId: () => `fk-${counter++}` }
+        )
+
+        // Verify argument identity and forkedFrom
+        const forkedArg = forked.getArgument()
+        expect(forkedArg.id).toBe("fork-arg")
+        expect(forkedArg.version).toBe(0)
+        expect(forkedArg.forkedFromArgumentId).toBe("src-arg")
+        expect(forkedArg.forkedFromArgumentVersion).toBe(2)
+
+        // Verify remap table
+        expect(remapTable.argumentId).toEqual({
+            from: "src-arg",
+            to: "fork-arg",
         })
+        expect(remapTable.premises.size).toBe(1)
+        expect(remapTable.expressions.size).toBe(1)
+        expect(remapTable.variables.size).toBe(2) // var-p + auto premise-bound
+
+        // Verify premise forkedFrom
+        const forkedPremise = forked.listPremises()[0]
+        const forkedPremiseData = forkedPremise.snapshot().premise
+        expect(forkedPremiseData.forkedFromPremiseId).toBe("prem-1")
+
+        // Verify expression forkedFrom
+        const forkedExpr = forkedPremise.getExpressions()[0]
+        expect(forkedExpr.forkedFromExpressionId).toBe("expr-1")
+
+        // Verify variable forkedFrom
+        const forkedVar = forked
+            .getVariables()
+            .find((v) => v.id === remapTable.variables.get("var-p"))!
+        expect(forkedVar.forkedFromVariableId).toBe("var-p")
+
+        // Verify conclusion remapped
+        expect(forked.getConclusionPremise()?.getId()).toBe(
+            remapTable.premises.get("prem-1")
+        )
+
+        // Verify independence
+        forked.createPremise()
+        expect(eng.listPremises()).toHaveLength(1)
+        expect(forked.listPremises()).toHaveLength(2)
     })
+
+    it("does not call canFork()", () => {
+        class NoForkEngine extends ArgumentEngine {
+            public override canFork(): boolean {
+                return false
+            }
+        }
+        const eng = new NoForkEngine(ARG, aLib(), sLib(), csLib())
+        // Standalone function should NOT check canFork
+        expect(() =>
+            forkArgumentEngine(eng, "new-arg", {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            })
+        ).not.toThrow()
+    })
+})
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -936,7 +938,15 @@ export function forkArgumentEngine<
     TClaim extends TCoreClaim = TCoreClaim,
     TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
 >(
-    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>,
+    engine: ArgumentEngine<
+        TArg,
+        TPremise,
+        TExpr,
+        TVar,
+        TSource,
+        TClaim,
+        TAssoc
+    >,
     newArgumentId: string,
     libraries: {
         claimLibrary: TClaimLookup<TClaim>
@@ -944,7 +954,10 @@ export function forkArgumentEngine<
         claimSourceLibrary: TClaimSourceLookup<TAssoc>
     },
     options?: TForkArgumentOptions
-): { engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>; remapTable: TForkRemapTable } {
+): {
+    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>
+    remapTable: TForkRemapTable
+} {
     const generateId = options?.generateId ?? randomUUID
 
     const snap = engine.snapshot()
@@ -1002,41 +1015,38 @@ export function forkArgumentEngine<
             ps.rootExpressionId = expressionRemap.get(ps.rootExpressionId)!
         }
 
-        ps.expressions.expressions = ps.expressions.expressions.map(
-            (expr) => {
-                const originalExprId = expr.id
-                const newExprId = expressionRemap.get(originalExprId)!
+        ps.expressions.expressions = ps.expressions.expressions.map((expr) => {
+            const originalExprId = expr.id
+            const newExprId = expressionRemap.get(originalExprId)!
 
-                const remapped = {
-                    ...expr,
-                    id: newExprId,
-                    argumentId: newArgumentId,
-                    argumentVersion: 0,
-                    premiseId: newPremiseId,
-                    parentId: expr.parentId
-                        ? (expressionRemap.get(expr.parentId) ?? null)
-                        : null,
-                    forkedFromExpressionId: originalExprId,
-                    forkedFromPremiseId: originalPremiseId,
-                    forkedFromArgumentId: originalArgumentId,
-                    forkedFromArgumentVersion: originalArgumentVersion,
-                } as TExpr
+            const remapped = {
+                ...expr,
+                id: newExprId,
+                argumentId: newArgumentId,
+                argumentVersion: 0,
+                premiseId: newPremiseId,
+                parentId: expr.parentId
+                    ? (expressionRemap.get(expr.parentId) ?? null)
+                    : null,
+                forkedFromExpressionId: originalExprId,
+                forkedFromPremiseId: originalPremiseId,
+                forkedFromArgumentId: originalArgumentId,
+                forkedFromArgumentVersion: originalArgumentVersion,
+            } as TExpr
 
-                if (
-                    (remapped as { type: string }).type === "variable" &&
-                    "variableId" in remapped
-                ) {
-                    const origVarId = (
-                        remapped as unknown as { variableId: string }
-                    ).variableId
-                    ;(
-                        remapped as unknown as { variableId: string }
-                    ).variableId = variableRemap.get(origVarId)!
-                }
-
-                return remapped
+            if (
+                (remapped as { type: string }).type === "variable" &&
+                "variableId" in remapped
+            ) {
+                const origVarId = (
+                    remapped as unknown as { variableId: string }
+                ).variableId
+                ;(remapped as unknown as { variableId: string }).variableId =
+                    variableRemap.get(origVarId)!
             }
-        )
+
+            return remapped
+        })
     }
 
     // Remap variables
@@ -1054,11 +1064,7 @@ export function forkArgumentEngine<
             forkedFromArgumentVersion: originalArgumentVersion,
         }
 
-        if (
-            isPremiseBound(
-                remapped as unknown as TCorePropositionalVariable
-            )
-        ) {
+        if (isPremiseBound(remapped as unknown as TCorePropositionalVariable)) {
             const premiseBound =
                 remapped as unknown as TPremiseBoundVariable & {
                     boundPremiseId: string
@@ -1114,21 +1120,29 @@ export function forkArgumentEngine<
 **Important:** The standalone function needs access to the engine's config (checksum, position, grammar). Check whether `ArgumentEngine` has public getters for these. If not, they need to be exposed. The current `forkArgument()` accesses `this.checksumConfig`, `this.positionConfig`, `this.grammarConfig` directly as private fields. The standalone function can get these from the snapshot's `config` field instead — the snapshot already includes config. Adjust the config section:
 
 ```typescript
-    // Carry config from the snapshot (already includes engine config) or options
-    if (options?.checksumConfig || options?.positionConfig || options?.grammarConfig) {
-        snap.config = {
-            ...snap.config,
-            ...(options.checksumConfig
-                ? { checksumConfig: serializeChecksumConfig(options.checksumConfig) }
-                : {}),
-            ...(options.positionConfig
-                ? { positionConfig: options.positionConfig }
-                : {}),
-            ...(options.grammarConfig
-                ? { grammarConfig: options.grammarConfig }
-                : {}),
-        }
+// Carry config from the snapshot (already includes engine config) or options
+if (
+    options?.checksumConfig ||
+    options?.positionConfig ||
+    options?.grammarConfig
+) {
+    snap.config = {
+        ...snap.config,
+        ...(options.checksumConfig
+            ? {
+                  checksumConfig: serializeChecksumConfig(
+                      options.checksumConfig
+                  ),
+              }
+            : {}),
+        ...(options.positionConfig
+            ? { positionConfig: options.positionConfig }
+            : {}),
+        ...(options.grammarConfig
+            ? { grammarConfig: options.grammarConfig }
+            : {}),
     }
+}
 ```
 
 Actually, the `snapshot()` method already populates `snap.config` with the engine's config. So the standalone function only needs to override the config fields when options are provided. The default case (no options) already works because the snapshot contains the config.
@@ -1136,22 +1150,22 @@ Actually, the `snapshot()` method already populates `snap.config` with the engin
 Revise the config section to:
 
 ```typescript
-    // Override config from options if provided; otherwise snapshot already has it
-    if (options?.checksumConfig) {
-        snap.config = {
-            ...snap.config,
-            checksumConfig: serializeChecksumConfig(options.checksumConfig),
-        }
+// Override config from options if provided; otherwise snapshot already has it
+if (options?.checksumConfig) {
+    snap.config = {
+        ...snap.config,
+        checksumConfig: serializeChecksumConfig(options.checksumConfig),
     }
-    if (options?.positionConfig) {
-        snap.config = { ...snap.config, positionConfig: options.positionConfig }
-    }
-    if (options?.grammarConfig) {
-        snap.config = { ...snap.config, grammarConfig: options.grammarConfig }
-    }
+}
+if (options?.positionConfig) {
+    snap.config = { ...snap.config, positionConfig: options.positionConfig }
+}
+if (options?.grammarConfig) {
+    snap.config = { ...snap.config, grammarConfig: options.grammarConfig }
+}
 
-    // grammarConfig for fromSnapshot comes from snap.config or options
-    const grammarConfig = options?.grammarConfig ?? snap.config?.grammarConfig
+// grammarConfig for fromSnapshot comes from snap.config or options
+const grammarConfig = options?.grammarConfig ?? snap.config?.grammarConfig
 ```
 
 And use `grammarConfig` in the `fromSnapshot` call.
@@ -1181,6 +1195,7 @@ git commit -m "feat: extract forkArgumentEngine standalone function"
 ### Task 6: Make `canFork()` public on ArgumentEngine
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -1188,21 +1203,21 @@ git commit -m "feat: extract forkArgumentEngine standalone function"
 Add inside the `ForksLibrary` describe block in `test/core.test.ts`:
 
 ```typescript
-    it("canFork() is publicly accessible", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
-        // Should be callable without casting
-        expect(eng.canFork()).toBe(true)
-    })
+it("canFork() is publicly accessible", () => {
+    const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+    // Should be callable without casting
+    expect(eng.canFork()).toBe(true)
+})
 
-    it("canFork() override still works on subclass", () => {
-        class RestrictedEngine extends ArgumentEngine {
-            public override canFork(): boolean {
-                return false
-            }
+it("canFork() override still works on subclass", () => {
+    class RestrictedEngine extends ArgumentEngine {
+        public override canFork(): boolean {
+            return false
         }
-        const eng = new RestrictedEngine(ARG, aLib(), sLib(), csLib())
-        expect(eng.canFork()).toBe(false)
-    })
+    }
+    const eng = new RestrictedEngine(ARG, aLib(), sLib(), csLib())
+    expect(eng.canFork()).toBe(false)
+})
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1250,6 +1265,7 @@ git commit -m "feat: make canFork() public on ArgumentEngine"
 ### Task 7: Add `ForksLibrary.forkArgument()` and remove engine method
 
 **Files:**
+
 - Modify: `src/lib/core/forks-library.ts`
 - Modify: `src/lib/core/argument-engine.ts`
 
@@ -1258,168 +1274,172 @@ git commit -m "feat: make canFork() public on ArgumentEngine"
 Add inside the `ForksLibrary` describe block in `test/core.test.ts`:
 
 ```typescript
-    describe("ForksLibrary.forkArgument()", () => {
-        it("creates fork record, sets forkId on all entities, returns engine + remapTable + fork", () => {
-            const claimLib = aLib()
-            const sourceLib = sLib()
-            const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+describe("ForksLibrary.forkArgument()", () => {
+    it("creates fork record, sets forkId on all entities, returns engine + remapTable + fork", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
 
-            const eng = new ArgumentEngine(
-                { id: "src-arg", version: 2 },
-                claimLib,
-                sourceLib,
-                csLibrary
-            )
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 2 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
 
-            eng.addVariable({
-                id: "var-p",
-                argumentId: "src-arg",
-                argumentVersion: 2,
-                symbol: "P",
-                claimId: "claim-default",
-                claimVersion: 0,
-            } as TClaimBoundVariable)
+        eng.addVariable({
+            id: "var-p",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        } as TClaimBoundVariable)
 
-            const { result: pm } = eng.createPremiseWithId("prem-1")
-            pm.addExpression({
-                id: "expr-1",
-                argumentId: "src-arg",
-                argumentVersion: 2,
-                premiseId: "prem-1",
-                type: "variable",
-                variableId: "var-p",
-                parentId: null,
-                position: POSITION_INITIAL,
-            })
+        const { result: pm } = eng.createPremiseWithId("prem-1")
+        pm.addExpression({
+            id: "expr-1",
+            argumentId: "src-arg",
+            argumentVersion: 2,
+            premiseId: "prem-1",
+            type: "variable",
+            variableId: "var-p",
+            parentId: null,
+            position: POSITION_INITIAL,
+        })
 
-            const forksLib = new ForksLibrary()
-            const forkClaimLib = aLib()
-            const forkSourceLib = sLib()
-            const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forksLib = new ForksLibrary()
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
 
-            let counter = 0
-            const { engine: forked, remapTable, fork } = forksLib.forkArgument(
-                eng,
-                "fork-arg",
-                {
-                    claimLibrary: forkClaimLib,
-                    sourceLibrary: forkSourceLib,
-                    claimSourceLibrary: forkCsLib,
-                },
-                {
-                    generateId: () => `fk-${counter++}`,
-                    creatorId: "user-42",
-                }
-            )
-
-            // Fork record created in library
-            expect(fork.id).toBeDefined()
-            expect(fork.sourceArgumentId).toBe("src-arg")
-            expect(fork.sourceArgumentVersion).toBe(2)
-            expect(fork.creatorId).toBe("user-42")
-            expect(fork.createdOn).toBeDefined()
-            expect(forksLib.get(fork.id)).toBe(fork)
-
-            // forkId set on argument
-            const forkedArg = forked.getArgument()
-            expect(forkedArg.forkId).toBe(fork.id)
-
-            // forkId set on premises
-            const forkedPremise = forked.listPremises()[0]
-            const premiseData = forkedPremise.snapshot().premise
-            expect(premiseData.forkId).toBe(fork.id)
-
-            // forkId set on expressions
-            const forkedExpr = forkedPremise.getExpressions()[0]
-            expect(forkedExpr.forkId).toBe(fork.id)
-
-            // forkId set on variables
-            for (const v of forked.getVariables()) {
-                expect(v.forkId).toBe(fork.id)
+        let counter = 0
+        const {
+            engine: forked,
+            remapTable,
+            fork,
+        } = forksLib.forkArgument(
+            eng,
+            "fork-arg",
+            {
+                claimLibrary: forkClaimLib,
+                sourceLibrary: forkSourceLib,
+                claimSourceLibrary: forkCsLib,
+            },
+            {
+                generateId: () => `fk-${counter++}`,
+                creatorId: "user-42",
             }
+        )
 
-            // forkedFrom still set
-            expect(forkedArg.forkedFromArgumentId).toBe("src-arg")
-            expect(premiseData.forkedFromPremiseId).toBe("prem-1")
+        // Fork record created in library
+        expect(fork.id).toBeDefined()
+        expect(fork.sourceArgumentId).toBe("src-arg")
+        expect(fork.sourceArgumentVersion).toBe(2)
+        expect(fork.creatorId).toBe("user-42")
+        expect(fork.createdOn).toBeDefined()
+        expect(forksLib.get(fork.id)).toBe(fork)
 
-            // Remap table correct
-            expect(remapTable.premises.size).toBe(1)
-            expect(remapTable.expressions.size).toBe(1)
-        })
+        // forkId set on argument
+        const forkedArg = forked.getArgument()
+        expect(forkedArg.forkId).toBe(fork.id)
 
-        it("calls canFork() and throws when false", () => {
-            class NoForkEngine extends ArgumentEngine {
-                public override canFork(): boolean {
-                    return false
-                }
-            }
-            const eng = new NoForkEngine(ARG, aLib(), sLib(), csLib())
-            const forksLib = new ForksLibrary()
+        // forkId set on premises
+        const forkedPremise = forked.listPremises()[0]
+        const premiseData = forkedPremise.snapshot().premise
+        expect(premiseData.forkId).toBe(fork.id)
 
-            expect(() =>
-                forksLib.forkArgument(eng, "new-arg", {
-                    claimLibrary: aLib(),
-                    sourceLibrary: sLib(),
-                    claimSourceLibrary: csLib(),
-                })
-            ).toThrow("Forking is not allowed")
-        })
+        // forkId set on expressions
+        const forkedExpr = forkedPremise.getExpressions()[0]
+        expect(forkedExpr.forkId).toBe(fork.id)
 
-        it("accepts a caller-provided forkId", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
-            const forksLib = new ForksLibrary()
+        // forkId set on variables
+        for (const v of forked.getVariables()) {
+            expect(v.forkId).toBe(fork.id)
+        }
 
-            const { fork } = forksLib.forkArgument(
-                eng,
-                "fork-arg",
-                {
-                    claimLibrary: aLib(),
-                    sourceLibrary: sLib(),
-                    claimSourceLibrary: csLib(),
-                },
-                { forkId: "my-custom-fork-id" }
-            )
+        // forkedFrom still set
+        expect(forkedArg.forkedFromArgumentId).toBe("src-arg")
+        expect(premiseData.forkedFromPremiseId).toBe("prem-1")
 
-            expect(fork.id).toBe("my-custom-fork-id")
-            expect(forksLib.get("my-custom-fork-id")).toBeDefined()
-        })
-
-        it("remove() does not cascade to forked entities", () => {
-            const claimLib = aLib()
-            const sourceLib = sLib()
-            const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
-            const eng = new ArgumentEngine(
-                { id: "src-arg", version: 0 },
-                claimLib,
-                sourceLib,
-                csLibrary
-            )
-            eng.createPremise()
-
-            const forksLib = new ForksLibrary()
-            const forkClaimLib = aLib()
-            const forkSourceLib = sLib()
-            const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
-
-            const { engine: forked, fork } = forksLib.forkArgument(
-                eng,
-                "fork-arg",
-                {
-                    claimLibrary: forkClaimLib,
-                    sourceLibrary: forkSourceLib,
-                    claimSourceLibrary: forkCsLib,
-                }
-            )
-
-            // Remove fork record
-            forksLib.remove(fork.id)
-            expect(forksLib.get(fork.id)).toBeUndefined()
-
-            // Forked engine is unaffected
-            expect(forked.listPremises()).toHaveLength(1)
-            expect(forked.getArgument().forkId).toBe(fork.id) // forkId still on entity
-        })
+        // Remap table correct
+        expect(remapTable.premises.size).toBe(1)
+        expect(remapTable.expressions.size).toBe(1)
     })
+
+    it("calls canFork() and throws when false", () => {
+        class NoForkEngine extends ArgumentEngine {
+            public override canFork(): boolean {
+                return false
+            }
+        }
+        const eng = new NoForkEngine(ARG, aLib(), sLib(), csLib())
+        const forksLib = new ForksLibrary()
+
+        expect(() =>
+            forksLib.forkArgument(eng, "new-arg", {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            })
+        ).toThrow("Forking is not allowed")
+    })
+
+    it("accepts a caller-provided forkId", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const forksLib = new ForksLibrary()
+
+        const { fork } = forksLib.forkArgument(
+            eng,
+            "fork-arg",
+            {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { forkId: "my-custom-fork-id" }
+        )
+
+        expect(fork.id).toBe("my-custom-fork-id")
+        expect(forksLib.get("my-custom-fork-id")).toBeDefined()
+    })
+
+    it("remove() does not cascade to forked entities", () => {
+        const claimLib = aLib()
+        const sourceLib = sLib()
+        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            sourceLib,
+            csLibrary
+        )
+        eng.createPremise()
+
+        const forksLib = new ForksLibrary()
+        const forkClaimLib = aLib()
+        const forkSourceLib = sLib()
+        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+
+        const { engine: forked, fork } = forksLib.forkArgument(
+            eng,
+            "fork-arg",
+            {
+                claimLibrary: forkClaimLib,
+                sourceLibrary: forkSourceLib,
+                claimSourceLibrary: forkCsLib,
+            }
+        )
+
+        // Remove fork record
+        forksLib.remove(fork.id)
+        expect(forksLib.get(fork.id)).toBeUndefined()
+
+        // Forked engine is unaffected
+        expect(forked.listPremises()).toHaveLength(1)
+        expect(forked.getArgument().forkId).toBe(fork.id) // forkId still on entity
+    })
+})
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1583,17 +1603,29 @@ The existing tests in the `forkArgument` describe block (lines 17985-18678) call
 - `forked entities are fully mutable` test (line 18592): Update to use `ForksLibrary.forkArgument()`.
 
 Pattern for updating each test — replace:
+
 ```typescript
 const { engine: forked, remapTable } = eng.forkArgument(
-    "forked-arg", forkClaimLib, forkSourceLib, forkCsLib, options
+    "forked-arg",
+    forkClaimLib,
+    forkSourceLib,
+    forkCsLib,
+    options
 )
 ```
+
 with:
+
 ```typescript
 const forksLib = new ForksLibrary()
 const { engine: forked, remapTable } = forksLib.forkArgument(
-    eng, "forked-arg",
-    { claimLibrary: forkClaimLib, sourceLibrary: forkSourceLib, claimSourceLibrary: forkCsLib },
+    eng,
+    "forked-arg",
+    {
+        claimLibrary: forkClaimLib,
+        sourceLibrary: forkSourceLib,
+        claimSourceLibrary: forkCsLib,
+    },
     options
 )
 ```
@@ -1615,6 +1647,7 @@ git commit -m "feat: add ForksLibrary.forkArgument() and remove engine method"
 ### Task 8: Update `createForkedFromMatcher()` regression test
 
 **Files:**
+
 - Modify: `test/core.test.ts`
 
 - [ ] **Step 1: Add regression test**
@@ -1622,65 +1655,61 @@ git commit -m "feat: add ForksLibrary.forkArgument() and remove engine method"
 Add inside the `ForksLibrary` describe block. This confirms that `createForkedFromMatcher()` continues to work with the new fork flow:
 
 ```typescript
-    it("createForkedFromMatcher() works with ForksLibrary-forked engines", () => {
-        const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
-        const eng = new ArgumentEngine(
-            { id: "src-arg", version: 0 },
-            claimLib,
-            sourceLib,
-            csLibrary
-        )
+it("createForkedFromMatcher() works with ForksLibrary-forked engines", () => {
+    const claimLib = aLib()
+    const sourceLib = sLib()
+    const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+    const eng = new ArgumentEngine(
+        { id: "src-arg", version: 0 },
+        claimLib,
+        sourceLib,
+        csLibrary
+    )
 
-        eng.addVariable({
-            id: "var-p",
-            argumentId: "src-arg",
-            argumentVersion: 0,
-            symbol: "P",
-            claimId: "claim-default",
-            claimVersion: 0,
-        } as TClaimBoundVariable)
+    eng.addVariable({
+        id: "var-p",
+        argumentId: "src-arg",
+        argumentVersion: 0,
+        symbol: "P",
+        claimId: "claim-default",
+        claimVersion: 0,
+    } as TClaimBoundVariable)
 
-        const { result: pm } = eng.createPremiseWithId("prem-1")
-        pm.addExpression({
-            id: "expr-1",
-            argumentId: "src-arg",
-            argumentVersion: 0,
-            premiseId: "prem-1",
-            type: "variable",
-            variableId: "var-p",
-            parentId: null,
-            position: POSITION_INITIAL,
-        })
-
-        const forksLib = new ForksLibrary()
-        const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
-
-        const { engine: forked } = forksLib.forkArgument(
-            eng,
-            "fork-arg",
-            {
-                claimLibrary: forkClaimLib,
-                sourceLibrary: forkSourceLib,
-                claimSourceLibrary: forkCsLib,
-            }
-        )
-
-        // Diff with forked-from matchers
-        const matchers = createForkedFromMatcher()
-        const diff = diffArguments(eng, forked, matchers)
-
-        // Premises should be paired (not added/removed)
-        expect(diff.premises.added).toHaveLength(0)
-        expect(diff.premises.removed).toHaveLength(0)
-
-        // Expressions should be paired
-        expect(diff.expressions.added).toHaveLength(0)
-        expect(diff.expressions.removed).toHaveLength(0)
+    const { result: pm } = eng.createPremiseWithId("prem-1")
+    pm.addExpression({
+        id: "expr-1",
+        argumentId: "src-arg",
+        argumentVersion: 0,
+        premiseId: "prem-1",
+        type: "variable",
+        variableId: "var-p",
+        parentId: null,
+        position: POSITION_INITIAL,
     })
+
+    const forksLib = new ForksLibrary()
+    const forkClaimLib = aLib()
+    const forkSourceLib = sLib()
+    const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+
+    const { engine: forked } = forksLib.forkArgument(eng, "fork-arg", {
+        claimLibrary: forkClaimLib,
+        sourceLibrary: forkSourceLib,
+        claimSourceLibrary: forkCsLib,
+    })
+
+    // Diff with forked-from matchers
+    const matchers = createForkedFromMatcher()
+    const diff = diffArguments(eng, forked, matchers)
+
+    // Premises should be paired (not added/removed)
+    expect(diff.premises.added).toHaveLength(0)
+    expect(diff.premises.removed).toHaveLength(0)
+
+    // Expressions should be paired
+    expect(diff.expressions.added).toHaveLength(0)
+    expect(diff.expressions.removed).toHaveLength(0)
+})
 ```
 
 Import `diffArguments` and `createForkedFromMatcher` from `../src/lib/index` if not already imported.
@@ -1702,6 +1731,7 @@ git commit -m "test: add createForkedFromMatcher regression test with ForksLibra
 ### Task 9: Update documentation
 
 **Files:**
+
 - Modify: `docs/api-reference.md`
 - Modify: `README.md`
 - Modify: `docs/release-notes/upcoming.md`
@@ -1710,6 +1740,7 @@ git commit -m "test: add createForkedFromMatcher regression test with ForksLibra
 - [ ] **Step 1: Update API reference**
 
 Add a `ForksLibrary` section to `docs/api-reference.md` documenting:
+
 - `ForksLibrary<TFork>` class
 - `create()`, `get()`, `getAll()`, `remove()`, `snapshot()`, `fromSnapshot()`
 - `forkArgument()` method
@@ -1725,6 +1756,7 @@ Update the forking section in `README.md` to use `ForksLibrary.forkArgument()` i
 - [ ] **Step 3: Write release notes**
 
 Update `docs/release-notes/upcoming.md` with user-facing changes:
+
 - New: `ForksLibrary` for managing fork records
 - New: `forkArgumentEngine()` standalone function
 - New: `forkId` field on all entity schemas
@@ -1769,6 +1801,7 @@ git commit -m "chore: fix lint and formatting"
 ### Task 11: Clean up change request
 
 **Files:**
+
 - Delete: `docs/change-requests/2026-03-28-forks-library.md`
 
 - [ ] **Step 1: Delete the change request file**
