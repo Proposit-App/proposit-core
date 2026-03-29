@@ -3,6 +3,7 @@ import path from "node:path"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
 import { SourceLibrary } from "../../lib/core/source-library.js"
 import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
+import { ForkLibrary } from "../../lib/core/fork-library.js"
 import type {
     TClaimLookup,
     TSourceLookup,
@@ -85,6 +86,28 @@ export async function writeClaimSourceLibrary(
     library: ClaimSourceLibrary
 ): Promise<void> {
     const filePath = claimSourceAssociationsPath()
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
+}
+
+function forksPath(): string {
+    return path.join(getStateDir(), "forks.json")
+}
+
+export async function readForkLibrary(): Promise<ForkLibrary> {
+    try {
+        const content = await fs.readFile(forksPath(), "utf-8")
+        const snapshot = JSON.parse(content) as ReturnType<
+            ForkLibrary["snapshot"]
+        >
+        return ForkLibrary.fromSnapshot(snapshot)
+    } catch {
+        return new ForkLibrary()
+    }
+}
+
+export async function writeForkLibrary(library: ForkLibrary): Promise<void> {
+    const filePath = forksPath()
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
 }
