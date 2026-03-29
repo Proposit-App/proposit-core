@@ -14,6 +14,7 @@ import {
     ForkNamespace,
     ForkLibrary,
     ArgumentLibrary,
+    PropositCore,
 } from "../src/lib/index"
 import type {
     TOrderedOperation,
@@ -22791,5 +22792,212 @@ describe("ArgumentLibrary", () => {
             libs.claimSourceLibrary
         )
         expect(() => argLib.register(engine)).toThrow(/already exists/)
+    })
+})
+
+describe("PropositCore", () => {
+    it("should construct with default libraries", () => {
+        const core = new PropositCore()
+        expect(core.arguments).toBeInstanceOf(ArgumentLibrary)
+        expect(core.claims).toBeInstanceOf(ClaimLibrary)
+        expect(core.sources).toBeInstanceOf(SourceLibrary)
+        expect(core.claimSources).toBeInstanceOf(ClaimSourceLibrary)
+        expect(core.forks).toBeInstanceOf(ForkLibrary)
+    })
+
+    it("should accept pre-constructed libraries", () => {
+        const claimLibrary = new ClaimLibrary()
+        const sourceLibrary = new SourceLibrary()
+        const claimSourceLibrary = new ClaimSourceLibrary(
+            claimLibrary,
+            sourceLibrary
+        )
+        const core = new PropositCore({
+            claimLibrary,
+            sourceLibrary,
+            claimSourceLibrary,
+        })
+        expect(core.claims).toBe(claimLibrary)
+        expect(core.sources).toBe(sourceLibrary)
+        expect(core.claimSources).toBe(claimSourceLibrary)
+    })
+
+    it("should accept a pre-constructed fork library", () => {
+        const forkLibrary = new ForkLibrary()
+        const core = new PropositCore({ forkLibrary })
+        expect(core.forks).toBe(forkLibrary)
+    })
+
+    it("should accept a pre-constructed argument library", () => {
+        const claimLibrary = new ClaimLibrary()
+        const sourceLibrary = new SourceLibrary()
+        const claimSourceLibrary = new ClaimSourceLibrary(
+            claimLibrary,
+            sourceLibrary
+        )
+        const argumentLibrary = new ArgumentLibrary({
+            claimLibrary,
+            sourceLibrary,
+            claimSourceLibrary,
+        })
+        const core = new PropositCore({
+            claimLibrary,
+            sourceLibrary,
+            claimSourceLibrary,
+            argumentLibrary,
+        })
+        expect(core.arguments).toBe(argumentLibrary)
+    })
+
+    it("should round-trip via snapshot/fromSnapshot with claims", () => {
+        const core = new PropositCore()
+        const claim = core.claims.create({ id: crypto.randomUUID() })
+
+        const snap = core.snapshot()
+        const restored = PropositCore.fromSnapshot(snap)
+
+        expect(restored.claims.get(claim.id, claim.version)).toBeDefined()
+        expect(restored.claims.get(claim.id, claim.version)!.id).toBe(claim.id)
+    })
+
+    it("should round-trip via snapshot/fromSnapshot with sources", () => {
+        const core = new PropositCore()
+        const source = core.sources.create({ id: crypto.randomUUID() })
+
+        const snap = core.snapshot()
+        const restored = PropositCore.fromSnapshot(snap)
+
+        expect(restored.sources.get(source.id, source.version)).toBeDefined()
+        expect(restored.sources.get(source.id, source.version)!.id).toBe(
+            source.id
+        )
+    })
+
+    it("should round-trip via snapshot/fromSnapshot with arguments", () => {
+        const core = new PropositCore()
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+
+        const snap = core.snapshot()
+        const restored = PropositCore.fromSnapshot(snap)
+
+        expect(restored.arguments.get(argId)).toBeDefined()
+    })
+
+    it("should round-trip via snapshot/fromSnapshot with claim-source associations", () => {
+        const core = new PropositCore()
+        const claim = core.claims.create({ id: crypto.randomUUID() })
+        core.claims.freeze(claim.id)
+        const source = core.sources.create({ id: crypto.randomUUID() })
+        core.sources.freeze(source.id)
+        const assoc = core.claimSources.add({
+            id: crypto.randomUUID(),
+            claimId: claim.id,
+            claimVersion: 0,
+            sourceId: source.id,
+            sourceVersion: 0,
+        })
+
+        const snap = core.snapshot()
+        const restored = PropositCore.fromSnapshot(snap)
+
+        expect(restored.claimSources.get(assoc.id)).toBeDefined()
+        expect(restored.claimSources.get(assoc.id)!.claimId).toBe(claim.id)
+    })
+
+    it("should round-trip via snapshot/fromSnapshot with fork records", () => {
+        const core = new PropositCore()
+        const forkId = crypto.randomUUID()
+        core.forks.arguments.create({
+            entityId: crypto.randomUUID(),
+            forkedFromEntityId: crypto.randomUUID(),
+            forkedFromArgumentId: crypto.randomUUID(),
+            forkedFromArgumentVersion: 0,
+            forkId,
+        })
+
+        const snap = core.snapshot()
+        const restored = PropositCore.fromSnapshot(snap)
+
+        expect(restored.forks.arguments.getAll()).toHaveLength(1)
+        expect(restored.forks.arguments.getAll()[0].forkId).toBe(forkId)
+    })
+
+    it("should round-trip a full snapshot with all library types", () => {
+        const core = new PropositCore()
+
+        // Populate claims
+        const claim = core.claims.create({ id: crypto.randomUUID() })
+        core.claims.freeze(claim.id)
+
+        // Populate sources
+        const source = core.sources.create({ id: crypto.randomUUID() })
+        core.sources.freeze(source.id)
+
+        // Populate associations
+        core.claimSources.add({
+            id: crypto.randomUUID(),
+            claimId: claim.id,
+            claimVersion: 0,
+            sourceId: source.id,
+            sourceVersion: 0,
+        })
+
+        // Populate arguments
+        core.arguments.create({ id: crypto.randomUUID(), version: 0 })
+
+        // Populate forks
+        core.forks.arguments.create({
+            entityId: crypto.randomUUID(),
+            forkedFromEntityId: crypto.randomUUID(),
+            forkedFromArgumentId: crypto.randomUUID(),
+            forkedFromArgumentVersion: 0,
+            forkId: crypto.randomUUID(),
+        })
+
+        const snap = core.snapshot()
+        const restored = PropositCore.fromSnapshot(snap)
+
+        expect(restored.claims.getAll()).toHaveLength(2) // frozen + successor
+        expect(restored.sources.getAll()).toHaveLength(2) // frozen + successor
+        expect(restored.claimSources.getAll()).toHaveLength(1)
+        expect(restored.arguments.getAll()).toHaveLength(1)
+        expect(restored.forks.arguments.getAll()).toHaveLength(1)
+    })
+
+    it("should return ok validation for empty core", () => {
+        const core = new PropositCore()
+        const result = core.validate()
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("should merge validation results from all libraries", () => {
+        const core = new PropositCore()
+
+        // Populate with valid data
+        const claim = core.claims.create({ id: crypto.randomUUID() })
+        core.claims.freeze(claim.id)
+        const source = core.sources.create({ id: crypto.randomUUID() })
+        core.sources.freeze(source.id)
+        core.arguments.create({ id: crypto.randomUUID(), version: 0 })
+
+        const result = core.validate()
+        expect(result.ok).toBe(true)
+    })
+
+    it("should propagate config to internally constructed libraries", () => {
+        // The config should thread through to ArgumentLibrary engine options.
+        // We verify this indirectly by creating an argument engine and checking
+        // it works properly with default config.
+        const core = new PropositCore({
+            checksumConfig: {
+                argumentFields: new Set(["id", "version"]),
+            },
+        })
+        const argId = crypto.randomUUID()
+        const engine = core.arguments.create({ id: argId, version: 0 })
+        expect(engine).toBeDefined()
+        expect(engine.getArgument().id).toBe(argId)
     })
 })

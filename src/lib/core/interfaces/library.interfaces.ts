@@ -20,6 +20,9 @@ import type {
     TCorePropositionalVariable,
 } from "../../schemata/index.js"
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
+import type { TCoreChecksumConfig } from "../../types/checksum.js"
+import type { TCorePositionConfig } from "../../utils/position.js"
+import type { TGrammarConfig } from "../../types/grammar.js"
 
 /**
  * Narrow read-only interface for claim lookups. Used by `ArgumentEngine` for
@@ -413,4 +416,56 @@ export type TArgumentLibrarySnapshot<
 > = {
     /** Snapshots of all argument engines in the library. */
     arguments: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>[]
+}
+
+/**
+ * Serializable snapshot of a `PropositCore` instance. Contains snapshots of
+ * all managed libraries: arguments, claims, sources, claim-source associations,
+ * and fork records.
+ */
+export type TPropositCoreSnapshot<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TSource extends TCoreSource = TCoreSource,
+    TClaim extends TCoreClaim = TCoreClaim,
+    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
+    TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
+    TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
+    TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
+    TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
+    TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
+> = {
+    /** Snapshot of all argument engines. */
+    arguments: TArgumentLibrarySnapshot<TArg, TPremise, TExpr, TVar>
+    /** Snapshot of the claim library. */
+    claims: TClaimLibrarySnapshot<TClaim>
+    /** Snapshot of the source library. */
+    sources: TSourceLibrarySnapshot<TSource>
+    /** Snapshot of the claim-source association library. */
+    claimSources: TClaimSourceLibrarySnapshot<TAssoc>
+    /** Snapshot of the fork library. */
+    forks: TForkLibrarySnapshot<
+        TArgFork,
+        TPremiseFork,
+        TExprFork,
+        TVarFork,
+        TClaimFork,
+        TSourceFork
+    >
+}
+
+/**
+ * Shared configuration options for `PropositCore`. These config values are
+ * threaded to all internally constructed libraries and engines.
+ */
+export type TPropositCoreConfig = {
+    /** Checksum config shared across all libraries and engines. */
+    checksumConfig?: TCoreChecksumConfig
+    /** Position config for argument engines. */
+    positionConfig?: TCorePositionConfig
+    /** Grammar config for argument engines. */
+    grammarConfig?: TGrammarConfig
 }

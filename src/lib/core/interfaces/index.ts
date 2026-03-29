@@ -37,4 +37,6 @@ export type {
     TForksLibrarySnapshot,
     TForkLibrarySnapshot,
     TArgumentLibrarySnapshot,
+    TPropositCoreSnapshot,
+    TPropositCoreConfig,
 } from "./library.interfaces.js"
