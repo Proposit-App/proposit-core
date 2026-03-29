@@ -1,11 +1,14 @@
 import fs from "node:fs/promises"
-import { ArgumentEngine } from "../lib/core/argument-engine.js"
+import {
+    ArgumentEngine,
+    type TArgumentEngineSnapshot,
+} from "../lib/core/argument-engine.js"
+import type { TPremiseEngineSnapshot } from "../lib/core/premise-engine.js"
 import { ClaimLibrary } from "../lib/core/claim-library.js"
-import { ClaimSourceLibrary } from "../lib/core/claim-source-library.js"
-import { SourceLibrary } from "../lib/core/source-library.js"
+import { PropositCore } from "../lib/core/proposit-core.js"
 import type {
-    TClaimBoundVariable,
     TCoreArgument,
+    TCorePropositionalExpression,
     TOptionalChecksum,
 } from "../lib/schemata/index.js"
 import { isClaimBound } from "../lib/schemata/index.js"
@@ -21,9 +24,11 @@ import {
     readClaimLibrary,
     readSourceLibrary,
     readClaimSourceLibrary,
+    readForkLibrary,
     writeClaimLibrary,
     writeSourceLibrary,
     writeClaimSourceLibrary,
+    writeForkLibrary,
 } from "./storage/libraries.js"
 import {
     listPremiseIds,
@@ -35,29 +40,30 @@ import {
 import { readRoles, writeRoles } from "./storage/roles.js"
 import { readVariables, writeVariables } from "./storage/variables.js"
 
-export async function hydrateLibraries(): Promise<{
-    claimLibrary: ClaimLibrary
-    sourceLibrary: SourceLibrary
-    claimSourceLibrary: ClaimSourceLibrary
-}> {
-    const claimLibrary = await readClaimLibrary()
-    const sourceLibrary = await readSourceLibrary()
+export async function hydratePropositCore(): Promise<PropositCore> {
+    const [claimLibrary, sourceLibrary, forkLibrary] = await Promise.all([
+        readClaimLibrary(),
+        readSourceLibrary(),
+        readForkLibrary(),
+    ])
     const claimSourceLibrary = await readClaimSourceLibrary(
         claimLibrary,
         sourceLibrary
     )
-    return { claimLibrary, sourceLibrary, claimSourceLibrary }
+    return new PropositCore({
+        claimLibrary,
+        sourceLibrary,
+        claimSourceLibrary,
+        forkLibrary,
+    })
 }
 
-export async function persistLibraries(
-    claimLibrary: ClaimLibrary,
-    sourceLibrary: SourceLibrary,
-    claimSourceLibrary: ClaimSourceLibrary
-): Promise<void> {
+export async function persistCore(core: PropositCore): Promise<void> {
     await Promise.all([
-        writeClaimLibrary(claimLibrary),
-        writeSourceLibrary(sourceLibrary),
-        writeClaimSourceLibrary(claimSourceLibrary),
+        writeClaimLibrary(core.claims),
+        writeSourceLibrary(core.sources),
+        writeClaimSourceLibrary(core.claimSources),
+        writeForkLibrary(core.forks),
     ])
 }
 
@@ -65,20 +71,13 @@ export async function persistLibraries(
  * Builds a fully-hydrated ArgumentEngine from the on-disk state for the
  * given argument ID and version number.
  *
- * All argument-level variables are registered with every PremiseEngine so
- * that expression validation and evaluation work correctly.
- *
- * Expressions are added in BFS order (root first, then children) to satisfy
- * the parent-existence requirement of addExpression.
+ * Uses `ArgumentEngine.fromSnapshot()` to restore the engine, which
+ * correctly suppresses auto-variable creation during premise restoration.
  */
 export async function hydrateEngine(
     argumentId: string,
     version: number,
-    libraries?: {
-        claimLibrary: ClaimLibrary
-        sourceLibrary: SourceLibrary
-        claimSourceLibrary: ClaimSourceLibrary
-    }
+    core?: PropositCore
 ): Promise<ArgumentEngine> {
     const [argMeta, versionMeta, allVariables, roles, premiseIds] =
         await Promise.all([
@@ -94,13 +93,12 @@ export async function hydrateEngine(
         ...versionMeta,
     }
 
-    const libs = libraries ?? (await hydrateLibraries())
-    let { claimLibrary } = libs
-    const { sourceLibrary, claimSourceLibrary } = libs
+    const resolvedCore = core ?? (await hydratePropositCore())
 
     // Placeholder claim generation for backward compatibility.
     // Arguments created before library persistence was implemented have
     // variables referencing claims that don't exist in the library.
+    let claimLibrary = resolvedCore.claims
     const missingClaims: { id: string; version: number }[] = []
     for (const variable of allVariables) {
         if (
@@ -126,22 +124,8 @@ export async function hydrateEngine(
         claimLibrary = ClaimLibrary.fromSnapshot(snapshot)
     }
 
-    const engine = new ArgumentEngine(
-        argument,
-        claimLibrary,
-        sourceLibrary,
-        claimSourceLibrary
-    )
-
-    // Register all argument-level variables once on the engine; the shared
-    // VariableManager is visible to every PremiseEngine.
-    for (const variable of allVariables) {
-        engine.addVariable({
-            ...variable,
-            argumentVersion: version,
-        } as TOptionalChecksum<TClaimBoundVariable>)
-    }
-
+    // Build premise snapshots from disk data
+    const premiseSnapshots: TPremiseEngineSnapshot[] = []
     for (const premiseId of premiseIds) {
         const [meta, data] = await Promise.all([
             readPremiseMeta(argumentId, version, premiseId),
@@ -149,55 +133,47 @@ export async function hydrateEngine(
         ])
 
         const { id: _id, ...premiseExtras } = meta
-        const { result: pm } = engine.createPremiseWithId(
-            premiseId,
-            premiseExtras
-        )
-
-        // Add expressions in BFS order: root (parentId===null) first, then
-        // children of already-added expressions.
-        const remaining = [...data.expressions]
-        const added = new Set<string>()
-
-        // First pass: root expressions
-        for (let i = remaining.length - 1; i >= 0; i--) {
-            const expr = remaining[i]
-            if (expr.parentId === null) {
-                pm.addExpression({
-                    ...expr,
-                    premiseId: premiseId,
+        premiseSnapshots.push({
+            premise: {
+                id: premiseId,
+                argumentId,
+                argumentVersion: version,
+                ...premiseExtras,
+            },
+            rootExpressionId: data.rootExpressionId,
+            expressions: {
+                expressions: data.expressions.map((e) => ({
+                    ...e,
+                    premiseId,
                     argumentVersion: version,
-                })
-                added.add(expr.id)
-                remaining.splice(i, 1)
-            }
-        }
-
-        // Subsequent passes: children of already-added nodes
-        let progress = true
-        while (remaining.length > 0 && progress) {
-            progress = false
-            for (let i = remaining.length - 1; i >= 0; i--) {
-                const expr = remaining[i]
-                if (expr.parentId !== null && added.has(expr.parentId)) {
-                    pm.addExpression({
-                        ...expr,
-                        premiseId: premiseId,
-                        argumentVersion: version,
-                    })
-                    added.add(expr.id)
-                    remaining.splice(i, 1)
-                    progress = true
-                }
-            }
-        }
+                })) as TCorePropositionalExpression[],
+            },
+        })
     }
 
-    if (roles.conclusionPremiseId !== undefined) {
-        engine.setConclusionPremise(roles.conclusionPremiseId)
+    // Build full engine snapshot
+    const engineSnapshot: TArgumentEngineSnapshot = {
+        argument,
+        variables: {
+            variables: allVariables.map((v) => ({
+                ...v,
+                argumentVersion: version,
+            })),
+        },
+        premises: premiseSnapshots,
+        conclusionPremiseId: roles.conclusionPremiseId,
     }
-    // Supporting premises are now derived from expression type (inference premises
-    // that aren't the conclusion), so no explicit role assignment is needed.
+
+    // Use fromSnapshot which correctly handles restoringFromSnapshot flag,
+    // preventing auto-variable creation during premise restoration.
+    const engine = ArgumentEngine.fromSnapshot(
+        engineSnapshot,
+        claimLibrary,
+        resolvedCore.sources,
+        resolvedCore.claimSources,
+        undefined,
+        "ignore"
+    )
 
     return engine
 }
@@ -211,8 +187,6 @@ export async function persistEngine(engine: ArgumentEngine): Promise<void> {
     const arg = engine.getArgument()
     const { id } = arg
 
-    // Extract CLI-specific fields from the argument (which has extras via
-    // additionalProperties) and write them as flat argument/version meta.
     const argRecord = arg as Record<string, unknown>
     await writeArgumentMeta({
         id,
