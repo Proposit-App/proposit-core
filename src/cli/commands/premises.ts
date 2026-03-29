@@ -17,10 +17,9 @@ import {
     premiseExists,
     readPremiseData,
     readPremiseMeta,
-    writePremiseData,
     writePremiseMeta,
 } from "../storage/premises.js"
-import { readRoles, writeRoles } from "../storage/roles.js"
+import { hydrateEngine, persistEngine } from "../engine.js"
 import { readVariables } from "../storage/variables.js"
 
 async function assertNotPublished(
@@ -59,17 +58,25 @@ export function registerPremiseCommands(
         .command("create")
         .description("Create a new premise")
         .option("--title <title>", "Optional title for the premise")
-        .action(async (opts: { title?: string }) => {
+        .option(
+            "--symbol <symbol>",
+            "Symbol for the auto-created premise-bound variable"
+        )
+        .action(async (opts: { title?: string; symbol?: string }) => {
             await assertNotPublished(argumentId, version)
+            const engine = await hydrateEngine(argumentId, version)
+
             const id = randomUUID()
-            await writePremiseMeta(argumentId, version, {
-                id,
-                ...(opts.title ? { title: opts.title } : {}),
-            })
-            await writePremiseData(argumentId, version, id, {
-                variables: [],
-                expressions: [],
-            })
+            const extras: Record<string, unknown> = {}
+            if (opts.title) extras.title = opts.title
+
+            try {
+                engine.createPremiseWithId(id, extras, opts.symbol)
+            } catch (err) {
+                errorExit(err instanceof Error ? err.message : String(err))
+            }
+
+            await persistEngine(engine)
             printLine(id)
         })
 
@@ -179,15 +186,14 @@ export function registerPremiseCommands(
                 await requireConfirmation(`Delete premise "${premiseId}"?`)
             }
 
-            // Clean up roles
-            const roles = await readRoles(argumentId, version)
-            if (roles.conclusionPremiseId === premiseId) {
-                await writeRoles(argumentId, version, {
-                    ...roles,
-                    conclusionPremiseId: undefined,
-                })
+            const engine = await hydrateEngine(argumentId, version)
+            try {
+                engine.removePremise(premiseId)
+            } catch (err) {
+                errorExit(err instanceof Error ? err.message : String(err))
             }
 
+            await persistEngine(engine)
             await deletePremiseDir(argumentId, version, premiseId)
             printLine("success")
         })
