@@ -53,6 +53,10 @@ The operators **implies** and **iff** must appear ONLY at the root level of a fo
 
 If you need to express a nested conditional, introduce an intermediate claim and a separate premise.
 
+### Variable Declaration Rule
+
+**Every symbol that appears in any premise formula MUST have a corresponding entry in the \`variables\` array, and every variable MUST reference a claim in the \`claims\` array.** If your argument requires intermediate reasoning steps — for example, when chaining implications across premises — you must declare a claim and variable for each intermediate proposition. A formula that references an undeclared symbol will be rejected and the premise will be dropped.
+
 ## Response Structure
 
 Your response must conform to the provided JSON schema. Key fields:
@@ -108,7 +112,16 @@ Always use the correct prefix when referencing entities. Cross-type references a
 - \`claimMiniId\` on a variable → only \`c\`-prefixed miniIds (claims)
 - \`conclusionPremiseMiniId\` → only \`p\`-prefixed miniIds (premises)
 
-If the input text has no external citations, leave \`sourceMiniIds\` as an empty array \`[]\` and the \`sources\` array empty.`
+If the input text has no external citations, leave \`sourceMiniIds\` as an empty array \`[]\` and the \`sources\` array empty.
+
+## Self-Check
+
+Before finalizing your response, verify:
+1. Every symbol that appears in any premise formula is declared in the \`variables\` array
+2. Every variable's \`claimMiniId\` references an existing claim in the \`claims\` array
+3. The \`conclusionPremiseMiniId\` references an existing premise in the \`premises\` array
+4. No \`implies\` or \`iff\` operator is nested inside another operator in any formula
+5. \`sourceMiniIds\` on claims contain only \`s\`-prefixed miniIds, never \`c\`-prefixed`
 
 type TSchemaLike = {
     properties?: Record<string, TSchemaLike>
