@@ -7,6 +7,7 @@ export type TInvariantViolationEntityType =
     | "source"
     | "association"
     | "fork"
+    | "forkRecord"
 
 export type TInvariantViolation = {
     code: string
@@ -71,3 +72,6 @@ export const ASSOC_SOURCE_REF_NOT_FOUND = "ASSOC_SOURCE_REF_NOT_FOUND"
 
 // -- ForksLibrary codes --
 export const FORK_SCHEMA_INVALID = "FORK_SCHEMA_INVALID"
+
+// -- ForkNamespace codes --
+export const FORK_RECORD_SCHEMA_INVALID = "FORK_RECORD_SCHEMA_INVALID"

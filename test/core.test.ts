@@ -11,8 +11,9 @@ import {
     EMPTY_SOURCE_LOOKUP,
     EMPTY_CLAIM_SOURCE_LOOKUP,
     forkArgumentEngine,
+    ForkNamespace,
 } from "../src/lib/index"
-import type { TOrderedOperation } from "../src/lib/index"
+import type { TOrderedOperation, TCoreEntityForkRecord } from "../src/lib/index"
 import { ClaimSourceLibrary } from "../src/lib/core/claim-source-library"
 import { ForksLibrary } from "../src/lib/core/forks-library"
 import type { TReactiveSnapshot } from "../src/lib/index"
@@ -22511,6 +22512,110 @@ describe("ForkRecordSchemas", () => {
             expect(Value.Check(CoreSourceForkRecordSchema, withVersion)).toBe(
                 true
             )
+        })
+    })
+})
+
+describe("ForkNamespace", () => {
+    const makeRecord = (
+        overrides: Partial<TCoreEntityForkRecord> = {}
+    ): TCoreEntityForkRecord => ({
+        entityId: crypto.randomUUID(),
+        forkedFromEntityId: crypto.randomUUID(),
+        forkedFromArgumentId: crypto.randomUUID(),
+        forkedFromArgumentVersion: 0,
+        forkId: crypto.randomUUID(),
+        ...overrides,
+    })
+
+    describe("create", () => {
+        it("should store and return the record", () => {
+            const ns = new ForkNamespace()
+            const record = makeRecord()
+            const result = ns.create(record)
+            expect(result).toEqual(record)
+            expect(ns.get(record.entityId)).toEqual(record)
+        })
+
+        it("should throw on duplicate entityId", () => {
+            const ns = new ForkNamespace()
+            const record = makeRecord()
+            ns.create(record)
+            expect(() => ns.create(record)).toThrow(/already exists/)
+        })
+    })
+
+    describe("get", () => {
+        it("should return undefined for missing entityId", () => {
+            const ns = new ForkNamespace()
+            expect(ns.get("nonexistent")).toBeUndefined()
+        })
+    })
+
+    describe("getAll", () => {
+        it("should return all records", () => {
+            const ns = new ForkNamespace()
+            const r1 = ns.create(makeRecord())
+            const r2 = ns.create(makeRecord())
+            expect(ns.getAll()).toEqual(expect.arrayContaining([r1, r2]))
+            expect(ns.getAll()).toHaveLength(2)
+        })
+    })
+
+    describe("getByForkId", () => {
+        it("should return records matching the forkId", () => {
+            const ns = new ForkNamespace()
+            const forkId = crypto.randomUUID()
+            const r1 = ns.create(makeRecord({ forkId }))
+            const r2 = ns.create(makeRecord({ forkId }))
+            ns.create(makeRecord({ forkId: crypto.randomUUID() }))
+
+            const results = ns.getByForkId(forkId)
+            expect(results).toHaveLength(2)
+            expect(results).toEqual(expect.arrayContaining([r1, r2]))
+        })
+
+        it("should return empty array for unknown forkId", () => {
+            const ns = new ForkNamespace()
+            expect(ns.getByForkId("nonexistent")).toEqual([])
+        })
+    })
+
+    describe("remove", () => {
+        it("should remove and return the record", () => {
+            const ns = new ForkNamespace()
+            const record = ns.create(makeRecord())
+            const removed = ns.remove(record.entityId)
+            expect(removed).toEqual(record)
+            expect(ns.get(record.entityId)).toBeUndefined()
+        })
+
+        it("should throw if entityId not found", () => {
+            const ns = new ForkNamespace()
+            expect(() => ns.remove("nonexistent")).toThrow(/not found/)
+        })
+    })
+
+    describe("snapshot / fromSnapshot", () => {
+        it("should round-trip all records", () => {
+            const ns = new ForkNamespace()
+            const r1 = ns.create(makeRecord())
+            const r2 = ns.create(makeRecord())
+
+            const snap = ns.snapshot()
+            const restored = ForkNamespace.fromSnapshot(snap)
+
+            expect(restored.getAll()).toEqual(expect.arrayContaining([r1, r2]))
+            expect(restored.getAll()).toHaveLength(2)
+        })
+    })
+
+    describe("validate", () => {
+        it("should return ok for valid records", () => {
+            const ns = new ForkNamespace()
+            ns.create(makeRecord())
+            const result = ns.validate()
+            expect(result.ok).toBe(true)
         })
     })
 })
