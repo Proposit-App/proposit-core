@@ -60,7 +60,7 @@ interface TEvaluationOverlay {
     rejectedExpressionIds: Set<string>
 }
 
-function buildDotGraph(
+export function buildDotGraph(
     engine: ArgumentEngine,
     core: PropositCore,
     overlay?: TEvaluationOverlay
@@ -118,8 +118,8 @@ function buildDotGraph(
         const premiseTitle =
             typeof premiseData.title === "string" ? premiseData.title : ""
         const clusterLabel = premiseTitle
-            ? `${premiseTitle}\\n${displayStr}`
-            : displayStr
+            ? `${dotEscape(premiseTitle)}\\n${dotEscape(displayStr)}`
+            : dotEscape(displayStr)
 
         const premResult = overlay?.premiseResults.get(pid)
 
@@ -127,17 +127,17 @@ function buildDotGraph(
 
         if (overlay && premResult?.rootValue !== undefined) {
             const borderColor = truthColor(premResult.rootValue)
-            lines.push(`    label="${dotEscape(clusterLabel)}";`)
+            lines.push(`    label="${clusterLabel}";`)
             lines.push(`    style=bold;`)
             lines.push(`    color=${borderColor};`)
             lines.push(`    penwidth=2;`)
         } else if (isConclusion) {
-            lines.push(`    label="${dotEscape(clusterLabel)}  [CONCLUSION]";`)
+            lines.push(`    label="${clusterLabel}  [CONCLUSION]";`)
             lines.push("    style=bold;")
             lines.push("    color=red;")
             lines.push("    penwidth=2;")
         } else {
-            lines.push(`    label="${dotEscape(clusterLabel)}";`)
+            lines.push(`    label="${clusterLabel}";`)
             lines.push("    style=dashed;")
             lines.push("    color=gray40;")
         }
