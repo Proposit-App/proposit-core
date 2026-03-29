@@ -313,6 +313,36 @@ The conclusion premise is marked with `*`. Each section includes any available m
 
 ---
 
+## 8b. Graph (DOT / Graphviz)
+
+Output the argument as a DOT directed graph:
+
+```bash
+proposit-core <argument-id> latest graph
+# → digraph argument {
+# →   compound=true;
+# →   rankdir=TB;
+# →   label="Hypothetical Syllogism";
+# →   ...
+# → }
+```
+
+Pipe to Graphviz to produce an image:
+
+```bash
+proposit-core <argument-id> latest graph | dot -Tsvg -o argument.svg
+```
+
+Overlay evaluation results from an analysis file:
+
+```bash
+proposit-core <argument-id> latest graph --analysis analysis.json
+```
+
+Expression nodes are colored by truth value (green/red/gray), rejected expressions get double borders, and the graph subtitle shows the evaluation summary.
+
+---
+
 ## 9. Analysis
 
 ### Validate the argument structure
@@ -536,9 +566,15 @@ proposit-core $ARG latest roles set-conclusion $P3
 # ── Render ────────────────────────────────────────────────────────────────────
 proposit-core $ARG latest render
 
+# ── Graph (DOT) ────────────────────────────────────────────────────────────────────
+proposit-core $ARG latest graph                          # DOT to stdout
+proposit-core $ARG latest graph | dot -Tsvg -o arg.svg   # render to SVG
 # ── Analysis ──────────────────────────────────────────────────────────────────
 proposit-core $ARG latest analysis validate-argument
 proposit-core $ARG latest analysis create
 proposit-core $ARG latest analysis evaluate --json
 proposit-core $ARG latest analysis check-validity
+
+# ── Graph with evaluation overlay ────────────────────────────────────────────────────────────────────
+proposit-core $ARG latest graph --analysis analysis.json
 ```

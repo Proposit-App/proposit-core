@@ -303,13 +303,20 @@ section "8. render (full argument)"
 $CLI "$ARG" latest render
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8b. VALIDATE — invariant check
+# 8b. GRAPH — DOT (Graphviz) directed graph output
 # ─────────────────────────────────────────────────────────────────────────────
-section "8b. validate (invariant check)"
+section "8b. graph (DOT output)"
+$CLI "$ARG" latest graph
+$CLI "$ARG" latest graph --json
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8c. VALIDATE — invariant check
+# ─────────────────────────────────────────────────────────────────────────────
+section "8c. validate (invariant check)"
 $CLI "$ARG" latest validate
 $CLI "$ARG" latest validate --json
 
-section "8c. repair (grammar auto-normalization)"
+section "8d. repair (grammar auto-normalization)"
 $CLI "$ARG" latest repair --dry-run
 $CLI "$ARG" latest repair --json
 $CLI "$ARG" latest repair
@@ -340,6 +347,10 @@ $CLI "$ARG" latest analysis validate-assignments --json
 section "9e. analysis — evaluate"
 $CLI "$ARG" latest analysis evaluate
 $CLI "$ARG" latest analysis evaluate --json
+
+section "9e2. graph — with evaluation overlay"
+$CLI "$ARG" latest graph --analysis analysis.json
+$CLI "$ARG" latest graph --analysis analysis.json --json
 
 section "9f. analysis — reset all to false and re-evaluate"
 $CLI "$ARG" latest analysis reset --value false

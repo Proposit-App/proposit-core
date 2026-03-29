@@ -13,6 +13,7 @@ import { registerRepairCommand } from "./cli/commands/repair.js"
 import { registerSourceCommands } from "./cli/commands/sources.js"
 import { registerClaimCommands } from "./cli/commands/claims.js"
 import { registerRenderCommand } from "./cli/commands/render.js"
+import { registerGraphCommand } from "./cli/commands/graph.js"
 import { registerDiffCommand } from "./cli/commands/diff.js"
 import { isNamedCommand, resolveVersion } from "./cli/router.js"
 import { errorExit } from "./cli/output.js"
@@ -56,6 +57,7 @@ if (!isNamedCommand(process.argv)) {
 
     registerVersionShowCommand(sub, argumentId, version)
     registerRenderCommand(sub, argumentId, version)
+    registerGraphCommand(sub, argumentId, version)
     registerRoleCommands(sub, argumentId, version)
     registerVariableCommands(sub, argumentId, version)
     registerPremiseCommands(sub, argumentId, version)

@@ -874,6 +874,33 @@ Renders the full argument with metadata. Output includes:
 
 Display strings use standard logical notation (¬ ∧ ∨ → ↔).
 
+#### graph
+
+```
+proposit-core <id> <ver> graph [--json] [--analysis <filename>]
+```
+
+Outputs the argument as a DOT (Graphviz) directed graph. Pipe the output to `dot` to produce images:
+
+```bash
+proposit-core <id> <ver> graph | dot -Tsvg -o argument.svg
+proposit-core <id> <ver> graph | dot -Tpng -o argument.png
+```
+
+The graph includes:
+
+- **Premise clusters** — one subgraph per premise containing its expression tree; conclusion premise highlighted with bold red border
+- **Expression nodes** — operators (diamond), formula wrappers (ellipse), variable references (box)
+- **Variable definitions** — claim-bound (yellow) and premise-bound (blue) with binding details
+- **Cross-premise edges** — premise-bound variables link to their bound premise cluster
+
+With `--analysis <filename>`, evaluation results from an analysis file are overlaid:
+
+- Expression nodes colored by truth value (green = true, red = false, gray = unknown)
+- Rejected expressions marked with double border
+- Premise cluster borders colored by root expression truth value
+- Graph subtitle shows evaluation summary (admissible, counterexample, preserves truth)
+
 #### roles
 
 ```
