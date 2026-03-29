@@ -288,86 +288,231 @@ Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `cla
 
 ### `canFork()` → `boolean` _(public)_
 
-Returns whether this argument may be forked. Default implementation returns `true`. Override in subclasses to inject validation policy (e.g., only allow forking published arguments). Called by `ForksLibrary.forkArgument()` and `forkArgumentEngine()` before any work; throws if `false`.
+Returns whether this argument may be forked. Default implementation returns `true`. Override in subclasses to inject validation policy (e.g., only allow forking published arguments). Called by `PropositCore.forkArgument()` and `forkArgumentEngine()` before any work; throws if `false`.
 
 ---
 
-## `ForksLibrary<TFork>`
+## `PropositCore`
 
-Standalone library for managing fork records. Fork records track the provenance of argument forks — source argument, timestamp, and optional creator metadata. Implements `TForkLookup<TFork>`.
+Top-level orchestrator that owns all five libraries and provides unified snapshot/restore, validation, and cross-library operations. Recommended entry point for new applications.
 
-### `new ForksLibrary()`
+### `new PropositCore(options?)`
 
-Creates an empty forks library.
+Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → sources → claimSources → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `grammarConfig`).
 
----
+Public library fields:
 
-### `create(fork)` → `TFork`
-
-Creates a new fork record (without `checksum` — it is computed automatically). The `fork` parameter is `Omit<TFork, "checksum">`. Throws if a fork with the given `id` already exists.
-
----
-
-### `get(id)` → `TFork | undefined`
-
-Returns a fork record by ID, or `undefined` if not found.
+- `core.claims` — `ClaimLibrary`
+- `core.sources` — `SourceLibrary`
+- `core.claimSources` — `ClaimSourceLibrary`
+- `core.forks` — `ForkLibrary`
+- `core.arguments` — `ArgumentLibrary`
 
 ---
 
-### `getAll()` → `TFork[]`
+### `forkArgument(argumentId, newArgumentId, options?)` → `{ engine, remapTable, claimRemap, sourceRemap, argumentFork }`
+
+Full fork orchestration:
+
+1. Retrieves the source engine from `ArgumentLibrary`; calls `engine.canFork()`.
+2. Clones all referenced claims (unique `claimId` values from the source engine's variables).
+3. Clones all sources referenced by associations of those claims.
+4. Clones all claim-source associations for the cloned claims/sources.
+5. Forks the engine via `forkArgumentEngine()` with new UUIDs.
+6. Remaps variable claim references to point at the cloned claims.
+7. Registers the forked engine in `ArgumentLibrary`.
+8. Creates fork records in all six `ForkLibrary` namespaces.
+
+Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`, `sourceForkExtras`) and an optional `forkId`.
+
+Returns:
+
+- `engine` — the new `ArgumentEngine`
+- `remapTable` — `TForkRemapTable` mapping original entity IDs to new IDs
+- `claimRemap` — `Map<string, string>` mapping original claim IDs to cloned claim IDs
+- `sourceRemap` — `Map<string, string>` mapping original source IDs to cloned source IDs
+- `argumentFork` — the created `TArgFork` record
+
+---
+
+### `diffArguments(argumentIdA, argumentIdB, options?)` → `TCoreArgumentDiff`
+
+Computes a structural diff between two managed arguments. Automatically injects fork-aware entity matchers derived from `ForkLibrary` records — when argument B is a fork of argument A, entities are paired by fork provenance rather than by ID. Caller-provided matchers in `options` take precedence over the fork-aware defaults.
+
+---
+
+### `snapshot()` → `TPropositCoreSnapshot`
+
+Returns a serializable snapshot of the entire system state (all five libraries).
+
+---
+
+### `static fromSnapshot(snapshot, config?)` → `PropositCore`
+
+Restores a `PropositCore` from a snapshot. Libraries are restored in dependency order.
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Runs invariant validation across all five libraries and merges the results.
+
+---
+
+## `ArgumentLibrary`
+
+Engine registry with lifecycle management. Stores `ArgumentEngine` instances keyed by argument ID. Constructed and wired by `PropositCore`, but can be used standalone.
+
+### `new ArgumentLibrary(libraries, options?)`
+
+Creates an empty library. `libraries` must include `claimLibrary`, `sourceLibrary`, and `claimSourceLibrary`. `options` is the shared `TLogicEngineOptions` applied to all created engines.
+
+---
+
+### `create(argument)` → `ArgumentEngine`
+
+Constructs a new `ArgumentEngine` for the given argument (without `checksum` — it is computed lazily) and stores it. Throws if an engine with the same argument ID already exists.
+
+---
+
+### `register(engine)` → `void`
+
+Stores a pre-built `ArgumentEngine` in the library. Used internally by `PropositCore.forkArgument()` after forking. Throws if an engine with the same argument ID already exists.
+
+---
+
+### `get(argumentId)` → `ArgumentEngine | undefined`
+
+Returns the engine for the given ID, or `undefined`.
+
+---
+
+### `getAll()` → `ArgumentEngine[]`
+
+Returns all managed engines.
+
+---
+
+### `remove(argumentId)` → `ArgumentEngine`
+
+Removes and returns the engine for the given ID. Throws if not found.
+
+---
+
+### `snapshot()` → `TArgumentLibrarySnapshot`
+
+Returns a serializable snapshot containing all engine snapshots.
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Merges invariant validation results from all managed engines.
+
+---
+
+### `static fromSnapshot(snapshot, libraries, options?)` → `ArgumentLibrary`
+
+Restores an `ArgumentLibrary` from a snapshot by calling `ArgumentEngine.fromSnapshot()` for each engine snapshot.
+
+---
+
+## `ForkLibrary`
+
+Unified store for fork provenance records, organized into six namespaces. Fork records are immutable after creation and carry no checksums.
+
+### `new ForkLibrary()`
+
+Creates an empty library with six `ForkNamespace` instances:
+
+- `forks.arguments` — argument fork records (`TCoreArgumentForkRecord`)
+- `forks.premises` — premise fork records (`TCorePremiseForkRecord`)
+- `forks.expressions` — expression fork records (`TCoreExpressionForkRecord`)
+- `forks.variables` — variable fork records (`TCoreVariableForkRecord`)
+- `forks.claims` — claim fork records (`TCoreClaimForkRecord`)
+- `forks.sources` — source fork records (`TCoreSourceForkRecord`)
+
+---
+
+### `snapshot()` → `TForkLibrarySnapshot`
+
+Returns a serializable snapshot of all six namespaces.
+
+---
+
+### `static fromSnapshot(snapshot)` → `ForkLibrary`
+
+Restores a `ForkLibrary` from a snapshot.
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Validates all fork records across all six namespaces.
+
+---
+
+## `ForkNamespace<T>`
+
+Standalone reusable class for managing fork records of a single entity type. Keyed by `entityId`.
+
+### `new ForkNamespace(schema?)`
+
+Creates an empty namespace. Accepts an optional Typebox schema for validation (defaults to `CoreEntityForkRecordSchema`).
+
+---
+
+### `create(record)` → `T`
+
+Stores a fork record. Throws if a record with the same `entityId` already exists.
+
+---
+
+### `get(entityId)` → `T | undefined`
+
+Returns the fork record for the given entity ID.
+
+---
+
+### `getAll()` → `T[]`
 
 Returns all fork records.
 
 ---
 
-### `remove(id)` → `TFork`
+### `getByForkId(forkId)` → `T[]`
 
-Removes a fork record by ID and returns the removed entity. Throws if the fork does not exist.
-
----
-
-### `snapshot()` → `TForksLibrarySnapshot<TFork>`
-
-Returns a serializable snapshot of the library state.
+Returns all records belonging to the given fork operation.
 
 ---
 
-### `static fromSnapshot(snapshot)` → `ForksLibrary`
+### `remove(entityId)` → `T`
 
-Restores a library instance from a previously captured snapshot.
+Removes and returns the fork record for the given entity ID. Throws if not found.
 
 ---
 
-### `forkArgument(engine, newArgumentId, libraries, options?)` → `{ engine, remapTable, fork }`
+### `snapshot()` → `T[]`
 
-Full fork orchestration: calls `engine.canFork()`, creates the forked engine via `forkArgumentEngine()`, stamps `forkId` on all forked entities, and records a fork record in this library.
+Returns all records as an array.
 
-- `engine` — the source `ArgumentEngine`
-- `newArgumentId` — ID for the new argument
-- `libraries` — `{ claimLibrary, sourceLibrary, claimSourceLibrary }` for the new engine
-- `options?` — `TForkArgumentOptions` (see below)
+---
 
-Returns `{ engine, remapTable, fork }` where `fork` is the newly created `TCoreFork` record.
+### `static fromSnapshot(records, schema?)` → `ForkNamespace<T>`
 
-```typescript
-const forksLib = new ForksLibrary()
-const {
-    engine: forked,
-    remapTable,
-    fork,
-} = forksLib.forkArgument(
-    sourceEngine,
-    "new-arg-id",
-    { claimLibrary, sourceLibrary, claimSourceLibrary },
-    { creatorId: "user-123" }
-)
-```
+Restores a namespace from an array of records.
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Validates all records against the namespace schema.
 
 ---
 
 ## `forkArgumentEngine(engine, newArgumentId, libraries, options?)` → `{ engine, remapTable }`
 
-Standalone low-level function for argument forking without fork record management. Creates an independent copy of the source engine with new UUIDs for all entities. Every forked entity carries `forkedFrom` provenance metadata pointing back to the original. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. The forked engine starts at version `0`.
+Standalone low-level function for argument forking without fork record management or claim/source cloning. Creates an independent copy of the source engine with new UUIDs for all entities. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. Does NOT set `forkedFrom*` fields on entities (those fields were removed from entity schemas) and does NOT create fork records — use `PropositCore.forkArgument()` for full orchestration. The forked engine starts at version `0`.
 
 - `engine` — the source `ArgumentEngine`
 - `newArgumentId` — ID for the new argument
@@ -792,25 +937,7 @@ const diff = diffArguments(engineA, engineB, {
 
 Default comparators exported: `defaultCompareArgument`, `defaultCompareVariable`, `defaultComparePremise`, `defaultCompareExpression`.
 
-`TCoreDiffOptions` also accepts optional entity matchers (`premiseMatcher`, `variableMatcher`, `expressionMatcher`) for custom entity pairing. When provided, matchers override the default ID-based pairing — useful for comparing forked arguments where entities have different IDs but carry `forkedFrom` provenance metadata. See `createForkedFromMatcher()`.
-
----
-
-### `createForkedFromMatcher()` → `{ premiseMatcher, variableMatcher, expressionMatcher }`
-
-Returns entity matchers for fork-aware diffing. Pairs entity A with entity B when B's `forkedFrom*Id` matches A's `id` and the argument identity matches. No remap table required — uses self-describing provenance metadata.
-
-```typescript
-import {
-    diffArguments,
-    createForkedFromMatcher,
-} from "@polintpro/proposit-core"
-
-const diff = diffArguments(originalEngine, forkedEngine, {
-    ...createForkedFromMatcher(),
-})
-// diff.premises.modified shows what changed; .added/.removed show new/deleted premises
-```
+`TCoreDiffOptions` also accepts optional entity matchers (`premiseMatcher`, `variableMatcher`, `expressionMatcher`) for custom entity pairing. When provided, matchers override the default ID-based pairing. For fork-aware diffing, use `PropositCore.diffArguments()` instead — it injects fork-aware matchers automatically from `ForkLibrary` records.
 
 ---
 
@@ -987,6 +1114,9 @@ Hierarchical snapshot types for capturing and restoring engine state:
 | `TClaimLibrarySnapshot`       | `claims` (all versions of all claims)                                                       |
 | `TSourceLibrarySnapshot`      | `sources` (all versions of all sources)                                                     |
 | `TClaimSourceLibrarySnapshot` | `claimSourceAssociations` (all associations)                                                |
+| `TArgumentLibrarySnapshot`    | `arguments` (array of `TArgumentEngineSnapshot`)                                            |
+| `TForkLibrarySnapshot`        | Six arrays (`arguments`, `premises`, `expressions`, `variables`, `claims`, `sources`)       |
+| `TPropositCoreSnapshot`       | All five library snapshots in one object                                                    |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
@@ -1013,16 +1143,26 @@ Premise-bound variables enable hierarchical argument structure: variable Q bound
 
 ### Fork Types
 
-| Type                    | Description                                                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `TForkArgumentOptions`  | Options for `forkArgumentEngine`: `generateId`, `checksumConfig`, `positionConfig`, `grammarConfig`          |
-| `TForkRemapTable`       | Maps original entity IDs to forked counterparts: `argumentId`, `premises`, `expressions`, `variables` (Maps) |
-| `TCoreFork`             | Fork record entity (`{ id, sourceArgumentId, sourceArgumentVersion, createdAt, creatorId?, checksum }`)      |
-| `CoreForkSchema`        | Typebox schema for `TCoreFork`                                                                               |
-| `TForkLookup`           | Narrow read-only interface for fork lookups (`get(id)`, `getAll()`)                                          |
-| `TForksLibrarySnapshot` | Snapshot type for `ForksLibrary` state                                                                       |
+| Type                             | Description                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `TForkArgumentOptions`           | Options for `forkArgumentEngine`: `generateId`, `checksumConfig`, `positionConfig`, `grammarConfig`            |
+| `TForkRemapTable`                | Maps original entity IDs to forked counterparts: `argumentId`, `premises`, `expressions`, `variables` (Maps)   |
+| `TCoreEntityForkRecord`          | Base fork record (`{ entityId, forkedFromEntityId, forkedFromArgumentId, forkedFromArgumentVersion, forkId }`) |
+| `TCoreArgumentForkRecord`        | Alias for `TCoreEntityForkRecord` (no extra fields)                                                            |
+| `TCorePremiseForkRecord`         | Alias for `TCoreEntityForkRecord` (no extra fields)                                                            |
+| `TCoreExpressionForkRecord`      | Extends base with `forkedFromPremiseId`                                                                        |
+| `TCoreVariableForkRecord`        | Alias for `TCoreEntityForkRecord` (no extra fields)                                                            |
+| `TCoreClaimForkRecord`           | Extends base with `forkedFromEntityVersion` (claim version that was cloned)                                    |
+| `TCoreSourceForkRecord`          | Extends base with `forkedFromEntityVersion` (source version that was cloned)                                   |
+| `TForkLibrarySnapshot`           | Snapshot type for `ForkLibrary` (six arrays, one per namespace)                                                |
+| `TArgumentLibrarySnapshot`       | Snapshot type for `ArgumentLibrary` (`{ arguments: TArgumentEngineSnapshot[] }`)                               |
+| `TPropositCoreSnapshot`          | Snapshot type for `PropositCore` (all five library snapshots)                                                  |
+| `CoreEntityForkRecordSchema`     | Typebox schema for `TCoreEntityForkRecord`                                                                     |
+| `CoreExpressionForkRecordSchema` | Typebox schema for `TCoreExpressionForkRecord`                                                                 |
+| `CoreClaimForkRecordSchema`      | Typebox schema for `TCoreClaimForkRecord`                                                                      |
+| `CoreSourceForkRecordSchema`     | Typebox schema for `TCoreSourceForkRecord`                                                                     |
 
-All entity schemas (arguments, premises, expressions, variables) carry an optional nullable `forkId` field referencing their `TCoreFork` record. `forkId` is `null`/absent on non-forked entities and populated by `ForksLibrary.forkArgument()` on forked entities. All entity schemas also carry optional nullable `forkedFrom` provenance fields (e.g., `forkedFromArgumentId`, `forkedFromPremiseId`, etc.). These are `null`/absent on non-forked entities and populated by both `ForksLibrary.forkArgument()` and `forkArgumentEngine()` on forked entities.
+Fork provenance lives entirely in `ForkLibrary` — entity schemas (argument, premises, expressions, variables) do NOT carry `forkedFrom*` or `forkId` fields. Use `ForkLibrary.arguments.get(entityId)` (or the appropriate namespace) to look up whether an entity was forked and from which original.
 
 ---
 
