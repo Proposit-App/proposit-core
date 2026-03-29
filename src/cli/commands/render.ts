@@ -91,12 +91,16 @@ export function registerRenderCommand(
                 }
             }
 
-            // Claims
-            const claims = core.claims.getAll()
-            if (claims.length > 0) {
+            // Claims — only those referenced by this argument's variables
+            const referencedClaims = variables
+                .map((v) => v as unknown as TCorePropositionalVariable)
+                .filter(isClaimBound)
+                .map((v) => core.claims.get(v.claimId, v.claimVersion))
+                .filter((c) => c !== undefined)
+            if (referencedClaims.length > 0) {
                 printLine("")
                 printLine("Claims:")
-                for (const claim of claims) {
+                for (const claim of referencedClaims) {
                     const extras = claim as Record<string, unknown>
                     const frozen = claim.frozen ? " [frozen]" : ""
                     const meta = extrasString(extras, ["title", "body"])
@@ -104,12 +108,27 @@ export function registerRenderCommand(
                 }
             }
 
-            // Sources
-            const sources = core.sources.getAll()
-            if (sources.length > 0) {
+            // Sources — only those associated with referenced claims
+            const referencedClaimKeys = new Set(
+                referencedClaims.map((c) => `${c.id}@${c.version}`)
+            )
+            const allAssocs = core.claimSources.getAll()
+            const referencedSourceKeys = new Set(
+                allAssocs
+                    .filter((a) =>
+                        referencedClaimKeys.has(
+                            `${a.claimId}@${a.claimVersion}`
+                        )
+                    )
+                    .map((a) => `${a.sourceId}@${a.sourceVersion}`)
+            )
+            const referencedSources = core.sources
+                .getAll()
+                .filter((s) => referencedSourceKeys.has(`${s.id}@${s.version}`))
+            if (referencedSources.length > 0) {
                 printLine("")
                 printLine("Sources:")
-                for (const source of sources) {
+                for (const source of referencedSources) {
                     const extras = source as Record<string, unknown>
                     const meta = extrasString(extras, ["text"])
                     printLine(`  ${source.id}@${source.version}${meta}`)
