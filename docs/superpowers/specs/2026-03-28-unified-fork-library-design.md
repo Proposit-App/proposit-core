@@ -114,19 +114,7 @@ Standalone exported class in `src/lib/core/fork-namespace.ts`. Manages fork reco
 - `getByForkId()` is a linear scan (no secondary index). Adequate for typical fork sizes.
 - Mutations wrapped in `withValidation()` following the established library pattern.
 
-**Lookup interface** (in `library.interfaces.ts`):
-
-```typescript
-interface TForkNamespaceLookup<
-    T extends TCoreEntityForkRecord = TCoreEntityForkRecord,
-> {
-    get(entityId: string): T | undefined
-    getAll(): T[]
-    getByForkId(forkId: string): T[]
-}
-```
-
-`ForkNamespace` implements `TForkNamespaceLookup`.
+No separate lookup interface needed. `ForkNamespace` is the concrete class used directly by `ForkLibrary` and `PropositCore`.
 
 ### 6. ForkLibrary Class
 
@@ -324,17 +312,17 @@ forkArgument(
 
 The result is a fully independent copy: the forked argument, its claims, its sources, and all claim-source associations are decoupled from the originals. Mutating any forked entity has no effect on the original.
 
-#### `createForkedFromMatcher()`
+#### `diffArguments()`
 
 ```typescript
-createForkedFromMatcher(): {
-    premiseMatcher: (a: TPremise, b: TPremise) => boolean
-    variableMatcher: (a: TVar, b: TVar) => boolean
-    expressionMatcher: (a: TExpr, b: TExpr) => boolean
-}
+diffArguments(
+    argumentIdA: string,
+    argumentIdB: string,
+    options?: TCoreDiffOptions<TPremise, TExpr, TVar>
+): TCoreArgumentDiff<TPremise, TExpr, TVar>
 ```
 
-Reads from `this.forks` internally. Each matcher checks `this.forks.<namespace>.get(b.id)?.forkedFromEntityId === a.id`.
+Retrieves engines from `this.arguments`, automatically injects fork-aware entity matchers from `this.forks`, and delegates to the existing standalone `diffArguments()` function. Each matcher checks `this.forks.<namespace>.get(b.id)?.forkedFromEntityId === a.id` to pair forked entities with their originals. Caller-provided matchers in `options` override the automatic fork-aware matchers.
 
 **State operations:**
 
@@ -379,7 +367,7 @@ type TPropositCoreSnapshot<
 }
 ```
 
-**Subclassing:** All internal library references are `protected`. Key methods (`forkArgument`, `createForkedFromMatcher`) are public and overridable. Subclasses can inject custom behavior (e.g., fork policy, event hooks) by overriding these methods.
+**Subclassing:** All internal library references are `protected`. Key methods (`forkArgument`, `diffArguments`) are public and overridable. Subclasses can inject custom behavior (e.g., fork policy, event hooks) by overriding these methods.
 
 ### 9. `forkArgumentEngine()` Changes
 
@@ -424,31 +412,16 @@ type TForkRemapTable = {
 }
 ```
 
-### 11. `createForkedFromMatcher()` Changes
+### 11. `createForkedFromMatcher()` Removal
 
-The standalone exported function is removed. Fork matching moves to `PropositCore.createForkedFromMatcher()`.
-
-For consumers that don't use `PropositCore`, a standalone function accepting a lookup interface is available:
-
-```typescript
-function createForkedFromMatcher<TPremise, TExpr, TVar>(forkLookup: {
-    premises: TForkNamespaceLookup<TCorePremiseForkRecord>
-    variables: TForkNamespaceLookup<TCoreVariableForkRecord>
-    expressions: TForkNamespaceLookup<TCoreExpressionForkRecord>
-}): {
-    premiseMatcher: (a: TPremise, b: TPremise) => boolean
-    variableMatcher: (a: TVar, b: TVar) => boolean
-    expressionMatcher: (a: TExpr, b: TExpr) => boolean
-}
-```
-
-`PropositCore.createForkedFromMatcher()` delegates to this function, passing `this.forks` namespaces.
+The standalone `createForkedFromMatcher()` function is removed entirely. Fork-aware entity matching is handled internally by `PropositCore.diffArguments()`, which has direct access to the fork records in `this.forks`. There is no need for consumers to create matchers manually.
 
 ## Removals
 
 - `ForksLibrary` class — replaced by `ForkLibrary` + `PropositCore`
 - `TCoreFork`, `CoreForkSchema` — replaced by `TCoreEntityForkRecord` and per-entity types
-- `TForkLookup`, `TForksLibrarySnapshot` — replaced by `TForkNamespaceLookup`, `TForkLibrarySnapshot`
+- `TForkLookup`, `TForksLibrarySnapshot` — replaced by `TForkLibrarySnapshot`
+- `createForkedFromMatcher()` standalone function — fork matching is now internal to `PropositCore.diffArguments()`
 - `forkFields` from `TCoreChecksumConfig`
 - All `forkedFrom*` and `forkId` fields from entity schemas and checksum configs
 - `ForksLibrary.forkArgument()` — replaced by `PropositCore.forkArgument()`
@@ -459,16 +432,16 @@ All new types, schemas, classes, and functions exported from `src/lib/index.ts`:
 
 **Classes:** `ForkNamespace`, `ForkLibrary`, `ArgumentLibrary`, `PropositCore`
 
-**Types:** `TCoreEntityForkRecord`, `TCoreArgumentForkRecord`, `TCorePremiseForkRecord`, `TCoreExpressionForkRecord`, `TCoreVariableForkRecord`, `TCoreClaimForkRecord`, `TCoreSourceForkRecord`, `TForkNamespaceLookup`, `TForkLibrarySnapshot`, `TArgumentLibrarySnapshot`, `TPropositCoreOptions`, `TPropositCoreSnapshot`
+**Types:** `TCoreEntityForkRecord`, `TCoreArgumentForkRecord`, `TCorePremiseForkRecord`, `TCoreExpressionForkRecord`, `TCoreVariableForkRecord`, `TCoreClaimForkRecord`, `TCoreSourceForkRecord`, `TForkLibrarySnapshot`, `TArgumentLibrarySnapshot`, `TPropositCoreOptions`, `TPropositCoreSnapshot`
 
 **Schemas:** `CoreEntityForkRecordSchema`, `CoreArgumentForkRecordSchema`, `CorePremiseForkRecordSchema`, `CoreExpressionForkRecordSchema`, `CoreVariableForkRecordSchema`, `CoreClaimForkRecordSchema`, `CoreSourceForkRecordSchema`
 
-**Functions:** `forkArgumentEngine` (updated), `createForkedFromMatcher` (updated signature)
+**Functions:** `forkArgumentEngine` (updated)
 
 ## Documentation Requirements
 
 1. **JSDoc** on all exported functions, types, and class methods.
-2. **`src/lib/core/interfaces/`**: Replace `TForkLookup`/`TForksLibrarySnapshot` with `TForkNamespaceLookup`/`TForkLibrarySnapshot`/`TArgumentLibrarySnapshot`/`TPropositCoreSnapshot` in `library.interfaces.ts`.
+2. **`src/lib/core/interfaces/`**: Replace `TForkLookup`/`TForksLibrarySnapshot` with `TForkLibrarySnapshot`/`TArgumentLibrarySnapshot`/`TPropositCoreSnapshot` in `library.interfaces.ts`.
 3. **CLAUDE.md**: Add design rules for PropositCore, ArgumentLibrary, ForkLibrary. Add explicit note that the core library does not deal in application metadata (user IDs, timestamps, display text).
 4. **README.md**: Add PropositCore section as the recommended entry point. Update forking section. Add the same metadata note.
 5. **docs/api-reference.md**: Add PropositCore, ArgumentLibrary, ForkLibrary, ForkNamespace sections. Remove ForksLibrary section.
@@ -481,11 +454,10 @@ All new types, schemas, classes, and functions exported from `src/lib/index.ts`:
 3. **ArgumentLibrary**: create/get/getAll/remove, snapshot/fromSnapshot round-trip, duplicate ID rejection, validate delegates to engines.
 4. **PropositCore construction**: constructs all libraries, wires them together.
 5. **PropositCore.forkArgument()**: end-to-end — clones claims and sources, creates associations, creates fork records in all 6 namespaces, registers forked engine, respects `canFork()` guard.
-6. **PropositCore.createForkedFromMatcher()**: correctly pairs forked entities with originals via fork records.
+6. **PropositCore.diffArguments()**: automatically pairs forked entities with originals via fork records. Caller-provided matchers override automatic fork matching.
 7. **PropositCore snapshot/fromSnapshot**: full round-trip of all libraries.
 8. **forkArgumentEngine()**: claim remap works, no forkedFrom fields on forked entities, returns expanded TForkRemapTable.
 9. **Entity schema regression**: forked entities do NOT carry forkedFrom/forkId fields.
 10. **Generic extras**: custom fields merged into fork records during `forkArgument()`.
-11. **Standalone createForkedFromMatcher()**: works with any `TForkNamespaceLookup` implementation.
-12. **Checksum regression**: entity checksums no longer include fork-related fields.
-13. **PropositCore subclassing**: subclass can override `forkArgument()` and `createForkedFromMatcher()`.
+11. **Checksum regression**: entity checksums no longer include fork-related fields.
+12. **PropositCore subclassing**: subclass can override `forkArgument()` and `diffArguments()`.
