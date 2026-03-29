@@ -293,7 +293,9 @@ forkArgument(
     }
 ): {
     engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>
-    remapTable: TForkRemapTable
+    remapTable: TForkRemapTable           // entity remaps (argument, premises, expressions, variables)
+    claimRemap: Map<string, string>       // original claim ID → cloned claim ID
+    sourceRemap: Map<string, string>      // original source ID → cloned source ID
     argumentFork: TArgFork
 }
 ```
@@ -302,14 +304,14 @@ forkArgument(
 
 1. Retrieve source engine from `this.arguments`. Throw if not found.
 2. Call `engine.canFork()` — throw if `false`.
-3. **Clone claims:** Identify all unique claims referenced by the engine's variables (via `claimId`/`claimVersion`). Clone each claim into `this.claims` (new ID, version 0, content from the referenced version). Build claim remap.
-4. **Clone sources:** Identify all sources associated with the referenced claims (via `this.claimSources`). Clone each source into `this.sources` (new ID, version 0). Build source remap.
-5. **Clone associations:** For each original claim-source association involving a referenced claim, create a corresponding new association in `this.claimSources` linking the cloned claim (at its cloned version) to the cloned source (at its cloned version). The forked argument gets a complete, independent copy of all claim-source relationships.
-6. **Fork engine:** Call `forkArgumentEngine()` to create the forked engine with remapped entity IDs.
-7. **Remap claim references:** Snapshot the forked engine, update variable `claimId`/`claimVersion` to point to the cloned claims, reconstruct the engine.
+3. **Clone claims:** Collect all unique claim IDs referenced by the engine's variables (via `claimId`). For each unique claim ID, clone the claim's current (latest) version into `this.claims` as a new claim (new ID, version 0). Build claim remap (`Map<string, string>` — original ID → cloned ID). If multiple variables reference different versions of the same claim, a single clone is created from the latest version.
+4. **Clone sources:** For each cloned claim, find all claim-source associations in `this.claimSources` that reference the original claim. Collect the unique source IDs from those associations. Clone each source's current version into `this.sources` (new ID, version 0). Build source remap.
+5. **Clone associations:** For each original claim-source association involving a cloned claim, create a corresponding new association in `this.claimSources` linking the cloned claim (version 0) to the cloned source (version 0).
+6. **Fork engine:** Call `forkArgumentEngine()` to create the forked engine with remapped entity IDs. Pass `this.claims`, `this.sources`, `this.claimSources` as library lookups (they now contain both originals and clones).
+7. **Remap claim references:** Snapshot the forked engine, update each variable's `claimId` to the cloned claim ID and `claimVersion` to `0`, reconstruct the engine using the same library references.
 8. **Register engine:** Store the forked engine in `this.arguments`.
-9. **Create fork records:** Populate all 6 namespaces of `this.forks` using the remap table (merging respective extras).
-10. Return `{ engine, remapTable, argumentFork }`.
+9. **Create fork records:** Populate all 6 namespaces of `this.forks`: use the engine remap table for argument/premise/expression/variable fork records, and the claim/source remaps from steps 3-4 for claim/source fork records. Merge respective extras into each record.
+10. Return `{ engine, remapTable, claimRemap, sourceRemap, argumentFork }`.
 
 The result is a fully independent copy: the forked argument, its claims, its sources, and all claim-source associations are decoupled from the originals. Mutating any forked entity has no effect on the original.
 
@@ -396,20 +398,9 @@ function forkArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc
 }
 ```
 
-### 10. `TForkRemapTable` Changes
+### 10. `TForkRemapTable` — No Changes
 
-Expanded to include claim and source remaps:
-
-```typescript
-type TForkRemapTable = {
-    argumentId: { from: string; to: string }
-    premises: Map<string, string>
-    expressions: Map<string, string>
-    variables: Map<string, string>
-    claims: Map<string, string> // original claim ID -> cloned claim ID
-    sources: Map<string, string> // original source ID -> cloned source ID
-}
-```
+`TForkRemapTable` stays at its current 4 fields (argumentId, premises, expressions, variables). It describes what `forkArgumentEngine()` produces. Claim and source remaps are built by `PropositCore.forkArgument()` and returned as separate fields in the result.
 
 ### 11. `createForkedFromMatcher()` Removal
 
@@ -452,11 +443,13 @@ All new types, schemas, classes, and functions exported from `src/lib/index.ts`:
 2. **ForkLibrary**: 6 namespaces populated, snapshot/fromSnapshot round-trips all namespaces, validate delegates to each namespace.
 3. **ArgumentLibrary**: create/get/getAll/remove, snapshot/fromSnapshot round-trip, duplicate ID rejection, validate delegates to engines.
 4. **PropositCore construction**: constructs all libraries, wires them together.
-5. **PropositCore.forkArgument()**: end-to-end — clones claims and sources, creates associations, creates fork records in all 6 namespaces, registers forked engine, respects `canFork()` guard.
-6. **PropositCore.diffArguments()**: automatically pairs forked entities with originals via fork records. Caller-provided matchers override automatic fork matching.
-7. **PropositCore snapshot/fromSnapshot**: full round-trip of all libraries.
-8. **forkArgumentEngine()**: no forkedFrom fields on forked entities, entity IDs and cross-references correctly remapped.
-9. **Entity schema regression**: forked entities do NOT carry forkedFrom/forkId fields.
-10. **Generic extras**: custom fields merged into fork records during `forkArgument()`.
-11. **Checksum regression**: entity checksums no longer include fork-related fields.
-12. **PropositCore subclassing**: subclass can override `forkArgument()` and `diffArguments()`.
+5. **PropositCore.forkArgument()**: end-to-end — clones claims and sources, creates associations, creates fork records in all 6 namespaces, registers forked engine, respects `canFork()` guard. Forked variables reference cloned claims (not originals).
+6. **PropositCore.forkArgument() claim dedup**: multiple variables referencing the same claim produce a single cloned claim. Variables referencing different versions of the same claim all point to the single clone at version 0.
+7. **PropositCore.forkArgument() association cloning**: claim-source associations are cloned for the referenced claims, linking cloned claims to cloned sources.
+8. **PropositCore.diffArguments()**: automatically pairs forked entities with originals via fork records. Caller-provided matchers override automatic fork matching.
+9. **PropositCore snapshot/fromSnapshot**: full round-trip of all libraries including cloned claims, sources, and associations.
+10. **forkArgumentEngine()**: no forkedFrom fields on forked entities, entity IDs and cross-references correctly remapped.
+11. **Entity schema regression**: forked entities do NOT carry forkedFrom/forkId fields.
+12. **Generic extras**: custom fields merged into fork records during `forkArgument()`.
+13. **Checksum regression**: entity checksums no longer include fork-related fields.
+14. **PropositCore subclassing**: subclass can override `forkArgument()` and `diffArguments()`.
