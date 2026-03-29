@@ -4,7 +4,7 @@ import path from "node:path"
 import { Command } from "commander"
 import { importArgumentFromYaml } from "../import.js"
 import { getVersionDir } from "../config.js"
-import { hydratePropositCore, persistEngine, persistCore } from "../engine.js"
+import { hydratePropositCore, hydrateEngine, persistEngine, persistCore } from "../engine.js"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
 import { SourceLibrary } from "../../lib/core/source-library.js"
 import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
@@ -223,6 +223,26 @@ export function registerArgumentCommands(program: Command): void {
             await fs.writeFile(newMetaPath, JSON.stringify(cleanMeta, null, 2))
 
             printLine(`Version ${V} published, draft version ${newV} prepared`)
+        })
+
+    args.command("fork <argument_id>")
+        .description("Fork an argument (creates an independent copy)")
+        .action(async (argumentId: string) => {
+            const core = await hydratePropositCore()
+            const engine = await hydrateEngine(argumentId, (await latestVersionNumber(argumentId)), core)
+            core.arguments.register(engine)
+
+            const newArgumentId = randomUUID()
+            let result
+            try {
+                result = core.forkArgument(argumentId, newArgumentId)
+            } catch (err) {
+                errorExit(err instanceof Error ? err.message : String(err))
+            }
+
+            await persistEngine(result.engine)
+            await persistCore(core)
+            printLine(newArgumentId)
         })
 
     registerParseCommand(args)
