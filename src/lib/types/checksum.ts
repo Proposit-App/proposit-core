@@ -16,6 +16,4 @@ export interface TCoreChecksumConfig {
     sourceFields?: Set<string>
     /** Fields to hash for claim-source associations. */
     claimSourceAssociationFields?: Set<string>
-    /** Fields to hash for fork records. Defaults to ["id", "sourceArgumentId", "sourceArgumentVersion", "createdOn"]. */
-    forkFields?: Set<string>
 }

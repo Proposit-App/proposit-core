@@ -26,8 +26,7 @@ import { isPremiseBound } from "../schemata/propositional.js"
  * Creates an independent copy of an argument engine under a new argument ID.
  *
  * Every premise, expression, and variable receives a fresh ID. All internal
- * cross-references are remapped. Each forked entity carries `forkedFrom*`
- * metadata pointing back to the originals.
+ * cross-references are remapped.
  *
  * This function does NOT call `engine.canFork()` — callers are responsible
  * for checking fork eligibility.
@@ -73,7 +72,6 @@ export function forkArgumentEngine<
     const snap = engine.snapshot()
 
     const originalArgumentId = snap.argument.id
-    const originalArgumentVersion = snap.argument.version
 
     // Build remap tables (old ID → new ID)
     const premiseRemap = new Map<string, string>()
@@ -102,8 +100,6 @@ export function forkArgumentEngine<
         ...snap.argument,
         id: newArgumentId,
         version: 0,
-        forkedFromArgumentId: originalArgumentId,
-        forkedFromArgumentVersion: originalArgumentVersion,
     } as TOptionalChecksum<TArg>
 
     // Remap premises and expressions
@@ -116,9 +112,6 @@ export function forkArgumentEngine<
             id: newPremiseId,
             argumentId: newArgumentId,
             argumentVersion: 0,
-            forkedFromPremiseId: originalPremiseId,
-            forkedFromArgumentId: originalArgumentId,
-            forkedFromArgumentVersion: originalArgumentVersion,
         } as TOptionalChecksum<TPremise>
 
         if (ps.rootExpressionId) {
@@ -138,10 +131,6 @@ export function forkArgumentEngine<
                 parentId: expr.parentId
                     ? (expressionRemap.get(expr.parentId) ?? null)
                     : null,
-                forkedFromExpressionId: originalExprId,
-                forkedFromPremiseId: originalPremiseId,
-                forkedFromArgumentId: originalArgumentId,
-                forkedFromArgumentVersion: originalArgumentVersion,
             } as TExpr
 
             if (
@@ -169,9 +158,6 @@ export function forkArgumentEngine<
             id: newVarId,
             argumentId: newArgumentId,
             argumentVersion: 0,
-            forkedFromVariableId: originalVarId,
-            forkedFromArgumentId: originalArgumentId,
-            forkedFromArgumentVersion: originalArgumentVersion,
         }
 
         if (isPremiseBound(remapped as unknown as TCorePropositionalVariable)) {

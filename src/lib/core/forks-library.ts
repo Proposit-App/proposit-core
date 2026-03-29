@@ -15,7 +15,6 @@ import type {
 } from "../schemata/source.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import type { TForkArgumentOptions, TForkRemapTable } from "../types/fork.js"
-import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
 import { ArgumentEngine } from "./argument-engine.js"
 import { forkArgumentEngine } from "./fork.js"
@@ -69,13 +68,17 @@ export class ForksLibrary<
         }
     }
 
+    private static readonly forkChecksumFields = new Set([
+        "id",
+        "sourceArgumentId",
+        "sourceArgumentVersion",
+        "createdOn",
+    ])
+
     private computeChecksum(fork: TFork): string {
-        const fields =
-            this.checksumConfig?.forkFields ??
-            DEFAULT_CHECKSUM_CONFIG.forkFields!
         return entityChecksum(
             fork as unknown as Record<string, unknown>,
-            fields
+            ForksLibrary.forkChecksumFields
         )
     }
 
@@ -141,8 +144,7 @@ export class ForksLibrary<
      * with a fork record tracking the operation.
      *
      * Calls `engine.canFork()` as a guard. Delegates engine forking to
-     * `forkArgumentEngine()`, creates the fork record, and sets `forkId` on
-     * all entities in the forked engine.
+     * `forkArgumentEngine()` and creates the fork record.
      *
      * @param engine - The source engine to fork.
      * @param newArgumentId - The ID for the forked argument.
@@ -220,37 +222,7 @@ export class ForksLibrary<
             ...(options?.creatorId ? { creatorId: options.creatorId } : {}),
         } as Omit<TFork, "checksum">)
 
-        // 5. Set forkId on all entities via snapshot → inject → reconstruct
-        const snap = forkedEngine.snapshot()
-        snap.argument = { ...snap.argument, forkId } as typeof snap.argument
-        for (const ps of snap.premises) {
-            ps.premise = { ...ps.premise, forkId } as typeof ps.premise
-            ps.expressions.expressions = ps.expressions.expressions.map(
-                (expr) => ({ ...expr, forkId }) as typeof expr
-            )
-        }
-        snap.variables.variables = snap.variables.variables.map(
-            (v) => ({ ...v, forkId }) as typeof v
-        )
-
-        const finalEngine = ArgumentEngine.fromSnapshot<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TSource,
-            TClaim,
-            TAssoc
-        >(
-            snap,
-            libraries.claimLibrary,
-            libraries.sourceLibrary,
-            libraries.claimSourceLibrary,
-            snap.config?.grammarConfig,
-            "ignore"
-        )
-
-        return { engine: finalEngine, remapTable, fork }
+        return { engine: forkedEngine, remapTable, fork }
     }
 
     public static fromSnapshot<TFork extends TCoreFork = TCoreFork>(

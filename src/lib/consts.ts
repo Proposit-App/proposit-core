@@ -11,11 +11,6 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "premiseId",
         "variableId",
         "operator",
-        "forkedFromExpressionId",
-        "forkedFromPremiseId",
-        "forkedFromArgumentId",
-        "forkedFromArgumentVersion",
-        "forkId",
     ]),
     variableFields: new Set([
         "id",
@@ -27,27 +22,9 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "boundPremiseId",
         "boundArgumentId",
         "boundArgumentVersion",
-        "forkedFromVariableId",
-        "forkedFromArgumentId",
-        "forkedFromArgumentVersion",
-        "forkId",
     ]),
-    premiseFields: new Set([
-        "id",
-        "argumentId",
-        "argumentVersion",
-        "forkedFromPremiseId",
-        "forkedFromArgumentId",
-        "forkedFromArgumentVersion",
-        "forkId",
-    ]),
-    argumentFields: new Set([
-        "id",
-        "version",
-        "forkedFromArgumentId",
-        "forkedFromArgumentVersion",
-        "forkId",
-    ]),
+    premiseFields: new Set(["id", "argumentId", "argumentVersion"]),
+    argumentFields: new Set(["id", "version"]),
     roleFields: new Set(["conclusionPremiseId"]),
     claimFields: new Set(["id", "version"]),
     sourceFields: new Set(["id", "version"]),
@@ -57,12 +34,6 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "claimVersion",
         "sourceId",
         "sourceVersion",
-    ]),
-    forkFields: new Set([
-        "id",
-        "sourceArgumentId",
-        "sourceArgumentVersion",
-        "createdOn",
     ]),
 }
 
@@ -85,7 +56,6 @@ export function normalizeChecksumConfig(
         "claimFields",
         "sourceFields",
         "claimSourceAssociationFields",
-        "forkFields",
     ] as const
     const result: TCoreChecksumConfig = {}
     for (const key of keys) {
@@ -119,7 +89,6 @@ export function serializeChecksumConfig(
         "claimFields",
         "sourceFields",
         "claimSourceAssociationFields",
-        "forkFields",
     ] as const
     const result: Record<string, string[]> = {}
     for (const key of keys) {
@@ -146,7 +115,6 @@ export function createChecksumConfig(
         "claimFields",
         "sourceFields",
         "claimSourceAssociationFields",
-        "forkFields",
     ] as const
     const result: TCoreChecksumConfig = {}
     for (const key of keys) {

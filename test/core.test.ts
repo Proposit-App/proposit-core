@@ -18000,218 +18000,6 @@ describe("toggleNegation extraFields", () => {
 })
 
 describe("forkArgument", () => {
-    it("CoreArgumentSchema accepts forkedFrom fields with values", () => {
-        const arg = {
-            id: "arg-fork",
-            version: 0,
-            checksum: "cs1",
-            descendantChecksum: null,
-            combinedChecksum: "cs1",
-            forkedFromArgumentId: "arg-original",
-            forkedFromArgumentVersion: 3,
-        }
-        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
-    })
-
-    it("CoreArgumentSchema accepts forkedFrom fields as null", () => {
-        const arg = {
-            id: "arg-fork",
-            version: 0,
-            checksum: "cs1",
-            descendantChecksum: null,
-            combinedChecksum: "cs1",
-            forkedFromArgumentId: null,
-            forkedFromArgumentVersion: null,
-        }
-        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
-    })
-
-    it("CoreArgumentSchema accepts objects without forkedFrom fields (backward compat)", () => {
-        const arg = {
-            id: "arg-original",
-            version: 0,
-            checksum: "cs1",
-            descendantChecksum: null,
-            combinedChecksum: "cs1",
-        }
-        expect(Value.Check(CoreArgumentSchema, arg)).toBe(true)
-    })
-
-    it("CorePremiseSchema accepts forkedFrom fields with values", () => {
-        const premise = {
-            id: "prem-fork",
-            argumentId: "arg-fork",
-            argumentVersion: 0,
-            checksum: "cs2",
-            descendantChecksum: null,
-            combinedChecksum: "cs2",
-            forkedFromPremiseId: "prem-original",
-            forkedFromArgumentId: "arg-original",
-            forkedFromArgumentVersion: 3,
-        }
-        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
-    })
-
-    it("CorePremiseSchema accepts forkedFrom fields as null", () => {
-        const premise = {
-            id: "prem-fork",
-            argumentId: "arg-fork",
-            argumentVersion: 0,
-            checksum: "cs2",
-            descendantChecksum: null,
-            combinedChecksum: "cs2",
-            forkedFromPremiseId: null,
-            forkedFromArgumentId: null,
-            forkedFromArgumentVersion: null,
-        }
-        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
-    })
-
-    it("CorePropositionalExpressionSchema accepts forkedFrom fields with values", () => {
-        const expr = {
-            id: "expr-fork",
-            argumentId: "arg-fork",
-            argumentVersion: 0,
-            premiseId: "prem-fork",
-            parentId: null,
-            position: 0,
-            checksum: "cs3",
-            descendantChecksum: null,
-            combinedChecksum: "cs3",
-            type: "variable" as const,
-            variableId: "var-1",
-            forkedFromExpressionId: "expr-original",
-            forkedFromPremiseId: "prem-original",
-            forkedFromArgumentId: "arg-original",
-            forkedFromArgumentVersion: 3,
-        }
-        expect(Value.Check(CorePropositionalExpressionSchema, expr)).toBe(true)
-    })
-
-    it("CorePropositionalExpressionSchema accepts forkedFrom fields as null", () => {
-        const expr = {
-            id: "expr-fork",
-            argumentId: "arg-fork",
-            argumentVersion: 0,
-            premiseId: "prem-fork",
-            parentId: null,
-            position: 0,
-            checksum: "cs3",
-            descendantChecksum: null,
-            combinedChecksum: "cs3",
-            type: "variable" as const,
-            variableId: "var-1",
-            forkedFromExpressionId: null,
-            forkedFromPremiseId: null,
-            forkedFromArgumentId: null,
-            forkedFromArgumentVersion: null,
-        }
-        expect(Value.Check(CorePropositionalExpressionSchema, expr)).toBe(true)
-    })
-
-    it("CorePropositionalVariableSchema (claim-bound) accepts forkedFrom fields with values", () => {
-        const variable = {
-            id: "var-fork",
-            argumentId: "arg-fork",
-            argumentVersion: 0,
-            symbol: "P",
-            checksum: "cs4",
-            claimId: "claim-1",
-            claimVersion: 1,
-            forkedFromVariableId: "var-original",
-            forkedFromArgumentId: "arg-original",
-            forkedFromArgumentVersion: 3,
-        }
-        expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(
-            true
-        )
-    })
-
-    it("CorePropositionalVariableSchema (claim-bound) accepts forkedFrom fields as null", () => {
-        const variable = {
-            id: "var-fork",
-            argumentId: "arg-fork",
-            argumentVersion: 0,
-            symbol: "P",
-            checksum: "cs4",
-            claimId: "claim-1",
-            claimVersion: 1,
-            forkedFromVariableId: null,
-            forkedFromArgumentId: null,
-            forkedFromArgumentVersion: null,
-        }
-        expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(
-            true
-        )
-    })
-
-    it("CorePropositionalVariableSchema (premise-bound) accepts forkedFrom fields with values", () => {
-        const variable = {
-            id: "var-fork",
-            argumentId: "arg-fork",
-            argumentVersion: 0,
-            symbol: "Q",
-            checksum: "cs5",
-            boundPremiseId: "prem-original",
-            boundArgumentId: "arg-original",
-            boundArgumentVersion: 3,
-            forkedFromVariableId: "var-original",
-            forkedFromArgumentId: "arg-original",
-            forkedFromArgumentVersion: 3,
-        }
-        expect(Value.Check(CorePropositionalVariableSchema, variable)).toBe(
-            true
-        )
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for argument", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.argumentFields).toContain(
-            "forkedFromArgumentId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.argumentFields).toContain(
-            "forkedFromArgumentVersion"
-        )
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for premise", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain(
-            "forkedFromPremiseId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain(
-            "forkedFromArgumentId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain(
-            "forkedFromArgumentVersion"
-        )
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for expression", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
-            "forkedFromExpressionId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
-            "forkedFromPremiseId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
-            "forkedFromArgumentId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain(
-            "forkedFromArgumentVersion"
-        )
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG includes forkedFrom fields for variable", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain(
-            "forkedFromVariableId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain(
-            "forkedFromArgumentId"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain(
-            "forkedFromArgumentVersion"
-        )
-    })
-
     it("canFork rejects when overridden to return false", () => {
         class NoForkEngine extends ArgumentEngine {
             public override canFork(): boolean {
@@ -18229,7 +18017,7 @@ describe("forkArgument", () => {
         ).toThrow("Forking is not allowed")
     })
 
-    it("forks a simple argument with new IDs and forkedFrom metadata", () => {
+    it("forks a simple argument with new IDs", () => {
         const claimLib = aLib()
         const sourceLib = sLib()
         const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
@@ -18270,8 +18058,6 @@ describe("forkArgument", () => {
         const forkedArg = forked.getArgument()
         expect(forkedArg.id).toBe("forked-arg")
         expect(forkedArg.version).toBe(0)
-        expect(forkedArg.forkedFromArgumentId).toBe(ARG.id)
-        expect(forkedArg.forkedFromArgumentVersion).toBe(ARG.version)
 
         // Verify remap table
         expect(remapTable.argumentId).toEqual({
@@ -18290,24 +18076,12 @@ describe("forkArgument", () => {
         expect(forkedPremiseId).not.toBe(premiseId)
         expect(remapTable.premises.get(premiseId)).toBe(forkedPremiseId)
 
-        // Verify premise forkedFrom metadata
-        const forkedPremiseData = forkedPremise.snapshot().premise
-        expect(forkedPremiseData.forkedFromPremiseId).toBe(premiseId)
-        expect(forkedPremiseData.forkedFromArgumentId).toBe(ARG.id)
-        expect(forkedPremiseData.forkedFromArgumentVersion).toBe(ARG.version)
-
         // Verify expression was remapped
         const forkedExprs = forkedPremise.getExpressions()
         expect(forkedExprs).toHaveLength(1)
         const forkedExpr = forkedExprs[0]
         expect(forkedExpr.id).not.toBe("expr-1")
         expect(remapTable.expressions.get("expr-1")).toBe(forkedExpr.id)
-
-        // Verify expression forkedFrom metadata
-        expect(forkedExpr.forkedFromExpressionId).toBe("expr-1")
-        expect(forkedExpr.forkedFromPremiseId).toBe(premiseId)
-        expect(forkedExpr.forkedFromArgumentId).toBe(ARG.id)
-        expect(forkedExpr.forkedFromArgumentVersion).toBe(ARG.version)
 
         // Verify expression's variableId was remapped
         expect(forkedExpr.type).toBe("variable")
@@ -18327,9 +18101,6 @@ describe("forkArgument", () => {
         expect(forkedVar).toBeDefined()
         expect(forkedVar.id).not.toBe("var-p")
         expect(remapTable.variables.get("var-p")).toBe(forkedVar.id)
-        expect(forkedVar.forkedFromVariableId).toBe("var-p")
-        expect(forkedVar.forkedFromArgumentId).toBe(ARG.id)
-        expect(forkedVar.forkedFromArgumentVersion).toBe(ARG.version)
 
         // Verify conclusion role was remapped
         expect(forked.getConclusionPremise()?.getId()).toBe(forkedPremiseId)
@@ -18756,7 +18527,7 @@ describe("forkArgument", () => {
         const srcSnapshot = eng.snapshot()
         const forkSnapshot = forked.snapshot()
 
-        // Argument checksums differ (IDs and forkedFrom fields differ)
+        // Argument checksums differ (IDs differ)
         expect(forkSnapshot.argument.checksum).not.toBe(
             srcSnapshot.argument.checksum
         )
@@ -18814,7 +18585,8 @@ describe("forkArgument", () => {
         expect(diff.variables.added).toHaveLength(2)
     })
 
-    it("diffArguments with createForkedFromMatcher pairs forked entities", () => {
+    // Skipped: createForkedFromMatcher reads forkedFrom* fields removed from entities; removed in Task 9
+    it.skip("diffArguments with createForkedFromMatcher pairs forked entities", () => {
         const claimLib = aLib()
         const sourceLib = sLib()
         const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
@@ -18845,7 +18617,8 @@ describe("forkArgument", () => {
         expect(diff.variables.added).toHaveLength(0)
     })
 
-    it("fork-aware diff detects mutations after fork", () => {
+    // Skipped: createForkedFromMatcher reads forkedFrom* fields removed from entities; removed in Task 9
+    it.skip("fork-aware diff detects mutations after fork", () => {
         const claimLib = aLib()
         const sourceLib = sLib()
         const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
@@ -21930,32 +21703,6 @@ describe("ForksLibrary", () => {
         expect(Value.Check(CoreForkSchema, fork)).toBe(false)
     })
 
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in argument fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.argumentFields).toContain("forkId")
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in premise fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.premiseFields).toContain("forkId")
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in expression fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.expressionFields).toContain("forkId")
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG includes forkId in variable fields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.variableFields).toContain("forkId")
-    })
-
-    it("DEFAULT_CHECKSUM_CONFIG has forkFields", () => {
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toBeDefined()
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("id")
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("sourceArgumentId")
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain(
-            "sourceArgumentVersion"
-        )
-        expect(DEFAULT_CHECKSUM_CONFIG.forkFields).toContain("createdOn")
-    })
-
     it("create() stores a fork record and computes checksum", () => {
         const lib = new ForksLibrary()
         lib.create({
@@ -22089,7 +21836,7 @@ describe("ForksLibrary", () => {
     })
 
     describe("ForksLibrary.forkArgument()", () => {
-        it("creates fork record, sets forkId on all entities, returns engine + remapTable + fork", () => {
+        it("creates fork record, returns engine + remapTable + fork", () => {
             const claimLib = aLib()
             const sourceLib = sLib()
             const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
@@ -22157,27 +21904,10 @@ describe("ForksLibrary", () => {
             expect(fork.createdOn).toBeDefined()
             expect(forksLib.get(fork.id)).toEqual(fork)
 
-            // forkId set on argument
+            // Forked argument has new ID
             const forkedArg = forked.getArgument()
-            expect(forkedArg.forkId).toBe(fork.id)
-
-            // forkId set on premises
-            const forkedPremise = forked.listPremises()[0]
-            const premiseData = forkedPremise.snapshot().premise
-            expect(premiseData.forkId).toBe(fork.id)
-
-            // forkId set on expressions
-            const forkedExpr = forkedPremise.getExpressions()[0]
-            expect(forkedExpr.forkId).toBe(fork.id)
-
-            // forkId set on variables
-            for (const v of forked.getVariables()) {
-                expect(v.forkId).toBe(fork.id)
-            }
-
-            // forkedFrom still set
-            expect(forkedArg.forkedFromArgumentId).toBe("src-arg")
-            expect(premiseData.forkedFromPremiseId).toBe("prem-1")
+            expect(forkedArg.id).toBe("fork-arg")
+            expect(forkedArg.version).toBe(0)
 
             // Remap table correct
             expect(remapTable.premises.size).toBe(1)
@@ -22256,10 +21986,10 @@ describe("ForksLibrary", () => {
 
             // Forked engine is unaffected
             expect(forked.listPremises()).toHaveLength(1)
-            expect(forked.getArgument().forkId).toBe(fork.id)
         })
 
-        it("createForkedFromMatcher() works with ForksLibrary-forked engines", () => {
+        // Skipped: createForkedFromMatcher reads forkedFrom* fields removed from entities; removed in Task 9
+        it.skip("createForkedFromMatcher() works with ForksLibrary-forked engines", () => {
             const claimLib = aLib()
             const sourceLib = sLib()
             const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
@@ -22372,12 +22102,10 @@ describe("forkArgumentEngine", () => {
             { generateId: () => `fk-${counter++}` }
         )
 
-        // Verify argument identity and forkedFrom
+        // Verify argument identity
         const forkedArg = forked.getArgument()
         expect(forkedArg.id).toBe("fork-arg")
         expect(forkedArg.version).toBe(0)
-        expect(forkedArg.forkedFromArgumentId).toBe("src-arg")
-        expect(forkedArg.forkedFromArgumentVersion).toBe(2)
 
         // Verify remap table
         expect(remapTable.argumentId).toEqual({
@@ -22388,20 +22116,19 @@ describe("forkArgumentEngine", () => {
         expect(remapTable.expressions.size).toBe(1)
         expect(remapTable.variables.size).toBe(2) // var-p + auto premise-bound
 
-        // Verify premise forkedFrom
+        // Verify premise was remapped
         const forkedPremise = forked.listPremises()[0]
-        const forkedPremiseData = forkedPremise.snapshot().premise
-        expect(forkedPremiseData.forkedFromPremiseId).toBe("prem-1")
+        expect(forkedPremise.getId()).toBe(remapTable.premises.get("prem-1"))
 
-        // Verify expression forkedFrom
+        // Verify expression was remapped
         const forkedExpr = forkedPremise.getExpressions()[0]
-        expect(forkedExpr.forkedFromExpressionId).toBe("expr-1")
+        expect(forkedExpr.id).toBe(remapTable.expressions.get("expr-1"))
 
-        // Verify variable forkedFrom
+        // Verify variable was remapped
         const forkedVar = forked
             .getVariables()
             .find((v) => v.id === remapTable.variables.get("var-p"))!
-        expect(forkedVar.forkedFromVariableId).toBe("var-p")
+        expect(forkedVar).toBeDefined()
 
         // Verify conclusion remapped
         expect(forked.getConclusionPremise()?.getId()).toBe(
