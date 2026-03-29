@@ -36,4 +36,5 @@ export type {
     TForkLookup,
     TForksLibrarySnapshot,
     TForkLibrarySnapshot,
+    TArgumentLibrarySnapshot,
 } from "./library.interfaces.js"

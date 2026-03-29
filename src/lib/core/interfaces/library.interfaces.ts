@@ -13,6 +13,13 @@ import type {
     TCoreSourceForkRecord,
 } from "../../schemata/fork.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
+import type {
+    TCoreArgument,
+    TCorePremise,
+    TCorePropositionalExpression,
+    TCorePropositionalVariable,
+} from "../../schemata/index.js"
+import type { TArgumentEngineSnapshot } from "../argument-engine.js"
 
 /**
  * Narrow read-only interface for claim lookups. Used by `ArgumentEngine` for
@@ -392,4 +399,18 @@ export type TForkLibrarySnapshot<
     claims: TClaimFork[]
     /** All source fork records. */
     sources: TSourceFork[]
+}
+
+/**
+ * Serializable snapshot of an `ArgumentLibrary`. Contains snapshots of all
+ * managed `ArgumentEngine` instances.
+ */
+export type TArgumentLibrarySnapshot<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+> = {
+    /** Snapshots of all argument engines in the library. */
+    arguments: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>[]
 }

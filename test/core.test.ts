@@ -13,6 +13,7 @@ import {
     forkArgumentEngine,
     ForkNamespace,
     ForkLibrary,
+    ArgumentLibrary,
 } from "../src/lib/index"
 import type {
     TOrderedOperation,
@@ -22688,5 +22689,107 @@ describe("ForkLibrary", () => {
         lib.arguments.create(makeBaseRecord())
         const result = lib.validate()
         expect(result.ok).toBe(true)
+    })
+})
+
+describe("ArgumentLibrary", () => {
+    const makeArgument = (): TOptionalChecksum<TCoreArgument> => ({
+        id: crypto.randomUUID(),
+        version: 0,
+    })
+
+    const makeLibraries = () => {
+        const claimLibrary = new ClaimLibrary()
+        const sourceLibrary = new SourceLibrary()
+        const claimSourceLibrary = new ClaimSourceLibrary(
+            claimLibrary,
+            sourceLibrary
+        )
+        return { claimLibrary, sourceLibrary, claimSourceLibrary }
+    }
+
+    it("should create and retrieve an engine", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        const arg = makeArgument()
+        const engine = argLib.create(arg)
+
+        expect(engine).toBeInstanceOf(ArgumentEngine)
+        expect(engine.getArgument().id).toBe(arg.id)
+        expect(argLib.get(arg.id)).toBe(engine)
+    })
+
+    it("should throw on duplicate argument ID", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        const arg = makeArgument()
+        argLib.create(arg)
+        expect(() => argLib.create(arg)).toThrow(/already exists/)
+    })
+
+    it("should list all engines", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        argLib.create(makeArgument())
+        argLib.create(makeArgument())
+        expect(argLib.getAll()).toHaveLength(2)
+    })
+
+    it("should remove and return an engine", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        const arg = makeArgument()
+        const engine = argLib.create(arg)
+        const removed = argLib.remove(arg.id)
+
+        expect(removed).toBe(engine)
+        expect(argLib.get(arg.id)).toBeUndefined()
+    })
+
+    it("should throw when removing nonexistent ID", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        expect(() => argLib.remove("nonexistent")).toThrow(/not found/)
+    })
+
+    it("should round-trip via snapshot/fromSnapshot", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        const arg = makeArgument()
+        argLib.create(arg)
+
+        const snap = argLib.snapshot()
+        const restored = ArgumentLibrary.fromSnapshot(snap, libs)
+
+        expect(restored.get(arg.id)).toBeDefined()
+        expect(restored.get(arg.id)!.getArgument().id).toBe(arg.id)
+    })
+
+    it("should register a pre-built engine", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        const arg = makeArgument()
+        const engine = new ArgumentEngine(
+            arg,
+            libs.claimLibrary,
+            libs.sourceLibrary,
+            libs.claimSourceLibrary
+        )
+        argLib.register(engine)
+        expect(argLib.get(arg.id)).toBe(engine)
+    })
+
+    it("should throw when registering duplicate ID", () => {
+        const libs = makeLibraries()
+        const argLib = new ArgumentLibrary(libs)
+        const arg = makeArgument()
+        argLib.create(arg)
+        const engine = new ArgumentEngine(
+            arg,
+            libs.claimLibrary,
+            libs.sourceLibrary,
+            libs.claimSourceLibrary
+        )
+        expect(() => argLib.register(engine)).toThrow(/already exists/)
     })
 })
