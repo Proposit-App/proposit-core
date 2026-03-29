@@ -398,4 +398,92 @@ export function registerExpressionCommands(
                 }
             }
         )
+
+    exprs
+        .command("toggle-negation <premise_id> <expression_id>")
+        .description(
+            "Toggle negation on an expression (wrap in NOT or unwrap)"
+        )
+        .action(async (premiseId: string, expressionId: string) => {
+            await assertNotPublished(argumentId, version)
+            if (!(await premiseExists(argumentId, version, premiseId))) {
+                errorExit(`Premise "${premiseId}" not found.`)
+            }
+
+            const engine = await hydrateEngine(argumentId, version)
+            const pm = engine.getPremise(premiseId)
+            if (!pm) errorExit(`Premise "${premiseId}" not found in engine.`)
+
+            try {
+                pm.toggleNegation(expressionId)
+            } catch (e) {
+                errorExit(
+                    e instanceof Error
+                        ? e.message
+                        : "Failed to toggle negation."
+                )
+            }
+
+            await writePremiseData(argumentId, version, premiseId, {
+                rootExpressionId: pm.getRootExpressionId(),
+                variables: [...pm.getReferencedVariableIds()].sort(),
+                expressions: pm.getExpressions(),
+            })
+            printLine("success")
+        })
+
+    exprs
+        .command("change-operator <premise_id> <expression_id> <new_operator>")
+        .description("Change the operator type of an operator expression")
+        .option(
+            "--source-child-id <id>",
+            "Source child ID for split behavior"
+        )
+        .option(
+            "--target-child-id <id>",
+            "Target child ID for split behavior"
+        )
+        .action(
+            async (
+                premiseId: string,
+                expressionId: string,
+                newOperator: string,
+                opts: {
+                    sourceChildId?: string
+                    targetChildId?: string
+                }
+            ) => {
+                await assertNotPublished(argumentId, version)
+                if (!(await premiseExists(argumentId, version, premiseId))) {
+                    errorExit(`Premise "${premiseId}" not found.`)
+                }
+
+                const engine = await hydrateEngine(argumentId, version)
+                const pm = engine.getPremise(premiseId)
+                if (!pm)
+                    errorExit(`Premise "${premiseId}" not found in engine.`)
+
+                try {
+                    pm.changeOperator(
+                        expressionId,
+                        newOperator as TCoreLogicalOperatorType,
+                        opts.sourceChildId,
+                        opts.targetChildId
+                    )
+                } catch (e) {
+                    errorExit(
+                        e instanceof Error
+                            ? e.message
+                            : "Failed to change operator."
+                    )
+                }
+
+                await writePremiseData(argumentId, version, premiseId, {
+                    rootExpressionId: pm.getRootExpressionId(),
+                    variables: [...pm.getReferencedVariableIds()].sort(),
+                    expressions: pm.getExpressions(),
+                })
+                printLine("success")
+            }
+        )
 }
