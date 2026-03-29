@@ -314,14 +314,15 @@ forkArgument(
 
 1. Retrieve source engine from `this.arguments`. Throw if not found.
 2. Call `engine.canFork()` — throw if `false`.
-3. Identify all unique claims referenced by the engine's variables.
-4. Clone each claim into `this.claims` (new ID, version 0, content from the referenced version). Build claim remap.
-5. Identify all sources associated with the referenced claims (via `this.claimSources`). Clone each source into `this.sources` (new ID, version 0). Build source remap.
-6. Create new claim-source associations in `this.claimSources` linking cloned claims to cloned sources.
-7. Call `forkArgumentEngine()` with claim remap so forked variables point to cloned claims.
-8. Register forked engine in `this.arguments`.
-9. Create fork records in all 6 namespaces of `this.forks` using the remap table (merging respective extras).
-10. Return `{ engine, remapTable, argumentFork }`.
+3. **Clone claims:** Identify all unique claims referenced by the engine's variables (via `claimId`/`claimVersion`). Clone each claim into `this.claims` (new ID, version 0, content from the referenced version). Build claim remap.
+4. **Clone sources:** Identify all sources associated with the referenced claims (via `this.claimSources`). Clone each source into `this.sources` (new ID, version 0). Build source remap.
+5. **Clone associations:** For each original claim-source association involving a referenced claim, create a corresponding new association in `this.claimSources` linking the cloned claim (at its cloned version) to the cloned source (at its cloned version). The forked argument gets a complete, independent copy of all claim-source relationships.
+6. **Fork engine:** Call `forkArgumentEngine()` with claim remap so forked variables' `claimId`/`claimVersion` references point to the cloned claims instead of the originals.
+7. **Register engine:** Store the forked engine in `this.arguments`.
+8. **Create fork records:** Populate all 6 namespaces of `this.forks` using the remap table (merging respective extras).
+9. Return `{ engine, remapTable, argumentFork }`.
+
+The result is a fully independent copy: the forked argument, its claims, its sources, and all claim-source associations are decoupled from the originals. Mutating any forked entity has no effect on the original.
 
 #### `createForkedFromMatcher()`
 
@@ -344,6 +345,8 @@ Reads from `this.forks` internally. Each matcher checks `this.forks.<namespace>.
 | `validate(): TInvariantValidationResult`                          | Validates all libraries, merges results |
 
 **Snapshot type:**
+
+`TPropositCoreSnapshot` captures the complete state of all libraries, including all claim-source associations. Round-tripping through `snapshot()`/`fromSnapshot()` preserves forked arguments with their independent claims, sources, and associations intact.
 
 ```typescript
 type TPropositCoreSnapshot<
