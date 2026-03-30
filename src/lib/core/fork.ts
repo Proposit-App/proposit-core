@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto"
+import { defaultGenerateId } from "./argument-engine.js"
 import type {
     TCoreArgument,
     TCorePremise,
@@ -66,7 +66,7 @@ export function forkArgumentEngine<
     engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>
     remapTable: TForkRemapTable
 } {
-    const generateId = options?.generateId ?? randomUUID
+    const generateId = options?.generateId ?? defaultGenerateId
 
     // Snapshot includes config from the source engine
     const snap = engine.snapshot()
