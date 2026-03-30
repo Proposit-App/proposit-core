@@ -5497,8 +5497,8 @@ describe("checksum utilities", () => {
             eng.addVariable(v1)
             const { result: pm1 } = eng.createPremiseWithId("p1")
             const { result: pm2 } = eng.createPremiseWithId("p2")
-            // Different premise IDs mean different checksums (id is part of checksum)
-            expect(pm1.checksum()).not.toBe(pm2.checksum())
+            // Different premise IDs do NOT change the checksum (id is excluded from default checksum config)
+            expect(pm1.checksum()).toBe(pm2.checksum())
         })
     })
 
@@ -5948,7 +5948,8 @@ describe("createChecksumConfig", () => {
         const config = createChecksumConfig({
             expressionFields: new Set(["customField"]),
         })
-        expect(config.expressionFields!.has("id")).toBe(true)
+        // "id" is not in the default expressionFields, so it will not be present after merge
+        expect(config.expressionFields!.has("id")).toBe(false)
         expect(config.expressionFields!.has("customField")).toBe(true)
     })
 
