@@ -15,6 +15,7 @@ import {
     resolveAnalysisFilename,
     writeAnalysis,
 } from "../storage/analysis.js"
+import { gradeEvaluation } from "../../lib/core/evaluation/grading.js"
 import { listPremiseIds, readPremiseData } from "../storage/premises.js"
 import { readVariables } from "../storage/variables.js"
 
@@ -523,7 +524,10 @@ export function registerAnalysisCommands(
                 )
 
                 if (opts.json) {
-                    printJson(result)
+                    printJson({
+                        ...result,
+                        grading: gradeEvaluation(result),
+                    })
                     return
                 }
 
@@ -537,6 +541,8 @@ export function registerAnalysisCommands(
                     return
                 }
 
+                const grading = gradeEvaluation(result)
+                printLine(`grade:             ${grading.label}`)
                 printLine(`admissible:        ${result.isAdmissibleAssignment}`)
                 printLine(
                     `all supporting:    ${result.allSupportingPremisesTrue}`
