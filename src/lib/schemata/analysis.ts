@@ -11,8 +11,13 @@ export const CoreAnalysisFileSchema = Type.Object({
             description: "Variable symbol → true/false/null (unset).",
         }
     ),
-    rejectedExpressionIds: Type.Array(Type.String(), {
-        description: "Expression IDs rejected by the user.",
-    }),
+    operatorAssignments: Type.Record(
+        Type.String(),
+        Type.Union([Type.Literal("accepted"), Type.Literal("rejected")]),
+        {
+            description:
+                "Operator expression ID → accepted/rejected. Unset operators evaluate normally.",
+        }
+    ),
 })
 export type TCoreAnalysisFile = Static<typeof CoreAnalysisFileSchema>

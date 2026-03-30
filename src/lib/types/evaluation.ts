@@ -8,12 +8,15 @@ export type TCoreTrivalentValue = boolean | null
 /** Maps variable IDs to three-valued truth values. */
 export type TCoreVariableAssignment = Record<string, TCoreTrivalentValue>
 
-/** Full expression assignment: variable truth values and rejected expression IDs. */
+/** Operator acceptance state: accepted (true), rejected (false), or unset (normal evaluation). */
+export type TCoreOperatorAssignment = "accepted" | "rejected"
+
+/** Full expression assignment: variable truth values and operator acceptance states. */
 export interface TCoreExpressionAssignment {
     /** Variable ID → true/false/null (null = unset/not sure). */
     variables: TCoreVariableAssignment
-    /** Expression IDs the user rejects (evaluate to false, children skipped). */
-    rejectedExpressionIds: string[]
+    /** Operator expression ID → accepted/rejected. Unset operators evaluate normally. */
+    operatorAssignments: Record<string, TCoreOperatorAssignment>
 }
 
 /** Severity level for validation issues. */
