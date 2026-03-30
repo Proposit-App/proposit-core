@@ -77,7 +77,7 @@ function truthFillColor(value: TCoreTrivalentValue): string {
 interface TEvaluationOverlay {
     result: TCoreArgumentEvaluationResult
     premiseResults: Map<string, TCorePremiseEvaluationResult>
-    rejectedExpressionIds: Set<string>
+    operatorAssignments: Record<string, string>
 }
 
 export function buildDotGraph(
@@ -198,7 +198,7 @@ export function buildDotGraph(
                     attrs.push(`style=filled`)
                     attrs.push(`fillcolor=${truthFillColor(exprValue)}`)
                 }
-                if (overlay.rejectedExpressionIds.has(expr.id)) {
+                if (overlay.operatorAssignments[expr.id] === "rejected") {
                     attrs.push(`peripheries=2`)
                     attrs.push(`color=red`)
                 }
@@ -399,9 +399,9 @@ export function registerGraphCommand(
                 const result = engine.evaluate(
                     {
                         variables: variableAssignment,
-                        rejectedExpressionIds: [
-                            ...analysisData.rejectedExpressionIds,
-                        ],
+                        operatorAssignments: {
+                            ...analysisData.operatorAssignments,
+                        },
                     },
                     {
                         includeExpressionValues: true,
@@ -433,9 +433,9 @@ export function registerGraphCommand(
                 overlay = {
                     result,
                     premiseResults,
-                    rejectedExpressionIds: new Set(
-                        analysisData.rejectedExpressionIds
-                    ),
+                    operatorAssignments: {
+                        ...analysisData.operatorAssignments,
+                    },
                 }
             }
 

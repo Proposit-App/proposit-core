@@ -14,6 +14,7 @@ import {
     resolveAnalysisFilename,
     writeAnalysis,
 } from "../storage/analysis.js"
+import { listPremiseIds, readPremiseData } from "../storage/premises.js"
 import { readVariables } from "../storage/variables.js"
 
 export function registerAnalysisCommands(
@@ -66,7 +67,7 @@ export function registerAnalysisCommands(
                     argumentId,
                     argumentVersion: version,
                     assignments,
-                    rejectedExpressionIds: [],
+                    operatorAssignments: {},
                 })
                 printLine(filename)
             }
@@ -105,11 +106,12 @@ export function registerAnalysisCommands(
                 for (const [symbol, value] of sorted) {
                     printLine(`${symbol} = ${value ?? "unset"}`)
                 }
-                if (data.rejectedExpressionIds.length > 0) {
+                const opEntries = Object.entries(data.operatorAssignments)
+                if (opEntries.length > 0) {
                     printLine("")
-                    printLine("Rejected expressions:")
-                    for (const id of data.rejectedExpressionIds) {
-                        printLine(`  ${id}`)
+                    printLine("Operator assignments:")
+                    for (const [id, state] of opEntries) {
+                        printLine(`  ${id} = ${state}`)
                     }
                 }
             }
@@ -197,7 +199,7 @@ export function registerAnalysisCommands(
 
     analysis
         .command("reject <expression_id>")
-        .description("Reject an expression (it will evaluate to false)")
+        .description("Reject an operator (it will evaluate to false)")
         .option(
             "--file <filename>",
             "Analysis filename (default: analysis.json)"
@@ -208,16 +210,14 @@ export function registerAnalysisCommands(
                 errorExit(`Analysis file "${filename}" does not exist.`)
             }
             const data = await readAnalysis(argumentId, version, filename)
-            if (!data.rejectedExpressionIds.includes(expressionId)) {
-                data.rejectedExpressionIds.push(expressionId)
-            }
+            data.operatorAssignments[expressionId] = "rejected"
             await writeAnalysis(argumentId, version, filename, data)
             printLine("success")
         })
 
     analysis
         .command("accept <expression_id>")
-        .description("Accept an expression (restore normal computation)")
+        .description("Accept an operator (restore normal computation)")
         .option(
             "--file <filename>",
             "Analysis filename (default: analysis.json)"
@@ -228,11 +228,63 @@ export function registerAnalysisCommands(
                 errorExit(`Analysis file "${filename}" does not exist.`)
             }
             const data = await readAnalysis(argumentId, version, filename)
-            data.rejectedExpressionIds = data.rejectedExpressionIds.filter(
-                (id) => id !== expressionId
-            )
+            delete data.operatorAssignments[expressionId]
             await writeAnalysis(argumentId, version, filename, data)
             printLine("success")
+        })
+
+    analysis
+        .command("reject-all")
+        .description("Reject all operator expressions across all premises")
+        .option(
+            "--file <filename>",
+            "Analysis filename (default: analysis.json)"
+        )
+        .action(async (opts: { file?: string }) => {
+            const filename = resolveAnalysisFilename(opts.file)
+            if (!(await analysisFileExists(argumentId, version, filename))) {
+                errorExit(`Analysis file "${filename}" does not exist.`)
+            }
+            const premiseIds = await listPremiseIds(argumentId, version)
+            const allExpressionIds: string[] = []
+            for (const pid of premiseIds) {
+                const premiseData = await readPremiseData(
+                    argumentId,
+                    version,
+                    pid
+                )
+                for (const expr of premiseData.expressions) {
+                    if (expr.type === "operator") {
+                        allExpressionIds.push(expr.id)
+                    }
+                }
+            }
+            const data = await readAnalysis(argumentId, version, filename)
+            data.operatorAssignments = {}
+            for (const id of allExpressionIds) {
+                data.operatorAssignments[id] = "rejected"
+            }
+            await writeAnalysis(argumentId, version, filename, data)
+            printLine(`${allExpressionIds.length} operator(s) rejected`)
+        })
+
+    analysis
+        .command("accept-all")
+        .description("Accept all operators (clear all rejections)")
+        .option(
+            "--file <filename>",
+            "Analysis filename (default: analysis.json)"
+        )
+        .action(async (opts: { file?: string }) => {
+            const filename = resolveAnalysisFilename(opts.file)
+            if (!(await analysisFileExists(argumentId, version, filename))) {
+                errorExit(`Analysis file "${filename}" does not exist.`)
+            }
+            const data = await readAnalysis(argumentId, version, filename)
+            const count = Object.keys(data.operatorAssignments).length
+            data.operatorAssignments = {}
+            await writeAnalysis(argumentId, version, filename, data)
+            printLine(`${count} operator(s) accepted`)
         })
 
     analysis
@@ -285,19 +337,20 @@ export function registerAnalysisCommands(
                 }
             }
 
-            // Validate rejected expression IDs
-            if (data.rejectedExpressionIds.length > 0) {
+            // Validate operator assignment IDs
+            const opAssignmentIds = Object.keys(data.operatorAssignments)
+            if (opAssignmentIds.length > 0) {
                 const engine = await hydrateEngine(argumentId, version)
                 const allExpressionIds = new Set(
                     engine
                         .listPremises()
                         .flatMap((pm) => pm.getExpressions().map((e) => e.id))
                 )
-                for (const id of data.rejectedExpressionIds) {
+                for (const id of opAssignmentIds) {
                     if (!allExpressionIds.has(id)) {
                         issues.push({
-                            code: "UNKNOWN_REJECTED_EXPRESSION",
-                            message: `Rejected expression ID "${id}" does not exist in any premise.`,
+                            code: "UNKNOWN_OPERATOR_ASSIGNMENT",
+                            message: `Operator assignment ID "${id}" does not exist in any premise.`,
                         })
                     }
                 }
@@ -410,9 +463,9 @@ export function registerAnalysisCommands(
                 const result = engine.evaluate(
                     {
                         variables: variableAssignment,
-                        rejectedExpressionIds: [
-                            ...analysisData.rejectedExpressionIds,
-                        ],
+                        operatorAssignments: {
+                            ...analysisData.operatorAssignments,
+                        },
                     },
                     {
                         strictUnknownAssignmentKeys:
@@ -571,6 +624,58 @@ export function registerAnalysisCommands(
                 printLine(
                     `${variableId} | ${info.symbol} | premises: [${info.premiseIds.join(", ")}]`
                 )
+            }
+        })
+
+    analysis
+        .command("operators")
+        .description("List all operator expressions across all premises")
+        .option("--json", "Output as JSON")
+        .action(async (opts: { json?: boolean }) => {
+            const engine = await hydrateEngine(argumentId, version)
+            const premises = engine.listPremises()
+            const operators: {
+                expressionId: string
+                operator: string
+                premiseId: string
+                formula: string
+            }[] = []
+
+            for (const pm of premises) {
+                const premiseId = pm.getId()
+                const formula = pm.toDisplayString() || "(empty)"
+                for (const expr of pm.getExpressions()) {
+                    if (expr.type === "operator") {
+                        operators.push({
+                            expressionId: expr.id,
+                            operator: (
+                                expr as { operator: string } & typeof expr
+                            ).operator,
+                            premiseId,
+                            formula,
+                        })
+                    }
+                }
+            }
+
+            if (opts.json) {
+                printJson(operators)
+                return
+            }
+
+            if (operators.length === 0) {
+                printLine("No operator expressions found.")
+                return
+            }
+
+            let currentPremise = ""
+            for (const op of operators) {
+                if (op.premiseId !== currentPremise) {
+                    if (currentPremise !== "") printLine("")
+                    currentPremise = op.premiseId
+                    printLine(`Premise ${op.premiseId}:  ${op.formula}`)
+                }
+                printLine(`  ${op.expressionId} | ${op.operator}`)
             }
         })
 

@@ -32,7 +32,7 @@ function makeAssignment(
         if (!id) throw new Error(`Unknown variable symbol: ${symbol}`)
         variables[id] = value
     }
-    return { variables, rejectedExpressionIds: [] }
+    return { variables, operatorAssignments: {} }
 }
 
 // ---------------------------------------------------------------------------

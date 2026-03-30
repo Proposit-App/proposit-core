@@ -1890,7 +1890,7 @@ describe("PremiseEngine — validation and evaluation", () => {
 
         const result = pm.evaluate({
             variables: { [VAR_P.id]: true, [VAR_Q.id]: false },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.rootValue).toBe(false)
         expect(result.premiseType).toBe("inference")
@@ -1916,7 +1916,7 @@ describe("PremiseEngine — validation and evaluation", () => {
 
         const result = pm.evaluate({
             variables: { [VAR_P.id]: false, [VAR_Q.id]: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.rootValue).toBe(false)
         expect(result.inferenceDiagnostic).toMatchObject({
@@ -2011,7 +2011,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
         const result = eng.evaluate({
             variables: { [VAR_P.id]: false, [VAR_Q.id]: false },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         expect(result.isAdmissibleAssignment).toBe(false)
@@ -2129,7 +2129,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
     ) {
         const result = eng.evaluate({
             variables,
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         return {
@@ -2151,7 +2151,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
 
         const evaluation = eng.evaluate({
             variables,
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(evaluation.ok).toBe(true)
 
@@ -3089,7 +3089,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
 
         const assignment: TCoreExpressionAssignment = {
             variables: { "var-p": null },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         }
         const result = pm.evaluate(assignment)
         expect(result.rootValue).toBeNull()
@@ -3104,7 +3104,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
 
         const assignment: TCoreExpressionAssignment = {
             variables: {},
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         }
         const result = pm.evaluate(assignment)
         expect(result.rootValue).toBeNull()
@@ -3128,14 +3128,14 @@ describe("PremiseEngine — three-valued evaluation", () => {
         // true AND null = null
         const r1 = pm.evaluate({
             variables: { "var-p": true, "var-q": null },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(r1.rootValue).toBeNull()
 
         // false AND null = false
         const r2 = pm.evaluate({
             variables: { "var-p": false, "var-q": null },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(r2.rootValue).toBe(false)
     })
@@ -3156,14 +3156,14 @@ describe("PremiseEngine — three-valued evaluation", () => {
         // true OR null = true
         const r1 = pm.evaluate({
             variables: { "var-p": true, "var-q": null },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(r1.rootValue).toBe(true)
 
         // false OR null = null
         const r2 = pm.evaluate({
             variables: { "var-p": false, "var-q": null },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(r2.rootValue).toBeNull()
     })
@@ -3184,21 +3184,21 @@ describe("PremiseEngine — three-valued evaluation", () => {
         // false implies null = true
         const r1 = pm.evaluate({
             variables: { "var-p": false, "var-q": null },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(r1.rootValue).toBe(true)
 
         // null implies true = true
         const r2 = pm.evaluate({
             variables: { "var-p": null, "var-q": true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(r2.rootValue).toBe(true)
 
         // true implies null = null
         const r3 = pm.evaluate({
             variables: { "var-p": true, "var-q": null },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(r3.rootValue).toBeNull()
     })
@@ -3219,7 +3219,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
 
         const result = pm.evaluate({
             variables: { "var-p": true, "var-q": true },
-            rejectedExpressionIds: ["and-root"],
+            operatorAssignments: { "and-root": "rejected" },
         })
         expect(result.rootValue).toBe(false)
         // Children should NOT be in expressionValues because they were skipped
@@ -3239,7 +3239,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
 
         const result = pm.evaluate({
             variables: { "var-p": true },
-            rejectedExpressionIds: ["f-root"],
+            operatorAssignments: { "f-root": "rejected" },
         })
         expect(result.rootValue).toBe(false)
         // Child skipped
@@ -3280,7 +3280,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
         // (false) or true → true
         const result = pm.evaluate({
             variables: { "var-p": true, "var-q": true, "var-r": true },
-            rejectedExpressionIds: ["and-child"],
+            operatorAssignments: { "and-child": "rejected" },
         })
         expect(result.rootValue).toBe(true)
         // AND evaluates to false due to rejection
@@ -3308,7 +3308,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
 
         const result = pm.evaluate({
             variables: { "var-p": true, "var-q": true },
-            rejectedExpressionIds: ["imp"],
+            operatorAssignments: { "imp": "rejected" },
         })
         expect(result.rootValue).toBe(false)
         expect(result.inferenceDiagnostic).toBeUndefined()
@@ -3374,7 +3374,7 @@ describe("ArgumentEngine — three-valued evaluation", () => {
                 [VAR_C.id]: true,
                 [VAR_D.id]: null,
             },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         expect(result.isAdmissibleAssignment).toBe(null)
@@ -3389,7 +3389,7 @@ describe("ArgumentEngine — three-valued evaluation", () => {
                 [VAR_C.id]: true,
                 [VAR_D.id]: true,
             },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         expect(result.isAdmissibleAssignment).toBe(true)
@@ -3406,7 +3406,7 @@ describe("ArgumentEngine — three-valued evaluation", () => {
                 [VAR_C.id]: true,
                 [VAR_D.id]: true,
             },
-            rejectedExpressionIds: ["c-imp"],
+            operatorAssignments: { "c-imp": "rejected" },
         })
         expect(result.ok).toBe(true)
         expect(result.conclusionTrue).toBe(false)
@@ -3421,7 +3421,7 @@ describe("ArgumentEngine — three-valued evaluation", () => {
                 [VAR_C.id]: true,
                 [VAR_D.id]: true,
             },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         expect(result.isCounterexample).toBe(null)
@@ -10005,13 +10005,13 @@ describe("wrapExpression", () => {
         // Q=true, P=false → false (only false case for implies)
         const result = pm.evaluate({
             variables: { [VAR_Q.id]: true, [VAR_P.id]: false },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.rootValue).toBe(false)
         // Q=false, P=false → true
         const result2 = pm.evaluate({
             variables: { [VAR_Q.id]: false, [VAR_P.id]: false },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result2.rootValue).toBe(true)
     })
@@ -11528,7 +11528,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
         // A=true, B=true, P=true → Q = (A implies B) = true → P implies Q = true
         const result = engine.evaluate({
             variables: { vA: true, vB: true, vP: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result).toBeDefined()
         expect(result.ok).toBe(true)
@@ -11543,7 +11543,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
         // P=true → P implies Q = true implies false = false
         const result = engine.evaluate({
             variables: { vA: true, vB: false, vP: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result).toBeDefined()
         expect(result.ok).toBe(true)
@@ -11558,7 +11558,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
         // P=true → P implies Q = true implies true = true
         const result = engine.evaluate({
             variables: { vA: false, vB: false, vP: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result).toBeDefined()
         expect(result.ok).toBe(true)
@@ -11701,7 +11701,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
         // A=true, B=true → Q = true; P=true → P and Q and Q = true and true and true = true
         const result = engine.evaluate({
             variables: { vA: true, vB: true, vP: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         if (result.ok) {
@@ -11711,7 +11711,7 @@ describe("Premise-variable associations — lazy evaluation", () => {
         // A=true, B=false → Q = false; P=true → P and Q and Q = true and false and false = false
         const result2 = engine.evaluate({
             variables: { vA: true, vB: false, vP: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result2.ok).toBe(true)
         if (result2.ok) {
@@ -12218,7 +12218,7 @@ describe("Premise-variable associations — integration", () => {
         // P=true, Q=false => (true implies false) = false
         const evalResult = engine.evaluate({
             variables: { vA: true, vB: false, vP: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(evalResult).toBeDefined()
         expect(evalResult.conclusion!.rootValue).toBe(false)
@@ -12237,7 +12237,7 @@ describe("Premise-variable associations — integration", () => {
         // Re-evaluate with same assignment
         const reEvalResult = restored.evaluate({
             variables: { vA: true, vB: false, vP: true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(reEvalResult).toBeDefined()
         expect(reEvalResult.conclusion!.rootValue).toBe(false)
@@ -18774,7 +18774,7 @@ describe("cross-argument variable binding", () => {
         // X = true -> pm1 evaluates to true -> auto-variable resolves to true -> pm2 = true
         const result = eng.evaluate({
             variables: { "v-p": true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         // p2 uses the auto-variable bound to p1; p1 is a supporting premise
@@ -18811,7 +18811,7 @@ describe("cross-argument variable binding", () => {
 
         const result = eng.evaluate({
             variables: { "v-ext": true },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
         expect(result.conclusionTrue).toBe(true)
@@ -18893,7 +18893,7 @@ describe("cross-argument variable binding", () => {
         // Evaluation still works after restoration
         const result = restored.evaluate({
             variables: { "v-ext": true, "v-claim": false },
-            rejectedExpressionIds: [],
+            operatorAssignments: {},
         })
         expect(result.ok).toBe(true)
     })
