@@ -241,7 +241,8 @@ export class ArgumentLibrary<
                 libraries.sourceLibrary,
                 libraries.claimSourceLibrary,
                 undefined,
-                "ignore"
+                "ignore",
+                options?.generateId
             )
             lib.engines.set(engine.getArgument().id, engine)
         }

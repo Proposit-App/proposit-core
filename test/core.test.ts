@@ -22730,3 +22730,65 @@ describe("PropositCore", () => {
         })
     })
 })
+
+// ---------------------------------------------------------------------------
+// generateId injection — ArgumentLibrary
+// ---------------------------------------------------------------------------
+
+describe("generateId injection — ArgumentLibrary", () => {
+    it("threads generateId to engines created via create()", () => {
+        let counter = 0
+        const generateId = () => `al-id-${++counter}`
+
+        const lib = new ArgumentLibrary(
+            {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId }
+        )
+
+        const engine = lib.create({ id: "arg-1", version: 0 })
+        const { result: pm } = engine.createPremise()
+
+        expect(pm.getId()).toBe("al-id-1")
+    })
+
+    it("threads generateId through fromSnapshot restoration", () => {
+        let counter = 0
+        const generateId = () => `al-id-${++counter}`
+
+        // Create library with one engine + one premise
+        const lib = new ArgumentLibrary(
+            {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId }
+        )
+        const engine = lib.create({ id: "arg-1", version: 0 })
+        engine.createPremise()
+
+        // Snapshot, then restore with a NEW generateId
+        const snap = lib.snapshot()
+        let restoreCounter = 0
+        const restoreGenerateId = () => `restored-id-${++restoreCounter}`
+
+        const restoredLib = ArgumentLibrary.fromSnapshot(
+            snap,
+            {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId: restoreGenerateId }
+        )
+
+        // New mutations on the restored engine should use the new generateId
+        const restoredEngine = restoredLib.get("arg-1")!
+        const { result: newPm } = restoredEngine.createPremise()
+        expect(newPm.getId()).toBe("restored-id-1")
+    })
+})
