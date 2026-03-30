@@ -37,10 +37,14 @@ export function registerAnalysisCommands(
             "Default value for all assignments (true, false, or unset)",
             "unset"
         )
+        .option(
+            "--from <filename>",
+            "Copy assignments and operator states from an existing analysis file"
+        )
         .action(
             async (
                 filenameArg: string | undefined,
-                opts: { default: string }
+                opts: { default: string; from?: string }
             ) => {
                 const filename = filenameArg
                     ? await resolveAnalysisFilename(
@@ -51,6 +55,38 @@ export function registerAnalysisCommands(
                     : await nextAnalysisFilename(argumentId, version)
                 if (await analysisFileExists(argumentId, version, filename)) {
                     errorExit(`Analysis file "${filename}" already exists.`)
+                }
+
+                if (opts.from) {
+                    const sourceFile = await resolveAnalysisFilename(
+                        opts.from,
+                        argumentId,
+                        version
+                    )
+                    if (
+                        !(await analysisFileExists(
+                            argumentId,
+                            version,
+                            sourceFile
+                        ))
+                    ) {
+                        errorExit(
+                            `Source analysis file "${sourceFile}" does not exist.`
+                        )
+                    }
+                    const source = await readAnalysis(
+                        argumentId,
+                        version,
+                        sourceFile
+                    )
+                    await writeAnalysis(argumentId, version, filename, {
+                        argumentId,
+                        argumentVersion: version,
+                        assignments: { ...source.assignments },
+                        operatorAssignments: { ...source.operatorAssignments },
+                    })
+                    printLine(filename)
+                    return
                 }
 
                 if (!["true", "false", "unset"].includes(opts.default)) {
