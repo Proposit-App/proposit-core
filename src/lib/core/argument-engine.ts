@@ -2324,102 +2324,218 @@ export class ArgumentEngine<
             return null
         }
 
+        // Track which variable IDs were explicitly set by the user
+        // (true or false). These are never overwritten by propagation.
+        const userAssigned = new Set<string>()
+        for (const [varId, val] of Object.entries(vars)) {
+            if (val !== null && val !== undefined) userAssigned.add(varId)
+        }
+
         /**
          * Try to set a child expression's variable to a value.
-         * Only sets if the child resolves to a variable leaf and
-         * that variable is currently null (unknown).
-         * Returns true if a new value was assigned.
+         * Never overwrites user-assigned values.
+         * False overrides propagated true (rejection wins).
+         * Returns true if a value changed.
          */
         const trySetChild = (
             child: TCorePropositionalExpression,
             value: boolean
         ): boolean => {
             const varId = resolveLeafVariableId(child)
-            if (varId != null && vars[varId] === null) {
+            if (varId == null || userAssigned.has(varId)) return false
+            const current = vars[varId] ?? null
+            if (current === null) {
                 vars[varId] = value
+                return true
+            }
+            // False overrides propagated true
+            if (value === false && current === true) {
+                vars[varId] = false
                 return true
             }
             return false
         }
 
-        // Fixed-point loop
-        let changed = true
-        while (changed) {
-            changed = false
+        // Two-phase propagation: rejections first (to establish false values),
+        // then acceptances (which only fill remaining unknowns).
+        // This prevents acceptance from deriving values through chains that
+        // are later invalidated by rejection.
+        for (const phase of ["rejected", "accepted"] as const) {
+            let changed = true
+            while (changed) {
+                changed = false
 
-            for (const [exprId, expr] of exprById) {
-                if (expr.type !== "operator") continue
-                if (opAssignments[exprId] !== "accepted") continue
+                for (const [exprId, expr] of exprById) {
+                    if (expr.type !== "operator") continue
+                    const state = opAssignments[exprId]
+                    if (state !== phase) continue
 
-                const op = (expr as TCorePropositionalExpression<"operator">)
-                    .operator
-                const children = childrenOf.get(exprId) ?? []
+                    const op = (
+                        expr as TCorePropositionalExpression<"operator">
+                    ).operator
+                    const children = childrenOf.get(exprId) ?? []
 
-                switch (op) {
-                    case "not": {
-                        // ¬A accepted (= true) => child must be false
-                        if (children.length > 0) {
-                            if (trySetChild(children[0], false)) changed = true
-                        }
-                        break
-                    }
-                    case "and": {
-                        // A ∧ B accepted => all children must be true
-                        for (const child of children) {
-                            if (trySetChild(child, true)) changed = true
-                        }
-                        break
-                    }
-                    case "or": {
-                        // A ∨ B accepted: if all-but-one are false, remaining must be true
-                        const unknownChildren: TCorePropositionalExpression[] =
-                            []
-                        let allOthersAreFalse = true
-                        for (const child of children) {
-                            const childValue = resolveValue(child.id)
-                            if (childValue === null) {
-                                unknownChildren.push(child)
-                            } else if (childValue !== false) {
-                                allOthersAreFalse = false
+                    if (state === "accepted") {
+                        switch (op) {
+                            case "not": {
+                                // ¬A accepted (= true) => child must be false
+                                if (children.length > 0) {
+                                    if (trySetChild(children[0], false))
+                                        changed = true
+                                }
+                                break
+                            }
+                            case "and": {
+                                // A ∧ B accepted => all children must be true
+                                for (const child of children) {
+                                    if (trySetChild(child, true)) changed = true
+                                }
+                                break
+                            }
+                            case "or": {
+                                // A ∨ B accepted: if all-but-one are false, remaining must be true
+                                const unknownChildren: TCorePropositionalExpression[] =
+                                    []
+                                let allOthersAreFalse = true
+                                for (const child of children) {
+                                    const childValue = resolveValue(child.id)
+                                    if (childValue === null) {
+                                        unknownChildren.push(child)
+                                    } else if (childValue !== false) {
+                                        allOthersAreFalse = false
+                                    }
+                                }
+                                if (
+                                    unknownChildren.length === 1 &&
+                                    allOthersAreFalse
+                                ) {
+                                    if (trySetChild(unknownChildren[0], true))
+                                        changed = true
+                                }
+                                break
+                            }
+                            case "implies": {
+                                // A → B accepted: if A=true => B=true; if B=false => A=false
+                                if (children.length >= 2) {
+                                    const leftValue = resolveValue(
+                                        children[0].id
+                                    )
+                                    const rightValue = resolveValue(
+                                        children[1].id
+                                    )
+                                    if (leftValue === true) {
+                                        if (trySetChild(children[1], true))
+                                            changed = true
+                                    }
+                                    if (rightValue === false) {
+                                        if (trySetChild(children[0], false))
+                                            changed = true
+                                    }
+                                }
+                                break
+                            }
+                            case "iff": {
+                                // A ↔ B accepted: if A known => B matches; if B known => A matches
+                                if (children.length >= 2) {
+                                    const leftValue = resolveValue(
+                                        children[0].id
+                                    )
+                                    const rightValue = resolveValue(
+                                        children[1].id
+                                    )
+                                    if (leftValue !== null) {
+                                        if (trySetChild(children[1], leftValue))
+                                            changed = true
+                                    }
+                                    if (rightValue !== null) {
+                                        if (
+                                            trySetChild(children[0], rightValue)
+                                        )
+                                            changed = true
+                                    }
+                                }
+                                break
                             }
                         }
-                        if (unknownChildren.length === 1 && allOthersAreFalse) {
-                            if (trySetChild(unknownChildren[0], true))
-                                changed = true
+                    } else {
+                        // state === "rejected" — expression forced false
+                        switch (op) {
+                            case "not": {
+                                // ¬A rejected (= false) => child must be true
+                                if (children.length > 0) {
+                                    if (trySetChild(children[0], true))
+                                        changed = true
+                                }
+                                break
+                            }
+                            case "and": {
+                                // A ∧ B rejected (= false): if all-but-one are true, remaining must be false
+                                const unknownChildren: TCorePropositionalExpression[] =
+                                    []
+                                let allOthersAreTrue = true
+                                for (const child of children) {
+                                    const childValue = resolveValue(child.id)
+                                    if (childValue === null) {
+                                        unknownChildren.push(child)
+                                    } else if (childValue !== true) {
+                                        allOthersAreTrue = false
+                                    }
+                                }
+                                if (
+                                    unknownChildren.length === 1 &&
+                                    allOthersAreTrue
+                                ) {
+                                    if (trySetChild(unknownChildren[0], false))
+                                        changed = true
+                                }
+                                break
+                            }
+                            case "or": {
+                                // A ∨ B rejected (= false) => all children must be false
+                                for (const child of children) {
+                                    if (trySetChild(child, false))
+                                        changed = true
+                                }
+                                break
+                            }
+                            case "implies": {
+                                // A → B rejected (= false) => A must be true, B must be false
+                                if (children.length >= 2) {
+                                    if (trySetChild(children[0], true))
+                                        changed = true
+                                    if (trySetChild(children[1], false))
+                                        changed = true
+                                }
+                                break
+                            }
+                            case "iff": {
+                                // A ↔ B rejected (= false): if A known => B is opposite; if B known => A is opposite
+                                if (children.length >= 2) {
+                                    const leftValue = resolveValue(
+                                        children[0].id
+                                    )
+                                    const rightValue = resolveValue(
+                                        children[1].id
+                                    )
+                                    if (leftValue !== null) {
+                                        if (
+                                            trySetChild(children[1], !leftValue)
+                                        )
+                                            changed = true
+                                    }
+                                    if (rightValue !== null) {
+                                        if (
+                                            trySetChild(
+                                                children[0],
+                                                !rightValue
+                                            )
+                                        )
+                                            changed = true
+                                    }
+                                }
+                                break
+                            }
                         }
-                        break
-                    }
-                    case "implies": {
-                        // A → B accepted: if A=true => B=true; if B=false => A=false
-                        if (children.length >= 2) {
-                            const leftValue = resolveValue(children[0].id)
-                            const rightValue = resolveValue(children[1].id)
-                            if (leftValue === true) {
-                                if (trySetChild(children[1], true))
-                                    changed = true
-                            }
-                            if (rightValue === false) {
-                                if (trySetChild(children[0], false))
-                                    changed = true
-                            }
-                        }
-                        break
-                    }
-                    case "iff": {
-                        // A ↔ B accepted: if A known => B matches; if B known => A matches
-                        if (children.length >= 2) {
-                            const leftValue = resolveValue(children[0].id)
-                            const rightValue = resolveValue(children[1].id)
-                            if (leftValue !== null) {
-                                if (trySetChild(children[1], leftValue))
-                                    changed = true
-                            }
-                            if (rightValue !== null) {
-                                if (trySetChild(children[0], rightValue))
-                                    changed = true
-                            }
-                        }
-                        break
                     }
                 }
             }
