@@ -1,6 +1,6 @@
 {
     "name": "@polintpro/proposit-core",
-    "version": "0.8.1",
+    "version": "0.8.2",
     "description": "Core engine for building and manipulating propositional logic arguments.",
     "license": "MIT",
     "keywords": [
