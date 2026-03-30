@@ -2,7 +2,6 @@ import type { TCoreChecksumConfig } from "./types/checksum.js"
 
 export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
     expressionFields: new Set([
-        "id",
         "type",
         "parentId",
         "position",
@@ -13,7 +12,6 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "operator",
     ]),
     variableFields: new Set([
-        "id",
         "symbol",
         "argumentId",
         "argumentVersion",
@@ -23,13 +21,12 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "boundArgumentId",
         "boundArgumentVersion",
     ]),
-    premiseFields: new Set(["id", "argumentId", "argumentVersion"]),
-    argumentFields: new Set(["id", "version"]),
+    premiseFields: new Set(["argumentId", "argumentVersion"]),
+    argumentFields: new Set(["version"]),
     roleFields: new Set(["conclusionPremiseId"]),
-    claimFields: new Set(["id", "version"]),
-    sourceFields: new Set(["id", "version"]),
+    claimFields: new Set(["version"]),
+    sourceFields: new Set(["version"]),
     claimSourceAssociationFields: new Set([
-        "id",
         "claimId",
         "claimVersion",
         "sourceId",

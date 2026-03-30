@@ -22512,14 +22512,14 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
             claimId: "claim-default",
             claimVersion: 0,
         })
-        const { result: pm1 } = eng1.createPremise()
+        const { result: pm1 } = eng1.createPremiseWithId("prem-shared")
         pm1.addExpression({
             id: "expr-AAA",
             type: "variable",
             variableId: "v1",
             argumentId: "arg1",
             argumentVersion: 0,
-            premiseId: pm1.getId(),
+            premiseId: "prem-shared",
             parentId: null,
             position: 1,
         })
@@ -22538,14 +22538,14 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
             claimId: "claim-default",
             claimVersion: 0,
         })
-        const { result: pm2 } = eng2.createPremise()
+        const { result: pm2 } = eng2.createPremiseWithId("prem-shared")
         pm2.addExpression({
             id: "expr-BBB",
             type: "variable",
             variableId: "v1",
             argumentId: "arg1",
             argumentVersion: 0,
-            premiseId: pm2.getId(),
+            premiseId: "prem-shared",
             parentId: null,
             position: 1,
         })
