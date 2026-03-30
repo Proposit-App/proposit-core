@@ -1477,7 +1477,8 @@ export class PremiseEngine<
                 throw new Error(`Expression "${expressionId}" was not found.`)
             }
 
-            if (assignment.rejectedExpressionIds.includes(expression.id)) {
+            const operatorState = assignment.operatorAssignments[expression.id]
+            if (operatorState === "rejected") {
                 expressionValues[expression.id] = false
                 return false
             }
@@ -1573,7 +1574,7 @@ export class PremiseEngine<
         let inferenceDiagnostic: TCorePremiseInferenceDiagnostic | undefined
         if (
             this.isInference() &&
-            !assignment.rejectedExpressionIds.includes(rootExpressionId)
+            assignment.operatorAssignments[rootExpressionId] !== "rejected"
         ) {
             const root = this.expressions.getExpression(rootExpressionId)
             if (root?.type === "operator") {
