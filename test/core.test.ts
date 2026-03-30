@@ -22638,4 +22638,95 @@ describe("PropositCore", () => {
             expect(generatedExprs.length).toBeGreaterThanOrEqual(2)
         })
     })
+
+    // ---------------------------------------------------------------------------
+    // generateId injection — ArgumentEngine
+    // ---------------------------------------------------------------------------
+
+    describe("generateId injection — ArgumentEngine", () => {
+        it("uses injected generateId for createPremise and auto-variable IDs", () => {
+            let counter = 0
+            const generateId = () => `ae-id-${++counter}`
+
+            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+                generateId,
+            })
+
+            const { result: pm } = engine.createPremise()
+
+            // Premise ID should come from generateId
+            expect(pm.getId()).toBe("ae-id-1")
+
+            // Auto-created premise-bound variable should also use generateId
+            const vars = engine.getVariables()
+            expect(vars.length).toBe(1)
+            expect(vars[0].id).toBe("ae-id-2")
+        })
+
+        it("threads generateId to PremiseEngine for formula buffer creation", () => {
+            let counter = 0
+            const generateId = () => `ae-id-${++counter}`
+
+            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+                generateId,
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+
+            engine.addVariable(makeVar("var-p", "X"))
+            engine.addVariable(makeVar("var-q", "Y"))
+
+            const { result: pm } = engine.createPremise()
+            const premiseId = pm.getId()
+
+            // Build AND(X, Y) — no formula buffer needed
+            pm.addExpression(
+                makeOpExpr("op-and", "and", {
+                    parentId: null,
+                    position: 0,
+                    premiseId,
+                })
+            )
+            pm.addExpression(
+                makeVarExpr("v-p", "var-p", {
+                    parentId: "op-and",
+                    position: 0,
+                    premiseId,
+                })
+            )
+            pm.addExpression(
+                makeVarExpr("v-q", "var-q", {
+                    parentId: "op-and",
+                    position: 1,
+                    premiseId,
+                })
+            )
+
+            // Add nested OR under AND — should auto-insert formula buffer with generateId
+            pm.addExpression(
+                makeOpExpr("op-or", "or", {
+                    parentId: "op-and",
+                    position: 2,
+                    premiseId,
+                })
+            )
+
+            const allExprs = pm.getExpressions()
+            const formulaExpr = allExprs.find((e) => e.type === "formula")
+            expect(formulaExpr).toBeDefined()
+            expect(formulaExpr!.id).toMatch(/^ae-id-/)
+        })
+
+        it("falls back to default generateId when none provided", () => {
+            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const { result: pm } = engine.createPremise()
+
+            // Default generates valid UUIDs
+            expect(pm.getId()).toMatch(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+            )
+        })
+    })
 })
