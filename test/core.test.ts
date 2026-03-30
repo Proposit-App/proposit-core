@@ -22648,6 +22648,8 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         expect(DEFAULT_CHECKSUM_CONFIG.argumentFields!.has("id")).toBe(false)
         expect(DEFAULT_CHECKSUM_CONFIG.claimFields!.has("id")).toBe(false)
         expect(DEFAULT_CHECKSUM_CONFIG.sourceFields!.has("id")).toBe(false)
-        expect(DEFAULT_CHECKSUM_CONFIG.claimSourceAssociationFields!.has("id")).toBe(false)
+        expect(
+            DEFAULT_CHECKSUM_CONFIG.claimSourceAssociationFields!.has("id")
+        ).toBe(false)
     })
 })
