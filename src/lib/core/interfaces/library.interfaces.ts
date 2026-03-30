@@ -436,4 +436,6 @@ export type TPropositCoreConfig = {
     positionConfig?: TCorePositionConfig
     /** Grammar config for argument engines. */
     grammarConfig?: TGrammarConfig
+    /** UUID generator for new entity IDs. Defaults to `globalThis.crypto.randomUUID()`. */
+    generateId?: () => string
 }

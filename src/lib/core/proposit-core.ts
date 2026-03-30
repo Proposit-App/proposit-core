@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import type {
     TCoreArgument,
     TCorePremise,
@@ -33,7 +32,7 @@ import { ClaimLibrary } from "./claim-library.js"
 import { SourceLibrary } from "./source-library.js"
 import { ClaimSourceLibrary } from "./claim-source-library.js"
 import { ArgumentLibrary } from "./argument-library.js"
-import { ArgumentEngine } from "./argument-engine.js"
+import { ArgumentEngine, defaultGenerateId } from "./argument-engine.js"
 import { ForkLibrary } from "./fork-library.js"
 import { forkArgumentEngine } from "./fork.js"
 import { diffArguments as standaloneDiffArguments } from "./diff.js"
@@ -129,6 +128,7 @@ export class PropositCore<
         TClaim,
         TAssoc
     >
+    protected generateId: () => string
 
     constructor(
         options?: TPropositCoreOptions<
@@ -147,6 +147,8 @@ export class PropositCore<
             TSourceFork
         >
     ) {
+        this.generateId = options?.generateId ?? defaultGenerateId
+
         const checksumOpts = options?.checksumConfig
             ? { checksumConfig: options.checksumConfig }
             : undefined
@@ -197,6 +199,7 @@ export class PropositCore<
                     checksumConfig: options?.checksumConfig,
                     positionConfig: options?.positionConfig,
                     grammarConfig: options?.grammarConfig,
+                    generateId: this.generateId,
                 }
             )
     }
@@ -332,6 +335,7 @@ export class PropositCore<
                 checksumConfig: config?.checksumConfig,
                 positionConfig: config?.positionConfig,
                 grammarConfig: config?.grammarConfig,
+                generateId: config?.generateId,
             }
         )
 
@@ -356,6 +360,8 @@ export class PropositCore<
             forkLibrary: forks,
             argumentLibrary: restoredArguments,
         })
+
+        core.generateId = config?.generateId ?? defaultGenerateId
 
         return core
     }
@@ -384,13 +390,13 @@ export class PropositCore<
      * namespaces.
      *
      * @param argumentId - The ID of the argument to fork.
-     * @param newArgumentId - The ID for the forked argument.
+     * @param newArgumentId - The ID for the forked argument. Defaults to `this.generateId()`.
      * @param options - Optional fork configuration and extras for fork records.
      * @returns The forked engine, remap tables, and the argument fork record.
      */
     public forkArgument(
         argumentId: string,
-        newArgumentId: string,
+        newArgumentId?: string,
         options?: TForkArgumentOptions & {
             forkId?: string
             argumentForkExtras?: Partial<
@@ -441,7 +447,8 @@ export class PropositCore<
         }
 
         const sourceArg = engine.getArgument()
-        const forkId = options?.forkId ?? randomUUID()
+        const resolvedNewArgumentId = newArgumentId ?? this.generateId()
+        const forkId = options?.forkId ?? this.generateId()
 
         // Build expressionId → premiseId map from source engine snapshot
         const sourceSnap = engine.snapshot()
@@ -470,7 +477,7 @@ export class PropositCore<
                 )
             }
             claimVersionMap.set(originalClaimId, currentClaim.version)
-            const newClaimId = randomUUID()
+            const newClaimId = this.generateId()
             const {
                 id: _id,
                 version: _v,
@@ -503,7 +510,7 @@ export class PropositCore<
                 )
             }
             sourceVersionMap.set(originalSourceId, currentSource.version)
-            const newSourceId = randomUUID()
+            const newSourceId = this.generateId()
             const {
                 id: _id,
                 version: _v,
@@ -526,7 +533,7 @@ export class PropositCore<
                 const clonedSourceId = sourceRemap.get(assoc.sourceId)
                 if (clonedSourceId) {
                     this.claimSources.add({
-                        id: randomUUID(),
+                        id: this.generateId(),
                         claimId: clonedClaimId,
                         claimVersion: 0,
                         sourceId: clonedSourceId,
@@ -547,13 +554,16 @@ export class PropositCore<
             TAssoc
         >(
             engine,
-            newArgumentId,
+            resolvedNewArgumentId,
             {
                 claimLibrary: this.claims,
                 sourceLibrary: this.sources,
                 claimSourceLibrary: this.claimSources,
             },
-            options
+            {
+                ...options,
+                generateId: options?.generateId ?? this.generateId,
+            }
         )
 
         // Step 7: Remap claim references
@@ -586,7 +596,8 @@ export class PropositCore<
             this.sources,
             this.claimSources,
             snap.config?.grammarConfig,
-            "ignore"
+            "ignore",
+            this.generateId
         )
 
         // Step 8: Register engine
@@ -596,7 +607,7 @@ export class PropositCore<
 
         // Argument fork record
         const argumentFork = this.forks.arguments.create({
-            entityId: newArgumentId,
+            entityId: resolvedNewArgumentId,
             forkedFromEntityId: sourceArg.id,
             forkedFromArgumentId: sourceArg.id,
             forkedFromArgumentVersion: sourceArg.version,

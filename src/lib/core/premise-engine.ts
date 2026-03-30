@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import {
     CorePremiseSchema,
     isExternallyBound,
@@ -46,7 +45,10 @@ import {
     PREMISE_VARIABLE_REF_NOT_FOUND,
 } from "../types/validation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
-import type { TLogicEngineOptions } from "./argument-engine.js"
+import {
+    defaultGenerateId,
+    type TLogicEngineOptions,
+} from "./argument-engine.js"
 import type { TGrammarConfig } from "../types/grammar.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
@@ -115,6 +117,7 @@ export class PremiseEngine<
     private cachedDescendantChecksum: string | null | undefined
     private cachedCombinedChecksum: string | undefined
     private expressionIndex?: Map<string, string>
+    private generateId: () => string
     private onMutate?: () => void
     private circularityCheck?: (
         variableId: string,
@@ -142,6 +145,7 @@ export class PremiseEngine<
         this.expressions = new ExpressionManager<TExpr>(config)
         this.expressionsByVariableId = new DefaultMap(() => new Set())
         this.expressionIndex = deps.expressionIndex
+        this.generateId = config?.generateId ?? defaultGenerateId
     }
 
     public setOnMutate(callback: (() => void) | undefined): void {
@@ -836,7 +840,7 @@ export class PremiseEngine<
                         // Build not → formula → target
                         const formulaExpr = {
                             ...extraFields,
-                            id: randomUUID(),
+                            id: this.generateId(),
                             argumentId: target.argumentId,
                             argumentVersion: target.argumentVersion,
                             premiseId: target.premiseId,
@@ -851,7 +855,7 @@ export class PremiseEngine<
 
                         const notExpr = {
                             ...extraFields,
-                            id: randomUUID(),
+                            id: this.generateId(),
                             argumentId: target.argumentId,
                             argumentVersion: target.argumentVersion,
                             premiseId: target.premiseId,
@@ -869,7 +873,7 @@ export class PremiseEngine<
                         // Wrap target with a new NOT operator
                         const notExpr = {
                             ...extraFields,
-                            id: randomUUID(),
+                            id: this.generateId(),
                             argumentId: target.argumentId,
                             argumentVersion: target.argumentVersion,
                             premiseId: target.premiseId,
@@ -1083,8 +1087,8 @@ export class PremiseEngine<
                     // Create the sub-operator and formula first as detached nodes,
                     // then reparent children away from the parent (freeing their
                     // position slots), and finally add formula + sub-operator.
-                    const formulaId = randomUUID()
-                    const newOpId = randomUUID()
+                    const formulaId = this.generateId()
+                    const newOpId = this.generateId()
 
                     // Reparent source and target children to a temporary holding
                     // position under the new sub-operator. We must reparent them
@@ -1953,7 +1957,8 @@ export class PremiseEngine<
         argument: TOptionalChecksum<TArg>,
         variables: VariableManager<TVar>,
         expressionIndex?: Map<string, string>,
-        grammarConfig?: TGrammarConfig
+        grammarConfig?: TGrammarConfig,
+        generateId?: () => string
     ): PremiseEngine<TArg, TPremise, TExpr, TVar> {
         // Normalize checksumConfig in case the snapshot went through a JSON
         // round-trip that converted Sets to arrays or empty objects.
@@ -1964,8 +1969,11 @@ export class PremiseEngine<
                       checksumConfig: normalizeChecksumConfig(
                           snapshot.config.checksumConfig
                       ),
+                      generateId: generateId ?? snapshot.config.generateId,
                   }
-                : snapshot.config
+                : generateId
+                  ? { generateId }
+                  : snapshot.config
         const pe = new PremiseEngine<TArg, TPremise, TExpr, TVar>(
             snapshot.premise,
             { argument, variables, expressionIndex },
@@ -1974,7 +1982,8 @@ export class PremiseEngine<
         // Restore expressions from the snapshot
         pe.expressions = ExpressionManager.fromSnapshot<TExpr>(
             snapshot.expressions,
-            grammarConfig
+            grammarConfig,
+            generateId
         )
         // Restore rootExpressionId from snapshot
         pe.rootExpressionId = snapshot.rootExpressionId

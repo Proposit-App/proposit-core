@@ -3,7 +3,7 @@
  * types, schemata, and the diff function.
  */
 export * from "./schemata/index.js"
-export { ArgumentEngine } from "./core/argument-engine.js"
+export { ArgumentEngine, defaultGenerateId } from "./core/argument-engine.js"
 export type {
     TLogicEngineOptions,
     TArgumentEngineSnapshot,

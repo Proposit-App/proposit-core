@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import { Value } from "typebox/value"
 import type { TSchema } from "typebox"
 import type { TParserWarning, TParserBuildOptions } from "./types.js"
@@ -16,7 +15,7 @@ import { parseFormula } from "../core/parser/formula.js"
 import type { TFormulaAST } from "../core/parser/formula.js"
 import type { TExpressionInput } from "../core/expression-manager.js"
 import { POSITION_INITIAL } from "../utils/position.js"
-import { ArgumentEngine } from "../core/argument-engine.js"
+import { ArgumentEngine, defaultGenerateId } from "../core/argument-engine.js"
 import { ClaimLibrary } from "../core/claim-library.js"
 import { SourceLibrary } from "../core/source-library.js"
 import { ClaimSourceLibrary } from "../core/claim-source-library.js"
@@ -121,9 +120,10 @@ function buildExpressions(
     argumentVersion: number,
     premiseId: string,
     variablesBySymbol: Map<string, Omit<TClaimBoundVariable, "checksum">>,
-    addExpression: (expr: TExpressionInput) => void
+    addExpression: (expr: TExpressionInput) => void,
+    generateId: () => string
 ): string {
-    const id = randomUUID()
+    const id = generateId()
 
     switch (ast.type) {
         case "variable": {
@@ -159,7 +159,8 @@ function buildExpressions(
                 argumentVersion,
                 premiseId,
                 variablesBySymbol,
-                addExpression
+                addExpression,
+                generateId
             )
             return id
         }
@@ -184,7 +185,8 @@ function buildExpressions(
                     argumentVersion,
                     premiseId,
                     variablesBySymbol,
-                    addExpression
+                    addExpression,
+                    generateId
                 )
             }
             return id
@@ -209,7 +211,8 @@ function buildExpressions(
                 argumentVersion,
                 premiseId,
                 variablesBySymbol,
-                addExpression
+                addExpression,
+                generateId
             )
             buildExpressions(
                 ast.right,
@@ -219,7 +222,8 @@ function buildExpressions(
                 argumentVersion,
                 premiseId,
                 variablesBySymbol,
-                addExpression
+                addExpression,
+                generateId
             )
             return id
         }
@@ -282,6 +286,7 @@ export class ArgumentParser<
     > {
         const warnings: TParserWarning[] = []
         const strict = options?.strict ?? true
+        const genId = options?.generateId ?? defaultGenerateId
         const arg = response.argument
         if (!arg) {
             throw new Error("Cannot build: argument is null.")
@@ -339,7 +344,7 @@ export class ArgumentParser<
         }
 
         // 2. Create argument
-        const argumentId = randomUUID()
+        const argumentId = genId()
         const argumentVersion = 0
         const argumentExtras = this.mapArgument(arg)
         const argument = {
@@ -357,7 +362,7 @@ export class ArgumentParser<
 
         for (const parsedClaim of arg.claims) {
             const extras = this.mapClaim(parsedClaim)
-            const claimId = randomUUID()
+            const claimId = genId()
             const claim = claimLibrary.create({
                 ...extras,
                 id: claimId,
@@ -377,7 +382,7 @@ export class ArgumentParser<
 
         for (const parsedSource of arg.sources) {
             const extras = this.mapSource(parsedSource)
-            const sourceId = randomUUID()
+            const sourceId = genId()
             const source = sourceLibrary.create({
                 ...extras,
                 id: sourceId,
@@ -421,7 +426,7 @@ export class ArgumentParser<
                 )
                 claimSourceLibrary.add({
                     ...extras,
-                    id: randomUUID(),
+                    id: genId(),
                     claimId: claimRef.id,
                     claimVersion: claimRef.version,
                     sourceId: sourceRef.id,
@@ -444,6 +449,7 @@ export class ArgumentParser<
                 enforceFormulaBetweenOperators: true,
                 autoNormalize: true,
             },
+            generateId: genId,
         })
 
         // 7. Create variables — resolve claimMiniId to real claim UUID
@@ -475,7 +481,7 @@ export class ArgumentParser<
             const variable: Omit<TClaimBoundVariable, "checksum"> &
                 Record<string, unknown> = {
                 ...extras,
-                id: randomUUID(),
+                id: genId(),
                 argumentId,
                 argumentVersion,
                 symbol: parsedVar.symbol,
@@ -530,7 +536,8 @@ export class ArgumentParser<
                 argumentVersion,
                 pm.getId(),
                 variablesBySymbol,
-                (expr) => pm.addExpression(expr as TExpressionInput<TExpr>)
+                (expr) => pm.addExpression(expr as TExpressionInput<TExpr>),
+                genId
             )
         }
 

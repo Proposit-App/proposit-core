@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import { Value } from "typebox/value"
 import {
     CoreArgumentSchema,
@@ -87,10 +86,15 @@ import type {
     TClaimSourceLookup,
 } from "./interfaces/index.js"
 
+/** Default ID generator using the Web Crypto API (Node.js 20+, all modern browsers). */
+export const defaultGenerateId = (): string => globalThis.crypto.randomUUID()
+
 export type TLogicEngineOptions = {
     checksumConfig?: TCoreChecksumConfig
     positionConfig?: TCorePositionConfig
     grammarConfig?: TGrammarConfig
+    /** UUID generator for new entity IDs. Defaults to `globalThis.crypto.randomUUID()`. */
+    generateId?: () => string
 }
 
 export type TArgumentEngineSnapshot<
@@ -143,6 +147,7 @@ export class ArgumentEngine<
     private checksumConfig?: TCoreChecksumConfig
     private positionConfig?: TCorePositionConfig
     private grammarConfig?: TGrammarConfig
+    private generateId: () => string
     private restoringFromSnapshot = false
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
@@ -178,9 +183,11 @@ export class ArgumentEngine<
         this.checksumConfig = options?.checksumConfig
         this.positionConfig = options?.positionConfig
         this.grammarConfig = options?.grammarConfig
+        this.generateId = options?.generateId ?? defaultGenerateId
         this.variables = new VariableManager<TVar>({
             checksumConfig: this.checksumConfig,
             positionConfig: this.positionConfig,
+            generateId: this.generateId,
         })
         this.expressionIndex = new Map()
         this.conclusionPremiseId = undefined
@@ -529,7 +536,7 @@ export class ArgumentEngine<
         TPremise,
         TArg
     > {
-        return this.createPremiseWithId(randomUUID(), extras, symbol)
+        return this.createPremiseWithId(this.generateId(), extras, symbol)
     }
 
     public createPremiseWithId(
@@ -564,6 +571,7 @@ export class ArgumentEngine<
                     checksumConfig: this.checksumConfig,
                     positionConfig: this.positionConfig,
                     grammarConfig: this.grammarConfig,
+                    generateId: this.generateId,
                 }
             )
             this.premises.set(id, pm)
@@ -593,7 +601,7 @@ export class ArgumentEngine<
             if (!this.restoringFromSnapshot) {
                 const autoSymbol = symbol ?? this.generateUniqueSymbol()
                 const autoVariable = {
-                    id: randomUUID(),
+                    id: this.generateId(),
                     argumentId: this.argument.id,
                     argumentVersion: this.argument.version as number,
                     symbol: autoSymbol,
@@ -1190,7 +1198,8 @@ export class ArgumentEngine<
         sourceLibrary: TSourceLookup<TSource>,
         claimSourceLibrary: TClaimSourceLookup<TAssoc>,
         grammarConfig?: TGrammarConfig,
-        checksumVerification?: "ignore" | "strict"
+        checksumVerification?: "ignore" | "strict",
+        generateId?: () => string
     ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc> {
         const engine = new ArgumentEngine<
             TArg,
@@ -1211,8 +1220,11 @@ export class ArgumentEngine<
                       checksumConfig: normalizeChecksumConfig(
                           snapshot.config.checksumConfig
                       ),
+                      generateId: generateId ?? snapshot.config.generateId,
                   }
-                : undefined
+                : generateId
+                  ? { generateId }
+                  : undefined
         )
         engine.restoringFromSnapshot = true
         // Restore premises first (premise-bound variables reference them)
@@ -1222,7 +1234,8 @@ export class ArgumentEngine<
                 snapshot.argument,
                 engine.variables,
                 engine.expressionIndex,
-                grammarConfig
+                grammarConfig,
+                generateId
             )
             engine.premises.set(pe.getId(), pe)
             engine.wireCircularityCheck(pe)

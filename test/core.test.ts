@@ -22494,4 +22494,499 @@ describe("PropositCore", () => {
             expect(() => core.diffArguments("a", "b")).toThrow(/not found/)
         })
     })
+
+    // ---------------------------------------------------------------------------
+    // generateId injection — ExpressionManager
+    // ---------------------------------------------------------------------------
+
+    describe("generateId injection — ExpressionManager", () => {
+        it("uses injected generateId for auto-formula buffers in addExpression", () => {
+            let counter = 0
+            const generateId = () => `em-id-${++counter}`
+
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+                generateId,
+            })
+
+            // Root AND
+            em.addExpression(
+                makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+            )
+            // Add nested OR — should auto-insert a formula buffer
+            em.addExpression(
+                makeOpExpr("op-or", "or", { parentId: "op-and", position: 0 })
+            )
+
+            const allExprs = em.toArray()
+            const formulaExpr = allExprs.find((e) => e.type === "formula")
+            expect(formulaExpr).toBeDefined()
+            expect(formulaExpr!.id).toMatch(/^em-id-/)
+        })
+
+        it("uses default generateId when none provided", () => {
+            const em = new ExpressionManager({
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+
+            em.addExpression(
+                makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+            )
+            em.addExpression(
+                makeOpExpr("op-or", "or", { parentId: "op-and", position: 0 })
+            )
+
+            const allExprs = em.toArray()
+            const formulaExpr = allExprs.find((e) => e.type === "formula")
+            expect(formulaExpr).toBeDefined()
+            // Default produces a valid UUID-format string
+            expect(formulaExpr!.id).toMatch(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+            )
+        })
+    })
+
+    // ---------------------------------------------------------------------------
+    // generateId injection — PremiseEngine
+    // ---------------------------------------------------------------------------
+
+    describe("generateId injection — PremiseEngine", () => {
+        it("uses injected generateId for toggleNegation wrapper IDs", () => {
+            let counter = 0
+            const generateId = () => `pe-id-${++counter}`
+
+            const vm = new VariableManager()
+            vm.addVariable(VAR_P as TCorePropositionalVariable)
+
+            const pe = new PremiseEngine(
+                {
+                    id: "premise-1",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                } as TCorePremise,
+                { argument: ARG, variables: vm },
+                { generateId }
+            )
+
+            // Add a single variable expression
+            pe.addExpression(
+                makeVarExpr("v-p", "var-p", { parentId: null, position: 0 })
+            )
+
+            // Toggle negation wraps it with a NOT — the NOT's ID should use generateId
+            pe.toggleNegation("v-p")
+
+            const allExprs = pe.getExpressions()
+            const notExpr = allExprs.find(
+                (e) => e.type === "operator" && e.operator === "not"
+            )
+            expect(notExpr).toBeDefined()
+            expect(notExpr!.id).toMatch(/^pe-id-/)
+        })
+
+        it("uses injected generateId for changeOperator sub-expression IDs", () => {
+            let counter = 0
+            const generateId = () => `pe-id-${++counter}`
+
+            const vm = new VariableManager()
+            vm.addVariable(VAR_P as TCorePropositionalVariable)
+            vm.addVariable(VAR_Q as TCorePropositionalVariable)
+            vm.addVariable(VAR_R as TCorePropositionalVariable)
+
+            const pe = new PremiseEngine(
+                {
+                    id: "premise-1",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                } as TCorePremise,
+                { argument: ARG, variables: vm },
+                {
+                    generateId,
+                    grammarConfig: {
+                        enforceFormulaBetweenOperators: true,
+                        autoNormalize: true,
+                    },
+                }
+            )
+
+            // Build: AND(P, Q, R) — 3 children
+            pe.addExpression(
+                makeOpExpr("op-and", "and", { parentId: null, position: 0 })
+            )
+            pe.addExpression(
+                makeVarExpr("v-p", "var-p", { parentId: "op-and", position: 0 })
+            )
+            pe.addExpression(
+                makeVarExpr("v-q", "var-q", { parentId: "op-and", position: 1 })
+            )
+            pe.addExpression(
+                makeVarExpr("v-r", "var-r", { parentId: "op-and", position: 2 })
+            )
+
+            // changeOperator groups two siblings under a new sub-operator
+            pe.changeOperator("op-and", "or", "v-p", "v-q")
+
+            const allExprs = pe.getExpressions()
+            const generatedExprs = allExprs.filter((e) =>
+                e.id.startsWith("pe-id-")
+            )
+            // Should have generated at least the sub-operator + formula buffer IDs
+            expect(generatedExprs.length).toBeGreaterThanOrEqual(2)
+        })
+    })
+
+    // ---------------------------------------------------------------------------
+    // generateId injection — ArgumentEngine
+    // ---------------------------------------------------------------------------
+
+    describe("generateId injection — ArgumentEngine", () => {
+        it("uses injected generateId for createPremise and auto-variable IDs", () => {
+            let counter = 0
+            const generateId = () => `ae-id-${++counter}`
+
+            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+                generateId,
+            })
+
+            const { result: pm } = engine.createPremise()
+
+            // Premise ID should come from generateId
+            expect(pm.getId()).toBe("ae-id-1")
+
+            // Auto-created premise-bound variable should also use generateId
+            const vars = engine.getVariables()
+            expect(vars.length).toBe(1)
+            expect(vars[0].id).toBe("ae-id-2")
+        })
+
+        it("threads generateId to PremiseEngine for formula buffer creation", () => {
+            let counter = 0
+            const generateId = () => `ae-id-${++counter}`
+
+            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+                generateId,
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+            })
+
+            engine.addVariable(makeVar("var-p", "X"))
+            engine.addVariable(makeVar("var-q", "Y"))
+
+            const { result: pm } = engine.createPremise()
+            const premiseId = pm.getId()
+
+            // Build AND(X, Y) — no formula buffer needed
+            pm.addExpression(
+                makeOpExpr("op-and", "and", {
+                    parentId: null,
+                    position: 0,
+                    premiseId,
+                })
+            )
+            pm.addExpression(
+                makeVarExpr("v-p", "var-p", {
+                    parentId: "op-and",
+                    position: 0,
+                    premiseId,
+                })
+            )
+            pm.addExpression(
+                makeVarExpr("v-q", "var-q", {
+                    parentId: "op-and",
+                    position: 1,
+                    premiseId,
+                })
+            )
+
+            // Add nested OR under AND — should auto-insert formula buffer with generateId
+            pm.addExpression(
+                makeOpExpr("op-or", "or", {
+                    parentId: "op-and",
+                    position: 2,
+                    premiseId,
+                })
+            )
+
+            const allExprs = pm.getExpressions()
+            const formulaExpr = allExprs.find((e) => e.type === "formula")
+            expect(formulaExpr).toBeDefined()
+            expect(formulaExpr!.id).toMatch(/^ae-id-/)
+        })
+
+        it("falls back to default generateId when none provided", () => {
+            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const { result: pm } = engine.createPremise()
+
+            // Default generates valid UUIDs
+            expect(pm.getId()).toMatch(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+            )
+        })
+    })
+})
+
+// ---------------------------------------------------------------------------
+// generateId injection — ArgumentLibrary
+// ---------------------------------------------------------------------------
+
+describe("generateId injection — ArgumentLibrary", () => {
+    it("threads generateId to engines created via create()", () => {
+        let counter = 0
+        const generateId = () => `al-id-${++counter}`
+
+        const lib = new ArgumentLibrary(
+            {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId }
+        )
+
+        const engine = lib.create({ id: "arg-1", version: 0 })
+        const { result: pm } = engine.createPremise()
+
+        expect(pm.getId()).toBe("al-id-1")
+    })
+
+    it("threads generateId through fromSnapshot restoration", () => {
+        let counter = 0
+        const generateId = () => `al-id-${++counter}`
+
+        // Create library with one engine + one premise
+        const lib = new ArgumentLibrary(
+            {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId }
+        )
+        const engine = lib.create({ id: "arg-1", version: 0 })
+        engine.createPremise()
+
+        // Snapshot, then restore with a NEW generateId
+        const snap = lib.snapshot()
+        let restoreCounter = 0
+        const restoreGenerateId = () => `restored-id-${++restoreCounter}`
+
+        const restoredLib = ArgumentLibrary.fromSnapshot(
+            snap,
+            {
+                claimLibrary: aLib(),
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId: restoreGenerateId }
+        )
+
+        // New mutations on the restored engine should use the new generateId
+        const restoredEngine = restoredLib.get("arg-1")!
+        const { result: newPm } = restoredEngine.createPremise()
+        expect(newPm.getId()).toBe("restored-id-1")
+    })
+
+    it("threads generateId to restored PremiseEngines for post-restoration mutations", () => {
+        let counter = 0
+        const generateId = () => `orig-id-${++counter}`
+
+        const claimLib = aLib()
+        const lib = new ArgumentLibrary(
+            {
+                claimLibrary: claimLib,
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId }
+        )
+        const engine = lib.create({ id: "arg-1", version: 0 })
+        engine.addVariable({
+            id: "var-p",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: "claim-default",
+            claimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise()
+        const premiseId = pm.getId()
+
+        // Add a variable expression so toggleNegation has something to wrap
+        pm.addExpression({
+            id: "v-p",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            premiseId,
+            type: "variable",
+            variableId: "var-p",
+            parentId: null,
+            position: 0,
+        })
+
+        // Snapshot, restore with a new generateId
+        const snap = lib.snapshot()
+        let restoreCounter = 0
+        const restoreGenerateId = () => `snap-id-${++restoreCounter}`
+
+        const restoredLib = ArgumentLibrary.fromSnapshot(
+            snap,
+            {
+                claimLibrary: claimLib,
+                sourceLibrary: sLib(),
+                claimSourceLibrary: csLib(),
+            },
+            { generateId: restoreGenerateId }
+        )
+
+        // toggleNegation on a restored PremiseEngine should use the new generateId
+        const restoredEngine = restoredLib.get("arg-1")!
+        const restoredPm = restoredEngine.getPremise(premiseId)!
+        restoredPm.toggleNegation("v-p")
+
+        const allExprs = restoredPm.getExpressions()
+        const notExpr = allExprs.find(
+            (e) => e.type === "operator" && e.operator === "not"
+        )
+        expect(notExpr).toBeDefined()
+        expect(notExpr!.id).toMatch(/^snap-id-/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// generateId injection — PropositCore
+// ---------------------------------------------------------------------------
+
+describe("generateId injection — PropositCore", () => {
+    it("threads generateId to ArgumentLibrary for engine creation", () => {
+        let counter = 0
+        const generateId = () => `pc-id-${++counter}`
+
+        const core = new PropositCore({ generateId })
+        const engine = core.arguments.create({ id: "arg-1", version: 0 })
+        const { result: pm } = engine.createPremise()
+
+        expect(pm.getId()).toBe("pc-id-1")
+    })
+
+    it("uses generateId in forkArgument for library-level entities", () => {
+        let counter = 0
+        const generateId = () => `pc-id-${++counter}`
+
+        const core = new PropositCore({ generateId })
+        const engine = core.arguments.create({
+            id: "pc-id-1",
+            version: 0,
+        })
+
+        // Add a claim-bound variable and a premise
+        const claim = core.claims.create({ id: "pc-id-2" })
+        engine.addVariable({
+            id: "pc-id-3",
+            argumentId: "pc-id-1",
+            argumentVersion: 0,
+            symbol: "P",
+            claimId: claim.id,
+            claimVersion: claim.version,
+        })
+        engine.createPremise()
+
+        // Fork — should use generateId for new claim, source, and fork IDs
+        const result = core.forkArgument("pc-id-1")
+
+        // All generated IDs should match our pattern
+        expect(result.engine.getArgument().id).toMatch(/^pc-id-/)
+        expect(result.claimRemap.size).toBeGreaterThanOrEqual(1)
+        for (const newClaimId of result.claimRemap.values()) {
+            expect(newClaimId).toMatch(/^pc-id-/)
+        }
+    })
+
+    it("falls back to default generateId", () => {
+        const core = new PropositCore()
+        const engine = core.arguments.create({
+            id: crypto.randomUUID(),
+            version: 0,
+        })
+        const { result: pm } = engine.createPremise()
+
+        expect(pm.getId()).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+        )
+    })
+})
+
+// ---------------------------------------------------------------------------
+// generateId injection — ArgumentParser
+// ---------------------------------------------------------------------------
+
+describe("generateId injection — ArgumentParser", () => {
+    it("uses injected generateId for all entity IDs", () => {
+        let counter = 0
+        const generateId = () => `parser-id-${++counter}`
+
+        const parser = new ArgumentParser()
+
+        const response: TParsedArgumentResponse = {
+            argument: {
+                claims: [
+                    {
+                        miniId: "C1",
+                        role: "premise",
+                        sourceMiniIds: [],
+                    },
+                ],
+                variables: [
+                    {
+                        miniId: "V1",
+                        symbol: "P",
+                        claimMiniId: "C1",
+                    },
+                ],
+                sources: [],
+                premises: [
+                    {
+                        miniId: "P1",
+                        formula: "P",
+                    },
+                ],
+                conclusionPremiseMiniId: "P1",
+            },
+            uncategorizedText: null,
+            selectionRationale: null,
+            failureText: null,
+        }
+
+        const result = parser.build(response, { generateId })
+
+        // Argument ID
+        expect(result.engine.getArgument().id).toMatch(/^parser-id-/)
+
+        // Variable IDs (claim-bound)
+        const vars = result.engine.getVariables()
+        expect(vars.length).toBeGreaterThanOrEqual(1)
+        const claimBoundVars = vars.filter((v) => "claimId" in v)
+        expect(claimBoundVars.length).toBe(1)
+        expect(claimBoundVars[0].id).toMatch(/^parser-id-/)
+
+        // Claim IDs
+        const claims = result.claimLibrary.getAll()
+        expect(claims.length).toBe(1)
+        expect(claims[0].id).toMatch(/^parser-id-/)
+
+        // Expression IDs
+        const premises = result.engine.listPremises()
+        expect(premises.length).toBe(1)
+        const exprs = premises[0].getExpressions()
+        for (const expr of exprs) {
+            expect(expr.id).toMatch(/^parser-id-/)
+        }
+    })
 })

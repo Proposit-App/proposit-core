@@ -29,4 +29,6 @@ export type TParserWarning = {
 
 export type TParserBuildOptions = {
     strict?: boolean
+    /** UUID generator for new entity IDs. Defaults to `globalThis.crypto.randomUUID()`. */
+    generateId?: () => string
 }

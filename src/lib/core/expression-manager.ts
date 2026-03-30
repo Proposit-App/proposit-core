@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto"
 import type {
     TCoreLogicalOperatorType,
     TCorePropositionalExpression,
@@ -11,6 +10,7 @@ import {
     type TCorePositionConfig,
     midpoint,
 } from "../utils/position.js"
+import { defaultGenerateId } from "./argument-engine.js"
 import type { TLogicEngineOptions } from "./argument-engine.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
@@ -103,6 +103,7 @@ export class ExpressionManager<
     private childPositionsByParentId: Map<string | null, Set<number>>
     private positionConfig: TCorePositionConfig
     private config?: TLogicEngineOptions
+    private generateId: () => string
     private collector: ChangeCollector | null = null
     private dirtyExpressionIds = new Set<string>()
 
@@ -116,6 +117,7 @@ export class ExpressionManager<
         this.childPositionsByParentId = new Map()
         this.positionConfig = config?.positionConfig ?? DEFAULT_POSITION_CONFIG
         this.config = config
+        this.generateId = config?.generateId ?? defaultGenerateId
     }
 
     private get grammarConfig(): TGrammarConfig {
@@ -312,7 +314,7 @@ export class ExpressionManager<
                     this.assertChildLimit(parent.operator, expression.parentId)
 
                     // Auto-insert a formula buffer between parent and expression.
-                    const formulaId = randomUUID()
+                    const formulaId = this.generateId()
                     const formulaExpr = this.attachChecksum({
                         id: formulaId,
                         type: "formula",
@@ -1366,7 +1368,7 @@ export class ExpressionManager<
         let finalPosition = anchorPosition
 
         if (needsParentFormulaBuffer) {
-            const formulaId = randomUUID()
+            const formulaId = this.generateId()
             const formulaExpr = this.attachChecksum({
                 id: formulaId,
                 type: "formula",
@@ -1423,7 +1425,7 @@ export class ExpressionManager<
         for (const childId of childrenNeedingFormulaBuffer) {
             const child = this.expressions.get(childId)!
             const childPosition = child.position
-            const formulaId = randomUUID()
+            const formulaId = this.generateId()
 
             // Reparent the child under the formula first. This detaches the child
             // from expression.id's tracking (removing its position from the set).
@@ -1672,7 +1674,7 @@ export class ExpressionManager<
         let operatorPosition = anchorPosition
 
         if (needsParentFormulaBuffer) {
-            const formulaId = randomUUID()
+            const formulaId = this.generateId()
             const formulaExpr = this.attachChecksum({
                 id: formulaId,
                 type: "formula",
@@ -1728,7 +1730,7 @@ export class ExpressionManager<
         if (existingNodeNeedsFormulaBuffer) {
             const existingChild = this.expressions.get(existingNodeId)!
             const childPosition = existingChild.position
-            const formulaId = randomUUID()
+            const formulaId = this.generateId()
 
             // Reparent existing node under formula first (frees position in operator's tracking).
             this.reparent(existingNodeId, formulaId, 0)
@@ -1765,7 +1767,7 @@ export class ExpressionManager<
         if (siblingNeedsFormulaBuffer) {
             const siblingChild = this.expressions.get(newSibling.id)!
             const childPosition = siblingChild.position
-            const formulaId = randomUUID()
+            const formulaId = this.generateId()
 
             // Reparent sibling under formula first (frees position in operator's tracking).
             this.reparent(newSibling.id, formulaId, 0)
@@ -2156,7 +2158,8 @@ export class ExpressionManager<
             TCorePropositionalExpression,
     >(
         snapshot: TExpressionManagerSnapshot<TExpr>,
-        grammarConfig?: TGrammarConfig
+        grammarConfig?: TGrammarConfig,
+        generateId?: () => string
     ): ExpressionManager<TExpr> {
         // Normalize checksumConfig in case the snapshot went through a JSON
         // round-trip that converted Sets to arrays or empty objects.
@@ -2174,12 +2177,14 @@ export class ExpressionManager<
         const loadingConfig: TLogicEngineOptions = {
             ...normalizedConfig,
             grammarConfig: grammarConfig ?? normalizedConfig?.grammarConfig,
+            generateId: generateId ?? normalizedConfig?.generateId,
         }
         const em = new ExpressionManager<TExpr>(loadingConfig)
         em.loadInitialExpressions(
             snapshot.expressions as unknown as TExpressionInput<TExpr>[]
         )
         // After loading: restore the normalized config for ongoing mutations
+        // (generateId is preserved via the em.generateId field set in constructor)
         em.config = normalizedConfig
         return em
     }
