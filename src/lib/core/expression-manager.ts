@@ -141,6 +141,53 @@ export class ExpressionManager<
     }
 
     /**
+     * Creates and registers a formula-buffer expression in the three internal
+     * maps (`expressions`, `childExpressionIdsByParentId`,
+     * `childPositionsByParentId`) and notifies the change collector.
+     *
+     * Used by `addExpression`, `insertExpression`, and `wrapExpression` to
+     * auto-insert formula nodes between operators when
+     * `grammarConfig.autoNormalize` is enabled.
+     *
+     * @returns The generated formula expression ID.
+     */
+    private registerFormulaBuffer(
+        sourceExpr: TExpr,
+        parentId: string | null,
+        position: number,
+        formulaId?: string
+    ): string {
+        formulaId ??= this.generateId()
+        const formulaExpr = this.attachChecksum({
+            id: formulaId,
+            type: "formula",
+            argumentId: sourceExpr.argumentId,
+            argumentVersion: sourceExpr.argumentVersion,
+            premiseId: (sourceExpr as unknown as { premiseId: string })
+                .premiseId,
+            parentId,
+            position,
+        } as TExpressionInput<TExpr>)
+
+        this.expressions.set(formulaId, formulaExpr)
+        this.collector?.addedExpression({
+            ...formulaExpr,
+        } as unknown as TCorePropositionalExpression)
+        getOrCreate(
+            this.childExpressionIdsByParentId,
+            parentId,
+            () => new Set()
+        ).add(formulaId)
+        getOrCreate(
+            this.childPositionsByParentId,
+            parentId,
+            () => new Set()
+        ).add(position)
+
+        return formulaId
+    }
+
+    /**
      * Marks an expression and all its ancestors as dirty for hierarchical
      * checksum recomputation. Stops early when it reaches an expression
      * already in the dirty set (since its ancestors are already marked).
@@ -314,34 +361,11 @@ export class ExpressionManager<
                     this.assertChildLimit(parent.operator, expression.parentId)
 
                     // Auto-insert a formula buffer between parent and expression.
-                    const formulaId = this.generateId()
-                    const formulaExpr = this.attachChecksum({
-                        id: formulaId,
-                        type: "formula",
-                        argumentId: expression.argumentId,
-                        argumentVersion: expression.argumentVersion,
-                        premiseId: (
-                            expression as unknown as { premiseId: string }
-                        ).premiseId,
-                        parentId: expression.parentId,
-                        position: expression.position,
-                    } as TExpressionInput<TExpr>)
-
-                    // Register formula directly in stores.
-                    this.expressions.set(formulaId, formulaExpr)
-                    this.collector?.addedExpression({
-                        ...formulaExpr,
-                    } as unknown as TCorePropositionalExpression)
-                    getOrCreate(
-                        this.childExpressionIdsByParentId,
+                    const formulaId = this.registerFormulaBuffer(
+                        expression as unknown as TExpr,
                         expression.parentId,
-                        () => new Set()
-                    ).add(formulaId)
-                    getOrCreate(
-                        this.childPositionsByParentId,
-                        expression.parentId,
-                        () => new Set()
-                    ).add(expression.position)
+                        expression.position
+                    )
 
                     // Rewrite expression to be child of formula.
                     expression = {
@@ -351,7 +375,7 @@ export class ExpressionManager<
                     } as TExpressionInput<TExpr>
 
                     // Update parent reference for subsequent checks.
-                    parent = formulaExpr
+                    parent = this.expressions.get(formulaId)!
                 } else {
                     throw new Error(
                         `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
@@ -1368,32 +1392,11 @@ export class ExpressionManager<
         let finalPosition = anchorPosition
 
         if (needsParentFormulaBuffer) {
-            const formulaId = this.generateId()
-            const formulaExpr = this.attachChecksum({
-                id: formulaId,
-                type: "formula",
-                argumentId: expression.argumentId,
-                argumentVersion: expression.argumentVersion,
-                premiseId: (expression as unknown as { premiseId: string })
-                    .premiseId,
-                parentId: anchorParentId,
-                position: anchorPosition,
-            } as TExpressionInput<TExpr>)
-
-            this.expressions.set(formulaId, formulaExpr)
-            this.collector?.addedExpression({
-                ...formulaExpr,
-            } as unknown as TCorePropositionalExpression)
-            getOrCreate(
-                this.childExpressionIdsByParentId,
+            const formulaId = this.registerFormulaBuffer(
+                expression as unknown as TExpr,
                 anchorParentId,
-                () => new Set()
-            ).add(formulaId)
-            getOrCreate(
-                this.childPositionsByParentId,
-                anchorParentId,
-                () => new Set()
-            ).add(anchorPosition)
+                anchorPosition
+            )
 
             finalParentId = formulaId
             finalPosition = 0
@@ -1425,38 +1428,18 @@ export class ExpressionManager<
         for (const childId of childrenNeedingFormulaBuffer) {
             const child = this.expressions.get(childId)!
             const childPosition = child.position
-            const formulaId = this.generateId()
 
             // Reparent the child under the formula first. This detaches the child
             // from expression.id's tracking (removing its position from the set).
+            // registerFormulaBuffer then occupies the freed position.
+            const formulaId = this.generateId()
             this.reparent(childId, formulaId, 0)
-
-            // Now create and register the formula at the freed position under expression.id.
-            const formulaExpr = this.attachChecksum({
-                id: formulaId,
-                type: "formula",
-                argumentId: expression.argumentId,
-                argumentVersion: expression.argumentVersion,
-                premiseId: (expression as unknown as { premiseId: string })
-                    .premiseId,
-                parentId: expression.id,
-                position: childPosition,
-            } as TExpressionInput<TExpr>)
-
-            this.expressions.set(formulaId, formulaExpr)
-            this.collector?.addedExpression({
-                ...formulaExpr,
-            } as unknown as TCorePropositionalExpression)
-            getOrCreate(
-                this.childExpressionIdsByParentId,
+            this.registerFormulaBuffer(
+                expression as unknown as TExpr,
                 expression.id,
-                () => new Set()
-            ).add(formulaId)
-            getOrCreate(
-                this.childPositionsByParentId,
-                expression.id,
-                () => new Set()
-            ).add(childPosition)
+                childPosition,
+                formulaId
+            )
         }
 
         // Mark the new expression and its ancestors dirty for hierarchical checksum recomputation.
@@ -1674,32 +1657,11 @@ export class ExpressionManager<
         let operatorPosition = anchorPosition
 
         if (needsParentFormulaBuffer) {
-            const formulaId = this.generateId()
-            const formulaExpr = this.attachChecksum({
-                id: formulaId,
-                type: "formula",
-                argumentId: operator.argumentId,
-                argumentVersion: operator.argumentVersion,
-                premiseId: (operator as unknown as { premiseId: string })
-                    .premiseId,
-                parentId: anchorParentId,
-                position: anchorPosition,
-            } as TExpressionInput<TExpr>)
-
-            this.expressions.set(formulaId, formulaExpr)
-            this.collector?.addedExpression({
-                ...formulaExpr,
-            } as unknown as TCorePropositionalExpression)
-            getOrCreate(
-                this.childExpressionIdsByParentId,
+            const formulaId = this.registerFormulaBuffer(
+                operator as unknown as TExpr,
                 anchorParentId,
-                () => new Set()
-            ).add(formulaId)
-            getOrCreate(
-                this.childPositionsByParentId,
-                anchorParentId,
-                () => new Set()
-            ).add(anchorPosition)
+                anchorPosition
+            )
 
             operatorParentId = formulaId
             operatorPosition = 0
@@ -1733,34 +1695,14 @@ export class ExpressionManager<
             const formulaId = this.generateId()
 
             // Reparent existing node under formula first (frees position in operator's tracking).
+            // registerFormulaBuffer then occupies the freed position.
             this.reparent(existingNodeId, formulaId, 0)
-
-            // Register formula at the freed position under operator.
-            const formulaExpr = this.attachChecksum({
-                id: formulaId,
-                type: "formula",
-                argumentId: operator.argumentId,
-                argumentVersion: operator.argumentVersion,
-                premiseId: (operator as unknown as { premiseId: string })
-                    .premiseId,
-                parentId: operator.id,
-                position: childPosition,
-            } as TExpressionInput<TExpr>)
-
-            this.expressions.set(formulaId, formulaExpr)
-            this.collector?.addedExpression({
-                ...formulaExpr,
-            } as unknown as TCorePropositionalExpression)
-            getOrCreate(
-                this.childExpressionIdsByParentId,
+            this.registerFormulaBuffer(
+                operator as unknown as TExpr,
                 operator.id,
-                () => new Set()
-            ).add(formulaId)
-            getOrCreate(
-                this.childPositionsByParentId,
-                operator.id,
-                () => new Set()
-            ).add(childPosition)
+                childPosition,
+                formulaId
+            )
         }
 
         // Site 3: auto-insert formula buffer between operator and new sibling.
@@ -1770,34 +1712,14 @@ export class ExpressionManager<
             const formulaId = this.generateId()
 
             // Reparent sibling under formula first (frees position in operator's tracking).
+            // registerFormulaBuffer then occupies the freed position.
             this.reparent(newSibling.id, formulaId, 0)
-
-            // Register formula at the freed position under operator.
-            const formulaExpr = this.attachChecksum({
-                id: formulaId,
-                type: "formula",
-                argumentId: operator.argumentId,
-                argumentVersion: operator.argumentVersion,
-                premiseId: (operator as unknown as { premiseId: string })
-                    .premiseId,
-                parentId: operator.id,
-                position: childPosition,
-            } as TExpressionInput<TExpr>)
-
-            this.expressions.set(formulaId, formulaExpr)
-            this.collector?.addedExpression({
-                ...formulaExpr,
-            } as unknown as TCorePropositionalExpression)
-            getOrCreate(
-                this.childExpressionIdsByParentId,
+            this.registerFormulaBuffer(
+                operator as unknown as TExpr,
                 operator.id,
-                () => new Set()
-            ).add(formulaId)
-            getOrCreate(
-                this.childPositionsByParentId,
-                operator.id,
-                () => new Set()
-            ).add(childPosition)
+                childPosition,
+                formulaId
+            )
         }
 
         // Mark the new operator (and ancestors), the new sibling, and the reparented existing node dirty.
