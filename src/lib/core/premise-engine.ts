@@ -304,28 +304,7 @@ export class PremiseEngine<
                 expression.argumentId,
                 expression.argumentVersion
             )
-
-            if (
-                expression.type === "variable" &&
-                !this.variables.hasVariable(expression.variableId)
-            ) {
-                throw new Error(
-                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
-                )
-            }
-
-            if (expression.type === "variable" && this.circularityCheck) {
-                if (
-                    this.circularityCheck(
-                        expression.variableId,
-                        this.premise.id
-                    )
-                ) {
-                    throw new Error(
-                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
-                    )
-                }
-            }
+            this.assertVariableExpressionValid(expression)
 
             if (expression.parentId === null) {
                 if (this.rootExpressionId !== undefined) {
@@ -380,28 +359,7 @@ export class PremiseEngine<
                 expression.argumentId,
                 expression.argumentVersion
             )
-
-            if (
-                expression.type === "variable" &&
-                !this.variables.hasVariable(expression.variableId)
-            ) {
-                throw new Error(
-                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
-                )
-            }
-
-            if (expression.type === "variable" && this.circularityCheck) {
-                if (
-                    this.circularityCheck(
-                        expression.variableId,
-                        this.premise.id
-                    )
-                ) {
-                    throw new Error(
-                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
-                    )
-                }
-            }
+            this.assertVariableExpressionValid(expression)
 
             if (parentId === null) {
                 if (this.rootExpressionId !== undefined) {
@@ -455,28 +413,7 @@ export class PremiseEngine<
                 expression.argumentId,
                 expression.argumentVersion
             )
-
-            if (
-                expression.type === "variable" &&
-                !this.variables.hasVariable(expression.variableId)
-            ) {
-                throw new Error(
-                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
-                )
-            }
-
-            if (expression.type === "variable" && this.circularityCheck) {
-                if (
-                    this.circularityCheck(
-                        expression.variableId,
-                        this.premise.id
-                    )
-                ) {
-                    throw new Error(
-                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
-                    )
-                }
-            }
+            this.assertVariableExpressionValid(expression)
 
             if (!this.expressions.getExpression(siblingId)) {
                 throw new Error(
@@ -647,28 +584,7 @@ export class PremiseEngine<
                 expression.argumentId,
                 expression.argumentVersion
             )
-
-            if (
-                expression.type === "variable" &&
-                !this.variables.hasVariable(expression.variableId)
-            ) {
-                throw new Error(
-                    `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
-                )
-            }
-
-            if (expression.type === "variable" && this.circularityCheck) {
-                if (
-                    this.circularityCheck(
-                        expression.variableId,
-                        this.premise.id
-                    )
-                ) {
-                    throw new Error(
-                        `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
-                    )
-                }
-            }
+            this.assertVariableExpressionValid(expression)
 
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             this.expressions.setCollector(collector)
@@ -716,28 +632,7 @@ export class PremiseEngine<
                 newSibling.argumentId,
                 newSibling.argumentVersion
             )
-
-            if (
-                newSibling.type === "variable" &&
-                !this.variables.hasVariable(newSibling.variableId)
-            ) {
-                throw new Error(
-                    `Variable expression "${newSibling.id}" references non-existent variable "${newSibling.variableId}".`
-                )
-            }
-
-            if (newSibling.type === "variable" && this.circularityCheck) {
-                if (
-                    this.circularityCheck(
-                        newSibling.variableId,
-                        this.premise.id
-                    )
-                ) {
-                    throw new Error(
-                        `Circular binding: variable "${newSibling.variableId}" is bound to this premise (directly or transitively)`
-                    )
-                }
-            }
+            this.assertVariableExpressionValid(newSibling)
 
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             this.expressions.setCollector(collector)
@@ -1871,6 +1766,27 @@ export class PremiseEngine<
             throw new Error(
                 `Entity argumentVersion "${argumentVersion}" does not match engine argument version "${this.argument.version}".`
             )
+        }
+    }
+
+    private assertVariableExpressionValid(
+        expression: TExpressionInput<TExpr> | TExpressionWithoutPosition<TExpr>
+    ): void {
+        if (
+            expression.type === "variable" &&
+            !this.variables.hasVariable(expression.variableId)
+        ) {
+            throw new Error(
+                `Variable expression "${expression.id}" references non-existent variable "${expression.variableId}".`
+            )
+        }
+
+        if (expression.type === "variable" && this.circularityCheck) {
+            if (this.circularityCheck(expression.variableId, this.premise.id)) {
+                throw new Error(
+                    `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
+                )
+            }
         }
     }
 
