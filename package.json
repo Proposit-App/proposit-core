@@ -47,7 +47,7 @@
     },
     "scripts": {
         "generate:parser": "peggy --format es -o src/lib/core/parser/formula-gen.js src/lib/core/parser/formula.peggy",
-        "build": "rm -rf dist tsconfig.build.tsbuildinfo && pnpm run generate:parser && pnpm tsc -p tsconfig.build.json && cp src/lib/core/parser/formula-gen.js dist/lib/core/parser/formula-gen.js",
+        "build": "rm -rf dist tsconfig.build.tsbuildinfo && pnpm run generate:parser && pnpm tsc -p tsconfig.build.json && cp src/lib/core/parser/formula-gen.js dist/lib/core/parser/formula-gen.js && pnpm run docs",
         "typecheck": "pnpm tsc -p tsconfig.json",
         "lint": "pnpm run prettify:check && pnpm eslint .",
         "prettify": "pnpm prettier -w .",
