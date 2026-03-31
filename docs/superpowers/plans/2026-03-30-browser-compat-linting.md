@@ -13,11 +13,13 @@
 ### Task 1: Install `eslint-plugin-n` and add `engines` field
 
 **Files:**
+
 - Modify: `package.json`
 
 - [ ] **Step 1: Install the plugin**
 
 Run:
+
 ```bash
 pnpm add -D eslint-plugin-n
 ```
@@ -37,6 +39,7 @@ This tells `eslint-plugin-n` which Node version to target for `n/no-unsupported-
 - [ ] **Step 3: Verify installation**
 
 Run:
+
 ```bash
 pnpm ls eslint-plugin-n
 ```
@@ -55,9 +58,11 @@ git commit -m "chore: add eslint-plugin-n and engines field"
 ### Task 2: Restructure ESLint globals and add library browser-compat rules
 
 **Files:**
+
 - Modify: `eslint.config.mjs`
 
 The current config applies `globals.node` at the top level. We need to:
+
 1. Replace the top-level globals with `globals.es2021` (JS builtins only)
 2. Add a library override for `src/lib/**` and `src/extensions/**` with `globals["shared-node-browser"]`, `no-restricted-imports`, and `no-restricted-globals`
 3. Add a CLI override for `src/cli/**` with `globals.node` and `eslint-plugin-n` rules
@@ -348,6 +353,7 @@ export default defineConfig([
 ```
 
 Key changes from the current config:
+
 - Import `nodePlugin` from `eslint-plugin-n`
 - Top-level globals changed from `globals.node` to `globals.es2021`
 - New library override: `src/lib/**/*.ts` and `src/extensions/**/*.ts` with `globals["shared-node-browser"]`, `no-restricted-imports`, `no-restricted-globals`
@@ -357,6 +363,7 @@ Key changes from the current config:
 - [ ] **Step 2: Run lint to verify no regressions**
 
 Run:
+
 ```bash
 pnpm run lint
 ```
@@ -377,6 +384,7 @@ git commit -m "feat: add browser-compat linting for library and Node version lin
 This task creates a temporary test file to verify the rules fire correctly, then removes it. This is not a permanent test — it's a one-time verification.
 
 **Files:**
+
 - Create (temporary): `src/lib/utils/test-browser-compat-lint.ts`
 - Create (temporary): `src/cli/test-node-version-lint.ts`
 
@@ -397,11 +405,13 @@ const env = process.env.HOME
 - [ ] **Step 2: Run lint on the test file and verify violations**
 
 Run:
+
 ```bash
 pnpm eslint src/lib/utils/test-browser-compat-lint.ts 2>&1 || true
 ```
 
 Expected: At least these errors:
+
 - `no-restricted-imports`: `"node:fs"` flagged (pattern match)
 - `no-restricted-imports`: `"path"` flagged (paths list)
 - `no-restricted-globals`: `__dirname` flagged
@@ -428,6 +438,7 @@ const p = path.join("a", "b")
 - [ ] **Step 5: Run lint on the CLI test file and verify violations**
 
 Run:
+
 ```bash
 pnpm eslint src/cli/test-node-version-lint.ts 2>&1 || true
 ```
@@ -443,6 +454,7 @@ rm src/cli/test-node-version-lint.ts
 - [ ] **Step 7: Run full lint to confirm clean**
 
 Run:
+
 ```bash
 pnpm run lint
 ```
@@ -452,6 +464,7 @@ Expected: All files pass with no errors.
 - [ ] **Step 8: Run full check to confirm nothing else broke**
 
 Run:
+
 ```bash
 pnpm run check
 ```

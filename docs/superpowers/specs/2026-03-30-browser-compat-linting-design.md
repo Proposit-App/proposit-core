@@ -6,12 +6,12 @@ Ensure all code in `src/lib/` and `src/extensions/` works in both Node.js 20+ an
 
 ## Scope
 
-| Directory | Environment | Enforcement |
-|-----------|------------|-------------|
-| `src/lib/**` | Node 20+ and browsers | No Node built-in imports, no Node-only globals |
-| `src/extensions/**` | Node 20+ and browsers | Same as `src/lib/` |
-| `src/cli/**` | Node 20+ only | No APIs newer than Node 20, enforce `node:` prefix |
-| `test/**` | Node only | No restrictions (test runner is Node) |
+| Directory           | Environment           | Enforcement                                        |
+| ------------------- | --------------------- | -------------------------------------------------- |
+| `src/lib/**`        | Node 20+ and browsers | No Node built-in imports, no Node-only globals     |
+| `src/extensions/**` | Node 20+ and browsers | Same as `src/lib/`                                 |
+| `src/cli/**`        | Node 20+ only         | No APIs newer than Node 20, enforce `node:` prefix |
+| `test/**`           | Node only             | No restrictions (test runner is Node)              |
 
 ## Changes
 
@@ -67,7 +67,7 @@ Add a file-scoped override with:
 Current config applies `globals.node` at the top level. Restructure to:
 
 - **Top-level:** Only `globals.es2021` (or similar) — safe everywhere
-- **`src/cli/**` override:** Add `globals.node` — full Node global access
+- **`src/cli/**`override:** Add`globals.node` — full Node global access
 - **`src/lib/**`, `src/extensions/**`:** No additional globals beyond ES baseline. The `no-restricted-globals` rule provides a safety net.
 
 This way, a developer who types `process.` in library code will see both an ESLint error and no autocomplete suggestion for it.
@@ -75,22 +75,23 @@ This way, a developer who types `process.` in library code will see both an ESLi
 ### 6. No code changes required
 
 The library code is already clean:
+
 - No `node:*` imports in `src/lib/` or `src/extensions/`
 - No `process`, `Buffer`, `__dirname`, `__filename`, `require`, or `global` usage
 - `globalThis.crypto.randomUUID()` is a Web Crypto API (available in browsers and Node 20+)
 
 ## What this catches
 
-| Mistake | Rule |
-|---------|------|
-| `import fs from "node:fs"` in library | `no-restricted-imports` (pattern) |
-| `import { join } from "path"` in library | `no-restricted-imports` (paths) |
-| `process.env.FOO` in library | `no-restricted-globals` |
-| `Buffer.from(...)` in library | `no-restricted-globals` |
-| `require("something")` in library | `no-restricted-globals` |
-| `global.something` in library | `no-restricted-globals` |
-| Using a Node 22+ API in CLI | `n/no-unsupported-features/node-builtins` |
-| `import fs from "fs"` in CLI (no prefix) | `n/prefer-node-protocol` |
+| Mistake                                  | Rule                                      |
+| ---------------------------------------- | ----------------------------------------- |
+| `import fs from "node:fs"` in library    | `no-restricted-imports` (pattern)         |
+| `import { join } from "path"` in library | `no-restricted-imports` (paths)           |
+| `process.env.FOO` in library             | `no-restricted-globals`                   |
+| `Buffer.from(...)` in library            | `no-restricted-globals`                   |
+| `require("something")` in library        | `no-restricted-globals`                   |
+| `global.something` in library            | `no-restricted-globals`                   |
+| Using a Node 22+ API in CLI              | `n/no-unsupported-features/node-builtins` |
+| `import fs from "fs"` in CLI (no prefix) | `n/prefer-node-protocol`                  |
 
 ## Files modified
 

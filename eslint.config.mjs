@@ -2,6 +2,66 @@ import { defineConfig, globalIgnores } from "eslint/config"
 import tseslint from "typescript-eslint"
 import globals from "globals"
 import checkFile from "eslint-plugin-check-file"
+import nodePlugin from "eslint-plugin-n"
+
+// All Node.js built-in module names (bare imports without node: prefix).
+// Used by no-restricted-imports to prevent Node built-in usage in library code.
+const nodeBuiltinModules = [
+    "assert",
+    "assert/strict",
+    "async_hooks",
+    "buffer",
+    "child_process",
+    "cluster",
+    "console",
+    "constants",
+    "crypto",
+    "dgram",
+    "diagnostics_channel",
+    "dns",
+    "dns/promises",
+    "domain",
+    "events",
+    "fs",
+    "fs/promises",
+    "http",
+    "http2",
+    "https",
+    "inspector",
+    "inspector/promises",
+    "module",
+    "net",
+    "os",
+    "path",
+    "path/posix",
+    "path/win32",
+    "perf_hooks",
+    "process",
+    "punycode",
+    "querystring",
+    "readline",
+    "readline/promises",
+    "repl",
+    "stream",
+    "stream/consumers",
+    "stream/promises",
+    "stream/web",
+    "string_decoder",
+    "sys",
+    "timers",
+    "timers/promises",
+    "tls",
+    "trace_events",
+    "tty",
+    "url",
+    "util",
+    "util/types",
+    "v8",
+    "vm",
+    "wasi",
+    "worker_threads",
+    "zlib",
+]
 
 export default defineConfig([
     ...tseslint.configs.recommendedTypeChecked,
@@ -9,7 +69,7 @@ export default defineConfig([
     {
         languageOptions: {
             globals: {
-                ...globals.node,
+                ...globals.es2021,
             },
             parserOptions: {
                 project: "./tsconfig.json",
@@ -119,6 +179,92 @@ export default defineConfig([
                 { "**/*.ts": "KEBAB_CASE" },
                 { ignoreMiddleExtensions: true },
             ],
+        },
+    },
+    // Browser-compat rules for library and extension code.
+    // These files must work in both Node 20+ and modern browsers.
+    {
+        files: ["src/lib/**/*.ts", "src/extensions/**/*.ts"],
+        languageOptions: {
+            globals: {
+                ...globals["shared-node-browser"],
+            },
+        },
+        rules: {
+            "no-restricted-imports": [
+                "error",
+                {
+                    paths: nodeBuiltinModules.map((name) => ({
+                        name,
+                        message:
+                            "Node.js built-in modules are not allowed in browser-compatible library code. Use src/cli/ for Node-specific code.",
+                    })),
+                    patterns: [
+                        {
+                            group: ["node:*"],
+                            message:
+                                "Node.js built-in modules are not allowed in browser-compatible library code. Use src/cli/ for Node-specific code.",
+                        },
+                    ],
+                },
+            ],
+            "no-restricted-globals": [
+                "error",
+                {
+                    name: "process",
+                    message:
+                        "process is Node-only. Do not use in browser-compatible library code.",
+                },
+                {
+                    name: "Buffer",
+                    message:
+                        "Buffer is Node-only. Use Uint8Array or ArrayBuffer for cross-platform code.",
+                },
+                {
+                    name: "__dirname",
+                    message:
+                        "__dirname is CJS/Node-only. Do not use in browser-compatible library code.",
+                },
+                {
+                    name: "__filename",
+                    message:
+                        "__filename is CJS/Node-only. Do not use in browser-compatible library code.",
+                },
+                {
+                    name: "require",
+                    message:
+                        "require is CJS/Node-only. Use ES module imports in browser-compatible library code.",
+                },
+                {
+                    name: "global",
+                    message:
+                        "global is Node-only. Use globalThis for cross-platform code.",
+                },
+            ],
+        },
+    },
+    // Node-specific rules for CLI code.
+    // CLI runs on Node 20+ only — enforce version boundaries and node: prefix.
+    {
+        files: ["src/cli/**/*.ts"],
+        plugins: { n: nodePlugin },
+        languageOptions: {
+            globals: {
+                ...globals.node,
+            },
+        },
+        rules: {
+            "n/no-unsupported-features/node-builtins": "error",
+            "n/prefer-node-protocol": "error",
+        },
+    },
+    // Test files run on Node only — no browser-compat restrictions.
+    {
+        files: ["test/**/*.ts"],
+        languageOptions: {
+            globals: {
+                ...globals.node,
+            },
         },
     },
     globalIgnores([
