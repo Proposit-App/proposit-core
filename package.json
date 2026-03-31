@@ -55,6 +55,7 @@
         "test": "pnpm vitest run",
         "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
         "cli": "node dist/cli.js",
+        "preversion": "pnpm run check",
         "prepublishOnly": "pnpm run check"
     },
     "devDependencies": {
