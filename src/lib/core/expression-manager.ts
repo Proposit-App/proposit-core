@@ -188,6 +188,27 @@ export class ExpressionManager<
     }
 
     /**
+     * Removes an expression from the three internal maps: deletes it from
+     * the main `expressions` store, removes it from its parent's child-id
+     * and position indexes, and deletes its own child-id and position
+     * indexes.
+     *
+     * Callers remain responsible for collector notification, dirty-set
+     * cleanup, and parent dirtying — timing for those varies by call site.
+     */
+    private detachExpression(expressionId: string, expression: TExpr): void {
+        this.expressions.delete(expressionId)
+        this.childExpressionIdsByParentId
+            .get(expression.parentId)
+            ?.delete(expressionId)
+        this.childPositionsByParentId
+            .get(expression.parentId)
+            ?.delete(expression.position)
+        this.childExpressionIdsByParentId.delete(expressionId)
+        this.childPositionsByParentId.delete(expressionId)
+    }
+
+    /**
      * Marks an expression and all its ancestors as dirty for hierarchical
      * checksum recomputation. Stops early when it reaches an expression
      * already in the dirty set (since its ancestors are already marked).
@@ -676,17 +697,7 @@ export class ExpressionManager<
             this.collector?.removedExpression({
                 ...expression,
             } as unknown as TCorePropositionalExpression)
-            this.expressions.delete(id)
-            this.childExpressionIdsByParentId
-                .get(expression.parentId)
-                ?.delete(id)
-
-            this.childPositionsByParentId
-                .get(expression.parentId)
-                ?.delete(expression.position)
-
-            this.childExpressionIdsByParentId.delete(id)
-            this.childPositionsByParentId.delete(id)
+            this.detachExpression(id, expression)
         }
 
         // Prune deleted expressions from the dirty set and mark the surviving parent dirty.
@@ -716,13 +727,7 @@ export class ExpressionManager<
             this.collector?.removedExpression({
                 ...target,
             } as unknown as TCorePropositionalExpression)
-            this.expressions.delete(expressionId)
-            this.childExpressionIdsByParentId
-                .get(parentId)
-                ?.delete(expressionId)
-            this.childPositionsByParentId.get(parentId)?.delete(target.position)
-            this.childExpressionIdsByParentId.delete(expressionId)
-            this.childPositionsByParentId.delete(expressionId)
+            this.detachExpression(expressionId, target)
 
             // Prune deleted expression from dirty set and mark surviving parent dirty.
             this.dirtyExpressionIds.delete(expressionId)
@@ -824,15 +829,7 @@ export class ExpressionManager<
                 this.collector?.removedExpression({
                     ...operator,
                 } as unknown as TCorePropositionalExpression)
-                this.expressions.delete(operatorId)
-                this.childExpressionIdsByParentId
-                    .get(grandparentId)
-                    ?.delete(operatorId)
-                this.childPositionsByParentId
-                    .get(grandparentId)
-                    ?.delete(operator.position)
-                this.childExpressionIdsByParentId.delete(operatorId)
-                this.childPositionsByParentId.delete(operatorId)
+                this.detachExpression(operatorId, operator)
 
                 // Prune collapsed formula from dirty set and propagate to grandparent.
                 this.dirtyExpressionIds.delete(operatorId)
@@ -851,20 +848,11 @@ export class ExpressionManager<
 
         if (children.length === 0) {
             const grandparentId = operator.parentId
-            const grandparentPosition = operator.position
 
             this.collector?.removedExpression({
                 ...operator,
             } as unknown as TCorePropositionalExpression)
-            this.expressions.delete(operatorId)
-            this.childExpressionIdsByParentId
-                .get(grandparentId)
-                ?.delete(operatorId)
-            this.childPositionsByParentId
-                .get(grandparentId)
-                ?.delete(grandparentPosition)
-            this.childExpressionIdsByParentId.delete(operatorId)
-            this.childPositionsByParentId.delete(operatorId)
+            this.detachExpression(operatorId, operator)
 
             // Prune collapsed operator from dirty set and propagate to grandparent.
             this.dirtyExpressionIds.delete(operatorId)
@@ -1759,20 +1747,7 @@ export class ExpressionManager<
             )
         }
 
-        // Detach from parent
-        this.childExpressionIdsByParentId
-            .get(expression.parentId)
-            ?.delete(expressionId)
-        this.childPositionsByParentId
-            .get(expression.parentId)
-            ?.delete(expression.position)
-
-        // Remove own tracking
-        this.childExpressionIdsByParentId.delete(expressionId)
-        this.childPositionsByParentId.delete(expressionId)
-
-        // Remove from store
-        this.expressions.delete(expressionId)
+        this.detachExpression(expressionId, expression)
 
         // Notify collector
         this.collector?.removedExpression({
