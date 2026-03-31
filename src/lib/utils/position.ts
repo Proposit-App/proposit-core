@@ -14,6 +14,7 @@ export const DEFAULT_POSITION_CONFIG: TCorePositionConfig = {
     initial: POSITION_INITIAL,
 }
 
+/** Returns the integer midpoint between two numbers, truncating toward zero. */
 export function midpoint(a: number, b: number): number {
     return Math.trunc(a + (b - a) / 2)
 }

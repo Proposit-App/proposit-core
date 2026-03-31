@@ -9,6 +9,11 @@ import type {
 import { FORK_RECORD_SCHEMA_INVALID } from "../types/validation.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 
+/**
+ * A keyed collection of fork records for a single entity type.
+ * Each record maps a forked entity back to its origin via `entityId → forkId`.
+ * Records are schema-validated on mutation; invalid state throws {@link InvariantViolationError}.
+ */
 export class ForkNamespace<
     T extends TCoreEntityForkRecord = TCoreEntityForkRecord,
 > {
@@ -42,6 +47,7 @@ export class ForkNamespace<
         }
     }
 
+    /** Registers a fork record. Throws if the `entityId` already exists. */
     public create(record: T): T {
         return this.withValidation(() => {
             if (this.records.has(record.entityId)) {
@@ -54,20 +60,24 @@ export class ForkNamespace<
         })
     }
 
+    /** Returns the fork record for the given entity ID, or `undefined`. */
     public get(entityId: string): T | undefined {
         return this.records.get(entityId)
     }
 
+    /** Returns all fork records in this namespace. */
     public getAll(): T[] {
         return Array.from(this.records.values())
     }
 
+    /** Returns all records that share the given origin `forkId`. */
     public getByForkId(forkId: string): T[] {
         return Array.from(this.records.values()).filter(
             (r) => r.forkId === forkId
         )
     }
 
+    /** Removes and returns the fork record for the given entity ID. Throws if not found. */
     public remove(entityId: string): T {
         return this.withValidation(() => {
             const record = this.records.get(entityId)
@@ -81,10 +91,12 @@ export class ForkNamespace<
         })
     }
 
+    /** Returns a serializable snapshot of all records. */
     public snapshot(): T[] {
         return Array.from(this.records.values())
     }
 
+    /** Restores a namespace from a previously captured snapshot. */
     public static fromSnapshot<
         T extends TCoreEntityForkRecord = TCoreEntityForkRecord,
     >(records: T[], schema?: TSchema): ForkNamespace<T> {
@@ -95,6 +107,7 @@ export class ForkNamespace<
         return ns
     }
 
+    /** Validates every record against the namespace's schema. */
     public validate(): TInvariantValidationResult {
         const violations: TInvariantViolation[] = []
         for (const [entityId, record] of this.records) {

@@ -11,6 +11,7 @@ export type TFormulaAST =
 
 const typedParse = pegParse as (input: string) => TFormulaAST
 
+/** Parses a propositional logic formula string into an AST. Uses the PEG grammar defined in `formula.peggy`. */
 export function parseFormula(input: string): TFormulaAST {
     return typedParse(input)
 }

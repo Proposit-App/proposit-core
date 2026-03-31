@@ -10,6 +10,7 @@ import type {
 } from "../types/validation.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 
+/** Base shape for entities managed by {@link VersionedLibrary}. */
 export type TVersionedEntity = {
     id: string
     version: number
@@ -17,6 +18,11 @@ export type TVersionedEntity = {
     checksum: string
 }
 
+/**
+ * Abstract base class for versioned, freezable entity libraries.
+ * Provides CRUD, freeze/unfreeze lifecycle, schema validation, and checksum
+ * computation. Subclasses supply the entity label, schema, and validation codes.
+ */
 export abstract class VersionedLibrary<TEntity extends TVersionedEntity> {
     protected entities: Map<string, Map<number, TEntity>>
     protected checksumConfig?: TCoreChecksumConfig
@@ -63,6 +69,7 @@ export abstract class VersionedLibrary<TEntity extends TVersionedEntity> {
         }
     }
 
+    /** Creates a new entity at version 0. Throws if the ID already exists. */
     public create(
         entity: Omit<TEntity, "version" | "frozen" | "checksum">
     ): TEntity {
@@ -87,6 +94,7 @@ export abstract class VersionedLibrary<TEntity extends TVersionedEntity> {
         })
     }
 
+    /** Applies partial updates to the latest version of an entity. Throws if the entity is frozen. */
     public update(
         id: string,
         updates: Partial<
@@ -119,6 +127,7 @@ export abstract class VersionedLibrary<TEntity extends TVersionedEntity> {
         })
     }
 
+    /** Freezes the latest version and creates a new mutable successor. Returns both. */
     public freeze(id: string): { frozen: TEntity; current: TEntity } {
         return this.withValidation(() => {
             const versions = this.entities.get(id)
@@ -154,16 +163,19 @@ export abstract class VersionedLibrary<TEntity extends TVersionedEntity> {
         })
     }
 
+    /** Returns a specific version of an entity, or `undefined` if not found. */
     public get(id: string, version: number): TEntity | undefined {
         return this.entities.get(id)?.get(version)
     }
 
+    /** Returns the latest (highest-version) entity for the given ID, or `undefined` if not found. */
     public getCurrent(id: string): TEntity | undefined {
         const versions = this.entities.get(id)
         if (!versions) return undefined
         return versions.get(this.maxVersion(versions))
     }
 
+    /** Returns every entity across all IDs and versions. */
     public getAll(): TEntity[] {
         const result: TEntity[] = []
         for (const versions of this.entities.values()) {
@@ -174,6 +186,7 @@ export abstract class VersionedLibrary<TEntity extends TVersionedEntity> {
         return result
     }
 
+    /** Returns all versions of an entity sorted ascending by version number. */
     public getVersions(id: string): TEntity[] {
         const versions = this.entities.get(id)
         if (!versions) return []
@@ -182,6 +195,7 @@ export abstract class VersionedLibrary<TEntity extends TVersionedEntity> {
         )
     }
 
+    /** Validates all entities against the schema and checks that frozen versions have successors. */
     public validate(): TInvariantValidationResult {
         const violations: TInvariantViolation[] = []
         for (const [id, versions] of this.entities) {

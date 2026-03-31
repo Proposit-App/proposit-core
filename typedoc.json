@@ -1,0 +1,13 @@
+{
+    "entryPoints": [
+        "src/lib/index.ts",
+        "src/extensions/ieee/index.ts",
+        "src/extensions/basics/index.ts"
+    ],
+    "out": "docs/api",
+    "tsconfig": "tsconfig.json",
+    "name": "proposit-core",
+    "readme": "none",
+    "excludePrivate": true,
+    "excludeInternal": true
+}

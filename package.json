@@ -54,6 +54,7 @@
         "prettify:check": "pnpm prettier --check .",
         "test": "pnpm vitest run",
         "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
+        "docs": "typedoc",
         "cli": "node dist/cli.js",
         "preversion": "pnpm run check",
         "prepublishOnly": "pnpm run check"
@@ -67,6 +68,7 @@
         "globals": "^16.5.0",
         "peggy": "^5.0.6",
         "prettier": "^3.8.1",
+        "typedoc": "^0.28.18",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.55.0",
         "vitest": "^4.0.18"

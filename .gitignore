@@ -10,3 +10,4 @@ coverage/
 .untracked/
 .env.*
 .DS_Store
+docs/api/

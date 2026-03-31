@@ -81,6 +81,7 @@ function mergeObjectSchemas(base: TObject, extension: TObject): TObject {
     )
 }
 
+/** Builds a composite response schema by merging optional per-entity schema extensions into the base parsing schemata. */
 export function buildParsingResponseSchema(
     options?: TParsingSchemaOptions
 ): TSchema {
@@ -149,6 +150,7 @@ export function buildParsingResponseSchema(
     return responseSch
 }
 
+/** Returns a plain JSON-serializable copy of the given schema (defaults to {@link ParsedArgumentResponseSchema}). */
 export function getParsingResponseSchema(
     schema?: TSchema
 ): Record<string, unknown> {

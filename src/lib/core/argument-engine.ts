@@ -795,6 +795,7 @@ export class ArgumentEngine<
         })
     }
 
+    /** Adds a premise-bound variable that references a premise in a different argument. */
     public bindVariableToExternalPremise(
         variable: TOptionalChecksum<TPremiseBoundVariable> &
             Record<string, unknown>
@@ -840,6 +841,7 @@ export class ArgumentEngine<
         })
     }
 
+    /** Adds a premise-bound variable that references another argument's conclusion premise. */
     public bindVariableToArgument(
         variable: Omit<
             TOptionalChecksum<TPremiseBoundVariable>,

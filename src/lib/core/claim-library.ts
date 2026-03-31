@@ -26,6 +26,7 @@ export class ClaimLibrary<TClaim extends TCoreClaim = TCoreClaim>
         return { claims: this.getAll() }
     }
 
+    /** Restores a claim library from a previously captured snapshot. */
     public static fromSnapshot<TClaim extends TCoreClaim = TCoreClaim>(
         snapshot: TClaimLibrarySnapshot<TClaim>,
         options?: { checksumConfig?: TCoreChecksumConfig }

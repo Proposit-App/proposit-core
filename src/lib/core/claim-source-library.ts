@@ -192,6 +192,7 @@ export class ClaimSourceLibrary<
         return { claimSourceAssociations: this.getAll() }
     }
 
+    /** Restores a claim-source library from a snapshot, re-indexing all associations. */
     public static fromSnapshot<
         TAssoc extends TCoreClaimSourceAssociation =
             TCoreClaimSourceAssociation,

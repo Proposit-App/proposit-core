@@ -3,6 +3,7 @@ import Type, { type Static, type TSchema, type TSchemaOptions } from "typebox"
 // ---------------------------------------------------------------------------
 // EncodableDate — custom TypeBox type for Date values
 // ---------------------------------------------------------------------------
+/** Custom TypeBox type that validates, converts, and clones `Date` values. */
 export class TDateType extends Type.Base<Date> {
     public readonly type = Date
 
@@ -25,6 +26,7 @@ export class TDateType extends Type.Base<Date> {
         return new TDateType()
     }
 }
+/** Creates a new {@link TDateType} schema instance. */
 export function dateType(): TDateType {
     return new TDateType()
 }
@@ -73,6 +75,7 @@ export type TJsonArray = TJsonValue[]
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+/** Wraps a TypeBox schema in a `Union([schema, Null()])` with `default: null`. */
 export const Nullable = <T extends TSchema>(
     schema: T,
     options?: Omit<TSchemaOptions, "default">

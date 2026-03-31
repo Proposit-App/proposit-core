@@ -26,6 +26,7 @@ export class SourceLibrary<TSource extends TCoreSource = TCoreSource>
         return { sources: this.getAll() }
     }
 
+    /** Restores a source library from a previously captured snapshot. */
     public static fromSnapshot<TSource extends TCoreSource = TCoreSource>(
         snapshot: TSourceLibrarySnapshot<TSource>,
         options?: { checksumConfig?: TCoreChecksumConfig }

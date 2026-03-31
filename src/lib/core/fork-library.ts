@@ -16,6 +16,12 @@ import { ForkNamespace } from "./fork-namespace.js"
 import type { TForkLibrarySnapshot } from "./interfaces/library.interfaces.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 
+/**
+ * Aggregate container for fork provenance across all entity types.
+ * Holds six {@link ForkNamespace} instances — one per entity kind
+ * (arguments, premises, expressions, variables, claims, sources).
+ * Fork records are immutable after creation and carry no checksums.
+ */
 export class ForkLibrary<
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
@@ -46,6 +52,7 @@ export class ForkLibrary<
         )
     }
 
+    /** Returns a serializable snapshot of all six namespaces. */
     public snapshot(): TForkLibrarySnapshot<
         TArgFork,
         TPremiseFork,
@@ -64,6 +71,7 @@ export class ForkLibrary<
         }
     }
 
+    /** Restores a full library from a previously captured snapshot. */
     public static fromSnapshot<
         TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
         TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
@@ -119,6 +127,7 @@ export class ForkLibrary<
         return lib
     }
 
+    /** Validates all six namespaces and returns the combined result. */
     public validate(): TInvariantValidationResult {
         const allViolations = [
             ...this.arguments.validate().violations,
