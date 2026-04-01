@@ -33,17 +33,17 @@ The existing 33 reference type schemas get constraints, descriptions, and date t
 
 ### Constraints by field pattern
 
-| Field pattern | Constraint | Example |
-|---|---|---|
-| Required `Type.String()` fields | `{ minLength: 1, description: "..." }` | `title`, `publisher`, `caseName` |
-| `authors` / `editors` / `inventors` (required arrays) | `Type.Array(Type.String({ minLength: 1 }), { minItems: 1 })` | Book `authors` |
-| `authors` (optional arrays) | `Type.Optional(Type.Array(Type.String({ minLength: 1 })))` | Dataset `authors` |
-| `year` fields | `Type.String({ pattern: "^\\d{4}$", description: "Four-digit year" })` | Book `year` |
-| URL fields | `Type.String({ format: "uri", minLength: 1 })` | Website `url` |
-| ISBN fields | `Type.Optional(Type.String({ pattern: "^(?:\\d{9}[\\dX]|\\d{13})$", description: "ISBN-10 or ISBN-13 (digits only)" }))` | Book `isbn` |
-| DOI fields | `Type.Optional(Type.String({ pattern: "^10\\..+/.+$", description: "DOI identifier" }))` | JournalArticle `doi` |
-| `accessedDate`, `date`, `postDate`, `dateEnacted` | `EncodableDate` (from `../../lib/schemata/shared.js`) | Website `accessedDate`, Patent `date` |
-| `type` discriminator | unchanged (literal) | all types |
+| Field pattern                                         | Constraint                                                                               | Example                                                          |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ----------- |
+| Required `Type.String()` fields                       | `{ minLength: 1, description: "..." }`                                                   | `title`, `publisher`, `caseName`                                 |
+| `authors` / `editors` / `inventors` (required arrays) | `Type.Array(Type.String({ minLength: 1 }), { minItems: 1 })`                             | Book `authors`                                                   |
+| `authors` (optional arrays)                           | `Type.Optional(Type.Array(Type.String({ minLength: 1 })))`                               | Dataset `authors`                                                |
+| `year` fields                                         | `Type.String({ pattern: "^\\d{4}$", description: "Four-digit year" })`                   | Book `year`                                                      |
+| URL fields                                            | `Type.String({ format: "uri", minLength: 1 })`                                           | Website `url`                                                    |
+| ISBN fields                                           | `Type.Optional(Type.String({ pattern: "^(?:\\d{9}[\\dX]                                  | \\d{13})$", description: "ISBN-10 or ISBN-13 (digits only)" }))` | Book `isbn` |
+| DOI fields                                            | `Type.Optional(Type.String({ pattern: "^10\\..+/.+$", description: "DOI identifier" }))` | JournalArticle `doi`                                             |
+| `accessedDate`, `date`, `postDate`, `dateEnacted`     | `EncodableDate` (from `../../lib/schemata/shared.js`)                                    | Website `accessedDate`, Patent `date`                            |
+| `type` discriminator                                  | unchanged (literal)                                                                      | all types                                                        |
 
 ### New exports
 
@@ -87,12 +87,34 @@ A recursive `stripConstraints(schema)` internal utility that deep-clones a TypeB
 ```ts
 interface TCitationSegment {
     text: string
-    role: "authors" | "title" | "bookTitle" | "publisher" | "location"
-        | "year" | "date" | "edition" | "pages" | "volume" | "issue"
-        | "doi" | "url" | "isbn" | "accessedDate" | "institution"
-        | "degree" | "organization" | "standardNumber" | "reportNumber"
-        | "patentNumber" | "country" | "platform" | "separator"
-        | "prefix" | "suffix" | "misc"
+    role:
+        | "authors"
+        | "title"
+        | "bookTitle"
+        | "publisher"
+        | "location"
+        | "year"
+        | "date"
+        | "edition"
+        | "pages"
+        | "volume"
+        | "issue"
+        | "doi"
+        | "url"
+        | "isbn"
+        | "accessedDate"
+        | "institution"
+        | "degree"
+        | "organization"
+        | "standardNumber"
+        | "reportNumber"
+        | "patentNumber"
+        | "country"
+        | "platform"
+        | "separator"
+        | "prefix"
+        | "suffix"
+        | "misc"
     style?: "italic" | "quoted" | "link" | "plain"
 }
 
@@ -111,7 +133,7 @@ interface TCitationFormatResult {
 ### Example output (Book)
 
 ```ts
-[
+;[
     { text: "J. Author, K. Other", role: "authors", style: "plain" },
     { text: ", ", role: "separator" },
     { text: "Title of Book", role: "title", style: "italic" },

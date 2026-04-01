@@ -15,6 +15,7 @@
 ### Task 1: Enrich `references.ts` — constraints, descriptions, EncodableDate, and schema map
 
 **Files:**
+
 - Modify: `src/extensions/ieee/references.ts`
 - Test: `test/extensions/ieee.test.ts` (create)
 
@@ -128,7 +129,10 @@ describe("IEEE extension", () => {
 
         it("validates a conforming JournalArticle reference", () => {
             expect(
-                Value.Check(JournalArticleReferenceSchema, validJournalArticle())
+                Value.Check(
+                    JournalArticleReferenceSchema,
+                    validJournalArticle()
+                )
             ).toBe(true)
         })
 
@@ -252,15 +256,39 @@ describe("IEEE extension", () => {
     describe("IEEEReferenceSchemaMap", () => {
         it("has an entry for every reference type", () => {
             const expectedTypes: TReferenceType[] = [
-                "Book", "Website", "BookChapter", "Handbook",
-                "TechnicalReport", "Standard", "Thesis", "Patent",
-                "Dictionary", "Encyclopedia", "JournalArticle",
-                "MagazineArticle", "NewspaperArticle", "ConferencePaper",
-                "ConferenceProceedings", "Dataset", "Software",
-                "OnlineDocument", "Blog", "SocialMedia", "Preprint",
-                "Video", "Podcast", "Course", "Presentation", "Interview",
-                "PersonalCommunication", "Email", "Law", "CourtCase",
-                "GovernmentPublication", "Datasheet", "ProductManual",
+                "Book",
+                "Website",
+                "BookChapter",
+                "Handbook",
+                "TechnicalReport",
+                "Standard",
+                "Thesis",
+                "Patent",
+                "Dictionary",
+                "Encyclopedia",
+                "JournalArticle",
+                "MagazineArticle",
+                "NewspaperArticle",
+                "ConferencePaper",
+                "ConferenceProceedings",
+                "Dataset",
+                "Software",
+                "OnlineDocument",
+                "Blog",
+                "SocialMedia",
+                "Preprint",
+                "Video",
+                "Podcast",
+                "Course",
+                "Presentation",
+                "Interview",
+                "PersonalCommunication",
+                "Email",
+                "Law",
+                "CourtCase",
+                "GovernmentPublication",
+                "Datasheet",
+                "ProductManual",
             ]
             for (const t of expectedTypes) {
                 expect(IEEEReferenceSchemaMap).toHaveProperty(t)
@@ -313,6 +341,7 @@ Expected: Most constraint and EncodableDate tests fail (current schemas have no 
 - [ ] **Step 3: Enrich `references.ts` with constraints, descriptions, EncodableDate, and schema map**
 
 Rewrite `src/extensions/ieee/references.ts`. Key changes:
+
 - Add `import { EncodableDate } from "../../lib/schemata/shared.js"` at the top
 - Add `{ minLength: 1, description: "..." }` to all required string fields
 - Change `authors`/`editors`/`inventors` arrays to `Type.Array(Type.String({ minLength: 1 }), { minItems: 1 })` for required, omit `minItems` for optional
@@ -838,7 +867,10 @@ export const SoftwareReferenceSchema = Type.Intersect([
             Type.String({ minLength: 1, description: "Software version" })
         ),
         publisher: Type.Optional(
-            Type.String({ minLength: 1, description: "Publisher or distributor" })
+            Type.String({
+                minLength: 1,
+                description: "Publisher or distributor",
+            })
         ),
         doi: Type.Optional(
             Type.String({
@@ -1324,6 +1356,7 @@ git commit -m "feat(ieee): add schema constraints, descriptions, EncodableDate, 
 ### Task 2: Add relaxed schema variants (`relaxed.ts`)
 
 **Files:**
+
 - Create: `src/extensions/ieee/relaxed.ts`
 - Modify: `src/extensions/ieee/index.ts`
 - Test: `test/extensions/ieee.test.ts`
@@ -1395,9 +1428,7 @@ describe("relaxed schemas", () => {
     })
 
     it("relaxed union validates a Book", () => {
-        expect(
-            Value.Check(IEEEReferenceSchemaRelaxed, validBook())
-        ).toBe(true)
+        expect(Value.Check(IEEEReferenceSchemaRelaxed, validBook())).toBe(true)
     })
 
     it("relaxed map has entry for every type", () => {
@@ -1515,101 +1546,215 @@ function cloneAndStrip(value: unknown): unknown {
 export const RelaxedBookReferenceSchema = stripConstraints(BookReferenceSchema)
 export type TRelaxedBookReference = Static<typeof RelaxedBookReferenceSchema>
 
-export const RelaxedWebsiteReferenceSchema = stripConstraints(WebsiteReferenceSchema)
-export type TRelaxedWebsiteReference = Static<typeof RelaxedWebsiteReferenceSchema>
+export const RelaxedWebsiteReferenceSchema = stripConstraints(
+    WebsiteReferenceSchema
+)
+export type TRelaxedWebsiteReference = Static<
+    typeof RelaxedWebsiteReferenceSchema
+>
 
-export const RelaxedBookChapterReferenceSchema = stripConstraints(BookChapterReferenceSchema)
-export type TRelaxedBookChapterReference = Static<typeof RelaxedBookChapterReferenceSchema>
+export const RelaxedBookChapterReferenceSchema = stripConstraints(
+    BookChapterReferenceSchema
+)
+export type TRelaxedBookChapterReference = Static<
+    typeof RelaxedBookChapterReferenceSchema
+>
 
-export const RelaxedHandbookReferenceSchema = stripConstraints(HandbookReferenceSchema)
-export type TRelaxedHandbookReference = Static<typeof RelaxedHandbookReferenceSchema>
+export const RelaxedHandbookReferenceSchema = stripConstraints(
+    HandbookReferenceSchema
+)
+export type TRelaxedHandbookReference = Static<
+    typeof RelaxedHandbookReferenceSchema
+>
 
-export const RelaxedTechnicalReportReferenceSchema = stripConstraints(TechnicalReportReferenceSchema)
-export type TRelaxedTechnicalReportReference = Static<typeof RelaxedTechnicalReportReferenceSchema>
+export const RelaxedTechnicalReportReferenceSchema = stripConstraints(
+    TechnicalReportReferenceSchema
+)
+export type TRelaxedTechnicalReportReference = Static<
+    typeof RelaxedTechnicalReportReferenceSchema
+>
 
-export const RelaxedStandardReferenceSchema = stripConstraints(StandardReferenceSchema)
-export type TRelaxedStandardReference = Static<typeof RelaxedStandardReferenceSchema>
+export const RelaxedStandardReferenceSchema = stripConstraints(
+    StandardReferenceSchema
+)
+export type TRelaxedStandardReference = Static<
+    typeof RelaxedStandardReferenceSchema
+>
 
-export const RelaxedThesisReferenceSchema = stripConstraints(ThesisReferenceSchema)
-export type TRelaxedThesisReference = Static<typeof RelaxedThesisReferenceSchema>
+export const RelaxedThesisReferenceSchema = stripConstraints(
+    ThesisReferenceSchema
+)
+export type TRelaxedThesisReference = Static<
+    typeof RelaxedThesisReferenceSchema
+>
 
-export const RelaxedPatentReferenceSchema = stripConstraints(PatentReferenceSchema)
-export type TRelaxedPatentReference = Static<typeof RelaxedPatentReferenceSchema>
+export const RelaxedPatentReferenceSchema = stripConstraints(
+    PatentReferenceSchema
+)
+export type TRelaxedPatentReference = Static<
+    typeof RelaxedPatentReferenceSchema
+>
 
-export const RelaxedDictionaryReferenceSchema = stripConstraints(DictionaryReferenceSchema)
-export type TRelaxedDictionaryReference = Static<typeof RelaxedDictionaryReferenceSchema>
+export const RelaxedDictionaryReferenceSchema = stripConstraints(
+    DictionaryReferenceSchema
+)
+export type TRelaxedDictionaryReference = Static<
+    typeof RelaxedDictionaryReferenceSchema
+>
 
-export const RelaxedEncyclopediaReferenceSchema = stripConstraints(EncyclopediaReferenceSchema)
-export type TRelaxedEncyclopediaReference = Static<typeof RelaxedEncyclopediaReferenceSchema>
+export const RelaxedEncyclopediaReferenceSchema = stripConstraints(
+    EncyclopediaReferenceSchema
+)
+export type TRelaxedEncyclopediaReference = Static<
+    typeof RelaxedEncyclopediaReferenceSchema
+>
 
-export const RelaxedJournalArticleReferenceSchema = stripConstraints(JournalArticleReferenceSchema)
-export type TRelaxedJournalArticleReference = Static<typeof RelaxedJournalArticleReferenceSchema>
+export const RelaxedJournalArticleReferenceSchema = stripConstraints(
+    JournalArticleReferenceSchema
+)
+export type TRelaxedJournalArticleReference = Static<
+    typeof RelaxedJournalArticleReferenceSchema
+>
 
-export const RelaxedMagazineArticleReferenceSchema = stripConstraints(MagazineArticleReferenceSchema)
-export type TRelaxedMagazineArticleReference = Static<typeof RelaxedMagazineArticleReferenceSchema>
+export const RelaxedMagazineArticleReferenceSchema = stripConstraints(
+    MagazineArticleReferenceSchema
+)
+export type TRelaxedMagazineArticleReference = Static<
+    typeof RelaxedMagazineArticleReferenceSchema
+>
 
-export const RelaxedNewspaperArticleReferenceSchema = stripConstraints(NewspaperArticleReferenceSchema)
-export type TRelaxedNewspaperArticleReference = Static<typeof RelaxedNewspaperArticleReferenceSchema>
+export const RelaxedNewspaperArticleReferenceSchema = stripConstraints(
+    NewspaperArticleReferenceSchema
+)
+export type TRelaxedNewspaperArticleReference = Static<
+    typeof RelaxedNewspaperArticleReferenceSchema
+>
 
-export const RelaxedConferencePaperReferenceSchema = stripConstraints(ConferencePaperReferenceSchema)
-export type TRelaxedConferencePaperReference = Static<typeof RelaxedConferencePaperReferenceSchema>
+export const RelaxedConferencePaperReferenceSchema = stripConstraints(
+    ConferencePaperReferenceSchema
+)
+export type TRelaxedConferencePaperReference = Static<
+    typeof RelaxedConferencePaperReferenceSchema
+>
 
-export const RelaxedConferenceProceedingsReferenceSchema = stripConstraints(ConferenceProceedingsReferenceSchema)
-export type TRelaxedConferenceProceedingsReference = Static<typeof RelaxedConferenceProceedingsReferenceSchema>
+export const RelaxedConferenceProceedingsReferenceSchema = stripConstraints(
+    ConferenceProceedingsReferenceSchema
+)
+export type TRelaxedConferenceProceedingsReference = Static<
+    typeof RelaxedConferenceProceedingsReferenceSchema
+>
 
-export const RelaxedDatasetReferenceSchema = stripConstraints(DatasetReferenceSchema)
-export type TRelaxedDatasetReference = Static<typeof RelaxedDatasetReferenceSchema>
+export const RelaxedDatasetReferenceSchema = stripConstraints(
+    DatasetReferenceSchema
+)
+export type TRelaxedDatasetReference = Static<
+    typeof RelaxedDatasetReferenceSchema
+>
 
-export const RelaxedSoftwareReferenceSchema = stripConstraints(SoftwareReferenceSchema)
-export type TRelaxedSoftwareReference = Static<typeof RelaxedSoftwareReferenceSchema>
+export const RelaxedSoftwareReferenceSchema = stripConstraints(
+    SoftwareReferenceSchema
+)
+export type TRelaxedSoftwareReference = Static<
+    typeof RelaxedSoftwareReferenceSchema
+>
 
-export const RelaxedOnlineDocumentReferenceSchema = stripConstraints(OnlineDocumentReferenceSchema)
-export type TRelaxedOnlineDocumentReference = Static<typeof RelaxedOnlineDocumentReferenceSchema>
+export const RelaxedOnlineDocumentReferenceSchema = stripConstraints(
+    OnlineDocumentReferenceSchema
+)
+export type TRelaxedOnlineDocumentReference = Static<
+    typeof RelaxedOnlineDocumentReferenceSchema
+>
 
 export const RelaxedBlogReferenceSchema = stripConstraints(BlogReferenceSchema)
 export type TRelaxedBlogReference = Static<typeof RelaxedBlogReferenceSchema>
 
-export const RelaxedSocialMediaReferenceSchema = stripConstraints(SocialMediaReferenceSchema)
-export type TRelaxedSocialMediaReference = Static<typeof RelaxedSocialMediaReferenceSchema>
+export const RelaxedSocialMediaReferenceSchema = stripConstraints(
+    SocialMediaReferenceSchema
+)
+export type TRelaxedSocialMediaReference = Static<
+    typeof RelaxedSocialMediaReferenceSchema
+>
 
-export const RelaxedPreprintReferenceSchema = stripConstraints(PreprintReferenceSchema)
-export type TRelaxedPreprintReference = Static<typeof RelaxedPreprintReferenceSchema>
+export const RelaxedPreprintReferenceSchema = stripConstraints(
+    PreprintReferenceSchema
+)
+export type TRelaxedPreprintReference = Static<
+    typeof RelaxedPreprintReferenceSchema
+>
 
-export const RelaxedVideoReferenceSchema = stripConstraints(VideoReferenceSchema)
+export const RelaxedVideoReferenceSchema =
+    stripConstraints(VideoReferenceSchema)
 export type TRelaxedVideoReference = Static<typeof RelaxedVideoReferenceSchema>
 
-export const RelaxedPodcastReferenceSchema = stripConstraints(PodcastReferenceSchema)
-export type TRelaxedPodcastReference = Static<typeof RelaxedPodcastReferenceSchema>
+export const RelaxedPodcastReferenceSchema = stripConstraints(
+    PodcastReferenceSchema
+)
+export type TRelaxedPodcastReference = Static<
+    typeof RelaxedPodcastReferenceSchema
+>
 
-export const RelaxedCourseReferenceSchema = stripConstraints(CourseReferenceSchema)
-export type TRelaxedCourseReference = Static<typeof RelaxedCourseReferenceSchema>
+export const RelaxedCourseReferenceSchema = stripConstraints(
+    CourseReferenceSchema
+)
+export type TRelaxedCourseReference = Static<
+    typeof RelaxedCourseReferenceSchema
+>
 
-export const RelaxedPresentationReferenceSchema = stripConstraints(PresentationReferenceSchema)
-export type TRelaxedPresentationReference = Static<typeof RelaxedPresentationReferenceSchema>
+export const RelaxedPresentationReferenceSchema = stripConstraints(
+    PresentationReferenceSchema
+)
+export type TRelaxedPresentationReference = Static<
+    typeof RelaxedPresentationReferenceSchema
+>
 
-export const RelaxedInterviewReferenceSchema = stripConstraints(InterviewReferenceSchema)
-export type TRelaxedInterviewReference = Static<typeof RelaxedInterviewReferenceSchema>
+export const RelaxedInterviewReferenceSchema = stripConstraints(
+    InterviewReferenceSchema
+)
+export type TRelaxedInterviewReference = Static<
+    typeof RelaxedInterviewReferenceSchema
+>
 
-export const RelaxedPersonalCommunicationReferenceSchema = stripConstraints(PersonalCommunicationReferenceSchema)
-export type TRelaxedPersonalCommunicationReference = Static<typeof RelaxedPersonalCommunicationReferenceSchema>
+export const RelaxedPersonalCommunicationReferenceSchema = stripConstraints(
+    PersonalCommunicationReferenceSchema
+)
+export type TRelaxedPersonalCommunicationReference = Static<
+    typeof RelaxedPersonalCommunicationReferenceSchema
+>
 
-export const RelaxedEmailReferenceSchema = stripConstraints(EmailReferenceSchema)
+export const RelaxedEmailReferenceSchema =
+    stripConstraints(EmailReferenceSchema)
 export type TRelaxedEmailReference = Static<typeof RelaxedEmailReferenceSchema>
 
 export const RelaxedLawReferenceSchema = stripConstraints(LawReferenceSchema)
 export type TRelaxedLawReference = Static<typeof RelaxedLawReferenceSchema>
 
-export const RelaxedCourtCaseReferenceSchema = stripConstraints(CourtCaseReferenceSchema)
-export type TRelaxedCourtCaseReference = Static<typeof RelaxedCourtCaseReferenceSchema>
+export const RelaxedCourtCaseReferenceSchema = stripConstraints(
+    CourtCaseReferenceSchema
+)
+export type TRelaxedCourtCaseReference = Static<
+    typeof RelaxedCourtCaseReferenceSchema
+>
 
-export const RelaxedGovernmentPublicationReferenceSchema = stripConstraints(GovernmentPublicationReferenceSchema)
-export type TRelaxedGovernmentPublicationReference = Static<typeof RelaxedGovernmentPublicationReferenceSchema>
+export const RelaxedGovernmentPublicationReferenceSchema = stripConstraints(
+    GovernmentPublicationReferenceSchema
+)
+export type TRelaxedGovernmentPublicationReference = Static<
+    typeof RelaxedGovernmentPublicationReferenceSchema
+>
 
-export const RelaxedDatasheetReferenceSchema = stripConstraints(DatasheetReferenceSchema)
-export type TRelaxedDatasheetReference = Static<typeof RelaxedDatasheetReferenceSchema>
+export const RelaxedDatasheetReferenceSchema = stripConstraints(
+    DatasheetReferenceSchema
+)
+export type TRelaxedDatasheetReference = Static<
+    typeof RelaxedDatasheetReferenceSchema
+>
 
-export const RelaxedProductManualReferenceSchema = stripConstraints(ProductManualReferenceSchema)
-export type TRelaxedProductManualReference = Static<typeof RelaxedProductManualReferenceSchema>
+export const RelaxedProductManualReferenceSchema = stripConstraints(
+    ProductManualReferenceSchema
+)
+export type TRelaxedProductManualReference = Static<
+    typeof RelaxedProductManualReferenceSchema
+>
 
 // ---------------------------------------------------------------------------
 // Relaxed discriminated union
@@ -1682,6 +1827,7 @@ git commit -m "feat(ieee): add relaxed schema variants with constraints stripped
 ### Task 3: Add citation formatting (`formatting.ts`)
 
 **Files:**
+
 - Create: `src/extensions/ieee/formatting.ts`
 - Modify: `src/extensions/ieee/index.ts`
 - Test: `test/extensions/ieee.test.ts`
@@ -1719,18 +1865,14 @@ describe("formatNamesInCitation", () => {
     })
 
     it("joins two names with and", () => {
-        expect(
-            formatNamesInCitation(["Jane Smith", "Bob Wilson"])
-        ).toBe("J. Smith and B. Wilson")
+        expect(formatNamesInCitation(["Jane Smith", "Bob Wilson"])).toBe(
+            "J. Smith and B. Wilson"
+        )
     })
 
     it("joins three or more names with commas and and", () => {
         expect(
-            formatNamesInCitation([
-                "Jane Smith",
-                "Bob Wilson",
-                "Carol White",
-            ])
+            formatNamesInCitation(["Jane Smith", "Bob Wilson", "Carol White"])
         ).toBe("J. Smith, B. Wilson, and C. White")
     })
 
@@ -2167,9 +2309,7 @@ function websiteSegments(ref: Record<string, unknown>): TCitationSegment[] {
     return segs
 }
 
-function bookChapterSegments(
-    ref: Record<string, unknown>
-): TCitationSegment[] {
+function bookChapterSegments(ref: Record<string, unknown>): TCitationSegment[] {
     const segs: TCitationSegment[] = []
     segs.push({
         text: formatNamesInCitation(ref.authors as string[]),
@@ -2586,9 +2726,7 @@ function blogSegments(ref: Record<string, unknown>): TCitationSegment[] {
     return segs
 }
 
-function socialMediaSegments(
-    ref: Record<string, unknown>
-): TCitationSegment[] {
+function socialMediaSegments(ref: Record<string, unknown>): TCitationSegment[] {
     const segs: TCitationSegment[] = []
     segs.push({ text: ref.author as string, role: "authors", style: "plain" })
     segs.push(sep(", "))
@@ -2881,7 +3019,9 @@ const BUILDERS: Record<TReferenceType, SegmentBuilder> = {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-export function formatCitationParts(ref: TIEEEReference): TCitationFormatResult {
+export function formatCitationParts(
+    ref: TIEEEReference
+): TCitationFormatResult {
     const builder = BUILDERS[ref.type]
     return {
         type: ref.type,
@@ -2916,6 +3056,7 @@ git commit -m "feat(ieee): add citation formatting with structured segments"
 ### Task 4: Lint, typecheck, and full test suite
 
 **Files:**
+
 - Possibly modify: any files with lint/type issues
 
 - [ ] **Step 1: Run typecheck**
@@ -2948,6 +3089,7 @@ git commit -m "chore(ieee): fix lint and formatting"
 ### Task 5: Update documentation
 
 **Files:**
+
 - Modify: `docs/release-notes/upcoming.md`
 - Modify: `docs/changelogs/upcoming.md`
 
