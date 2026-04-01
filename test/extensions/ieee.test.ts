@@ -11,6 +11,11 @@ import {
     DatasetReferenceSchema,
     IEEEReferenceSchema,
     IEEEReferenceSchemaMap,
+    RelaxedBookReferenceSchema,
+    RelaxedWebsiteReferenceSchema,
+    RelaxedJournalArticleReferenceSchema,
+    IEEEReferenceSchemaRelaxed,
+    IEEEReferenceSchemaMapRelaxed,
     type TReferenceType,
 } from "../../src/extensions/ieee"
 
@@ -265,6 +270,77 @@ describe("IEEE extension", () => {
             expect(
                 Value.Check(IEEEReferenceSchemaMap.Book, validWebsite())
             ).toBe(false)
+        })
+    })
+
+    describe("relaxed schemas", () => {
+        it("accepts a Book with invalid ISBN (constraint stripped)", () => {
+            expect(
+                Value.Check(RelaxedBookReferenceSchema, {
+                    ...validBook(),
+                    isbn: "bad-isbn",
+                })
+            ).toBe(true)
+        })
+
+        it("accepts a Book with empty title (minLength stripped)", () => {
+            expect(
+                Value.Check(RelaxedBookReferenceSchema, {
+                    ...validBook(),
+                    title: "",
+                })
+            ).toBe(true)
+        })
+
+        it("accepts a JournalArticle with invalid DOI (pattern stripped)", () => {
+            expect(
+                Value.Check(RelaxedJournalArticleReferenceSchema, {
+                    ...validJournalArticle(),
+                    doi: "not-a-doi",
+                })
+            ).toBe(true)
+        })
+
+        it("accepts a Website with non-URI URL (format stripped)", () => {
+            expect(
+                Value.Check(RelaxedWebsiteReferenceSchema, {
+                    ...validWebsite(),
+                    url: "not a url",
+                })
+            ).toBe(true)
+        })
+
+        it("still rejects structural type mismatches", () => {
+            expect(
+                Value.Check(RelaxedBookReferenceSchema, {
+                    ...validBook(),
+                    title: 42,
+                })
+            ).toBe(false)
+        })
+
+        it("still rejects missing required fields", () => {
+            const { title: _, ...noTitle } = validBook()
+            expect(Value.Check(RelaxedBookReferenceSchema, noTitle)).toBe(false)
+        })
+
+        it("relaxed union validates a Book", () => {
+            expect(Value.Check(IEEEReferenceSchemaRelaxed, validBook())).toBe(
+                true
+            )
+        })
+
+        it("relaxed map has entry for every type", () => {
+            expect(Object.keys(IEEEReferenceSchemaMapRelaxed)).toHaveLength(33)
+        })
+
+        it("relaxed map Book entry accepts invalid ISBN", () => {
+            expect(
+                Value.Check(IEEEReferenceSchemaMapRelaxed.Book, {
+                    ...validBook(),
+                    isbn: "bad-isbn",
+                })
+            ).toBe(true)
         })
     })
 
