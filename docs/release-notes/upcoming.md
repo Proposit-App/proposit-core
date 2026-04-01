@@ -1,15 +1,1 @@
 # Release Notes
-
-## IEEE Schema Compliance
-
-- **Structured authors:** All person-name fields now use `AuthorSchema` (`{ givenNames, familyName, suffix? }`) instead of flat strings. New `TAuthor` type export.
-- **Universal `title` field:** Added required `title` to 19 reference types that were missing it (Handbook, TechnicalReport, Thesis, Patent, Dictionary, Encyclopedia, JournalArticle, MagazineArticle, NewspaperArticle, ConferencePaper, Dataset, Software, Preprint, Video, Course, Presentation, GovernmentPublication, Datasheet, ProductManual).
-- **Universal `year`/`date` field:** Added `year` or `date` to 16 types that had neither.
-- **Blog restructured:** `blogTitle` renamed to `blogName`, added `postTitle` (post title) and `date` (publication date).
-- **Handbook made author-less:** Per IEEE spec, handbook entries begin with the italicized title, not an author.
-- **Video gains `releaseDate`:** Optional `EncodableDate` for the video's release date (IEEE requires it alongside `accessedDate`).
-- **`formatNamesInCitation()` now takes `TAuthor[]`:** Abbreviates given names to initials per IEEE rules. Supports suffixes (Jr., Sr., III). Uses "et al." for 7+ authors.
-- **New `formatSingleAuthor()` export:** Formats a single `TAuthor` to IEEE style.
-- **IEEE month abbreviations:** `formatDate` now produces `"Jun."` (with period) instead of `"Jun"`, per IEEE style. `"May"` remains without period.
-
-**Breaking:** Author fields changed from `string` / `string[]` to `AuthorSchema` / `AuthorSchema[]`. Many types gained required `title` and `year` fields. Blog field `blogTitle` renamed to `blogName`.
