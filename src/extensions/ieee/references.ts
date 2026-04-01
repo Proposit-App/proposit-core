@@ -1,7 +1,7 @@
 // IEEE Citation Reference Schemas
 // https://journals.ieeeauthorcenter.ieee.org/wp-content/uploads/sites/7/IEEE_Reference_Guide.pdf
 
-import Type, { type Static } from "typebox"
+import Type, { type Static, type TSchema } from "typebox"
 import { EncodableDate } from "../../lib/schemata/shared.js"
 
 // ---------------------------------------------------------------------------
@@ -973,4 +973,4 @@ export const IEEEReferenceSchemaMap = {
     GovernmentPublication: GovernmentPublicationReferenceSchema,
     Datasheet: DatasheetReferenceSchema,
     ProductManual: ProductManualReferenceSchema,
-} as const
+} as const satisfies Record<TReferenceType, TSchema>

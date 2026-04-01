@@ -1,8 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { Settings } from "typebox/system"
 import { Value } from "typebox/value"
-
-Settings.Set({ correctiveParse: true })
 
 import {
     BookReferenceSchema,
@@ -182,6 +180,9 @@ describe("IEEE extension", () => {
     })
 
     describe("EncodableDate fields", () => {
+        beforeAll(() => Settings.Set({ correctiveParse: true }))
+        afterAll(() => Settings.Set({ correctiveParse: false }))
+
         it("Website accessedDate accepts a Date object", () => {
             expect(Value.Check(WebsiteReferenceSchema, validWebsite())).toBe(
                 true
