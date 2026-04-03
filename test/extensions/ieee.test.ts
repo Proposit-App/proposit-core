@@ -846,3 +846,46 @@ describe("segment template config", () => {
         expect(BOOK_TEMPLATE.length).toBeGreaterThan(0)
     })
 })
+
+import { buildSegments } from "../../src/extensions/ieee/segment-builder.js"
+import { BOOK_TEMPLATE } from "../../src/extensions/ieee/segment-templates.js"
+
+describe("buildSegments", () => {
+    it("produces identical output to bookSegments for a full Book reference", () => {
+        const ref = {
+            type: "Book" as const,
+            title: "AI Fundamentals",
+            year: "2024",
+            authors: [
+                { givenNames: "Jane", familyName: "Smith" },
+                { givenNames: "Bob", familyName: "Wilson" },
+            ],
+            edition: "3rd",
+            publisher: "MIT Press",
+            location: "Cambridge, MA",
+            isbn: "9780262046824",
+        }
+        const fromConfig = buildSegments(
+            ref as unknown as Record<string, unknown>,
+            BOOK_TEMPLATE
+        )
+        const fromOriginal = formatCitationParts(ref).segments
+        expect(fromConfig).toEqual(fromOriginal)
+    })
+
+    it("produces identical output for a minimal Book (no optional fields)", () => {
+        const ref = {
+            type: "Book" as const,
+            title: "AI Fundamentals",
+            year: "2024",
+            authors: [{ givenNames: "Jane", familyName: "Smith" }],
+            publisher: "MIT Press",
+        }
+        const fromConfig = buildSegments(
+            ref as unknown as Record<string, unknown>,
+            BOOK_TEMPLATE
+        )
+        const fromOriginal = formatCitationParts(ref).segments
+        expect(fromConfig).toEqual(fromOriginal)
+    })
+})
