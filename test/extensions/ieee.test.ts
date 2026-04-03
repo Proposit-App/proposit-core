@@ -837,3 +837,12 @@ describe("IEEE extension", () => {
         })
     })
 })
+
+describe("segment template config", () => {
+    it("BOOK_TEMPLATE is a non-empty array", async () => {
+        const { BOOK_TEMPLATE } =
+            await import("../../src/extensions/ieee/segment-templates.js")
+        expect(Array.isArray(BOOK_TEMPLATE)).toBe(true)
+        expect(BOOK_TEMPLATE.length).toBeGreaterThan(0)
+    })
+})
