@@ -12,11 +12,7 @@
         "isolatedModules": true,
         "incremental": true,
         "verbatimModuleSyntax": true,
-        "types": ["node", "vitest/globals"],
-        "baseUrl": ".",
-        "paths": {
-            "@/*": ["./src/*"]
-        }
+        "types": ["node", "vitest/globals"]
     },
     "include": [
         "src/**/*.ts",
