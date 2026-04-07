@@ -817,6 +817,7 @@ export class ExpressionManager<
     }
 
     private collapseIfNeeded(operatorId: string | null): void {
+        if (!this.grammarConfig.autoNormalize) return
         if (operatorId === null) return
 
         const operator = this.expressions.get(operatorId)
@@ -1075,6 +1076,7 @@ export class ExpressionManager<
         operatorId: string | null,
         removedChildId: string
     ): void {
+        if (!this.grammarConfig.autoNormalize) return
         if (operatorId === null) return
 
         const operator = this.expressions.get(operatorId)

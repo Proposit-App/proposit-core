@@ -27,10 +27,10 @@ export type TGrammarConfig = TGrammarOptions & {
     autoNormalize: boolean
 }
 
-/** Default config: all rules enforced, auto-normalize off. */
+/** Default config: all rules enforced, auto-normalize on. */
 export const DEFAULT_GRAMMAR_CONFIG: TGrammarConfig = {
     enforceFormulaBetweenOperators: true,
-    autoNormalize: false,
+    autoNormalize: true,
 }
 
 /** Permissive config: no enforcement. Used by default in `fromData`. */
