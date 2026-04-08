@@ -811,7 +811,9 @@ export class ExpressionManager<
         this.dirtyExpressionIds.delete(expressionId)
         this.markExpressionDirty(child.id)
 
-        // No collapseIfNeeded after promotion.
+        // After promotion, the target's parent may be a formula that now needs collapsing
+        // (e.g., if the promoted child has no binary operator in its bounded subtree).
+        this.collapseIfNeeded(target.parentId)
 
         return target
     }
@@ -1099,6 +1101,13 @@ export class ExpressionManager<
             // >1 children: removeAndPromote throws before any mutation, no nesting concern.
             if (children.length === 1) {
                 this.assertPromotionSafe(children[0], target.parentId)
+                // Simulate post-promotion cascade (formula collapse after promotion).
+                if (this.grammarConfig.autoNormalize) {
+                    this.simulatePostPromotionCollapse(
+                        target.parentId,
+                        children[0]
+                    )
+                }
             }
             if (children.length === 0) {
                 this.simulateCollapseChain(target.parentId, expressionId)
@@ -1166,8 +1175,14 @@ export class ExpressionManager<
         )
 
         if (operator.type === "formula") {
-            // Formula: 0 children → deleted, recurse up.
             if (remainingChildren.length === 0) {
+                this.simulateCollapseChain(operator.parentId, operatorId)
+            } else if (
+                remainingChildren.length === 1 &&
+                !this.hasBinaryOperatorInBoundedSubtree(remainingChildren[0].id)
+            ) {
+                // Formula would collapse — child promoted.
+                // Formula collapse promotion is always safe (child is variable, not, or formula).
                 this.simulateCollapseChain(operator.parentId, operatorId)
             }
             return
@@ -1178,7 +1193,39 @@ export class ExpressionManager<
             this.simulateCollapseChain(operator.parentId, operatorId)
         } else if (remainingChildren.length === 1) {
             this.assertPromotionSafe(remainingChildren[0], operator.parentId)
+            // After promotion, simulate further collapse on grandparent.
+            this.simulatePostPromotionCollapse(
+                operator.parentId,
+                remainingChildren[0]
+            )
         }
+    }
+
+    /**
+     * After an operator promotion places `promotedChild` into `parentId`'s child set,
+     * check whether the parent (if a formula) would itself collapse. Formula collapse
+     * promotion is always safe (the child can't be a binary operator or root-only operator),
+     * but we need to continue the simulation chain.
+     */
+    private simulatePostPromotionCollapse(
+        parentId: string | null,
+        promotedChild: TExpr
+    ): void {
+        if (parentId === null) return
+        const parent = this.expressions.get(parentId)
+        if (!parent) return
+
+        if (parent.type === "formula") {
+            if (!this.hasBinaryOperatorInBoundedSubtree(promotedChild.id)) {
+                // Formula would collapse. The promotedChild takes formula's slot.
+                // This is always safe. Continue simulation from formula's parent.
+                this.simulatePostPromotionCollapse(
+                    parent.parentId,
+                    promotedChild
+                )
+            }
+        }
+        // Operator parents: child count unchanged, no further collapse.
     }
 
     private assertChildLimit(

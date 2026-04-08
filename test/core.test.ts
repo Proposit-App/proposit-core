@@ -6979,7 +6979,8 @@ describe("removeExpression — deleteSubtree parameter", () => {
 
     it("deleteSubtree: false — promotes child into non-root slot", () => {
         const { pm } = setup()
-        // Tree: and(not(formula(or(P, Q))))
+        // Tree: and(not(formula(or(P, Q))), P2)
+        // Need two children for and so it doesn't collapse after not removal.
         pm.addExpression(
             makeOpExpr("op-and", "and", { parentId: null, position: 1 })
         )
@@ -7004,13 +7005,19 @@ describe("removeExpression — deleteSubtree parameter", () => {
         pm.addExpression(
             makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-or", position: 2 })
         )
+        pm.addExpression(
+            makeVarExpr("expr-p2", VAR_P.id, {
+                parentId: "op-and",
+                position: 2,
+            })
+        )
 
         // Remove not with deleteSubtree: false — formula promoted into not's slot under and
         pm.removeExpression("op-not", false)
 
         expect(pm.getRootExpressionId()).toBe("op-and")
         const expressions = pm.getExpressions()
-        expect(expressions).toHaveLength(5) // and, formula, or, P, Q
+        expect(expressions).toHaveLength(6) // and, formula, or, P, Q, P2
         const formulaExpr = expressions.find((e) => e.id === "formula-1")!
         expect(formulaExpr.parentId).toBe("op-and")
         const orExpr = expressions.find((e) => e.id === "op-or")!
@@ -24728,6 +24735,88 @@ describe("validateArgument (standalone)", () => {
             expect(em.getExpression("op-and")).toBeUndefined()
             expect(em.getExpression("op-not")!.parentId).toBeNull()
             expect(em.getExpression("v-q")!.parentId).toBe("op-not")
+        })
+
+        it("assertRemovalSafe accounts for formula collapse after operator promotion", () => {
+            const em = new ExpressionManager()
+            // Build: and → [formula → or → [not → P, Q], R]
+            em.addExpression({
+                id: "op-and",
+                type: "operator",
+                operator: "and",
+                parentId: null,
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "formula-1",
+                type: "formula",
+                parentId: "op-and",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "op-or",
+                type: "operator",
+                operator: "or",
+                parentId: "formula-1",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "op-not",
+                type: "operator",
+                operator: "not",
+                parentId: "op-or",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-p",
+                type: "variable",
+                variableId: VAR_P.id,
+                parentId: "op-not",
+                position: 0,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-q",
+                type: "variable",
+                variableId: VAR_Q.id,
+                parentId: "op-or",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+            em.addExpression({
+                id: "v-r",
+                type: "variable",
+                variableId: VAR_R.id,
+                parentId: "op-and",
+                position: 1,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+            } as TExpressionInput)
+
+            // Should not throw — entire cascade is safe
+            expect(() => em.removeExpression("v-p", true)).not.toThrow()
+            // Verify the cascade happened correctly
+            expect(em.getExpression("op-not")).toBeUndefined()
+            expect(em.getExpression("op-or")).toBeUndefined()
+            expect(em.getExpression("formula-1")).toBeUndefined()
+            expect(em.getExpression("v-q")!.parentId).toBe("op-and")
         })
     })
 })
