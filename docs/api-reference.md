@@ -925,7 +925,7 @@ Compares two `ArgumentEngine` instances and returns a structured diff covering a
 Options allow plugging custom comparators per entity type via `TCoreDiffOptions`:
 
 ```typescript
-import { diffArguments, defaultCompareVariable } from "@polintpro/proposit-core"
+import { diffArguments, defaultCompareVariable } from "@proposit/proposit-core"
 
 const diff = diffArguments(engineA, engineB, {
     compareVariable: (before, after) => {
@@ -956,7 +956,7 @@ Analyzes how every other premise in the argument relates to a focused premise, c
 Each result includes per-variable relationship details and a `transitive` flag.
 
 ```typescript
-import { analyzePremiseRelationships } from "@polintpro/proposit-core"
+import { analyzePremiseRelationships } from "@proposit/proposit-core"
 
 const analysis = analyzePremiseRelationships(engine, conclusionPremiseId)
 for (const r of analysis.premises) {
@@ -977,8 +977,8 @@ Builds a profile of a premise's variable appearances, recording each variable's 
 Parses a logical formula string into an AST. Supports standard logical notation with operators `not`/`¬`, `and`/`∧`, `or`/`∨`, `implies`/`→`, `iff`/`↔`, and parentheses for grouping.
 
 ```typescript
-import { parseFormula } from "@polintpro/proposit-core"
-import type { TFormulaAST } from "@polintpro/proposit-core"
+import { parseFormula } from "@proposit/proposit-core"
+import type { TFormulaAST } from "@proposit/proposit-core"
 
 const ast: TFormulaAST = parseFormula("(P and Q) implies R")
 ```
@@ -999,7 +999,7 @@ Merges additional fields into the defaults via set union. The `additional` param
 import {
     createChecksumConfig,
     DEFAULT_CHECKSUM_CONFIG,
-} from "@polintpro/proposit-core"
+} from "@proposit/proposit-core"
 
 // Add a custom field to expression checksums while keeping all defaults
 const config = createChecksumConfig({
@@ -1014,7 +1014,7 @@ const config = createChecksumConfig({
 Ensures all fields on a `TCoreChecksumConfig` are `Set<string>` instances, converting from arrays or other iterables as needed. Returns `undefined` when passed `undefined`. Useful after JSON round-trips where `Set` values are serialized as arrays. Called automatically by `fromSnapshot`, `fromData`, and `rollback`, but exported for consumers who deserialize checksum configs independently.
 
 ```typescript
-import { normalizeChecksumConfig } from "@polintpro/proposit-core"
+import { normalizeChecksumConfig } from "@proposit/proposit-core"
 
 // After JSON round-trip, Set fields become arrays
 const deserialized = JSON.parse(storedConfig)
@@ -1029,7 +1029,7 @@ const config = normalizeChecksumConfig(deserialized.checksumConfig)
 Converts all `Set<string>` fields on a `TCoreChecksumConfig` to `string[]` arrays for JSON-safe serialization. Returns `undefined` when passed `undefined`. Called automatically by all `snapshot()` methods (`ArgumentEngine`, `PremiseEngine`, `ExpressionManager`, `VariableManager`), but exported for consumers who serialize checksum configs independently.
 
 ```typescript
-import { serializeChecksumConfig } from "@polintpro/proposit-core"
+import { serializeChecksumConfig } from "@proposit/proposit-core"
 
 const serialized = serializeChecksumConfig(engine.getChecksumConfig())
 // serialized.premiseFields is now a string[] — safe for JSON.stringify

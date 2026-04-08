@@ -3,7 +3,7 @@
 ## 1. Creating an Argument
 
 ```typescript
-import { ArgumentEngine } from "@polintpro/proposit-core"
+import { ArgumentEngine } from "@proposit/proposit-core"
 
 const engine = new ArgumentEngine({
     id: "arg-1",
@@ -265,7 +265,7 @@ import {
     defaultCompareVariable,
     defaultComparePremise,
     defaultCompareExpression,
-} from "@polintpro/proposit-core"
+} from "@proposit/proposit-core"
 
 const diff = diffArguments(engineA, engineB, {
     compareArgument: defaultCompareArgument,
@@ -289,7 +289,7 @@ const diff = diffArguments(engineA, engineB, {
 import {
     analyzePremiseRelationships,
     buildPremiseProfile,
-} from "@polintpro/proposit-core"
+} from "@proposit/proposit-core"
 
 // Analyze how all premises relate to a focused premise
 const analysis = analyzePremiseRelationships(engine, "p-conclusion")
@@ -311,8 +311,8 @@ Both are standalone functions.
 ## 9. Formula Parsing
 
 ```typescript
-import { parseFormula } from "@polintpro/proposit-core"
-import type { FormulaAST } from "@polintpro/proposit-core"
+import { parseFormula } from "@proposit/proposit-core"
+import type { FormulaAST } from "@proposit/proposit-core"
 
 const ast: FormulaAST = parseFormula("P -> (Q & R)")
 ```
@@ -402,7 +402,7 @@ import {
     entityChecksum,
     DEFAULT_CHECKSUM_CONFIG,
     createChecksumConfig,
-} from "@polintpro/proposit-core"
+} from "@proposit/proposit-core"
 
 // Low-level hash
 const hash = computeHash("input string")
@@ -436,7 +436,7 @@ import {
     POSITION_MAX, // Number.MAX_SAFE_INTEGER
     POSITION_INITIAL, // midpoint(POSITION_MIN, POSITION_MAX)
     midpoint, // (a, b) => a + (b - a) / 2
-} from "@polintpro/proposit-core"
+} from "@proposit/proposit-core"
 ```
 
 Positions are opaque numbers. Only relative ordering matters. The `appendExpression` and `addExpressionRelative` APIs compute positions automatically -- prefer those over manual positioning.

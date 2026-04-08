@@ -4,7 +4,7 @@ Core engine for building, evaluating, and checking the logical validity of propo
 
 Also ships a **CLI** (`proposit-core`) for managing arguments, premises, variables, expressions, and analyses stored on disk.
 
-Full documentation is available at <https://www.polintpro.com/proposit-core/>.
+Full documentation is available at <https://proposit-app.github.io/proposit-core/>.
 
 ## Visual Overview
 
@@ -41,9 +41,9 @@ flowchart TD
 ## Installation
 
 ```bash
-pnpm add @polintpro/proposit-core
+pnpm add @proposit/proposit-core
 # or
-npm install @polintpro/proposit-core
+npm install @proposit/proposit-core
 ```
 
 ## Concepts
@@ -167,7 +167,7 @@ flowchart TD
 `PropositCore` is the recommended top-level entry point. It creates and wires together all five libraries and provides unified cross-library operations:
 
 ```typescript
-import { PropositCore } from "@polintpro/proposit-core"
+import { PropositCore } from "@proposit/proposit-core"
 
 const core = new PropositCore()
 
@@ -205,7 +205,7 @@ A **source** is an evidentiary reference (paper, article, URL). Source entities 
 
 Claim-source associations are managed by `ClaimSourceLibrary<TAssoc>` — a standalone global class that links a claim version to a source version. Associations are immutable: create or delete only, no update. `ClaimSourceLibrary` validates both the claim and source references on `add()`.
 
-The `@polintpro/proposit-core/extensions/ieee` subpath export provides `IEEESourceSchema` — an extended source type with IEEE citation reference schemas covering 33 reference types.
+The `@proposit/proposit-core/extensions/ieee` subpath export provides `IEEESourceSchema` — an extended source type with IEEE citation reference schemas covering 33 reference types.
 
 ### Auto-variable creation
 
@@ -255,8 +255,8 @@ Each expression carries:
 ### Creating an engine and premises
 
 ```typescript
-import { ArgumentEngine, POSITION_INITIAL } from "@polintpro/proposit-core"
-import type { TPropositionalExpression } from "@polintpro/proposit-core"
+import { ArgumentEngine, POSITION_INITIAL } from "@proposit/proposit-core"
+import type { TPropositionalExpression } from "@proposit/proposit-core"
 
 // The constructor accepts an argument without checksum — it is computed lazily.
 const argument = {
@@ -456,7 +456,7 @@ if (validity.ok) {
 
 ```tsx
 import { useSyncExternalStore } from "react"
-import { ArgumentEngine } from "@polintpro/proposit-core"
+import { ArgumentEngine } from "@proposit/proposit-core"
 
 // Create the engine outside of React (or in a ref/context)
 const engine = new ArgumentEngine({ id: "arg-1", version: 1 })
@@ -595,7 +595,7 @@ console.log(premise1.toDisplayString()) // (P → Q)
 
 ```typescript
 // Fork John's argument to create Rich's response
-import { PropositCore } from "@polintpro/proposit-core"
+import { PropositCore } from "@proposit/proposit-core"
 
 const core = new PropositCore()
 

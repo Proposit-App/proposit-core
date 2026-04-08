@@ -1,5 +1,5 @@
 /**
- * @module @polintpro/proposit-core
+ * @module @proposit/proposit-core
  *
  * Core engine for building, evaluating, and diffing propositional logic
  * arguments. Exports {@link ArgumentEngine} and {@link PremiseEngine} as
