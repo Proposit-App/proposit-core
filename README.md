@@ -102,15 +102,15 @@ flowchart TD
     OR --> Q["Q\n(variable)"]
     OR --> S["S\n(variable)"]
 
-    style IMP fill:#e8f4fd,stroke:#2196f3
-    style NOT fill:#e8f4fd,stroke:#2196f3
-    style AND fill:#e8f4fd,stroke:#2196f3
-    style OR fill:#e8f4fd,stroke:#2196f3
+    style IMP fill:#e8f4fd,stroke:#2196f3,color:#1a1a1a
+    style NOT fill:#e8f4fd,stroke:#2196f3,color:#1a1a1a
+    style AND fill:#e8f4fd,stroke:#2196f3,color:#1a1a1a
+    style OR fill:#e8f4fd,stroke:#2196f3,color:#1a1a1a
     style FRM fill:none,stroke:#888,stroke-dasharray: 5 5
-    style P fill:#f5f5f5,stroke:#666
-    style R fill:#f5f5f5,stroke:#666
-    style Q fill:#f5f5f5,stroke:#666
-    style S fill:#f5f5f5,stroke:#666
+    style P fill:#f5f5f5,stroke:#666,color:#1a1a1a
+    style R fill:#f5f5f5,stroke:#666,color:#1a1a1a
+    style Q fill:#f5f5f5,stroke:#666,color:#1a1a1a
+    style S fill:#f5f5f5,stroke:#666,color:#1a1a1a
 ```
 
 ### Argument roles
@@ -153,9 +153,9 @@ flowchart TD
     P2 ~~~ note2
     P3 ~~~ note3
 
-    style P1 fill:#e8f4fd,stroke:#2196f3
-    style P2 fill:#e8f4fd,stroke:#2196f3
-    style P3 fill:#fff3e0,stroke:#ff9800
+    style P1 fill:#e8f4fd,stroke:#2196f3,color:#1a1a1a
+    style P2 fill:#e8f4fd,stroke:#2196f3,color:#1a1a1a
+    style P3 fill:#fff3e0,stroke:#ff9800,color:#1a1a1a
     style Shared fill:none,stroke:#888,stroke-dasharray: 5 5
     style note1 fill:none,stroke:none
     style note2 fill:none,stroke:none
@@ -417,12 +417,12 @@ flowchart LR
     NONCE2 --> Validity
     INADM --> Validity
 
-    style FAIL fill:#ffebee,stroke:#f44336
-    style CE fill:#ffebee,stroke:#f44336
-    style NONCE fill:#e8f5e9,stroke:#4caf50
-    style NONCE2 fill:#e8f5e9,stroke:#4caf50
-    style INADM fill:#f5f5f5,stroke:#888
-    style VALID fill:#e8f5e9,stroke:#4caf50
+    style FAIL fill:#ffebee,stroke:#f44336,color:#1a1a1a
+    style CE fill:#ffebee,stroke:#f44336,color:#1a1a1a
+    style NONCE fill:#e8f5e9,stroke:#4caf50,color:#1a1a1a
+    style NONCE2 fill:#e8f5e9,stroke:#4caf50,color:#1a1a1a
+    style INADM fill:#f5f5f5,stroke:#888,color:#1a1a1a
+    style VALID fill:#e8f5e9,stroke:#4caf50,color:#1a1a1a
     style Validity fill:none,stroke:#888,stroke-dasharray: 5 5
 ```
 
