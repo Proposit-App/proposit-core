@@ -25125,3 +25125,96 @@ describe("validateArgument (standalone)", () => {
         })
     })
 })
+
+describe("PremiseEngine.normalizeExpressions", () => {
+    it("normalizes unjustified formulas and returns changeset", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pe } = eng.createPremise()
+
+        // Build: and → [formula → P, Q]
+        pe.addExpression(makeOpExpr("op-and", "and"))
+        pe.addExpression(
+            makeFormulaExpr("formula-1", { parentId: "op-and", position: 0 })
+        )
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "formula-1",
+                position: 0,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, { parentId: "op-and", position: 1 })
+        )
+
+        const { changes } = pe.normalizeExpressions()
+
+        expect(pe.getExpression("formula-1")).toBeUndefined()
+        expect(pe.getExpression("v-p")!.parentId).toBe("op-and")
+        expect(
+            changes.expressions!.removed.some((e) => e.id === "formula-1")
+        ).toBe(true)
+        expect(changes.expressions!.modified.some((e) => e.id === "v-p")).toBe(
+            true
+        )
+    })
+})
+
+describe("ArgumentEngine.normalizeAllExpressions", () => {
+    it("normalizes all premises", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+            grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
+        })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pe1 } = eng.createPremise()
+        const { result: pe2 } = eng.createPremise()
+
+        // pe1: and → [formula → P, Q]
+        pe1.addExpression(
+            makeOpExpr("op-and-1", "and", { premiseId: pe1.getId() })
+        )
+        pe1.addExpression(
+            makeFormulaExpr("formula-1", {
+                parentId: "op-and-1",
+                position: 0,
+                premiseId: pe1.getId(),
+            })
+        )
+        pe1.addExpression(
+            makeVarExpr("v-p-1", VAR_P.id, {
+                parentId: "formula-1",
+                position: 0,
+                premiseId: pe1.getId(),
+            })
+        )
+        pe1.addExpression(
+            makeVarExpr("v-q-1", VAR_Q.id, {
+                parentId: "op-and-1",
+                position: 1,
+                premiseId: pe1.getId(),
+            })
+        )
+
+        // pe2: formula → Q (unjustified root formula)
+        pe2.addExpression(
+            makeFormulaExpr("formula-2", { premiseId: pe2.getId() })
+        )
+        pe2.addExpression(
+            makeVarExpr("v-q-2", VAR_Q.id, {
+                parentId: "formula-2",
+                position: 0,
+                premiseId: pe2.getId(),
+            })
+        )
+
+        const { changes } = eng.normalizeAllExpressions()
+
+        expect(pe1.getExpression("formula-1")).toBeUndefined()
+        expect(pe2.getExpression("formula-2")).toBeUndefined()
+        expect(changes.expressions!.removed.length).toBe(2)
+    })
+})

@@ -639,6 +639,31 @@ export class PremiseEngine<
         })
     }
 
+    /**
+     * Performs a full normalization sweep on this premise's expression tree.
+     * Collapses unjustified formulas, operators with 0/1 children, and inserts
+     * formula buffers where needed. Works regardless of `autoNormalize` setting.
+     */
+    public normalizeExpressions(): TCoreMutationResult<
+        void,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
+        return this.withValidation(() => {
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.normalize()
+                const changes = this.finalizeExpressionMutation(collector)
+                return { result: undefined, changes }
+            } finally {
+                this.expressions.setCollector(null)
+            }
+        })
+    }
+
     public toggleNegation(
         expressionId: string,
         extraFields?: Partial<TExpr>

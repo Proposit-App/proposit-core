@@ -1061,6 +1061,37 @@ export class ArgumentEngine<
         return roots
     }
 
+    /**
+     * Normalizes expression trees across all premises. Collapses unjustified
+     * formulas, operators with 0/1 children, and inserts formula buffers where
+     * needed. Works regardless of `autoNormalize` setting.
+     */
+    public normalizeAllExpressions(): TCoreMutationResult<
+        void,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
+        const merged: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
+        for (const pe of this.premises.values()) {
+            const { changes } = pe.normalizeExpressions()
+            if (changes.expressions) {
+                merged.expressions ??= { added: [], modified: [], removed: [] }
+                merged.expressions.added.push(...changes.expressions.added)
+                merged.expressions.modified.push(
+                    ...changes.expressions.modified
+                )
+                merged.expressions.removed.push(...changes.expressions.removed)
+            }
+            if (changes.premises) {
+                merged.premises ??= { added: [], modified: [], removed: [] }
+                merged.premises.modified.push(...changes.premises.modified)
+            }
+        }
+        return { result: undefined, changes: merged }
+    }
+
     public getRoleState(): TCoreArgumentRoleState {
         return {
             ...(this.conclusionPremiseId !== undefined
