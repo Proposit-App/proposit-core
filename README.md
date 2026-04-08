@@ -771,14 +771,6 @@ The package ships a command-line interface for managing arguments stored on disk
 ### Running the CLI
 
 ```bash
-# From the repo, using node directly:
-node dist/cli.js --help
-
-# Using the npm script:
-pnpm cli -- --help
-
-# Link globally to get the `proposit-core` command on your PATH:
-pnpm link --global
 proposit-core --help
 ```
 
@@ -1021,12 +1013,3 @@ pnpm run build && bash scripts/smoke-test.sh
 ```
 
 See [CLI_EXAMPLES.md](CLI_EXAMPLES.md) for a full walkthrough.
-
-## Publishing
-
-Releases are published to GitHub Packages automatically. To publish a new version:
-
-1. Bump `version` in `package.json`.
-2. Create a GitHub Release with a tag matching the version (e.g. `v0.2.0`) via `pnpm version patch`
-3. The [Publish workflow](.github/workflows/publish.yml) will build and publish the package or run `pnpm publish --access public`
-4. Push new tags with `git push --follow-tags`
