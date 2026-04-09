@@ -288,6 +288,31 @@ function premiseWithVarsStrict(): PremiseEngine {
     return pm
 }
 
+/** premiseWithVars using a granular TAutoNormalizeConfig. */
+function premiseWithVarsGranular(config: {
+    wrapInsertFormula?: boolean
+    negationInsertFormula?: boolean
+    collapseDoubleNegation?: boolean
+    collapseEmptyFormula?: boolean
+}): PremiseEngine {
+    const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+        grammarConfig: {
+            enforceFormulaBetweenOperators: true,
+            autoNormalize: {
+                wrapInsertFormula: config.wrapInsertFormula ?? false,
+                negationInsertFormula: config.negationInsertFormula ?? false,
+                collapseDoubleNegation: config.collapseDoubleNegation ?? false,
+                collapseEmptyFormula: config.collapseEmptyFormula ?? false,
+            },
+        },
+    })
+    eng.addVariable(VAR_P)
+    eng.addVariable(VAR_Q)
+    eng.addVariable(VAR_R)
+    const { result: pm } = eng.createPremise()
+    return pm
+}
+
 /** Create a PremiseEngine directly with a deterministic ID (for toData tests). */
 function makePremise(extras?: Record<string, unknown>): PremiseEngine {
     const vm = new VariableManager()
@@ -25670,5 +25695,335 @@ describe("walkFormulaTree", () => {
         })
 
         expect(walked).toBe(pe.toDisplayString())
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Granular TAutoNormalizeConfig
+// ---------------------------------------------------------------------------
+
+describe("granular autoNormalize config", () => {
+    it("autoNormalize: false disables all behaviors (backward compat)", () => {
+        const pe = premiseWithVarsStrict()
+        const pid = pe.getId()
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pid }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pid,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pid,
+            })
+        )
+        // Adding a non-not operator directly under another operator should throw
+        expect(() =>
+            pe.addExpression(
+                makeOpExpr("op-or", "or", {
+                    parentId: "op-and",
+                    position: 2,
+                    premiseId: pid,
+                })
+            )
+        ).toThrow("wrap in a formula node")
+    })
+
+    it("autoNormalize: true enables all behaviors (backward compat)", () => {
+        const pe = premiseWithVars()
+        const pid = pe.getId()
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pid }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pid,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pid,
+            })
+        )
+        // Adding OR under AND auto-inserts formula buffer
+        pe.addExpression(
+            makeOpExpr("op-or", "or", {
+                parentId: "op-and",
+                position: 2,
+                premiseId: pid,
+            })
+        )
+        const orExpr = pe.getExpression("op-or")!
+        const orParent = pe.getExpression(orExpr.parentId!)!
+        expect(orParent.type).toBe("formula")
+    })
+
+    it("granular: only wrapInsertFormula enabled", () => {
+        const pe = premiseWithVarsGranular({
+            wrapInsertFormula: true,
+            collapseDoubleNegation: false,
+            collapseEmptyFormula: false,
+        })
+        const pid = pe.getId()
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pid }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pid,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pid,
+            })
+        )
+        // wrapInsertFormula: true → formula auto-inserted
+        pe.addExpression(
+            makeOpExpr("op-or", "or", {
+                parentId: "op-and",
+                position: 2,
+                premiseId: pid,
+            })
+        )
+        const orExpr = pe.getExpression("op-or")!
+        const orParent = pe.getExpression(orExpr.parentId!)!
+        expect(orParent.type).toBe("formula")
+    })
+
+    it("wrapInsertFormula: true auto-inserts formula on addExpression", () => {
+        const pe = premiseWithVarsGranular({
+            wrapInsertFormula: true,
+        })
+        const pid = pe.getId()
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pid }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pid,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pid,
+            })
+        )
+        // Add an OR directly under AND — should auto-insert formula
+        pe.addExpression(
+            makeOpExpr("op-or", "or", {
+                parentId: "op-and",
+                position: 2,
+                premiseId: pid,
+            })
+        )
+        const orExpr = pe.getExpression("op-or")!
+        const orParent = pe.getExpression(orExpr.parentId!)!
+        expect(orParent.type).toBe("formula")
+    })
+
+    it("wrapInsertFormula: false throws on addExpression under operator", () => {
+        const pe = premiseWithVarsGranular({
+            wrapInsertFormula: false,
+        })
+        const pid = pe.getId()
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pid }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pid,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pid,
+            })
+        )
+        expect(() =>
+            pe.addExpression(
+                makeOpExpr("op-or", "or", {
+                    parentId: "op-and",
+                    position: 2,
+                    premiseId: pid,
+                })
+            )
+        ).toThrow("wrap in a formula node")
+    })
+
+    it("collapseDoubleNegation: true collapses NOT(NOT(x)) on toggleNegation", () => {
+        const pe = premiseWithVarsGranular({
+            collapseDoubleNegation: true,
+        })
+        // Build: NOT(P)
+        pe.addExpression(makeOpExpr("op-not", "not", { premiseId: pe.getId() }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-not",
+                position: 0,
+                premiseId: pe.getId(),
+            })
+        )
+        expect(pe.toDisplayString()).toBe("¬(P)")
+
+        // Toggle negation on the NOT expression itself — would create NOT(NOT(P))
+        // but collapseDoubleNegation collapses to just P
+        pe.toggleNegation("op-not")
+        expect(pe.toDisplayString()).toBe("P")
+    })
+
+    it("collapseDoubleNegation: false allows NOT(NOT(x)) on toggleNegation", () => {
+        const pe = premiseWithVarsGranular({
+            collapseDoubleNegation: false,
+        })
+        // Build: NOT(P)
+        pe.addExpression(makeOpExpr("op-not", "not", { premiseId: pe.getId() }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-not",
+                position: 0,
+                premiseId: pe.getId(),
+            })
+        )
+        expect(pe.toDisplayString()).toBe("¬(P)")
+
+        // Toggle negation on the NOT — wraps in another NOT
+        pe.toggleNegation("op-not")
+        expect(pe.toDisplayString()).toBe("¬(¬(P))")
+    })
+
+    it("collapseEmptyFormula: false preserves empty formula after child deletion", () => {
+        const pe = premiseWithVarsGranular({
+            collapseEmptyFormula: false,
+            wrapInsertFormula: true,
+        })
+        // Build: AND(P, Q)
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pe.getId() }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pe.getId(),
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pe.getId(),
+            })
+        )
+
+        // Delete P — AND now has 1 child. With collapseEmptyFormula: false,
+        // AND should NOT auto-collapse and promote Q.
+        pe.removeExpression("v-p", true)
+        // AND still exists with 1 child
+        const andExpr = pe.getExpression("op-and")
+        expect(andExpr).toBeDefined()
+        expect(pe.getChildExpressions("op-and").length).toBe(1)
+    })
+
+    it("collapseEmptyFormula: true collapses empty operator after child deletion", () => {
+        const pe = premiseWithVars()
+        // Build: AND(P, Q)
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pe.getId() }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pe.getId(),
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pe.getId(),
+            })
+        )
+
+        // Delete both children — AND collapses (autoNormalize: true)
+        pe.removeExpression("v-p", true)
+        // After removing P, AND has 1 child Q — Q is promoted
+        const andExpr = pe.getExpression("op-and")
+        expect(andExpr).toBeUndefined()
+    })
+
+    it("negationInsertFormula: true auto-inserts formula when negating an operator", () => {
+        const pe = premiseWithVarsGranular({
+            negationInsertFormula: true,
+        })
+        const pid = pe.getId()
+        // Build: AND(P, Q)
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pid }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pid,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pid,
+            })
+        )
+        expect(pe.toDisplayString()).toBe("(P ∧ Q)")
+
+        // Toggle negation on the AND operator — formula buffer auto-inserted
+        // NOT → formula → AND(P, Q) renders as ¬(((P ∧ Q)))
+        pe.toggleNegation("op-and")
+        expect(pe.toDisplayString()).toBe("¬(((P ∧ Q)))")
+    })
+
+    it("negationInsertFormula: false throws when negating an operator", () => {
+        const pe = premiseWithVarsGranular({
+            negationInsertFormula: false,
+        })
+        const pid = pe.getId()
+        // Build: AND(P, Q)
+        pe.addExpression(makeOpExpr("op-and", "and", { premiseId: pid }))
+        pe.addExpression(
+            makeVarExpr("v-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+                premiseId: pid,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("v-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+                premiseId: pid,
+            })
+        )
+        expect(() => pe.toggleNegation("op-and")).toThrow(
+            "Enable negationInsertFormula"
+        )
+    })
+
+    it("negationInsertFormula: false allows negating variables (no formula needed)", () => {
+        const pe = premiseWithVarsGranular({
+            negationInsertFormula: false,
+        })
+        const pid = pe.getId()
+        pe.addExpression(makeVarExpr("v-p", VAR_P.id, { premiseId: pid }))
+        // Negating a variable doesn't need a formula buffer
+        pe.toggleNegation("v-p")
+        expect(pe.toDisplayString()).toBe("¬(P)")
     })
 })

@@ -20,6 +20,7 @@ import {
 import { entityChecksum, computeHash, canonicalSerialize } from "./checksum.js"
 import {
     DEFAULT_GRAMMAR_CONFIG,
+    resolveAutoNormalize,
     type TGrammarConfig,
 } from "../types/grammar.js"
 import { Value } from "typebox/value"
@@ -377,7 +378,12 @@ export class ExpressionManager<
                 expression.type === "operator" &&
                 expression.operator !== "not"
             ) {
-                if (this.grammarConfig.autoNormalize) {
+                if (
+                    resolveAutoNormalize(
+                        this.grammarConfig,
+                        "wrapInsertFormula"
+                    )
+                ) {
                     // Check original parent can accept the formula as a new child.
                     this.assertChildLimit(parent.operator, expression.parentId)
 
@@ -855,7 +861,8 @@ export class ExpressionManager<
     }
 
     private collapseIfNeeded(operatorId: string | null): void {
-        if (!this.grammarConfig.autoNormalize) return
+        if (!resolveAutoNormalize(this.grammarConfig, "collapseEmptyFormula"))
+            return
         if (operatorId === null) return
 
         const operator = this.expressions.get(operatorId)
@@ -1058,6 +1065,63 @@ export class ExpressionManager<
                 this.reparent(expr.id, formulaId, 0)
                 changed = true
             }
+
+            // Pass 4: Collapse double negation — NOT(NOT(x)) → x.
+            for (const expr of this.toArray()) {
+                if (expr.type !== "operator" || expr.operator !== "not")
+                    continue
+                if (!this.expressions.has(expr.id)) continue
+                const children = this.getChildExpressions(expr.id)
+                if (children.length !== 1) continue
+                const child = children[0]
+                // Direct: NOT → NOT → x
+                if (child.type === "operator" && child.operator === "not") {
+                    const innerChildren = this.getChildExpressions(child.id)
+                    if (innerChildren.length === 1) {
+                        // Promote inner child into outer NOT's slot, remove both NOTs.
+                        this.promoteChild(child.id, child, innerChildren[0])
+                        this.promoteChild(
+                            expr.id,
+                            // Re-fetch since promoteChild mutated in place.
+                            this.expressions.get(expr.id)!,
+                            innerChildren[0]
+                        )
+                        changed = true
+                    }
+                }
+                // Buffered: NOT → formula → NOT → x
+                if (
+                    child.type === "formula" &&
+                    this.expressions.has(child.id)
+                ) {
+                    const formulaChildren = this.getChildExpressions(child.id)
+                    if (
+                        formulaChildren.length === 1 &&
+                        formulaChildren[0].type === "operator" &&
+                        formulaChildren[0].operator === "not"
+                    ) {
+                        const innerNot = formulaChildren[0]
+                        const innerChildren = this.getChildExpressions(
+                            innerNot.id
+                        )
+                        if (innerChildren.length === 1) {
+                            // Remove inner NOT, promote its child into formula.
+                            this.promoteChild(
+                                innerNot.id,
+                                innerNot,
+                                innerChildren[0]
+                            )
+                            // Remove outer NOT, promote formula into its slot.
+                            this.promoteChild(
+                                expr.id,
+                                this.expressions.get(expr.id)!,
+                                child
+                            )
+                            changed = true
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1151,7 +1215,12 @@ export class ExpressionManager<
             if (children.length === 1) {
                 this.assertPromotionSafe(children[0], target.parentId)
                 // Simulate post-promotion cascade (formula collapse after promotion).
-                if (this.grammarConfig.autoNormalize) {
+                if (
+                    resolveAutoNormalize(
+                        this.grammarConfig,
+                        "collapseEmptyFormula"
+                    )
+                ) {
                     this.simulatePostPromotionCollapse(
                         target.parentId,
                         children[0]
@@ -1210,7 +1279,8 @@ export class ExpressionManager<
         operatorId: string | null,
         removedChildId: string
     ): void {
-        if (!this.grammarConfig.autoNormalize) return
+        if (!resolveAutoNormalize(this.grammarConfig, "collapseEmptyFormula"))
+            return
         if (operatorId === null) return
 
         const operator = this.expressions.get(operatorId)
@@ -1498,7 +1568,12 @@ export class ExpressionManager<
             ) {
                 const anchorParent = this.expressions.get(anchor.parentId)
                 if (anchorParent && anchorParent.type === "operator") {
-                    if (this.grammarConfig.autoNormalize) {
+                    if (
+                        resolveAutoNormalize(
+                            this.grammarConfig,
+                            "wrapInsertFormula"
+                        )
+                    ) {
                         needsParentFormulaBuffer = true
                     } else {
                         throw new Error(
@@ -1514,7 +1589,12 @@ export class ExpressionManager<
                     leftNode?.type === "operator" &&
                     leftNode.operator !== "not"
                 ) {
-                    if (this.grammarConfig.autoNormalize) {
+                    if (
+                        resolveAutoNormalize(
+                            this.grammarConfig,
+                            "wrapInsertFormula"
+                        )
+                    ) {
                         childrenNeedingFormulaBuffer.push(leftNodeId!)
                     } else {
                         throw new Error(
@@ -1526,7 +1606,12 @@ export class ExpressionManager<
                     rightNode?.type === "operator" &&
                     rightNode.operator !== "not"
                 ) {
-                    if (this.grammarConfig.autoNormalize) {
+                    if (
+                        resolveAutoNormalize(
+                            this.grammarConfig,
+                            "wrapInsertFormula"
+                        )
+                    ) {
                         childrenNeedingFormulaBuffer.push(rightNodeId!)
                     } else {
                         throw new Error(
@@ -1736,7 +1821,12 @@ export class ExpressionManager<
                     existingNode.parentId
                 )
                 if (existingParent && existingParent.type === "operator") {
-                    if (this.grammarConfig.autoNormalize) {
+                    if (
+                        resolveAutoNormalize(
+                            this.grammarConfig,
+                            "wrapInsertFormula"
+                        )
+                    ) {
                         needsParentFormulaBuffer = true
                     } else {
                         throw new Error(
@@ -1751,7 +1841,12 @@ export class ExpressionManager<
                 existingNode.type === "operator" &&
                 existingNode.operator !== "not"
             ) {
-                if (this.grammarConfig.autoNormalize) {
+                if (
+                    resolveAutoNormalize(
+                        this.grammarConfig,
+                        "wrapInsertFormula"
+                    )
+                ) {
                     existingNodeNeedsFormulaBuffer = true
                 } else {
                     throw new Error(
@@ -1765,7 +1860,12 @@ export class ExpressionManager<
                 newSibling.type === "operator" &&
                 newSibling.operator !== "not"
             ) {
-                if (this.grammarConfig.autoNormalize) {
+                if (
+                    resolveAutoNormalize(
+                        this.grammarConfig,
+                        "wrapInsertFormula"
+                    )
+                ) {
                     siblingNeedsFormulaBuffer = true
                 } else {
                     throw new Error(

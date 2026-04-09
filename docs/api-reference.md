@@ -1066,17 +1066,32 @@ Individual structural rule toggles. Each boolean controls whether a specific con
 | -------------------------------- | ------- | ---------------------------------------------------------------------------------- |
 | `enforceFormulaBetweenOperators` | `true`  | Require a `formula` node between a parent operator and a non-`not` operator child. |
 
+### `TAutoNormalizeConfig`
+
+Granular auto-normalization flags. Each flag controls a specific automatic structural correction:
+
+| Field                    | Description                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `wrapInsertFormula`      | Insert a formula node when `addExpression`/`insertExpression`/`wrapExpression` creates operator-under-operator. |
+| `negationInsertFormula`  | Insert a formula buffer when `toggleNegation` wraps a non-not operator in NOT.                                  |
+| `collapseDoubleNegation` | Collapse NOT(NOT(x)) → x during `toggleNegation` and `normalize`.                                               |
+| `collapseEmptyFormula`   | Collapse empty formulas/operators and promote single children after `removeExpression`.                         |
+
 ### `TGrammarConfig`
 
 Extends `TGrammarOptions` with an additional control:
 
-| Field           | Default | Description                                                                                                                                                  |
-| --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `autoNormalize` | `false` | When `true`, auto-insert `formula` buffers instead of throwing when a rule is violated. Only supported by `addExpression`; compound operations always throw. |
+| Field           | Type                              | Default | Description                                                                                               |
+| --------------- | --------------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `autoNormalize` | `boolean \| TAutoNormalizeConfig` | `true`  | `true` enables all normalizations; `false` disables all; an object enables per-behavior granular control. |
+
+### `resolveAutoNormalize(grammarConfig, flag)` → `boolean`
+
+Resolves a single granular flag from the grammar config. Returns `true`/`false` for boolean configs; looks up the specific flag for object configs.
 
 ### `DEFAULT_GRAMMAR_CONFIG`
 
-`{ enforceFormulaBetweenOperators: true, autoNormalize: false }` — all rules enforced, auto-normalize off. Used by all mutating engine operations by default.
+`{ enforceFormulaBetweenOperators: true, autoNormalize: true }` — all rules enforced, auto-normalize on. Used by all mutating engine operations by default.
 
 ### `PERMISSIVE_GRAMMAR_CONFIG`
 

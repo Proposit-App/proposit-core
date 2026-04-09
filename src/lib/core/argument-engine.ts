@@ -1287,10 +1287,11 @@ export class ArgumentEngine<
 
         engine.restoringFromSnapshot = false
 
-        // Post-load normalization: collapse unjustified formulas if the
-        // caller's grammar config requests it.
+        // Post-load normalization: only run full normalize when autoNormalize
+        // is `true` (boolean). When it is a granular config object, individual
+        // flags control in-operation behavior — loading should not mutate data.
         const restoredGrammarConfig = grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
-        if (restoredGrammarConfig.autoNormalize) {
+        if (restoredGrammarConfig.autoNormalize === true) {
             for (const pe of engine.premises.values()) {
                 pe.normalizeExpressions()
             }
@@ -1443,11 +1444,11 @@ export class ArgumentEngine<
 
         engine.restoringFromSnapshot = false
 
-        // Post-load normalization: collapse unjustified formulas and apply
-        // grammar rules to loaded data. Runs after all expressions are in place.
+        // Post-load normalization: only run full normalize when autoNormalize
+        // is `true` (boolean). Granular config objects skip post-load normalization.
         const restoredGrammarConfig =
             config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
-        if (restoredGrammarConfig.autoNormalize) {
+        if (restoredGrammarConfig.autoNormalize === true) {
             for (const pe of engine.premises.values()) {
                 pe.normalizeExpressions()
             }

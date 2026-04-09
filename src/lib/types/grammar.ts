@@ -11,26 +11,70 @@ export type TGrammarOptions = {
 }
 
 /**
+ * Granular auto-normalization flags.
+ *
+ * Each flag controls a specific automatic structural correction during
+ * expression mutation operations. Using this object instead of a plain
+ * `boolean` for `autoNormalize` allows fine-grained control over which
+ * normalizations are applied.
+ */
+export type TAutoNormalizeConfig = {
+    /** Insert a formula node when wrapping/inserting creates operator-under-operator. */
+    wrapInsertFormula: boolean
+    /** Insert a formula buffer when toggleNegation wraps a non-not operator in NOT. */
+    negationInsertFormula: boolean
+    /** Collapse double negation (NOT(NOT(x)) → x) during toggleNegation and normalize. */
+    collapseDoubleNegation: boolean
+    /** Collapse empty formulas/operators and promote single children after removal. */
+    collapseEmptyFormula: boolean
+}
+
+/**
  * Grammar enforcement configuration for expression trees.
  *
  * Controls which structural rules are enforced and whether violations are
  * automatically corrected.
  *
- * **`autoNormalize` scope:** When `true`, expression mutation operations
- * (`addExpression`, `insertExpression`, `wrapExpression`) auto-insert formula
- * buffers. `removeExpression` auto-collapses operators with 0 or 1 children
- * and collapses formulas whose bounded subtree has no binary operator
- * (`and`/`or`). When `false`, no automatic structural changes occur — the
- * tree can be in any state including incomplete or grammar-violating.
+ * **`autoNormalize` scope:** Accepts `boolean | TAutoNormalizeConfig`.
+ *
+ * - `true` — enables all automatic normalizations (backward compatible).
+ * - `false` — disables all automatic normalizations (backward compatible).
+ * - `TAutoNormalizeConfig` — granular control over individual behaviors:
+ *   - `wrapInsertFormula`: auto-insert formula buffers in `addExpression`,
+ *     `insertExpression`, and `wrapExpression`.
+ *   - `negationInsertFormula`: auto-insert a formula buffer when
+ *     `toggleNegation` wraps a non-not operator in NOT.
+ *   - `collapseDoubleNegation`: collapse NOT(NOT(x)) → x during
+ *     `toggleNegation` and `normalize`.
+ *   - `collapseEmptyFormula`: auto-collapse operators with 0/1 children
+ *     and formulas whose bounded subtree has no binary operator after
+ *     `removeExpression`.
  *
  * **Formula collapse rule:** A formula node is only justified if its bounded
  * subtree (stopping at the next nested formula) contains a binary operator
  * (`and` or `or`). Formulas wrapping only variables, `not` chains, or other
- * non-binary subtrees are automatically collapsed when `autoNormalize` is `true`.
+ * non-binary subtrees are automatically collapsed when `collapseEmptyFormula`
+ * (or `autoNormalize: true`) is enabled.
  */
 export type TGrammarConfig = TGrammarOptions & {
-    /** When `true`, auto-fix violations where possible instead of throwing. */
-    autoNormalize: boolean
+    /** When `true`, auto-fix all violations. When an object, granular control. */
+    autoNormalize: boolean | TAutoNormalizeConfig
+}
+
+/**
+ * Resolves a granular auto-normalize flag from the grammar config.
+ *
+ * - `true` → all flags enabled.
+ * - `false` → all flags disabled.
+ * - `TAutoNormalizeConfig` → returns the specific flag value.
+ */
+export function resolveAutoNormalize(
+    grammarConfig: TGrammarConfig,
+    flag: keyof TAutoNormalizeConfig
+): boolean {
+    const { autoNormalize } = grammarConfig
+    if (typeof autoNormalize === "boolean") return autoNormalize
+    return autoNormalize[flag]
 }
 
 /** Default config: all rules enforced, auto-normalize on. */

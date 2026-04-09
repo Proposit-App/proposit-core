@@ -50,12 +50,12 @@ export interface TExpressionMutations<
      * root is permitted per premise. All structural rules (`implies`/`iff`
      * root-only, child limits, position uniqueness) are enforced.
      *
-     * When `grammarConfig.autoNormalize` is `true`, operator nesting
+     * When the `wrapInsertFormula` flag is enabled (either directly via
+     * `TAutoNormalizeConfig` or via `autoNormalize: true`), operator nesting
      * violations are auto-corrected by inserting a `formula` buffer between
      * the parent operator and the non-`not` operator child, rather than
-     * throwing. Auto-normalize is only active for `addExpression`; compound
-     * operations (`insertExpression`, `wrapExpression`) and `removeExpression`
-     * always throw on violations regardless of this flag.
+     * throwing. The same flag also controls auto-insertion in
+     * `insertExpression` and `wrapExpression`.
      *
      * @param expression - The expression to add, including position and
      *   parent assignment.
@@ -66,7 +66,7 @@ export interface TExpressionMutations<
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
      * @throws If a non-not operator would become a direct child of another
-     *   operator expression (when `autoNormalize` is `false`).
+     *   operator expression (when `wrapInsertFormula` is disabled).
      */
     addExpression(
         expression: TExpressionInput<TExpr>
@@ -190,6 +190,15 @@ export interface TExpressionMutations<
      * NOT operator, removes the NOT (promoting the expression). Otherwise,
      * wraps the expression with a new NOT operator.
      *
+     * When the target is already a NOT expression and `collapseDoubleNegation`
+     * is enabled, removes the existing NOT (promoting its child) instead of
+     * wrapping in another NOT — preventing NOT(NOT(x)).
+     *
+     * When the target is a non-not operator and `negationInsertFormula` is
+     * enabled, auto-inserts a formula buffer between the new NOT and the
+     * target to satisfy the operator nesting restriction. Throws if the flag
+     * is disabled and `enforceFormulaBetweenOperators` is `true`.
+     *
      * @param expressionId - The ID of the expression to toggle negation on.
      * @param extraFields - Optional additional fields to merge into newly
      *   created expressions (NOT and formula nodes). Structural fields
@@ -198,6 +207,8 @@ export interface TExpressionMutations<
      * @returns The new NOT expression when adding negation, or `null` when
      *   removing it, along with the changeset.
      * @throws If the expression does not exist in this premise.
+     * @throws If `negationInsertFormula` is disabled and the target is a
+     *   non-not operator (would create operator-under-operator).
      */
     toggleNegation(
         expressionId: string,

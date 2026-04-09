@@ -49,7 +49,11 @@ import {
     defaultGenerateId,
     type TLogicEngineOptions,
 } from "./argument-engine.js"
-import type { TGrammarConfig } from "../types/grammar.js"
+import {
+    DEFAULT_GRAMMAR_CONFIG,
+    resolveAutoNormalize,
+    type TGrammarConfig,
+} from "../types/grammar.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
@@ -115,6 +119,7 @@ export class PremiseEngine<
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TOptionalChecksum<TArg>
     private checksumConfig?: TCoreChecksumConfig
+    private grammarConfig: TGrammarConfig
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -143,6 +148,7 @@ export class PremiseEngine<
         this.premise = { ...premise }
         this.argument = deps.argument
         this.checksumConfig = config?.checksumConfig
+        this.grammarConfig = config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
         this.rootExpressionId = undefined
         this.variables = deps.variables
         this.expressions = new ExpressionManager<TExpr>(config)
@@ -718,16 +724,42 @@ export class PremiseEngine<
 
                     const changes = this.finalizeExpressionMutation(collector)
                     return { result: null, changes }
+                } else if (
+                    target.type === "operator" &&
+                    target.operator === "not" &&
+                    resolveAutoNormalize(
+                        this.grammarConfig,
+                        "collapseDoubleNegation"
+                    )
+                ) {
+                    // Target is already NOT — wrapping would create NOT(NOT(x)).
+                    // Collapse instead: remove the existing NOT, promoting its child.
+                    this.expressions.removeExpression(expressionId, false)
+
+                    const changes = this.finalizeExpressionMutation(collector)
+                    return { result: null, changes }
                 } else {
-                    // When the target is a non-not operator, insert a formula
-                    // buffer between the new not and the target so the tree
-                    // satisfies the operator nesting restriction.
+                    // When the target is a non-not operator, a formula buffer
+                    // is needed between the new NOT and the target to satisfy
+                    // the operator nesting restriction.
                     const needsFormula =
-                        target.type === "operator" && target.operator !== "not"
+                        this.grammarConfig.enforceFormulaBetweenOperators &&
+                        target.type === "operator" &&
+                        target.operator !== "not"
 
                     let notExprId: string
 
                     if (needsFormula) {
+                        if (
+                            !resolveAutoNormalize(
+                                this.grammarConfig,
+                                "negationInsertFormula"
+                            )
+                        ) {
+                            throw new Error(
+                                `Cannot negate operator expression "${expressionId}" — would place a non-not operator as a direct child of NOT. Enable negationInsertFormula or wrap in a formula node first.`
+                            )
+                        }
                         // Build not → formula → target
                         const formulaExpr = {
                             ...extraFields,
@@ -1919,6 +1951,10 @@ export class PremiseEngine<
             { argument, variables, expressionIndex },
             normalizedConfig
         )
+        // Override grammar config if the caller specified one.
+        if (grammarConfig) {
+            pe.grammarConfig = grammarConfig
+        }
         // Restore expressions from the snapshot
         pe.expressions = ExpressionManager.fromSnapshot<TExpr>(
             snapshot.expressions,
