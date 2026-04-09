@@ -26027,3 +26027,190 @@ describe("granular autoNormalize config", () => {
         expect(pe.toDisplayString()).toBe("¬(P)")
     })
 })
+
+// ---------------------------------------------------------------------------
+// fromData checksum idempotency
+// ---------------------------------------------------------------------------
+
+describe("fromData checksum idempotency", () => {
+    const GRANULAR_GRAMMAR_CONFIG = {
+        enforceFormulaBetweenOperators: true,
+        autoNormalize: {
+            wrapInsertFormula: true,
+            negationInsertFormula: true,
+            collapseDoubleNegation: true,
+            collapseEmptyFormula: false,
+        },
+    }
+
+    // Build IMPLIES(formula(AND(P, Q)), R) as flat expression arrays
+    const arg: TOptionalChecksum<TCoreArgument> = { id: "arg-1", version: 1 }
+    const variables: TVariableInput[] = [
+        makeVar("v1", "P"),
+        makeVar("v2", "Q"),
+        makeVar("v3", "R"),
+    ]
+    const premises: TOptionalChecksum<TCorePremise>[] = [
+        { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+    ]
+    const roles = { conclusionPremiseId: "p1" }
+
+    const expressions: TExpressionInput[] = [
+        makeOpExpr("e-implies", "implies", {
+            parentId: null,
+            position: 0,
+            premiseId: "p1",
+        }),
+        makeFormulaExpr("e-formula", {
+            parentId: "e-implies",
+            position: 0,
+            premiseId: "p1",
+        }),
+        makeOpExpr("e-and", "and", {
+            parentId: "e-formula",
+            position: 0,
+            premiseId: "p1",
+        }),
+        makeVarExpr("e-vp", "v1", {
+            parentId: "e-and",
+            position: 0,
+            premiseId: "p1",
+        }),
+        makeVarExpr("e-vq", "v2", {
+            parentId: "e-and",
+            position: 1073741823,
+            premiseId: "p1",
+        }),
+        makeVarExpr("e-vr", "v3", {
+            parentId: "e-implies",
+            position: 500000,
+            premiseId: "p1",
+        }),
+    ]
+
+    it("successive fromData calls produce identical checksums", () => {
+        const engineA = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            sLib(),
+            csLib(),
+            variables,
+            premises,
+            expressions,
+            roles,
+            { grammarConfig: GRANULAR_GRAMMAR_CONFIG },
+            GRANULAR_GRAMMAR_CONFIG,
+            "ignore"
+        )
+        const engineB = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            sLib(),
+            csLib(),
+            variables,
+            premises,
+            expressions,
+            roles,
+            { grammarConfig: GRANULAR_GRAMMAR_CONFIG },
+            GRANULAR_GRAMMAR_CONFIG,
+            "ignore"
+        )
+
+        // All expression checksums should match
+        const exprsA = engineA
+            .getPremise("p1")!
+            .getExpressions()
+            .sort((a, b) => a.id.localeCompare(b.id))
+        const exprsB = engineB
+            .getPremise("p1")!
+            .getExpressions()
+            .sort((a, b) => a.id.localeCompare(b.id))
+
+        expect(exprsA.length).toBe(exprsB.length)
+        for (let i = 0; i < exprsA.length; i++) {
+            expect(exprsA[i].checksum).toBe(exprsB[i].checksum)
+            expect(exprsA[i].combinedChecksum).toBe(
+                exprsB[i].combinedChecksum
+            )
+            expect(exprsA[i].descendantChecksum).toBe(
+                exprsB[i].descendantChecksum
+            )
+        }
+
+        // Argument-level checksums should match
+        const snapA = engineA.snapshot()
+        const snapB = engineB.snapshot()
+        expect(snapA.argument.checksum).toBe(snapB.argument.checksum)
+        expect(snapA.argument.combinedChecksum).toBe(
+            snapB.argument.combinedChecksum
+        )
+        expect(snapA.argument.descendantChecksum).toBe(
+            snapB.argument.descendantChecksum
+        )
+    })
+
+    it("fromData produces identical checksums regardless of expression array order", () => {
+        const topological = [...expressions]
+        const reversed = [...expressions].reverse()
+        const shuffled = [
+            expressions[3],
+            expressions[0],
+            expressions[5],
+            expressions[2],
+            expressions[1],
+            expressions[4],
+        ]
+
+        const engineTopo = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            sLib(),
+            csLib(),
+            variables,
+            premises,
+            topological,
+            roles,
+            { grammarConfig: GRANULAR_GRAMMAR_CONFIG },
+            GRANULAR_GRAMMAR_CONFIG,
+            "ignore"
+        )
+        const engineReversed = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            sLib(),
+            csLib(),
+            variables,
+            premises,
+            reversed,
+            roles,
+            { grammarConfig: GRANULAR_GRAMMAR_CONFIG },
+            GRANULAR_GRAMMAR_CONFIG,
+            "ignore"
+        )
+        const engineShuffled = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            sLib(),
+            csLib(),
+            variables,
+            premises,
+            shuffled,
+            roles,
+            { grammarConfig: GRANULAR_GRAMMAR_CONFIG },
+            GRANULAR_GRAMMAR_CONFIG,
+            "ignore"
+        )
+
+        const snapTopo = engineTopo.snapshot()
+        const snapReversed = engineReversed.snapshot()
+        const snapShuffled = engineShuffled.snapshot()
+
+        // All three orderings should produce identical argument-level combined checksums
+        expect(snapTopo.argument.combinedChecksum).toBe(
+            snapReversed.argument.combinedChecksum
+        )
+        expect(snapTopo.argument.combinedChecksum).toBe(
+            snapShuffled.argument.combinedChecksum
+        )
+    })
+})
