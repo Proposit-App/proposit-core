@@ -26295,4 +26295,159 @@ describe("fromData checksum idempotency", () => {
             snapShuffled.argument.combinedChecksum
         )
     })
+
+    it("fromData rejects operator-under-operator when enforceFormulaBetweenOperators is true", () => {
+        const arg = { id: "arg-1", version: 1 }
+        const variables = [makeVar("v1", "P"), makeVar("v2", "Q")]
+        const premises: TOptionalChecksum<TCorePremise>[] = [
+            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+        ]
+        // AND(OR(P, Q)) — no formula buffer between AND and OR
+        const expressions = [
+            makeOpExpr("e-and", "and", {
+                parentId: null,
+                position: 0,
+                premiseId: "p1",
+            }),
+            makeOpExpr("e-or", "or", {
+                parentId: "e-and",
+                position: 0,
+                premiseId: "p1",
+            }),
+            makeVarExpr("e-v1", "v1", {
+                parentId: "e-or",
+                position: 0,
+                premiseId: "p1",
+            }),
+            makeVarExpr("e-v2", "v2", {
+                parentId: "e-or",
+                position: 1,
+                premiseId: "p1",
+            }),
+        ]
+        const roles = { conclusionPremiseId: "p1" }
+
+        expect(() =>
+            ArgumentEngine.fromData(
+                arg,
+                aLib(),
+                sLib(),
+                csLib(),
+                variables,
+                premises,
+                expressions,
+                roles,
+                { grammarConfig: GRANULAR_GRAMMAR_CONFIG },
+                GRANULAR_GRAMMAR_CONFIG,
+                "ignore"
+            )
+        ).toThrow("direct child of operator")
+    })
+
+    it("fromSnapshot rejects operator-under-operator when grammarConfig enforces it", () => {
+        // Build a valid engine with permissive config, then restore with strict config
+        const claimLibrary = aLib()
+        const engine = new ArgumentEngine(
+            { id: "arg-1", version: 1 },
+            claimLibrary,
+            sLib(),
+            csLib(),
+            { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
+        )
+        engine.addVariable(makeVar("v1", "P"))
+        engine.addVariable(makeVar("v2", "Q"))
+        const { result: pm } = engine.createPremise()
+        const pid = pm.getId()
+        pm.addExpression(
+            makeOpExpr("e-and", "and", { premiseId: pid })
+        )
+        pm.addExpression(
+            makeOpExpr("e-or", "or", {
+                premiseId: pid,
+                parentId: "e-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-v1", "v1", {
+                premiseId: pid,
+                parentId: "e-or",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("e-v2", "v2", {
+                premiseId: pid,
+                parentId: "e-or",
+                position: 1,
+            })
+        )
+
+        const snapshot = engine.snapshot()
+
+        // Restoring with enforceFormulaBetweenOperators should reject it
+        expect(() =>
+            ArgumentEngine.fromSnapshot(
+                snapshot,
+                claimLibrary,
+                sLib(),
+                csLib(),
+                GRANULAR_GRAMMAR_CONFIG,
+                "ignore"
+            )
+        ).toThrow("direct child of operator")
+    })
+
+    it("mutations after fromData loading still respect grammar config", () => {
+        const arg = { id: "arg-1", version: 1 }
+        const variables = [makeVar("v1", "P")]
+        const premises: TOptionalChecksum<TCorePremise>[] = [
+            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+        ]
+        // Simple tree: AND(P)
+        const expressions = [
+            makeOpExpr("e-and", "and", {
+                parentId: null,
+                position: 0,
+                premiseId: "p1",
+            }),
+            makeVarExpr("e-vp", "v1", {
+                parentId: "e-and",
+                position: 0,
+                premiseId: "p1",
+            }),
+        ]
+        const roles = { conclusionPremiseId: "p1" }
+
+        const engine = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            sLib(),
+            csLib(),
+            variables,
+            premises,
+            expressions,
+            roles,
+            { grammarConfig: GRANULAR_GRAMMAR_CONFIG },
+            GRANULAR_GRAMMAR_CONFIG,
+            "ignore"
+        )
+
+        // Adding a non-NOT operator as child of AND should auto-insert a formula buffer
+        const pe = engine.findPremiseByExpressionId("e-and")!
+        pe.addExpression(
+            makeOpExpr("e-or", "or", {
+                premiseId: "p1",
+                parentId: "e-and",
+                position: 500,
+            })
+        )
+
+        // The OR should have been wrapped in a formula
+        const orExpr = pe.getExpression("e-or")!
+        expect(orExpr.parentId).not.toBe("e-and")
+        const formulaParent = pe.getExpression(orExpr.parentId!)!
+        expect(formulaParent.type).toBe("formula")
+        expect(formulaParent.parentId).toBe("e-and")
+    })
 })
