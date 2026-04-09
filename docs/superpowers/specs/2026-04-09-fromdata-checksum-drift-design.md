@@ -165,6 +165,31 @@ code handles the second and third.
    data (missing parents, duplicate positions, etc.) still fails at the
    `validate()` step.
 
+5. **Grammar enforcement after loading (fromData):** Build a `fromData` engine
+   with `enforceFormulaBetweenOperators: true` and granular
+   `wrapInsertFormula: true`. Feed it data with a non-NOT operator as a direct
+   child of another operator (no formula buffer). Verify that `fromData` throws
+   `InvariantViolationError` with `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` —
+   the grammar config is still enforced via post-load validation even though
+   `registerExpression` doesn't check it.
+
+6. **Grammar enforcement after loading (fromSnapshot):** Same as above but via
+   `fromSnapshot`. Construct a snapshot with an operator-under-operator
+   violation and verify the grammar config rejects it.
+
+7. **Post-load normalization with `autoNormalize: true` (boolean):** Build
+   `fromData` with `autoNormalize: true` (boolean, not granular) and feed it
+   data with an unjustified formula (a formula whose bounded subtree has no
+   binary operator). Verify the post-load `normalizeExpressions()` pass
+   collapses the unjustified formula — i.e., the normalization path still works
+   after the `registerExpression` refactor.
+
+8. **Mutations after loading respect grammar config:** Load an engine via
+   `fromData` with granular `wrapInsertFormula: true`. Then call
+   `addExpression` to add a non-NOT operator as a child of an existing
+   operator. Verify that `addExpression` auto-inserts a formula buffer — the
+   grammar config is active for post-load mutations.
+
 ## Files changed
 
 | File | Change |
