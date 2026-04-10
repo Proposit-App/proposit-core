@@ -935,12 +935,34 @@ export class ExpressionManager<
      */
     private promoteChild(parentId: string, parent: TExpr, child: TExpr): void {
         const grandparentId = parent.parentId
-        const grandparentPosition = parent.position
+        let promotedPosition = parent.position
+
+        // When repositionOnCollision is enabled and the grandparent has multiple
+        // children, compute the midpoint between the parent's left and right
+        // neighbors for better spacing.
+        if (
+            grandparentId !== null &&
+            resolveAutoNormalize(this.grammarConfig, "repositionOnCollision")
+        ) {
+            const siblings = this.getChildExpressions(grandparentId)
+            if (siblings.length > 1) {
+                const parentIdx = siblings.findIndex((s) => s.id === parentId)
+                const leftPos =
+                    parentIdx > 0
+                        ? siblings[parentIdx - 1].position
+                        : this.positionConfig.min
+                const rightPos =
+                    parentIdx < siblings.length - 1
+                        ? siblings[parentIdx + 1].position
+                        : this.positionConfig.max
+                promotedPosition = midpoint(leftPos, rightPos)
+            }
+        }
 
         const promoted = this.attachChecksum({
             ...child,
             parentId: grandparentId,
-            position: grandparentPosition,
+            position: promotedPosition,
         } as TExpressionInput<TExpr>)
         this.expressions.set(child.id, promoted)
         this.collector?.modifiedExpression({
@@ -953,6 +975,16 @@ export class ExpressionManager<
             grandparentId,
             () => new Set()
         ).add(child.id)
+
+        // Update position tracking: remove parent's old position, add promoted position.
+        this.childPositionsByParentId
+            .get(grandparentId)
+            ?.delete(parent.position)
+        getOrCreate(
+            this.childPositionsByParentId,
+            grandparentId,
+            () => new Set()
+        ).add(promotedPosition)
 
         this.childExpressionIdsByParentId.delete(parentId)
         this.childPositionsByParentId.delete(parentId)

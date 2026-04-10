@@ -26596,4 +26596,50 @@ describe("repositionOnCollision auto-normalize flag", () => {
         expect(children).toHaveLength(1)
         expect(children[0].position).toBe(POSITION_INITIAL)
     })
+
+    it("promoteChild with repositionOnCollision uses midpoint of neighbors", () => {
+        const pm = premiseWithVarsGranular({
+            repositionOnCollision: true,
+            collapseEmptyFormula: true,
+        })
+        pm.addExpression(
+            makeOpExpr("root", "and", { parentId: null, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
+        )
+        // A formula wrapping a single variable — will collapse when its child collapses.
+        pm.addExpression(
+            makeFormulaExpr("wrap", { parentId: "root", position: 1 })
+        )
+        pm.addExpression(
+            makeOpExpr("inner-and", "and", { parentId: "wrap", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("inner-left", "var-q", {
+                parentId: "inner-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("inner-right", "var-r", {
+                parentId: "inner-and",
+                position: 100,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("c3", "var-p", { parentId: "root", position: 100 })
+        )
+
+        // Remove inner-left → inner-and has 1 child → inner-right promoted into inner-and's slot.
+        // wrap still has the binary operator... wait, inner-and is gone after promotion.
+        // So wrap has 1 child (inner-right) and no binary operator → formula collapse.
+        // inner-right promoted to root at midpoint(0, 100) = 50 instead of position 1.
+        pm.removeExpression("inner-left", true)
+
+        const children = pm.getChildExpressions("root")
+        const promoted = children.find((c) => c.id === "inner-right")
+        expect(promoted).toBeDefined()
+        expect(promoted!.position).toBe(midpoint(0, 100))
+    })
 })
