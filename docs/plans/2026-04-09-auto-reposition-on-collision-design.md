@@ -37,23 +37,25 @@ When a midpoint collision is detected, only the minimal set of nodes is repositi
 The redistribution is a private method on `ExpressionManager`. It bypasses `updateExpression` (which has operator swap validation and per-update collision checks) and instead rebuilds positions atomically: clears affected positions from the parent's position set, computes new positions, updates each expression with fresh checksum, notifies the collector, and rebuilds the position set. Returns the array of modified expressions.
 
 **Example:** Positions `0, 5, 6, 10`, insert between 5 and 6:
+
 - Right chain: [6], boundary 10. Left chain: [5], boundary 0. Tie — pick right.
 - Redistribute [6] in (5, 10) -> position 7. Then `midpoint(5, 7) = 6`. One modification.
 
 **Example:** Positions `0, 1, 2, 3, 100`, insert between 1 and 2:
+
 - Right chain: [2, 3], boundary 100. Left chain: [0, 1], boundary min. Pick right.
 - Redistribute [2, 3] in (1, 100) -> positions 34, 67. Then `midpoint(1, 34) = 17`. Two modifications.
 
 ## Affected operations
 
-| Method | Change |
-|---|---|
-| `addExpressionRelative` | After computing midpoint, detect collision -> targeted redistribution -> recompute midpoint. |
-| `appendExpression` | Same — midpoint between last child and `max` can collide if last child is at `max - 1`. |
-| `insertExpression` | Replace hardcoded `reparent(..., 0)` / `reparent(..., 1)` with evenly-spaced positions across `[positionConfig.min, positionConfig.max]`. For 2 children: `initial` and `midpoint(initial, max)` (matching `wrapExpression`'s existing pattern). For 1 child: `initial`. |
-| `wrapExpression` | Already uses `initial` and `midpoint(initial, max)` — no change needed. |
-| `promoteChild` | When the flag is enabled and grandparent has siblings, compute midpoint between parent's left and right neighbors (or `min`/`max` boundaries) instead of inheriting parent's position. When disabled or at root, keep existing behavior. |
-| `addExpression` | No change — caller provides explicit position, collision still throws. |
+| Method                  | Change                                                                                                                                                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `addExpressionRelative` | After computing midpoint, detect collision -> targeted redistribution -> recompute midpoint.                                                                                                                                                                             |
+| `appendExpression`      | Same — midpoint between last child and `max` can collide if last child is at `max - 1`.                                                                                                                                                                                  |
+| `insertExpression`      | Replace hardcoded `reparent(..., 0)` / `reparent(..., 1)` with evenly-spaced positions across `[positionConfig.min, positionConfig.max]`. For 2 children: `initial` and `midpoint(initial, max)` (matching `wrapExpression`'s existing pattern). For 1 child: `initial`. |
+| `wrapExpression`        | Already uses `initial` and `midpoint(initial, max)` — no change needed.                                                                                                                                                                                                  |
+| `promoteChild`          | When the flag is enabled and grandparent has siblings, compute midpoint between parent's left and right neighbors (or `min`/`max` boundaries) instead of inheriting parent's position. When disabled or at root, keep existing behavior.                                 |
+| `addExpression`         | No change — caller provides explicit position, collision still throws.                                                                                                                                                                                                   |
 
 ### Changeset impact
 

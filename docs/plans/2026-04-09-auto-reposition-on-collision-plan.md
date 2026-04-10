@@ -13,6 +13,7 @@
 ### Task 1: Add `repositionOnCollision` flag to grammar types
 
 **Files:**
+
 - Modify: `src/lib/types/grammar.ts:21-30` (TAutoNormalizeConfig)
 
 - [ ] **Step 1: Write the failing test**
@@ -23,7 +24,10 @@ Add at the bottom of `test/core.test.ts`:
 describe("repositionOnCollision auto-normalize flag", () => {
     it("resolveAutoNormalize returns true for repositionOnCollision when autoNormalize is true", () => {
         expect(
-            resolveAutoNormalize(DEFAULT_GRAMMAR_CONFIG, "repositionOnCollision")
+            resolveAutoNormalize(
+                DEFAULT_GRAMMAR_CONFIG,
+                "repositionOnCollision"
+            )
         ).toBe(true)
     })
 
@@ -136,6 +140,7 @@ git commit -m "feat(grammar): add repositionOnCollision flag to TAutoNormalizeCo
 ### Task 2: Implement `repositionSiblings` on `ExpressionManager`
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts` (add private method)
 
 - [ ] **Step 1: Write the failing test**
@@ -145,9 +150,7 @@ This tests the redistribution via `addExpressionRelative`. Add at the bottom of 
 ```typescript
 it("addExpressionRelative redistributes on collision (consecutive positions)", () => {
     const pm = premiseWithVarsGranular({ repositionOnCollision: true })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     // Two children at consecutive positions — midpoint(0, 1) = 0 → collision.
     pm.addExpression(
         makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
@@ -426,6 +429,7 @@ git commit -m "feat(expression-manager): add repositionSiblings and collision ha
 ### Task 3: Add collision handling to `appendExpression`
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts:485-502` (appendExpression)
 
 - [ ] **Step 1: Write the failing test**
@@ -435,9 +439,7 @@ Add inside the `repositionOnCollision auto-normalize flag` describe block:
 ```typescript
 it("appendExpression redistributes when last child is at POSITION_MAX - 1", () => {
     const pm = premiseWithVarsGranular({ repositionOnCollision: true })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     pm.addExpression(
         makeVarExpr("c1", "var-p", {
             parentId: "root",
@@ -535,6 +537,7 @@ git commit -m "feat(expression-manager): add collision handling to appendExpress
 ### Task 4: Fix `insertExpression` child spacing
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts:1635-1641` (insertExpression reparent calls)
 
 - [ ] **Step 1: Write the failing test**
@@ -593,43 +596,45 @@ Expected: FAIL — children have positions 0 and 1 instead of the midpoint-space
 In `src/lib/core/expression-manager.ts`, replace the hardcoded position logic in `insertExpression` (around line 1635-1641):
 
 Find:
+
 ```typescript
-        // Reparent rightNode first in case it is a descendant of leftNode.
-        if (rightNodeId !== undefined) {
-            this.reparent(rightNodeId, expression.id, 1)
-        }
-        if (leftNodeId !== undefined) {
-            this.reparent(leftNodeId, expression.id, 0)
-        }
+// Reparent rightNode first in case it is a descendant of leftNode.
+if (rightNodeId !== undefined) {
+    this.reparent(rightNodeId, expression.id, 1)
+}
+if (leftNodeId !== undefined) {
+    this.reparent(leftNodeId, expression.id, 0)
+}
 ```
 
 Replace with:
-```typescript
-        // Compute child positions (midpoint-spaced for future bisection),
-        // matching the pattern used by wrapExpression.
-        let leftPosition: number
-        let rightPosition: number
-        if (leftNodeId !== undefined && rightNodeId !== undefined) {
-            leftPosition = this.positionConfig.initial
-            rightPosition = midpoint(
-                this.positionConfig.initial,
-                this.positionConfig.max
-            )
-        } else if (leftNodeId !== undefined) {
-            leftPosition = this.positionConfig.initial
-            rightPosition = this.positionConfig.initial // unused
-        } else {
-            leftPosition = this.positionConfig.initial // unused
-            rightPosition = this.positionConfig.initial
-        }
 
-        // Reparent rightNode first in case it is a descendant of leftNode.
-        if (rightNodeId !== undefined) {
-            this.reparent(rightNodeId, expression.id, rightPosition)
-        }
-        if (leftNodeId !== undefined) {
-            this.reparent(leftNodeId, expression.id, leftPosition)
-        }
+```typescript
+// Compute child positions (midpoint-spaced for future bisection),
+// matching the pattern used by wrapExpression.
+let leftPosition: number
+let rightPosition: number
+if (leftNodeId !== undefined && rightNodeId !== undefined) {
+    leftPosition = this.positionConfig.initial
+    rightPosition = midpoint(
+        this.positionConfig.initial,
+        this.positionConfig.max
+    )
+} else if (leftNodeId !== undefined) {
+    leftPosition = this.positionConfig.initial
+    rightPosition = this.positionConfig.initial // unused
+} else {
+    leftPosition = this.positionConfig.initial // unused
+    rightPosition = this.positionConfig.initial
+}
+
+// Reparent rightNode first in case it is a descendant of leftNode.
+if (rightNodeId !== undefined) {
+    this.reparent(rightNodeId, expression.id, rightPosition)
+}
+if (leftNodeId !== undefined) {
+    this.reparent(leftNodeId, expression.id, leftPosition)
+}
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -649,6 +654,7 @@ git commit -m "fix(expression-manager): use midpoint-spaced positions in insertE
 ### Task 5: Improve `promoteChild` positioning
 
 **Files:**
+
 - Modify: `src/lib/core/expression-manager.ts:855-885` (promoteChild)
 
 - [ ] **Step 1: Write the failing test**
@@ -661,9 +667,7 @@ it("promoteChild uses midpoint of neighbors instead of parent position", () => {
         repositionOnCollision: true,
         collapseEmptyFormula: true,
     })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     // Three children: 0, 1, 100.
     pm.addExpression(
         makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
@@ -699,16 +703,12 @@ it("promoteChild with repositionOnCollision uses midpoint of neighbors", () => {
         repositionOnCollision: true,
         collapseEmptyFormula: true,
     })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     pm.addExpression(
         makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
     )
     // A formula wrapping a single variable — will collapse when its child collapses.
-    pm.addExpression(
-        makeFormulaExpr("wrap", { parentId: "root", position: 1 })
-    )
+    pm.addExpression(makeFormulaExpr("wrap", { parentId: "root", position: 1 }))
     pm.addExpression(
         makeOpExpr("inner-and", "and", { parentId: "wrap", position: 0 })
     )
@@ -842,6 +842,7 @@ git commit -m "feat(expression-manager): improve promoteChild positioning with m
 ### Task 6: Additional test coverage
 
 **Files:**
+
 - Modify: `test/core.test.ts`
 
 - [ ] **Step 1: Add remaining test cases**
@@ -851,9 +852,7 @@ Add inside the `repositionOnCollision auto-normalize flag` describe block:
 ```typescript
 it("no collision when gap is wide — no repositioning", () => {
     const pm = premiseWithVarsGranular({ repositionOnCollision: true })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     pm.addExpression(
         makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
     )
@@ -884,9 +883,7 @@ it("no collision when gap is wide — no repositioning", () => {
 
 it("flag disabled — collision throws", () => {
     const pm = premiseWithVarsGranular({ repositionOnCollision: false })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     pm.addExpression(
         makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
     )
@@ -909,9 +906,7 @@ it("flag disabled — collision throws", () => {
 
 it("three consecutive children — tight chain shifts minimally", () => {
     const pm = premiseWithVarsGranular({ repositionOnCollision: true })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     pm.addExpression(
         makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
     )
@@ -943,16 +938,12 @@ it("three consecutive children — tight chain shifts minimally", () => {
     expect(children[0].id).toBe("c1")
     expect(children[0].position).toBe(0)
     // modified should contain the repositioned siblings but NOT c1.
-    expect(
-        changes.expressions!.modified.some((e) => e.id === "c1")
-    ).toBe(false)
+    expect(changes.expressions!.modified.some((e) => e.id === "c1")).toBe(false)
 })
 
 it("tight chain direction — shifts toward gap with fewer nodes", () => {
     const pm = premiseWithVarsGranular({ repositionOnCollision: true })
-    pm.addExpression(
-        makeOpExpr("root", "and", { parentId: null, position: 0 })
-    )
+    pm.addExpression(makeOpExpr("root", "and", { parentId: null, position: 0 }))
     // Positions: 0, 5, 6, 7, 100
     pm.addExpression(
         makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
@@ -1038,6 +1029,7 @@ git commit -m "test: add comprehensive coverage for repositionOnCollision flag"
 ### Task 7: Documentation sync
 
 **Files:**
+
 - Modify: `CLAUDE.md` — update `TAutoNormalizeConfig` description in "Granular auto-normalize" design rule
 - Modify: `docs/release-notes/upcoming.md` — add user-facing note
 - Modify: `docs/changelogs/upcoming.md` — add developer changelog entry

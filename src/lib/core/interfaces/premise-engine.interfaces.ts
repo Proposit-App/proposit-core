@@ -76,6 +76,11 @@ export interface TExpressionMutations<
      * position computed automatically. If `parentId` is `null`, the
      * expression becomes the root.
      *
+     * When the `repositionOnCollision` auto-normalize flag is enabled,
+     * sibling positions are automatically redistributed if the computed
+     * position would collide with an existing sibling. Repositioned
+     * siblings appear in `changes.expressions.modified`.
+     *
      * @param parentId - The parent expression ID, or `null` for root.
      * @param expression - The expression to add (position is auto-assigned).
      * @returns The added expression (with checksum) and changeset.
@@ -92,6 +97,12 @@ export interface TExpressionMutations<
     /**
      * Adds an expression immediately before or after an existing sibling,
      * with position computed automatically.
+     *
+     * When the `repositionOnCollision` auto-normalize flag is enabled,
+     * sibling positions are automatically redistributed if the computed
+     * midpoint position would collide with an existing sibling. Only the
+     * minimal set of nodes is repositioned. Repositioned siblings appear
+     * in `changes.expressions.modified`.
      *
      * @param siblingId - The ID of the existing sibling expression.
      * @param relativePosition - Whether to insert `"before"` or `"after"`
