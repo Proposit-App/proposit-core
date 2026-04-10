@@ -26642,4 +26642,183 @@ describe("repositionOnCollision auto-normalize flag", () => {
         expect(promoted).toBeDefined()
         expect(promoted!.position).toBe(midpoint(0, 100))
     })
+
+    it("no collision when gap is wide — no repositioning", () => {
+        const pm = premiseWithVarsGranular({ repositionOnCollision: true })
+        pm.addExpression(
+            makeOpExpr("root", "and", { parentId: null, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c2", "var-q", { parentId: "root", position: 1000 })
+        )
+
+        const { changes } = pm.addExpressionRelative("c1", "after", {
+            id: "c3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-r",
+            parentId: "root",
+        })
+
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(3)
+        expect(children[1].id).toBe("c3")
+        expect(children[1].position).toBe(midpoint(0, 1000))
+        // No repositioning needed — no siblings should have changed position.
+        // Filter to only children of root (exclude parent checksum updates).
+        const childIds = new Set(children.map((c) => c.id))
+        const modifiedSiblings = (changes.expressions?.modified ?? []).filter(
+            (e) => childIds.has(e.id) && e.id !== "c3"
+        )
+        expect(modifiedSiblings).toHaveLength(0)
+    })
+
+    it("flag disabled — collision throws", () => {
+        const pm = premiseWithVarsGranular({ repositionOnCollision: false })
+        pm.addExpression(
+            makeOpExpr("root", "and", { parentId: null, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c2", "var-q", { parentId: "root", position: 1 })
+        )
+
+        expect(() =>
+            pm.addExpressionRelative("c1", "after", {
+                id: "c3",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: "premise-1",
+                type: "variable",
+                variableId: "var-r",
+                parentId: "root",
+            })
+        ).toThrow(/Position.*already used/)
+    })
+
+    it("three consecutive children — tight chain shifts minimally", () => {
+        const pm = premiseWithVarsGranular({ repositionOnCollision: true })
+        pm.addExpression(
+            makeOpExpr("root", "and", { parentId: null, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c2", "var-q", { parentId: "root", position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr("c3", "var-r", { parentId: "root", position: 2 })
+        )
+
+        const { changes } = pm.addExpressionRelative("c1", "after", {
+            id: "c4",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-p",
+            parentId: "root",
+        })
+
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(4)
+        const positions = children.map((c) => c.position)
+        // All positions should be strictly increasing.
+        for (let i = 1; i < positions.length; i++) {
+            expect(positions[i]).toBeGreaterThan(positions[i - 1])
+        }
+        // The algorithm picks the direction with fewer nodes to shift.
+        // Left chain: c1 (1 node). Right chain: c2, c3 (2 nodes). Shifts left (fewer).
+        // c1 is repositioned; c2 and c3 keep their original positions.
+        expect(children.find((c) => c.id === "c2")!.position).toBe(1)
+        expect(children.find((c) => c.id === "c3")!.position).toBe(2)
+        // c2 and c3 should not be in the modified list.
+        expect(changes.expressions!.modified.some((e) => e.id === "c2")).toBe(
+            false
+        )
+        expect(changes.expressions!.modified.some((e) => e.id === "c3")).toBe(
+            false
+        )
+    })
+
+    it("tight chain direction — shifts toward gap with fewer nodes", () => {
+        const pm = premiseWithVarsGranular({ repositionOnCollision: true })
+        pm.addExpression(
+            makeOpExpr("root", "and", { parentId: null, position: 0 })
+        )
+        // Positions: 0, 5, 6, 7, 100
+        pm.addExpression(
+            makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c2", "var-q", { parentId: "root", position: 5 })
+        )
+        pm.addExpression(
+            makeVarExpr("c3", "var-r", { parentId: "root", position: 6 })
+        )
+        pm.addExpression(
+            makeVarExpr("c4", "var-p", { parentId: "root", position: 7 })
+        )
+        pm.addExpression(
+            makeVarExpr("c5", "var-q", { parentId: "root", position: 100 })
+        )
+
+        // Insert between c2 (5) and c3 (6).
+        // Left chain from c2: just c2 (gap to c1 is 5 > 1). Right chain from c3: c3, c4 (gap 1).
+        // Algorithm picks left (fewer nodes): shifts c2 into the gap between c1 (0) and c3 (6).
+        pm.addExpressionRelative("c2", "after", {
+            id: "new",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-r",
+            parentId: "root",
+        })
+
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(6)
+        // c1 at 0 and c5 at 100 should be untouched (outside the tight chain).
+        expect(children.find((c) => c.id === "c1")!.position).toBe(0)
+        expect(children.find((c) => c.id === "c5")!.position).toBe(100)
+        // c3 and c4 should be untouched (right chain was not chosen).
+        expect(children.find((c) => c.id === "c3")!.position).toBe(6)
+        expect(children.find((c) => c.id === "c4")!.position).toBe(7)
+        // c2 was shifted left into the gap between c1 (0) and c3 (6).
+        expect(children.find((c) => c.id === "c2")!.position).toBeLessThan(5)
+        expect(children.find((c) => c.id === "c2")!.position).toBeGreaterThan(0)
+    })
+
+    it("promoteChild at root keeps parent position", () => {
+        const pm = premiseWithVarsGranular({
+            repositionOnCollision: true,
+            collapseEmptyFormula: true,
+        })
+        pm.addExpression(
+            makeOpExpr("root", "and", { parentId: null, position: 42 })
+        )
+        pm.addExpression(
+            makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c2", "var-q", { parentId: "root", position: 100 })
+        )
+
+        // Remove c2 → root-and has 1 child → c1 promoted into root's slot.
+        pm.removeExpression("c2", true)
+
+        // c1 should have root's old position (42), not midpoint of neighbors.
+        const expressions = pm.getChildExpressions(null)
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].id).toBe("c1")
+        expect(expressions[0].position).toBe(42)
+    })
 })
