@@ -526,12 +526,70 @@ export class ExpressionManager<
                     ? children[siblingIndex - 1].position
                     : this.positionConfig.min
             position = midpoint(prevPosition, sibling.position)
+
+            if (position === prevPosition || position === sibling.position) {
+                if (
+                    resolveAutoNormalize(
+                        this.grammarConfig,
+                        "repositionOnCollision"
+                    )
+                ) {
+                    this.repositionSiblings(
+                        sibling.parentId,
+                        siblingIndex > 0
+                            ? children[siblingIndex - 1].position
+                            : this.positionConfig.min,
+                        sibling.position
+                    )
+                    const updated = this.getChildExpressions(sibling.parentId)
+                    const newSiblingIdx = updated.findIndex(
+                        (c) => c.id === siblingId
+                    )
+                    const newPrevPos =
+                        newSiblingIdx > 0
+                            ? updated[newSiblingIdx - 1].position
+                            : this.positionConfig.min
+                    position = midpoint(
+                        newPrevPos,
+                        updated[newSiblingIdx].position
+                    )
+                }
+            }
         } else {
             const nextPosition =
                 siblingIndex < children.length - 1
                     ? children[siblingIndex + 1].position
                     : this.positionConfig.max
             position = midpoint(sibling.position, nextPosition)
+
+            if (position === sibling.position || position === nextPosition) {
+                if (
+                    resolveAutoNormalize(
+                        this.grammarConfig,
+                        "repositionOnCollision"
+                    )
+                ) {
+                    this.repositionSiblings(
+                        sibling.parentId,
+                        sibling.position,
+                        siblingIndex < children.length - 1
+                            ? children[siblingIndex + 1].position
+                            : this.positionConfig.max
+                    )
+                    const updated = this.getChildExpressions(sibling.parentId)
+                    const newSiblingIdx = updated.findIndex(
+                        (c) => c.id === siblingId
+                    )
+                    const newNextPos =
+                        newSiblingIdx < updated.length - 1
+                            ? updated[newSiblingIdx + 1].position
+                            : this.positionConfig.max
+                    position = midpoint(
+                        updated[newSiblingIdx].position,
+                        newNextPos
+                    )
+                }
+            }
         }
 
         this.addExpression({
@@ -882,6 +940,135 @@ export class ExpressionManager<
 
         this.dirtyExpressionIds.delete(parentId)
         this.markExpressionDirty(child.id)
+    }
+
+    /**
+     * Redistributes the minimal set of sibling positions to create room at
+     * an insertion point between `leftPos` and `rightPos` under `parentId`.
+     *
+     * When `leftPos` or `rightPos` is a boundary value (positionConfig.min/max)
+     * rather than a real node position, the corresponding chain has 0 nodes.
+     */
+    private repositionSiblings(
+        parentId: string | null,
+        leftPos: number,
+        rightPos: number
+    ): TExpr[] {
+        const children = this.getChildExpressions(parentId)
+        if (children.length === 0) return []
+
+        const positions = children.map((c) => c.position)
+
+        const leftIdx = positions.indexOf(leftPos)
+        const rightIdx = positions.indexOf(rightPos)
+
+        // Scan left from leftIdx: expand while consecutive gaps <= 1.
+        let scanLeft: number
+        let leftBound: number
+        let leftCount: number
+        if (leftIdx === -1) {
+            // leftPos is a boundary (positionConfig.min), not a real node.
+            scanLeft = 0
+            leftBound = leftPos
+            leftCount = 0
+        } else {
+            scanLeft = leftIdx
+            while (
+                scanLeft > 0 &&
+                positions[scanLeft] - positions[scanLeft - 1] <= 1
+            ) {
+                scanLeft--
+            }
+            leftBound =
+                scanLeft > 0 ? positions[scanLeft - 1] : this.positionConfig.min
+            leftCount = leftIdx - scanLeft + 1
+        }
+
+        // Scan right from rightIdx: expand while consecutive gaps <= 1.
+        let scanRight: number
+        let rightBound: number
+        let rightCount: number
+        if (rightIdx === -1) {
+            // rightPos is a boundary (positionConfig.max), not a real node.
+            scanRight = positions.length - 1
+            rightBound = rightPos
+            rightCount = 0
+        } else {
+            scanRight = rightIdx
+            while (
+                scanRight < positions.length - 1 &&
+                positions[scanRight + 1] - positions[scanRight] <= 1
+            ) {
+                scanRight++
+            }
+            rightBound =
+                scanRight < positions.length - 1
+                    ? positions[scanRight + 1]
+                    : this.positionConfig.max
+            rightCount = scanRight - rightIdx + 1
+        }
+
+        // Pick direction with fewer nodes. Tie-break: right.
+        let startIdx: number
+        let endIdx: number
+        let lowerBound: number
+        let upperBound: number
+
+        if (leftCount > 0 && leftCount < rightCount) {
+            startIdx = scanLeft
+            endIdx = leftIdx
+            lowerBound = leftBound
+            upperBound = rightPos
+        } else if (rightCount > 0) {
+            startIdx = rightIdx
+            endIdx = scanRight
+            lowerBound = leftPos
+            upperBound = rightBound
+        } else {
+            // leftCount > 0, rightCount === 0: must pick left.
+            startIdx = scanLeft
+            endIdx = leftIdx
+            lowerBound = leftBound
+            upperBound = rightPos
+        }
+
+        const count = endIdx - startIdx + 1
+        const range = upperBound - lowerBound
+        if (range <= count) {
+            throw new Error(
+                `Cannot reposition: not enough space in range (${lowerBound}, ${upperBound}) for ${count} expressions.`
+            )
+        }
+
+        const modified: TExpr[] = []
+
+        const positionSet = this.childPositionsByParentId.get(parentId)
+        for (let i = startIdx; i <= endIdx; i++) {
+            positionSet?.delete(positions[i])
+        }
+
+        for (let i = startIdx; i <= endIdx; i++) {
+            const newPos = Math.trunc(
+                lowerBound +
+                    ((upperBound - lowerBound) / (count + 1)) *
+                        (i - startIdx + 1)
+            )
+            const child = children[i]
+
+            const updated = this.attachChecksum({
+                ...child,
+                position: newPos,
+            } as TExpressionInput<TExpr>)
+            this.expressions.set(child.id, updated)
+            this.collector?.modifiedExpression({
+                ...updated,
+            } as unknown as TCorePropositionalExpression)
+            positionSet?.add(newPos)
+            this.markExpressionDirty(child.id)
+            modified.push(updated)
+        }
+
+        return modified
     }
 
     private collapseIfNeeded(operatorId: string | null): void {

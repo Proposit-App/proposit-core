@@ -26496,4 +26496,37 @@ describe("repositionOnCollision auto-normalize flag", () => {
             )
         ).toBe(true)
     })
+
+    it("addExpressionRelative redistributes on collision (consecutive positions)", () => {
+        const pm = premiseWithVarsGranular({ repositionOnCollision: true })
+        pm.addExpression(
+            makeOpExpr("root", "and", { parentId: null, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c1", "var-p", { parentId: "root", position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr("c2", "var-q", { parentId: "root", position: 1 })
+        )
+
+        const { changes } = pm.addExpressionRelative("c1", "after", {
+            id: "c3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: "premise-1",
+            type: "variable",
+            variableId: "var-r",
+            parentId: "root",
+        })
+
+        const children = pm.getChildExpressions("root")
+        expect(children).toHaveLength(3)
+        const positions = children.map((c) => c.position)
+        expect(positions[0]).toBeLessThan(positions[1])
+        expect(positions[1]).toBeLessThan(positions[2])
+
+        expect(changes.expressions).toBeDefined()
+        expect(changes.expressions!.modified.length).toBeGreaterThan(0)
+        expect(changes.expressions!.added.some((e) => e.id === "c3")).toBe(true)
+    })
 })
