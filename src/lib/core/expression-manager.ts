@@ -1634,7 +1634,8 @@ export class ExpressionManager<
      *
      * The new expression inherits the tree slot of the anchor node
      * (`leftNodeId ?? rightNodeId`). The anchor and optional second node
-     * become children of the new expression at positions 0 and 1.
+     * become children of the new expression at midpoint-spaced positions
+     * (`POSITION_INITIAL` and `midpoint(POSITION_INITIAL, POSITION_MAX)`).
      *
      * Right node is reparented before left node to handle the case where
      * the right node is a descendant of the left node's subtree.
@@ -1842,12 +1843,30 @@ export class ExpressionManager<
         const anchorParentId = anchor.parentId
         const anchorPosition = anchor.position
 
+        // Compute child positions (midpoint-spaced for future bisection),
+        // matching the pattern used by wrapExpression.
+        let leftPosition: number
+        let rightPosition: number
+        if (leftNodeId !== undefined && rightNodeId !== undefined) {
+            leftPosition = this.positionConfig.initial
+            rightPosition = midpoint(
+                this.positionConfig.initial,
+                this.positionConfig.max
+            )
+        } else if (leftNodeId !== undefined) {
+            leftPosition = this.positionConfig.initial
+            rightPosition = this.positionConfig.initial // unused
+        } else {
+            leftPosition = this.positionConfig.initial // unused
+            rightPosition = this.positionConfig.initial
+        }
+
         // Reparent rightNode first in case it is a descendant of leftNode.
         if (rightNodeId !== undefined) {
-            this.reparent(rightNodeId, expression.id, 1)
+            this.reparent(rightNodeId, expression.id, rightPosition)
         }
         if (leftNodeId !== undefined) {
-            this.reparent(leftNodeId, expression.id, 0)
+            this.reparent(leftNodeId, expression.id, leftPosition)
         }
 
         // Determine the slot for the new expression. If a parent formula buffer

@@ -607,9 +607,18 @@ describe("insertExpression", () => {
     it("inserts new expression into anchor's slot when only right node is provided", () => {
         const premise = premiseWithVars()
         premise.addExpression(makeVarExpr("expr-p", VAR_P.id))
-        // expr-p is root; op-or inherits that root slot, expr-p becomes position 1
+        // expr-p is root; op-or inherits that root slot, expr-p becomes POSITION_INITIAL
         premise.insertExpression(makeOpExpr("op-or", "or"), undefined, "expr-p")
-        // Position 1 should now be occupied
+        // POSITION_INITIAL should now be occupied
+        expect(() =>
+            premise.addExpression(
+                makeVarExpr("expr-q", VAR_Q.id, {
+                    parentId: "op-or",
+                    position: POSITION_INITIAL,
+                })
+            )
+        ).toThrowError(/Position 0 is already used/)
+        // A different position should be free
         expect(() =>
             premise.addExpression(
                 makeVarExpr("expr-q", VAR_Q.id, {
@@ -617,19 +626,10 @@ describe("insertExpression", () => {
                     position: 1,
                 })
             )
-        ).toThrowError(/Position 1 is already used/)
-        // Position 0 should be free
-        expect(() =>
-            premise.addExpression(
-                makeVarExpr("expr-q", VAR_Q.id, {
-                    parentId: "op-or",
-                    position: 0,
-                })
-            )
         ).not.toThrow()
     })
 
-    it("inserts binary expression with leftNode at position 0 and rightNode at position 1", () => {
+    it("inserts binary expression with leftNode at POSITION_INITIAL and rightNode at midpoint", () => {
         // Use ExpressionManager directly to allow two root-level expressions
         const em = new ExpressionManager()
         em.addExpression(makeVarExpr("expr-p", VAR_P.id))
@@ -641,15 +641,15 @@ describe("insertExpression", () => {
         )
         // Insert op-and: anchor is expr-p (root), so op-and becomes root
         em.insertExpression(makeOpExpr("op-and", "and"), "expr-p", "expr-q")
-        // op-and (root) → [expr-p(0), expr-q(1)]
+        // op-and (root) → [expr-p(POSITION_INITIAL), expr-q(midpoint)]
         const andExpr = em.getExpression("op-and")!
         expect(andExpr.parentId).toBeNull()
         const pExpr = em.getExpression("expr-p")!
         expect(pExpr.parentId).toBe("op-and")
-        expect(pExpr.position).toBe(0)
+        expect(pExpr.position).toBe(POSITION_INITIAL)
         const qExpr = em.getExpression("expr-q")!
         expect(qExpr.parentId).toBe("op-and")
-        expect(qExpr.position).toBe(1)
+        expect(qExpr.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
     })
 
     it("inserts not expression as a unary wrapper around its single left child", () => {
@@ -26556,5 +26556,44 @@ describe("repositionOnCollision auto-normalize flag", () => {
         expect(children).toHaveLength(2)
         expect(children[0].position).toBeLessThan(children[1].position)
         expect(changes.expressions!.modified.length).toBeGreaterThan(0)
+    })
+
+    it("insertExpression uses evenly-spaced child positions instead of 0 and 1", () => {
+        const em = new ExpressionManager()
+        em.addExpression(
+            makeVarExpr("left", "var-p", { parentId: null, position: 0 })
+        )
+        em.addExpression(
+            makeVarExpr("right", "var-q", { parentId: null, position: 100 })
+        )
+
+        em.insertExpression(
+            makeOpExpr("op", "and", { parentId: null, position: 0 }),
+            "left",
+            "right"
+        )
+
+        const children = em.getChildExpressions("op")
+        expect(children).toHaveLength(2)
+        expect(children[0].position).toBe(POSITION_INITIAL)
+        expect(children[1].position).toBe(
+            midpoint(POSITION_INITIAL, POSITION_MAX)
+        )
+    })
+
+    it("insertExpression with single child uses POSITION_INITIAL", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(
+            makeVarExpr("child", "var-p", { parentId: null, position: 50 })
+        )
+
+        pm.insertExpression(
+            makeOpExpr("op", "not", { parentId: null, position: 0 }),
+            "child"
+        )
+
+        const children = pm.getChildExpressions("op")
+        expect(children).toHaveLength(1)
+        expect(children[0].position).toBe(POSITION_INITIAL)
     })
 })
