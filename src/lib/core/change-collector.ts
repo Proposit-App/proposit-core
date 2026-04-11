@@ -60,6 +60,9 @@ export class ChangeCollector<
     addedPremise(premise: TPremise): void {
         this.premises.added.push(premise)
     }
+    modifiedPremise(premise: TPremise): void {
+        this.premises.modified.push(premise)
+    }
     removedPremise(premise: TPremise): void {
         this.premises.removed.push(premise)
     }
