@@ -1149,7 +1149,10 @@ export class PremiseEngine<
             collector.modifiedPremise(this.toPremiseData())
 
             this.onMutate?.()
-            return { result: this.getExtras(), changes: collector.toChangeset() }
+            return {
+                result: this.getExtras(),
+                changes: collector.toChangeset(),
+            }
         })
     }
 

@@ -528,9 +528,7 @@ export class ArgumentEngine<
             id,
             version,
             ...(checksum !== undefined ? { checksum } : {}),
-            ...(descendantChecksum !== undefined
-                ? { descendantChecksum }
-                : {}),
+            ...(descendantChecksum !== undefined ? { descendantChecksum } : {}),
             ...(combinedChecksum !== undefined ? { combinedChecksum } : {}),
         } as TOptionalChecksum<TArg>
         this.markDirty()
