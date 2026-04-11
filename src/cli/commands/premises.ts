@@ -233,9 +233,7 @@ export function registerPremiseCommands(
                         )
                     }
                 } catch (err) {
-                    errorExit(
-                        err instanceof Error ? err.message : String(err)
-                    )
+                    errorExit(err instanceof Error ? err.message : String(err))
                 }
 
                 await persistEngine(engine)

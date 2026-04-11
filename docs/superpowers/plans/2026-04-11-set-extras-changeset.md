@@ -15,6 +15,7 @@
 ### Task 1: Add `modifiedPremise()` to `ChangeCollector`
 
 **Files:**
+
 - Modify: `src/lib/core/change-collector.ts:60-65`
 
 - [ ] **Step 1: Add `modifiedPremise` method**
@@ -44,6 +45,7 @@ git commit -m "feat: add modifiedPremise() to ChangeCollector"
 ### Task 2: Fix `PremiseEngine.setExtras` to produce a changeset
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts:1115-1149`
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts:521-529`
 - Test: `test/core.test.ts`
@@ -212,18 +214,18 @@ In `src/lib/core/premise-engine.ts`, replace the `setExtras` method (lines 1115-
 In `test/core.test.ts`, find the test at line 5273 ("setExtras returns new extras with empty changes"). Replace the assertion:
 
 ```ts
-    it("setExtras returns new extras with changeset", () => {
-        const eng = new ArgumentEngine(
-            { id: "arg1", version: 0 },
-            aLib(),
-            sLib(),
-            csLib()
-        )
-        const { result: pm } = eng.createPremise()
-        const { result, changes } = pm.setExtras({ title: "Test" })
-        expect(result).toEqual({ title: "Test" })
-        expect(changes.premises?.modified).toHaveLength(1)
-    })
+it("setExtras returns new extras with changeset", () => {
+    const eng = new ArgumentEngine(
+        { id: "arg1", version: 0 },
+        aLib(),
+        sLib(),
+        csLib()
+    )
+    const { result: pm } = eng.createPremise()
+    const { result, changes } = pm.setExtras({ title: "Test" })
+    expect(result).toEqual({ title: "Test" })
+    expect(changes.premises?.modified).toHaveLength(1)
+})
 ```
 
 - [ ] **Step 6: Run tests**
@@ -243,6 +245,7 @@ git commit -m "feat: PremiseEngine.setExtras produces changeset with modified pr
 ### Task 3: Add `PremiseEngine.updateExtras`
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts` (after `setExtras`)
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts`
 - Test: `test/core.test.ts`
@@ -358,6 +361,7 @@ git commit -m "feat: add PremiseEngine.updateExtras with changeset"
 ### Task 4: Add `ArgumentEngine.getExtras`, `setExtras`, `updateExtras`
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts` (after `getArgument`, around line 501)
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts:446-458`
 - Test: `test/core.test.ts`
@@ -581,6 +585,7 @@ git commit -m "feat: add ArgumentEngine.getExtras/setExtras/updateExtras with ch
 ### Task 5: Refactor CLI `premises update` to use engine
 
 **Files:**
+
 - Modify: `src/cli/commands/premises.ts:201-233`
 
 - [ ] **Step 1: Refactor the `premises update` command**
@@ -588,42 +593,35 @@ git commit -m "feat: add ArgumentEngine.getExtras/setExtras/updateExtras with ch
 In `src/cli/commands/premises.ts`, replace the `update` action (lines 206-232):
 
 ```ts
-            async (
-                premiseId: string,
-                opts: { title?: string; clearTitle?: boolean }
-            ) => {
-                await assertNotPublished(argumentId, version)
-                if (opts.title !== undefined && opts.clearTitle) {
-                    errorExit(
-                        "--title and --clear-title cannot both be specified."
-                    )
-                }
+;async (premiseId: string, opts: { title?: string; clearTitle?: boolean }) => {
+    await assertNotPublished(argumentId, version)
+    if (opts.title !== undefined && opts.clearTitle) {
+        errorExit("--title and --clear-title cannot both be specified.")
+    }
 
-                const engine = await hydrateEngine(argumentId, version)
-                const pm = engine.getPremise(premiseId)
-                if (!pm) {
-                    errorExit(`Premise "${premiseId}" not found.`)
-                }
+    const engine = await hydrateEngine(argumentId, version)
+    const pm = engine.getPremise(premiseId)
+    if (!pm) {
+        errorExit(`Premise "${premiseId}" not found.`)
+    }
 
-                try {
-                    if (opts.clearTitle) {
-                        const extras = pm.getExtras()
-                        delete extras.title
-                        pm.setExtras(extras)
-                    } else if (opts.title !== undefined) {
-                        pm.updateExtras({ title: opts.title })
-                    } else {
-                        errorExit(
-                            "No updates specified. Use --title or --clear-title."
-                        )
-                    }
-                } catch (err) {
-                    errorExit(err instanceof Error ? err.message : String(err))
-                }
+    try {
+        if (opts.clearTitle) {
+            const extras = pm.getExtras()
+            delete extras.title
+            pm.setExtras(extras)
+        } else if (opts.title !== undefined) {
+            pm.updateExtras({ title: opts.title })
+        } else {
+            errorExit("No updates specified. Use --title or --clear-title.")
+        }
+    } catch (err) {
+        errorExit(err instanceof Error ? err.message : String(err))
+    }
 
-                await persistEngine(engine)
-                printLine("success")
-            }
+    await persistEngine(engine)
+    printLine("success")
+}
 ```
 
 - [ ] **Step 2: Remove unused `writePremiseMeta` import**
@@ -652,6 +650,7 @@ git commit -m "refactor: route CLI premises update through engine"
 ### Task 6: Documentation updates
 
 **Files:**
+
 - Modify: `docs/api-reference.md`
 - Modify: `docs/release-notes/upcoming.md`
 - Modify: `docs/changelogs/upcoming.md`
@@ -693,6 +692,7 @@ git commit -m "docs: API reference, release notes, and changelog for extras chan
 ### Task 7: Delete change request and final verification
 
 **Files:**
+
 - Delete: `docs/change-requests/2026-04-11-set-extras-changeset.md`
 
 - [ ] **Step 1: Delete the change request file**

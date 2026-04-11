@@ -244,6 +244,24 @@ Options:
 
 ---
 
+### `getExtras()` → `Record<string, unknown>`
+
+Returns the argument's extra metadata (all fields except `id`, `version`, and checksums).
+
+---
+
+### `setExtras(extras)` → `TCoreMutationResult<Record<string, unknown>>`
+
+Replaces all extra metadata on the argument. Structural fields (`id`, `version`, checksums) are preserved and cannot be overwritten. Returns the new extras and a changeset with the updated argument in `changes.argument`.
+
+---
+
+### `updateExtras(updates)` → `TCoreMutationResult<Record<string, unknown>>`
+
+Shallow-merges `updates` into the existing extras. Equivalent to `setExtras({ ...getExtras(), ...updates })`. Returns the merged extras and a changeset with the updated argument.
+
+---
+
 ### `subscribe(listener)` → `() => void`
 
 Registers a listener that is called synchronously after every mutation (including mutations through child `PremiseEngine` instances). Returns an unsubscribe function. Compatible with React's `useSyncExternalStore`.
@@ -912,6 +930,18 @@ Mirrors the internal traversal of `toDisplayString()` but delegates rendering to
 ### `toPremiseData()` → `TPremise`
 
 Returns a serialisable premise object (`{ id, argumentId, argumentVersion, checksum }` plus any extension fields). Does not include `rootExpressionId`, expressions, or variables — use `getRootExpressionId()`, `getExpressions()`, and `getReferencedVariableIds()` for those.
+
+---
+
+### `setExtras(extras)` → `TCoreMutationResult<Record<string, unknown>>`
+
+Replaces all extra metadata on the premise. Structural fields (`id`, `argumentId`, `argumentVersion`, checksums) are preserved and cannot be overwritten. Returns the new extras and a changeset with the modified premise in `changes.premises.modified`.
+
+---
+
+### `updateExtras(updates)` → `TCoreMutationResult<Record<string, unknown>>`
+
+Shallow-merges `updates` into the existing extras. Equivalent to `setExtras({ ...getExtras(), ...updates })`. Returns the merged extras and a changeset with the modified premise.
 
 ---
 
