@@ -21768,6 +21768,184 @@ describe("orderChangeset", () => {
         expect(deleteOps[1].data.id).toBe("parent")
     })
 
+    it("emits reparent updates before deleting the old parent (cascade safety)", () => {
+        // Scenario: absorbSameOperator reparents V3, V4 from OR to AND,
+        // then deletes OR and F1. If the DB has ON DELETE CASCADE on
+        // parentId, deleting OR before updating V3/V4's parentId destroys them.
+        const changeset: TCoreChangeset = {
+            expressions: {
+                added: [],
+                modified: [
+                    {
+                        // V3 — reparented from OR to AND
+                        id: "v3",
+                        type: "variable",
+                        variableId: "var3",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "and", // new parent
+                        position: 3,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
+                    {
+                        // V4 — reparented from OR to AND
+                        id: "v4",
+                        type: "variable",
+                        variableId: "var4",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "and", // new parent
+                        position: 4,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
+                    {
+                        // AND — checksum updated (not reparented)
+                        id: "and",
+                        type: "operator",
+                        operator: "and",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: null,
+                        position: 1,
+                        checksum: "c2",
+                        descendantChecksum: "d2",
+                        combinedChecksum: "cd2",
+                    },
+                ],
+                removed: [
+                    {
+                        // OR — the old parent being deleted
+                        id: "or",
+                        type: "operator",
+                        operator: "or",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "f1",
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: "d",
+                        combinedChecksum: "cd",
+                    },
+                    {
+                        // F1 — formula wrapper also deleted
+                        id: "f1",
+                        type: "formula",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "and",
+                        position: 2,
+                        checksum: "c",
+                        descendantChecksum: "d",
+                        combinedChecksum: "cd",
+                    },
+                ],
+            },
+        }
+        const ops = orderChangeset(changeset)
+
+        // Find the first update for a reparented child (v3 or v4)
+        const firstReparentUpdate = ops.findIndex(
+            (op) =>
+                op.type === "update" &&
+                op.entity === "expression" &&
+                (op.data.id === "v3" || op.data.id === "v4")
+        )
+        // Find the first delete of the old parent
+        const firstDelete = ops.findIndex(
+            (op) =>
+                op.type === "delete" &&
+                op.entity === "expression" &&
+                (op.data.id === "or" || op.data.id === "f1")
+        )
+
+        expect(firstReparentUpdate).not.toBe(-1)
+        expect(firstDelete).not.toBe(-1)
+        // The reparent update must come BEFORE the delete
+        expect(firstReparentUpdate).toBeLessThan(firstDelete)
+    })
+
+    it("drops expressions from modified when also in removed (dedup)", () => {
+        // Scenario: changeOperatorType records OR as modified (operator
+        // field changed), then absorbSameOperator records it as removed.
+        // The changeset should not contain OR in both buckets.
+        const changeset: TCoreChangeset = {
+            expressions: {
+                added: [],
+                modified: [
+                    {
+                        // OR — stale modified entry (also being deleted)
+                        id: "or",
+                        type: "operator",
+                        operator: "and", // changed from or to and
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "f1",
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: "d",
+                        combinedChecksum: "cd",
+                    },
+                    {
+                        // V3 — legitimately modified (reparented)
+                        id: "v3",
+                        type: "variable",
+                        variableId: "var3",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "and",
+                        position: 3,
+                        checksum: "c",
+                        descendantChecksum: null,
+                        combinedChecksum: "c",
+                    },
+                ],
+                removed: [
+                    {
+                        id: "or",
+                        type: "operator",
+                        operator: "or",
+                        argumentId: "a",
+                        argumentVersion: 0,
+                        premiseId: "p1",
+                        parentId: "f1",
+                        position: 1,
+                        checksum: "c",
+                        descendantChecksum: "d",
+                        combinedChecksum: "cd",
+                    },
+                ],
+            },
+        }
+        const ops = orderChangeset(changeset)
+
+        // OR should appear only as a delete, not as an update
+        const orOps = ops.filter(
+            (op) => op.entity === "expression" && op.data.id === "or"
+        )
+        expect(orOps).toHaveLength(1)
+        expect(orOps[0].type).toBe("delete")
+
+        // V3 should still appear as an update
+        const v3Ops = ops.filter(
+            (op) =>
+                op.type === "update" &&
+                op.entity === "expression" &&
+                op.data.id === "v3"
+        )
+        expect(v3Ops).toHaveLength(1)
+    })
+
     it("includes argument and roles updates at the end", () => {
         const changeset: TCoreChangeset = {
             roles: { conclusionPremiseId: "p1" },

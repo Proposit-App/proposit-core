@@ -177,21 +177,25 @@ export type TOrderedOperation<
  * Ordering phases:
  * 1. Update premises — ensure premise rows have correct metadata before
  *    dependent deletes run.
- * 2. Delete expressions — expression rows hold FKs to variables and premises,
+ * 2. Reparent expressions — update expressions whose IDs are NOT in the
+ *    removed set. This detaches reparented children from doomed parents
+ *    before ON DELETE CASCADE runs. Expressions that appear in both
+ *    modified and removed are skipped (the row is about to be deleted).
+ * 3. Delete expressions — expression rows hold FKs to variables and premises,
  *    so they must be removed first.
- * 3. Delete variables — safe after expression deletes (no remaining FK
+ * 4. Delete variables — safe after expression deletes (no remaining FK
  *    references from expressions).
- * 4. Delete premises — safe after all child rows are removed.
- * 5. Insert premises — new premises must exist before their expressions and
+ * 5. Delete premises — safe after all child rows are removed.
+ * 6. Insert premises — new premises must exist before their expressions and
  *    variables can be inserted.
- * 6. Insert variables — new variables must exist before variable-type
+ * 7. Insert variables — new variables must exist before variable-type
  *    expressions can reference them.
- * 7. Insert expressions — topologically sorted so parent expressions are
+ * 8. Insert expressions — topologically sorted so parent expressions are
  *    inserted before their children (satisfies the parentId self-FK).
- * 8. Update variables — grouped after inserts for clarity.
- * 9. Update expressions — checksum and position updates.
- * 10. Update argument metadata — if present.
- * 11. Update role state — if present.
+ * 9. Update variables — grouped after inserts for clarity.
+ * 10. (No-op — expression updates are now emitted in Phase 2.)
+ * 11. Update argument metadata — if present.
+ * 12. Update role state — if present.
  *
  * @param changeset - The changeset to convert into ordered operations.
  * @returns A flat array of {@link TOrderedOperation} entries in FK-safe
@@ -207,13 +211,29 @@ export function orderChangeset<
 ): TOrderedOperation<TExpr, TVar, TPremise, TArg>[] {
     const ops: TOrderedOperation<TExpr, TVar, TPremise, TArg>[] = []
 
+    // Build a set of removed expression IDs so we can skip them in modified
+    // phases. An expression that appears in both modified and removed is a
+    // no-op update — the row is about to be deleted.
+    const removedExprIds = new Set(
+        (changeset.expressions?.removed ?? []).map((e) => e.id)
+    )
+
     // Phase 1: Update premises — ensure premise rows have correct metadata
     // before dependent deletes run.
     for (const p of changeset.premises?.modified ?? []) {
         ops.push({ type: "update", entity: "premise", data: p })
     }
 
-    // Phase 2: Delete expressions — reverse-topologically sorted so children
+    // Phase 2: Reparent expressions — update expressions whose IDs are NOT
+    // in the removed set. This detaches reparented children from doomed
+    // parents before ON DELETE CASCADE runs in Phase 3.
+    for (const e of changeset.expressions?.modified ?? []) {
+        if (!removedExprIds.has(e.id)) {
+            ops.push({ type: "update", entity: "expression", data: e })
+        }
+    }
+
+    // Phase 3: Delete expressions — reverse-topologically sorted so children
     // are deleted before parents (satisfies the parentId self-FK).
     const removedExprs = changeset.expressions?.removed ?? []
     const sortedRemoved = topologicalSortExpressions(removedExprs).reverse()
@@ -221,31 +241,31 @@ export function orderChangeset<
         ops.push({ type: "delete", entity: "expression", data: e })
     }
 
-    // Phase 3: Delete variables — safe after expression deletes (no
+    // Phase 4: Delete variables — safe after expression deletes (no
     // remaining FK references from expressions).
     for (const v of changeset.variables?.removed ?? []) {
         ops.push({ type: "delete", entity: "variable", data: v })
     }
 
-    // Phase 4: Delete premises — safe after all child rows (expressions,
+    // Phase 5: Delete premises — safe after all child rows (expressions,
     // variables) are removed.
     for (const p of changeset.premises?.removed ?? []) {
         ops.push({ type: "delete", entity: "premise", data: p })
     }
 
-    // Phase 5: Insert premises — new premises must exist before their
+    // Phase 6: Insert premises — new premises must exist before their
     // expressions and variables can be inserted.
     for (const p of changeset.premises?.added ?? []) {
         ops.push({ type: "insert", entity: "premise", data: p })
     }
 
-    // Phase 6: Insert variables — new variables must exist before
+    // Phase 7: Insert variables — new variables must exist before
     // variable-type expressions can reference them.
     for (const v of changeset.variables?.added ?? []) {
         ops.push({ type: "insert", entity: "variable", data: v })
     }
 
-    // Phase 7: Insert expressions — topologically sorted so parent
+    // Phase 8: Insert expressions — topologically sorted so parent
     // expressions are inserted before their children (satisfies the
     // parentId self-FK).
     const sortedInsertExprs = topologicalSortExpressions(
@@ -255,17 +275,16 @@ export function orderChangeset<
         ops.push({ type: "insert", entity: "expression", data: e })
     }
 
-    // Phase 8: Update variables — grouped after inserts for clarity.
+    // Phase 9: Update variables — grouped after inserts for clarity.
     for (const v of changeset.variables?.modified ?? []) {
         ops.push({ type: "update", entity: "variable", data: v })
     }
 
-    // Phase 9: Update expressions — checksum and position updates.
-    for (const e of changeset.expressions?.modified ?? []) {
-        ops.push({ type: "update", entity: "expression", data: e })
-    }
+    // Phase 10: Update expressions — no-op. All non-removed modified
+    // expressions were already emitted in Phase 2 (reparent). This phase is
+    // retained as a logical placeholder to keep the phase numbering stable.
 
-    // Phase 10: Update argument metadata — if present.
+    // Phase 11: Update argument metadata — if present.
     if (changeset.argument !== undefined) {
         ops.push({
             type: "update",
@@ -274,7 +293,7 @@ export function orderChangeset<
         })
     }
 
-    // Phase 11: Update role state — if present.
+    // Phase 12: Update role state — if present.
     if (changeset.roles !== undefined) {
         ops.push({ type: "update", entity: "roles", data: changeset.roles })
     }
