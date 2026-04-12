@@ -1,3 +1,1 @@
 # Release Notes
-
-- Operator swaps that create same-operator nesting through a formula are now automatically flattened. For example, changing an OR to AND when it is already inside an AND group will absorb the children into the parent AND, removing the unnecessary formula wrapper. Controlled by the new `absorbSameOperator` auto-normalize flag.

@@ -1,10 +1,1 @@
 # Changelog
-
-## feat: absorbSameOperator auto-normalization
-
-- Added `absorbSameOperator` flag to `TAutoNormalizeConfig` in `src/lib/types/grammar.ts`
-- Added `absorbSameOperator` / `absorbSameOperatorIfNeeded` private methods to `ExpressionManager`
-- `updateExpression`: after an `and<->or` operator swap, if the new operator matches a grandparent operator (separated by a formula), the inner operator's children are absorbed into the outer operator and the formula + inner operator are removed
-- `normalize()`: Pass 5 performs the same absorption sweep for explicit on-demand normalization (not gated by the flag)
-- Updated CLI grammar config in `src/cli/engine.ts` to enable the new flag
-- 6 new tests in `test/core.test.ts` covering absorption, non-absorption, flag control, and changeset reporting
