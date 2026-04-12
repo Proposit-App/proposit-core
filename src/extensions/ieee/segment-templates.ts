@@ -6,25 +6,25 @@ import type { TCitationSegment } from "./formatting.js"
 // Instruction types
 // ---------------------------------------------------------------------------
 
-interface TSegmentSource {
+export interface TSegmentSource {
     kind: "string" | "date" | "authors" | "singleAuthor" | "literal"
     field?: string
     text?: string
 }
 
-interface TSegmentInstructionSegment {
+export interface TSegmentInstructionSegment {
     type: "segment"
     source: TSegmentSource
     role: TCitationSegment["role"]
     style?: TCitationSegment["style"]
 }
 
-interface TSegmentInstructionSeparator {
+export interface TSegmentInstructionSeparator {
     type: "separator"
     text: string
 }
 
-interface TSegmentInstructionConditional {
+export interface TSegmentInstructionConditional {
     type: "conditional"
     field: string
     checkLength?: boolean
