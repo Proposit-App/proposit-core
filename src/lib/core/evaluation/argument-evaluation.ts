@@ -64,6 +64,13 @@ export interface TEvaluablePremise {
             resolver?: (variableId: string) => boolean | null
         }
     ): TCorePremiseEvaluationResult
+    /**
+     * Returns the operator expressions a reviewer can accept or reject,
+     * in pre-order tree order. Excludes `"not"` operators and skips
+     * formula nodes. See `TExpressionQueries.getDecidableOperatorExpressions`
+     * on the full `PremiseEngine` for the authoritative contract.
+     */
+    getDecidableOperatorExpressions(): TCorePropositionalExpression[]
 }
 
 /**

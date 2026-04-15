@@ -1591,6 +1591,26 @@ export class PremiseEngine<
         return this.walkExpression(visitor, this.rootExpressionId)
     }
 
+    public getDecidableOperatorExpressions(): TExpr[] {
+        const result: TExpr[] = []
+        const rootId = this.rootExpressionId
+        if (rootId === undefined) return result
+
+        const visit = (exprId: string): void => {
+            const expr = this.expressions.getExpression(exprId)
+            if (!expr) return
+            if (expr.type === "operator" && expr.operator !== "not") {
+                result.push(expr)
+            }
+            for (const child of this.expressions.getChildExpressions(exprId)) {
+                visit(child.id)
+            }
+        }
+
+        visit(rootId)
+        return result
+    }
+
     public getReferencedVariableIds(): Set<string> {
         const ids = new Set<string>()
         for (const expr of this.expressions.toArray()) {

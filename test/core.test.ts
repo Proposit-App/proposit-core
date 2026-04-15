@@ -27714,3 +27714,123 @@ describe("review helper errors", () => {
         expect(err.message).toContain("expr-var")
     })
 })
+
+describe("PremiseEngine — getDecidableOperatorExpressions", () => {
+    it("returns [or] for a single or(a,b)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise({ title: "P or Q" })
+        const orId = `${pm.getId()}-or`
+        pm.addExpression(makeOpExpr(orId, "or"))
+        pm.addExpression(
+            makeVarExpr(`${orId}-p`, VAR_P.id, { parentId: orId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-q`, VAR_Q.id, { parentId: orId, position: 1 })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([orId])
+    })
+
+    it("returns [and, or] in pre-order for and(or(a,b), c)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(makeVar("var-r", "R"))
+        const { result: pm } = eng.createPremise({ title: "(P or Q) and R" })
+        const andId = `${pm.getId()}-and`
+        const orId = `${pm.getId()}-or`
+        const formulaId = `${pm.getId()}-formula`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeFormulaExpr(formulaId, { parentId: andId, position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr(orId, "or", { parentId: formulaId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-p`, VAR_P.id, { parentId: orId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-q`, VAR_Q.id, { parentId: orId, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-r`, "var-r", { parentId: andId, position: 1 })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([andId, orId])
+    })
+
+    it("excludes NOT inside a premise: and(not(a), b) returns [and]", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise({ title: "not(P) and Q" })
+        const andId = `${pm.getId()}-and`
+        const notId = `${pm.getId()}-not`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeOpExpr(notId, "not", { parentId: andId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${notId}-p`, VAR_P.id, {
+                parentId: notId,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-q`, VAR_Q.id, {
+                parentId: andId,
+                position: 1,
+            })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([andId])
+    })
+
+    it("excludes wrapping NOT but keeps inner AND: not(and(a,b)) returns [and]", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise({ title: "not(P and Q)" })
+        const notId = `${pm.getId()}-not`
+        const formulaId = `${pm.getId()}-formula`
+        const andId = `${pm.getId()}-and`
+        pm.addExpression(makeOpExpr(notId, "not"))
+        pm.addExpression(
+            makeFormulaExpr(formulaId, { parentId: notId, position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr(andId, "and", { parentId: formulaId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-p`, VAR_P.id, {
+                parentId: andId,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-q`, VAR_Q.id, {
+                parentId: andId,
+                position: 1,
+            })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([andId])
+    })
+
+    it("returns [] for a single-variable premise with no operators", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "P" })
+        pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
+        expect(pm.getDecidableOperatorExpressions()).toEqual([])
+    })
+
+    it("returns [] for an empty premise", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise({ title: "empty" })
+        expect(pm.getDecidableOperatorExpressions()).toEqual([])
+    })
+})
