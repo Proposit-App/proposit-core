@@ -18,6 +18,7 @@ import {
     InvalidArgumentStructureError,
     UnknownExpressionError,
     NotOperatorNotDecidableError,
+    collectArgumentReferencedClaims,
 } from "../src/lib/index"
 import type {
     TOrderedOperation,
@@ -27832,5 +27833,169 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
         const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
         const { result: pm } = eng.createPremise({ title: "empty" })
         expect(pm.getDecidableOperatorExpressions()).toEqual([])
+    })
+})
+
+describe("collectArgumentReferencedClaims", () => {
+    function evalCtxFrom(eng: ArgumentEngine): TArgumentEvaluationContext {
+        return {
+            argumentId: eng.getArgument().id,
+            conclusionPremiseId: eng.getRoleState().conclusionPremiseId,
+            getConclusionPremise: () =>
+                eng.getConclusionPremise() as TEvaluablePremise | undefined,
+            listSupportingPremises: () =>
+                eng.listSupportingPremises() as TEvaluablePremise[],
+            listPremises: () => eng.listPremises() as TEvaluablePremise[],
+            getVariable: (id) => eng.getVariable(id),
+            getPremise: (id) =>
+                eng.getPremise(id) as TEvaluablePremise | undefined,
+            validateEvaluability: () => eng.validateEvaluability(),
+        }
+    }
+
+    it("returns only the conclusion's claims when there are no supporting premises", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "P" })
+        pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
+        eng.setConclusionPremise(pm.getId())
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-default"])
+        expect(r.byId["claim-default"].variableIds).toEqual([VAR_P.id])
+        expect(r.byId["claim-default"].premiseIds).toEqual([pm.getId()])
+        expect(r.byId["claim-default"].claimVersion).toBe(0)
+    })
+
+    it("emits a claim once at its first occurrence when shared across premises", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: support } = eng.createPremise({ title: "P (support)" })
+        const { result: conclusion } = eng.createPremise({ title: "P (conc)" })
+        support.addExpression(makeVarExpr(`${support.getId()}-p`, VAR_P.id))
+        conclusion.addExpression(
+            makeVarExpr(`${conclusion.getId()}-p`, VAR_P.id)
+        )
+        eng.setConclusionPremise(conclusion.getId())
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-default"])
+        expect(r.byId["claim-default"].premiseIds).toHaveLength(2)
+        expect(r.byId["claim-default"].variableIds).toEqual([VAR_P.id])
+    })
+
+    it("skips premise-bound variables (no bound claim)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: inner } = eng.createPremise({ title: "inner: P" })
+        inner.addExpression(makeVarExpr(`${inner.getId()}-p`, VAR_P.id))
+        const { result: outer } = eng.createPremise({ title: "outer" })
+        const varsBound = eng.getVariables().filter((v) => isPremiseBound(v))
+        expect(varsBound.length).toBeGreaterThan(0)
+        void outer
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-default"])
+    })
+
+    it("throws InvalidArgumentStructureError when two variables bind the same claim with different versions", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "claim-shared" })
+        // freeze() leaves v0 (frozen) AND v1 (new mutable copy) both reachable.
+        lib.freeze("claim-shared")
+
+        const eng = new ArgumentEngine(
+            ARG,
+            lib,
+            sLib(),
+            new ClaimSourceLibrary(lib, sLib())
+        )
+        eng.addVariable({
+            id: "var-v0",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "X",
+            claimId: "claim-shared",
+            claimVersion: 0,
+        })
+        eng.addVariable({
+            id: "var-v1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "Y",
+            claimId: "claim-shared",
+            claimVersion: 1,
+        })
+        const { result: pm } = eng.createPremise({ title: "pm" })
+        const andId = `${pm.getId()}-and`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeVarExpr(`${andId}-x`, "var-v0", {
+                parentId: andId,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-y`, "var-v1", {
+                parentId: andId,
+                position: 1,
+            })
+        )
+        eng.setConclusionPremise(pm.getId())
+
+        expect(() => collectArgumentReferencedClaims(evalCtxFrom(eng))).toThrow(
+            InvalidArgumentStructureError
+        )
+    })
+
+    it("orders claims by supporting → conclusion → constraint, then by first tree-order reference", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "claim-a" })
+        lib.create({ id: "claim-b" })
+        const eng = new ArgumentEngine(
+            ARG,
+            lib,
+            sLib(),
+            new ClaimSourceLibrary(lib, sLib())
+        )
+        eng.addVariable({
+            id: "var-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "A",
+            claimId: "claim-a",
+            claimVersion: 0,
+        })
+        eng.addVariable({
+            id: "var-b",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "B",
+            claimId: "claim-b",
+            claimVersion: 0,
+        })
+        const { result: support } = eng.createPremise({ title: "B -> A" })
+        const implId = `${support.getId()}-impl`
+        support.addExpression(makeOpExpr(implId, "implies"))
+        support.addExpression(
+            makeVarExpr(`${implId}-b`, "var-b", {
+                parentId: implId,
+                position: 0,
+            })
+        )
+        support.addExpression(
+            makeVarExpr(`${implId}-a`, "var-a", {
+                parentId: implId,
+                position: 1,
+            })
+        )
+        const { result: conclusion } = eng.createPremise({ title: "A" })
+        conclusion.addExpression(
+            makeVarExpr(`${conclusion.getId()}-a`, "var-a")
+        )
+        eng.setConclusionPremise(conclusion.getId())
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-b", "claim-a"])
     })
 })
