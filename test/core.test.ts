@@ -28159,3 +28159,114 @@ describe("canonicalizeOperatorAssignments", () => {
         }
     })
 })
+
+describe("evaluateArgument — propagatedVariableValues", () => {
+    function evalCtxFrom(eng: ArgumentEngine): TArgumentEvaluationContext {
+        return {
+            argumentId: eng.getArgument().id,
+            conclusionPremiseId: eng.getRoleState().conclusionPremiseId,
+            getConclusionPremise: () =>
+                eng.getConclusionPremise() as TEvaluablePremise | undefined,
+            listSupportingPremises: () =>
+                eng.listSupportingPremises() as TEvaluablePremise[],
+            listPremises: () => eng.listPremises() as TEvaluablePremise[],
+            getVariable: (id) => eng.getVariable(id),
+            getPremise: (id) =>
+                eng.getPremise(id) as TEvaluablePremise | undefined,
+            validateEvaluability: () => eng.validateEvaluability(),
+        }
+    }
+
+    function buildModusPonensEng() {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: support } = eng.createPremise({ title: "P->Q" })
+        const { result: pPremise } = eng.createPremise({ title: "P" })
+        const { result: conclusion } = eng.createPremise({ title: "Q" })
+        const implId = `${support.getId()}-impl`
+        support.addExpression(makeOpExpr(implId, "implies"))
+        support.addExpression(
+            makeVarExpr(`${implId}-p`, VAR_P.id, {
+                parentId: implId,
+                position: 0,
+            })
+        )
+        support.addExpression(
+            makeVarExpr(`${implId}-q`, VAR_Q.id, {
+                parentId: implId,
+                position: 1,
+            })
+        )
+        pPremise.addExpression(makeVarExpr(`${pPremise.getId()}-p`, VAR_P.id))
+        conclusion.addExpression(
+            makeVarExpr(`${conclusion.getId()}-q`, VAR_Q.id)
+        )
+        eng.setConclusionPremise(conclusion.getId())
+        return { eng, implId }
+    }
+
+    it("pins unknown Q to true under accepted implies + P=true", () => {
+        const { eng, implId } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            {
+                variables: { [VAR_P.id]: true, [VAR_Q.id]: null },
+                operatorAssignments: { [implId]: "accepted" },
+            },
+            { includeDiagnostics: true }
+        )
+        expect(result.ok).toBe(true)
+        expect(result.propagatedVariableValues).toBeDefined()
+        expect(result.propagatedVariableValues![VAR_P.id]).toBe(true)
+        expect(result.propagatedVariableValues![VAR_Q.id]).toBe(true)
+    })
+
+    it("is undefined when includeDiagnostics is false", () => {
+        const { eng, implId } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            {
+                variables: { [VAR_P.id]: true, [VAR_Q.id]: null },
+                operatorAssignments: { [implId]: "accepted" },
+            },
+            { includeDiagnostics: false }
+        )
+        expect(result.ok).toBe(true)
+        expect(result.propagatedVariableValues).toBeUndefined()
+    })
+
+    it("represents still-unresolved variables as null (present in map)", () => {
+        const { eng } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            { variables: {}, operatorAssignments: {} },
+            { includeDiagnostics: true }
+        )
+        expect(result.ok).toBe(true)
+        expect(result.propagatedVariableValues).toBeDefined()
+        expect(VAR_P.id in result.propagatedVariableValues!).toBe(true)
+        expect(VAR_Q.id in result.propagatedVariableValues!).toBe(true)
+        expect(result.propagatedVariableValues![VAR_P.id]).toBeNull()
+        expect(result.propagatedVariableValues![VAR_Q.id]).toBeNull()
+    })
+
+    it("map key set equals referencedVariableIds", () => {
+        const { eng, implId } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            {
+                variables: { [VAR_P.id]: true },
+                operatorAssignments: { [implId]: "accepted" },
+            },
+            { includeDiagnostics: true }
+        )
+        expect(result.ok).toBe(true)
+        const keys = Object.keys(result.propagatedVariableValues!).sort()
+        expect(keys).toEqual([...result.referencedVariableIds!].sort())
+    })
+})

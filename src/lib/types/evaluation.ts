@@ -157,6 +157,13 @@ export interface TCoreArgumentEvaluationResult {
     isCounterexample?: TCoreTrivalentValue
     /** Convenience inverse of `isCounterexample` for the evaluated assignment. */
     preservesTruthUnderAssignment?: TCoreTrivalentValue
+    /**
+     * Evaluator's authoritative propagated variable values across the whole
+     * argument. Populated only when `includeDiagnostics: true`. Key set
+     * matches `referencedVariableIds`; still-unresolved variables appear
+     * with value `null`.
+     */
+    propagatedVariableValues?: Record<string, TCoreTrivalentValue>
 }
 
 export interface TCoreValidityCheckOptions {

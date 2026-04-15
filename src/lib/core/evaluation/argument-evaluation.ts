@@ -534,6 +534,15 @@ export function evaluateArgument(
                 : undefined,
         })
 
+        const propagatedVariableValues = includeDiagnostics
+            ? Object.fromEntries(
+                  referencedVariableIds.map((vid) => [
+                      vid,
+                      propagatedAssignment.variables[vid] ?? null,
+                  ])
+              )
+            : undefined
+
         return {
             ok: true,
             assignment: {
@@ -551,6 +560,7 @@ export function evaluateArgument(
             conclusionTrue,
             isCounterexample,
             preservesTruthUnderAssignment: kleeneNot(isCounterexample),
+            propagatedVariableValues,
         }
     } catch (error) {
         return {
