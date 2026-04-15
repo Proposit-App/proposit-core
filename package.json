@@ -1,6 +1,6 @@
 {
     "name": "@proposit/proposit-core",
-    "version": "0.8.19",
+    "version": "0.9.0",
     "description": "Core engine for building and manipulating propositional logic arguments.",
     "license": "MIT",
     "keywords": [
