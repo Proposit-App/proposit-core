@@ -106,3 +106,13 @@ export type {
     TValidatablePremise,
 } from "./core/argument-validation.js"
 export { InvariantViolationError } from "./core/invariant-violation-error.js"
+export {
+    InvalidArgumentStructureError,
+    UnknownExpressionError,
+    NotOperatorNotDecidableError,
+} from "./core/review-errors.js"
+export type { TNotOperatorNotDecidableReason } from "./core/review-errors.js"
+export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
+export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
+export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"
+export type { TCanonicalizeOperatorAssignmentsInput } from "./core/review-helpers.js"

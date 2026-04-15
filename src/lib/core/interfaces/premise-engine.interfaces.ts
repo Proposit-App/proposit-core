@@ -317,6 +317,21 @@ export interface TExpressionQueries<
      * @returns An array of child expression entities.
      */
     getChildExpressions(parentId: string | null): TExpr[]
+    /**
+     * Returns the operator expressions a reviewer can accept or reject, in
+     * pre-order depth-first tree order.
+     *
+     * Excludes `"not"` operators (NOT is flipped via a render-time flag,
+     * not voted on) and skips formula nodes (they are traversed but never
+     * emitted). Returns `[]` for empty premises and premises with no
+     * operators.
+     *
+     * Order is stable across calls on the same `PremiseEngine` instance;
+     * callers typically rely on index for step-queue construction.
+     *
+     * @returns An array of decidable operator expression entities.
+     */
+    getDecidableOperatorExpressions(): TExpr[]
 }
 
 /**

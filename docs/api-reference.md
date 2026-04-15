@@ -862,6 +862,12 @@ Returns children of `parentId` sorted by position.
 
 ---
 
+### `getDecidableOperatorExpressions()` → `TCorePropositionalExpression[]`
+
+Returns the operator expressions a reviewer can accept or reject, in pre-order depth-first tree order. Excludes `"not"` operators (NOT is flipped via render-time negation, not voted on) and skips formula nodes. Returns `[]` for empty premises and premises with no operators. Also available on `TEvaluablePremise`.
+
+---
+
 ### `getRootExpression()` → `TPropositionalExpression | undefined`
 
 Returns the root expression, if one exists.
@@ -1016,6 +1022,41 @@ for (const r of analysis.premises) {
 ### `buildPremiseProfile(premise)` → `TCorePremiseProfile`
 
 Builds a profile of a premise's variable appearances, recording each variable's side (`antecedent` or `consequent`) and polarity (`positive` or `negative`, determined by negation depth). Used internally by `analyzePremiseRelationships` but also exported for direct use.
+
+---
+
+### `collectArgumentReferencedClaims(ctx)` → `TCollectArgumentReferencedClaimsResult`
+
+Returns every distinct claim referenced by any variable in any premise of the argument.
+
+- **ctx**: `TArgumentEvaluationContext`
+- **returns**: `{ claimIds: string[], byId: Record<string, { claimVersion, variableIds, premiseIds }> }`
+
+Ordering: supporting premises first (in `listSupportingPremises()` order), then the conclusion premise, then any remaining premises (constraints). Within a premise, claims appear in the order their first-referencing variable appears in the expression tree (pre-order DFS). A claim shared across premises is emitted once at its first occurrence.
+
+Variables without a bound claim (e.g. premise-bound variables) are skipped silently.
+
+Throws `InvalidArgumentStructureError` if two variables bind the same `claimId` with different `claimVersion`s.
+
+---
+
+### `canonicalizeOperatorAssignments(ctx, input)` → `Record<string, TCoreOperatorAssignment>`
+
+Expands `premiseScope` decisions into per-expression operator assignments via `TEvaluablePremise.getDecidableOperatorExpressions()`, then layers `expressionOverrides` on top.
+
+- **ctx**: `TArgumentEvaluationContext`
+- **input**: `{ premiseScope: Record<string, "accepted" | "rejected">, expressionOverrides?: Record<string, "accepted" | "rejected"> }`
+- **returns**: expression-id → accepted/rejected map
+
+An override whose parent premise is NOT in `premiseScope` is still applied. Output keys are exactly those expression ids that ended up with an assignment — not every expression in the argument.
+
+Throws `UnknownExpressionError` for any override id missing from the argument. Throws `NotOperatorNotDecidableError` (with `reason: "is-not-operator"` for `"not"` operators, or `reason: "not-an-operator-type"` for variable/formula expressions).
+
+---
+
+### `TCoreArgumentEvaluationResult.propagatedVariableValues?: Record<string, TCoreTrivalentValue>`
+
+Optional map of the evaluator's authoritative propagated variable values. Populated only when `evaluateArgument` is called with `includeDiagnostics: true`. Key set matches `referencedVariableIds` (claim-bound and externally-bound premise variables only); still-unresolved variables appear with value `null`. Internally-bound premise variables have no standalone truth value and are resolved lazily by the evaluator — they are NOT included in this map.
 
 ---
 
@@ -1246,3 +1287,19 @@ Fork provenance lives entirely in `ForkLibrary` — entity schemas (argument, pr
 | `TClaimLibrarySnapshot`         | Snapshot type for `ClaimLibrary` state                                                                                                                        |
 | `TSourceLibrarySnapshot`        | Snapshot type for `SourceLibrary` state                                                                                                                       |
 | `TClaimSourceLibrarySnapshot`   | Snapshot type for `ClaimSourceLibrary` state                                                                                                                  |
+
+## Errors
+
+### `InvalidArgumentStructureError`
+
+Thrown when an argument's structural invariants preclude a review-helper operation — e.g., two variables binding to the same claim with different versions. Carries a human-readable message.
+
+### `UnknownExpressionError`
+
+Thrown by `canonicalizeOperatorAssignments` when an override references an expression id not present in any premise. Exposes `expressionId: string`.
+
+### `NotOperatorNotDecidableError`
+
+Thrown by `canonicalizeOperatorAssignments` when an override targets an expression that cannot carry an accept/reject assignment. Exposes `expressionId: string` and `reason: TNotOperatorNotDecidableReason` (`"is-not-operator"` for `"not"` operators, `"not-an-operator-type"` for variable/formula expressions).
+
+---

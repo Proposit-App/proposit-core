@@ -15,6 +15,11 @@ import {
     ForkLibrary,
     ArgumentLibrary,
     PropositCore,
+    InvalidArgumentStructureError,
+    UnknownExpressionError,
+    NotOperatorNotDecidableError,
+    collectArgumentReferencedClaims,
+    canonicalizeOperatorAssignments,
 } from "../src/lib/index"
 import type {
     TOrderedOperation,
@@ -27671,5 +27676,597 @@ describe("updateExpression — absorbSameOperator", () => {
 
         const expressions = pm.getExpressions()
         expect(expressions).toHaveLength(3) // no structural change
+    })
+})
+
+describe("review helper errors", () => {
+    it("InvalidArgumentStructureError carries a message and name", () => {
+        const err = new InvalidArgumentStructureError("bad structure")
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("InvalidArgumentStructureError")
+        expect(err.message).toBe("bad structure")
+    })
+
+    it("UnknownExpressionError carries the bad id", () => {
+        const err = new UnknownExpressionError("expr-xyz")
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("UnknownExpressionError")
+        expect(err.expressionId).toBe("expr-xyz")
+        expect(err.message).toContain("expr-xyz")
+    })
+
+    it("NotOperatorNotDecidableError on a NOT operator carries reason and id", () => {
+        const err = new NotOperatorNotDecidableError(
+            "expr-not",
+            "is-not-operator"
+        )
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("NotOperatorNotDecidableError")
+        expect(err.expressionId).toBe("expr-not")
+        expect(err.reason).toBe("is-not-operator")
+        expect(err.message).toContain("expr-not")
+    })
+
+    it("NotOperatorNotDecidableError on a non-operator expression carries reason", () => {
+        const err = new NotOperatorNotDecidableError(
+            "expr-var",
+            "not-an-operator-type"
+        )
+        expect(err.reason).toBe("not-an-operator-type")
+        expect(err.message).toContain("expr-var")
+    })
+})
+
+describe("PremiseEngine — getDecidableOperatorExpressions", () => {
+    it("returns [or] for a single or(a,b)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise({ title: "P or Q" })
+        const orId = `${pm.getId()}-or`
+        pm.addExpression(makeOpExpr(orId, "or"))
+        pm.addExpression(
+            makeVarExpr(`${orId}-p`, VAR_P.id, { parentId: orId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-q`, VAR_Q.id, { parentId: orId, position: 1 })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([orId])
+    })
+
+    it("returns [and, or] in pre-order for and(or(a,b), c)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(makeVar("var-r", "R"))
+        const { result: pm } = eng.createPremise({ title: "(P or Q) and R" })
+        const andId = `${pm.getId()}-and`
+        const orId = `${pm.getId()}-or`
+        const formulaId = `${pm.getId()}-formula`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeFormulaExpr(formulaId, { parentId: andId, position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr(orId, "or", { parentId: formulaId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-p`, VAR_P.id, { parentId: orId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-q`, VAR_Q.id, { parentId: orId, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-r`, "var-r", { parentId: andId, position: 1 })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([andId, orId])
+    })
+
+    it("excludes NOT inside a premise: and(not(a), b) returns [and]", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise({ title: "not(P) and Q" })
+        const andId = `${pm.getId()}-and`
+        const notId = `${pm.getId()}-not`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeOpExpr(notId, "not", { parentId: andId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${notId}-p`, VAR_P.id, {
+                parentId: notId,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-q`, VAR_Q.id, {
+                parentId: andId,
+                position: 1,
+            })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([andId])
+    })
+
+    it("excludes wrapping NOT but keeps inner AND: not(and(a,b)) returns [and]", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise({ title: "not(P and Q)" })
+        const notId = `${pm.getId()}-not`
+        const formulaId = `${pm.getId()}-formula`
+        const andId = `${pm.getId()}-and`
+        pm.addExpression(makeOpExpr(notId, "not"))
+        pm.addExpression(
+            makeFormulaExpr(formulaId, { parentId: notId, position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr(andId, "and", { parentId: formulaId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-p`, VAR_P.id, {
+                parentId: andId,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-q`, VAR_Q.id, {
+                parentId: andId,
+                position: 1,
+            })
+        )
+        const result = pm.getDecidableOperatorExpressions()
+        expect(result.map((e) => e.id)).toEqual([andId])
+    })
+
+    it("returns [] for a single-variable premise with no operators", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "P" })
+        pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
+        expect(pm.getDecidableOperatorExpressions()).toEqual([])
+    })
+
+    it("returns [] for an empty premise", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const { result: pm } = eng.createPremise({ title: "empty" })
+        expect(pm.getDecidableOperatorExpressions()).toEqual([])
+    })
+})
+
+describe("collectArgumentReferencedClaims", () => {
+    function evalCtxFrom(eng: ArgumentEngine): TArgumentEvaluationContext {
+        return {
+            argumentId: eng.getArgument().id,
+            conclusionPremiseId: eng.getRoleState().conclusionPremiseId,
+            getConclusionPremise: () =>
+                eng.getConclusionPremise() as TEvaluablePremise | undefined,
+            listSupportingPremises: () =>
+                eng.listSupportingPremises() as TEvaluablePremise[],
+            listPremises: () => eng.listPremises() as TEvaluablePremise[],
+            getVariable: (id) => eng.getVariable(id),
+            getPremise: (id) =>
+                eng.getPremise(id) as TEvaluablePremise | undefined,
+            validateEvaluability: () => eng.validateEvaluability(),
+        }
+    }
+
+    it("returns only the conclusion's claims when there are no supporting premises", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "P" })
+        pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
+        eng.setConclusionPremise(pm.getId())
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-default"])
+        expect(r.byId["claim-default"].variableIds).toEqual([VAR_P.id])
+        expect(r.byId["claim-default"].premiseIds).toEqual([pm.getId()])
+        expect(r.byId["claim-default"].claimVersion).toBe(0)
+    })
+
+    it("emits a claim once at its first occurrence when shared across premises", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: support } = eng.createPremise({ title: "P (support)" })
+        const { result: conclusion } = eng.createPremise({ title: "P (conc)" })
+        support.addExpression(makeVarExpr(`${support.getId()}-p`, VAR_P.id))
+        conclusion.addExpression(
+            makeVarExpr(`${conclusion.getId()}-p`, VAR_P.id)
+        )
+        eng.setConclusionPremise(conclusion.getId())
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-default"])
+        expect(r.byId["claim-default"].premiseIds).toHaveLength(2)
+        expect(r.byId["claim-default"].variableIds).toEqual([VAR_P.id])
+    })
+
+    it("skips premise-bound variables (no bound claim)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: inner } = eng.createPremise({ title: "inner: P" })
+        inner.addExpression(makeVarExpr(`${inner.getId()}-p`, VAR_P.id))
+        const { result: outer } = eng.createPremise({ title: "outer" })
+        const varsBound = eng.getVariables().filter((v) => isPremiseBound(v))
+        expect(varsBound.length).toBeGreaterThan(0)
+        void outer
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-default"])
+    })
+
+    it("throws InvalidArgumentStructureError when two variables bind the same claim with different versions", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "claim-shared" })
+        // freeze() leaves v0 (frozen) AND v1 (new mutable copy) both reachable.
+        lib.freeze("claim-shared")
+
+        const eng = new ArgumentEngine(
+            ARG,
+            lib,
+            sLib(),
+            new ClaimSourceLibrary(lib, sLib())
+        )
+        eng.addVariable({
+            id: "var-v0",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "X",
+            claimId: "claim-shared",
+            claimVersion: 0,
+        })
+        eng.addVariable({
+            id: "var-v1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "Y",
+            claimId: "claim-shared",
+            claimVersion: 1,
+        })
+        const { result: pm } = eng.createPremise({ title: "pm" })
+        const andId = `${pm.getId()}-and`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeVarExpr(`${andId}-x`, "var-v0", {
+                parentId: andId,
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-y`, "var-v1", {
+                parentId: andId,
+                position: 1,
+            })
+        )
+        eng.setConclusionPremise(pm.getId())
+
+        expect(() => collectArgumentReferencedClaims(evalCtxFrom(eng))).toThrow(
+            InvalidArgumentStructureError
+        )
+    })
+
+    it("orders claims by supporting → conclusion → constraint, then by first tree-order reference", () => {
+        const lib = new ClaimLibrary()
+        lib.create({ id: "claim-a" })
+        lib.create({ id: "claim-b" })
+        const eng = new ArgumentEngine(
+            ARG,
+            lib,
+            sLib(),
+            new ClaimSourceLibrary(lib, sLib())
+        )
+        eng.addVariable({
+            id: "var-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "A",
+            claimId: "claim-a",
+            claimVersion: 0,
+        })
+        eng.addVariable({
+            id: "var-b",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "B",
+            claimId: "claim-b",
+            claimVersion: 0,
+        })
+        const { result: support } = eng.createPremise({ title: "B -> A" })
+        const implId = `${support.getId()}-impl`
+        support.addExpression(makeOpExpr(implId, "implies"))
+        support.addExpression(
+            makeVarExpr(`${implId}-b`, "var-b", {
+                parentId: implId,
+                position: 0,
+            })
+        )
+        support.addExpression(
+            makeVarExpr(`${implId}-a`, "var-a", {
+                parentId: implId,
+                position: 1,
+            })
+        )
+        const { result: conclusion } = eng.createPremise({ title: "A" })
+        conclusion.addExpression(
+            makeVarExpr(`${conclusion.getId()}-a`, "var-a")
+        )
+        eng.setConclusionPremise(conclusion.getId())
+
+        const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
+        expect(r.claimIds).toEqual(["claim-b", "claim-a"])
+    })
+})
+
+describe("canonicalizeOperatorAssignments", () => {
+    function evalCtxFrom(eng: ArgumentEngine): TArgumentEvaluationContext {
+        return {
+            argumentId: eng.getArgument().id,
+            conclusionPremiseId: eng.getRoleState().conclusionPremiseId,
+            getConclusionPremise: () =>
+                eng.getConclusionPremise() as TEvaluablePremise | undefined,
+            listSupportingPremises: () =>
+                eng.listSupportingPremises() as TEvaluablePremise[],
+            listPremises: () => eng.listPremises() as TEvaluablePremise[],
+            getVariable: (id) => eng.getVariable(id),
+            getPremise: (id) =>
+                eng.getPremise(id) as TEvaluablePremise | undefined,
+            validateEvaluability: () => eng.validateEvaluability(),
+        }
+    }
+
+    /** Builds eng with one premise containing AND(OR(p,q), r). Returns ids. */
+    function buildNested(): {
+        eng: ArgumentEngine
+        premiseId: string
+        andId: string
+        orId: string
+    } {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(makeVar("var-r", "R"))
+        const { result: pm } = eng.createPremise({ title: "(P or Q) and R" })
+        const andId = `${pm.getId()}-and`
+        const orId = `${pm.getId()}-or`
+        const formulaId = `${pm.getId()}-formula`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeFormulaExpr(formulaId, { parentId: andId, position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr(orId, "or", { parentId: formulaId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-p`, VAR_P.id, { parentId: orId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-q`, VAR_Q.id, { parentId: orId, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-r`, "var-r", { parentId: andId, position: 1 })
+        )
+        eng.setConclusionPremise(pm.getId())
+        return { eng, premiseId: pm.getId(), andId, orId }
+    }
+
+    it("empty input returns {}", () => {
+        const { eng } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: {},
+        })
+        expect(r).toEqual({})
+    })
+
+    it("premiseScope fans out to every non-NOT operator in the premise", () => {
+        const { eng, premiseId, andId, orId } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: { [premiseId]: "accepted" },
+        })
+        expect(r).toEqual({
+            [andId]: "accepted",
+            [orId]: "accepted",
+        })
+    })
+
+    it("expressionOverrides win over premiseScope fan-out", () => {
+        const { eng, premiseId, andId, orId } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: { [premiseId]: "accepted" },
+            expressionOverrides: { [orId]: "rejected" },
+        })
+        expect(r).toEqual({
+            [andId]: "accepted",
+            [orId]: "rejected",
+        })
+    })
+
+    it("expressionOverrides alone produce assignments even when parent premise is not in premiseScope", () => {
+        const { eng, orId } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: {},
+            expressionOverrides: { [orId]: "rejected" },
+        })
+        expect(r).toEqual({ [orId]: "rejected" })
+    })
+
+    it("unknown expression id throws UnknownExpressionError", () => {
+        const { eng } = buildNested()
+        expect(() =>
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { "not-a-real-id": "accepted" },
+            })
+        ).toThrow(UnknownExpressionError)
+    })
+
+    it("NOT override throws NotOperatorNotDecidableError with reason=is-not-operator", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "not P" })
+        const notId = `${pm.getId()}-not`
+        pm.addExpression(makeOpExpr(notId, "not"))
+        pm.addExpression(
+            makeVarExpr(`${notId}-p`, VAR_P.id, {
+                parentId: notId,
+                position: 0,
+            })
+        )
+        eng.setConclusionPremise(pm.getId())
+
+        expect(() =>
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { [notId]: "accepted" },
+            })
+        ).toThrow(NotOperatorNotDecidableError)
+        try {
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { [notId]: "accepted" },
+            })
+            expect.fail("expected throw")
+        } catch (e) {
+            expect(e).toBeInstanceOf(NotOperatorNotDecidableError)
+            expect((e as NotOperatorNotDecidableError).reason).toBe(
+                "is-not-operator"
+            )
+        }
+    })
+
+    it("override on a non-operator expression throws NotOperatorNotDecidableError with reason=not-an-operator-type", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "P" })
+        const varExprId = `${pm.getId()}-p`
+        pm.addExpression(makeVarExpr(varExprId, VAR_P.id))
+        eng.setConclusionPremise(pm.getId())
+
+        try {
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { [varExprId]: "accepted" },
+            })
+            expect.fail("expected throw")
+        } catch (e) {
+            expect(e).toBeInstanceOf(NotOperatorNotDecidableError)
+            expect((e as NotOperatorNotDecidableError).reason).toBe(
+                "not-an-operator-type"
+            )
+        }
+    })
+})
+
+describe("evaluateArgument — propagatedVariableValues", () => {
+    function evalCtxFrom(eng: ArgumentEngine): TArgumentEvaluationContext {
+        return {
+            argumentId: eng.getArgument().id,
+            conclusionPremiseId: eng.getRoleState().conclusionPremiseId,
+            getConclusionPremise: () =>
+                eng.getConclusionPremise() as TEvaluablePremise | undefined,
+            listSupportingPremises: () =>
+                eng.listSupportingPremises() as TEvaluablePremise[],
+            listPremises: () => eng.listPremises() as TEvaluablePremise[],
+            getVariable: (id) => eng.getVariable(id),
+            getPremise: (id) =>
+                eng.getPremise(id) as TEvaluablePremise | undefined,
+            validateEvaluability: () => eng.validateEvaluability(),
+        }
+    }
+
+    function buildModusPonensEng() {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: support } = eng.createPremise({ title: "P->Q" })
+        const { result: pPremise } = eng.createPremise({ title: "P" })
+        const { result: conclusion } = eng.createPremise({ title: "Q" })
+        const implId = `${support.getId()}-impl`
+        support.addExpression(makeOpExpr(implId, "implies"))
+        support.addExpression(
+            makeVarExpr(`${implId}-p`, VAR_P.id, {
+                parentId: implId,
+                position: 0,
+            })
+        )
+        support.addExpression(
+            makeVarExpr(`${implId}-q`, VAR_Q.id, {
+                parentId: implId,
+                position: 1,
+            })
+        )
+        pPremise.addExpression(makeVarExpr(`${pPremise.getId()}-p`, VAR_P.id))
+        conclusion.addExpression(
+            makeVarExpr(`${conclusion.getId()}-q`, VAR_Q.id)
+        )
+        eng.setConclusionPremise(conclusion.getId())
+        return { eng, implId }
+    }
+
+    it("pins unknown Q to true under accepted implies + P=true", () => {
+        const { eng, implId } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            {
+                variables: { [VAR_P.id]: true, [VAR_Q.id]: null },
+                operatorAssignments: { [implId]: "accepted" },
+            },
+            { includeDiagnostics: true }
+        )
+        expect(result.ok).toBe(true)
+        expect(result.propagatedVariableValues).toBeDefined()
+        expect(result.propagatedVariableValues![VAR_P.id]).toBe(true)
+        expect(result.propagatedVariableValues![VAR_Q.id]).toBe(true)
+    })
+
+    it("is undefined when includeDiagnostics is false", () => {
+        const { eng, implId } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            {
+                variables: { [VAR_P.id]: true, [VAR_Q.id]: null },
+                operatorAssignments: { [implId]: "accepted" },
+            },
+            { includeDiagnostics: false }
+        )
+        expect(result.ok).toBe(true)
+        expect(result.propagatedVariableValues).toBeUndefined()
+    })
+
+    it("represents still-unresolved variables as null (present in map)", () => {
+        const { eng } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            { variables: {}, operatorAssignments: {} },
+            { includeDiagnostics: true }
+        )
+        expect(result.ok).toBe(true)
+        expect(result.propagatedVariableValues).toBeDefined()
+        expect(VAR_P.id in result.propagatedVariableValues!).toBe(true)
+        expect(VAR_Q.id in result.propagatedVariableValues!).toBe(true)
+        expect(result.propagatedVariableValues![VAR_P.id]).toBeNull()
+        expect(result.propagatedVariableValues![VAR_Q.id]).toBeNull()
+    })
+
+    it("map key set equals referencedVariableIds", () => {
+        const { eng, implId } = buildModusPonensEng()
+        const ctx = evalCtxFrom(eng)
+        const result = evaluateArgument(
+            ctx,
+            {
+                variables: { [VAR_P.id]: true },
+                operatorAssignments: { [implId]: "accepted" },
+            },
+            { includeDiagnostics: true }
+        )
+        expect(result.ok).toBe(true)
+        const keys = Object.keys(result.propagatedVariableValues!).sort()
+        expect(keys).toEqual([...result.referencedVariableIds!].sort())
     })
 })
