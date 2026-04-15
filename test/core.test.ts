@@ -15,6 +15,9 @@ import {
     ForkLibrary,
     ArgumentLibrary,
     PropositCore,
+    InvalidArgumentStructureError,
+    UnknownExpressionError,
+    NotOperatorNotDecidableError,
 } from "../src/lib/index"
 import type {
     TOrderedOperation,
@@ -27671,5 +27674,43 @@ describe("updateExpression — absorbSameOperator", () => {
 
         const expressions = pm.getExpressions()
         expect(expressions).toHaveLength(3) // no structural change
+    })
+})
+
+describe("review helper errors", () => {
+    it("InvalidArgumentStructureError carries a message and name", () => {
+        const err = new InvalidArgumentStructureError("bad structure")
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("InvalidArgumentStructureError")
+        expect(err.message).toBe("bad structure")
+    })
+
+    it("UnknownExpressionError carries the bad id", () => {
+        const err = new UnknownExpressionError("expr-xyz")
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("UnknownExpressionError")
+        expect(err.expressionId).toBe("expr-xyz")
+        expect(err.message).toContain("expr-xyz")
+    })
+
+    it("NotOperatorNotDecidableError on a NOT operator carries reason and id", () => {
+        const err = new NotOperatorNotDecidableError(
+            "expr-not",
+            "is-not-operator"
+        )
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("NotOperatorNotDecidableError")
+        expect(err.expressionId).toBe("expr-not")
+        expect(err.reason).toBe("is-not-operator")
+        expect(err.message).toContain("expr-not")
+    })
+
+    it("NotOperatorNotDecidableError on a non-operator expression carries reason", () => {
+        const err = new NotOperatorNotDecidableError(
+            "expr-var",
+            "not-an-operator-type"
+        )
+        expect(err.reason).toBe("not-an-operator-type")
+        expect(err.message).toContain("expr-var")
     })
 })
