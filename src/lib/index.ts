@@ -114,3 +114,5 @@ export {
 export type { TNotOperatorNotDecidableReason } from "./core/review-errors.js"
 export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
 export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
+export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"
+export type { TCanonicalizeOperatorAssignmentsInput } from "./core/review-helpers.js"

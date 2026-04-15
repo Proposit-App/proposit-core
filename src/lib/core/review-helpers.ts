@@ -1,13 +1,19 @@
 import {
     isClaimBound,
     type TClaimBoundVariable,
+    type TCorePropositionalExpression,
     type TCorePropositionalVariable,
 } from "../schemata/index.js"
+import type { TCoreOperatorAssignment } from "../types/evaluation.js"
 import type {
     TArgumentEvaluationContext,
     TEvaluablePremise,
 } from "./evaluation/argument-evaluation.js"
-import { InvalidArgumentStructureError } from "./review-errors.js"
+import {
+    InvalidArgumentStructureError,
+    NotOperatorNotDecidableError,
+    UnknownExpressionError,
+} from "./review-errors.js"
 
 export interface TCollectArgumentReferencedClaimsResult {
     /** Claim IDs in first-occurrence order. */
@@ -149,4 +155,76 @@ export function collectArgumentReferencedClaims(
     }
 
     return { claimIds: order, byId: outById }
+}
+
+export interface TCanonicalizeOperatorAssignmentsInput {
+    premiseScope: Record<string, TCoreOperatorAssignment>
+    expressionOverrides?: Record<string, TCoreOperatorAssignment>
+}
+
+/**
+ * Expands `premiseScope` decisions into per-expression operator
+ * assignments via `TEvaluablePremise.getDecidableOperatorExpressions()`,
+ * then layers `expressionOverrides` on top.
+ *
+ * **Overrides without matching premiseScope**: An override whose parent
+ * premise is not listed in `premiseScope` is still applied verbatim. This
+ * lets the review wizard collect expression-level decisions without
+ * having to decide at premise scope first.
+ *
+ * Output keys are exactly those expression ids that ended up with an
+ * assignment — not every expression in the argument.
+ *
+ * @throws {UnknownExpressionError} For any override id that does not
+ *   exist in the argument.
+ * @throws {NotOperatorNotDecidableError} With `reason: "is-not-operator"`
+ *   for overrides targeting a `"not"` operator, or with
+ *   `reason: "not-an-operator-type"` for overrides targeting a variable
+ *   or formula expression.
+ */
+export function canonicalizeOperatorAssignments(
+    ctx: TArgumentEvaluationContext,
+    input: TCanonicalizeOperatorAssignmentsInput
+): Record<string, TCoreOperatorAssignment> {
+    const out: Record<string, TCoreOperatorAssignment> = {}
+
+    // Expand premise-scope entries. TEvaluablePremise exposes
+    // getDecidableOperatorExpressions (added in Task 2).
+    for (const [premiseId, value] of Object.entries(input.premiseScope)) {
+        const premise = ctx.getPremise(premiseId)
+        if (!premise) continue
+        for (const expr of premise.getDecidableOperatorExpressions()) {
+            out[expr.id] = value
+        }
+    }
+
+    // Apply expression overrides.
+    const overrides = input.expressionOverrides ?? {}
+    if (Object.keys(overrides).length > 0) {
+        const exprById = new Map<string, TCorePropositionalExpression>()
+        for (const pm of ctx.listPremises()) {
+            for (const e of pm.getExpressions()) {
+                exprById.set(e.id, e)
+            }
+        }
+        for (const [exprId, value] of Object.entries(overrides)) {
+            const expr = exprById.get(exprId)
+            if (!expr) throw new UnknownExpressionError(exprId)
+            if (expr.type !== "operator") {
+                throw new NotOperatorNotDecidableError(
+                    exprId,
+                    "not-an-operator-type"
+                )
+            }
+            if (expr.operator === "not") {
+                throw new NotOperatorNotDecidableError(
+                    exprId,
+                    "is-not-operator"
+                )
+            }
+            out[exprId] = value
+        }
+    }
+
+    return out
 }

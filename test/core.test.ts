@@ -19,6 +19,7 @@ import {
     UnknownExpressionError,
     NotOperatorNotDecidableError,
     collectArgumentReferencedClaims,
+    canonicalizeOperatorAssignments,
 } from "../src/lib/index"
 import type {
     TOrderedOperation,
@@ -27997,5 +27998,164 @@ describe("collectArgumentReferencedClaims", () => {
 
         const r = collectArgumentReferencedClaims(evalCtxFrom(eng))
         expect(r.claimIds).toEqual(["claim-b", "claim-a"])
+    })
+})
+
+describe("canonicalizeOperatorAssignments", () => {
+    function evalCtxFrom(eng: ArgumentEngine): TArgumentEvaluationContext {
+        return {
+            argumentId: eng.getArgument().id,
+            conclusionPremiseId: eng.getRoleState().conclusionPremiseId,
+            getConclusionPremise: () =>
+                eng.getConclusionPremise() as TEvaluablePremise | undefined,
+            listSupportingPremises: () =>
+                eng.listSupportingPremises() as TEvaluablePremise[],
+            listPremises: () => eng.listPremises() as TEvaluablePremise[],
+            getVariable: (id) => eng.getVariable(id),
+            getPremise: (id) =>
+                eng.getPremise(id) as TEvaluablePremise | undefined,
+            validateEvaluability: () => eng.validateEvaluability(),
+        }
+    }
+
+    /** Builds eng with one premise containing AND(OR(p,q), r). Returns ids. */
+    function buildNested(): {
+        eng: ArgumentEngine
+        premiseId: string
+        andId: string
+        orId: string
+    } {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(makeVar("var-r", "R"))
+        const { result: pm } = eng.createPremise({ title: "(P or Q) and R" })
+        const andId = `${pm.getId()}-and`
+        const orId = `${pm.getId()}-or`
+        const formulaId = `${pm.getId()}-formula`
+        pm.addExpression(makeOpExpr(andId, "and"))
+        pm.addExpression(
+            makeFormulaExpr(formulaId, { parentId: andId, position: 0 })
+        )
+        pm.addExpression(
+            makeOpExpr(orId, "or", { parentId: formulaId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-p`, VAR_P.id, { parentId: orId, position: 0 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${orId}-q`, VAR_Q.id, { parentId: orId, position: 1 })
+        )
+        pm.addExpression(
+            makeVarExpr(`${andId}-r`, "var-r", { parentId: andId, position: 1 })
+        )
+        eng.setConclusionPremise(pm.getId())
+        return { eng, premiseId: pm.getId(), andId, orId }
+    }
+
+    it("empty input returns {}", () => {
+        const { eng } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: {},
+        })
+        expect(r).toEqual({})
+    })
+
+    it("premiseScope fans out to every non-NOT operator in the premise", () => {
+        const { eng, premiseId, andId, orId } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: { [premiseId]: "accepted" },
+        })
+        expect(r).toEqual({
+            [andId]: "accepted",
+            [orId]: "accepted",
+        })
+    })
+
+    it("expressionOverrides win over premiseScope fan-out", () => {
+        const { eng, premiseId, andId, orId } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: { [premiseId]: "accepted" },
+            expressionOverrides: { [orId]: "rejected" },
+        })
+        expect(r).toEqual({
+            [andId]: "accepted",
+            [orId]: "rejected",
+        })
+    })
+
+    it("expressionOverrides alone produce assignments even when parent premise is not in premiseScope", () => {
+        const { eng, orId } = buildNested()
+        const r = canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+            premiseScope: {},
+            expressionOverrides: { [orId]: "rejected" },
+        })
+        expect(r).toEqual({ [orId]: "rejected" })
+    })
+
+    it("unknown expression id throws UnknownExpressionError", () => {
+        const { eng } = buildNested()
+        expect(() =>
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { "not-a-real-id": "accepted" },
+            })
+        ).toThrow(UnknownExpressionError)
+    })
+
+    it("NOT override throws NotOperatorNotDecidableError with reason=is-not-operator", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "not P" })
+        const notId = `${pm.getId()}-not`
+        pm.addExpression(makeOpExpr(notId, "not"))
+        pm.addExpression(
+            makeVarExpr(`${notId}-p`, VAR_P.id, {
+                parentId: notId,
+                position: 0,
+            })
+        )
+        eng.setConclusionPremise(pm.getId())
+
+        expect(() =>
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { [notId]: "accepted" },
+            })
+        ).toThrow(NotOperatorNotDecidableError)
+        try {
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { [notId]: "accepted" },
+            })
+            expect.fail("expected throw")
+        } catch (e) {
+            expect(e).toBeInstanceOf(NotOperatorNotDecidableError)
+            expect((e as NotOperatorNotDecidableError).reason).toBe(
+                "is-not-operator"
+            )
+        }
+    })
+
+    it("override on a non-operator expression throws NotOperatorNotDecidableError with reason=not-an-operator-type", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        eng.addVariable(VAR_P)
+        const { result: pm } = eng.createPremise({ title: "P" })
+        const varExprId = `${pm.getId()}-p`
+        pm.addExpression(makeVarExpr(varExprId, VAR_P.id))
+        eng.setConclusionPremise(pm.getId())
+
+        try {
+            canonicalizeOperatorAssignments(evalCtxFrom(eng), {
+                premiseScope: {},
+                expressionOverrides: { [varExprId]: "accepted" },
+            })
+            expect.fail("expected throw")
+        } catch (e) {
+            expect(e).toBeInstanceOf(NotOperatorNotDecidableError)
+            expect((e as NotOperatorNotDecidableError).reason).toBe(
+                "not-an-operator-type"
+            )
+        }
     })
 })
