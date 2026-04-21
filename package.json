@@ -20,15 +20,18 @@
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
-            "import": "./dist/index.js"
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
         },
         "./extensions/ieee": {
             "types": "./dist/extensions/ieee/index.d.ts",
-            "import": "./dist/extensions/ieee/index.js"
+            "import": "./dist/extensions/ieee/index.js",
+            "default": "./dist/extensions/ieee/index.js"
         },
         "./extensions/basics": {
             "types": "./dist/extensions/basics/index.d.ts",
-            "import": "./dist/extensions/basics/index.js"
+            "import": "./dist/extensions/basics/index.js",
+            "default": "./dist/extensions/basics/index.js"
         }
     },
     "bin": {
