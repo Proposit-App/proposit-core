@@ -7,6 +7,30 @@
 - All TypeScript development work must use the `brain-style` skill (specifically its TypeScript sub-skill). Invoke it before writing or reviewing any TypeScript code to ensure naming conventions, casing rules, and style guidelines are followed. Use the TypeScript language server (LSP tool) to verify types, check for errors, and navigate definitions during development.
 - After completing a major set of changes, offer to cut a new version via `pnpm version patch|minor|major`. Use `patch` for most changes, `minor` for major feature work, and `major` only when explicitly instructed. When versioning, rename `docs/release-notes/upcoming.md` to `docs/release-notes/v{version}.md` and `docs/changelogs/upcoming.md` to `docs/changelogs/v{version}.md`, then start fresh `upcoming.md` files for subsequent work. After the version bump commit, create a git tag at that commit: `git tag v{version}`. This tag triggers the release and docs deployment workflows.
 
+## Broker coordination
+
+This repo's Claude Code agent coordinates with sibling repos (and the workspace orchestrator at `/Users/brian/Projects/Proposit-App/`) via the `skill-cefailures:broker` skill over a shared Unix socket.
+
+- **Durable DM room:** topic `core`, current conversation ID `04cb42` (verify via `broker list --identity core --status all`; recreate if missing). This is your always-on mailbox for cross-repo coordination, sub-project kickoffs, and orchestrator messages. It persists across phases.
+- **Broker identity:** `core`.
+- **Session startup:** at the start of any multi-repo work, launch a persistent background follow on your durable DM room so incoming messages stream live:
+
+    ```bash
+    broker follow --identity core 04cb42
+    ```
+
+    Run it via `Bash(run_in_background: true)` so it streams without blocking your main loop.
+
+- **Sub-project rooms coexist.** When a cross-repo initiative starts (e.g. Phase 1 sub-project 1C), the orchestrator creates sub-project-scoped rooms (e.g. `phase-1-1c-core`) and pings you here with the ID. Join and follow those for scoped signals; the durable DM room stays the always-on channel.
+
+- **Signal prefixes** for coordination messages so the orchestrator can route them:
+    - `READY: <what>` — a milestone landed that unblocks downstream work.
+    - `BLOCKED: <on-whom> <what>` — stuck waiting on someone.
+    - `DECISION: <topic> → <choice>` — a coordination question resolved.
+    - `QUESTION: <target> <what>` — open question needing input.
+
+- **Do not poll.** Never write a `while true; broker read; sleep N` loop — use `broker follow` for blocking waits. See the `/skill-cefailures:broker` skill docs for full CLI reference and canonical patterns.
+
 ## Change requests
 
 Detailed change requests live in `docs/change-requests/` as markdown files. When the user mentions a change request, list the files in that folder and check if any filename pertains to the request. If a match looks likely, ask the user to confirm before reading the file. Once confirmed, read the file and use it as the specification for the work. After a change request is fully implemented, delete its markdown file from `docs/change-requests/`.
