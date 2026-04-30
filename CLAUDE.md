@@ -9,27 +9,16 @@
 
 ## Broker coordination
 
-This repo's Claude Code agent coordinates with sibling repos (and the workspace orchestrator at `/Users/brian/Projects/Proposit-App/`) via the `skill-cefailures:broker` skill over a shared Unix socket.
+This repo's Claude Code agent coordinates with sibling repos (`proposit-shared`, `proposit-server`, `proposit-mobile`) and the workspace orchestrator at `/Users/brian/Projects/Proposit-App/` via the `skill-cefailures:broker` skill. Invoke that skill for CLI reference, signal vocabulary (`READY` / `BLOCKED` / `DECISION` / `QUESTION`), and canonical patterns.
 
-- **Durable DM room:** topic `core`, current conversation ID `04cb42` (verify via `broker list --identity core --status all`; recreate if missing). This is your always-on mailbox for cross-repo coordination, sub-project kickoffs, and orchestrator messages. It persists across phases.
-- **Broker identity:** `core`.
-- **Session startup:** at the start of any multi-repo work, launch a persistent background follow on your durable DM room so incoming messages stream live:
+- **Identity:** run `broker whoami` to confirm what the CLI will use from this cwd. Identity is auto-derived (workspace `.broker/config.json` → nearest `package.json` → git remote). To address another agent, compute their identity from their repo — there is no directory to browse.
+- **Session startup for multi-repo work:** start a single background follow so incoming DMs stream live, then carry on:
 
     ```bash
-    broker follow --identity core 04cb42
+    broker follow
     ```
 
-    Run it via `Bash(run_in_background: true)` so it streams without blocking your main loop.
-
-- **Sub-project rooms coexist.** When a cross-repo initiative starts (e.g. Phase 1 sub-project 1C), the orchestrator creates sub-project-scoped rooms (e.g. `phase-1-1c-core`) and pings you here with the ID. Join and follow those for scoped signals; the durable DM room stays the always-on channel.
-
-- **Signal prefixes** for coordination messages so the orchestrator can route them:
-    - `READY: <what>` — a milestone landed that unblocks downstream work.
-    - `BLOCKED: <on-whom> <what>` — stuck waiting on someone.
-    - `DECISION: <topic> → <choice>` — a coordination question resolved.
-    - `QUESTION: <target> <what>` — open question needing input.
-
-- **Do not poll.** Never write a `while true; broker read; sleep N` loop — use `broker follow` for blocking waits. See the `/skill-cefailures:broker` skill docs for full CLI reference and canonical patterns.
+    Run it via `Bash(run_in_background: true)`. Do not `broker read` first — it would advance the cursor past the backlog.
 
 ## Change requests
 
