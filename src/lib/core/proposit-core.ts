@@ -5,17 +5,13 @@ import type {
     TCorePropositionalVariable,
 } from "../schemata/index.js"
 import type { TCoreClaim } from "../schemata/claim.js"
-import type {
-    TCoreClaimSourceAssociation,
-    TCoreSource,
-} from "../schemata/source.js"
+import type { TCoreClaimCitation } from "../schemata/claim-citation.js"
 import type {
     TCoreArgumentForkRecord,
     TCorePremiseForkRecord,
     TCoreExpressionForkRecord,
     TCoreVariableForkRecord,
     TCoreClaimForkRecord,
-    TCoreSourceForkRecord,
 } from "../schemata/fork.js"
 import type {
     TPropositCoreSnapshot,
@@ -29,8 +25,7 @@ import type { TForkArgumentOptions, TForkRemapTable } from "../types/fork.js"
 import type { TCoreArgumentDiff, TCoreDiffOptions } from "../types/diff.js"
 import { isClaimBound } from "../schemata/propositional.js"
 import { ClaimLibrary } from "./claim-library.js"
-import { SourceLibrary } from "./source-library.js"
-import { ClaimSourceLibrary } from "./claim-source-library.js"
+import { ClaimCitationLibrary } from "./claim-citation-library.js"
 import { ArgumentLibrary } from "./argument-library.js"
 import { ArgumentEngine, defaultGenerateId } from "./argument-engine.js"
 import { ForkLibrary } from "./fork-library.js"
@@ -48,30 +43,25 @@ export type TPropositCoreOptions<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
     TClaim extends TCoreClaim = TCoreClaim,
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
-    TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
 > = TPropositCoreConfig & {
     /** Pre-constructed claim library instance. */
     claimLibrary?: ClaimLibrary<TClaim>
-    /** Pre-constructed source library instance. */
-    sourceLibrary?: SourceLibrary<TSource>
-    /** Pre-constructed claim-source association library instance. */
-    claimSourceLibrary?: ClaimSourceLibrary<TAssoc>
+    /** Pre-constructed claim-citation library instance. */
+    claimCitationLibrary?: ClaimCitationLibrary<TCitation>
     /** Pre-constructed fork library instance. */
     forkLibrary?: ForkLibrary<
         TArgFork,
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork,
-        TSourceFork
+        TClaimFork
     >
     /** Pre-constructed argument library instance. */
     argumentLibrary?: ArgumentLibrary<
@@ -79,54 +69,52 @@ export type TPropositCoreOptions<
         TPremise,
         TExpr,
         TVar,
-        TSource,
         TClaim,
-        TAssoc
+        TCitation
     >
 }
 
 /**
- * Top-level orchestrator for the proposit-core system. Owns all five
- * libraries (claims, sources, claim-source associations, forks, arguments)
- * and provides unified snapshot/restore and validation.
+ * Top-level orchestrator for the proposit-core system. Owns all four
+ * libraries (claims, claim citations, forks, arguments) and provides
+ * unified snapshot/restore and validation.
  *
  * Construction order follows dependency order:
- * claims -> sources -> claimSources -> forks -> arguments.
+ * claims -> claimCitations -> forks -> arguments.
+ *
+ * As of v0.10.0 the legacy `sources` and `claimSources` libraries have been
+ * folded into `claims` and `claimCitations` respectively — sources are now
+ * claims with `type: "citation"`.
  */
 export class PropositCore<
     TArg extends TCoreArgument = TCoreArgument,
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
     TClaim extends TCoreClaim = TCoreClaim,
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
-    TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
 > {
     public readonly claims: ClaimLibrary<TClaim>
-    public readonly sources: SourceLibrary<TSource>
-    public readonly claimSources: ClaimSourceLibrary<TAssoc>
+    public readonly claimCitations: ClaimCitationLibrary<TCitation>
     public readonly forks: ForkLibrary<
         TArgFork,
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork,
-        TSourceFork
+        TClaimFork
     >
     public readonly arguments: ArgumentLibrary<
         TArg,
         TPremise,
         TExpr,
         TVar,
-        TSource,
         TClaim,
-        TAssoc
+        TCitation
     >
     protected generateId: () => string
 
@@ -136,15 +124,13 @@ export class PropositCore<
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc,
+            TCitation,
             TArgFork,
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork,
-            TSourceFork
+            TClaimFork
         >
     ) {
         this.generateId = options?.generateId ?? defaultGenerateId
@@ -153,20 +139,13 @@ export class PropositCore<
             ? { checksumConfig: options.checksumConfig }
             : undefined
 
-        // Dependency order: claims -> sources -> claimSources -> forks -> arguments
+        // Dependency order: claims -> claimCitations -> forks -> arguments
         this.claims =
             options?.claimLibrary ?? new ClaimLibrary<TClaim>(checksumOpts)
 
-        this.sources =
-            options?.sourceLibrary ?? new SourceLibrary<TSource>(checksumOpts)
-
-        this.claimSources =
-            options?.claimSourceLibrary ??
-            new ClaimSourceLibrary<TAssoc>(
-                this.claims,
-                this.sources,
-                checksumOpts
-            )
+        this.claimCitations =
+            options?.claimCitationLibrary ??
+            new ClaimCitationLibrary<TCitation>(this.claims, checksumOpts)
 
         this.forks =
             options?.forkLibrary ??
@@ -175,8 +154,7 @@ export class PropositCore<
                 TPremiseFork,
                 TExprFork,
                 TVarFork,
-                TClaimFork,
-                TSourceFork
+                TClaimFork
             >()
 
         this.arguments =
@@ -186,14 +164,12 @@ export class PropositCore<
                 TPremise,
                 TExpr,
                 TVar,
-                TSource,
                 TClaim,
-                TAssoc
+                TCitation
             >(
                 {
                     claimLibrary: this.claims,
-                    sourceLibrary: this.sources,
-                    claimSourceLibrary: this.claimSources,
+                    claimCitationLibrary: this.claimCitations,
                 },
                 {
                     checksumConfig: options?.checksumConfig,
@@ -213,29 +189,26 @@ export class PropositCore<
         TPremise,
         TExpr,
         TVar,
-        TSource,
         TClaim,
-        TAssoc,
+        TCitation,
         TArgFork,
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork,
-        TSourceFork
+        TClaimFork
     > {
         return {
             arguments: this.arguments.snapshot(),
             claims: this.claims.snapshot(),
-            sources: this.sources.snapshot(),
-            claimSources: this.claimSources.snapshot(),
+            claimCitations: this.claimCitations.snapshot(),
             forks: this.forks.snapshot(),
         }
     }
 
     /**
      * Restores a `PropositCore` instance from a snapshot. Libraries are
-     * restored in dependency order: claims -> sources -> claimSources ->
-     * forks -> arguments.
+     * restored in dependency order: claims -> claimCitations -> forks ->
+     * arguments.
      *
      * @param snapshot - The serialized PropositCore snapshot.
      * @param config - Optional shared configuration for the restored instance.
@@ -247,31 +220,26 @@ export class PropositCore<
         TExpr extends TCorePropositionalExpression =
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-        TSource extends TCoreSource = TCoreSource,
         TClaim extends TCoreClaim = TCoreClaim,
-        TAssoc extends TCoreClaimSourceAssociation =
-            TCoreClaimSourceAssociation,
+        TCitation extends TCoreClaimCitation = TCoreClaimCitation,
         TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
         TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
         TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
         TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
         TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
-        TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
     >(
         snapshot: TPropositCoreSnapshot<
             TArg,
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc,
+            TCitation,
             TArgFork,
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork,
-            TSourceFork
+            TClaimFork
         >,
         config?: TPropositCoreConfig
     ): PropositCore<
@@ -279,33 +247,26 @@ export class PropositCore<
         TPremise,
         TExpr,
         TVar,
-        TSource,
         TClaim,
-        TAssoc,
+        TCitation,
         TArgFork,
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork,
-        TSourceFork
+        TClaimFork
     > {
         const checksumOpts = config?.checksumConfig
             ? { checksumConfig: config.checksumConfig }
             : undefined
 
-        // Dependency order: claims -> sources -> claimSources -> forks -> arguments
+        // Dependency order: claims -> claimCitations -> forks -> arguments
         const claims = ClaimLibrary.fromSnapshot<TClaim>(
             snapshot.claims,
             checksumOpts
         )
-        const sources = SourceLibrary.fromSnapshot<TSource>(
-            snapshot.sources,
-            checksumOpts
-        )
-        const claimSources = ClaimSourceLibrary.fromSnapshot<TAssoc>(
-            snapshot.claimSources,
+        const claimCitations = ClaimCitationLibrary.fromSnapshot<TCitation>(
+            snapshot.claimCitations,
             claims,
-            sources,
             checksumOpts
         )
         const forks = ForkLibrary.fromSnapshot<
@@ -313,23 +274,20 @@ export class PropositCore<
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork,
-            TSourceFork
+            TClaimFork
         >(snapshot.forks)
         const restoredArguments = ArgumentLibrary.fromSnapshot<
             TArg,
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc
+            TCitation
         >(
             snapshot.arguments,
             {
                 claimLibrary: claims,
-                sourceLibrary: sources,
-                claimSourceLibrary: claimSources,
+                claimCitationLibrary: claimCitations,
             },
             {
                 checksumConfig: config?.checksumConfig,
@@ -344,19 +302,16 @@ export class PropositCore<
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc,
+            TCitation,
             TArgFork,
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork,
-            TSourceFork
+            TClaimFork
         >({
             claimLibrary: claims,
-            sourceLibrary: sources,
-            claimSourceLibrary: claimSources,
+            claimCitationLibrary: claimCitations,
             forkLibrary: forks,
             argumentLibrary: restoredArguments,
         })
@@ -375,8 +330,7 @@ export class PropositCore<
     public validate(): TInvariantValidationResult {
         const violations: TInvariantViolation[] = [
             ...this.claims.validate().violations,
-            ...this.sources.validate().violations,
-            ...this.claimSources.validate().violations,
+            ...this.claimCitations.validate().violations,
             ...this.forks.validate().violations,
             ...this.arguments.validate().violations,
         ]
@@ -384,10 +338,10 @@ export class PropositCore<
     }
 
     /**
-     * Forks an argument, cloning its referenced claims, sources, and
-     * claim-source associations, then remaps variable claim references to
-     * point at the cloned claims. Creates fork records in all six
-     * namespaces.
+     * Forks an argument, cloning its referenced claims (including any
+     * citation-typed claims reachable via citations) and the citation edges
+     * between them, then remaps variable claim references to point at the
+     * cloned claims. Creates fork records in all five namespaces.
      *
      * @param argumentId - The ID of the argument to fork.
      * @param newArgumentId - The ID for the forked argument. Defaults to `this.generateId()`.
@@ -414,23 +368,12 @@ export class PropositCore<
             claimForkExtras?: Partial<
                 Omit<TClaimFork, keyof TCoreClaimForkRecord>
             >
-            sourceForkExtras?: Partial<
-                Omit<TSourceFork, keyof TCoreSourceForkRecord>
-            >
         }
     ): {
-        engine: ArgumentEngine<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TSource,
-            TClaim,
-            TAssoc
-        >
+        // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar>
         remapTable: TForkRemapTable
         claimRemap: Map<string, string>
-        sourceRemap: Map<string, string>
         argumentFork: TArgFork
     } {
         // Step 1: Retrieve source engine
@@ -459,7 +402,10 @@ export class PropositCore<
             }
         }
 
-        // Step 3: Clone claims
+        // Step 3: Determine the closure of claims to clone — start from
+        // claim-bound variables, then transitively pull in any source-side
+        // claim referenced by a citation whose citing-side is already in
+        // the closure (citation-typed claims become part of the fork too).
         const claimRemap = new Map<string, string>()
         const claimVersionMap = new Map<string, number>()
         const variables = engine.getVariables()
@@ -469,6 +415,30 @@ export class PropositCore<
                 uniqueClaimIds.add(v.claimId)
             }
         }
+
+        // BFS through the citation graph from the seed set, accumulating
+        // every reachable claim along outgoing citation edges. Both ends of
+        // any citation we plan to clone must themselves be cloned.
+        const citationsToClone: TCitation[] = []
+        const visitedForCitations = new Set<string>()
+        const citationFrontier: string[] = Array.from(uniqueClaimIds)
+        while (citationFrontier.length > 0) {
+            const currentId = citationFrontier.pop()!
+            if (visitedForCitations.has(currentId)) continue
+            visitedForCitations.add(currentId)
+
+            const outgoing =
+                this.claimCitations.getCitationsForCitingClaim(currentId)
+            for (const citation of outgoing) {
+                citationsToClone.push(citation)
+                if (!uniqueClaimIds.has(citation.sourceClaimId)) {
+                    uniqueClaimIds.add(citation.sourceClaimId)
+                    citationFrontier.push(citation.sourceClaimId)
+                }
+            }
+        }
+
+        // Step 4: Clone every claim in the closure
         for (const originalClaimId of uniqueClaimIds) {
             const currentClaim = this.claims.getCurrent(originalClaimId)
             if (!currentClaim) {
@@ -492,55 +462,19 @@ export class PropositCore<
             claimRemap.set(originalClaimId, newClaimId)
         }
 
-        // Step 4: Clone sources
-        const sourceRemap = new Map<string, string>()
-        const sourceVersionMap = new Map<string, number>()
-        const uniqueSourceIds = new Set<string>()
-        for (const originalClaimId of uniqueClaimIds) {
-            const associations = this.claimSources.getForClaim(originalClaimId)
-            for (const assoc of associations) {
-                uniqueSourceIds.add(assoc.sourceId)
-            }
-        }
-        for (const originalSourceId of uniqueSourceIds) {
-            const currentSource = this.sources.getCurrent(originalSourceId)
-            if (!currentSource) {
-                throw new Error(
-                    `Source "${originalSourceId}" not found in SourceLibrary.`
-                )
-            }
-            sourceVersionMap.set(originalSourceId, currentSource.version)
-            const newSourceId = this.generateId()
-            const {
-                id: _id,
-                version: _v,
-                frozen: _f,
-                checksum: _c,
-                ...sourceData
-            } = currentSource as Record<string, unknown>
-            this.sources.create({
-                ...sourceData,
-                id: newSourceId,
-            } as Omit<TSource, "version" | "frozen" | "checksum">)
-            sourceRemap.set(originalSourceId, newSourceId)
-        }
-
-        // Step 5: Clone associations
-        for (const originalClaimId of uniqueClaimIds) {
-            const associations = this.claimSources.getForClaim(originalClaimId)
-            for (const assoc of associations) {
-                const clonedClaimId = claimRemap.get(originalClaimId)!
-                const clonedSourceId = sourceRemap.get(assoc.sourceId)
-                if (clonedSourceId) {
-                    this.claimSources.add({
-                        id: this.generateId(),
-                        claimId: clonedClaimId,
-                        claimVersion: 0,
-                        sourceId: clonedSourceId,
-                        sourceVersion: 0,
-                    } as Omit<TAssoc, "checksum">)
-                }
-            }
+        // Step 5: Clone citation edges between the cloned claims
+        for (const citation of citationsToClone) {
+            const remappedCitingId = claimRemap.get(citation.citingClaimId)
+            const remappedSourceId = claimRemap.get(citation.sourceClaimId)
+            if (!remappedCitingId || !remappedSourceId) continue
+            this.claimCitations.add({
+                ...citation,
+                id: this.generateId(),
+                citingClaimId: remappedCitingId,
+                citingClaimVersion: 0,
+                sourceClaimId: remappedSourceId,
+                sourceClaimVersion: 0,
+            } as Omit<TCitation, "checksum">)
         }
 
         // Step 6: Fork engine
@@ -549,16 +483,14 @@ export class PropositCore<
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc
+            TCitation
         >(
             engine,
             resolvedNewArgumentId,
             {
                 claimLibrary: this.claims,
-                sourceLibrary: this.sources,
-                claimSourceLibrary: this.claimSources,
+                claimCitationLibrary: this.claimCitations,
             },
             {
                 ...options,
@@ -582,19 +514,18 @@ export class PropositCore<
             return v
         })
 
+        // TODO Phase 7: ArgumentEngine.fromSnapshot will take
+        // (snapshot, claimLibrary, claimCitationLibrary, ...) once its
+        // generics are reduced to drop TSource/TAssoc.
         const finalEngine = ArgumentEngine.fromSnapshot<
             TArg,
             TPremise,
             TExpr,
-            TVar,
-            TSource,
-            TClaim,
-            TAssoc
+            TVar
         >(
             snap,
             this.claims,
-            this.sources,
-            this.claimSources,
+            this.claimCitations,
             snap.config?.grammarConfig,
             "ignore",
             this.generateId
@@ -665,26 +596,11 @@ export class PropositCore<
             } as TClaimFork)
         }
 
-        // Source fork records
-        for (const [originalSourceId, clonedSourceId] of sourceRemap) {
-            this.forks.sources.create({
-                entityId: clonedSourceId,
-                forkedFromEntityId: originalSourceId,
-                forkedFromArgumentId: sourceArg.id,
-                forkedFromArgumentVersion: sourceArg.version,
-                forkId,
-                forkedFromEntityVersion:
-                    sourceVersionMap.get(originalSourceId)!,
-                ...options?.sourceForkExtras,
-            } as TSourceFork)
-        }
-
         // Step 10: Return
         return {
             engine: finalEngine,
             remapTable,
             claimRemap,
-            sourceRemap,
             argumentFork,
         }
     }
