@@ -24,13 +24,12 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
     premiseFields: new Set(["argumentId", "argumentVersion"]),
     argumentFields: new Set(["version"]),
     roleFields: new Set(["conclusionPremiseId"]),
-    claimFields: new Set(["version"]),
-    sourceFields: new Set(["version"]),
-    claimSourceAssociationFields: new Set([
-        "claimId",
-        "claimVersion",
-        "sourceId",
-        "sourceVersion",
+    claimFields: new Set(["version", "type"]),
+    claimCitationFields: new Set([
+        "citingClaimId",
+        "citingClaimVersion",
+        "sourceClaimId",
+        "sourceClaimVersion",
     ]),
 }
 
@@ -51,8 +50,7 @@ export function normalizeChecksumConfig(
         "argumentFields",
         "roleFields",
         "claimFields",
-        "sourceFields",
-        "claimSourceAssociationFields",
+        "claimCitationFields",
     ] as const
     const result: TCoreChecksumConfig = {}
     for (const key of keys) {
@@ -84,8 +82,7 @@ export function serializeChecksumConfig(
         "argumentFields",
         "roleFields",
         "claimFields",
-        "sourceFields",
-        "claimSourceAssociationFields",
+        "claimCitationFields",
     ] as const
     const result: Record<string, string[]> = {}
     for (const key of keys) {
@@ -110,8 +107,7 @@ export function createChecksumConfig(
         "argumentFields",
         "roleFields",
         "claimFields",
-        "sourceFields",
-        "claimSourceAssociationFields",
+        "claimCitationFields",
     ] as const
     const result: TCoreChecksumConfig = {}
     for (const key of keys) {

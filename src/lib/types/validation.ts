@@ -4,8 +4,7 @@ export type TInvariantViolationEntityType =
     | "premise"
     | "argument"
     | "claim"
-    | "source"
-    | "association"
+    | "citation"
     | "fork"
     | "forkRecord"
 
@@ -60,15 +59,18 @@ export const ARG_CHECKSUM_MISMATCH = "ARG_CHECKSUM_MISMATCH"
 export const CLAIM_SCHEMA_INVALID = "CLAIM_SCHEMA_INVALID"
 export const CLAIM_FROZEN_NO_SUCCESSOR = "CLAIM_FROZEN_NO_SUCCESSOR"
 
-// -- SourceLibrary codes --
-export const SOURCE_SCHEMA_INVALID = "SOURCE_SCHEMA_INVALID"
-export const SOURCE_FROZEN_NO_SUCCESSOR = "SOURCE_FROZEN_NO_SUCCESSOR"
+// -- ClaimLibrary type-immutability and legacy codes --
+export const CLAIM_TYPE_IMMUTABLE = "CLAIM_TYPE_IMMUTABLE"
+export const LEGACY_CLAIM_MISSING_TYPE = "LEGACY_CLAIM_MISSING_TYPE"
 
-// -- ClaimSourceLibrary codes --
-export const ASSOC_SCHEMA_INVALID = "ASSOC_SCHEMA_INVALID"
-export const ASSOC_DUPLICATE_ID = "ASSOC_DUPLICATE_ID"
-export const ASSOC_CLAIM_REF_NOT_FOUND = "ASSOC_CLAIM_REF_NOT_FOUND"
-export const ASSOC_SOURCE_REF_NOT_FOUND = "ASSOC_SOURCE_REF_NOT_FOUND"
+// -- ClaimCitationLibrary codes --
+export const CITATION_SCHEMA_INVALID = "CITATION_SCHEMA_INVALID"
+export const CITATION_DUPLICATE_ID = "CITATION_DUPLICATE_ID"
+export const CITATION_CITING_REF_NOT_FOUND = "CITATION_CITING_REF_NOT_FOUND"
+export const CITATION_SOURCE_REF_NOT_FOUND = "CITATION_SOURCE_REF_NOT_FOUND"
+export const CITATION_SOURCE_NOT_CITATION_TYPE =
+    "CITATION_SOURCE_NOT_CITATION_TYPE"
+export const CITATION_CYCLE_DETECTED = "CITATION_CYCLE_DETECTED"
 
 // -- ForkNamespace codes --
 export const FORK_RECORD_SCHEMA_INVALID = "FORK_RECORD_SCHEMA_INVALID"
