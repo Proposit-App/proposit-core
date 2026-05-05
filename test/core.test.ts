@@ -33,6 +33,7 @@ import type { TReactiveSnapshot } from "../src/lib/index"
 import { Value } from "typebox/value"
 import {
     CoreArgumentSchema,
+    CoreClaimSchema,
     CorePropositionalVariableSchema,
     CorePropositionalExpressionSchema,
     CorePremiseSchema,
@@ -28268,5 +28269,47 @@ describe("evaluateArgument — propagatedVariableValues", () => {
         expect(result.ok).toBe(true)
         const keys = Object.keys(result.propagatedVariableValues!).sort()
         expect(keys).toEqual([...result.referencedVariableIds!].sort())
+    })
+})
+
+describe("CoreClaimSchema type field", () => {
+    it("rejects a claim without a type field", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(false)
+    })
+    it("accepts a claim with type: 'normal'", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+            type: "normal" as const,
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(true)
+    })
+    it("accepts a claim with type: 'citation'", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+            type: "citation" as const,
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(true)
+    })
+    it("rejects a claim with an unknown type", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+            type: "axiom",
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(false)
     })
 })
