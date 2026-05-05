@@ -44,13 +44,22 @@ export interface TClaimLibraryManagement<
 > extends TClaimLookup<TClaim> {
     /**
      * Creates a new claim at version 0. The `version`, `frozen`, and
-     * `checksum` fields are assigned automatically.
+     * `checksum` fields are assigned automatically. The `id` field is
+     * auto-generated when omitted. The `type` field is required and is
+     * immutable across the claim's lifetime.
      *
-     * @param claim - The claim data without system-managed fields.
+     * @param claim - The claim data without system-managed fields. `id` is
+     *   optional (auto-generated when omitted) and `type` is required.
      * @returns The created claim entity with all fields populated.
      * @throws If a claim with the same ID already exists.
      */
-    create(claim: Omit<TClaim, "version" | "frozen" | "checksum">): TClaim
+    create(
+        claim:
+            | Omit<TClaim, "version" | "frozen" | "checksum">
+            | (Omit<TClaim, "id" | "version" | "frozen" | "checksum"> & {
+                  id?: string
+              })
+    ): TClaim
 
     /**
      * Updates mutable fields on the current (latest, unfrozen) version of a

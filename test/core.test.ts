@@ -28446,3 +28446,71 @@ describe("ClaimCitationLibrary acyclicity", () => {
         ).toThrow(/CITATION_CYCLE_DETECTED/)
     })
 })
+
+describe("ClaimLibrary type immutability", () => {
+    it("rejects an update that changes the type field", () => {
+        const claimLib = new ClaimLibrary()
+        const c = claimLib.create({ type: "normal" })
+        expect(() =>
+            claimLib.update(c.id, { type: "citation" } as never)
+        ).toThrow(/CLAIM_TYPE_IMMUTABLE/)
+    })
+    it("allows an update that does not change the type field", () => {
+        const claimLib = new ClaimLibrary()
+        const c = claimLib.create({ type: "normal" })
+        // Update some other field via additionalProperties
+        expect(() =>
+            claimLib.update(c.id, { customField: "new value" } as never)
+        ).not.toThrow()
+    })
+    it("allows an update that re-asserts the same type", () => {
+        const claimLib = new ClaimLibrary()
+        const c = claimLib.create({ type: "normal" })
+        expect(() =>
+            claimLib.update(c.id, { type: "normal" } as never)
+        ).not.toThrow()
+    })
+})
+
+describe("ClaimLibrary legacy snapshot detection", () => {
+    it("emits LEGACY_CLAIM_MISSING_TYPE when restoring a snapshot with a typeless claim", () => {
+        const legacySnapshot = {
+            claims: [
+                {
+                    id: "00000000-0000-0000-0000-000000000001",
+                    version: 0,
+                    frozen: false,
+                    checksum: "abc",
+                    // type field intentionally missing
+                },
+            ],
+        }
+        expect(() =>
+            ClaimLibrary.fromSnapshot(
+                legacySnapshot as Parameters<
+                    typeof ClaimLibrary.fromSnapshot
+                >[0]
+            )
+        ).toThrow(/LEGACY_CLAIM_MISSING_TYPE/)
+    })
+    it("accepts a snapshot where every claim has a type field", () => {
+        const validSnapshot = {
+            claims: [
+                {
+                    id: "00000000-0000-0000-0000-000000000001",
+                    version: 0,
+                    frozen: false,
+                    checksum: "abc",
+                    type: "normal" as const,
+                },
+            ],
+        }
+        expect(() =>
+            ClaimLibrary.fromSnapshot(
+                validSnapshot as Parameters<
+                    typeof ClaimLibrary.fromSnapshot
+                >[0]
+            )
+        ).not.toThrow()
+    })
+})
