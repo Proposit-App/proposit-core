@@ -1,15 +1,11 @@
 import type { TCoreClaim } from "../../schemata/claim.js"
-import type {
-    TCoreClaimSourceAssociation,
-    TCoreSource,
-} from "../../schemata/source.js"
+import type { TCoreClaimCitation } from "../../schemata/claim-citation.js"
 import type {
     TCoreArgumentForkRecord,
     TCorePremiseForkRecord,
     TCoreExpressionForkRecord,
     TCoreVariableForkRecord,
     TCoreClaimForkRecord,
-    TCoreSourceForkRecord,
 } from "../../schemata/fork.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
 import type {
@@ -37,22 +33,6 @@ export interface TClaimLookup<TClaim extends TCoreClaim = TCoreClaim> {
      * @returns The claim entity, or `undefined`.
      */
     get(id: string, version: number): TClaim | undefined
-}
-
-/**
- * Narrow read-only interface for source lookups. Used by `ArgumentEngine` for
- * validation — callers that only need to verify source existence should depend
- * on this rather than the full `SourceLibrary`.
- */
-export interface TSourceLookup<TSource extends TCoreSource = TCoreSource> {
-    /**
-     * Returns a source by ID and version, or `undefined` if not found.
-     *
-     * @param id - The source ID.
-     * @param version - The source version number.
-     * @returns The source entity, or `undefined`.
-     */
-    get(id: string, version: number): TSource | undefined
 }
 
 /**
@@ -140,176 +120,93 @@ export interface TClaimLibraryManagement<
 }
 
 /**
- * Full management interface for a versioned source library. Extends
- * `TSourceLookup` with mutation, query, and snapshot methods.
+ * Narrow read-only interface for claim-citation lookups.
+ * Implemented by `ClaimCitationLibrary`.
  */
-export interface TSourceLibraryManagement<
-    TSource extends TCoreSource = TCoreSource,
-> extends TSourceLookup<TSource> {
-    /**
-     * Creates a new source at version 0. The `version`, `frozen`, and
-     * `checksum` fields are assigned automatically.
-     *
-     * @param source - The source data without system-managed fields.
-     * @returns The created source entity with all fields populated.
-     * @throws If a source with the same ID already exists.
-     */
-    create(source: Omit<TSource, "version" | "frozen" | "checksum">): TSource
-
-    /**
-     * Updates mutable fields on the current (latest, unfrozen) version of a
-     * source. System-managed fields (`id`, `version`, `frozen`, `checksum`)
-     * cannot be updated.
-     *
-     * @param id - The source ID.
-     * @param updates - The fields to update.
-     * @returns The updated source entity.
-     * @throws If the source does not exist.
-     * @throws If the current version is frozen.
-     */
-    update(
-        id: string,
-        updates: Partial<
-            Omit<TSource, "id" | "version" | "frozen" | "checksum">
-        >
-    ): TSource
-
-    /**
-     * Freezes the current version of a source (marking it immutable) and
-     * creates a new mutable version at `version + 1`.
-     *
-     * @param id - The source ID.
-     * @returns An object containing the `frozen` version and the new
-     *   `current` (mutable) version.
-     * @throws If the source does not exist.
-     * @throws If the current version is already frozen.
-     */
-    freeze(id: string): { frozen: TSource; current: TSource }
-
-    /**
-     * Returns the latest version of a source, or `undefined` if not found.
-     *
-     * @param id - The source ID.
-     * @returns The latest source entity, or `undefined`.
-     */
-    getCurrent(id: string): TSource | undefined
-
-    /**
-     * Returns all source entities across all IDs and versions.
-     *
-     * @returns An array of all source entities.
-     */
-    getAll(): TSource[]
-
-    /**
-     * Returns all versions of a source sorted by version number ascending.
-     *
-     * @param id - The source ID.
-     * @returns An array of source entities, or an empty array if the ID does
-     *   not exist.
-     */
-    getVersions(id: string): TSource[]
-
-    /**
-     * Returns a serializable snapshot of all sources in the library.
-     *
-     * @returns The source library snapshot.
-     */
-    snapshot(): TSourceLibrarySnapshot<TSource>
-
-    /**
-     * Run invariant validation on the source library.
-     *
-     * @returns The invariant validation result.
-     */
-    validate(): TInvariantValidationResult
-}
-
-/**
- * Narrow read-only interface for claim-source association lookups.
- * Implemented by `ClaimSourceLibrary`. Passed to `ArgumentEngine` as the
- * fourth constructor parameter.
- */
-export interface TClaimSourceLookup<
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+export interface TClaimCitationLookup<
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 > {
     /**
-     * Returns all associations for the given claim ID.
+     * Returns all citations where the given claim is the citing-side endpoint.
      *
-     * @param claimId - The claim ID to filter by.
-     * @returns An array of matching associations.
+     * @param citingClaimId - The citing claim ID to filter by.
+     * @returns An array of matching citations.
      */
-    getForClaim(claimId: string): TAssoc[]
+    getCitationsForCitingClaim(citingClaimId: string): TCitation[]
 
     /**
-     * Returns all associations for the given source ID.
+     * Returns all citations where the given claim is the source-side endpoint.
      *
-     * @param sourceId - The source ID to filter by.
-     * @returns An array of matching associations.
+     * @param sourceClaimId - The source claim ID to filter by.
+     * @returns An array of matching citations.
      */
-    getForSource(sourceId: string): TAssoc[]
+    getCitationsForSourceClaim(sourceClaimId: string): TCitation[]
 
     /**
-     * Returns an association by ID, or `undefined` if not found.
+     * Returns a citation by ID, or `undefined` if not found.
      *
-     * @param id - The association ID.
-     * @returns The association entity, or `undefined`.
+     * @param id - The citation ID.
+     * @returns The citation entity, or `undefined`.
      */
-    get(id: string): TAssoc | undefined
+    get(id: string): TCitation | undefined
 }
 
 /**
- * Full management interface for a claim-source association library. Extends
- * `TClaimSourceLookup` with mutation, query, and snapshot methods.
- * Associations are create-or-delete only — no update path.
+ * Full management interface for a claim-citation library. Extends
+ * `TClaimCitationLookup` with mutation, query, and snapshot methods.
+ * Citations are create-or-delete only — no update path.
  */
-export interface TClaimSourceLibraryManagement<
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
-> extends TClaimSourceLookup<TAssoc> {
+export interface TClaimCitationLibraryManagement<
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+> extends TClaimCitationLookup<TCitation> {
     /**
-     * Creates a claim-source association. Validates that the referenced claim
-     * and source exist in their respective libraries.
+     * Creates a claim citation. Validates that both the citing and source
+     * claims exist in the claim library, that the source-side claim has
+     * type='citation', and that the new edge does not introduce a cycle in
+     * the global claim-citation graph.
      *
-     * @param assoc - The association data without the `checksum` field.
-     * @returns The created association with checksum populated.
-     * @throws If an association with the same ID already exists.
-     * @throws If the referenced claim or source does not exist.
+     * @param citation - The citation data without the `checksum` field.
+     * @returns The created citation with checksum populated.
+     * @throws If a citation with the same ID already exists.
+     * @throws If the referenced citing or source claim does not exist.
+     * @throws If the source-side claim has type !== 'citation'.
+     * @throws If the citation would create a cycle.
      */
-    add(assoc: Omit<TAssoc, "checksum">): TAssoc
+    add(citation: Omit<TCitation, "checksum">): TCitation
 
     /**
-     * Removes a claim-source association by ID.
+     * Removes a claim citation by ID.
      *
-     * @param id - The association ID to remove.
-     * @returns The removed association entity.
-     * @throws If the association does not exist.
+     * @param id - The citation ID to remove.
+     * @returns The removed citation entity.
+     * @throws If the citation does not exist.
      */
-    remove(id: string): TAssoc
+    remove(id: string): TCitation
 
     /**
-     * Returns all associations in the library.
+     * Returns all citations in the library.
      *
-     * @returns An array of all association entities.
+     * @returns An array of all citation entities.
      */
-    getAll(): TAssoc[]
+    getAll(): TCitation[]
 
     /**
-     * Returns all associations matching the predicate.
+     * Returns all citations matching the predicate.
      *
-     * @param predicate - A filter function applied to each association.
-     * @returns An array of matching associations.
+     * @param predicate - A filter function applied to each citation.
+     * @returns An array of matching citations.
      */
-    filter(predicate: (a: TAssoc) => boolean): TAssoc[]
+    filter(predicate: (c: TCitation) => boolean): TCitation[]
 
     /**
-     * Returns a serializable snapshot of all associations in the library.
+     * Returns a serializable snapshot of all citations in the library.
      *
-     * @returns The claim-source library snapshot.
+     * @returns The claim-citation library snapshot.
      */
-    snapshot(): TClaimSourceLibrarySnapshot<TAssoc>
+    snapshot(): TClaimCitationLibrarySnapshot<TCitation>
 
     /**
-     * Run invariant validation on the claim-source association library.
+     * Run invariant validation on the claim-citation library.
      *
      * @returns The invariant validation result.
      */
@@ -326,24 +223,14 @@ export type TClaimLibrarySnapshot<TClaim extends TCoreClaim = TCoreClaim> = {
 }
 
 /**
- * Serializable snapshot of a `SourceLibrary`. Contains all source entities
- * across all IDs and versions.
- */
-export type TSourceLibrarySnapshot<TSource extends TCoreSource = TCoreSource> =
-    {
-        /** All source entities in the library. */
-        sources: TSource[]
-    }
-
-/**
- * Serializable snapshot of a `ClaimSourceLibrary`. Contains all association
+ * Serializable snapshot of a `ClaimCitationLibrary`. Contains all citation
  * entities.
  */
-export type TClaimSourceLibrarySnapshot<
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+export type TClaimCitationLibrarySnapshot<
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 > = {
-    /** All claim-source association entities in the library. */
-    claimSourceAssociations: TAssoc[]
+    /** All claim citation entities in the library. */
+    claimCitations: TCitation[]
 }
 
 /**
@@ -356,7 +243,6 @@ export type TForkLibrarySnapshot<
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
-    TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
 > = {
     /** All argument fork records. */
     arguments: TArgFork[]
@@ -368,8 +254,6 @@ export type TForkLibrarySnapshot<
     variables: TVarFork[]
     /** All claim fork records. */
     claims: TClaimFork[]
-    /** All source fork records. */
-    sources: TSourceFork[]
 }
 
 /**
@@ -388,40 +272,34 @@ export type TArgumentLibrarySnapshot<
 
 /**
  * Serializable snapshot of a `PropositCore` instance. Contains snapshots of
- * all managed libraries: arguments, claims, sources, claim-source associations,
- * and fork records.
+ * all managed libraries: arguments, claims, claim citations, and fork records.
  */
 export type TPropositCoreSnapshot<
     TArg extends TCoreArgument = TCoreArgument,
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
     TClaim extends TCoreClaim = TCoreClaim,
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
-    TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
 > = {
     /** Snapshot of all argument engines. */
     arguments: TArgumentLibrarySnapshot<TArg, TPremise, TExpr, TVar>
     /** Snapshot of the claim library. */
     claims: TClaimLibrarySnapshot<TClaim>
-    /** Snapshot of the source library. */
-    sources: TSourceLibrarySnapshot<TSource>
-    /** Snapshot of the claim-source association library. */
-    claimSources: TClaimSourceLibrarySnapshot<TAssoc>
+    /** Snapshot of the claim-citation library. */
+    claimCitations: TClaimCitationLibrarySnapshot<TCitation>
     /** Snapshot of the fork library. */
     forks: TForkLibrarySnapshot<
         TArgFork,
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork,
-        TSourceFork
+        TClaimFork
     >
 }
 

@@ -29,6 +29,7 @@ import type {
     TCoreSourceForkRecord,
 } from "../src/lib/index"
 import { ClaimSourceLibrary } from "../src/lib/core/claim-source-library"
+import { ClaimCitationLibrary } from "../src/lib/core/claim-citation-library"
 import type { TReactiveSnapshot } from "../src/lib/index"
 import { Value } from "typebox/value"
 import {
@@ -28311,5 +28312,110 @@ describe("CoreClaimSchema type field", () => {
             type: "axiom",
         }
         expect(Value.Check(CoreClaimSchema, claim)).toBe(false)
+    })
+})
+
+describe("ClaimCitationLibrary strict source-side type", () => {
+    it("rejects a citation where sourceClaimId references a normal claim", () => {
+        const claimLib = new ClaimLibrary()
+        const normalClaim = claimLib.create({ type: "normal" })
+        const anotherNormalClaim = claimLib.create({ type: "normal" })
+        const citationLib = new ClaimCitationLibrary({
+            get: (id, version) => claimLib.get(id, version),
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000010",
+                citingClaimId: normalClaim.id,
+                citingClaimVersion: normalClaim.version,
+                sourceClaimId: anotherNormalClaim.id,
+                sourceClaimVersion: anotherNormalClaim.version,
+                checksum: "stub",
+            })
+        ).toThrow(/CITATION_SOURCE_NOT_CITATION_TYPE/)
+    })
+    it("accepts a citation where sourceClaimId references a citation claim", () => {
+        const claimLib = new ClaimLibrary()
+        const normalClaim = claimLib.create({ type: "normal" })
+        const citationClaim = claimLib.create({ type: "citation" })
+        const citationLib = new ClaimCitationLibrary({
+            get: (id, version) => claimLib.get(id, version),
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000011",
+                citingClaimId: normalClaim.id,
+                citingClaimVersion: normalClaim.version,
+                sourceClaimId: citationClaim.id,
+                sourceClaimVersion: citationClaim.version,
+                checksum: "stub",
+            })
+        ).not.toThrow()
+    })
+})
+
+describe("ClaimCitationLibrary acyclicity", () => {
+    function makeLibs() {
+        const claimLib = new ClaimLibrary()
+        const claimLookup = {
+            get: (id: string, version: number) => claimLib.get(id, version),
+        }
+        const citationLib = new ClaimCitationLibrary(claimLookup)
+        return { claimLib, citationLib }
+    }
+    it("rejects a direct A↔B cycle", () => {
+        const { claimLib, citationLib } = makeLibs()
+        const a = claimLib.create({ type: "citation" })
+        const b = claimLib.create({ type: "citation" })
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000001",
+            citingClaimId: a.id,
+            citingClaimVersion: a.version,
+            sourceClaimId: b.id,
+            sourceClaimVersion: b.version,
+            checksum: "stub",
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000002",
+                citingClaimId: b.id,
+                citingClaimVersion: b.version,
+                sourceClaimId: a.id,
+                sourceClaimVersion: a.version,
+                checksum: "stub",
+            })
+        ).toThrow(/CITATION_CYCLE_DETECTED/)
+    })
+    it("rejects a transitive A→B→C→A cycle", () => {
+        const { claimLib, citationLib } = makeLibs()
+        const a = claimLib.create({ type: "citation" })
+        const b = claimLib.create({ type: "citation" })
+        const c = claimLib.create({ type: "citation" })
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000010",
+            citingClaimId: a.id,
+            citingClaimVersion: a.version,
+            sourceClaimId: b.id,
+            sourceClaimVersion: b.version,
+            checksum: "stub",
+        })
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000011",
+            citingClaimId: b.id,
+            citingClaimVersion: b.version,
+            sourceClaimId: c.id,
+            sourceClaimVersion: c.version,
+            checksum: "stub",
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000012",
+                citingClaimId: c.id,
+                citingClaimVersion: c.version,
+                sourceClaimId: a.id,
+                sourceClaimVersion: a.version,
+                checksum: "stub",
+            })
+        ).toThrow(/CITATION_CYCLE_DETECTED/)
     })
 })
