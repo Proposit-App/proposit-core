@@ -28418,4 +28418,31 @@ describe("ClaimCitationLibrary acyclicity", () => {
             })
         ).toThrow(/CITATION_CYCLE_DETECTED/)
     })
+    it("treats version-different edges as projecting to the same ID-only graph", () => {
+        const { claimLib, citationLib } = makeLibs()
+        const a = claimLib.create({ type: "citation" })
+        const b = claimLib.create({ type: "citation" })
+        // First edge: A@v0 → B@v0
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000020",
+            citingClaimId: a.id,
+            citingClaimVersion: 0,
+            sourceClaimId: b.id,
+            sourceClaimVersion: 0,
+            checksum: "stub",
+        })
+        // Freeze A to bump it to a new version (v1)
+        claimLib.freeze(a.id)
+        // Try B@v0 → A@v1 — same ID-only cycle as the first edge's reverse
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000021",
+                citingClaimId: b.id,
+                citingClaimVersion: 0,
+                sourceClaimId: a.id,
+                sourceClaimVersion: 1,
+                checksum: "stub",
+            })
+        ).toThrow(/CITATION_CYCLE_DETECTED/)
+    })
 })

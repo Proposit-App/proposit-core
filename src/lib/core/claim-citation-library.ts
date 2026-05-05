@@ -15,6 +15,7 @@ import type {
 } from "../types/validation.js"
 import {
     CITATION_SCHEMA_INVALID,
+    CITATION_DUPLICATE_ID,
     CITATION_CITING_REF_NOT_FOUND,
     CITATION_SOURCE_REF_NOT_FOUND,
     CITATION_SOURCE_NOT_CITATION_TYPE,
@@ -24,8 +25,7 @@ import { InvariantViolationError } from "./invariant-violation-error.js"
 
 export class ClaimCitationLibrary<
     TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-> implements TClaimCitationLibraryManagement<TCitation>
-{
+> implements TClaimCitationLibraryManagement<TCitation> {
     private citations: Map<string, TCitation>
     private citingClaimToCitations: Map<string, Set<string>>
     private sourceClaimToCitations: Map<string, Set<string>>
@@ -88,9 +88,14 @@ export class ClaimCitationLibrary<
     public add(citation: Omit<TCitation, "checksum">): TCitation {
         return this.withValidation(() => {
             if (this.citations.has(citation.id)) {
-                throw new Error(
-                    `ClaimCitation with ID "${citation.id}" already exists.`
-                )
+                throw new InvariantViolationError([
+                    {
+                        code: CITATION_DUPLICATE_ID,
+                        message: `Citation with id ${citation.id} already exists`,
+                        entityType: "citation",
+                        entityId: citation.id,
+                    },
+                ])
             }
 
             const citingClaim = this.claimLookup.get(
@@ -308,7 +313,82 @@ export class ClaimCitationLibrary<
                 })
             }
         }
+
+        // Strict source-side type: every citation's source claim must have
+        // type='citation'. Catches tampered snapshots loaded via fromSnapshot.
+        for (const citation of this.citations.values()) {
+            const sourceClaim = this.claimLookup.get(
+                citation.sourceClaimId,
+                citation.sourceClaimVersion
+            )
+            if (sourceClaim && sourceClaim.type !== "citation") {
+                violations.push({
+                    code: CITATION_SOURCE_NOT_CITATION_TYPE,
+                    message: `Citation ${citation.id} source claim ${citation.sourceClaimId} has type='${sourceClaim.type}'; only 'citation' is permitted on the source side`,
+                    entityType: "citation",
+                    entityId: citation.id,
+                })
+            }
+        }
+
+        // Acyclicity: walk the entire citation graph (ID-only) and detect
+        // cycles. Catches cycles introduced by snapshot tampering.
+        const cycleViolations = this.detectAllCycles()
+        for (const v of cycleViolations) violations.push(v)
+
         return { ok: violations.length === 0, violations }
+    }
+
+    /**
+     * Detects all cycles in the ID-only projection of the citation graph.
+     * Returns one violation per cycle (deduped by the citation that closes
+     * each detected cycle).
+     */
+    private detectAllCycles(): TInvariantViolation[] {
+        const violations: TInvariantViolation[] = []
+        const visited = new Set<string>()
+        const inProgress = new Set<string>()
+        const reportedCycleIds = new Set<string>()
+
+        const visit = (node: string, path: string[]): void => {
+            if (inProgress.has(node)) {
+                // Cycle detected: report the citation that closes it.
+                // Find the citation linking the previous node to this one.
+                const prev = path[path.length - 1]
+                for (const citation of this.citations.values()) {
+                    if (
+                        citation.citingClaimId === prev &&
+                        citation.sourceClaimId === node &&
+                        !reportedCycleIds.has(citation.id)
+                    ) {
+                        violations.push({
+                            code: CITATION_CYCLE_DETECTED,
+                            message: `Citation graph contains a cycle involving claim ${node}`,
+                            entityType: "citation",
+                            entityId: citation.id,
+                        })
+                        reportedCycleIds.add(citation.id)
+                    }
+                }
+                return
+            }
+            if (visited.has(node)) return
+            visited.add(node)
+            inProgress.add(node)
+            const outgoing = this.citingClaimToCitations.get(node)
+            if (outgoing) {
+                for (const cid of outgoing) {
+                    const c = this.citations.get(cid)
+                    if (c) visit(c.sourceClaimId, [...path, node])
+                }
+            }
+            inProgress.delete(node)
+        }
+
+        for (const node of this.citingClaimToCitations.keys()) {
+            if (!visited.has(node)) visit(node, [])
+        }
+        return violations
     }
 
     /**
@@ -322,12 +402,13 @@ export class ClaimCitationLibrary<
         sourceClaimId: string
     ): boolean {
         // Optimization: if citing-side has type "normal", it can never appear
-        // on the source side, so no cycle is reachable.
-        const citingClaimType = this.findAnyVersionType(citingClaimId)
+        // on the source side, so no cycle is reachable. Type is immutable
+        // post-creation, so v0's type is authoritative.
+        const citingClaimType = this.claimLookup.get(citingClaimId, 0)?.type
         if (citingClaimType === "normal") return false
 
-        // DFS from sourceClaimId following outgoing source edges.
-        // Edges: any citation where citingClaimId === current node (ID-only).
+        // DFS from sourceClaimId following outgoing source edges via the
+        // citingClaimToCitations index (avoids scanning all citations).
         const visited = new Set<string>()
         const stack: string[] = [sourceClaimId]
         while (stack.length > 0) {
@@ -335,28 +416,17 @@ export class ClaimCitationLibrary<
             if (node === citingClaimId) return true
             if (visited.has(node)) continue
             visited.add(node)
-            for (const citation of this.citations.values()) {
-                if (citation.citingClaimId === node) {
-                    stack.push(citation.sourceClaimId)
+            const outgoingIds = this.citingClaimToCitations.get(node)
+            if (outgoingIds) {
+                for (const cid of outgoingIds) {
+                    const c = this.citations.get(cid)
+                    if (c) {
+                        stack.push(c.sourceClaimId)
+                    }
                 }
             }
         }
         return false
-    }
-
-    /**
-     * The claimLookup is keyed by (id, version). Type is immutable across
-     * versions, so any existing version's type is authoritative. Probe
-     * versions until one is found.
-     */
-    private findAnyVersionType(
-        claimId: string
-    ): "normal" | "citation" | undefined {
-        for (let v = 0; v < 1000; v++) {
-            const claim = this.claimLookup.get(claimId, v)
-            if (claim) return claim.type
-        }
-        return undefined
     }
 
     private computeChecksum(citation: TCitation): string {
