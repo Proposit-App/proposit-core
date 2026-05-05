@@ -416,16 +416,15 @@ export class PropositCore<
             }
         }
 
-        // BFS through the citation graph from the seed set, accumulating
+        // DFS through the citation graph from the seed set, accumulating
         // every reachable claim along outgoing citation edges. Both ends of
         // any citation we plan to clone must themselves be cloned.
         const citationsToClone: TCitation[] = []
-        const visitedForCitations = new Set<string>()
+        // Invariant: every push to citationFrontier is gated by !uniqueClaimIds.has(...),
+        // so each claim id is processed at most once. No separate visited set needed.
         const citationFrontier: string[] = Array.from(uniqueClaimIds)
         while (citationFrontier.length > 0) {
             const currentId = citationFrontier.pop()!
-            if (visitedForCitations.has(currentId)) continue
-            visitedForCitations.add(currentId)
 
             const outgoing =
                 this.claimCitations.getCitationsForCitingClaim(currentId)
