@@ -21,11 +21,12 @@ import { VersionedLibrary } from "./versioned-library.js"
  * extension fields on `TClaim` are passed through as-is, matching the base
  * {@link VersionedLibrary.create} contract.
  */
-export type TClaimCreateInput<TClaim extends TCoreClaim = TCoreClaim> =
-    | Omit<TClaim, "version" | "frozen" | "checksum">
-    | (Omit<TClaim, "version" | "frozen" | "checksum" | "id"> & {
-          id?: string
-      })
+export type TClaimCreateInput<TClaim extends TCoreClaim = TCoreClaim> = Omit<
+    TClaim,
+    "id" | "version" | "frozen" | "checksum"
+> & {
+    id?: string
+}
 
 export class ClaimLibrary<TClaim extends TCoreClaim = TCoreClaim>
     extends VersionedLibrary<TClaim>
@@ -52,7 +53,7 @@ export class ClaimLibrary<TClaim extends TCoreClaim = TCoreClaim>
      * Creates a new claim at version 0. The `type` field is required and is
      * immutable across the claim's lifetime. `id` is auto-generated when omitted.
      */
-    public create(input: TClaimCreateInput<TClaim>): TClaim {
+    public override create(input: TClaimCreateInput<TClaim>): TClaim {
         const inputId = (input as { id?: string }).id
         const id = inputId ?? this.generateId()
         const entity = {

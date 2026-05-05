@@ -54,11 +54,9 @@ export interface TClaimLibraryManagement<
      * @throws If a claim with the same ID already exists.
      */
     create(
-        claim:
-            | Omit<TClaim, "version" | "frozen" | "checksum">
-            | (Omit<TClaim, "id" | "version" | "frozen" | "checksum"> & {
-                  id?: string
-              })
+        claim: Omit<TClaim, "id" | "version" | "frozen" | "checksum"> & {
+            id?: string
+        }
     ): TClaim
 
     /**
