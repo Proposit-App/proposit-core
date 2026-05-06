@@ -30310,3 +30310,142 @@ describe("Fork integration with derivation premises", () => {
         ).not.toThrow()
     })
 })
+
+// ---------------------------------------------------------------------------
+// validateEvaluability derivation pre-flight + validateDerivationStructures (Task 11)
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine validateEvaluability with derivation pre-flight", () => {
+    /**
+     * Builds an ArgumentEngine whose single derivation premise has an empty
+     * expression tree (no root expression → structure violation).
+     */
+    function setupArgumentWithBrokenDerivation() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const csLibLocal = new ClaimCitationLibrary(claimLib)
+
+        const engine = new ArgumentEngine(
+            { id: "arg-broken", version: 1 },
+            claimLib,
+            csLibLocal
+        )
+        engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
+
+        // Take snapshot and strip all expressions from the derivation premise.
+        const snap = engine.snapshot()
+        const derivPremSnap = snap.premises.find(
+            (p) => (p.premise as Record<string, unknown>).type === "derivation"
+        )!
+        derivPremSnap.expressions = { expressions: [] }
+        derivPremSnap.rootExpressionId = undefined
+
+        // Restore via ArgumentEngine.fromSnapshot — uses PremiseEngine (no
+        // derivation structure check), so the broken tree loads without error.
+        const argumentEngine = ArgumentEngine.fromSnapshot(
+            snap,
+            claimLib,
+            csLibLocal
+        )
+        return { argumentEngine }
+    }
+
+    /**
+     * Builds an ArgumentEngine with a well-formed derivation premise
+     * (naked-Q form created by createPremise).
+     */
+    function setupArgumentWithGoodDerivation() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const csLibLocal = new ClaimCitationLibrary(claimLib)
+
+        const engine = new ArgumentEngine(
+            { id: "arg-good", version: 1 },
+            claimLib,
+            csLibLocal
+        )
+        engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
+        return { argumentEngine: engine }
+    }
+
+    it("flags a structurally-broken derivation premise with DERIVATION_STRUCTURE_INVALID_AT_EVALUATION", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.validateEvaluability()
+        expect(
+            result.issues.some(
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+            )
+        ).toBe(true)
+    })
+
+    it("evaluate returns {ok: false} when derivation premise is broken", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.evaluate({
+            variables: {},
+            operatorAssignments: {},
+        })
+        expect(result.ok).toBe(false)
+        expect(
+            result.validation?.issues.some(
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+            )
+        ).toBe(true)
+    })
+
+    it("checkValidity flags broken derivation premises (parity with evaluate)", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.checkValidity()
+        expect(
+            result.validation?.issues.some(
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+            )
+        ).toBe(true)
+    })
+
+    it("does not flag well-formed derivation premises", () => {
+        const { argumentEngine } = setupArgumentWithGoodDerivation()
+        const result = argumentEngine.validateEvaluability()
+        const derivationIssues = result.issues.filter(
+            (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+        )
+        expect(derivationIssues).toEqual([])
+    })
+})
+
+describe("ArgumentEngine.validateDerivationStructures", () => {
+    function setupArgumentWithBrokenDerivation() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const csLibLocal = new ClaimCitationLibrary(claimLib)
+
+        const engine = new ArgumentEngine(
+            { id: "arg-broken2", version: 1 },
+            claimLib,
+            csLibLocal
+        )
+        engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
+
+        const snap = engine.snapshot()
+        const derivPremSnap = snap.premises.find(
+            (p) => (p.premise as Record<string, unknown>).type === "derivation"
+        )!
+        derivPremSnap.expressions = { expressions: [] }
+        derivPremSnap.rootExpressionId = undefined
+
+        const argumentEngine = ArgumentEngine.fromSnapshot(
+            snap,
+            claimLib,
+            csLibLocal
+        )
+        return { argumentEngine }
+    }
+
+    it("returns the derivation-specific subset of validateEvaluability checks", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.validateDerivationStructures()
+        expect(result.violations.length).toBeGreaterThan(0)
+        for (const v of result.violations) {
+            expect(v.code).toBe("DERIVATION_STRUCTURE_INVALID_AT_EVALUATION")
+        }
+    })
+})

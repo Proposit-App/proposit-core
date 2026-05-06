@@ -33,7 +33,9 @@ import {
     CLAIM_NOT_FOUND,
     CREATE_DERIVATION_CLAIM_NOT_FOUND,
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
+    DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
 } from "../types/validation.js"
+import { validateDerivationStructure } from "../utils/derivation-validation.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
@@ -52,6 +54,10 @@ import {
     type TArgumentEvaluationContext,
     type TEvaluablePremise,
 } from "./evaluation/argument-evaluation.js"
+import {
+    makeErrorIssue,
+    makeValidationResult,
+} from "./evaluation/validation.js"
 import {
     validateArgument as validateArgumentStandalone,
     validateArgumentAfterPremiseMutation as validateAfterPremiseMutationStandalone,
@@ -2177,9 +2183,74 @@ export class ArgumentEngine<
     }
 
     public validateEvaluability(): TCoreValidationResult {
-        return validateArgumentEvaluabilityStandalone(
+        const base = validateArgumentEvaluabilityStandalone(
             this.asValidationContext()
         )
+        const derivationIssues = this.collectDerivationStructureIssues()
+        if (derivationIssues.length === 0) return base
+        return makeValidationResult([...base.issues, ...derivationIssues])
+    }
+
+    /**
+     * Returns the derivation-specific subset of `validateEvaluability` checks.
+     * Apps can pre-check derivation premise structures before invoking the full
+     * evaluation pipeline.
+     *
+     * @since 0.11.0
+     */
+    /**
+     * Returns the derivation-specific subset of `validateEvaluability` checks.
+     * Apps can pre-check derivation premise structures before invoking the full
+     * evaluation pipeline.
+     *
+     * @since 0.11.0
+     */
+    public validateDerivationStructures(): TInvariantValidationResult {
+        const violations: TInvariantValidationResult["violations"] = []
+        for (const { violation } of this.collectDerivationViolations()) {
+            violations.push({
+                ...violation,
+                code: DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
+            })
+        }
+        return { ok: violations.length === 0, violations }
+    }
+
+    private collectDerivationStructureIssues(): TCoreValidationResult["issues"] {
+        const issues: TCoreValidationResult["issues"] = []
+        for (const { violation } of this.collectDerivationViolations()) {
+            issues.push(
+                makeErrorIssue({
+                    code: DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
+                    message: violation.message,
+                    premiseId: violation.entityId,
+                })
+            )
+        }
+        return issues
+    }
+
+    private *collectDerivationViolations(): Iterable<{
+        violation: TInvariantValidationResult["violations"][number]
+    }> {
+        const allVars =
+            this.variables.toArray() as unknown as TCorePropositionalVariable[]
+        for (const premise of this.listPremises()) {
+            const premiseData = premise.toPremiseData()
+            if (premiseData.type !== "derivation") continue
+            const derivationPremise =
+                premiseData as unknown as TCoreDerivationPremise
+            const exprs =
+                premise.getExpressions() as unknown as TCorePropositionalExpression[]
+            const subResult = validateDerivationStructure(
+                derivationPremise,
+                exprs,
+                allVars
+            )
+            for (const violation of subResult.violations) {
+                yield { violation }
+            }
+        }
     }
 
     private asValidationContext(): TArgumentValidationContext {
