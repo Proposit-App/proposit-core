@@ -35,10 +35,16 @@ import {
     writePremiseData,
     writePremiseMeta,
 } from "./storage/premises.js"
+import { migrateV010 } from "./storage/migrate-v0.10.js"
 import { readRoles, writeRoles } from "./storage/roles.js"
 import { readVariables, writeVariables } from "./storage/variables.js"
 
 export async function hydratePropositCore(): Promise<PropositCore> {
+    // Run the v0.10.0 one-time data migration before any library hydration.
+    // The migration is idempotent — a `.proposit-v0.10` marker short-circuits
+    // it on subsequent invocations.
+    await migrateV010()
+
     const [claimLibrary, forkLibrary] = await Promise.all([
         readClaimLibrary(),
         readForkLibrary(),
