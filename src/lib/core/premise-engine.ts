@@ -112,14 +112,14 @@ export class PremiseEngine<
         TFormulaTreeWalking,
         THierarchicalChecksummable<"expressions">
 {
-    private premise: TOptionalChecksum<TPremise>
-    private rootExpressionId: string | undefined
-    private variables: VariableManager<TVar>
-    private expressions: ExpressionManager<TExpr>
+    protected premise: TOptionalChecksum<TPremise>
+    protected rootExpressionId: string | undefined
+    protected variables: VariableManager<TVar>
+    protected expressions: ExpressionManager<TExpr>
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TOptionalChecksum<TArg>
     private checksumConfig?: TCoreChecksumConfig
-    private grammarConfig: TGrammarConfig
+    protected grammarConfig: TGrammarConfig
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
