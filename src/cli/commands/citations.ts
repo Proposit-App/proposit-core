@@ -41,13 +41,9 @@ export function registerCitationCommands(program: Command): void {
             } else {
                 printLine(`id:                  ${citation.id}`)
                 printLine(`citingClaimId:       ${citation.citingClaimId}`)
-                printLine(
-                    `citingClaimVersion:  ${citation.citingClaimVersion}`
-                )
+                printLine(`citingClaimVersion:  ${citation.citingClaimVersion}`)
                 printLine(`sourceClaimId:       ${citation.sourceClaimId}`)
-                printLine(
-                    `sourceClaimVersion:  ${citation.sourceClaimVersion}`
-                )
+                printLine(`sourceClaimVersion:  ${citation.sourceClaimVersion}`)
             }
         })
 

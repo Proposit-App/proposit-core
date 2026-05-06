@@ -86,10 +86,7 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
     }
 }
 
-async function writeJsonFile(
-    filePath: string,
-    data: unknown
-): Promise<void> {
+async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, JSON.stringify(data, null, 2))
 }
@@ -97,15 +94,18 @@ async function writeJsonFile(
 async function checkSourceExtrasCollision(stateDir: string): Promise<void> {
     const sourcesPath = path.join(stateDir, "sources.json")
     const snapshot = await readJsonFile<{
-        sources?: Array<Record<string, unknown>>
+        sources?: Record<string, unknown>[]
     }>(sourcesPath)
-    if (!snapshot || !snapshot.sources) return
+    if (!snapshot?.sources) return
     const colliding = snapshot.sources.filter(
         (s) => (s as { type?: unknown }).type !== undefined
     )
     if (colliding.length > 0) {
         const ids = colliding
-            .map((s) => (s as { id?: unknown }).id ?? "<unknown>")
+            .map((s) => {
+                const id = (s as { id?: unknown }).id
+                return typeof id === "string" ? id : "<unknown>"
+            })
             .join(", ")
         throw new Error(
             `[proposit migration] Cannot migrate: source records have a 'type' extra that would collide with the new top-level 'type' field. Conflicting source IDs: ${ids}. Rename the extra (e.g., to 'kind') in sources.json and re-run.`
@@ -117,13 +117,13 @@ async function convertSourcesToClaims(stateDir: string): Promise<void> {
     const sourcesPath = path.join(stateDir, "sources.json")
     const claimsPath = path.join(stateDir, "claims.json")
     const sourcesSnapshot = await readJsonFile<{
-        sources?: Array<Record<string, unknown>>
+        sources?: Record<string, unknown>[]
     }>(sourcesPath)
-    if (!sourcesSnapshot || !sourcesSnapshot.sources) return
+    if (!sourcesSnapshot?.sources) return
     const claimsSnapshot = (await readJsonFile<{
-        claims?: Array<Record<string, unknown>>
+        claims?: Record<string, unknown>[]
     }>(claimsPath)) ?? { claims: [] }
-    if (!claimsSnapshot.claims) claimsSnapshot.claims = []
+    claimsSnapshot.claims ??= []
     for (const source of sourcesSnapshot.sources) {
         claimsSnapshot.claims.push({
             ...source,
@@ -140,9 +140,9 @@ async function convertSourcesToClaims(stateDir: string): Promise<void> {
 async function backfillClaimTypes(stateDir: string): Promise<void> {
     const claimsPath = path.join(stateDir, "claims.json")
     const snapshot = await readJsonFile<{
-        claims?: Array<Record<string, unknown>>
+        claims?: Record<string, unknown>[]
     }>(claimsPath)
-    if (!snapshot || !snapshot.claims) return
+    if (!snapshot?.claims) return
     let backfilled = 0
     for (const claim of snapshot.claims) {
         if (claim.type === undefined) {
@@ -158,15 +158,13 @@ async function backfillClaimTypes(stateDir: string): Promise<void> {
     }
 }
 
-async function convertAssociationsToCitations(
-    stateDir: string
-): Promise<void> {
+async function convertAssociationsToCitations(stateDir: string): Promise<void> {
     const oldPath = path.join(stateDir, "claim-source-associations.json")
     const newPath = path.join(stateDir, "claim-citations.json")
     const snapshot = await readJsonFile<{
-        claimSourceAssociations?: Array<Record<string, unknown>>
+        claimSourceAssociations?: Record<string, unknown>[]
     }>(oldPath)
-    if (!snapshot || !snapshot.claimSourceAssociations) return
+    if (!snapshot?.claimSourceAssociations) return
     const RESERVED_KEYS = new Set([
         "id",
         "claimId",
@@ -197,8 +195,8 @@ async function convertAssociationsToCitations(
 async function foldForkSourcesIntoClaims(stateDir: string): Promise<void> {
     const forksPath = path.join(stateDir, "forks.json")
     const snapshot = await readJsonFile<{
-        sources?: Array<Record<string, unknown>>
-        claims?: Array<Record<string, unknown>>
+        sources?: Record<string, unknown>[]
+        claims?: Record<string, unknown>[]
         [key: string]: unknown
     }>(forksPath)
     if (!snapshot) return
@@ -212,7 +210,7 @@ async function foldForkSourcesIntoClaims(stateDir: string): Promise<void> {
         return
     }
 
-    if (!snapshot.claims) snapshot.claims = []
+    snapshot.claims ??= []
     snapshot.claims.push(...sources)
     const sourceCount = sources.length
     delete snapshot.sources
@@ -223,15 +221,14 @@ async function foldForkSourcesIntoClaims(stateDir: string): Promise<void> {
 }
 
 async function recomputeChecksums(stateDir: string): Promise<void> {
-    const claimFields =
-        DEFAULT_CHECKSUM_CONFIG.claimFields ?? new Set<string>()
+    const claimFields = DEFAULT_CHECKSUM_CONFIG.claimFields ?? new Set<string>()
     const claimCitationFields =
         DEFAULT_CHECKSUM_CONFIG.claimCitationFields ?? new Set<string>()
 
     // Recompute claim checksums.
     const claimsPath = path.join(stateDir, "claims.json")
     const claimsSnapshot = await readJsonFile<{
-        claims?: Array<Record<string, unknown>>
+        claims?: Record<string, unknown>[]
     }>(claimsPath)
     let claimCount = 0
     if (claimsSnapshot?.claims) {
@@ -245,7 +242,7 @@ async function recomputeChecksums(stateDir: string): Promise<void> {
     // Recompute citation checksums.
     const citationsPath = path.join(stateDir, "claim-citations.json")
     const citationsSnapshot = await readJsonFile<{
-        claimCitations?: Array<Record<string, unknown>>
+        claimCitations?: Record<string, unknown>[]
     }>(citationsPath)
     let citationCount = 0
     if (citationsSnapshot?.claimCitations) {

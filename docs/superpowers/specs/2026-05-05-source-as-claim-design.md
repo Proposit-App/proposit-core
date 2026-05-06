@@ -65,9 +65,9 @@ All callers that previously created or referenced sources must use `TCoreClaim` 
 ```ts
 type TCoreClaimCitation = {
     id: UUID
-    citingClaimId: UUID         // the claim being supported (was: claimId)
+    citingClaimId: UUID // the claim being supported (was: claimId)
     citingClaimVersion: number
-    sourceClaimId: UUID         // the supporting claim (was: sourceId)
+    sourceClaimId: UUID // the supporting claim (was: sourceId)
     sourceClaimVersion: number
     checksum: string
 }
@@ -105,6 +105,7 @@ After this change:
 Adding `type` to the claim's checksum-relevant fields means every existing claim's checksum changes after migration. **However, the cascade is narrower than initially feared.** Variables and expressions reference claims by `(claimId, claimVersion)` only, NOT by claim checksum value. So claim checksum changes do NOT propagate into expression `descendantChecksum`/`combinedChecksum` values. The only collection-level checksum that shifts is `getCollectionChecksum("claims")`.
 
 Apps that have persisted state must:
+
 - Recompute all claim checksums after migration.
 - Recompute `getCollectionChecksum("claims")` and `getCollectionChecksum("claimCitations")` (the renamed citation collection).
 - Treat the post-migration collection-level checksums as a reset baseline.
@@ -152,10 +153,10 @@ The acyclicity check operates on `claimId` only (per above). Version pinning is 
 
 ### Error code renames
 
-| Existing | New |
-|---|---|
-| `ASSOC_SCHEMA_INVALID` | `CITATION_SCHEMA_INVALID` |
-| `ASSOC_CLAIM_REF_NOT_FOUND` | `CITATION_CITING_REF_NOT_FOUND` |
+| Existing                     | New                             |
+| ---------------------------- | ------------------------------- |
+| `ASSOC_SCHEMA_INVALID`       | `CITATION_SCHEMA_INVALID`       |
+| `ASSOC_CLAIM_REF_NOT_FOUND`  | `CITATION_CITING_REF_NOT_FOUND` |
 | `ASSOC_SOURCE_REF_NOT_FOUND` | `CITATION_SOURCE_REF_NOT_FOUND` |
 
 ### New error codes
@@ -231,10 +232,13 @@ Also update `argument-engine.interfaces.ts` and `premise-engine.interfaces.ts` J
 
 - `basics/argument-parser.ts` — `BasicsArgumentParser` extends `ArgumentParser`; drop `TCoreSource` and `TCoreClaimSourceAssociation` from its generic parameter list. Update any `mapSource` overrides.
 - `ieee/source.ts` — RENAME (or replace contents). Currently defines:
-  ```ts
-  IEEESourceSchema = Type.Intersect([CoreSourceSchema, Type.Object({url, citation})])
-  ```
-  After unification: produces a citation-typed claim schema instead. Two options (decide in implementation plan): (a) replace with `IEEECitationClaimSchema = Type.Intersect([CoreClaimSchema, Type.Object({url, citation})])` — same intersect shape, just with the unified claim — and document that consumers use it for `type: "citation"` claims; (b) drop the dedicated schema and let consumers compose intersects ad hoc. **Option (a) is recommended** — preserves IEEE extension API surface for downstream apps. Either way: `TIEEESource` type alias renames to `TIEEECitationClaim`.
+    ```ts
+    IEEESourceSchema = Type.Intersect([
+        CoreSourceSchema,
+        Type.Object({ url, citation }),
+    ])
+    ```
+    After unification: produces a citation-typed claim schema instead. Two options (decide in implementation plan): (a) replace with `IEEECitationClaimSchema = Type.Intersect([CoreClaimSchema, Type.Object({url, citation})])` — same intersect shape, just with the unified claim — and document that consumers use it for `type: "citation"` claims; (b) drop the dedicated schema and let consumers compose intersects ad hoc. **Option (a) is recommended** — preserves IEEE extension API surface for downstream apps. Either way: `TIEEESource` type alias renames to `TIEEECitationClaim`.
 - `ieee/index.ts` (line 3) — update barrel re-export to reflect rename.
 - `ieee/argument-parser.ts` (if it exists / wherever IEEE parser construction happens) — drop source-typed generics, rename to citation.
 
@@ -243,19 +247,19 @@ Also update `argument-engine.interfaces.ts` and `premise-engine.interfaces.ts` J
 The CLI persists arguments to disk and exposes user-facing commands. This is where the biggest CLI-level changes happen, plus the one-and-only data migration in this release.
 
 - `commands/sources.ts` — REWRITE / RENAME to `commands/citations.ts`. The 5 user-facing subcommands (`list`, `show`, `add`, `link-claim`, `unlink`) remain conceptually but address citation claims and citations rather than sources and associations:
-  - `claims add --type=citation ...` (a citation claim is just a claim with `type: "citation"`)
-  - `citations list` — replaces `sources list`
-  - `citations show <id>` — replaces `sources show <id>`
-  - `citations add <citing-claim-id> <source-claim-id>` — replaces `sources link-claim`
-  - `citations unlink <citation-id>` — replaces `sources unlink`
+    - `claims add --type=citation ...` (a citation claim is just a claim with `type: "citation"`)
+    - `citations list` — replaces `sources list`
+    - `citations show <id>` — replaces `sources show <id>`
+    - `citations add <citing-claim-id> <source-claim-id>` — replaces `sources link-claim`
+    - `citations unlink <citation-id>` — replaces `sources unlink`
 - `router.ts` — replace `"sources"` registered command with `"citations"`. Update help text.
 - `storage/libraries.ts` — file path constants and helpers:
-  - DELETE `sourcesPath()`, `readSourceLibrary`, `writeSourceLibrary`.
-  - RENAME `claimSourceAssociationsPath()` → `claimCitationsPath()`. File names on disk: `sources.json` is removed; `claim-source-associations.json` is renamed to `claim-citations.json`.
-  - RENAME `readClaimSourceLibrary` → `readClaimCitationLibrary`. New signature takes a single `claimLookup` parameter (was: two lookups).
-  - RENAME `writeClaimSourceLibrary` → `writeClaimCitationLibrary`.
-  - Drop `TSourceLookup` import from `library.interfaces.js`.
-  - `forks.json` is unchanged in path but its content shape changes (sources namespace is dropped).
+    - DELETE `sourcesPath()`, `readSourceLibrary`, `writeSourceLibrary`.
+    - RENAME `claimSourceAssociationsPath()` → `claimCitationsPath()`. File names on disk: `sources.json` is removed; `claim-source-associations.json` is renamed to `claim-citations.json`.
+    - RENAME `readClaimSourceLibrary` → `readClaimCitationLibrary`. New signature takes a single `claimLookup` parameter (was: two lookups).
+    - RENAME `writeClaimSourceLibrary` → `writeClaimCitationLibrary`.
+    - Drop `TSourceLookup` import from `library.interfaces.js`.
+    - `forks.json` is unchanged in path but its content shape changes (sources namespace is dropped).
 - `engine.ts` — `hydratePropositCore` / `persistCore`: drop sources persistence; update claim-citation persistence with new file paths and types. **Static factory call site change**: `ArgumentEngine.fromSnapshot(...)` invocation (around line 194) drops the source-library and claim-source-library positional params; pass `claimCitationLibrary` only.
 - `import.ts` (line 316), `commands/parse.ts`, `commands/arguments.ts` — drop `new SourceLibrary()` constructions; update `new ClaimSourceLibrary(claimLookup, sourceLookup)` to `new ClaimCitationLibrary(claimLookup)`.
 - `commands/render.ts` (lines ~111-134) — the "Sources:" section in argument render output is renamed to "Citations:". The render logic looks up citation-type claims via the unified claim library and pulls citations from `core.claimCitations.getAll()`. **Render UX policy** (decided here so the implementation has direction): citation-type claims appear inline alongside normal claims in the unified "Claims:" section with a `[citation]` badge; the dedicated "Citations:" section lists the citation edges (which claim cites which). Apps wanting different render UX implement their own.
@@ -285,18 +289,18 @@ The CLI logs each step to stderr for observability.
 The test suite requires a substantial rewrite. Distribution:
 
 - **`test/core.test.ts`** — ~480 occurrences. Major `describe` blocks to update or replace:
-  - `describe("ClaimSourceLibrary", ...)` (around L10325) → rename to `describe("ClaimCitationLibrary", ...)`. Update fixtures, method calls, field names.
-  - `describe("getForSource", ...)` (around L10510) → rename to `describe("getCitationsForSourceClaim", ...)`.
-  - `describe("ParsedSourceSchema", ...)` (around L12501) → DELETE.
-  - `describe("SourceLibrary — validate", ...)` (around L20258) → DELETE.
-  - `describe("ClaimSourceLibrary — validate", ...)` (around L20300) → rename and add tests for strict source-side type and acyclicity.
-  - `describe("CoreSourceForkRecordSchema", ...)` (around L22247) → DELETE.
-  - ADD: `describe("Claim type immutability", ...)` — verify `update()` rejects type changes.
-  - ADD: `describe("ClaimCitationLibrary strict source-side type", ...)` — verify `add()` rejects edges where source-side is normal.
-  - ADD: `describe("ClaimCitationLibrary acyclicity", ...)` — verify cycle detection across various graph shapes (direct A↔B, transitive A→B→C→A, cross-version edges that project to the same ID-only graph).
-  - ADD: `describe("ForkLibrary 5-namespace shape", ...)` — verify the namespace fold.
-  - ADD: `describe("Fork record schema equality", ...)` — round-trip a v0.9.x-shaped source fork through migration and assert structural equality with claim fork.
-  - ADD: `describe("Legacy snapshot validation", ...)` — verify pre-v0.10 snapshots produce `LEGACY_CLAIM_MISSING_TYPE` validation codes.
+    - `describe("ClaimSourceLibrary", ...)` (around L10325) → rename to `describe("ClaimCitationLibrary", ...)`. Update fixtures, method calls, field names.
+    - `describe("getForSource", ...)` (around L10510) → rename to `describe("getCitationsForSourceClaim", ...)`.
+    - `describe("ParsedSourceSchema", ...)` (around L12501) → DELETE.
+    - `describe("SourceLibrary — validate", ...)` (around L20258) → DELETE.
+    - `describe("ClaimSourceLibrary — validate", ...)` (around L20300) → rename and add tests for strict source-side type and acyclicity.
+    - `describe("CoreSourceForkRecordSchema", ...)` (around L22247) → DELETE.
+    - ADD: `describe("Claim type immutability", ...)` — verify `update()` rejects type changes.
+    - ADD: `describe("ClaimCitationLibrary strict source-side type", ...)` — verify `add()` rejects edges where source-side is normal.
+    - ADD: `describe("ClaimCitationLibrary acyclicity", ...)` — verify cycle detection across various graph shapes (direct A↔B, transitive A→B→C→A, cross-version edges that project to the same ID-only graph).
+    - ADD: `describe("ForkLibrary 5-namespace shape", ...)` — verify the namespace fold.
+    - ADD: `describe("Fork record schema equality", ...)` — round-trip a v0.9.x-shaped source fork through migration and assert structural equality with claim fork.
+    - ADD: `describe("Legacy snapshot validation", ...)` — verify pre-v0.10 snapshots produce `LEGACY_CLAIM_MISSING_TYPE` validation codes.
 - **`test/integration/parse-api.test.ts`** — ~11 source-shaped assertions (`arg.sources`, `built.sourceLibrary.getAll()`, `source.url`, `source.miniId`, etc.). Rewrite to use citation claims and `claimCitationLibrary`.
 - **`test/extensions/basics.test.ts`** (lines 19, 26, 35) — uses `sourceMiniIds: []` and `sources: []` in fixtures. Update field name to `citationMiniIds`; drop `sources` array.
 - **`test/extensions/ieee.test.ts`** (lines 829-830) — references `url`/`text` source fields. Update to use the renamed IEEE citation claim schema.
@@ -316,44 +320,44 @@ YAML files referenced by `test/examples.test.ts` likely reference sources via th
 Single-PR strategy with staged commits to keep each commit reviewable:
 
 1. **Schema-layer changes** (`src/lib/schemata/`):
-   - Add `type` field to `CoreClaimSchema`.
-   - Delete `source.ts`.
-   - Delete `CoreSourceForkRecordSchema` from `fork.ts`.
+    - Add `type` field to `CoreClaimSchema`.
+    - Delete `source.ts`.
+    - Delete `CoreSourceForkRecordSchema` from `fork.ts`.
 2. **Constants and types** (`src/lib/consts.ts`, `src/lib/types/`):
-   - Update `DEFAULT_CHECKSUM_CONFIG` (drop `sourceFields`, rename `claimSourceAssociationFields` → `claimCitationFields`, add `"type"` to `claimFields`).
-   - Update `TCoreChecksumConfig`.
-   - Update validation error codes (delete, rename, add).
+    - Update `DEFAULT_CHECKSUM_CONFIG` (drop `sourceFields`, rename `claimSourceAssociationFields` → `claimCitationFields`, add `"type"` to `claimFields`).
+    - Update `TCoreChecksumConfig`.
+    - Update validation error codes (delete, rename, add).
 3. **Core libraries** (`src/lib/core/`):
-   - Delete `SourceLibrary` (`source-library.ts` deleted).
-   - Rename `ClaimSourceLibrary` → `ClaimCitationLibrary` (file renamed). Single-lookup constructor. Add strict source-side type check and acyclicity check.
-   - Update `ClaimLibrary` to enforce type immutability on `update()`.
-   - Update `ArgumentLibrary` (drop `TSource`/`TAssoc` generics, rename library field).
-   - Update `ForkLibrary` (drop sources namespace).
-   - Update `forkArgumentEngine` and `PropositCore.forkArgument()` signatures and internals.
-   - Update `ArgumentEngine` constructor + static factories (`fromSnapshot`, `fromData`).
-   - Update `PropositCore` constructor.
+    - Delete `SourceLibrary` (`source-library.ts` deleted).
+    - Rename `ClaimSourceLibrary` → `ClaimCitationLibrary` (file renamed). Single-lookup constructor. Add strict source-side type check and acyclicity check.
+    - Update `ClaimLibrary` to enforce type immutability on `update()`.
+    - Update `ArgumentLibrary` (drop `TSource`/`TAssoc` generics, rename library field).
+    - Update `ForkLibrary` (drop sources namespace).
+    - Update `forkArgumentEngine` and `PropositCore.forkArgument()` signatures and internals.
+    - Update `ArgumentEngine` constructor + static factories (`fromSnapshot`, `fromData`).
+    - Update `PropositCore` constructor.
 4. **Interfaces** (`src/lib/core/interfaces/`):
-   - Update `library.interfaces.ts` (delete source types, rename association types, update fork and core snapshots).
-   - Update `argument-engine.interfaces.ts` and `premise-engine.interfaces.ts` JSDoc.
+    - Update `library.interfaces.ts` (delete source types, rename association types, update fork and core snapshots).
+    - Update `argument-engine.interfaces.ts` and `premise-engine.interfaces.ts` JSDoc.
 5. **Utilities** (`src/lib/utils/lookup.ts`):
-   - Delete `EMPTY_SOURCE_LOOKUP`. Rename `EMPTY_CLAIM_SOURCE_LOOKUP` → `EMPTY_CLAIM_CITATION_LOOKUP` with renamed methods.
+    - Delete `EMPTY_SOURCE_LOOKUP`. Rename `EMPTY_CLAIM_SOURCE_LOOKUP` → `EMPTY_CLAIM_CITATION_LOOKUP` with renamed methods.
 6. **Public exports** (`src/lib/index.ts`):
-   - Drop `SourceLibrary` re-export, rename `ClaimSourceLibrary` re-export. Update lookup re-exports.
+    - Drop `SourceLibrary` re-export, rename `ClaimSourceLibrary` re-export. Update lookup re-exports.
 7. **Parsing layer** (`src/lib/parsing/`):
-   - Update `ArgumentParser` generics and constructor signature.
-   - Update `schemata.ts` (delete `ParsedSourceSchema`, rename mini-id field, update parsed-argument schema).
-   - Update `types.ts` (drop `sourceSchema?` config option).
-   - Update `index.ts` barrel.
-   - Rewrite `prompt-builder.ts` user-facing copy.
+    - Update `ArgumentParser` generics and constructor signature.
+    - Update `schemata.ts` (delete `ParsedSourceSchema`, rename mini-id field, update parsed-argument schema).
+    - Update `types.ts` (drop `sourceSchema?` config option).
+    - Update `index.ts` barrel.
+    - Rewrite `prompt-builder.ts` user-facing copy.
 8. **Extensions** (`src/extensions/`):
-   - Update `basics/argument-parser.ts` (drop generics).
-   - Replace `ieee/source.ts` with `ieee/citation-claim.ts` (or in-place rewrite). Update `ieee/index.ts` barrel.
+    - Update `basics/argument-parser.ts` (drop generics).
+    - Replace `ieee/source.ts` with `ieee/citation-claim.ts` (or in-place rewrite). Update `ieee/index.ts` barrel.
 9. **CLI** (`src/cli/`):
-   - Update storage paths and read/write helpers.
-   - Replace `commands/sources.ts` with `commands/citations.ts`.
-   - Update `engine.ts`, `import.ts`, `commands/parse.ts`, `commands/arguments.ts`, `commands/render.ts`.
-   - Update `router.ts`.
-   - Add `storage/migrate-v0.10.ts` for one-time data migration on startup.
+    - Update storage paths and read/write helpers.
+    - Replace `commands/sources.ts` with `commands/citations.ts`.
+    - Update `engine.ts`, `import.ts`, `commands/parse.ts`, `commands/arguments.ts`, `commands/render.ts`.
+    - Update `router.ts`.
+    - Add `storage/migrate-v0.10.ts` for one-time data migration on startup.
 10. **Tests**:
     - Rewrite all source-referencing tests in `test/core.test.ts`; rename describe blocks; add new tests for type immutability, citation strictness, acyclicity, namespace fold, fork-record schema equality, legacy snapshot validation.
     - Rewrite `test/integration/parse-api.test.ts`.

@@ -1408,12 +1408,7 @@ export class ArgumentEngine<
             TVar,
             TClaim,
             TCitation
-        >(
-            argument,
-            claimLibrary,
-            claimCitationLibrary,
-            loadingConfig
-        )
+        >(argument, claimLibrary, claimCitationLibrary, loadingConfig)
         engine.restoringFromSnapshot = true
 
         // Register claim-bound variables first (no dependencies)
@@ -1530,14 +1525,7 @@ export class ArgumentEngine<
         TClaim extends TCoreClaim,
         TCitation extends TCoreClaimCitation,
     >(
-        engine: ArgumentEngine<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TClaim,
-            TCitation
-        >,
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation>,
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
     ): void {
         const checksumFields = [
@@ -1634,14 +1622,7 @@ export class ArgumentEngine<
         TClaim extends TCoreClaim,
         TCitation extends TCoreClaimCitation,
     >(
-        engine: ArgumentEngine<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TClaim,
-            TCitation
-        >,
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation>,
         argument: TOptionalChecksum<TArg>,
         variables: TOptionalChecksum<TVar>[],
         premises: TOptionalChecksum<TPremise>[]

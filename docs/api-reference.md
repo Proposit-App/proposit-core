@@ -1147,19 +1147,19 @@ A version of `TPropositionalExpression` with both the `position` and `checksum` 
 
 Hierarchical snapshot types for capturing and restoring engine state:
 
-| Type                          | Contains                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------- |
-| `TExpressionManagerSnapshot`  | `expressions` (with checksums), `config`                                                    |
-| `TVariableManagerSnapshot`    | `variables`, `config`                                                                       |
-| `TPremiseEngineSnapshot`      | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                    |
-| `TArgumentEngineSnapshot`     | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config`     |
-| `TReactiveSnapshot`           | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles` |
-| `TReactivePremiseSnapshot`    | `premise`, `expressions` (Record by ID), `rootExpressionId`                                 |
-| `TClaimLibrarySnapshot`       | `claims` (all versions of all claims, both `'normal'` and `'citation'`)                     |
-| `TClaimCitationLibrarySnapshot` | `claimCitations` (all citation edges)                                                     |
-| `TArgumentLibrarySnapshot`    | `arguments` (array of `TArgumentEngineSnapshot`)                                            |
-| `TForkLibrarySnapshot`        | Five arrays (`arguments`, `premises`, `expressions`, `variables`, `claims`)                 |
-| `TPropositCoreSnapshot`       | All four library snapshots in one object                                                    |
+| Type                            | Contains                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `TExpressionManagerSnapshot`    | `expressions` (with checksums), `config`                                                    |
+| `TVariableManagerSnapshot`      | `variables`, `config`                                                                       |
+| `TPremiseEngineSnapshot`        | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                    |
+| `TArgumentEngineSnapshot`       | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config`     |
+| `TReactiveSnapshot`             | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles` |
+| `TReactivePremiseSnapshot`      | `premise`, `expressions` (Record by ID), `rootExpressionId`                                 |
+| `TClaimLibrarySnapshot`         | `claims` (all versions of all claims, both `'normal'` and `'citation'`)                     |
+| `TClaimCitationLibrarySnapshot` | `claimCitations` (all citation edges)                                                       |
+| `TArgumentLibrarySnapshot`      | `arguments` (array of `TArgumentEngineSnapshot`)                                            |
+| `TForkLibrarySnapshot`          | Five arrays (`arguments`, `premises`, `expressions`, `variables`, `claims`)                 |
+| `TPropositCoreSnapshot`         | All four library snapshots in one object                                                    |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
@@ -1211,16 +1211,16 @@ Fork provenance lives entirely in `ForkLibrary` — entity schemas (argument, pr
 
 As of v0.10.0 the previously separate `Source` / `ClaimSourceAssociation` types are gone. Sources are now claims with `type: 'citation'`, and `ClaimSourceAssociation` is replaced by `TCoreClaimCitation` — a directed edge between two claim versions in the unified claim library.
 
-| Type                              | Description                                                                                                                                                       |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TCoreClaim`                      | Base claim entity (`{ id, version, frozen, checksum, type: 'normal' \| 'citation' }`); `type` is immutable post-creation                                          |
+| Type                              | Description                                                                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TCoreClaim`                      | Base claim entity (`{ id, version, frozen, checksum, type: 'normal' \| 'citation' }`); `type` is immutable post-creation                                                                    |
 | `TCoreClaimCitation`              | Citation edge in the global claim citation graph (`{ id, citingClaimId, citingClaimVersion, sourceClaimId, sourceClaimVersion, checksum }`); source-side claim must have `type: 'citation'` |
-| `TClaimLookup`                    | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                                 |
-| `TClaimLibraryManagement`         | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)       |
-| `TClaimCitationLookup`            | Narrow read-only interface for citation lookups (`getCitationsForCitingClaim`, `getCitationsForSourceClaim`, `get`)                                                |
-| `TClaimCitationLibraryManagement` | Full management interface for `ClaimCitationLibrary` (extends `TClaimCitationLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`)                       |
-| `TClaimLibrarySnapshot`           | Snapshot type for `ClaimLibrary` state (`{ claims: TClaim[] }`)                                                                                                   |
-| `TClaimCitationLibrarySnapshot`   | Snapshot type for `ClaimCitationLibrary` state (`{ claimCitations: TCitation[] }`)                                                                                |
+| `TClaimLookup`                    | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                                                           |
+| `TClaimLibraryManagement`         | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)                                 |
+| `TClaimCitationLookup`            | Narrow read-only interface for citation lookups (`getCitationsForCitingClaim`, `getCitationsForSourceClaim`, `get`)                                                                         |
+| `TClaimCitationLibraryManagement` | Full management interface for `ClaimCitationLibrary` (extends `TClaimCitationLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`)                                                 |
+| `TClaimLibrarySnapshot`           | Snapshot type for `ClaimLibrary` state (`{ claims: TClaim[] }`)                                                                                                                             |
+| `TClaimCitationLibrarySnapshot`   | Snapshot type for `ClaimCitationLibrary` state (`{ claimCitations: TCitation[] }`)                                                                                                          |
 
 ## Errors
 
@@ -1228,16 +1228,16 @@ As of v0.10.0 the previously separate `Source` / `ClaimSourceAssociation` types 
 
 These codes are emitted as `TInvariantViolation.code` values by `ClaimLibrary` and `ClaimCitationLibrary`:
 
-| Code                              | Source                                | Meaning                                                                                                          |
-| --------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `CLAIM_TYPE_IMMUTABLE`            | `ClaimLibrary.update()`               | An update tried to change a claim's `type` discriminator after creation.                                         |
-| `LEGACY_CLAIM_MISSING_TYPE`       | `ClaimLibrary.fromSnapshot()`         | A claim entry in the snapshot lacks the `type` field (pre-v0.10 data); migration required.                       |
-| `CITATION_SCHEMA_INVALID`         | `ClaimCitationLibrary.validate()`     | A citation does not match `CoreClaimCitationSchema`.                                                             |
-| `CITATION_DUPLICATE_ID`           | `ClaimCitationLibrary.add()`          | A citation with the given `id` already exists.                                                                   |
-| `CITATION_CITING_REF_NOT_FOUND`   | `ClaimCitationLibrary.add/validate()` | The citation's `citingClaimId@citingClaimVersion` does not resolve in the claim lookup.                          |
-| `CITATION_SOURCE_REF_NOT_FOUND`   | `ClaimCitationLibrary.add/validate()` | The citation's `sourceClaimId@sourceClaimVersion` does not resolve in the claim lookup.                          |
-| `CITATION_SOURCE_NOT_CITATION_TYPE` | `ClaimCitationLibrary.add/validate()` | The source-side claim has `type !== 'citation'`. Only citation-typed claims are valid as the source endpoint.  |
-| `CITATION_CYCLE_DETECTED`         | `ClaimCitationLibrary.add()`          | Adding the citation would introduce a cycle in the global claim-citation graph (ID-only — versions ignored).     |
+| Code                                | Source                                | Meaning                                                                                                       |
+| ----------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `CLAIM_TYPE_IMMUTABLE`              | `ClaimLibrary.update()`               | An update tried to change a claim's `type` discriminator after creation.                                      |
+| `LEGACY_CLAIM_MISSING_TYPE`         | `ClaimLibrary.fromSnapshot()`         | A claim entry in the snapshot lacks the `type` field (pre-v0.10 data); migration required.                    |
+| `CITATION_SCHEMA_INVALID`           | `ClaimCitationLibrary.validate()`     | A citation does not match `CoreClaimCitationSchema`.                                                          |
+| `CITATION_DUPLICATE_ID`             | `ClaimCitationLibrary.add()`          | A citation with the given `id` already exists.                                                                |
+| `CITATION_CITING_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()` | The citation's `citingClaimId@citingClaimVersion` does not resolve in the claim lookup.                       |
+| `CITATION_SOURCE_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()` | The citation's `sourceClaimId@sourceClaimVersion` does not resolve in the claim lookup.                       |
+| `CITATION_SOURCE_NOT_CITATION_TYPE` | `ClaimCitationLibrary.add/validate()` | The source-side claim has `type !== 'citation'`. Only citation-typed claims are valid as the source endpoint. |
+| `CITATION_CYCLE_DETECTED`           | `ClaimCitationLibrary.add()`          | Adding the citation would introduce a cycle in the global claim-citation graph (ID-only — versions ignored).  |
 
 ### `InvalidArgumentStructureError`
 

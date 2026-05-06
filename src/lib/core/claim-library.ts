@@ -66,9 +66,7 @@ export class ClaimLibrary<TClaim extends TCoreClaim = TCoreClaim>
      */
     public override update(
         id: string,
-        updates: Partial<
-            Omit<TClaim, "id" | "version" | "frozen" | "checksum">
-        >
+        updates: Partial<Omit<TClaim, "id" | "version" | "frozen" | "checksum">>
     ): TClaim {
         const existing = this.getCurrent(id)
         if (
@@ -119,7 +117,7 @@ export class ClaimLibrary<TClaim extends TCoreClaim = TCoreClaim>
                     typeof claim === "object" &&
                     "id" in claim &&
                     typeof (claim as { id?: unknown }).id === "string"
-                        ? ((claim as { id: string }).id)
+                        ? (claim as { id: string }).id
                         : "<unknown>"
                 throw new InvariantViolationError([
                     {

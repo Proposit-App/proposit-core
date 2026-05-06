@@ -159,14 +159,7 @@ export class PropositCore<
 
         this.arguments =
             options?.argumentLibrary ??
-            new ArgumentLibrary<
-                TArg,
-                TPremise,
-                TExpr,
-                TVar,
-                TClaim,
-                TCitation
-            >(
+            new ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim, TCitation>(
                 {
                     claimLibrary: this.claims,
                     claimCitationLibrary: this.claimCitations,

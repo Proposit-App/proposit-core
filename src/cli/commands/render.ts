@@ -103,7 +103,10 @@ export function registerRenderCommand(
             // Walk the citation graph from the directly referenced claims,
             // collecting every reachable claim (and the citation edges
             // between them) so the render output covers the full closure.
-            const claimByKey = new Map<string, (typeof directlyReferencedClaims)[number]>()
+            const claimByKey = new Map<
+                string,
+                (typeof directlyReferencedClaims)[number]
+            >()
             for (const claim of directlyReferencedClaims) {
                 claimByKey.set(`${claim.id}@${claim.version}`, claim)
             }
@@ -111,9 +114,7 @@ export function registerRenderCommand(
                 typeof core.claimCitations.getAll
             > = []
             const seenCitationIds = new Set<string>()
-            const frontier: string[] = directlyReferencedClaims.map(
-                (c) => c.id
-            )
+            const frontier: string[] = directlyReferencedClaims.map((c) => c.id)
             const visitedClaimIds = new Set(frontier)
             while (frontier.length > 0) {
                 const claimId = frontier.pop()!

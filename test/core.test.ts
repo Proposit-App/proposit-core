@@ -5457,7 +5457,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib()
+                csLib()
             )
             const { result: pm } = eng.createPremise()
             const cs1 = pm.checksum()
@@ -5469,7 +5469,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib()
+                csLib()
             )
             const v = {
                 id: "v1",
@@ -5500,7 +5500,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib()
+                csLib()
             )
             const { result: pm } = eng.createPremise()
             const before = pm.checksum()
@@ -5520,7 +5520,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib()
+                csLib()
             )
             const v1 = {
                 id: "v1",
@@ -5543,7 +5543,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib()
+                csLib()
             )
             expect(eng.checksum()).toBe(eng.checksum())
         })
@@ -5552,7 +5552,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib()
+                csLib()
             )
             const before = eng.checksum()
             eng.createPremise()
@@ -5564,7 +5564,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib()
+                csLib()
             )
             // First premise is auto-set as conclusion
             eng.createPremise()
@@ -5580,7 +5580,7 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-            csLib(),
+                csLib(),
                 { checksumConfig: { argumentFields: new Set(["id"]) } }
             )
             const cs = eng.checksum()
@@ -7247,16 +7247,8 @@ describe("diffArguments — generic type parameters", () => {
             version: 1,
             projectId: "proj-1",
         }
-        const engineA = new ArgumentEngine<TExtArg>(
-            argA,
-            aLib(),
-            csLib()
-        )
-        const engineB = new ArgumentEngine<TExtArg>(
-            argB,
-            aLib(),
-            csLib()
-        )
+        const engineA = new ArgumentEngine<TExtArg>(argA, aLib(), csLib())
+        const engineB = new ArgumentEngine<TExtArg>(argB, aLib(), csLib())
 
         const diff = diffArguments(engineA, engineB)
         expect(diff.argument.before.projectId).toBe("proj-1")
@@ -7687,11 +7679,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("round-trips a premise with expressions", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7750,11 +7738,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restored premise is independent from original", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7815,11 +7799,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restores rootExpressionId correctly", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7859,11 +7839,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("rebuilds expressionsByVariableId index on restore", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7966,11 +7942,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     it("round-trips an empty engine", () => {
         const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
         expect(restored.getArgument().id).toBe("arg-1")
         expect(restored.listPremiseIds()).toEqual([])
         expect(restored.getVariables()).toEqual([])
@@ -7994,11 +7966,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         })
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         expect(restored.listPremiseIds()).toEqual(["p1"])
         expect(restored.getVariables()).toHaveLength(3) // 2 claim-bound + 1 auto premise-bound
@@ -8014,11 +7982,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         engine.setConclusionPremise("p2")
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         expect(restored.getRoleState().conclusionPremiseId).toBe("p2")
     })
@@ -8040,11 +8004,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         engine.createPremiseWithId("p1")
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         // Mutate restored, original should be unaffected
         restored.createPremiseWithId("p2")
@@ -9025,11 +8985,7 @@ describe("ArgumentEngine — lookup methods", () => {
         it("survives snapshot round-trip", () => {
             const { engine } = setupEngine()
             const snap = engine.snapshot()
-            const restored = ArgumentEngine.fromSnapshot(
-                snap,
-                aLib(),
-            csLib()
-            )
+            const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
             expect(restored.getExpression("e1")?.id).toBe("e1")
             expect(restored.getExpressionPremiseId("e3")).toBe("p2")
         })
@@ -9045,7 +9001,7 @@ describe("ArgumentEngine — lookup methods", () => {
             const restored = ArgumentEngine.fromData(
                 engine.getArgument(),
                 aLib(),
-            csLib(),
+                csLib(),
                 vars,
                 premises,
                 expressions,
@@ -10595,9 +10551,9 @@ describe("ClaimCitationLibrary", () => {
             expect(restored.getCitationsForCitingClaim(claim1.id)).toHaveLength(
                 1
             )
-            expect(restored.getCitationsForSourceClaim(source1.id)).toHaveLength(
-                1
-            )
+            expect(
+                restored.getCitationsForSourceClaim(source1.id)
+            ).toHaveLength(1)
         })
 
         it("snapshot of empty library returns empty array", () => {
@@ -12487,7 +12443,8 @@ describe("Parsing — response schemas", () => {
                             claimMiniId: "c1",
                             customVarField: 42,
                         },
-                    ],                    premises: [
+                    ],
+                    premises: [
                         {
                             miniId: "p1",
                             formula: "P",
@@ -12523,7 +12480,8 @@ describe("Parsing — response schemas", () => {
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
-                    ],                    premises: [{ miniId: "p1", formula: "P" }],
+                    ],
+                    premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                 },
                 uncategorizedText: null,
@@ -12552,7 +12510,8 @@ describe("Parsing — response schemas", () => {
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
-                    ],                    premises: [{ miniId: "p1", formula: "P" }],
+                    ],
+                    premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                 },
                 uncategorizedText: null,
@@ -12575,7 +12534,8 @@ describe("Parsing — response schemas", () => {
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
-                    ],                    premises: [{ miniId: "p1", formula: "P" }],
+                    ],
+                    premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                 },
                 uncategorizedText: null,
@@ -12603,7 +12563,8 @@ describe("Parsing — response schemas", () => {
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
-                    ],                    premises: [{ miniId: "p1", formula: "P" }],
+                    ],
+                    premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                     argumentTitle: "My argument",
                 },
@@ -13050,7 +13011,8 @@ describe("Parsing — response schemas", () => {
                         variables: [
                             { miniId: "V1", symbol: "P", claimMiniId: "C1" },
                             { miniId: "V2", symbol: "Q", claimMiniId: "C2" },
-                        ],                        premises: [
+                        ],
+                        premises: [
                             { miniId: "P1", formula: "P implies Q" },
                             { miniId: "P2", formula: "P" },
                         ],
@@ -13349,8 +13311,7 @@ describe("Parsing — response schemas", () => {
                 const result = parser.build(validResponse())
                 const cits = result.claimCitationLibrary.getAll()
                 expect(cits).toHaveLength(1)
-                const link = (cits[0] as Record<string, unknown>)
-                    .link as string
+                const link = (cits[0] as Record<string, unknown>).link as string
                 // Link format is "claimMiniId-realCitingClaimUUID"
                 expect(link).toMatch(/^C1-/)
             })
@@ -14437,7 +14398,7 @@ describe("operator nesting restriction", () => {
                 ArgumentEngine.fromData(
                     arg,
                     aLib(),
-            csLib(),
+                    csLib(),
                     variables,
                     premises,
                     expressions,
@@ -15706,7 +15667,7 @@ describe("grammar enforcement config", () => {
             const engine = ArgumentEngine.fromData(
                 arg,
                 aLib(),
-            csLib(),
+                csLib(),
                 variables,
                 premises,
                 expressions,
@@ -15725,7 +15686,7 @@ describe("grammar enforcement config", () => {
                 ArgumentEngine.fromData(
                     arg,
                     aLib(),
-            csLib(),
+                    csLib(),
                     variables,
                     premises,
                     expressions,
@@ -15804,12 +15765,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 argumentFields: new Set(["id", "version"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         const snap = engine.snapshot()
         const serialized = jsonRoundTrip(snap)
 
@@ -15883,12 +15839,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 roleFields: new Set(["conclusionPremiseId", "customRole"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         const snap = engine.snapshot()
         const serialized = jsonRoundTrip(snap)
 
@@ -15912,12 +15863,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 argumentFields: new Set(["id", "version"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         const snap = engine.snapshot()
 
         // Native JSON round-trip: snapshot already has arrays, so they survive
@@ -15960,12 +15906,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 premiseFields: new Set(["id", "argumentId"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -16008,12 +15949,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 variableFields: new Set(["id", "symbol"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -16084,12 +16020,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 premiseFields: new Set(["id", "argumentId"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -16601,7 +16532,7 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-            csLib(),
+                csLib(),
                 undefined,
                 "strict"
             )
@@ -16633,7 +16564,7 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-            csLib(),
+                csLib(),
                 undefined,
                 "strict"
             )
@@ -16694,7 +16625,7 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-            csLib(),
+                csLib(),
                 undefined,
                 "strict"
             )
@@ -16717,7 +16648,7 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-            csLib(),
+                csLib(),
                 undefined,
                 "strict"
             )
@@ -16740,7 +16671,7 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-            csLib(),
+                csLib(),
                 undefined,
                 "strict"
             )
@@ -16775,7 +16706,7 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromData(
                 argData,
                 aLib(),
-            csLib(),
+                csLib(),
                 variables,
                 premises,
                 expressions,
@@ -16818,7 +16749,7 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromData(
                 argData,
                 aLib(),
-            csLib(),
+                csLib(),
                 variables,
                 premises,
                 expressions,
@@ -17065,11 +16996,7 @@ describe("hierarchical checksum propagation", () => {
 
         // Snapshot and restore
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         restored.flushChecksums()
 
@@ -19066,11 +18993,7 @@ describe("cross-argument variable binding", () => {
         eng.setConclusionPremise("p1")
 
         const snap = eng.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         const vars = restored.getVariables()
         const extVar = vars.find((v) => v.id === "v-ext")
@@ -19956,7 +19879,7 @@ describe("ArgumentEngine — validate", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-            csLib(),
+                csLib(),
                 undefined,
                 "ignore"
             )
@@ -21982,7 +21905,6 @@ describe("ForkRecordSchemas", () => {
             )
         })
     })
-
 })
 
 describe("ForkNamespace", () => {
@@ -22331,7 +22253,9 @@ describe("PropositCore", () => {
         const restored = PropositCore.fromSnapshot(snap)
 
         expect(restored.claimCitations.get(cit.id)).toBeDefined()
-        expect(restored.claimCitations.get(cit.id)!.citingClaimId).toBe(claim.id)
+        expect(restored.claimCitations.get(cit.id)!.citingClaimId).toBe(
+            claim.id
+        )
     })
 
     it("should round-trip via snapshot/fromSnapshot with fork records", () => {
@@ -23212,7 +23136,8 @@ describe("generateId injection — ArgumentParser", () => {
                         symbol: "P",
                         claimMiniId: "C1",
                     },
-                ],                premises: [
+                ],
+                premises: [
                     {
                         miniId: "P1",
                         formula: "P",
@@ -25483,11 +25408,7 @@ describe("post-load normalization", () => {
         const snapshot = eng.snapshot()
 
         // Restore with auto-normalize on (default)
-        const restored = ArgumentEngine.fromSnapshot(
-            snapshot,
-            aLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snapshot, aLib(), csLib())
 
         const restoredPe = restored.findPremiseByExpressionId("v-p")!
         expect(restoredPe.getExpression("formula-1")).toBeUndefined()
@@ -26286,7 +26207,7 @@ describe("fromData checksum idempotency", () => {
             ArgumentEngine.fromData(
                 arg,
                 aLib(),
-            csLib(),
+                csLib(),
                 variables,
                 premises,
                 expressions,
@@ -27985,7 +27906,8 @@ describe("ClaimCitationLibrary strict source-side type", () => {
                 citingClaimId: normalClaim.id,
                 citingClaimVersion: normalClaim.version,
                 sourceClaimId: anotherNormalClaim.id,
-                sourceClaimVersion: anotherNormalClaim.version,            })
+                sourceClaimVersion: anotherNormalClaim.version,
+            })
         ).toThrow(/only 'citation' is permitted/)
     })
     it("accepts a citation where sourceClaimId references a citation claim", () => {
@@ -28001,7 +27923,8 @@ describe("ClaimCitationLibrary strict source-side type", () => {
                 citingClaimId: normalClaim.id,
                 citingClaimVersion: normalClaim.version,
                 sourceClaimId: citationClaim.id,
-                sourceClaimVersion: citationClaim.version,            })
+                sourceClaimVersion: citationClaim.version,
+            })
         ).not.toThrow()
     })
 })
@@ -28024,14 +27947,16 @@ describe("ClaimCitationLibrary acyclicity", () => {
             citingClaimId: a.id,
             citingClaimVersion: a.version,
             sourceClaimId: b.id,
-            sourceClaimVersion: b.version,        })
+            sourceClaimVersion: b.version,
+        })
         expect(() =>
             citationLib.add({
                 id: "00000000-0000-0000-0000-000000000002",
                 citingClaimId: b.id,
                 citingClaimVersion: b.version,
                 sourceClaimId: a.id,
-                sourceClaimVersion: a.version,            })
+                sourceClaimVersion: a.version,
+            })
         ).toThrow(/cycle/i)
     })
     it("rejects a transitive A→B→C→A cycle", () => {
@@ -28044,20 +27969,23 @@ describe("ClaimCitationLibrary acyclicity", () => {
             citingClaimId: a.id,
             citingClaimVersion: a.version,
             sourceClaimId: b.id,
-            sourceClaimVersion: b.version,        })
+            sourceClaimVersion: b.version,
+        })
         citationLib.add({
             id: "00000000-0000-0000-0000-000000000011",
             citingClaimId: b.id,
             citingClaimVersion: b.version,
             sourceClaimId: c.id,
-            sourceClaimVersion: c.version,        })
+            sourceClaimVersion: c.version,
+        })
         expect(() =>
             citationLib.add({
                 id: "00000000-0000-0000-0000-000000000012",
                 citingClaimId: c.id,
                 citingClaimVersion: c.version,
                 sourceClaimId: a.id,
-                sourceClaimVersion: a.version,            })
+                sourceClaimVersion: a.version,
+            })
         ).toThrow(/cycle/i)
     })
     it("treats version-different edges as projecting to the same ID-only graph", () => {
@@ -28070,7 +27998,8 @@ describe("ClaimCitationLibrary acyclicity", () => {
             citingClaimId: a.id,
             citingClaimVersion: 0,
             sourceClaimId: b.id,
-            sourceClaimVersion: 0,        })
+            sourceClaimVersion: 0,
+        })
         // Freeze A to bump it to a new version (v1)
         claimLib.freeze(a.id)
         // Try B@v0 → A@v1 — same ID-only cycle as the first edge's reverse
@@ -28080,7 +28009,8 @@ describe("ClaimCitationLibrary acyclicity", () => {
                 citingClaimId: b.id,
                 citingClaimVersion: 0,
                 sourceClaimId: a.id,
-                sourceClaimVersion: 1,            })
+                sourceClaimVersion: 1,
+            })
         ).toThrow(/cycle/i)
     })
 })
@@ -28145,9 +28075,7 @@ describe("ClaimLibrary legacy snapshot detection", () => {
         }
         expect(() =>
             ClaimLibrary.fromSnapshot(
-                validSnapshot as Parameters<
-                    typeof ClaimLibrary.fromSnapshot
-                >[0]
+                validSnapshot as Parameters<typeof ClaimLibrary.fromSnapshot>[0]
             )
         ).not.toThrow()
     })

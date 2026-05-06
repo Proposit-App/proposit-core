@@ -763,15 +763,15 @@ The engine enforces structural invariants at two levels: **construction-time** (
 
 ### Claims and citations — prevented at construction time
 
-| Invalid construction                                                          | What happens / error code             |
-| ----------------------------------------------------------------------------- | ------------------------------------- |
-| Updating a claim's `type` field after creation                                | Throws — `CLAIM_TYPE_IMMUTABLE`       |
-| Restoring a pre-v0.10 snapshot whose claims lack the `type` field             | Throws — `LEGACY_CLAIM_MISSING_TYPE`  |
-| Adding a citation whose `id` already exists                                   | Throws — `CITATION_DUPLICATE_ID`      |
-| Adding a citation whose `citingClaimId@citingClaimVersion` is not in the lookup | Throws — `CITATION_CITING_REF_NOT_FOUND` |
-| Adding a citation whose `sourceClaimId@sourceClaimVersion` is not in the lookup | Throws — `CITATION_SOURCE_REF_NOT_FOUND` |
-| Source-side claim of a citation has `type !== 'citation'`                     | Throws — `CITATION_SOURCE_NOT_CITATION_TYPE` |
-| Citation that would create a cycle in the global claim-citation graph         | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate) |
+| Invalid construction                                                            | What happens / error code                                                  |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Updating a claim's `type` field after creation                                  | Throws — `CLAIM_TYPE_IMMUTABLE`                                            |
+| Restoring a pre-v0.10 snapshot whose claims lack the `type` field               | Throws — `LEGACY_CLAIM_MISSING_TYPE`                                       |
+| Adding a citation whose `id` already exists                                     | Throws — `CITATION_DUPLICATE_ID`                                           |
+| Adding a citation whose `citingClaimId@citingClaimVersion` is not in the lookup | Throws — `CITATION_CITING_REF_NOT_FOUND`                                   |
+| Adding a citation whose `sourceClaimId@sourceClaimVersion` is not in the lookup | Throws — `CITATION_SOURCE_REF_NOT_FOUND`                                   |
+| Source-side claim of a citation has `type !== 'citation'`                       | Throws — `CITATION_SOURCE_NOT_CITATION_TYPE`                               |
+| Citation that would create a cycle in the global claim-citation graph           | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate) |
 
 ### Removal cascades
 

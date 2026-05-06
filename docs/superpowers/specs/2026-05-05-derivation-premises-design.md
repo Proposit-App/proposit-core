@@ -40,7 +40,7 @@ This release assumes:
 
 ```ts
 type TCorePremise =
-    | TCoreFreeformPremise   // { type: "freeform", ...common fields }
+    | TCoreFreeformPremise // { type: "freeform", ...common fields }
     | TCoreDerivationPremise // { type: "derivation", derivedClaimId: UUID, ...common fields }
 ```
 
@@ -65,8 +65,8 @@ A premise with `type: "derivation"` and `derivedClaimId: Q.id` must conform to:
 
 - The root expression is **either** a single variable expression for Q's variable (naked), **or** an `implies`/`iff` operator with arity 2.
 - When the root is `implies`/`iff`:
-  - Position 0 (antecedent slot): any valid expression tree.
-  - Position 1 (consequent slot): exactly the variable expression for Q's variable. No operator subtree, no other variable, no formula wrapper.
+    - Position 0 (antecedent slot): any valid expression tree.
+    - Position 1 (consequent slot): exactly the variable expression for Q's variable. No operator subtree, no other variable, no formula wrapper.
 - Both `implies` and `iff` are accepted as the root operator. Per `argument-evaluation.ts:151–162`, both treat `children[0]` as the antecedent and `children[1]` as the consequent — position-ordered, even though `iff` is truth-functionally symmetric. Verified preserved across the entire codebase: parser (`src/lib/core/parser/formula.peggy`), validation (`expression-manager.ts`), evaluation propagation (`argument-evaluation.ts:290–305`), rendering (`premise-engine.ts:1896–1899`), and operator-swap path (`expression-manager.ts:84–85, 743–744`). No code path canonicalizes `iff` children — `getChildExpressions` always sorts by position and `absorbSameOperatorIfNeeded` does not apply to root-only operators.
 
 ### iff propagation note
@@ -154,15 +154,15 @@ The public mutation surface of `PremiseEngine` (verified against `src/lib/core/p
 
 `ManagedDerivationPremiseEngine` overrides each method in the override list to enforce additional invariants on top of the inherited grammar:
 
-| Rule | Error |
-|---|---|
-| Cannot insert into the consequent slot (position 1 of root `implies`/`iff`). | `DERIVATION_CONSEQUENT_LOCKED` |
-| Cannot remove the consequent variable expression. | `DERIVATION_CONSEQUENT_LOCKED` |
-| Cannot change the variable referenced by the consequent. | `DERIVATION_CONSEQUENT_LOCKED` |
-| Cannot wrap the consequent in `not`. | `DERIVATION_CONSEQUENT_LOCKED` |
-| Cannot change the root operator from `implies`/`iff` to `and`/`or`/`not`. | `DERIVATION_ROOT_OPERATOR_INVALID` |
-| Cannot bulk-load an expression set that violates derivation structure. | `DERIVATION_STRUCTURE_INVALID` |
-| Cannot normalize when normalization would destroy the consequent. | `DERIVATION_STRUCTURE_INVALID` |
+| Rule                                                                         | Error                              |
+| ---------------------------------------------------------------------------- | ---------------------------------- |
+| Cannot insert into the consequent slot (position 1 of root `implies`/`iff`). | `DERIVATION_CONSEQUENT_LOCKED`     |
+| Cannot remove the consequent variable expression.                            | `DERIVATION_CONSEQUENT_LOCKED`     |
+| Cannot change the variable referenced by the consequent.                     | `DERIVATION_CONSEQUENT_LOCKED`     |
+| Cannot wrap the consequent in `not`.                                         | `DERIVATION_CONSEQUENT_LOCKED`     |
+| Cannot change the root operator from `implies`/`iff` to `and`/`or`/`not`.    | `DERIVATION_ROOT_OPERATOR_INVALID` |
+| Cannot bulk-load an expression set that violates derivation structure.       | `DERIVATION_STRUCTURE_INVALID`     |
+| Cannot normalize when normalization would destroy the consequent.            | `DERIVATION_STRUCTURE_INVALID`     |
 
 Antecedent expressions remain fully editable. Negation, restructuring, formula wrapping, operator changes between `and↔or` — all unconstrained as long as they don't touch the consequent slot.
 
@@ -182,9 +182,9 @@ The same validation runs in `ManagedDerivationPremiseEngine.fromSnapshot` so tha
 - Looks up `citationLib.getCitationsForCitingClaim(derivedClaimId)` → `[S1, …, Sn]` (all citations from `derivedClaimId`).
 - Ensures a claim-bound variable exists in the argument for each `Si`. **This requires a new public API on `ArgumentEngine` — `ensureClaimBoundVariable(claimId: UUID): TClaimBoundVariable`** — see "New ArgumentEngine API" below.
 - Builds the antecedent expression tree based on `n`:
-  - `n = 0`: leaves the premise in its current form (typically naked Q if newly created). Returns without modification.
-  - `n = 1`: produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
-  - `n ≥ 2`: produces `IMPLIES(OR(VariableExpression(S1), …, VariableExpression(Sn)), VariableExpression(Q))`.
+    - `n = 0`: leaves the premise in its current form (typically naked Q if newly created). Returns without modification.
+    - `n = 1`: produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
+    - `n ≥ 2`: produces `IMPLIES(OR(VariableExpression(S1), …, VariableExpression(Sn)), VariableExpression(Q))`.
 - **One-shot**: no live binding to the citation library. Subsequent mutations to global citations do not propagate. To re-snapshot, the caller deletes and re-creates the derivation premise (or constructs a new one alongside).
 - **Non-recursive**: does not invoke `populateFromCitations` on cited claims' derivation premises. Apps that want recursive materialization invoke it themselves on each cited claim.
 - **Refuses non-empty antecedent**: detection is structural — the wrapped premise has a non-empty antecedent if the root expression is an operator (i.e., `implies`/`iff`) with a non-null position-0 child. If detected, throws `DERIVATION_ANTECEDENT_NON_EMPTY`. The caller decides whether to delete and re-create or re-use the existing structure. **Future opt-in merge mode** (deferred to plan): an option flag like `{merge: true}` could append new sources to an existing antecedent's `OR` group; out of scope for the initial implementation.
@@ -200,11 +200,12 @@ ensureClaimBoundVariable(claimId: UUID): TClaimBoundVariable
 ```
 
 Behavior:
+
 - If a claim-bound variable for `claimId` already exists in the argument, return it.
 - Otherwise, create a new claim-bound variable with:
-  - A fresh UUID.
-  - The current version of the claim from `ClaimLibrary`.
-  - An auto-generated symbol via the existing `generateUniqueSymbol` helper (now exposed to internal callers; remains private to external consumers).
+    - A fresh UUID.
+    - The current version of the claim from `ClaimLibrary`.
+    - An auto-generated symbol via the existing `generateUniqueSymbol` helper (now exposed to internal callers; remains private to external consumers).
 - Throws `CLAIM_NOT_FOUND` if the claim is not in the library.
 
 This API is independently useful beyond `populateFromCitations` — apps that programmatically add claim references to arguments can use it. It's a small, well-defined addition.
@@ -266,9 +267,9 @@ The validation routine lives in a single utility module (e.g., `src/lib/utils/de
 ## Lifecycle
 
 - **Creation** is fully driven by the application:
-  - `argumentEngine.createPremise({ type: "derivation", derivedClaimId: Q.id })` creates a derivation premise with naked Q at the root. Internally calls `ensureClaimBoundVariable(Q.id)` to materialize the variable.
-  - Apps can then operate on the premise via classic `PremiseEngine` (permissive, no enforcement) or wrap it in `ManagedDerivationPremiseEngine` for safe mutations.
-  - To seed the antecedent from current citations, apps wrap with `ManagedDerivationPremiseEngine` and call `populateFromCitations`.
+    - `argumentEngine.createPremise({ type: "derivation", derivedClaimId: Q.id })` creates a derivation premise with naked Q at the root. Internally calls `ensureClaimBoundVariable(Q.id)` to materialize the variable.
+    - Apps can then operate on the premise via classic `PremiseEngine` (permissive, no enforcement) or wrap it in `ManagedDerivationPremiseEngine` for safe mutations.
+    - To seed the antecedent from current citations, apps wrap with `ManagedDerivationPremiseEngine` and call `populateFromCitations`.
 - **Deletion** uses the existing `argumentEngine.removePremise` flow. No special semantics for derivation premises.
 - **Plurality**: the core library does not enforce one-derivation-per-claim. Apps may permit or restrict multiple derivation premises with the same `derivedClaimId`. Truth-functionally `(A → Q) ∧ (B → Q) ≡ (A ∨ B) → Q` across a single argument's premise set, but each premise is independently evaluated and listed in `listSupportingPremises` (`argument-engine.ts:1210`); counterexample search treats them as independent constraints. The choice between one vs. many is editorial.
 
@@ -281,9 +282,9 @@ Multiple derivation premises with the same `derivedClaimId` produce truth-functi
 ### Schemata (`src/lib/schemata/propositional.ts`)
 
 - `CorePremiseSchema` → discriminated union:
-  - `CoreFreeformPremiseSchema` (existing shape with `type: "freeform"` literal added)
-  - `CoreDerivationPremiseSchema` (existing shape with `type: "derivation"` literal and required `derivedClaimId: UUID`)
-  - `CorePremiseSchema = Type.Union([CoreFreeformPremiseSchema, CoreDerivationPremiseSchema])`
+    - `CoreFreeformPremiseSchema` (existing shape with `type: "freeform"` literal added)
+    - `CoreDerivationPremiseSchema` (existing shape with `type: "derivation"` literal and required `derivedClaimId: UUID`)
+    - `CorePremiseSchema = Type.Union([CoreFreeformPremiseSchema, CoreDerivationPremiseSchema])`
 - Update `TCorePremise` type alias accordingly.
 - Preserve `additionalProperties: true` on each variant.
 
@@ -291,23 +292,23 @@ Multiple derivation premises with the same `derivedClaimId` produce truth-functi
 
 - `premise-engine.ts` — visibility refactor: widen approximately 5 specific `private` fields (`premise`, `rootExpressionId`, `expressions`, `variables`, `grammarConfig`) to `protected` based on `ManagedDerivationPremiseEngine` needs. Public surface unchanged. The static `fromSnapshot` factory remains as-is; the managed engine defines its own `static fromSnapshot` that delegates and validates.
 - `argument-engine.ts` — multiple changes:
-  - `createPremise` and `createPremiseWithId` signatures change to typed-bag with backward-compatible overload (~50 call sites preserved).
-  - Add new public method `ensureClaimBoundVariable(claimId: UUID): TClaimBoundVariable`.
-  - Add new public method `validateDerivationStructures(): TInvariantValidationResult`.
-  - Extend `validateEvaluability()` to include derivation premise structural checks. This automatically flows to `evaluate` and `checkValidity`.
-  - `forkArgument` / fork copy paths (line ~1457): when calling `createPremiseWithId`, propagate `type` and `derivedClaimId` from the source premise.
+    - `createPremise` and `createPremiseWithId` signatures change to typed-bag with backward-compatible overload (~50 call sites preserved).
+    - Add new public method `ensureClaimBoundVariable(claimId: UUID): TClaimBoundVariable`.
+    - Add new public method `validateDerivationStructures(): TInvariantValidationResult`.
+    - Extend `validateEvaluability()` to include derivation premise structural checks. This automatically flows to `evaluate` and `checkValidity`.
+    - `forkArgument` / fork copy paths (line ~1457): when calling `createPremiseWithId`, propagate `type` and `derivedClaimId` from the source premise.
 - New file: `src/lib/core/managed-derivation-premise-engine.ts` — the `ManagedDerivationPremiseEngine` class definition with constructor validation, static `fromSnapshot` factory, mutation method overrides (including `normalizeExpressions` and `loadExpressions`), `populateFromCitations` helper.
 
 ### Utilities (`src/lib/utils/`)
 
 - New file: `src/lib/utils/derivation-validation.ts` (path indicative; final path per implementation plan) — single source of truth for derivation premise structure validation. Exports a function like:
-  ```ts
-  validateDerivationStructure(
-      premise: TCoreDerivationPremise,
-      expressions: TCorePropositionalExpression[],
-      variables: TCorePropositionalVariable[]
-  ): TInvariantValidationResult
-  ```
+    ```ts
+    validateDerivationStructure(
+        premise: TCoreDerivationPremise,
+        expressions: TCorePropositionalExpression[],
+        variables: TCorePropositionalVariable[]
+    ): TInvariantValidationResult
+    ```
 - Used by managed engine constructor/restore, `validateEvaluability`'s extension, and `validateDerivationStructures` public method.
 
 ### Interfaces (`src/lib/core/interfaces/`)
@@ -341,8 +342,8 @@ Add new error codes:
 ### CLI (`src/cli/`)
 
 - `commands/premises.ts` (or wherever premise creation lives) — accept new flags for derivation premise creation:
-  - `premises add --type=derivation --derived-claim=<claimId>` to create a derivation premise.
-  - `premises populate-citations <premiseId>` to invoke `populateFromCitations` on a derivation premise via a freshly-constructed `ManagedDerivationPremiseEngine`.
+    - `premises add --type=derivation --derived-claim=<claimId>` to create a derivation premise.
+    - `premises populate-citations <premiseId>` to invoke `populateFromCitations` on a derivation premise via a freshly-constructed `ManagedDerivationPremiseEngine`.
 - Render output: derivation premises display their `type` indicator and the derived claim, distinguishing them from freeform premises in CLI output.
 - New file `src/cli/storage/migrate-v0.11.ts` — one-time migration step that walks persisted premise data, adds `type: "freeform"` to records lacking it, recomputes premise checksums (which cascades up to argument-level descendantChecksum/combinedChecksum). Uses `.proposit-v0.11` marker file to ensure idempotency.
 
@@ -370,6 +371,7 @@ Update existing tests that constructed premises positionally — the typed-bag o
 ### Smoke test (`scripts/smoke-test.sh`)
 
 Add a new section exercising:
+
 - Creating a derivation premise via `premises add --type=derivation --derived-claim=<id>`.
 - Populating from citations.
 - Evaluation success/failure paths.
@@ -386,33 +388,33 @@ Recommended split into two PRs to keep each reviewable:
 **PR1 — schema, validation utility, managed engine (no integration)**:
 
 1. **Premise schema discriminator** (`src/lib/schemata/propositional.ts`):
-   - Add discriminated union; update `TCorePremise` type alias.
+    - Add discriminated union; update `TCorePremise` type alias.
 2. **Validation utility** (`src/lib/utils/derivation-validation.ts`):
-   - Implement standalone validation function. Unit-test in isolation.
+    - Implement standalone validation function. Unit-test in isolation.
 3. **PremiseEngine visibility refactor** (`src/lib/core/premise-engine.ts`):
-   - Identify exact 5 fields/helpers to widen from `private` to `protected`.
+    - Identify exact 5 fields/helpers to widen from `private` to `protected`.
 4. **ManagedDerivationPremiseEngine** (`src/lib/core/managed-derivation-premise-engine.ts`):
-   - Constructor with validation.
-   - Static `fromSnapshot` factory.
-   - Override mutation methods (incl. `normalizeExpressions`, `loadExpressions`) with derivation rule enforcement.
-   - `populateFromCitations` helper (depends on `ensureClaimBoundVariable` from PR2; either land that API in PR1 or stub the helper).
+    - Constructor with validation.
+    - Static `fromSnapshot` factory.
+    - Override mutation methods (incl. `normalizeExpressions`, `loadExpressions`) with derivation rule enforcement.
+    - `populateFromCitations` helper (depends on `ensureClaimBoundVariable` from PR2; either land that API in PR1 or stub the helper).
 5. **Constants, types** (`src/lib/consts.ts`, `src/lib/types/validation.ts`):
-   - Add `"type"`/`"derivedClaimId"` to `premiseFields`. Add new error codes.
+    - Add `"type"`/`"derivedClaimId"` to `premiseFields`. Add new error codes.
 6. **Public exports** (`src/lib/index.ts`):
-   - Re-export `ManagedDerivationPremiseEngine`.
+    - Re-export `ManagedDerivationPremiseEngine`.
 
 **PR2 — ArgumentEngine integration, CLI, migration, tests**:
 
 7. **ArgumentEngine API additions**:
-   - `ensureClaimBoundVariable` public method.
-   - `validateDerivationStructures` public method.
-   - Extend `validateEvaluability` with derivation pre-flight.
+    - `ensureClaimBoundVariable` public method.
+    - `validateDerivationStructures` public method.
+    - Extend `validateEvaluability` with derivation pre-flight.
 8. **createPremise + createPremiseWithId signature change**:
-   - Typed-bag with backward-compat overload.
-   - Derivation premise creation flow (variable creation, naked Q initialization, claim lookup).
-   - Fork integration: propagate `type`/`derivedClaimId` in `forkArgument`.
+    - Typed-bag with backward-compat overload.
+    - Derivation premise creation flow (variable creation, naked Q initialization, claim lookup).
+    - Fork integration: propagate `type`/`derivedClaimId` in `forkArgument`.
 9. **Interfaces**:
-   - JSDoc updates across argument-engine, premise-engine, library interfaces.
+    - JSDoc updates across argument-engine, premise-engine, library interfaces.
 10. **CLI**:
     - New CLI commands for derivation premise creation and citation population.
     - Render output updates.
