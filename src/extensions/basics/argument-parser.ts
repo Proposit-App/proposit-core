@@ -14,19 +14,13 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
 } from "../../lib/schemata/propositional.js"
-import type {
-    TCoreSource,
-    TCoreClaimSourceAssociation,
-} from "../../lib/schemata/source.js"
 
 export class BasicsArgumentParser extends ArgumentParser<
     TBasicsArgument,
     TBasicsPremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
-    TCoreSource,
-    TBasicsClaim,
-    TCoreClaimSourceAssociation
+    TBasicsClaim
 > {
     constructor() {
         super(BasicsParsingSchema)
