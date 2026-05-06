@@ -225,13 +225,44 @@ export function importArgumentFromYaml(yamlString: string): {
     const raw = parseYaml(yamlString)
     const input: TCoreYamlArgument = Value.Parse(CoreYamlArgumentSchema, raw)
 
-    // Parse all formulas and validate root-only constraint
-    const parsedFormulas: TFormulaAST[] = []
+    // Validate premise shapes before any parsing
     for (let i = 0; i < input.premises.length; i++) {
         const premise = input.premises[i]
+        const isDerivation = premise.type === "derivation"
+        const label = premise.metadata?.title
+            ? `premise "${premise.metadata.title}" (index ${i})`
+            : `premise at index ${i}`
+        if (isDerivation) {
+            if (!premise.derivedClaimId) {
+                throw new Error(
+                    `${label}: type "derivation" requires derivedClaimId.`
+                )
+            }
+            if (premise.formula !== undefined) {
+                throw new Error(
+                    `${label}: type "derivation" must not include a formula field.`
+                )
+            }
+        } else {
+            if (premise.formula === undefined) {
+                throw new Error(
+                    `${label}: freeform premise requires a formula field.`
+                )
+            }
+        }
+    }
+
+    // Parse formulas for freeform premises and validate root-only constraint
+    const parsedFormulas: (TFormulaAST | null)[] = []
+    for (let i = 0; i < input.premises.length; i++) {
+        const premise = input.premises[i]
+        if (premise.type === "derivation") {
+            parsedFormulas.push(null)
+            continue
+        }
         let ast: TFormulaAST
         try {
-            ast = parseFormula(premise.formula)
+            ast = parseFormula(premise.formula!)
         } catch (error) {
             const label = premise.metadata?.title
                 ? `premise "${premise.metadata.title}" (index ${i})`
@@ -253,10 +284,10 @@ export function importArgumentFromYaml(yamlString: string): {
         )
     }
 
-    // Collect all variable names across all formulas
+    // Collect all variable names across freeform formulas only
     const allVariableNames = new Set<string>()
     for (const ast of parsedFormulas) {
-        collectVariableNames(ast, allVariableNames)
+        if (ast !== null) collectVariableNames(ast, allVariableNames)
     }
 
     // Build the argument
@@ -277,6 +308,20 @@ export function importArgumentFromYaml(yamlString: string): {
         id: randomUUID(),
         type: "normal",
     })
+
+    // Register explicitly declared claims from the YAML `claims` block.
+    // These must be registered before any derivation premise is created so that
+    // the engine can resolve derivedClaimId via the claim library.
+    for (const yamlClaim of input.claims ?? []) {
+        claimLibrary.create({
+            id: yamlClaim.id,
+            type: yamlClaim.type,
+            ...(yamlClaim.title !== undefined
+                ? { title: yamlClaim.title }
+                : {}),
+        } as Parameters<typeof claimLibrary.create>[0])
+    }
+
     const claimCitationLibrary = new ClaimCitationLibrary(claimLibrary)
     const engine = new ArgumentEngine(
         argument,
@@ -284,7 +329,7 @@ export function importArgumentFromYaml(yamlString: string): {
         claimCitationLibrary
     )
 
-    // Create variables
+    // Create variables for freeform formula symbols
     const variablesByName = new Map<
         string,
         Omit<TClaimBoundVariable, "checksum">
@@ -301,7 +346,7 @@ export function importArgumentFromYaml(yamlString: string): {
         variablesByName.set(name, variable)
     }
 
-    // Register all variables with the engine (shared across all premises)
+    // Register all freeform variables with the engine (shared across all premises)
     for (const variable of variablesByName.values()) {
         engine.addVariable(variable)
     }
@@ -309,29 +354,45 @@ export function importArgumentFromYaml(yamlString: string): {
     // Create premises and build expression trees
     for (let i = 0; i < input.premises.length; i++) {
         const premiseDef = input.premises[i]
-        // Note: typed-bag heuristic — YAML authors who put `type` in premise metadata will route through the typed-bag path (e.g. type:"derivation" with derivedClaimId triggers the derivation init flow).
-        const { result: pm } = premiseDef.metadata
-            ? engine.createPremise({ ...premiseDef.metadata })
-            : engine.createPremise()
+        const isDerivation = premiseDef.type === "derivation"
 
-        // Build expression tree from parsed AST
-        buildExpressions(
-            parsedFormulas[i],
-            null,
-            POSITION_INITIAL,
-            argumentId,
-            0,
-            pm.getId(),
-            variablesByName,
-            (expr) => pm.addExpression(expr)
-        )
+        if (isDerivation) {
+            // Derivation premise — delegate to the engine's derivation init flow,
+            // which auto-creates the naked-Q root expression.
+            const { result: dpm } = engine.createPremise({
+                type: "derivation",
+                derivedClaimId: premiseDef.derivedClaimId!,
+                ...(premiseDef.metadata ?? {}),
+            })
+            const dRole = premiseDef.role ?? "supporting"
+            if (dRole === "conclusion") {
+                engine.setConclusionPremise(dpm.getId())
+            }
+        } else {
+            // Freeform premise — create premise then build expression tree.
+            const { result: pm } = premiseDef.metadata
+                ? engine.createPremise({ ...premiseDef.metadata })
+                : engine.createPremise()
 
-        // Assign conclusion role; supporting is derived from expression type
-        const role = premiseDef.role ?? "supporting"
-        if (role === "conclusion") {
-            engine.setConclusionPremise(pm.getId())
+            // Build expression tree from parsed AST
+            buildExpressions(
+                parsedFormulas[i]!,
+                null,
+                POSITION_INITIAL,
+                argumentId,
+                0,
+                pm.getId(),
+                variablesByName,
+                (expr) => pm.addExpression(expr)
+            )
+
+            // Assign conclusion role; supporting is derived from expression type
+            const role = premiseDef.role ?? "supporting"
+            if (role === "conclusion") {
+                engine.setConclusionPremise(pm.getId())
+            }
+            // Non-conclusion inference premises are automatically supporting
         }
-        // Non-conclusion inference premises are automatically supporting
     }
 
     return { engine, claimLibrary, claimCitationLibrary }

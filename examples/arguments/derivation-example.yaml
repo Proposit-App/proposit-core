@@ -1,0 +1,23 @@
+metadata:
+    title: "Derivation Premise Example"
+    description: >
+        Demonstrates a derivation premise — a premise structurally committed to
+        deriving a single named claim. The consequent slot is locked to the
+        derived claim's variable (Q). Freeform premises supply supporting
+        structure; the derivation premise names the conclusion claim explicitly.
+claims:
+    - id: "00000000-0000-0000-0000-000000000001"
+      type: "normal"
+      title: "Q: The derived conclusion"
+premises:
+    - metadata:
+          title: "P implies Q"
+      formula: "P → Q"
+    - metadata:
+          title: "P holds"
+      formula: "P"
+    - metadata:
+          title: "Derivation of Q"
+      role: "conclusion"
+      type: "derivation"
+      derivedClaimId: "00000000-0000-0000-0000-000000000001"
