@@ -263,8 +263,10 @@ export class ManagedDerivationPremiseEngine<
         leftNodeId?: string,
         rightNodeId?: string
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        // wrapExpression rejects calls without exactly one of leftNodeId/rightNodeId,
+        // so the !-assertion is safe: at least one of the two is always defined here.
         this.assertNotConsequentExpression(
-            leftNodeId ?? rightNodeId ?? operator.id
+            (leftNodeId ?? rightNodeId)!
         )
         const result = super.wrapExpression(
             operator,

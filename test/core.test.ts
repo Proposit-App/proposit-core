@@ -29093,6 +29093,19 @@ describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
         expect(err.violations[0].code).toBe(DERIVATION_ROOT_OPERATOR_INVALID)
     })
 
+    it("rejects changeOperator that swaps root implies → not with DERIVATION_ROOT_OPERATOR_INVALID", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.changeOperator(rootOpId, "not")
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ROOT_OPERATOR_INVALID)
+    })
+
     it("rejects loadExpressions with a tree that violates derivation structure with DERIVATION_STRUCTURE_INVALID", () => {
         const { engine, argId, premiseId, consequentVarId } =
             makeImpliesDerivationEngine()
@@ -29131,15 +29144,174 @@ describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
         expect(err.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
     })
 
-    it("permits antecedent edits — addExpression adds to the antecedent side", () => {
-        // Start with naked-Q form and add an implies root + antecedent manually.
-        // This tests that editing the antecedent side doesn't throw.
-        const { engine, antecedentVarId, antecedentExprId, rootOpId, argId, premiseId } =
-            makeImpliesDerivationEngine()
+    it("permits antecedent edits — updateExpression on the antecedent does not throw", () => {
         // updateExpression on the antecedent (position field change) is fine.
+        const { engine, antecedentExprId } = makeImpliesDerivationEngine()
         expect(() =>
             engine.updateExpression(antecedentExprId, { position: POSITION_INITIAL + 1 })
         ).not.toThrow()
+    })
+
+    it("permits antecedent edits — addExpression adds a child to an antecedent operator", () => {
+        // Build a derivation engine in the form:
+        //   implies(formula(and(P-var)), Q-var)
+        // The formula buffer sits between implies and and (required by
+        // enforceFormulaBetweenOperators). With one child in the AND, a second
+        // child can be added via addExpression without violating derivation structure.
+        const argId = "00000000-0000-0000-0000-000000000001"
+        const premiseId = "00000000-0000-0000-0000-00000000e003"
+        const claimId = "00000000-0000-0000-0000-00000000c0b4"
+        const antecedentClaimId = "00000000-0000-0000-0000-00000000c0b5"
+        const consequentVarId = "00000000-0000-0000-0000-00000000v010"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000v011"
+        const rootOpId = "00000000-0000-0000-0000-00000000xa00"
+        const formulaId = "00000000-0000-0000-0000-00000000xa01"
+        const antecedentOpId = "00000000-0000-0000-0000-00000000xa02"
+        const antecedentChildId = "00000000-0000-0000-0000-00000000xa03"
+        const consequentExprId = "00000000-0000-0000-0000-00000000xa04"
+
+        const vm = new VariableManager()
+        vm.addVariable({
+            id: consequentVarId,
+            argumentId: argId,
+            argumentVersion: 1,
+            symbol: "Q",
+            claimId,
+            claimVersion: 1,
+            checksum: "dummy",
+        })
+        vm.addVariable({
+            id: antecedentVarId,
+            argumentId: argId,
+            argumentVersion: 1,
+            symbol: "P",
+            claimId: antecedentClaimId,
+            claimVersion: 1,
+            checksum: "dummy",
+        })
+
+        const snap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: 1,
+                type: "derivation" as const,
+                derivedClaimId: claimId,
+            } as TCorePremise,
+            rootExpressionId: rootOpId,
+            expressions: {
+                expressions: [
+                    // implies(formula(and(P)), Q)
+                    {
+                        id: rootOpId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "operator" as const,
+                        operator: "implies" as const,
+                        checksum: "dummy",
+                        descendantChecksum: "dummy",
+                        combinedChecksum: "dummy",
+                    },
+                    // formula wrapper (required between implies and and)
+                    {
+                        id: formulaId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: rootOpId,
+                        position: POSITION_INITIAL,
+                        type: "formula" as const,
+                        checksum: "dummy",
+                        descendantChecksum: "dummy",
+                        combinedChecksum: "dummy",
+                    },
+                    // and operator (antecedent, one child — room for a second)
+                    {
+                        id: antecedentOpId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: formulaId,
+                        position: POSITION_INITIAL,
+                        type: "operator" as const,
+                        operator: "and" as const,
+                        checksum: "dummy",
+                        descendantChecksum: "dummy",
+                        combinedChecksum: "dummy",
+                    },
+                    // P-var: existing child of and
+                    {
+                        id: antecedentChildId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: antecedentOpId,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: antecedentVarId,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                    // Q-var: consequent (last child of implies by position)
+                    {
+                        id: consequentExprId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: rootOpId,
+                        position: 1073741823,
+                        type: "variable" as const,
+                        variableId: consequentVarId,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+
+        const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot(snap, ARG_OBJ, vm)
+
+        // addExpression adds a second child to the antecedent AND — should not throw.
+        const newChildId = "00000000-0000-0000-0000-00000000xa05"
+        expect(() =>
+            engine.addExpression({
+                id: newChildId,
+                argumentId: argId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: antecedentOpId,
+                position: POSITION_INITIAL + 1,
+                type: "variable" as const,
+                variableId: antecedentVarId,
+            })
+        ).not.toThrow()
+    })
+
+    it("normalizeExpressions — happy path: does not throw on a well-formed derivation", () => {
+        // The override calls super.normalizeExpressions() then assertWellFormed().
+        // A well-formed tree should survive intact.
+        const { engine } = makeImpliesDerivationEngine()
+        expect(() => engine.normalizeExpressions()).not.toThrow()
+    })
+
+    // TODO: It is currently not feasible to construct a state where
+    // normalizeExpressions() destroys the derivation structure, because the
+    // parent PremiseEngine's normalizeExpressions is robust enough that it
+    // never produces a derivation-violating tree from a previously-valid one
+    // (the consequent variable leaf has no collapse trigger, and the implies
+    // root is never collapsed). If a future refactor creates such a path, this
+    // test should be un-skipped and a destruction-state fixture added.
+    it.skip("normalizeExpressions — destruction path: throws DERIVATION_STRUCTURE_INVALID when normalization destroys the consequent", () => {
+        // Construct a managed engine wrapping a derivation premise whose tree
+        // has been put into a bad intermediate state via direct expression-manager
+        // manipulation, then verify normalizeExpressions() throws.
+        expect(true).toBe(false) // placeholder — implement when path is reachable
     })
 
     it("permits root operator swap implies ↔ iff", () => {
