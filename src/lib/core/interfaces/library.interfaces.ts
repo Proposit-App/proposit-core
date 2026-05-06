@@ -43,15 +43,10 @@ export interface TClaimLookup<TClaim extends TCoreClaim = TCoreClaim> {
      * `ClaimLibrary` class tracks versions natively and returns its internal
      * latest version directly.
      *
-     * Optional — implementations that only support version-exact lookup (e.g.
-     * read-only `ClaimCitationLibrary` claim lookups) may omit this method.
-     * `ensureClaimBoundVariable` on `ArgumentEngine` requires it at runtime
-     * and will throw if the backing lookup does not implement it.
-     *
      * @param id - The claim ID.
      * @returns The latest claim entity, or `undefined`.
      */
-    getCurrent?(id: string): TClaim | undefined
+    getCurrent(id: string): TClaim | undefined
 }
 
 /**

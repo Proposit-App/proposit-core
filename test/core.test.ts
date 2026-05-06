@@ -27910,6 +27910,7 @@ describe("ClaimCitationLibrary strict source-side type", () => {
         const anotherNormalClaim = claimLib.create({ type: "normal" })
         const citationLib = new ClaimCitationLibrary({
             get: (id, version) => claimLib.get(id, version),
+            getCurrent: (id) => claimLib.getCurrent(id),
         })
         expect(() =>
             citationLib.add({
@@ -27927,6 +27928,7 @@ describe("ClaimCitationLibrary strict source-side type", () => {
         const citationClaim = claimLib.create({ type: "citation" })
         const citationLib = new ClaimCitationLibrary({
             get: (id, version) => claimLib.get(id, version),
+            getCurrent: (id) => claimLib.getCurrent(id),
         })
         expect(() =>
             citationLib.add({
@@ -27945,6 +27947,7 @@ describe("ClaimCitationLibrary acyclicity", () => {
         const claimLib = new ClaimLibrary()
         const claimLookup = {
             get: (id: string, version: number) => claimLib.get(id, version),
+            getCurrent: (id: string) => claimLib.getCurrent(id),
         }
         const citationLib = new ClaimCitationLibrary(claimLookup)
         return { claimLib, citationLib }

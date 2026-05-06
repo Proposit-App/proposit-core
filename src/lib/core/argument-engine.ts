@@ -811,16 +811,6 @@ export class ArgumentEngine<
         }
 
         // Verify the claim exists in the library.
-        // getCurrent is optional on TClaimLookup (lightweight read-only lookups
-        // built with createLookup may or may not implement it). If the backing
-        // lookup does not support getCurrent, we cannot determine the current
-        // version, so we throw a configuration error.
-        if (!this.claimLibrary.getCurrent) {
-            throw new Error(
-                "ensureClaimBoundVariable requires a claim lookup that implements getCurrent(). " +
-                    "Use a ClaimLibrary instance or createLookup() rather than a bare { get } object."
-            )
-        }
         const currentClaim = this.claimLibrary.getCurrent(claimId)
         if (!currentClaim) {
             throw new InvariantViolationError([
