@@ -548,7 +548,10 @@ $CLI citations list
 section "9p4. derivation premises — [derivation] badge in list"
 
 # The derivation premise must appear with a [derivation] badge in 'premises list'.
-$CLI "$ARG" latest premises list | grep -q "\[derivation\]" || {
+# Capture to a variable first to avoid EPIPE with pipefail when grep -q exits
+# early after finding the first match.
+PREMISES_LIST=$($CLI "$ARG" latest premises list)
+echo "$PREMISES_LIST" | grep -q "\[derivation\]" || {
     echo "FAIL: [derivation] badge missing from 'premises list' output"
     exit 1
 }
