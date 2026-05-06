@@ -15,10 +15,9 @@ export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
 export { VariableManager } from "./core/variable-manager.js"
 export type { TVariableManagerSnapshot } from "./core/variable-manager.js"
 export { ClaimLibrary } from "./core/claim-library.js"
-export { SourceLibrary } from "./core/source-library.js"
 export { VersionedLibrary } from "./core/versioned-library.js"
 export type { TVersionedEntity } from "./core/versioned-library.js"
-export { ClaimSourceLibrary } from "./core/claim-source-library.js"
+export { ClaimCitationLibrary } from "./core/claim-citation-library.js"
 export { ArgumentLibrary } from "./core/argument-library.js"
 export type { TArgumentLibraryLibraries } from "./core/argument-library.js"
 export { ForkNamespace } from "./core/fork-namespace.js"
@@ -47,8 +46,7 @@ export type { TOrderedOperation } from "./utils/changeset.js"
 export {
     createLookup,
     EMPTY_CLAIM_LOOKUP,
-    EMPTY_SOURCE_LOOKUP,
-    EMPTY_CLAIM_SOURCE_LOOKUP,
+    EMPTY_CLAIM_CITATION_LOOKUP,
 } from "./utils/lookup.js"
 export * from "./types/checksum.js"
 export {
