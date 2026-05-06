@@ -23,7 +23,7 @@ import {
  * structural type rather than the concrete `ArgumentEngine<…>` class prevents
  * generic-parameter variance errors when the caller uses default type params.
  */
-type TVariableMaterializer = {
+export type TVariableMaterializer = {
     ensureClaimBoundVariable(claimId: string): TClaimBoundVariable
 }
 import {
