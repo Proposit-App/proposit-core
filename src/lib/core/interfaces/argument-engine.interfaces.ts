@@ -35,10 +35,37 @@ export interface TPremiseCrud<
      * Creates a new premise with an auto-generated UUID and registers it
      * with this engine.
      *
-     * Legacy positional form: `createPremise(extras?, symbol?)`.
-     * Typed-bag form: `createPremise({ type?, derivedClaimId?, extras?, symbol? })`.
+     * Two call styles are supported:
+     *
+     * - **Typed-bag (preferred, since 0.11.0):**
+     *   ```ts
+     *   engine.createPremise({
+     *       type: "freeform",        // or "derivation"
+     *       derivedClaimId: claimId, // required when type === "derivation"
+     *       extras: { label: "P1" },
+     *       symbol: "P1",
+     *   })
+     *   ```
+     *
+     * - **Legacy positional (kept for compatibility):**
+     *   ```ts
+     *   engine.createPremise(extras, symbol)  // creates a freeform premise
+     *   ```
+     *
+     * When `type === "derivation"`, the engine looks up `derivedClaimId` in
+     * the claim library, materializes a claim-bound variable for it (via
+     * `ensureClaimBoundVariable`) if one does not already exist, and
+     * initializes the premise's expression tree to the naked-Q form — a
+     * single variable expression at the root referencing the consequent.
      *
      * @returns The newly created PremiseEngine instance and changeset.
+     *
+     * @throws `InvariantViolationError(CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID)`
+     *   when `type === "derivation"` and `derivedClaimId` is absent.
+     * @throws `InvariantViolationError(CREATE_DERIVATION_CLAIM_NOT_FOUND)`
+     *   when `type === "derivation"` and the claim is not in the library.
+     *
+     * @since 0.11.0 — typed-bag overload; derivation premise initialization.
      */
     createPremise(): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
@@ -81,13 +108,38 @@ export interface TPremiseCrud<
     >
     /**
      * Creates a premise with a caller-supplied ID and registers it with
-     * this engine.
+     * this engine. Mirrors `createPremise` exactly, but accepts an explicit
+     * `id` as the first argument instead of generating one.
      *
-     * Legacy positional form: `createPremiseWithId(id, extras?, symbol?)`.
-     * Typed-bag form: `createPremiseWithId(id, { type?, derivedClaimId?, extras?, symbol? })`.
+     * Two call styles are supported:
+     *
+     * - **Typed-bag (preferred, since 0.11.0):**
+     *   ```ts
+     *   engine.createPremiseWithId(id, {
+     *       type: "freeform",        // or "derivation"
+     *       derivedClaimId: claimId, // required when type === "derivation"
+     *       extras: { label: "P1" },
+     *       symbol: "P1",
+     *   })
+     *   ```
+     *
+     * - **Legacy positional (kept for compatibility):**
+     *   ```ts
+     *   engine.createPremiseWithId(id, extras, symbol)  // creates a freeform premise
+     *   ```
+     *
+     * When `type === "derivation"`, the same derivation initialization as
+     * `createPremise` runs: variable materialization and naked-Q tree setup.
      *
      * @param id - The ID to assign to the new premise.
+     *
+     * @throws `InvariantViolationError(CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID)`
+     *   when `type === "derivation"` and `derivedClaimId` is absent.
+     * @throws `InvariantViolationError(CREATE_DERIVATION_CLAIM_NOT_FOUND)`
+     *   when `type === "derivation"` and the claim is not in the library.
      * @throws If a premise with the given ID already exists.
+     *
+     * @since 0.11.0 — typed-bag overload; derivation premise initialization.
      */
     createPremiseWithId(
         id: string,
@@ -276,6 +328,26 @@ export interface TVariableManagement<
      * @returns An array of variables bound to the given premise.
      */
     getVariablesBoundToPremise(premiseId: string): TVar[]
+    /**
+     * Idempotent lookup-or-create for a claim-bound variable. If a
+     * claim-bound variable for `claimId` already exists in this argument,
+     * it is returned as-is. Otherwise a new variable is created with a
+     * fresh UUID, the current version of the claim from the `ClaimLibrary`,
+     * and an auto-generated symbol.
+     *
+     * This method is used internally by derivation premise initialization
+     * but is also available to callers that need to pin a claim as a
+     * propositional variable without creating a full premise.
+     *
+     * @param claimId - The ID of the claim to bind a variable to.
+     * @returns The existing or newly created `TClaimBoundVariable`.
+     *
+     * @throws `InvariantViolationError(CLAIM_NOT_FOUND)`
+     *   when `claimId` is not present in the claim library.
+     *
+     * @since 0.11.0
+     */
+    ensureClaimBoundVariable(claimId: string): TClaimBoundVariable
 }
 
 /**
@@ -407,12 +479,39 @@ export interface TArgumentEvaluation {
     /**
      * Validates that this argument is structurally ready for evaluation: a
      * conclusion must be set, all role references must point to existing
-     * premises, variable ID/symbol mappings must be consistent, and every
-     * premise must be individually evaluable.
+     * premises, variable ID/symbol mappings must be consistent, every
+     * premise must be individually evaluable, and all derivation premise
+     * structures must be well-formed (naked-Q invariant; since 0.11.0).
+     *
+     * Derivation premises with structurally broken trees are flagged with
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`. Use
+     * `validateDerivationStructures()` to isolate derivation checks without
+     * running the full evaluability sweep.
      *
      * @returns A validation result with any issues found.
+     *
+     * @since 0.11.0 — derivation pre-flight added to the sweep.
      */
     validateEvaluability(): TCoreValidationResult
+    /**
+     * Returns the derivation-specific subset of `validateEvaluability`
+     * checks as an invariant result. Only derivation premises are inspected;
+     * freeform premises are ignored.
+     *
+     * Use this to pre-check derivation structure before entering the full
+     * evaluation pipeline, without requiring a conclusion or complete role
+     * state.
+     *
+     * Derivation premises with broken trees produce violations with code
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`.
+     *
+     * @returns An `TInvariantValidationResult` — `ok: true` when all
+     *   derivation premises are structurally valid, `ok: false` with
+     *   per-premise violations otherwise.
+     *
+     * @since 0.11.0
+     */
+    validateDerivationStructures(): TInvariantValidationResult
     /**
      * Evaluates the argument under a three-valued expression assignment.
      *
@@ -420,6 +519,11 @@ export interface TArgumentEvaluation {
      * flags (`isAdmissibleAssignment`, `isCounterexample`, etc.) are
      * three-valued: `null` means indeterminate due to unknown variable
      * values.
+     *
+     * Calls `validateEvaluability()` internally before evaluation; if the
+     * argument is not structurally ready (including derivation pre-flight),
+     * the method returns early with `{ ok: false }` and the validation
+     * details. Do not bypass `evaluate` to avoid this check.
      *
      * @param assignment - The variable assignment and optional rejected
      *   expression IDs.
@@ -438,6 +542,10 @@ export interface TArgumentEvaluation {
      * A counterexample is an admissible assignment where all supporting
      * premises are true but the conclusion is false. The argument is valid
      * if no counterexamples exist.
+     *
+     * Calls `validateEvaluability()` (including derivation pre-flight)
+     * before enumeration. If the argument is not evaluable, returns early
+     * with an appropriate result rather than throwing.
      *
      * @param options - Optional limits on variables/assignments checked
      *   and early termination mode.
