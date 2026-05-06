@@ -161,7 +161,6 @@ import {
     DERIVATION_TYPE_MISMATCH,
     DERIVATION_CONSEQUENT_LOCKED,
     DERIVATION_ROOT_OPERATOR_INVALID,
-    DERIVATION_STRUCTURE_INVALID,
 } from "../src/lib/types/validation"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
@@ -29112,30 +29111,33 @@ describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
         // Provide a tree with an AND root — violates derivation structure.
         const andRootId = "00000000-0000-0000-0000-000000000088"
         const varExprId = "00000000-0000-0000-0000-000000000089"
+        // Intentionally malformed (AND root violates derivation structure) — cast bypasses
+        // the parameter's narrower operator-literal type so the override's rejection runs.
+        const malformed = [
+            {
+                id: andRootId,
+                argumentId: argId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator" as const,
+                operator: "and" as const,
+            },
+            {
+                id: varExprId,
+                argumentId: argId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: andRootId,
+                position: POSITION_INITIAL,
+                type: "variable" as const,
+                variableId: consequentVarId,
+            },
+        ] as unknown as Parameters<typeof engine.loadExpressions>[0]
         let caught: unknown
         try {
-            engine.loadExpressions([
-                {
-                    id: andRootId,
-                    argumentId: argId,
-                    argumentVersion: 1,
-                    premiseId,
-                    parentId: null,
-                    position: POSITION_INITIAL,
-                    type: "operator" as const,
-                    operator: "and" as const,
-                },
-                {
-                    id: varExprId,
-                    argumentId: argId,
-                    argumentVersion: 1,
-                    premiseId,
-                    parentId: andRootId,
-                    position: POSITION_INITIAL,
-                    type: "variable" as const,
-                    variableId: consequentVarId,
-                },
-            ])
+            engine.loadExpressions(malformed)
         } catch (e) {
             caught = e
         }
