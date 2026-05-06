@@ -8,10 +8,7 @@ import {
     type TOptionalChecksum,
     type TClaimBoundVariable,
 } from "../schemata/index.js"
-import {
-    PremiseEngine,
-    type TPremiseEngineSnapshot,
-} from "./premise-engine.js"
+import { PremiseEngine, type TPremiseEngineSnapshot } from "./premise-engine.js"
 import { VariableManager } from "./variable-manager.js"
 import {
     defaultGenerateId,
@@ -114,7 +111,8 @@ export class ManagedDerivationPremiseEngine<
     static fromSnapshot<
         TArg extends TCoreArgument = TCoreArgument,
         TPremise extends TCorePremise = TCorePremise,
-        TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+        TExpr extends TCorePropositionalExpression =
+            TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     >(
         snapshot: TPremiseEngineSnapshot<TPremise, TExpr>,
@@ -273,7 +271,11 @@ export class ManagedDerivationPremiseEngine<
         rightNodeId?: string
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         this.assertNotConsequentSlot(expression)
-        const result = super.insertExpression(expression, leftNodeId, rightNodeId)
+        const result = super.insertExpression(
+            expression,
+            leftNodeId,
+            rightNodeId
+        )
         this.assertWellFormed()
         return result
     }
@@ -296,9 +298,7 @@ export class ManagedDerivationPremiseEngine<
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         // wrapExpression rejects calls without exactly one of leftNodeId/rightNodeId,
         // so the !-assertion is safe: at least one of the two is always defined here.
-        this.assertNotConsequentExpression(
-            (leftNodeId ?? rightNodeId)!
-        )
+        this.assertNotConsequentExpression((leftNodeId ?? rightNodeId)!)
         const result = super.wrapExpression(
             operator,
             newSibling,
@@ -604,8 +604,7 @@ export class ManagedDerivationPremiseEngine<
         // with position 1 (i.e., it claims the consequent slot).
         if (expression.parentId === rootId) {
             // Determine the consequent's current position to compare.
-            const consequentExpr =
-                this.expressions.getExpression(consequentId)
+            const consequentExpr = this.expressions.getExpression(consequentId)
             if (
                 consequentExpr &&
                 expression.position >= consequentExpr.position
@@ -654,7 +653,10 @@ export class ManagedDerivationPremiseEngine<
         if (consequentId === undefined || exprId !== consequentId) {
             return
         }
-        if (updates.variableId !== undefined || updates.operator !== undefined) {
+        if (
+            updates.variableId !== undefined ||
+            updates.operator !== undefined
+        ) {
             throw new InvariantViolationError([
                 {
                     code: DERIVATION_CONSEQUENT_LOCKED,

@@ -123,8 +123,7 @@ export function validateDerivationStructure(
     }
 
     // Any other root type (formula, or non-implies/iff operator) is invalid.
-    const rootDesc =
-        root.type === "operator" ? root.operator : root.type
+    const rootDesc = root.type === "operator" ? root.operator : root.type
     violations.push({
         entityType: "premise",
         entityId: premise.id,

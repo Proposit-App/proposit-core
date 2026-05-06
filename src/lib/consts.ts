@@ -21,7 +21,12 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "boundArgumentId",
         "boundArgumentVersion",
     ]),
-    premiseFields: new Set(["argumentId", "argumentVersion", "type", "derivedClaimId"]),
+    premiseFields: new Set([
+        "argumentId",
+        "argumentVersion",
+        "type",
+        "derivedClaimId",
+    ]),
     argumentFields: new Set(["version"]),
     roleFields: new Set(["conclusionPremiseId"]),
     claimFields: new Set(["version", "type"]),
