@@ -60,7 +60,9 @@ export function registerRenderCommand(
                     typeof premiseData.title === "string"
                         ? ` | ${premiseData.title}`
                         : ""
-                printLine(`  ${marker} ${display}${title}`)
+                const typeBadge =
+                    premiseData.type === "derivation" ? " [derivation]" : ""
+                printLine(`  ${marker} ${display}${typeBadge}${title}`)
             }
 
             // Variables

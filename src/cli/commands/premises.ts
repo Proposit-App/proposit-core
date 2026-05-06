@@ -210,8 +210,11 @@ export function registerPremiseCommands(
                     const premiseType = pm.isInference()
                         ? "inference"
                         : "constraint"
+                    const metaRecord = meta as Record<string, unknown>
+                    const typeBadge =
+                        metaRecord.type === "derivation" ? " [derivation]" : ""
                     printLine(
-                        `${meta.id} | ${premiseType} | ${display} | ${title}`
+                        `${meta.id}${typeBadge} | ${premiseType} | ${display} | ${title}`
                     )
                 }
             }
@@ -312,9 +315,12 @@ export function registerPremiseCommands(
                         rootExpr.operator === "iff")
                         ? "inference"
                         : "constraint"
+                const metaRecord = meta as Record<string, unknown>
+                const derivationBadge =
+                    metaRecord.type === "derivation" ? " [derivation]" : ""
                 printLine(`id:           ${meta.id}`)
                 printLine(`title:        ${meta.title ?? "(untitled)"}`)
-                printLine(`type:         ${premiseType}`)
+                printLine(`type:         ${premiseType}${derivationBadge}`)
                 printLine(`root expr id: ${data.rootExpressionId ?? "(none)"}`)
                 printLine(`variables:    ${data.variables.length}`)
                 printLine(`expressions:  ${data.expressions.length}`)
