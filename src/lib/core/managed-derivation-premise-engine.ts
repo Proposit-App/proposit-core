@@ -441,9 +441,19 @@ export class ManagedDerivationPremiseEngine<
         if (citations.length === 0) return
 
         // 3. Materialize a claim-bound variable for each cited source.
+        // ensureClaimBoundVariable adds the variable to the live argumentEngine,
+        // but the managed engine has its own VariableManager snapshot that was
+        // taken before these new variables were created. Register each newly
+        // returned variable into this engine's VariableManager so that the
+        // variable expressions we construct below pass assertVariableExpressionValid.
         const sourceVariables = citations.map((c) =>
             argumentEngine.ensureClaimBoundVariable(c.sourceClaimId)
         )
+        for (const sv of sourceVariables) {
+            if (!this.variables.hasVariable(sv.id)) {
+                this.variables.addVariable(sv as unknown as TVar)
+            }
+        }
 
         // 4. Build the antecedent expression tree. Mutations go via super.*
         //    to bypass this class's overrides, which validate after every call
