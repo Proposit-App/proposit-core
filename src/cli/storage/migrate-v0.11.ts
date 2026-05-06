@@ -121,9 +121,8 @@ async function backfillPremiseTypes(stateDir: string): Promise<void> {
 
             for (const premiseDir of premiseDirs) {
                 const metaPath = path.join(premiseDir, "meta.json")
-                const meta = await readJsonFile<Record<string, unknown>>(
-                    metaPath
-                )
+                const meta =
+                    await readJsonFile<Record<string, unknown>>(metaPath)
                 if (!meta) continue
                 if (meta.type !== undefined) continue // Already has type.
 

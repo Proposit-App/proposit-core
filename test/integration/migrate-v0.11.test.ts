@@ -32,7 +32,10 @@ async function writePremiseMeta(
         premiseId
     )
     await fs.mkdir(dir, { recursive: true })
-    await fs.writeFile(path.join(dir, "meta.json"), JSON.stringify(meta, null, 2))
+    await fs.writeFile(
+        path.join(dir, "meta.json"),
+        JSON.stringify(meta, null, 2)
+    )
 }
 
 async function readPremiseMeta(

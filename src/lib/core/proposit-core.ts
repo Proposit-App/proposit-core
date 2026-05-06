@@ -514,8 +514,9 @@ export class PropositCore<
                 const originalDerivedClaimId = (
                     premise as unknown as TCoreDerivationPremise
                 ).derivedClaimId
-                const remappedDerivedClaimId =
-                    claimRemap.get(originalDerivedClaimId)
+                const remappedDerivedClaimId = claimRemap.get(
+                    originalDerivedClaimId
+                )
                 if (remappedDerivedClaimId) {
                     ps.premise = {
                         ...ps.premise,

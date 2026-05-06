@@ -29870,7 +29870,8 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         )
         const premiseId = "00000000-0000-0000-0000-999000000p01"
         const consequentExprId = "00000000-0000-0000-0000-999000000x01"
-        const vm = (argumentEngine as unknown as Record<string, unknown>)["variables"] as VariableManager
+        const vm = (argumentEngine as unknown as Record<string, unknown>)
+            .variables as VariableManager
 
         const snap = {
             premise: {
@@ -30147,7 +30148,8 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         const sourceVar = argumentEngine.ensureClaimBoundVariable(
             sourceClaim.id
         )
-        const vm = (argumentEngine as unknown as Record<string, unknown>)["variables"] as VariableManager
+        const vm = (argumentEngine as unknown as Record<string, unknown>)
+            .variables as VariableManager
 
         // First engine: derivedClaim premise (naked-Q).
         const prem1Id = "00000000-0000-0000-0000-999000000p11"
