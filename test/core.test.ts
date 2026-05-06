@@ -46,6 +46,7 @@ import {
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
     type TCorePremise,
+    type TCoreDerivationPremise,
 } from "../src/lib/schemata"
 import { ChangeCollector } from "../src/lib/core/change-collector"
 import { VariableManager } from "../src/lib/core/variable-manager"
@@ -133,6 +134,7 @@ import {
     CLAIM_FROZEN_NO_SUCCESSOR,
     CITATION_CITING_REF_NOT_FOUND,
     CITATION_SOURCE_REF_NOT_FOUND,
+    DERIVATION_STRUCTURE_INVALID,
 } from "../src/lib/types/validation"
 import {
     ParsedClaimSchema,
@@ -152,6 +154,7 @@ import { buildParsingPrompt } from "../src/lib/parsing/prompt-builder"
 import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
 import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
+import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 
@@ -28164,5 +28167,489 @@ describe("Premise type discriminator", () => {
             combinedChecksum: "abcd",
         }
         expect(Value.Check(CorePremiseSchema, premise)).toBe(false)
+    })
+})
+
+describe("validateDerivationStructure", () => {
+    const argumentId = "00000000-0000-0000-0000-000000000001"
+    const claimId = "00000000-0000-0000-0000-00000000c0a1"
+    const variableId = "00000000-0000-0000-0000-00000000a000"
+    const exprId = "00000000-0000-0000-0000-00000000e000"
+    const premiseId = "00000000-0000-0000-0000-00000000d001"
+
+    function makeNakedQ(): {
+        premise: TCoreDerivationPremise
+        expressions: TCorePropositionalExpression[]
+        variables: TCorePropositionalVariable[]
+    } {
+        const premise: TCoreDerivationPremise = {
+            id: premiseId,
+            argumentId,
+            argumentVersion: 1,
+            type: "derivation",
+            derivedClaimId: claimId,
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const variables: TCorePropositionalVariable[] = [
+            {
+                id: variableId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "Q",
+                claimId,
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: exprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId: premise.id,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        return { premise, expressions, variables }
+    }
+
+    it("accepts naked-Q form (root = variable expression for derivedClaimId)", () => {
+        const { premise, expressions, variables } = makeNakedQ()
+        const result = validateDerivationStructure(premise, expressions, variables)
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("accepts IMPLIES(antecedent, Q) form", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000010"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a001"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000011"
+        const consequentExprId = "00000000-0000-0000-0000-000000000012"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "P",
+                claimId: "00000000-0000-0000-0000-00000000c0b1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                id: consequentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(premise, expressions, allVariables)
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("accepts IFF(antecedent, Q) form", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000020"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a002"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000021"
+        const consequentExprId = "00000000-0000-0000-0000-000000000022"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "R",
+                claimId: "00000000-0000-0000-0000-00000000c0c1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "iff",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                id: consequentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(premise, expressions, allVariables)
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("rejects missing root expression", () => {
+        const { premise, variables } = makeNakedQ()
+        const result = validateDerivationStructure(premise, [], variables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects multiple root expressions", () => {
+        const { premise, expressions, variables } = makeNakedQ()
+        const secondRoot: TCorePropositionalExpression = {
+            id: "00000000-0000-0000-0000-000000000030",
+            argumentId,
+            argumentVersion: 1,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL + 1,
+            type: "variable",
+            variableId,
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const result = validateDerivationStructure(premise, [...expressions, secondRoot], variables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects root operator that is not implies/iff/variable (e.g., AND root)", () => {
+        const { premise, variables } = makeNakedQ()
+        const andRoot: TCorePropositionalExpression = {
+            id: "00000000-0000-0000-0000-000000000040",
+            argumentId,
+            argumentVersion: 1,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "operator",
+            operator: "and",
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const result = validateDerivationStructure(premise, [andRoot], variables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects implies arity != 2", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000050"
+        const onlyChildExprId = "00000000-0000-0000-0000-000000000051"
+        // implies with only 1 child (consequent slot missing antecedent)
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: onlyChildExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(premise, expressions, variables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects consequent slot containing non-variable expression (e.g., AND subtree)", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000060"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a003"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000061"
+        const badConsequentId = "00000000-0000-0000-0000-000000000062"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "S",
+                claimId: "00000000-0000-0000-0000-00000000c0d1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                // consequent slot is an AND operator, not a variable
+                id: badConsequentId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "operator",
+                operator: "and",
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(premise, expressions, allVariables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects consequent slot containing different variable (not Q)", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000070"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a004"
+        const wrongConsequentVarId = "00000000-0000-0000-0000-00000000a005"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000071"
+        const wrongConsequentExprId = "00000000-0000-0000-0000-000000000072"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "T",
+                claimId: "00000000-0000-0000-0000-00000000c0e1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+            {
+                id: wrongConsequentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "U",
+                claimId: "00000000-0000-0000-0000-00000000c0f1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                // consequent slot references a variable that is NOT Q (not derivedClaimId's var)
+                id: wrongConsequentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId: wrongConsequentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(premise, expressions, allVariables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects naked variable that does not reference derivedClaimId", () => {
+        const { premise, variables } = makeNakedQ()
+        const wrongVarId = "00000000-0000-0000-0000-00000000a006"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: wrongVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "V",
+                claimId: "00000000-0000-0000-0000-00000000c0a2",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        // Root variable references wrongVarId, not variableId (Q)
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: exprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "variable",
+                variableId: wrongVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(premise, expressions, allVariables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects when no claim-bound variable for derivedClaimId exists in `variables`", () => {
+        const { premise, expressions } = makeNakedQ()
+        // Pass empty variables — no claim-bound variable for claimId
+        const result = validateDerivationStructure(premise, expressions, [])
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects formula as root (formula is not allowed as root)", () => {
+        const { premise, variables } = makeNakedQ()
+        const formulaRoot: TCorePropositionalExpression = {
+            id: "00000000-0000-0000-0000-000000000080",
+            argumentId,
+            argumentVersion: 1,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "formula",
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const result = validateDerivationStructure(premise, [formulaRoot], variables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
     })
 })
