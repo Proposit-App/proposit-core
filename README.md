@@ -28,9 +28,8 @@ flowchart TD
     Roles -.->|"conclusionPremiseId\n(supporting & constraint\nroles are derived)"| PM
 
     subgraph Injected["Injected Libraries"]
-        CL["ClaimLibrary"]
-        SL["SourceLibrary"]
-        CSL["ClaimSourceLibrary"]
+        CL["ClaimLibrary\n(normal + citation claims)"]
+        CCL["ClaimCitationLibrary"]
     end
 
     AE -.-> Injected
@@ -164,15 +163,35 @@ flowchart TD
 
 ### PropositCore
 
-`PropositCore` is the recommended top-level entry point. It creates and wires together all five libraries and provides unified cross-library operations:
+`PropositCore` is the recommended top-level entry point. It creates and wires together all four libraries and provides unified cross-library operations:
 
 ```typescript
 import { PropositCore } from "@proposit/proposit-core"
 
 const core = new PropositCore()
 
-// Create a claim in the global claim library
-const claim = core.claims.create({ id: "claim-1", text: "All men are mortal" })
+// Create a normal claim in the global claim library
+const claim = core.claims.create({
+    id: "claim-1",
+    type: "normal",
+    text: "All men are mortal",
+})
+
+// Create a citation claim (the v0.10.0 replacement for the former Source entity)
+const citationClaim = core.claims.create({
+    id: "citation-1",
+    type: "citation",
+    text: "Aristotle, Categories, ~350 BCE",
+})
+
+// Cite the citation claim from the normal claim
+core.claimCitations.add({
+    id: "edge-1",
+    citingClaimId: claim.id,
+    citingClaimVersion: claim.version,
+    sourceClaimId: citationClaim.id,
+    sourceClaimVersion: citationClaim.version,
+})
 
 // Create an argument engine — libraries are wired automatically
 const engine = core.arguments.create({
@@ -182,7 +201,7 @@ const engine = core.arguments.create({
     description: "",
 })
 
-// Fork the argument — clones claims/sources, records provenance
+// Fork the argument — clones claims (including citation-typed ones) + citation edges, records provenance
 const { engine: forked, remapTable } = core.forkArgument("arg-1", "arg-2")
 
 // Diff with automatic fork-aware entity matching
@@ -193,19 +212,22 @@ const snapshot = core.snapshot()
 const restored = PropositCore.fromSnapshot(snapshot)
 ```
 
-`PropositCore` is designed for subclassing. All library fields (`claims`, `sources`, `claimSources`, `forks`, `arguments`) are public and readable. Pass pre-constructed library instances via `TPropositCoreOptions` to inject custom implementations.
+`PropositCore` is designed for subclassing. All library fields (`claims`, `claimCitations`, `forks`, `arguments`) are public and readable. Pass pre-constructed library instances via `TPropositCoreOptions` to inject custom implementations.
 
 ### No application metadata
 
 The core library does not deal in user IDs, timestamps, or display text. These are application-level concerns. The CLI adds some metadata (e.g., `createdAt`, `publishedAt`) for its own purposes, but the core schemas are intentionally minimal. Applications extend core entity types via generic parameters.
 
-### Sources
+### Claims and citations
 
-A **source** is an evidentiary reference (paper, article, URL). Source entities live in a global `SourceLibrary` with versioning and freeze semantics (same as `ClaimLibrary`).
+Every claim in the unified `ClaimLibrary` carries an immutable `type: 'normal' | 'citation'` discriminator set at creation:
 
-Claim-source associations are managed by `ClaimSourceLibrary<TAssoc>` — a standalone global class that links a claim version to a source version. Associations are immutable: create or delete only, no update. `ClaimSourceLibrary` validates both the claim and source references on `add()`.
+- **Normal claims** (`type: 'normal'`) are primary-reasoning propositions referenced by an argument's variables.
+- **Citation claims** (`type: 'citation'`) represent external/cited content — papers, articles, URLs. They are the v0.10.0 unified replacement for the former separate `Source` entity. Application schemas (e.g. the IEEE extension) extend citation claims with structured reference data.
 
-The `@proposit/proposit-core/extensions/ieee` subpath export provides `IEEESourceSchema` — an extended source type with IEEE citation reference schemas covering 33 reference types.
+Citations between claims are managed by `ClaimCitationLibrary<TCitation>` — a standalone global class that stores directed edges in the global claim citation graph. Each citation pins both endpoints to specific claim versions (`citingClaimId@citingClaimVersion → sourceClaimId@sourceClaimVersion`). The source-side endpoint must reference a claim with `type: 'citation'`. Citations are immutable (create or delete, no update). `ClaimCitationLibrary` validates both endpoints, the source-side type, and global graph acyclicity on `add()`.
+
+The `@proposit/proposit-core/extensions/ieee` subpath export provides `IEEECitationClaimSchema` — an extended citation-claim type with IEEE reference schemas covering 33 reference types.
 
 ### Auto-variable creation
 
@@ -219,11 +241,11 @@ An argument can be **forked** via `PropositCore.forkArgument()` to create an ind
 
 - Creates a new argument with a new ID (version 0)
 - Assigns new UUIDs to all premises, expressions, and variables
-- Clones all referenced claims and sources (including their claim-source associations)
-- Creates fork records in all six `ForkLibrary` namespaces (arguments, premises, expressions, variables, claims, sources)
+- Walks the citation graph from the source argument's claim-bound variables and clones every reachable claim (both `'normal'` and `'citation'`-typed) plus the citation edges between them
+- Creates fork records in all five `ForkLibrary` namespaces (arguments, premises, expressions, variables, claims)
 - Remaps all internal references (expression parent chains, variable bindings, conclusion role, claim references)
 - Registers the new engine in `ArgumentLibrary`
-- Returns the new engine, a remap table, claim/source remap maps, and the argument fork record
+- Returns the new engine, a remap table, a claim remap map (covering both normal and citation claims), and the argument fork record
 
 The forked argument is fully independent — mutations don't affect the source. Fork-aware diffing is automatic via `PropositCore.diffArguments()`, which uses `ForkLibrary` records as entity matchers rather than ID-based pairing.
 
@@ -608,7 +630,7 @@ const johnEngine = core.arguments.create({
 })
 // ... populate with premises, variables, expressions ...
 
-// Fork — clones claims/sources, creates fork records, registers new engine
+// Fork — clones claims (and citation claims) + citation edges, creates fork records, registers new engine
 const { engine: richArg, remapTable } = core.forkArgument(
     "john-arg-id",
     "rich-arg-id"
@@ -739,6 +761,18 @@ The engine enforces structural invariants at two levels: **construction-time** (
 | Same variable ID used with multiple symbols across premises | `ARGUMENT_VARIABLE_ID_SYMBOL_MISMATCH` |
 | Same variable symbol used with multiple IDs across premises | `ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS`   |
 
+### Claims and citations — prevented at construction time
+
+| Invalid construction                                                          | What happens / error code             |
+| ----------------------------------------------------------------------------- | ------------------------------------- |
+| Updating a claim's `type` field after creation                                | Throws — `CLAIM_TYPE_IMMUTABLE`       |
+| Restoring a pre-v0.10 snapshot whose claims lack the `type` field             | Throws — `LEGACY_CLAIM_MISSING_TYPE`  |
+| Adding a citation whose `id` already exists                                   | Throws — `CITATION_DUPLICATE_ID`      |
+| Adding a citation whose `citingClaimId@citingClaimVersion` is not in the lookup | Throws — `CITATION_CITING_REF_NOT_FOUND` |
+| Adding a citation whose `sourceClaimId@sourceClaimVersion` is not in the lookup | Throws — `CITATION_SOURCE_REF_NOT_FOUND` |
+| Source-side claim of a citation has `type !== 'citation'`                     | Throws — `CITATION_SOURCE_NOT_CITATION_TYPE` |
+| Citation that would create a cycle in the global claim-citation graph         | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate) |
+
 ### Removal cascades
 
 These are not errors — they're intentional structural maintenance:
@@ -822,16 +856,15 @@ proposit-core arguments delete [--all] [--confirm] <id>   Delete an argument or 
 proposit-core arguments publish <id>               Publish latest version, prepare new draft
 proposit-core arguments parse [text] [options]     Parse natural language into an argument via LLM
 proposit-core arguments import <yaml_file>         Import an argument from YAML
-proposit-core claims list [--json]                 List all claims
+proposit-core claims list [--json]                 List all claims (citation-typed claims tagged [citation])
 proposit-core claims show <claim_id> [--json]      Show all versions of a claim
-proposit-core claims add [--title <t>] [--body <b>]  Create a new claim
-proposit-core claims update <claim_id> [--title <t>] [--body <b>]  Update claim metadata
+proposit-core claims add [--type <t>] [--title <t>] [--body <b>]  Create a new claim ('normal' default; 'citation' for cited content)
+proposit-core claims update <claim_id> [--title <t>] [--body <b>]  Update claim metadata (type is immutable)
 proposit-core claims freeze <claim_id>             Freeze current version
-proposit-core sources list [--json]                List all sources
-proposit-core sources show <source_id> [--json]    Show all versions of a source
-proposit-core sources add --text <text>            Create a new source
-proposit-core sources link-claim <source_id> <claim_id>  Link a source to a claim
-proposit-core sources unlink <association_id>      Remove a claim-source association
+proposit-core citations list [--json]              List all citation edges
+proposit-core citations show <citation_id> [--json]  Show a single citation
+proposit-core citations add <citing_claim_id> <source_claim_id>  Add a citation edge (source must be type=citation)
+proposit-core citations unlink <citation_id>       Remove a citation edge
 ```
 
 By default `delete` removes only the latest version. Pass `--all` to remove the argument entirely. Both `delete` and `delete-unused` prompt for confirmation unless `--confirm` is supplied.
@@ -863,8 +896,8 @@ Renders the full argument with metadata. Output includes:
 - **Argument header** — title and description
 - **Premises** — one per line with formula display string and title (if present); conclusion marked with `*`
 - **Variables** — symbol and bound claim title (or premise binding)
-- **Claims** — ID, version, frozen status, title, and body
-- **Sources** — ID, version, and text
+- **Claims** — ID, version, frozen status, type (`normal` or `citation`), title, and body
+- **Citations** — edges between claims (citing -> source), with both endpoints pinned to specific versions
 
 Display strings use standard logical notation (¬ ∧ ∨ → ↔).
 
