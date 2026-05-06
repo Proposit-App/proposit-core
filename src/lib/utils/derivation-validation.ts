@@ -3,6 +3,7 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
 } from "../schemata/propositional.js"
+import { isClaimBound } from "../schemata/propositional.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 import { DERIVATION_STRUCTURE_INVALID } from "../types/validation.js"
 
@@ -35,7 +36,7 @@ export function validateDerivationStructure(
 
     // 1. Locate the claim-bound variable for derivedClaimId.
     const consequentVariable = variables.find(
-        (v) => "claimId" in v && v.claimId === premise.derivedClaimId
+        (v) => isClaimBound(v) && v.claimId === premise.derivedClaimId
     )
     if (consequentVariable === undefined) {
         violations.push({
