@@ -76,9 +76,11 @@ export class ManagedDerivationPremiseEngine<
     /**
      * Captured from `config.generateId` (or the default UUID generator) for
      * use in `populateFromCitations`, which needs to mint new expression IDs.
-     * Stored separately because `PremiseEngine.generateId` is private.
+     * Stored separately because `PremiseEngine`'s generateId is private.
+     * Not `readonly` because `fromSnapshot` re-injects it after the prototype
+     * upgrade.
      */
-    private readonly _generateId: () => string
+    private generateIdFn: () => string
 
     constructor(
         premise: TOptionalChecksum<TPremise>,
@@ -90,7 +92,7 @@ export class ManagedDerivationPremiseEngine<
         config?: TLogicEngineOptions
     ) {
         super(premise, deps, config)
-        this._generateId = config?.generateId ?? defaultGenerateId
+        this.generateIdFn = config?.generateId ?? defaultGenerateId
         // Validate premise type immediately — no expressions needed.
         // Structural validation (assertWellFormed) is deferred to fromSnapshot
         // and mutation overrides because PremiseEngine is always constructed
@@ -158,8 +160,7 @@ export class ManagedDerivationPremiseEngine<
 
         // Inject the generateId captured from config (or the default) so that
         // populateFromCitations can mint new expression IDs.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(engine as any)._generateId = generateId ?? defaultGenerateId
+        engine.generateIdFn = generateId ?? defaultGenerateId
 
         // Validate the full tree — expressions are fully loaded at this point.
         // (Type was already checked at the top before delegating to the parent.)
@@ -468,8 +469,8 @@ export class ManagedDerivationPremiseEngine<
         if (citations.length === 1) {
             // n = 1: wrap naked-Q with IMPLIES using rightNodeId so that Q lands
             // at the midpoint (consequent) position and S1 lands at initial.
-            const impliesId = this._generateId()
-            const s1ExprId = this._generateId()
+            const impliesId = this.generateIdFn()
+            const s1ExprId = this.generateIdFn()
             const impliesOp = {
                 id: impliesId,
                 argumentId: argId,
@@ -498,8 +499,8 @@ export class ManagedDerivationPremiseEngine<
             const savedGrammarConfig = this.grammarConfig
             this.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
             try {
-                const impliesId = this._generateId()
-                const orId = this._generateId()
+                const impliesId = this.generateIdFn()
+                const orId = this.generateIdFn()
                 const impliesOp = {
                     id: impliesId,
                     argumentId: argId,
@@ -522,7 +523,7 @@ export class ManagedDerivationPremiseEngine<
                 super.wrapExpression(impliesOp, orOp, undefined, qRootExprId)
                 // Append each source variable expression as a child of OR.
                 for (const sourceVar of sourceVariables) {
-                    const srcExprId = this._generateId()
+                    const srcExprId = this.generateIdFn()
                     const srcVarExpr = {
                         id: srcExprId,
                         argumentId: argId,
