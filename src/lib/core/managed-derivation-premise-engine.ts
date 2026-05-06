@@ -121,7 +121,7 @@ export class ManagedDerivationPremiseEngine<
         >
 
         // Validate the full tree — expressions are fully loaded at this point.
-        engine.assertDerivationType()
+        // (Type was already checked at the top before delegating to the parent.)
         engine.assertWellFormed()
 
         return engine
