@@ -105,6 +105,16 @@ A claim's \`citationMiniIds\` array links that claim to other claims (within the
 
 If the input text has no citations, leave every claim's \`citationMiniIds\` as an empty array \`[]\`. You only emit citation-typed claims when the input text actually references external evidence.
 
+## Citation Claim Metadata
+
+Citation claims may carry additional fields (e.g., \`url\`, \`citation\`) defined by the consuming application's schema extension. When such fields are present in your assigned output schema, populate them from the source material:
+
+- Markdown links \`[text](url)\` → set the \`url\` field to the linked URL; the visible \`text\` typically informs the claim's natural-language content.
+- Footnote markers, anchor references, or bracketed reference numbers → preserve the linked URL or reference target in whichever field the schema provides for it.
+- Free-form citations (e.g., "as reported in The New York Times, January 5") → encode the citation text in the available \`citation\` (or equivalent) field.
+
+Only populate fields that actually appear in your assigned output schema. Do not invent fields, and do not fabricate URLs or citation text that the source material does not contain.
+
 ## MiniId Conventions
 
 Each entity type uses a distinct prefix for its miniId to avoid cross-reference confusion:

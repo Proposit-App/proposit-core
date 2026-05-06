@@ -368,20 +368,20 @@ export class ArgumentParser<
 
         for (const parsedClaim of arg.claims) {
             const citingRef = claimMiniIdToId.get(parsedClaim.miniId)!
-            for (const sourceMiniId of parsedClaim.citationMiniIds) {
-                const sourceRef = claimMiniIdToId.get(sourceMiniId)
+            for (const citationMiniId of parsedClaim.citationMiniIds) {
+                const sourceRef = claimMiniIdToId.get(citationMiniId)
                 if (!sourceRef) {
                     if (strict) {
                         throw new Error(
-                            `Claim "${parsedClaim.miniId}" references undeclared citation miniId "${sourceMiniId}".`
+                            `Claim "${parsedClaim.miniId}" references undeclared citation miniId "${citationMiniId}".`
                         )
                     }
                     warnings.push({
                         code: "UNRESOLVED_CITATION_MINIID",
-                        message: `Claim "${parsedClaim.miniId}" references undeclared citation miniId "${sourceMiniId}".`,
+                        message: `Claim "${parsedClaim.miniId}" references undeclared citation miniId "${citationMiniId}".`,
                         context: {
                             claimMiniId: parsedClaim.miniId,
-                            citationMiniId: sourceMiniId,
+                            citationMiniId,
                         },
                     })
                     continue
