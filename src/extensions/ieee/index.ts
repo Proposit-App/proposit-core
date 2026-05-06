@@ -1,5 +1,5 @@
 export * from "./references.js"
 export * from "./relaxed.js"
-export * from "./source.js"
+export * from "./citation-claim.js"
 export * from "./formatting.js"
 export * from "./segment-templates.js"

@@ -246,43 +246,59 @@ proposit-core <argument-id> latest roles clear-conclusion
 
 ---
 
-## 7. Sources and Claims
+## 7. Claims and Citations
 
-Claims and sources are global library entities, separate from argument-scoped data.
+Claims are the global library of propositional content (separate from argument-scoped data). As of v0.10.0 every claim has an immutable `type` discriminator: `normal` (the default — primary-reasoning content) or `citation` (external/cited content; the unified replacement for the former separate `Source` entity).
+
+Citations are directed edges between claims, stored in the global claim-citation graph. The source side of a citation must be a `type=citation` claim.
 
 ### Claims
 
 ```bash
-# Create a claim with metadata
+# Create a normal claim (default type)
 proposit-core claims add --title "It is raining" --body "Precipitation is currently occurring"
+# → <claim-id>
 
-# List all claims
+# Create a citation claim (the v0.10.0 replacement for `sources add`)
+proposit-core claims add --type=citation --title "Journal of Atmospheric Sciences, 2024" \
+    --body "Smith et al., 'Patterns of urban precipitation', JAS 81(4), 2024"
+# → <citation-claim-id>
+
+# List all claims (citation-typed claims are tagged [citation])
 proposit-core claims list
 
 # Show versions of a claim
 proposit-core claims show <claim-id>
 
-# Update claim metadata
+# Update claim metadata (type is immutable — cannot be changed)
 proposit-core claims update <claim-id> --title "New title" --body "New description"
 
 # Freeze a claim version
 proposit-core claims freeze <claim-id>
 ```
 
-### Sources
+### Citations
 
 ```bash
-# Create a source
-proposit-core sources add --text "Journal of Atmospheric Sciences, 2024"
+# Cite a citation-typed claim from another claim
+# (the source claim must have type=citation)
+proposit-core citations add <citing-claim-id> <citation-claim-id>
+# → <citation-edge-id>
 
-# List all sources
-proposit-core sources list
+# List all citation edges
+proposit-core citations list
+# → <citation-id> | <citingClaimId>@<v> -> <sourceClaimId>@<v>
 
-# Link a source to a claim
-proposit-core sources link-claim <source-id> <claim-id>
+# Show a single citation edge
+proposit-core citations show <citation-id>
+# → id:                  <citation-id>
+# → citingClaimId:       <citingClaimId>
+# → citingClaimVersion:  0
+# → sourceClaimId:       <sourceClaimId>
+# → sourceClaimVersion:  0
 
-# Remove a link
-proposit-core sources unlink <association-id>
+# Remove a citation edge
+proposit-core citations unlink <citation-id>
 ```
 
 ---

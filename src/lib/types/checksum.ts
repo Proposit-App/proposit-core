@@ -10,10 +10,8 @@ export interface TCoreChecksumConfig {
     argumentFields?: Set<string>
     /** Fields to hash for role state. Defaults to ["conclusionPremiseId"]. */
     roleFields?: Set<string>
-    /** Fields to hash for claim entities. Defaults to ["version"]. */
+    /** Fields to hash for claim entities. Defaults to ["version", "type"]. */
     claimFields?: Set<string>
-    /** Fields to hash for source entities. Defaults to ["version"]. */
-    sourceFields?: Set<string>
-    /** Fields to hash for claim-source associations. Defaults to ["claimId", "claimVersion", "sourceId", "sourceVersion"]. */
-    claimSourceAssociationFields?: Set<string>
+    /** Fields to hash for claim citations. Defaults to ["citingClaimId", "citingClaimVersion", "sourceClaimId", "sourceClaimVersion"]. */
+    claimCitationFields?: Set<string>
 }

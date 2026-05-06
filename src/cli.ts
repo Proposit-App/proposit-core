@@ -10,7 +10,7 @@ import { registerExpressionCommands } from "./cli/commands/expressions.js"
 import { registerAnalysisCommands } from "./cli/commands/analysis.js"
 import { registerValidateCommand } from "./cli/commands/validate.js"
 import { registerRepairCommand } from "./cli/commands/repair.js"
-import { registerSourceCommands } from "./cli/commands/sources.js"
+import { registerCitationCommands } from "./cli/commands/citations.js"
 import { registerClaimCommands } from "./cli/commands/claims.js"
 import { registerRenderCommand } from "./cli/commands/render.js"
 import { registerGraphCommand } from "./cli/commands/graph.js"
@@ -33,7 +33,7 @@ registerMetaCommands(program)
 registerArgumentCommands(program)
 registerClaimCommands(program)
 registerDiffCommand(program)
-registerSourceCommands(program)
+registerCitationCommands(program)
 
 // ── Version-scoped commands ───────────────────────────────────────────────────
 // If the first user argument is not a named command, treat it as an argument ID

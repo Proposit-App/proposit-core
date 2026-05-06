@@ -4,13 +4,11 @@ import type {
     TCoreExpressionForkRecord,
     TCoreVariableForkRecord,
     TCoreClaimForkRecord,
-    TCoreSourceForkRecord,
 } from "../schemata/fork.js"
 import {
     CoreEntityForkRecordSchema,
     CoreExpressionForkRecordSchema,
     CoreClaimForkRecordSchema,
-    CoreSourceForkRecordSchema,
 } from "../schemata/fork.js"
 import { ForkNamespace } from "./fork-namespace.js"
 import type { TForkLibrarySnapshot } from "./interfaces/library.interfaces.js"
@@ -18,9 +16,12 @@ import type { TInvariantValidationResult } from "../types/validation.js"
 
 /**
  * Aggregate container for fork provenance across all entity types.
- * Holds six {@link ForkNamespace} instances — one per entity kind
- * (arguments, premises, expressions, variables, claims, sources).
+ * Holds five {@link ForkNamespace} instances — one per entity kind
+ * (arguments, premises, expressions, variables, claims).
  * Fork records are immutable after creation and carry no checksums.
+ *
+ * As of v0.10.0 the legacy `sources` namespace has been folded into
+ * `claims` — sources are now claims with `type: "citation"`.
  */
 export class ForkLibrary<
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
@@ -28,14 +29,12 @@ export class ForkLibrary<
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
-    TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
 > {
     public readonly arguments: ForkNamespace<TArgFork>
     public readonly premises: ForkNamespace<TPremiseFork>
     public readonly expressions: ForkNamespace<TExprFork>
     public readonly variables: ForkNamespace<TVarFork>
     public readonly claims: ForkNamespace<TClaimFork>
-    public readonly sources: ForkNamespace<TSourceFork>
 
     constructor() {
         this.arguments = new ForkNamespace<TArgFork>(CoreEntityForkRecordSchema)
@@ -47,19 +46,15 @@ export class ForkLibrary<
         )
         this.variables = new ForkNamespace<TVarFork>(CoreEntityForkRecordSchema)
         this.claims = new ForkNamespace<TClaimFork>(CoreClaimForkRecordSchema)
-        this.sources = new ForkNamespace<TSourceFork>(
-            CoreSourceForkRecordSchema
-        )
     }
 
-    /** Returns a serializable snapshot of all six namespaces. */
+    /** Returns a serializable snapshot of all five namespaces. */
     public snapshot(): TForkLibrarySnapshot<
         TArgFork,
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork,
-        TSourceFork
+        TClaimFork
     > {
         return {
             arguments: this.arguments.snapshot(),
@@ -67,42 +62,38 @@ export class ForkLibrary<
             expressions: this.expressions.snapshot(),
             variables: this.variables.snapshot(),
             claims: this.claims.snapshot(),
-            sources: this.sources.snapshot(),
         }
     }
 
-    /** Restores a full library from a previously captured snapshot. */
+    /**
+     * Restores a full library from a previously captured snapshot.
+     *
+     * Pre-v0.10.0 snapshots that contained a `sources` namespace are not
+     * supported here — callers must convert them via the CLI migration
+     * (Phase 14) before invoking `fromSnapshot`. Any stray `sources` key on
+     * an input snapshot is silently ignored.
+     */
     public static fromSnapshot<
         TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
         TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
         TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
         TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
         TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
-        TSourceFork extends TCoreSourceForkRecord = TCoreSourceForkRecord,
     >(
         snapshot: TForkLibrarySnapshot<
             TArgFork,
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork,
-            TSourceFork
+            TClaimFork
         >
-    ): ForkLibrary<
-        TArgFork,
-        TPremiseFork,
-        TExprFork,
-        TVarFork,
-        TClaimFork,
-        TSourceFork
-    > {
+    ): ForkLibrary<TArgFork, TPremiseFork, TExprFork, TVarFork, TClaimFork> {
         const lib = new ForkLibrary<
             TArgFork,
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork,
-            TSourceFork
+            TClaimFork
         >()
 
         for (const record of snapshot.arguments) {
@@ -120,14 +111,11 @@ export class ForkLibrary<
         for (const record of snapshot.claims) {
             lib.claims.create(record)
         }
-        for (const record of snapshot.sources) {
-            lib.sources.create(record)
-        }
 
         return lib
     }
 
-    /** Validates all six namespaces and returns the combined result. */
+    /** Validates all five namespaces and returns the combined result. */
     public validate(): TInvariantValidationResult {
         const allViolations = [
             ...this.arguments.validate().violations,
@@ -135,7 +123,6 @@ export class ForkLibrary<
             ...this.expressions.validate().violations,
             ...this.variables.validate().violations,
             ...this.claims.validate().violations,
-            ...this.sources.validate().violations,
         ]
         return { ok: allViolations.length === 0, violations: allViolations }
     }

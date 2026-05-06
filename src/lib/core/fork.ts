@@ -7,14 +7,10 @@ import type {
     TPremiseBoundVariable,
 } from "../schemata/index.js"
 import type { TCoreClaim } from "../schemata/claim.js"
-import type {
-    TCoreSource,
-    TCoreClaimSourceAssociation,
-} from "../schemata/source.js"
+import type { TCoreClaimCitation } from "../schemata/claim-citation.js"
 import type {
     TClaimLookup,
-    TSourceLookup,
-    TClaimSourceLookup,
+    TClaimCitationLookup,
 } from "./interfaces/library.interfaces.js"
 import type { TForkArgumentOptions, TForkRemapTable } from "../types/fork.js"
 import type { TOptionalChecksum } from "../schemata/shared.js"
@@ -33,7 +29,7 @@ import { isPremiseBound } from "../schemata/propositional.js"
  *
  * @param engine - The source engine to fork.
  * @param newArgumentId - The ID for the forked argument.
- * @param libraries - Claim, source, and claim-source libraries for the new engine.
+ * @param libraries - Claim and claim-citation libraries for the new engine.
  * @param options - Optional ID generator, checksum/position/grammar config overrides.
  * @returns The forked engine and a remap table mapping original to new entity IDs.
  */
@@ -42,28 +38,20 @@ export function forkArgumentEngine<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
     TClaim extends TCoreClaim = TCoreClaim,
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 >(
-    engine: ArgumentEngine<
-        TArg,
-        TPremise,
-        TExpr,
-        TVar,
-        TSource,
-        TClaim,
-        TAssoc
-    >,
+    // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
+    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar>,
     newArgumentId: string,
     libraries: {
         claimLibrary: TClaimLookup<TClaim>
-        sourceLibrary: TSourceLookup<TSource>
-        claimSourceLibrary: TClaimSourceLookup<TAssoc>
+        claimCitationLibrary: TClaimCitationLookup<TCitation>
     },
     options?: TForkArgumentOptions
 ): {
-    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>
+    // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
+    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar>
     remapTable: TForkRemapTable
 } {
     const generateId = options?.generateId ?? defaultGenerateId
@@ -199,19 +187,18 @@ export function forkArgumentEngine<
     const grammarConfig = options?.grammarConfig ?? snap.config?.grammarConfig
 
     // Construct new engine
+    // TODO Phase 7: ArgumentEngine.fromSnapshot will take
+    // (snapshot, claimLibrary, claimCitationLibrary, ...) once its generics
+    // are reduced to drop TSource/TAssoc.
     const forkedEngine = ArgumentEngine.fromSnapshot<
         TArg,
         TPremise,
         TExpr,
-        TVar,
-        TSource,
-        TClaim,
-        TAssoc
+        TVar
     >(
         snap,
         libraries.claimLibrary,
-        libraries.sourceLibrary,
-        libraries.claimSourceLibrary,
+        libraries.claimCitationLibrary,
         grammarConfig,
         "ignore",
         generateId

@@ -1,13 +1,14 @@
 import Type, { type Static } from "typebox"
-import { CoreSourceSchema } from "../../lib/schemata/index.js"
+import { CoreClaimSchema } from "../../lib/schemata/index.js"
 import { Nullable } from "../../lib/schemata/shared.js"
 import { IEEEReferenceSchema } from "./references.js"
 
-export const IEEESourceSchema = Type.Intersect([
-    CoreSourceSchema,
+export const IEEECitationClaimSchema = Type.Intersect([
+    CoreClaimSchema,
     Type.Object({
+        type: Type.Literal("citation"),
         url: Nullable(Type.String()),
         citation: IEEEReferenceSchema,
     }),
 ])
-export type TIEEESource = Static<typeof IEEESourceSchema>
+export type TIEEECitationClaim = Static<typeof IEEECitationClaimSchema>

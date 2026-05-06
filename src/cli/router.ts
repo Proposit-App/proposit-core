@@ -9,9 +9,9 @@ const NAMED_COMMANDS = new Set([
     "--version",
     "-V",
     "arguments",
+    "citations",
     "claims",
     "diff",
-    "sources",
 ])
 
 /**

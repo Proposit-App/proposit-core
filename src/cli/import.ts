@@ -9,8 +9,7 @@ import type { TFormulaAST } from "../lib/core/parser/formula.js"
 import { parseFormula } from "../lib/core/parser/formula.js"
 import { ArgumentEngine } from "../lib/core/argument-engine.js"
 import { ClaimLibrary } from "../lib/core/claim-library.js"
-import { ClaimSourceLibrary } from "../lib/core/claim-source-library.js"
-import { SourceLibrary } from "../lib/core/source-library.js"
+import { ClaimCitationLibrary } from "../lib/core/claim-citation-library.js"
 import { POSITION_INITIAL } from "../lib/utils/position.js"
 
 /**
@@ -221,8 +220,7 @@ function buildExpressions(
 export function importArgumentFromYaml(yamlString: string): {
     engine: ArgumentEngine
     claimLibrary: ClaimLibrary
-    sourceLibrary: SourceLibrary
-    claimSourceLibrary: ClaimSourceLibrary
+    claimCitationLibrary: ClaimCitationLibrary
 } {
     const raw = parseYaml(yamlString)
     const input: TCoreYamlArgument = Value.Parse(CoreYamlArgumentSchema, raw)
@@ -275,17 +273,15 @@ export function importArgumentFromYaml(yamlString: string): {
     }
 
     const claimLibrary = new ClaimLibrary()
-    const defaultClaim = claimLibrary.create({ id: randomUUID() })
-    const sourceLibrary = new SourceLibrary()
-    const claimSourceLibrary = new ClaimSourceLibrary(
-        claimLibrary,
-        sourceLibrary
-    )
+    const defaultClaim = claimLibrary.create({
+        id: randomUUID(),
+        type: "normal",
+    })
+    const claimCitationLibrary = new ClaimCitationLibrary(claimLibrary)
     const engine = new ArgumentEngine(
         argument,
         claimLibrary,
-        sourceLibrary,
-        claimSourceLibrary
+        claimCitationLibrary
     )
 
     // Create variables
@@ -337,5 +333,5 @@ export function importArgumentFromYaml(yamlString: string): {
         // Non-conclusion inference premises are automatically supporting
     }
 
-    return { engine, claimLibrary, sourceLibrary, claimSourceLibrary }
+    return { engine, claimLibrary, claimCitationLibrary }
 }

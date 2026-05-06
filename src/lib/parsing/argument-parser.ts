@@ -6,9 +6,8 @@ import type {
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
-    TCoreSource,
     TCoreClaim,
-    TCoreClaimSourceAssociation,
+    TCoreClaimCitation,
 } from "../schemata/index.js"
 import type { TClaimBoundVariable } from "../schemata/propositional.js"
 import { parseFormula } from "../core/parser/formula.js"
@@ -17,8 +16,7 @@ import type { TExpressionInput } from "../core/expression-manager.js"
 import { POSITION_INITIAL } from "../utils/position.js"
 import { ArgumentEngine, defaultGenerateId } from "../core/argument-engine.js"
 import { ClaimLibrary } from "../core/claim-library.js"
-import { SourceLibrary } from "../core/source-library.js"
-import { ClaimSourceLibrary } from "../core/claim-source-library.js"
+import { ClaimCitationLibrary } from "../core/claim-citation-library.js"
 import { ParsedArgumentResponseSchema } from "./schemata.js"
 import { clampMaxLengths } from "./clamp-max-lengths.js"
 import type {
@@ -26,7 +24,6 @@ import type {
     TParsedArgument,
     TParsedClaim,
     TParsedVariable,
-    TParsedSource,
     TParsedPremise,
 } from "./schemata.js"
 
@@ -38,14 +35,12 @@ export type TArgumentParserResult<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
     TClaim extends TCoreClaim = TCoreClaim,
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 > = {
-    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc>
+    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation>
     claimLibrary: ClaimLibrary<TClaim>
-    sourceLibrary: SourceLibrary<TSource>
-    claimSourceLibrary: ClaimSourceLibrary<TAssoc>
+    claimCitationLibrary: ClaimCitationLibrary<TCitation>
     warnings: TParserWarning[]
 }
 
@@ -245,9 +240,8 @@ export class ArgumentParser<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
     TClaim extends TCoreClaim = TCoreClaim,
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 > {
     protected readonly responseSchema: TSchema
 
@@ -275,15 +269,7 @@ export class ArgumentParser<
     public build(
         response: TParsedArgumentResponse,
         options?: TParserBuildOptions
-    ): TArgumentParserResult<
-        TArg,
-        TPremise,
-        TExpr,
-        TVar,
-        TSource,
-        TClaim,
-        TAssoc
-    > {
+    ): TArgumentParserResult<TArg, TPremise, TExpr, TVar, TClaim, TCitation> {
         const warnings: TParserWarning[] = []
         const strict = options?.strict ?? true
         const genId = options?.generateId ?? defaultGenerateId
@@ -353,7 +339,7 @@ export class ArgumentParser<
             version: argumentVersion,
         } as TArg
 
-        // 3. Create claims
+        // 3. Create claims (unified — citation-typed and normal-typed)
         const claimLibrary = new ClaimLibrary<TClaim>()
         const claimMiniIdToId = new Map<
             string,
@@ -366,6 +352,7 @@ export class ArgumentParser<
             const claim = claimLibrary.create({
                 ...extras,
                 id: claimId,
+                type: parsedClaim.type,
             } as Omit<TClaim, "version" | "frozen" | "checksum">)
             claimMiniIdToId.set(parsedClaim.miniId, {
                 id: claim.id,
@@ -373,78 +360,57 @@ export class ArgumentParser<
             })
         }
 
-        // 4. Create sources
-        const sourceLibrary = new SourceLibrary<TSource>()
-        const sourceMiniIdToId = new Map<
-            string,
-            { id: string; version: number }
-        >()
-
-        for (const parsedSource of arg.sources) {
-            const extras = this.mapSource(parsedSource)
-            const sourceId = genId()
-            const source = sourceLibrary.create({
-                ...extras,
-                id: sourceId,
-            } as Omit<TSource, "version" | "frozen" | "checksum">)
-            sourceMiniIdToId.set(parsedSource.miniId, {
-                id: source.id,
-                version: source.version,
-            })
-        }
-
-        // 5. Wire claim-source associations
-        const claimSourceLibrary = new ClaimSourceLibrary<TAssoc>(
-            claimLibrary,
-            sourceLibrary
+        // 4. Wire claim citations — each parsed claim's citationMiniIds
+        //    yields a citation edge from this claim to the cited claim.
+        const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(
+            claimLibrary
         )
 
         for (const parsedClaim of arg.claims) {
-            const claimRef = claimMiniIdToId.get(parsedClaim.miniId)!
-            for (const sourceMiniId of parsedClaim.sourceMiniIds) {
-                const sourceRef = sourceMiniIdToId.get(sourceMiniId)
+            const citingRef = claimMiniIdToId.get(parsedClaim.miniId)!
+            for (const citationMiniId of parsedClaim.citationMiniIds) {
+                const sourceRef = claimMiniIdToId.get(citationMiniId)
                 if (!sourceRef) {
                     if (strict) {
                         throw new Error(
-                            `Claim "${parsedClaim.miniId}" references undeclared source "${sourceMiniId}".`
+                            `Claim "${parsedClaim.miniId}" references undeclared citation miniId "${citationMiniId}".`
                         )
                     }
                     warnings.push({
-                        code: "UNRESOLVED_SOURCE_MINIID",
-                        message: `Claim "${parsedClaim.miniId}" references undeclared source "${sourceMiniId}".`,
+                        code: "UNRESOLVED_CITATION_MINIID",
+                        message: `Claim "${parsedClaim.miniId}" references undeclared citation miniId "${citationMiniId}".`,
                         context: {
                             claimMiniId: parsedClaim.miniId,
-                            sourceMiniId,
+                            citationMiniId,
                         },
                     })
                     continue
                 }
-                const extras = this.mapClaimSourceAssociation(
+                const extras = this.mapClaimCitation(
                     parsedClaim,
-                    claimRef.id,
+                    citingRef.id,
                     sourceRef.id
                 )
-                claimSourceLibrary.add({
+                claimCitationLibrary.add({
                     ...extras,
                     id: genId(),
-                    claimId: claimRef.id,
-                    claimVersion: claimRef.version,
-                    sourceId: sourceRef.id,
-                    sourceVersion: sourceRef.version,
-                } as Omit<TAssoc, "checksum">)
+                    citingClaimId: citingRef.id,
+                    citingClaimVersion: citingRef.version,
+                    sourceClaimId: sourceRef.id,
+                    sourceClaimVersion: sourceRef.version,
+                } as Omit<TCitation, "checksum">)
             }
         }
 
-        // 6. Create ArgumentEngine
+        // 5. Create ArgumentEngine
         const engine = new ArgumentEngine<
             TArg,
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc
-        >(argument, claimLibrary, sourceLibrary, claimSourceLibrary, {
+            TCitation
+        >(argument, claimLibrary, claimCitationLibrary, {
             grammarConfig: {
                 enforceFormulaBetweenOperators: true,
                 autoNormalize: true,
@@ -452,7 +418,7 @@ export class ArgumentParser<
             generateId: genId,
         })
 
-        // 7. Create variables — resolve claimMiniId to real claim UUID
+        // 6. Create variables — resolve claimMiniId to real claim UUID
         const variablesBySymbol = new Map<
             string,
             Omit<TClaimBoundVariable, "checksum">
@@ -492,7 +458,7 @@ export class ArgumentParser<
             engine.addVariable(variable)
         }
 
-        // 7b. Filter formulas against surviving declared symbols
+        // 6b. Filter formulas against surviving declared symbols
         const survivingFormulas: typeof parsedFormulas = []
         for (const entry of parsedFormulas) {
             const formulaVarNames = new Set<string>()
@@ -520,7 +486,7 @@ export class ArgumentParser<
             if (!hasUndeclared) survivingFormulas.push(entry)
         }
 
-        // 8. Create premises and build expression trees
+        // 7. Create premises and build expression trees
         const premiseMiniIdToId = new Map<string, string>()
 
         for (const { ast, premise: parsedPremise } of survivingFormulas) {
@@ -541,7 +507,7 @@ export class ArgumentParser<
             )
         }
 
-        // 9. Set conclusion
+        // 8. Set conclusion
         const conclusionId = premiseMiniIdToId.get(arg.conclusionPremiseMiniId)
         if (!conclusionId) {
             if (strict) {
@@ -563,8 +529,7 @@ export class ArgumentParser<
         return {
             engine,
             claimLibrary,
-            sourceLibrary,
-            claimSourceLibrary,
+            claimCitationLibrary,
             warnings,
         }
     }
@@ -581,10 +546,6 @@ export class ArgumentParser<
         return {}
     }
 
-    protected mapSource(_parsed: TParsedSource): Record<string, unknown> {
-        return {}
-    }
-
     protected mapVariable(_parsed: TParsedVariable): Record<string, unknown> {
         return {}
     }
@@ -593,10 +554,10 @@ export class ArgumentParser<
         return {}
     }
 
-    protected mapClaimSourceAssociation(
+    protected mapClaimCitation(
         _parsed: TParsedClaim,
-        _claimId: string,
-        _sourceId: string
+        _citingClaimId: string,
+        _sourceClaimId: string
     ): Record<string, unknown> {
         return {}
     }

@@ -16,14 +16,16 @@ function basicsResponse(): Record<string, unknown> {
                 {
                     miniId: "C1",
                     role: "premise",
-                    sourceMiniIds: [],
+                    type: "normal",
+                    citationMiniIds: [],
                     title: "Earth is warming",
                     body: "Global average temperatures have increased over the past century.",
                 },
                 {
                     miniId: "C2",
                     role: "conclusion",
-                    sourceMiniIds: [],
+                    type: "normal",
+                    citationMiniIds: [],
                     title: "Action needed",
                     body: "Immediate action is required to address climate change.",
                 },
@@ -32,7 +34,6 @@ function basicsResponse(): Record<string, unknown> {
                 { miniId: "V1", symbol: "P", claimMiniId: "C1" },
                 { miniId: "V2", symbol: "Q", claimMiniId: "C2" },
             ],
-            sources: [],
             premises: [
                 {
                     miniId: "P1",
@@ -77,6 +78,7 @@ describe("Basics extension", () => {
                 version: 0,
                 frozen: false,
                 checksum: "abc",
+                type: "normal",
                 title: "My claim",
                 body: "Full description",
             }

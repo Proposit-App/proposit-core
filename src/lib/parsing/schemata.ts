@@ -8,13 +8,19 @@ export const ParsedClaimRoleType = Type.Union([
     Type.Literal("intermediate"),
 ])
 
+export const ParsedClaimTypeType = Type.Union([
+    Type.Literal("normal"),
+    Type.Literal("citation"),
+])
+
 export const ParsedClaimSchema = Type.Object(
     {
         miniId: Type.String(),
         role: ParsedClaimRoleType,
-        sourceMiniIds: Type.Array(Type.String(), {
+        type: ParsedClaimTypeType,
+        citationMiniIds: Type.Array(Type.String(), {
             description:
-                "MiniIds of external sources (citations/references from the sources array, e.g. s1, s2). Must NOT contain claim miniIds — logical dependencies between claims are expressed through premises and formulas, not here.",
+                'MiniIds of other parsed claims (within the same `claims` array) that have `type: "citation"` and serve as cited evidence for this claim. Must NOT contain miniIds of normal claims — logical dependencies between normal claims are expressed through premises and formulas, not here.',
         }),
     },
     { additionalProperties: true }
@@ -31,21 +37,6 @@ export const ParsedVariableSchema = Type.Object(
 )
 export type TParsedVariable = Static<typeof ParsedVariableSchema>
 
-export const ParsedSourceSchema = Type.Object(
-    {
-        miniId: Type.String(),
-        url: Type.String({ description: "URL of the source" }),
-        text: Type.Optional(
-            Type.String({
-                description:
-                    "Display text or description for the source (e.g. link text from markdown)",
-            })
-        ),
-    },
-    { additionalProperties: true }
-)
-export type TParsedSource = Static<typeof ParsedSourceSchema>
-
 export const ParsedPremiseSchema = Type.Object(
     {
         miniId: Type.String(),
@@ -59,7 +50,6 @@ export const ParsedArgumentSchema = Type.Object(
     {
         claims: Type.Array(ParsedClaimSchema, { minItems: 1 }),
         variables: Type.Array(ParsedVariableSchema, { minItems: 1 }),
-        sources: Type.Array(ParsedSourceSchema),
         premises: Type.Array(ParsedPremiseSchema, { minItems: 1 }),
         conclusionPremiseMiniId: Type.String(),
     },
@@ -104,13 +94,6 @@ export function buildParsingResponseSchema(
           )
         : ParsedVariableSchema
 
-    const sourceSch = options.sourceSchema
-        ? mergeObjectSchemas(
-              ParsedSourceSchema,
-              options.sourceSchema as TObject
-          )
-        : ParsedSourceSchema
-
     const premiseSch = options.premiseSchema
         ? mergeObjectSchemas(
               ParsedPremiseSchema,
@@ -121,7 +104,6 @@ export function buildParsingResponseSchema(
     const baseArgProps = {
         claims: Type.Array(claimSch, { minItems: 1 }),
         variables: Type.Array(variableSch, { minItems: 1 }),
-        sources: Type.Array(sourceSch),
         premises: Type.Array(premiseSch, { minItems: 1 }),
         conclusionPremiseMiniId: Type.String(),
     }

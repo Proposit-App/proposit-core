@@ -5,14 +5,12 @@ import type { TPromptOptions } from "./types.js"
  * Core property keys for each sub-schema in the parsed argument response.
  * Used to distinguish extension fields from built-in fields.
  */
-const CORE_CLAIM_KEYS = new Set(["miniId", "role", "sourceMiniIds"])
+const CORE_CLAIM_KEYS = new Set(["miniId", "role", "type", "citationMiniIds"])
 const CORE_VARIABLE_KEYS = new Set(["miniId", "symbol", "claimMiniId"])
-const CORE_SOURCE_KEYS = new Set(["miniId", "url", "text"])
 const CORE_PREMISE_KEYS = new Set(["miniId", "formula"])
 const CORE_ARGUMENT_KEYS = new Set([
     "claims",
     "variables",
-    "sources",
     "premises",
     "conclusionPremiseMiniId",
 ])
@@ -90,34 +88,46 @@ Abbreviations are encouraged to keep symbols short. Aim for under 20 characters 
 
 When formulating claims, write in third person, present tense, active voice. Each claim should be a clear, standalone declarative sentence.
 
-## Sources (External Citations)
+## Claim Types
 
-Sources are **external citations or references** that support a claim — books, articles, datasets, URLs, etc. They are NOT other claims. Logical relationships between claims are expressed through variables, formulas, and premises.
+Every claim has a \`type\` field, which is one of:
 
-Each source has:
-- **miniId**: e.g., "s1"
-- **url**: the URL of the external source
-- **text** (optional): display text or description for the source — e.g., link text from a markdown anchor, or a brief description if the URL alone is not self-explanatory
+- **\`"normal"\`**: a claim authored as part of the argument's primary reasoning (the propositions being argued for or from). Most claims are normal.
+- **\`"citation"\`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** \`claims\` array as normal claims; they are NOT a separate array.
 
-When extracting sources from markdown, if a link has anchor text that differs from the URL (e.g., \`[Study on climate change](https://example.com/study)\`), set \`url\` to the href and \`text\` to the anchor text. If the text is identical to the URL or adds no useful information, omit \`text\`.
+A citation claim is just a claim whose propositional content is "the cited material says/shows X". Logical relationships between *normal* claims are expressed through variables, formulas, and premises; citation evidence is expressed through the \`citationMiniIds\` link described below.
 
-A claim's \`sourceMiniIds\` array links that claim to its supporting **sources** (external citations). It must contain only source miniIds (e.g., \`["s1", "s2"]\`). **Never put claim miniIds (c1, c2, …) in sourceMiniIds** — that is a common mistake. If claim A depends on claim B, express that dependency through a premise formula, not through sourceMiniIds.
+## Citation Links
+
+A claim's \`citationMiniIds\` array links that claim to other claims (within the same \`claims\` array) that have \`type: "citation"\` and serve as cited evidence supporting it. It must contain only miniIds of claims with \`type: "citation"\` (e.g., \`["s1", "s2"]\`).
+
+**Never put miniIds of normal-typed claims in \`citationMiniIds\`** — that is a common mistake. If claim A logically depends on claim B (where B is itself a normal claim being argued), express that dependency through a premise formula, not through \`citationMiniIds\`.
+
+If the input text has no citations, leave every claim's \`citationMiniIds\` as an empty array \`[]\`. You only emit citation-typed claims when the input text actually references external evidence.
+
+## Citation Claim Metadata
+
+Citation claims may carry additional fields (e.g., \`url\`, \`citation\`) defined by the consuming application's schema extension. When such fields are present in your assigned output schema, populate them from the source material:
+
+- Markdown links \`[text](url)\` → set the \`url\` field to the linked URL; the visible \`text\` typically informs the claim's natural-language content.
+- Footnote markers, anchor references, or bracketed reference numbers → preserve the linked URL or reference target in whichever field the schema provides for it.
+- Free-form citations (e.g., "as reported in The New York Times, January 5") → encode the citation text in the available \`citation\` (or equivalent) field.
+
+Only populate fields that actually appear in your assigned output schema. Do not invent fields, and do not fabricate URLs or citation text that the source material does not contain.
 
 ## MiniId Conventions
 
 Each entity type uses a distinct prefix for its miniId to avoid cross-reference confusion:
 
-- Claims: \`c1\`, \`c2\`, \`c3\`, ...
-- Sources: \`s1\`, \`s2\`, \`s3\`, ...
+- Normal claims: \`c1\`, \`c2\`, \`c3\`, ...
+- Citation claims: \`s1\`, \`s2\`, \`s3\`, ... (the \`s\` prefix is a UX convention to mark the cited-evidence role; semantically these are claims in the same \`claims\` array, distinguished only by their \`type: "citation"\` field)
 - Variables: \`v1\`, \`v2\`, \`v3\`, ...
 - Premises: \`p1\`, \`p2\`, \`p3\`, ...
 
 Always use the correct prefix when referencing entities. Cross-type references are strict:
-- \`sourceMiniIds\` on a claim → only \`s\`-prefixed miniIds (sources)
-- \`claimMiniId\` on a variable → only \`c\`-prefixed miniIds (claims)
+- \`citationMiniIds\` on a claim → only miniIds of claims with \`type: "citation"\` (typically \`s\`-prefixed by convention)
+- \`claimMiniId\` on a variable → any claim in the \`claims\` array (typically \`c\`-prefixed; \`s\`-prefixed citation claims may also be referenced when their propositional content is part of the reasoning)
 - \`conclusionPremiseMiniId\` → only \`p\`-prefixed miniIds (premises)
-
-If the input text has no external citations, leave \`sourceMiniIds\` as an empty array \`[]\` and the \`sources\` array empty.
 
 ## Self-Check
 
@@ -126,7 +136,8 @@ Before finalizing your response, verify:
 2. Every variable's \`claimMiniId\` references an existing claim in the \`claims\` array
 3. The \`conclusionPremiseMiniId\` references an existing premise in the \`premises\` array
 4. No \`implies\` or \`iff\` operator is nested inside another operator in any formula
-5. \`sourceMiniIds\` on claims contain only \`s\`-prefixed miniIds, never \`c\`-prefixed`
+5. \`citationMiniIds\` on each claim contains only miniIds of claims whose \`type\` is \`"citation"\`, never miniIds of \`"normal"\`-typed claims
+6. Every claim has a \`type\` field set to either \`"normal"\` or \`"citation"\``
 
 type TSchemaLike = {
     properties?: Record<string, TSchemaLike>
@@ -202,7 +213,8 @@ function discoverExtensionFields(responseSchema: TSchema): TExtensionField[] {
         ...findExtensions(argumentSchema, CORE_ARGUMENT_KEYS, "argument")
     )
 
-    // Claims: argument.claims is Array(ClaimSchema)
+    // Claims (unified — covers both normal and citation typed claims):
+    // argument.claims is Array(ClaimSchema)
     const claimsArray = argumentSchema.properties?.claims
     if (claimsArray?.items) {
         extensions.push(
@@ -219,14 +231,6 @@ function discoverExtensionFields(responseSchema: TSchema): TExtensionField[] {
                 CORE_VARIABLE_KEYS,
                 "variable"
             )
-        )
-    }
-
-    // Sources: argument.sources is Array(SourceSchema)
-    const sourcesArray = argumentSchema.properties?.sources
-    if (sourcesArray?.items) {
-        extensions.push(
-            ...findExtensions(sourcesArray.items, CORE_SOURCE_KEYS, "source")
         )
     }
 

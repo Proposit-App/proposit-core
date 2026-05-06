@@ -3,13 +3,11 @@ import {
     ArgumentEngine,
     PremiseEngine,
     ClaimLibrary,
-    SourceLibrary,
     mergeChangesets,
     orderChangeset,
     createLookup,
     EMPTY_CLAIM_LOOKUP,
-    EMPTY_SOURCE_LOOKUP,
-    EMPTY_CLAIM_SOURCE_LOOKUP,
+    EMPTY_CLAIM_CITATION_LOOKUP,
     forkArgumentEngine,
     ForkNamespace,
     ForkLibrary,
@@ -26,20 +24,19 @@ import type {
     TCoreEntityForkRecord,
     TCoreExpressionForkRecord,
     TCoreClaimForkRecord,
-    TCoreSourceForkRecord,
 } from "../src/lib/index"
-import { ClaimSourceLibrary } from "../src/lib/core/claim-source-library"
+import { ClaimCitationLibrary } from "../src/lib/core/claim-citation-library"
 import type { TReactiveSnapshot } from "../src/lib/index"
 import { Value } from "typebox/value"
 import {
     CoreArgumentSchema,
+    CoreClaimSchema,
     CorePropositionalVariableSchema,
     CorePropositionalExpressionSchema,
     CorePremiseSchema,
     CoreEntityForkRecordSchema,
     CoreExpressionForkRecordSchema,
     CoreClaimForkRecordSchema,
-    CoreSourceForkRecordSchema,
     isClaimBound,
     isPremiseBound,
     isExternallyBound,
@@ -134,14 +131,12 @@ import {
     ARG_CLAIM_REF_NOT_FOUND,
     CLAIM_SCHEMA_INVALID,
     CLAIM_FROZEN_NO_SUCCESSOR,
-    SOURCE_SCHEMA_INVALID,
-    ASSOC_CLAIM_REF_NOT_FOUND,
-    ASSOC_SOURCE_REF_NOT_FOUND,
+    CITATION_CITING_REF_NOT_FOUND,
+    CITATION_SOURCE_REF_NOT_FOUND,
 } from "../src/lib/types/validation"
 import {
     ParsedClaimSchema,
     ParsedVariableSchema,
-    ParsedSourceSchema,
     ParsedPremiseSchema,
     ParsedArgumentResponseSchema,
     buildParsingResponseSchema,
@@ -150,7 +145,6 @@ import {
 import type {
     TParsedClaim,
     TParsedVariable,
-    TParsedSource,
     TParsedPremise,
     TParsedArgumentResponse,
 } from "../src/lib/parsing/schemata"
@@ -172,16 +166,12 @@ const ARG: TOptionalChecksum<TCoreArgument> = {
 
 function aLib() {
     const lib = new ClaimLibrary()
-    lib.create({ id: "claim-default" })
+    lib.create({ id: "claim-default", type: "normal" })
     return lib
 }
 
-function sLib() {
-    return new SourceLibrary()
-}
-
-function csLib() {
-    return new ClaimSourceLibrary(aLib(), sLib())
+function csLib(claimLib: ClaimLibrary = aLib()) {
+    return new ClaimCitationLibrary(claimLib)
 }
 
 function makeVar(
@@ -271,7 +261,7 @@ const VAR_R = makeVar("var-r", "R")
 
 /** Create a premise (via ArgumentEngine) with P, Q, R pre-loaded. */
 function premiseWithVars(): PremiseEngine {
-    const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+    const eng = new ArgumentEngine(ARG, aLib(), csLib())
     eng.addVariable(VAR_P)
     eng.addVariable(VAR_Q)
     eng.addVariable(VAR_R)
@@ -281,7 +271,7 @@ function premiseWithVars(): PremiseEngine {
 
 /** Like premiseWithVars but with autoNormalize off — for tests that expect throws. */
 function premiseWithVarsStrict(): PremiseEngine {
-    const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+    const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
         grammarConfig: {
             enforceFormulaBetweenOperators: true,
             autoNormalize: false,
@@ -303,7 +293,7 @@ function premiseWithVarsGranular(config: {
     repositionOnCollision?: boolean
     absorbSameOperator?: boolean
 }): PremiseEngine {
-    const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+    const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
         grammarConfig: {
             enforceFormulaBetweenOperators: true,
             autoNormalize: {
@@ -1023,7 +1013,7 @@ describe("removeExpression — operator collapse", () => {
 
 describe("removeVariable", () => {
     it("succeeds when no expression references the variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -1033,7 +1023,7 @@ describe("removeVariable", () => {
     })
 
     it("cascade-deletes expressions when a referenced variable is removed", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -1048,7 +1038,7 @@ describe("removeVariable", () => {
     })
 
     it("succeeds after the referencing expression is manually removed", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -1150,7 +1140,7 @@ describe("stress test", () => {
         const pick = (n: number) => Math.floor(rand() * n)
         const bool = (p = 0.5) => rand() < p
 
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
 
         const variables = Array.from({ length: numVars }, (_, i) =>
             makeVar(`var-${i}`, `X${i}`)
@@ -1585,7 +1575,7 @@ describe("formula", () => {
 
 describe("ArgumentEngine premise CRUD", () => {
     it("createPremise returns a PremiseEngine with a generated ID", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise({ title: "test" })
         expect(pm.toPremiseData().id).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -1596,18 +1586,18 @@ describe("ArgumentEngine premise CRUD", () => {
     })
 
     it("getPremise(id) returns the same instance", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         expect(eng.getPremise(pm.toPremiseData().id)).toBe(pm)
     })
 
     it("getPremise returns undefined for unknown IDs", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         expect(eng.getPremise("unknown")).toBeUndefined()
     })
 
     it("removePremise causes getPremise to return undefined", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         const { id } = pm.toPremiseData()
         eng.removePremise(id)
@@ -1615,7 +1605,7 @@ describe("ArgumentEngine premise CRUD", () => {
     })
 
     it("multiple premises coexist independently", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm1 } = eng.createPremise({ title: "first" })
@@ -1635,7 +1625,7 @@ describe("ArgumentEngine premise CRUD", () => {
 
 describe("ArgumentEngine — addVariable / removeVariable", () => {
     it("registers a variable and allows it to be referenced in a premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
@@ -1643,7 +1633,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("throws when adding a duplicate variable symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         expect(() => eng.addVariable(makeVar("var-p2", "P"))).toThrowError(
             /already exists/
@@ -1651,7 +1641,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("removes an unreferenced variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         expect(eng.removeVariable(VAR_P.id).result).toMatchObject({
             id: VAR_P.id,
@@ -1659,7 +1649,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("cascade-deletes expressions when removing a referenced variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -1674,7 +1664,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("throws when adding an expression that references an unregistered variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         expect(() =>
             pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
@@ -1682,7 +1672,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("throws when the variable does not belong to this argument", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const foreignVar = {
             ...makeVar("var-f", "F"),
             argumentId: "other-arg",
@@ -2028,7 +2018,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     }
 
     it("supports role APIs and removes roles when a premise is deleted", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "support" })
@@ -2053,7 +2043,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("prevents duplicate variable symbols at the engine level", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
 
         const varA = makeVar("var-a", "X")
         const varB = makeVar("var-b", "X")
@@ -2064,7 +2054,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("evaluates an assignment and identifies inadmissible non-counterexamples", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -2089,7 +2079,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("finds a counterexample for an invalid argument", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -2113,7 +2103,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("proves modus ponens form valid", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support1 } = eng.createPremise({ title: "P->Q" })
@@ -2240,7 +2230,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
     }
 
     it("affirming the consequent shows multiple evaluation outcomes and a single counterexample", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         addVars(eng, VAR_P, VAR_Q)
         const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
         const { result: qPremise } = eng.createPremise({ title: "Q" })
@@ -2316,7 +2306,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
     })
 
     it("a constrained transitive argument mixes admissible/inadmissible assignments and remains valid", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
         const { result: qImpliesR } = eng.createPremise({ title: "Q -> R" })
         const { result: pPremise } = eng.createPremise({ title: "P" })
@@ -2384,7 +2374,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
     })
 
     it("distinguishes valid+sound from valid+unsound using a designated actual assignment", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
         const { result: pPremise } = eng.createPremise({ title: "P" })
         const { result: qConclusion } = eng.createPremise({ title: "Q" })
@@ -2578,7 +2568,7 @@ describe("diffArguments", () => {
         engine: ArgumentEngine
         premiseId: string
     } {
-        const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(arg, aLib(), csLib())
         const varP = makeVar("var-p", "P")
         const varQ = makeVar("var-q", "Q")
         engine.addVariable(varP)
@@ -2652,7 +2642,7 @@ describe("diffArguments", () => {
         it("detects modified variable (symbol change)", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const argB = { ...ARG }
-            const engineB = new ArgumentEngine(argB, aLib(), sLib(), csLib())
+            const engineB = new ArgumentEngine(argB, aLib(), csLib())
             // Same variable ID, different symbol
             engineB.addVariable(makeVar("var-p", "X"))
             engineB.addVariable(makeVar("var-q", "Q"))
@@ -2708,7 +2698,7 @@ describe("diffArguments", () => {
 
         it("detects removed premise", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
-            const engineB = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const engineB = new ArgumentEngine(ARG, aLib(), csLib())
 
             const diff = diffArguments(engineA, engineB)
             expect(diff.premises.removed).toHaveLength(1)
@@ -2717,7 +2707,7 @@ describe("diffArguments", () => {
 
         it("detects modified premise via expression-level changes", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
-            const engineB = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const engineB = new ArgumentEngine(ARG, aLib(), csLib())
             engineB.addVariable(makeVar("var-p", "P"))
             engineB.addVariable(makeVar("var-q", "Q"))
             const { result: pm } = engineB.createPremiseWithId("premise-1", {
@@ -2763,7 +2753,7 @@ describe("diffArguments", () => {
 
         it("detects modified expressions within a premise", () => {
             // Build engineA with an 'and' root so removing one child doesn't collapse
-            const engineA = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const engineA = new ArgumentEngine(ARG, aLib(), csLib())
             engineA.addVariable(makeVar("var-p", "P"))
             engineA.addVariable(makeVar("var-q", "Q"))
             const { result: pmA } = engineA.createPremiseWithId("premise-1", {
@@ -2797,7 +2787,7 @@ describe("diffArguments", () => {
             )
 
             // Build engineB identically, then swap expr-r for expr-s
-            const engineB = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const engineB = new ArgumentEngine(ARG, aLib(), csLib())
             engineB.addVariable(makeVar("var-p", "P"))
             engineB.addVariable(makeVar("var-q", "Q"))
             engineB.addVariable(makeVar("var-r", "R"))
@@ -3149,7 +3139,7 @@ describe("Kleene three-valued logic helpers", () => {
 
 describe("PremiseEngine — three-valued evaluation", () => {
     it("evaluates unset variables as null", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         // Single variable expression as root
@@ -3165,7 +3155,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("missing variables default to null", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("e-p", "var-p"))
@@ -3180,7 +3170,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("propagates null through AND (Kleene)", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3209,7 +3199,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("propagates null through OR (Kleene)", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3237,7 +3227,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("propagates null through implies (Kleene)", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3272,7 +3262,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected operator evaluates to false and skips children", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3296,7 +3286,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected formula evaluates to false", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         // (P) as root formula wrapping variable
@@ -3315,7 +3305,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected nested operator forces false while parent computes normally", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -3361,7 +3351,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected inference root evaluates to false with no inference diagnostic", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3394,7 +3384,7 @@ describe("ArgumentEngine — three-valued evaluation", () => {
 
     function buildSimpleArgument() {
         // A implies B (conclusion), C implies A (supporting), D (constraint)
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(VAR_A)
         engine.addVariable(VAR_B)
         engine.addVariable(VAR_C)
@@ -3561,7 +3551,6 @@ describe("field preservation — unknown fields survive round-trips", () => {
         const engine = new ArgumentEngine(
             ARG_WITH_EXTRAS as TOptionalChecksum<TCoreArgument>,
             aLib(),
-            sLib(),
             csLib()
         )
         const result = engine.getArgument()
@@ -3573,7 +3562,6 @@ describe("field preservation — unknown fields survive round-trips", () => {
         const engine = new ArgumentEngine(
             ARG_WITH_EXTRAS as TOptionalChecksum<TCoreArgument>,
             aLib(),
-            sLib(),
             csLib()
         )
         const snap = engine.snapshot()
@@ -3587,7 +3575,6 @@ describe("field preservation — unknown fields survive round-trips", () => {
         const engine = new ArgumentEngine(
             { id: "arg-1", version: 1 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = engine.createPremise({
@@ -3603,7 +3590,6 @@ describe("field preservation — unknown fields survive round-trips", () => {
         const engine = new ArgumentEngine(
             { id: "arg-1", version: 1 },
             aLib(),
-            sLib(),
             csLib()
         )
         engine.createPremise({ title: "Premise One" })
@@ -3617,7 +3603,6 @@ describe("field preservation — unknown fields survive round-trips", () => {
         const engine = new ArgumentEngine(
             { id: "arg-1", version: 1 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = engine.createPremise({ a: "1", b: "2" })
@@ -3630,7 +3615,6 @@ describe("field preservation — unknown fields survive round-trips", () => {
         const engine = new ArgumentEngine(
             { id: "arg-1", version: 1 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = engine.createPremise({
@@ -3656,7 +3640,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles an implies premise with simple antecedent and consequent", () => {
         // A → B
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
@@ -3689,7 +3673,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles negation as negative polarity", () => {
         // F → ¬A
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_F)
         eng.addVariable(VAR_A)
         const { result: pm } = eng.createPremise()
@@ -3723,7 +3707,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles double negation as positive polarity", () => {
         // ¬(¬A ∧ B) → C — with formula buffer between not and and
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         eng.addVariable(VAR_C)
@@ -3782,7 +3766,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles compound antecedent and consequent", () => {
         // (A ∧ B) → (B ∧ C) — with formula buffers between implies and and
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         eng.addVariable(VAR_C)
@@ -3843,7 +3827,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles iff as left=antecedent, right=consequent", () => {
         // A ↔ B
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
@@ -3875,7 +3859,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles a constraint premise as non-inference with no appearances", () => {
         // A ∧ B (constraint)
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
@@ -3893,7 +3877,7 @@ describe("buildPremiseProfile", () => {
     })
 
     it("profiles an empty premise as non-inference with no appearances", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
 
         const profile = buildPremiseProfile(pm)
@@ -3946,7 +3930,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise whose consequent feeds the focused antecedent as supporting", () => {
         // P1: A → B, P2 (focused): B → C
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
 
@@ -3963,7 +3947,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise with negated consequent as contradicting", () => {
         // P1: A → ¬B, P2 (focused): B → C
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4008,7 +3992,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise with variable in both ante and conseq as restricting", () => {
         // P1: B → (B ∧ C), P2 (focused): B → D — with formula buffer
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_B)
         } catch {
@@ -4065,7 +4049,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a constraint premise sharing variables as restricting", () => {
         // P1: A ∧ B (constraint), P2 (focused): B → C
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4099,7 +4083,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise taking the focused consequent as downstream", () => {
         // P1 (focused): A → B, P2: B → C
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
 
@@ -4111,7 +4095,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise with no shared variables as unrelated", () => {
         // P1: A → B, P2 (focused): C → D
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_C, VAR_D)
 
@@ -4122,7 +4106,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     })
 
     it("excludes the focused premise from results", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
 
@@ -4133,12 +4117,12 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     })
 
     it("throws when focused premise does not exist", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         expect(() => analyzePremiseRelationships(eng, "nonexistent")).toThrow()
     })
 
     it("returns empty premises array when argument has only the focused premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
 
         const result = analyzePremiseRelationships(eng, "p1")
@@ -4191,7 +4175,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
 
     it("classifies transitive support through a chain", () => {
         // P1: A → B, P2: B → C, P3 (focused): C → D
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
         buildImplies(eng, "p3", VAR_C, VAR_D)
@@ -4208,7 +4192,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
 
     it("unrelated premise remains unrelated even when other premises form a chain", () => {
         // P1: E → F (unrelated), P2: B → C, P3 (focused): C → D
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_E, VAR_F)
         buildImplies(eng, "p2", VAR_B, VAR_C)
         buildImplies(eng, "p3", VAR_C, VAR_D)
@@ -4220,7 +4204,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
 
     it("classifies transitive downstream", () => {
         // P1 (focused): A → B, P2: B → C, P3: C → D
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
         buildImplies(eng, "p3", VAR_C, VAR_D)
@@ -4234,7 +4218,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
     it("propagates contradicting polarity through a chain", () => {
         // P1: A → ¬B, P2: B → C, P3 (focused): C → D
         // P1 contradicts P2's antecedent, so P1 is transitively contradicting P3
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4277,7 +4261,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
     it("double negation through chain cancels to supporting", () => {
         // P1: A → ¬B, P2: ¬B → C, P3 (focused): C → D
         // P1's conseq is B(negative), P2's ante is B(negative) → polarity match → supporting
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4346,7 +4330,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
     it("constraint premise connected transitively is restricting", () => {
         // P1: A ∧ B (constraint), P2: B → C, P3 (focused): C → D
         // P1 shares B with P2 which supports P3 → P1 restricts P3 transitively
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4426,7 +4410,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // P1: A → (¬B ∧ C), P2 (focused): (B ∧ C) → D
         // B: contradicting (¬B in conseq, B in ante), C: supporting (C in conseq, C in ante)
         // Precedence: contradicting wins — with formula buffers
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4529,7 +4513,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // B: restricting (in both ante and conseq of P1, in ante of P2)
         // C: supporting (in conseq of P1, in ante of P2)
         // Precedence: restricting wins — with formula buffers
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         try {
             eng.addVariable(VAR_B)
         } catch {
@@ -4618,7 +4602,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
 
     it("handles constraint-focused premise by classifying all sharers as restricting", () => {
         // P1: A → B, P2 (focused): A ∧ B (constraint)
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addExpression(makeOpExpr("p2-and", "and"))
@@ -4641,7 +4625,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
     })
 
     it("handles empty premise as unrelated", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.createPremiseWithId("p1") // empty
         buildImplies(eng, "p2", VAR_A, VAR_B)
 
@@ -4652,7 +4636,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
 
     it("handles graph cycles without hanging", () => {
         // P1: A → B, P2: B → A, P3 (focused): A → C
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_A)
         buildImplies(eng, "p3", VAR_A, VAR_C)
@@ -4980,7 +4964,6 @@ describe("PremiseEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const v1 = {
@@ -5225,7 +5208,6 @@ describe("PremiseEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const v = {
@@ -5247,7 +5229,6 @@ describe("PremiseEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const v = {
@@ -5269,7 +5250,6 @@ describe("PremiseEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result, changes } = eng.removeVariable("nonexistent")
@@ -5281,7 +5261,6 @@ describe("PremiseEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -5300,7 +5279,6 @@ describe("ArgumentEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm, changes } = eng.createPremise()
@@ -5313,7 +5291,6 @@ describe("ArgumentEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm, changes } = eng.createPremiseWithId("my-premise")
@@ -5326,7 +5303,6 @@ describe("ArgumentEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.createPremise()
@@ -5341,7 +5317,6 @@ describe("ArgumentEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -5355,7 +5330,6 @@ describe("ArgumentEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result, changes } = eng.removePremise("nope")
@@ -5367,7 +5341,6 @@ describe("ArgumentEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -5380,7 +5353,6 @@ describe("ArgumentEngine — mutation changesets", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -5485,7 +5457,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib()
             )
             const { result: pm } = eng.createPremise()
@@ -5498,7 +5469,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib()
             )
             const v = {
@@ -5530,7 +5500,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib()
             )
             const { result: pm } = eng.createPremise()
@@ -5551,7 +5520,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib()
             )
             const v1 = {
@@ -5575,7 +5543,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib()
             )
             expect(eng.checksum()).toBe(eng.checksum())
@@ -5585,7 +5552,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib()
             )
             const before = eng.checksum()
@@ -5598,7 +5564,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib()
             )
             // First premise is auto-set as conclusion
@@ -5615,7 +5580,6 @@ describe("checksum utilities", () => {
             const eng = new ArgumentEngine(
                 { id: "arg1", version: 0 },
                 aLib(),
-                sLib(),
                 csLib(),
                 { checksumConfig: { argumentFields: new Set(["id"]) } }
             )
@@ -5634,7 +5598,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const v = {
@@ -5689,7 +5652,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.addVariable({
@@ -5775,7 +5737,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.addVariable({
@@ -5814,7 +5775,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { changes } = eng.addVariable({
@@ -5833,7 +5793,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.addVariable({
@@ -5853,7 +5812,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.addVariable({
@@ -5882,7 +5840,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result } = eng.addVariable({
@@ -5900,7 +5857,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.createPremise()
@@ -5913,7 +5869,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.createPremise()
@@ -5935,7 +5890,6 @@ describe("entity checksum fields", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.addVariable({
@@ -6044,7 +5998,7 @@ describe("createChecksumConfig", () => {
 
 describe("ArgumentEngine — variable management", () => {
     it("addVariable registers a variable accessible from all premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm1 } = eng.createPremise()
         const { result: pm2 } = eng.createPremise()
@@ -6062,7 +6016,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable throws for duplicate symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         expect(() =>
             eng.addVariable({
@@ -6077,13 +6031,13 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable throws for duplicate id", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         expect(() => eng.addVariable(VAR_P)).toThrow(/already exists/)
     })
 
     it("addVariable throws for wrong argumentId", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         expect(() =>
             eng.addVariable({
                 id: "var-x",
@@ -6097,7 +6051,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable throws for wrong argumentVersion", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         expect(() =>
             eng.addVariable({
                 id: "var-x",
@@ -6111,7 +6065,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable returns mutation result with changeset", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result, changes } = eng.addVariable(VAR_P)
         expect(result.id).toBe(VAR_P.id)
         expect(result.checksum).toBeDefined()
@@ -6119,7 +6073,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("updateVariable renames a symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result } = eng.updateVariable(VAR_P.id, { symbol: "P_new" })
         expect(result?.symbol).toBe("P_new")
@@ -6130,13 +6084,13 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("updateVariable returns undefined for non-existent variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result } = eng.updateVariable("nope", { symbol: "X" })
         expect(result).toBeUndefined()
     })
 
     it("updateVariable throws for conflicting symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         expect(() => eng.updateVariable(VAR_P.id, { symbol: "Q" })).toThrow(
@@ -6145,7 +6099,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("updateVariable returns changeset with modified variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { changes } = eng.updateVariable(VAR_P.id, { symbol: "X" })
         expect(changes.variables?.modified).toHaveLength(1)
@@ -6153,7 +6107,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("getVariables returns all variables with checksums", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const vars = eng.getVariables()
@@ -6163,7 +6117,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable with no references removes cleanly", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result, changes } = eng.removeVariable(VAR_P.id)
         expect(result?.id).toBe(VAR_P.id)
@@ -6172,14 +6126,14 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable returns undefined for non-existent variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result, changes } = eng.removeVariable("nonexistent")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
 
     it("removeVariable cascade-deletes referencing expressions in one premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -6203,7 +6157,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable cascade-deletes across multiple premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm1 } = eng.createPremise()
         const { result: pm2 } = eng.createPremise()
@@ -6222,7 +6176,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable triggers operator collapse", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -6246,7 +6200,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable deletes subtrees when removing from implies", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -6277,7 +6231,7 @@ describe("ArgumentEngine — variable management", () => {
 
 describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
     it("returns empty result when variable has no expressions", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -6287,7 +6241,7 @@ describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
     })
 
     it("deletes a single variable expression", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -6302,7 +6256,7 @@ describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
     })
 
     it("deletes multiple expressions referencing the same variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -6327,7 +6281,7 @@ describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
     })
 
     it("handles already-removed expressions from subtree cascade", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -6409,7 +6363,6 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm, changes } = eng.createPremise()
@@ -6421,7 +6374,6 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { changes } = eng.createPremiseWithId("my-premise")
@@ -6433,7 +6385,6 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: first } = eng.createPremise()
@@ -6446,7 +6397,6 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.createPremise()
@@ -6460,7 +6410,6 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: first } = eng.createPremise()
@@ -6474,7 +6423,6 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.createPremise()
@@ -6490,7 +6438,7 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
 
 describe("PremiseEngine — updateExpression", () => {
     function setup() {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -6880,7 +6828,6 @@ describe("removeExpression — deleteSubtree parameter", () => {
         const eng = new ArgumentEngine(
             { id: ARG.id, version: ARG.version },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.addVariable(VAR_P)
@@ -7259,7 +7206,7 @@ describe("ArgumentEngine — generic type parameters", () => {
             version: 0,
             projectId: "proj-1",
         }
-        const engine = new ArgumentEngine<TExtArg>(arg, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine<TExtArg>(arg, aLib(), csLib())
         const retrieved = engine.getArgument()
         expect(retrieved.projectId).toBe("proj-1")
         expect(typeof retrieved.checksum).toBe("string")
@@ -7272,7 +7219,7 @@ describe("ArgumentEngine — generic type parameters", () => {
             TCorePremise,
             TCorePropositionalExpression,
             TExtVar
-        >({ id: "a1", version: 0 }, aLib(), sLib(), csLib())
+        >({ id: "a1", version: 0 }, aLib(), csLib())
         const { result } = engine.addVariable({
             id: "v1",
             argumentId: "a1",
@@ -7300,18 +7247,8 @@ describe("diffArguments — generic type parameters", () => {
             version: 1,
             projectId: "proj-1",
         }
-        const engineA = new ArgumentEngine<TExtArg>(
-            argA,
-            aLib(),
-            sLib(),
-            csLib()
-        )
-        const engineB = new ArgumentEngine<TExtArg>(
-            argB,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const engineA = new ArgumentEngine<TExtArg>(argA, aLib(), csLib())
+        const engineB = new ArgumentEngine<TExtArg>(argB, aLib(), csLib())
 
         const diff = diffArguments(engineA, engineB)
         expect(diff.argument.before.projectId).toBe("proj-1")
@@ -7472,7 +7409,7 @@ describe("configurable position range", () => {
 
     it("ArgumentEngine passes positionConfig to premises", () => {
         const config: TCorePositionConfig = { min: 100, max: 300, initial: 200 }
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
             positionConfig: config,
         })
         eng.addVariable(VAR_P)
@@ -7515,7 +7452,7 @@ describe("configurable position range", () => {
     })
 
     it("ArgumentEngine defaults work without positionConfig", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -7742,12 +7679,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("round-trips a premise with expressions", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7806,12 +7738,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restored premise is independent from original", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7872,12 +7799,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restores rootExpressionId correctly", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7917,12 +7839,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("rebuilds expressionsByVariableId index on restore", () => {
-        const eng = new ArgumentEngine(
-            ARG as TCoreArgument,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -8023,14 +7940,9 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     }
 
     it("round-trips an empty engine", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
         expect(restored.getArgument().id).toBe("arg-1")
         expect(restored.listPremiseIds()).toEqual([])
         expect(restored.getVariables()).toEqual([])
@@ -8038,7 +7950,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("round-trips engine with premises and variables", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         engine.addVariable(makeVariable("v2", "Q"))
         const { result: pm } = engine.createPremiseWithId("p1")
@@ -8054,12 +7966,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         })
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         expect(restored.listPremiseIds()).toEqual(["p1"])
         expect(restored.getVariables()).toHaveLength(3) // 2 claim-bound + 1 auto premise-bound
@@ -8069,18 +7976,13 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("preserves conclusion role through round-trip", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
         engine.setConclusionPremise("p2")
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         expect(restored.getRoleState().conclusionPremiseId).toBe("p2")
     })
@@ -8090,24 +7992,19 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
             checksumConfig: DEFAULT_CHECKSUM_CONFIG,
             positionConfig: DEFAULT_POSITION_CONFIG,
         }
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), config)
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), config)
         const snap = engine.snapshot()
         expect(snap.config).toBeDefined()
         expect(snap.config!.positionConfig).toEqual(DEFAULT_POSITION_CONFIG)
     })
 
     it("fromSnapshot produces independent copy", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         // Mutate restored, original should be unaffected
         restored.createPremiseWithId("p2")
@@ -8116,7 +8013,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("rollback restores previous state", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
@@ -8140,7 +8037,7 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("rollback after multiple mutations restores correct state", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -8235,7 +8132,6 @@ describe("ArgumentEngine — fromData bulk loading", () => {
         const engine = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -8253,7 +8149,6 @@ describe("ArgumentEngine — fromData bulk loading", () => {
         const engine = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             [],
             [
@@ -8318,7 +8213,6 @@ describe("ArgumentEngine — fromData bulk loading", () => {
         const engine = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -8392,7 +8286,6 @@ describe("ArgumentEngine — fromData bulk loading", () => {
         const engine = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -8415,7 +8308,6 @@ describe("ArgumentEngine — fromData bulk loading", () => {
         const engine = ArgumentEngine.fromData<TMyArg>(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             [],
             [],
@@ -8431,13 +8323,13 @@ describe("ArgumentEngine — toDisplayString", () => {
     const ARG = { id: "arg-1", version: 1 }
 
     it("renders an empty argument", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const display = eng.toDisplayString()
         expect(display).toContain("Argument: arg-1 (v1)")
     })
 
     it("labels conclusion premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -8462,7 +8354,7 @@ describe("ArgumentEngine — toDisplayString", () => {
     })
 
     it("labels constraint and supporting premises correctly", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -8866,7 +8758,7 @@ describe("PremiseEngine — shared expression index", () => {
 describe("ArgumentEngine — lookup methods", () => {
     function setupEngine() {
         const arg = { id: "arg-1", version: 0 }
-        const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(arg, aLib(), csLib())
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -9093,12 +8985,7 @@ describe("ArgumentEngine — lookup methods", () => {
         it("survives snapshot round-trip", () => {
             const { engine } = setupEngine()
             const snap = engine.snapshot()
-            const restored = ArgumentEngine.fromSnapshot(
-                snap,
-                aLib(),
-                sLib(),
-                csLib()
-            )
+            const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
             expect(restored.getExpression("e1")?.id).toBe("e1")
             expect(restored.getExpressionPremiseId("e3")).toBe("p2")
         })
@@ -9114,7 +9001,6 @@ describe("ArgumentEngine — lookup methods", () => {
             const restored = ArgumentEngine.fromData(
                 engine.getArgument(),
                 aLib(),
-                sLib(),
                 csLib(),
                 vars,
                 premises,
@@ -9155,7 +9041,7 @@ describe("ArgumentEngine — lookup methods", () => {
 
 describe("PremiseEngine onMutate callback", () => {
     it("fires onMutate when addExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
@@ -9169,7 +9055,7 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when removeExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         premise.addExpression(
@@ -9184,7 +9070,7 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when updateExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         premise.addExpression(
@@ -9199,7 +9085,7 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when appendExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
@@ -9218,7 +9104,7 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when insertExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(VAR_P)
         engine.addVariable(VAR_Q)
         const { result: premise } = engine.createPremise()
@@ -9254,7 +9140,7 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("does not fire onMutate when deleteExpressionsUsingVariable finds nothing", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
@@ -9268,7 +9154,7 @@ describe("PremiseEngine onMutate callback", () => {
 
 describe("ArgumentEngine subscribe", () => {
     it("notifies subscriber when a premise is created", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -9278,7 +9164,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a premise is removed", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: premise } = engine.createPremise()
         let notified = false
         engine.subscribe(() => {
@@ -9289,7 +9175,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a variable is added", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -9306,7 +9192,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a variable is updated", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable({
             id: "v1",
             argumentId: ARG.id,
@@ -9324,7 +9210,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a variable is removed", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable({
             id: "v1",
             argumentId: ARG.id,
@@ -9342,7 +9228,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when conclusion is set", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: premise } = engine.createPremise()
         engine.clearConclusionPremise()
         let notified = false
@@ -9354,7 +9240,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when conclusion is cleared", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.createPremise()
         let notified = false
         engine.subscribe(() => {
@@ -9365,7 +9251,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber on rollback", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const snap = engine.snapshot()
         engine.createPremise()
         let notified = false
@@ -9377,7 +9263,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("unsubscribe stops notifications", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         let count = 0
         const unsub = engine.subscribe(() => {
             count++
@@ -9390,7 +9276,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when expression is mutated through PremiseEngine", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: premise } = engine.createPremise()
         let count = 0
         engine.subscribe(() => {
@@ -9412,7 +9298,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("does not notify when removePremise finds nothing", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -9422,7 +9308,7 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("does not notify when removeVariable finds nothing", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -9434,7 +9320,7 @@ describe("ArgumentEngine subscribe", () => {
 
 describe("ArgumentEngine getSnapshot", () => {
     it("returns a snapshot with argument, variables, premises, and roles", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable({
             id: "v1",
             argumentId: ARG.id,
@@ -9469,7 +9355,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns the same reference when nothing has changed", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.createPremise()
         const snap1 = engine.getSnapshot()
         const snap2 = engine.getSnapshot()
@@ -9477,7 +9363,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns a new top-level reference after a mutation", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const snap1 = engine.getSnapshot()
         engine.createPremise()
         const snap2 = engine.getSnapshot()
@@ -9485,7 +9371,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("preserves premise reference when a different premise is mutated", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: premiseA } = engine.createPremiseWithId("pA")
         engine.createPremiseWithId("pB")
         const snap1 = engine.getSnapshot()
@@ -9507,7 +9393,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns new variables reference when a variable is added", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const snap1 = engine.getSnapshot()
         engine.addVariable({
             id: "v1",
@@ -9522,7 +9408,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("preserves variables reference when only a premise is mutated", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: premise } = engine.createPremise()
         const snap1 = engine.getSnapshot()
 
@@ -9542,7 +9428,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns new roles reference when conclusion changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: premise } = engine.createPremise()
         engine.clearConclusionPremise()
         const snap1 = engine.getSnapshot()
@@ -9552,7 +9438,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("preserves roles reference when only a variable changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.createPremise()
         const snap1 = engine.getSnapshot()
         engine.addVariable({
@@ -9568,7 +9454,7 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("rebuilds fully after rollback", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.createPremise()
         const engineSnap = engine.snapshot()
         const reactiveSnap1 = engine.getSnapshot()
@@ -9584,7 +9470,7 @@ describe("ArgumentEngine getSnapshot", () => {
 
 describe("ArgumentEngine reactive store integration", () => {
     it("works as a useSyncExternalStore-compatible store", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
 
         // Simulate useSyncExternalStore contract:
         // 1. subscribe returns unsubscribe
@@ -10320,242 +10206,241 @@ describe("toggleNegation", () => {
 })
 
 // ---------------------------------------------------------------------------
-// ClaimSourceLibrary
+// ClaimCitationLibrary
 // ---------------------------------------------------------------------------
-describe("ClaimSourceLibrary", () => {
+describe("ClaimCitationLibrary", () => {
     function makeFixtures() {
         const claimLib = new ClaimLibrary()
-        const claim1 = claimLib.create({ id: "claim-1" })
-        const claim2 = claimLib.create({ id: "claim-2" })
-        const sourceLib = new SourceLibrary()
-        const source1 = sourceLib.create({ id: "source-1" })
-        const source2 = sourceLib.create({ id: "source-2" })
-        const lib = new ClaimSourceLibrary(claimLib, sourceLib)
-        return { claimLib, claim1, claim2, sourceLib, source1, source2, lib }
+        const claim1 = claimLib.create({ id: "claim-1", type: "normal" })
+        const claim2 = claimLib.create({ id: "claim-2", type: "normal" })
+        const source1 = claimLib.create({ id: "source-1", type: "citation" })
+        const source2 = claimLib.create({ id: "source-2", type: "citation" })
+        const lib = new ClaimCitationLibrary(claimLib)
+        return { claimLib, claim1, claim2, source1, source2, lib }
     }
 
     describe("add", () => {
-        it("adds an association and returns it with a checksum", () => {
+        it("adds a citation and returns it with a checksum", () => {
             const { lib, claim1, source1 } = makeFixtures()
-            const assoc = lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+            const cit = lib.add({
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
-            expect(assoc.id).toBe("assoc-1")
-            expect(assoc.claimId).toBe("claim-1")
-            expect(assoc.sourceId).toBe("source-1")
-            expect(assoc.checksum).toBeTruthy()
-            expect(typeof assoc.checksum).toBe("string")
+            expect(cit.id).toBe("cit-1")
+            expect(cit.citingClaimId).toBe("claim-1")
+            expect(cit.sourceClaimId).toBe("source-1")
+            expect(cit.checksum).toBeTruthy()
+            expect(typeof cit.checksum).toBe("string")
         })
 
-        it("throws on duplicate association ID", () => {
+        it("throws on duplicate citation ID", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             expect(() =>
                 lib.add({
-                    id: "assoc-1",
-                    claimId: claim1.id,
-                    claimVersion: claim1.version,
-                    sourceId: source1.id,
-                    sourceVersion: source1.version,
+                    id: "cit-1",
+                    citingClaimId: claim1.id,
+                    citingClaimVersion: claim1.version,
+                    sourceClaimId: source1.id,
+                    sourceClaimVersion: source1.version,
                 })
             ).toThrow()
         })
 
-        it("throws when claim does not exist in the claim lookup", () => {
+        it("throws when citing claim does not exist in the claim lookup", () => {
             const { lib, source1 } = makeFixtures()
             expect(() =>
                 lib.add({
-                    id: "assoc-1",
-                    claimId: "nonexistent-claim",
-                    claimVersion: 0,
-                    sourceId: source1.id,
-                    sourceVersion: source1.version,
+                    id: "cit-1",
+                    citingClaimId: "nonexistent-claim",
+                    citingClaimVersion: 0,
+                    sourceClaimId: source1.id,
+                    sourceClaimVersion: source1.version,
                 })
             ).toThrow()
         })
 
-        it("throws when claim version does not exist", () => {
+        it("throws when citing claim version does not exist", () => {
             const { lib, claim1, source1 } = makeFixtures()
             expect(() =>
                 lib.add({
-                    id: "assoc-1",
-                    claimId: claim1.id,
-                    claimVersion: 999,
-                    sourceId: source1.id,
-                    sourceVersion: source1.version,
+                    id: "cit-1",
+                    citingClaimId: claim1.id,
+                    citingClaimVersion: 999,
+                    sourceClaimId: source1.id,
+                    sourceClaimVersion: source1.version,
                 })
             ).toThrow()
         })
 
-        it("throws when source does not exist in the source lookup", () => {
+        it("throws when source claim does not exist in the claim lookup", () => {
             const { lib, claim1 } = makeFixtures()
             expect(() =>
                 lib.add({
-                    id: "assoc-1",
-                    claimId: claim1.id,
-                    claimVersion: claim1.version,
-                    sourceId: "nonexistent-source",
-                    sourceVersion: 0,
+                    id: "cit-1",
+                    citingClaimId: claim1.id,
+                    citingClaimVersion: claim1.version,
+                    sourceClaimId: "nonexistent-source",
+                    sourceClaimVersion: 0,
                 })
             ).toThrow()
         })
 
-        it("throws when source version does not exist", () => {
+        it("throws when source claim version does not exist", () => {
             const { lib, claim1, source1 } = makeFixtures()
             expect(() =>
                 lib.add({
-                    id: "assoc-1",
-                    claimId: claim1.id,
-                    claimVersion: claim1.version,
-                    sourceId: source1.id,
-                    sourceVersion: 999,
+                    id: "cit-1",
+                    citingClaimId: claim1.id,
+                    citingClaimVersion: claim1.version,
+                    sourceClaimId: source1.id,
+                    sourceClaimVersion: 999,
                 })
             ).toThrow()
         })
     })
 
     describe("remove", () => {
-        it("removes an association and returns it", () => {
+        it("removes a citation and returns it", () => {
             const { lib, claim1, source1 } = makeFixtures()
             const added = lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
-            const removed = lib.remove("assoc-1")
+            const removed = lib.remove("cit-1")
             expect(removed).toEqual(added)
-            expect(lib.get("assoc-1")).toBeUndefined()
+            expect(lib.get("cit-1")).toBeUndefined()
         })
 
-        it("throws when association is not found", () => {
+        it("throws when citation is not found", () => {
             const { lib } = makeFixtures()
             expect(() => lib.remove("nonexistent")).toThrow()
         })
 
-        it("cleans up claim index on remove", () => {
+        it("cleans up citing-claim index on remove", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
-            lib.remove("assoc-1")
-            expect(lib.getForClaim(claim1.id)).toEqual([])
+            lib.remove("cit-1")
+            expect(lib.getCitationsForCitingClaim(claim1.id)).toEqual([])
         })
 
-        it("cleans up source index on remove", () => {
+        it("cleans up source-claim index on remove", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
-            lib.remove("assoc-1")
-            expect(lib.getForSource(source1.id)).toEqual([])
+            lib.remove("cit-1")
+            expect(lib.getCitationsForSourceClaim(source1.id)).toEqual([])
         })
     })
 
-    describe("getForClaim", () => {
-        it("returns all associations for a given claim ID", () => {
+    describe("getCitationsForCitingClaim", () => {
+        it("returns all citations for a given citing-claim ID", () => {
             const { lib, claim1, claim2, source1, source2 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             lib.add({
-                id: "assoc-2",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source2.id,
-                sourceVersion: source2.version,
+                id: "cit-2",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source2.id,
+                sourceClaimVersion: source2.version,
             })
             lib.add({
-                id: "assoc-3",
-                claimId: claim2.id,
-                claimVersion: claim2.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-3",
+                citingClaimId: claim2.id,
+                citingClaimVersion: claim2.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
-            const result = lib.getForClaim(claim1.id)
+            const result = lib.getCitationsForCitingClaim(claim1.id)
             expect(result).toHaveLength(2)
-            expect(result.map((a) => a.id)).toContain("assoc-1")
-            expect(result.map((a) => a.id)).toContain("assoc-2")
+            expect(result.map((a) => a.id)).toContain("cit-1")
+            expect(result.map((a) => a.id)).toContain("cit-2")
         })
 
-        it("returns empty array when no associations exist for the claim", () => {
+        it("returns empty array when no citations exist for the citing claim", () => {
             const { lib, claim1 } = makeFixtures()
-            expect(lib.getForClaim(claim1.id)).toEqual([])
+            expect(lib.getCitationsForCitingClaim(claim1.id)).toEqual([])
         })
     })
 
-    describe("getForSource", () => {
-        it("returns all associations for a given source ID", () => {
+    describe("getCitationsForSourceClaim", () => {
+        it("returns all citations for a given source-claim ID", () => {
             const { lib, claim1, claim2, source1, source2 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             lib.add({
-                id: "assoc-2",
-                claimId: claim2.id,
-                claimVersion: claim2.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-2",
+                citingClaimId: claim2.id,
+                citingClaimVersion: claim2.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             lib.add({
-                id: "assoc-3",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source2.id,
-                sourceVersion: source2.version,
+                id: "cit-3",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source2.id,
+                sourceClaimVersion: source2.version,
             })
-            const result = lib.getForSource(source1.id)
+            const result = lib.getCitationsForSourceClaim(source1.id)
             expect(result).toHaveLength(2)
-            expect(result.map((a) => a.id)).toContain("assoc-1")
-            expect(result.map((a) => a.id)).toContain("assoc-2")
+            expect(result.map((a) => a.id)).toContain("cit-1")
+            expect(result.map((a) => a.id)).toContain("cit-2")
         })
 
-        it("returns empty array when no associations exist for the source", () => {
+        it("returns empty array when no citations exist for the source claim", () => {
             const { lib, source1 } = makeFixtures()
-            expect(lib.getForSource(source1.id)).toEqual([])
+            expect(lib.getCitationsForSourceClaim(source1.id)).toEqual([])
         })
     })
 
     describe("get", () => {
-        it("returns the association by ID", () => {
+        it("returns the citation by ID", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
-            const result = lib.get("assoc-1")
+            const result = lib.get("cit-1")
             expect(result).toBeDefined()
-            expect(result!.id).toBe("assoc-1")
+            expect(result!.id).toBe("cit-1")
         })
 
         it("returns undefined for unknown ID", () => {
@@ -10565,61 +10450,61 @@ describe("ClaimSourceLibrary", () => {
     })
 
     describe("getAll", () => {
-        it("returns all associations", () => {
+        it("returns all citations", () => {
             const { lib, claim1, claim2, source1, source2 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             lib.add({
-                id: "assoc-2",
-                claimId: claim2.id,
-                claimVersion: claim2.version,
-                sourceId: source2.id,
-                sourceVersion: source2.version,
+                id: "cit-2",
+                citingClaimId: claim2.id,
+                citingClaimVersion: claim2.version,
+                sourceClaimId: source2.id,
+                sourceClaimVersion: source2.version,
             })
             expect(lib.getAll()).toHaveLength(2)
         })
 
-        it("returns empty array when no associations exist", () => {
+        it("returns empty array when no citations exist", () => {
             const { lib } = makeFixtures()
             expect(lib.getAll()).toEqual([])
         })
     })
 
     describe("filter", () => {
-        it("filters associations by predicate", () => {
+        it("filters citations by predicate", () => {
             const { lib, claim1, claim2, source1, source2 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             lib.add({
-                id: "assoc-2",
-                claimId: claim2.id,
-                claimVersion: claim2.version,
-                sourceId: source2.id,
-                sourceVersion: source2.version,
+                id: "cit-2",
+                citingClaimId: claim2.id,
+                citingClaimVersion: claim2.version,
+                sourceClaimId: source2.id,
+                sourceClaimVersion: source2.version,
             })
-            const result = lib.filter((a) => a.claimId === claim1.id)
+            const result = lib.filter((a) => a.citingClaimId === claim1.id)
             expect(result).toHaveLength(1)
-            expect(result[0].id).toBe("assoc-1")
+            expect(result[0].id).toBe("cit-1")
         })
 
         it("returns empty array when predicate matches nothing", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             expect(lib.filter(() => false)).toEqual([])
         })
@@ -10627,146 +10512,147 @@ describe("ClaimSourceLibrary", () => {
 
     describe("snapshot / fromSnapshot", () => {
         it("round-trips through snapshot and fromSnapshot", () => {
-            const {
-                lib,
-                claimLib,
-                sourceLib,
-                claim1,
-                claim2,
-                source1,
-                source2,
-            } = makeFixtures()
+            const { lib, claimLib, claim1, claim2, source1, source2 } =
+                makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             lib.add({
-                id: "assoc-2",
-                claimId: claim2.id,
-                claimVersion: claim2.version,
-                sourceId: source2.id,
-                sourceVersion: source2.version,
+                id: "cit-2",
+                citingClaimId: claim2.id,
+                citingClaimVersion: claim2.version,
+                sourceClaimId: source2.id,
+                sourceClaimVersion: source2.version,
             })
             const snap = lib.snapshot()
-            expect(snap.claimSourceAssociations).toHaveLength(2)
+            expect(snap.claimCitations).toHaveLength(2)
 
-            const restored = ClaimSourceLibrary.fromSnapshot(
-                snap,
-                claimLib,
-                sourceLib
-            )
+            const restored = ClaimCitationLibrary.fromSnapshot(snap, claimLib)
             expect(restored.getAll()).toHaveLength(2)
-            expect(restored.get("assoc-1")).toEqual(lib.get("assoc-1"))
-            expect(restored.get("assoc-2")).toEqual(lib.get("assoc-2"))
+            expect(restored.get("cit-1")).toEqual(lib.get("cit-1"))
+            expect(restored.get("cit-2")).toEqual(lib.get("cit-2"))
         })
 
-        it("restores claim and source indexes correctly", () => {
-            const { lib, claimLib, sourceLib, claim1, source1 } = makeFixtures()
+        it("restores citing- and source-claim indexes correctly", () => {
+            const { lib, claimLib, claim1, source1 } = makeFixtures()
             lib.add({
-                id: "assoc-1",
-                claimId: claim1.id,
-                claimVersion: claim1.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-1",
+                citingClaimId: claim1.id,
+                citingClaimVersion: claim1.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
             })
             const snap = lib.snapshot()
-            const restored = ClaimSourceLibrary.fromSnapshot(
-                snap,
-                claimLib,
-                sourceLib
+            const restored = ClaimCitationLibrary.fromSnapshot(snap, claimLib)
+            expect(restored.getCitationsForCitingClaim(claim1.id)).toHaveLength(
+                1
             )
-            expect(restored.getForClaim(claim1.id)).toHaveLength(1)
-            expect(restored.getForSource(source1.id)).toHaveLength(1)
+            expect(
+                restored.getCitationsForSourceClaim(source1.id)
+            ).toHaveLength(1)
         })
 
         it("snapshot of empty library returns empty array", () => {
             const { lib } = makeFixtures()
-            expect(lib.snapshot()).toEqual({ claimSourceAssociations: [] })
+            expect(lib.snapshot()).toEqual({ claimCitations: [] })
         })
     })
 
-    describe("generic TAssoc extension", () => {
+    describe("generic TCitation extension", () => {
         it("preserves extended fields through add, get, and snapshot", () => {
             const claimLib = new ClaimLibrary()
-            const claim = claimLib.create({ id: "claim-ext" })
-            const sourceLib = new SourceLibrary()
-            const source = sourceLib.create({ id: "source-ext" })
+            const claim = claimLib.create({
+                id: "claim-ext",
+                type: "normal",
+            })
+            const source = claimLib.create({
+                id: "source-ext",
+                type: "citation",
+            })
 
-            type TExtAssoc = {
+            type TExtCitation = {
                 id: string
-                claimId: string
-                claimVersion: number
-                sourceId: string
-                sourceVersion: number
+                citingClaimId: string
+                citingClaimVersion: number
+                sourceClaimId: string
+                sourceClaimVersion: number
                 checksum: string
                 createdBy: string
             }
 
-            const lib = new ClaimSourceLibrary<TExtAssoc>(claimLib, sourceLib)
-            const assoc = lib.add({
-                id: "assoc-ext",
-                claimId: claim.id,
-                claimVersion: claim.version,
-                sourceId: source.id,
-                sourceVersion: source.version,
+            const lib = new ClaimCitationLibrary<TExtCitation>(claimLib)
+            const cit = lib.add({
+                id: "cit-ext",
+                citingClaimId: claim.id,
+                citingClaimVersion: claim.version,
+                sourceClaimId: source.id,
+                sourceClaimVersion: source.version,
                 createdBy: "user-1",
             })
-            expect(assoc.createdBy).toBe("user-1")
+            expect(cit.createdBy).toBe("user-1")
 
-            const fetched = lib.get("assoc-ext")
+            const fetched = lib.get("cit-ext")
             expect(fetched?.createdBy).toBe("user-1")
 
             const snap = lib.snapshot()
-            expect(snap.claimSourceAssociations[0].createdBy).toBe("user-1")
+            expect(snap.claimCitations[0].createdBy).toBe("user-1")
 
-            const restored = ClaimSourceLibrary.fromSnapshot<TExtAssoc>(
+            const restored = ClaimCitationLibrary.fromSnapshot<TExtCitation>(
                 snap,
-                claimLib,
-                sourceLib
+                claimLib
             )
-            expect(restored.get("assoc-ext")?.createdBy).toBe("user-1")
+            expect(restored.get("cit-ext")?.createdBy).toBe("user-1")
         })
 
         it("filter works on extended fields", () => {
             const claimLib = new ClaimLibrary()
-            const claim = claimLib.create({ id: "claim-ext2" })
-            const sourceLib = new SourceLibrary()
-            const source1 = sourceLib.create({ id: "source-ext2a" })
-            const source2 = sourceLib.create({ id: "source-ext2b" })
+            const claim = claimLib.create({
+                id: "claim-ext2",
+                type: "normal",
+            })
+            const source1 = claimLib.create({
+                id: "source-ext2a",
+                type: "citation",
+            })
+            const source2 = claimLib.create({
+                id: "source-ext2b",
+                type: "citation",
+            })
 
-            type TExtAssoc = {
+            type TExtCitation = {
                 id: string
-                claimId: string
-                claimVersion: number
-                sourceId: string
-                sourceVersion: number
+                citingClaimId: string
+                citingClaimVersion: number
+                sourceClaimId: string
+                sourceClaimVersion: number
                 checksum: string
                 tag: string
             }
 
-            const lib = new ClaimSourceLibrary<TExtAssoc>(claimLib, sourceLib)
+            const lib = new ClaimCitationLibrary<TExtCitation>(claimLib)
             lib.add({
-                id: "assoc-ext-a",
-                claimId: claim.id,
-                claimVersion: claim.version,
-                sourceId: source1.id,
-                sourceVersion: source1.version,
+                id: "cit-ext-a",
+                citingClaimId: claim.id,
+                citingClaimVersion: claim.version,
+                sourceClaimId: source1.id,
+                sourceClaimVersion: source1.version,
                 tag: "alpha",
             })
             lib.add({
-                id: "assoc-ext-b",
-                claimId: claim.id,
-                claimVersion: claim.version,
-                sourceId: source2.id,
-                sourceVersion: source2.version,
+                id: "cit-ext-b",
+                citingClaimId: claim.id,
+                citingClaimVersion: claim.version,
+                sourceClaimId: source2.id,
+                sourceClaimVersion: source2.version,
                 tag: "beta",
             })
             const result = lib.filter((a) => a.tag === "alpha")
             expect(result).toHaveLength(1)
-            expect(result[0].id).toBe("assoc-ext-a")
+            expect(result[0].id).toBe("cit-ext-a")
         })
     })
 })
@@ -10829,14 +10715,13 @@ describe("Premise-variable associations — VariableManager.updateVariable gener
     })
     it("applies non-symbol fields through ArgumentEngine", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        claimLibrary.create({ id: "c2" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        claimLibrary.create({ id: "c2", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.addVariable({
@@ -10864,12 +10749,11 @@ describe("Premise-variable associations — VariableManager.updateVariable gener
 describe("Premise-variable associations — addVariable type guard", () => {
     it("rejects premise-bound variable passed to addVariable", () => {
         const claimLibrary = new ClaimLibrary()
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -10894,13 +10778,12 @@ describe("Premise-variable associations — addVariable type guard", () => {
 describe("Premise-variable associations — bindVariableToPremise", () => {
     function makeEngine() {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -11010,13 +10893,12 @@ describe("Premise-variable associations — bindVariableToPremise", () => {
 describe("Premise-variable associations — getVariablesBoundToPremise", () => {
     it("returns variables bound to a specific premise", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -11063,13 +10945,12 @@ describe("Premise-variable associations — getVariablesBoundToPremise", () => {
 describe("Premise-variable associations — removePremise cascade", () => {
     it("removes bound variables when their target premise is removed", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -11120,13 +11001,12 @@ describe("Premise-variable associations — removePremise cascade", () => {
 describe("Premise-variable associations — circularity prevention", () => {
     function makeEngineWithBinding() {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -11207,13 +11087,12 @@ describe("Premise-variable associations — circularity prevention", () => {
 describe("Premise-variable associations — transitive circularity", () => {
     it("rejects indirect cycles through binding chain", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -11279,14 +11158,13 @@ describe("Premise-variable associations — transitive circularity", () => {
 describe("Premise-variable associations — evaluation filtering", () => {
     it("excludes premise-bound variables from truth table columns", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        claimLibrary.create({ id: "c2" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        claimLibrary.create({ id: "c2", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -11405,13 +11283,12 @@ describe("Premise-variable associations — evaluation filtering", () => {
 
     it("includes premise-bound variables in referencedVariableIds but not in assignment generation", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -11478,15 +11355,14 @@ describe("Premise-variable associations — lazy evaluation", () => {
         // Premise 1 (p1): A implies B
         // Premise 2 (p2): P implies Q, where Q bound to p1
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "cA" })
-        claimLibrary.create({ id: "cB" })
-        claimLibrary.create({ id: "cP" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "cA", type: "normal" })
+        claimLibrary.create({ id: "cB", type: "normal" })
+        claimLibrary.create({ id: "cP", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -11646,15 +11522,14 @@ describe("Premise-variable associations — lazy evaluation", () => {
         // Build: P and Q and Q, where Q is bound to p1 (A implies B)
         // Q appears twice — resolver should cache and return same value
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "cA" })
-        claimLibrary.create({ id: "cB" })
-        claimLibrary.create({ id: "cP" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "cA", type: "normal" })
+        claimLibrary.create({ id: "cB", type: "normal" })
+        claimLibrary.create({ id: "cP", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -11821,14 +11696,13 @@ describe("Premise-variable associations — lazy evaluation", () => {
 describe("Premise-variable associations — updateVariable", () => {
     function makeEngine() {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        claimLibrary.create({ id: "c2" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        claimLibrary.create({ id: "c2", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -11953,13 +11827,12 @@ describe("Premise-variable associations — diff", () => {
 describe("Premise-variable associations — snapshot round-trip", () => {
     it("restores premise-bound variables from snapshot", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -11985,7 +11858,7 @@ describe("Premise-variable associations — snapshot round-trip", () => {
         const restored = ArgumentEngine.fromSnapshot(
             snapshot,
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -12003,13 +11876,12 @@ describe("Premise-variable associations — snapshot round-trip", () => {
 describe("Premise-variable associations — validateEvaluability", () => {
     it("warns when premise-bound variable targets an empty premise", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -12052,13 +11924,12 @@ describe("Premise-variable associations — validateEvaluability", () => {
 
     it("does not warn when premise-bound variable targets a premise with expressions", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -12114,13 +11985,12 @@ describe("Premise-variable associations — validateEvaluability", () => {
 
     it("warning does not block evaluation (ok is still true)", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "c1" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
         engine.createPremiseWithId("p1")
@@ -12171,15 +12041,14 @@ describe("Premise-variable associations — integration", () => {
     it("full round-trip: create, evaluate, snapshot, restore, re-evaluate", () => {
         // Build "P implies (A implies B)" argument
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "cA" })
-        claimLibrary.create({ id: "cB" })
-        claimLibrary.create({ id: "cP" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "cA", type: "normal" })
+        claimLibrary.create({ id: "cB", type: "normal" })
+        claimLibrary.create({ id: "cP", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -12305,7 +12174,7 @@ describe("Premise-variable associations — integration", () => {
         const restored = ArgumentEngine.fromSnapshot(
             snapshot,
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -12327,15 +12196,14 @@ describe("Premise-variable associations — integration", () => {
 
     it("checkValidity produces correct result for nested implication", () => {
         const claimLibrary = new ClaimLibrary()
-        claimLibrary.create({ id: "cA" })
-        claimLibrary.create({ id: "cB" })
-        claimLibrary.create({ id: "cP" })
-        const sourceLibrary = new SourceLibrary()
-        const csLibrary = new ClaimSourceLibrary(claimLibrary, sourceLibrary)
+        claimLibrary.create({ id: "cA", type: "normal" })
+        claimLibrary.create({ id: "cB", type: "normal" })
+        claimLibrary.create({ id: "cP", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLibrary)
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
             claimLibrary,
-            sourceLibrary,
+
             csLibrary
         )
 
@@ -12462,7 +12330,8 @@ describe("Parsing — response schemas", () => {
             const claim: TParsedClaim = {
                 miniId: "c1",
                 role: "premise",
-                sourceMiniIds: ["s1"],
+                type: "normal",
+                citationMiniIds: ["s1"],
             }
             expect(Value.Check(ParsedClaimSchema, claim)).toBe(true)
         })
@@ -12471,7 +12340,8 @@ describe("Parsing — response schemas", () => {
             const claim = {
                 miniId: "c1",
                 role: "conclusion",
-                sourceMiniIds: [],
+                type: "normal",
+                citationMiniIds: [],
                 customField: "extra",
             }
             expect(Value.Check(ParsedClaimSchema, claim)).toBe(true)
@@ -12481,7 +12351,8 @@ describe("Parsing — response schemas", () => {
             const claim = {
                 miniId: "c1",
                 role: "invalid",
-                sourceMiniIds: [],
+                type: "normal",
+                citationMiniIds: [],
             }
             expect(Value.Check(ParsedClaimSchema, claim)).toBe(false)
         })
@@ -12495,25 +12366,6 @@ describe("Parsing — response schemas", () => {
                 claimMiniId: "c1",
             }
             expect(Value.Check(ParsedVariableSchema, variable)).toBe(true)
-        })
-    })
-
-    describe("ParsedSourceSchema", () => {
-        it("accepts a valid source with url and text", () => {
-            const source: TParsedSource = {
-                miniId: "s1",
-                url: "https://example.com/source",
-                text: "Some source text",
-            }
-            expect(Value.Check(ParsedSourceSchema, source)).toBe(true)
-        })
-
-        it("accepts a valid source with url only", () => {
-            const source: TParsedSource = {
-                miniId: "s1",
-                url: "https://example.com/source",
-            }
-            expect(Value.Check(ParsedSourceSchema, source)).toBe(true)
         })
     })
 
@@ -12535,18 +12387,18 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "c1",
                             role: "premise",
-                            sourceMiniIds: ["s1"],
+                            type: "normal",
+                            citationMiniIds: ["s1"],
+                        },
+                        {
+                            miniId: "s1",
+                            role: "premise",
+                            type: "citation",
+                            citationMiniIds: [],
                         },
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
-                    ],
-                    sources: [
-                        {
-                            miniId: "s1",
-                            url: "https://example.com/source",
-                            text: "A source",
-                        },
                     ],
                     premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
@@ -12579,7 +12431,8 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "c1",
                             role: "conclusion",
-                            sourceMiniIds: [],
+                            type: "normal",
+                            citationMiniIds: [],
                             customClaimField: true,
                         },
                     ],
@@ -12591,7 +12444,6 @@ describe("Parsing — response schemas", () => {
                             customVarField: 42,
                         },
                     ],
-                    sources: [],
                     premises: [
                         {
                             miniId: "p1",
@@ -12622,13 +12474,13 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "c1",
                             role: "premise",
-                            sourceMiniIds: [],
+                            type: "normal",
+                            citationMiniIds: [],
                         },
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
                     ],
-                    sources: [],
                     premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                 },
@@ -12651,14 +12503,14 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "c1",
                             role: "premise",
-                            sourceMiniIds: [],
+                            type: "normal",
+                            citationMiniIds: [],
                             confidence: 0.9,
                         },
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
                     ],
-                    sources: [],
                     premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                 },
@@ -12675,14 +12527,14 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "c1",
                             role: "premise",
-                            sourceMiniIds: [],
+                            type: "normal",
+                            citationMiniIds: [],
                             // confidence missing
                         },
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
                     ],
-                    sources: [],
                     premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                 },
@@ -12705,13 +12557,13 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "c1",
                             role: "premise",
-                            sourceMiniIds: [],
+                            type: "normal",
+                            citationMiniIds: [],
                         },
                     ],
                     variables: [
                         { miniId: "v1", symbol: "P", claimMiniId: "c1" },
                     ],
-                    sources: [],
                     premises: [{ miniId: "p1", formula: "P" }],
                     conclusionPremiseMiniId: "p1",
                     argumentTitle: "My argument",
@@ -12728,9 +12580,6 @@ describe("Parsing — response schemas", () => {
                 claimSchema: Type.Object({
                     confidence: Type.Number(),
                 }),
-                sourceSchema: Type.Object({
-                    url: Type.String(),
-                }),
                 premiseSchema: Type.Object({
                     label: Type.String(),
                 }),
@@ -12744,8 +12593,16 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "c1",
                             role: "premise",
-                            sourceMiniIds: ["s1"],
+                            type: "normal",
+                            citationMiniIds: ["s1"],
                             confidence: 0.95,
+                        },
+                        {
+                            miniId: "s1",
+                            role: "premise",
+                            type: "citation",
+                            citationMiniIds: [],
+                            confidence: 0.5,
                         },
                     ],
                     variables: [
@@ -12754,13 +12611,6 @@ describe("Parsing — response schemas", () => {
                             symbol: "P",
                             claimMiniId: "c1",
                             description: "Prop P",
-                        },
-                    ],
-                    sources: [
-                        {
-                            miniId: "s1",
-                            text: "Source text",
-                            url: "https://example.com",
                         },
                     ],
                     premises: [
@@ -12871,16 +12721,15 @@ describe("Parsing — response schemas", () => {
             expect(prompt).toContain("s1")
             expect(prompt).toContain("v1")
             expect(prompt).toContain("p1")
-            expect(prompt).toContain("sourceMiniIds")
+            expect(prompt).toContain("citationMiniIds")
         })
 
-        it("clarifies that sourceMiniIds must not contain claim miniIds", () => {
+        it("clarifies that citationMiniIds must not contain normal claim miniIds", () => {
             const prompt = buildParsingPrompt(ParsedArgumentResponseSchema)
-            expect(prompt).toContain("Sources (External Citations)")
+            expect(prompt).toContain("citationMiniIds")
             expect(prompt).toContain(
-                "Never put claim miniIds (c1, c2, …) in sourceMiniIds"
+                "Never put miniIds of normal-typed claims in `citationMiniIds`"
             )
-            expect(prompt).toContain("`sources` array empty")
         })
     })
 
@@ -12895,24 +12744,25 @@ describe("Parsing — response schemas", () => {
                         {
                             miniId: "C1",
                             role: "premise",
-                            sourceMiniIds: ["S1"],
+                            type: "normal",
+                            citationMiniIds: ["S1"],
                         },
                         {
                             miniId: "C2",
                             role: "conclusion",
-                            sourceMiniIds: [],
+                            type: "normal",
+                            citationMiniIds: [],
+                        },
+                        {
+                            miniId: "S1",
+                            role: "premise",
+                            type: "citation",
+                            citationMiniIds: [],
                         },
                     ],
                     variables: [
                         { miniId: "V1", symbol: "P", claimMiniId: "C1" },
                         { miniId: "V2", symbol: "Q", claimMiniId: "C2" },
-                    ],
-                    sources: [
-                        {
-                            miniId: "S1",
-                            url: "https://example.com/some-source",
-                            text: "Some source",
-                        },
                     ],
                     premises: [
                         { miniId: "P1", formula: "P implies Q" },
@@ -12931,7 +12781,7 @@ describe("Parsing — response schemas", () => {
                 const parser = new ArgumentParser()
                 const result = parser.validate(validResponse())
                 expect(result.argument).toBeDefined()
-                expect(result.argument!.claims).toHaveLength(2)
+                expect(result.argument!.claims).toHaveLength(3)
             })
 
             it("accepts null argument with failureText", () => {
@@ -12963,15 +12813,15 @@ describe("Parsing — response schemas", () => {
                 const result = parser.build(validResponse())
                 expect(result.engine).toBeDefined()
                 expect(result.claimLibrary).toBeDefined()
-                expect(result.sourceLibrary).toBeDefined()
-                expect(result.claimSourceLibrary).toBeDefined()
+                expect(result.claimCitationLibrary).toBeDefined()
             })
 
             it("creates claims in library", () => {
                 const parser = new ArgumentParser()
                 const result = parser.build(validResponse())
                 const allClaims = result.claimLibrary.getAll()
-                expect(allClaims).toHaveLength(2)
+                // 2 normal claims (C1, C2) + 1 citation claim (S1)
+                expect(allClaims).toHaveLength(3)
             })
 
             it("creates variables bound to claims", () => {
@@ -13017,8 +12867,8 @@ describe("Parsing — response schemas", () => {
             it("wires claim-source associations", () => {
                 const parser = new ArgumentParser()
                 const result = parser.build(validResponse())
-                const assocs = result.claimSourceLibrary.getAll()
-                // C1 has sourceMiniIds: ["S1"], C2 has none
+                const assocs = result.claimCitationLibrary.getAll()
+                // C1 has citationMiniIds: ["S1"], C2 has none
                 expect(assocs).toHaveLength(1)
             })
 
@@ -13135,7 +12985,7 @@ describe("Parsing — response schemas", () => {
             it("throws on claim referencing undeclared source miniId", () => {
                 const parser = new ArgumentParser()
                 const resp = validResponse()
-                resp.argument!.claims[0].sourceMiniIds = ["BOGUS"]
+                resp.argument!.claims[0].citationMiniIds = ["BOGUS"]
                 expect(() => parser.build(resp)).toThrow(/BOGUS/)
             })
         })
@@ -13148,19 +12998,20 @@ describe("Parsing — response schemas", () => {
                             {
                                 miniId: "C1",
                                 role: "premise",
-                                sourceMiniIds: [],
+                                type: "normal",
+                                citationMiniIds: [],
                             },
                             {
                                 miniId: "C2",
                                 role: "conclusion",
-                                sourceMiniIds: [],
+                                type: "normal",
+                                citationMiniIds: [],
                             },
                         ],
                         variables: [
                             { miniId: "V1", symbol: "P", claimMiniId: "C1" },
                             { miniId: "V2", symbol: "Q", claimMiniId: "C2" },
                         ],
-                        sources: [],
                         premises: [
                             { miniId: "P1", formula: "P implies Q" },
                             { miniId: "P2", formula: "P" },
@@ -13204,26 +13055,28 @@ describe("Parsing — response schemas", () => {
                 expect(result.warnings[0].context.premiseMiniId).toBe("P3")
             })
 
-            it("skips bad source association and emits UNRESOLVED_SOURCE_MINIID", () => {
+            it("skips bad citation reference and emits UNRESOLVED_CITATION_MINIID", () => {
                 const parser = new ArgumentParser()
                 const resp = validResponse()
-                resp.argument!.sources = [
-                    {
-                        miniId: "S1",
-                        url: "https://example.com/real-source",
-                        text: "Real source",
-                    },
-                ]
-                resp.argument!.claims[0].sourceMiniIds = ["S1", "BOGUS"]
+                // Add a citation-typed claim S1 so one of two citationMiniIds resolves
+                resp.argument!.claims.push({
+                    miniId: "S1",
+                    role: "premise",
+                    type: "citation",
+                    citationMiniIds: [],
+                })
+                resp.argument!.claims[0].citationMiniIds = ["S1", "BOGUS"]
                 const result = parser.build(resp, { strict: false })
-                // Claim still created, one association wired, one skipped
-                expect(result.claimLibrary.getAll()).toHaveLength(2)
-                const assocs = result.claimSourceLibrary.getAll()
-                expect(assocs).toHaveLength(1)
+                // 2 normal claims + 1 citation claim; one citation wired, one skipped
+                expect(result.claimLibrary.getAll()).toHaveLength(3)
+                const cits = result.claimCitationLibrary.getAll()
+                expect(cits).toHaveLength(1)
                 expect(result.warnings).toHaveLength(1)
-                expect(result.warnings[0].code).toBe("UNRESOLVED_SOURCE_MINIID")
+                expect(result.warnings[0].code).toBe(
+                    "UNRESOLVED_CITATION_MINIID"
+                )
                 expect(result.warnings[0].context.claimMiniId).toBe("C1")
-                expect(result.warnings[0].context.sourceMiniId).toBe("BOGUS")
+                expect(result.warnings[0].context.citationMiniId).toBe("BOGUS")
             })
 
             it("skips variable with bad claim ref and emits UNRESOLVED_CLAIM_MINIID", () => {
@@ -13361,7 +13214,7 @@ describe("Parsing — response schemas", () => {
 
                 // UNRESOLVED_SOURCE_MINIID
                 const r5 = validResponse()
-                r5.argument!.claims[0].sourceMiniIds = ["BOGUS"]
+                r5.argument!.claims[0].citationMiniIds = ["BOGUS"]
                 expect(() => parser.build(r5)).toThrow(/BOGUS/)
 
                 // UNRESOLVED_CONCLUSION_MINIID
@@ -13444,40 +13297,22 @@ describe("Parsing — response schemas", () => {
                 )
             })
 
-            it("mapSource reflects on source entities", () => {
+            it("mapClaimCitation reflects on citation entities", () => {
                 class Custom extends ArgumentParser {
-                    protected override mapSource(parsed: {
-                        miniId: string
-                    }): Record<string, unknown> {
-                        return { note: `src-${parsed.miniId}` }
-                    }
-                }
-                const parser = new Custom()
-                const result = parser.build(validResponse())
-                const sources = result.sourceLibrary.getAll()
-                expect(sources).toHaveLength(1)
-                expect((sources[0] as Record<string, unknown>).note).toBe(
-                    "src-S1"
-                )
-            })
-
-            it("mapClaimSourceAssociation reflects on association entities", () => {
-                class Custom extends ArgumentParser {
-                    protected override mapClaimSourceAssociation(
+                    protected override mapClaimCitation(
                         parsed: TParsedClaim,
-                        claimId: string,
-                        _sourceId: string
+                        citingClaimId: string,
+                        _sourceClaimId: string
                     ): Record<string, unknown> {
-                        return { link: `${parsed.miniId}-${claimId}` }
+                        return { link: `${parsed.miniId}-${citingClaimId}` }
                     }
                 }
                 const parser = new Custom()
                 const result = parser.build(validResponse())
-                const assocs = result.claimSourceLibrary.getAll()
-                expect(assocs).toHaveLength(1)
-                const link = (assocs[0] as Record<string, unknown>)
-                    .link as string
-                // Link format is "claimMiniId-realClaimUUID"
+                const cits = result.claimCitationLibrary.getAll()
+                expect(cits).toHaveLength(1)
+                const link = (cits[0] as Record<string, unknown>).link as string
+                // Link format is "claimMiniId-realCitingClaimUUID"
                 expect(link).toMatch(/^C1-/)
             })
         })
@@ -13573,11 +13408,11 @@ describe("CliArgumentParser metadata injection", () => {
                     {
                         miniId: "C1",
                         role: "premise" as const,
-                        sourceMiniIds: [],
+                        type: "normal" as const,
+                        citationMiniIds: [],
                     },
                 ],
                 variables: [{ miniId: "V1", symbol: "A", claimMiniId: "C1" }],
-                sources: [],
                 premises: [{ miniId: "P1", formula: "A" }],
                 conclusionPremiseMiniId: "P1",
             },
@@ -13609,40 +13444,27 @@ describe("CliArgumentParser metadata injection", () => {
 describe("Library persistence", () => {
     it("ClaimLibrary round-trips through snapshot", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "c1" } as Parameters<typeof lib.create>[0])
+        lib.create({ id: "c1", type: "normal" })
         const snapshot = lib.snapshot()
         const restored = ClaimLibrary.fromSnapshot(snapshot)
         expect(restored.get("c1", 0)).toBeDefined()
         expect(restored.get("c1", 0)!.id).toBe("c1")
     })
 
-    it("SourceLibrary round-trips through snapshot", () => {
-        const lib = new SourceLibrary()
-        lib.create({ id: "s1" } as Parameters<typeof lib.create>[0])
-        const snapshot = lib.snapshot()
-        const restored = SourceLibrary.fromSnapshot(snapshot)
-        expect(restored.get("s1", 0)).toBeDefined()
-    })
-
-    it("ClaimSourceLibrary round-trips through snapshot", () => {
+    it("ClaimCitationLibrary round-trips through snapshot", () => {
         const claimLib = new ClaimLibrary()
-        claimLib.create({ id: "c1" } as Parameters<typeof claimLib.create>[0])
-        const sourceLib = new SourceLibrary()
-        sourceLib.create({ id: "s1" } as Parameters<typeof sourceLib.create>[0])
-        const csLib = new ClaimSourceLibrary(claimLib, sourceLib)
-        csLib.add({
+        claimLib.create({ id: "c1", type: "normal" })
+        claimLib.create({ id: "s1", type: "citation" })
+        const ccLib = new ClaimCitationLibrary(claimLib)
+        ccLib.add({
             id: "a1",
-            claimId: "c1",
-            claimVersion: 0,
-            sourceId: "s1",
-            sourceVersion: 0,
+            citingClaimId: "c1",
+            citingClaimVersion: 0,
+            sourceClaimId: "s1",
+            sourceClaimVersion: 0,
         })
-        const snapshot = csLib.snapshot()
-        const restored = ClaimSourceLibrary.fromSnapshot(
-            snapshot,
-            claimLib,
-            sourceLib
-        )
+        const snapshot = ccLib.snapshot()
+        const restored = ClaimCitationLibrary.fromSnapshot(snapshot, claimLib)
         expect(restored.get("a1")).toBeDefined()
         expect(restored.getAll()).toHaveLength(1)
     })
@@ -13655,6 +13477,7 @@ describe("Library persistence", () => {
             version: 0,
             frozen: true,
             checksum: "",
+            type: "normal",
         } as (typeof snapshot.claims)[number])
         const rebuilt = ClaimLibrary.fromSnapshot(snapshot)
         expect(rebuilt.get("c-missing", 0)).toBeDefined()
@@ -14575,7 +14398,6 @@ describe("operator nesting restriction", () => {
                 ArgumentEngine.fromData(
                     arg,
                     aLib(),
-                    sLib(),
                     csLib(),
                     variables,
                     premises,
@@ -14588,7 +14410,7 @@ describe("operator nesting restriction", () => {
 
         it("rollback can restore a tree with operator-under-operator", () => {
             const arg = { id: "arg-1", version: 1 }
-            const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
+            const engine = new ArgumentEngine(arg, aLib(), csLib())
             engine.addVariable({
                 id: "v1",
                 symbol: "P",
@@ -15845,7 +15667,6 @@ describe("grammar enforcement config", () => {
             const engine = ArgumentEngine.fromData(
                 arg,
                 aLib(),
-                sLib(),
                 csLib(),
                 variables,
                 premises,
@@ -15865,7 +15686,6 @@ describe("grammar enforcement config", () => {
                 ArgumentEngine.fromData(
                     arg,
                     aLib(),
-                    sLib(),
                     csLib(),
                     variables,
                     premises,
@@ -15879,7 +15699,7 @@ describe("grammar enforcement config", () => {
 
         it("rollback to snapshot with operator-under-operator rejects and restores", () => {
             const arg = { id: "arg-1", version: 1 }
-            const engine = new ArgumentEngine(arg, aLib(), sLib(), csLib())
+            const engine = new ArgumentEngine(arg, aLib(), csLib())
             engine.addVariable({
                 id: "v1",
                 symbol: "P",
@@ -15945,13 +15765,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 argumentFields: new Set(["id", "version"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            sLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         const snap = engine.snapshot()
         const serialized = jsonRoundTrip(snap)
 
@@ -15963,7 +15777,6 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         const restored = ArgumentEngine.fromSnapshot(
             serialized,
             aLib(),
-            sLib(),
             csLib()
         )
 
@@ -16000,7 +15813,6 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         const engine = ArgumentEngine.fromData(
             ARG,
             aLib(),
-            sLib(),
             csLib(),
             [],
             [],
@@ -16027,18 +15839,12 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 roleFields: new Set(["conclusionPremiseId", "customRole"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            sLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         const snap = engine.snapshot()
         const serialized = jsonRoundTrip(snap)
 
         // Create a fresh engine to rollback into
-        const engine2 = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine2 = new ArgumentEngine(ARG, aLib(), csLib())
         engine2.rollback(serialized)
 
         const restoredSnap = engine2.snapshot()
@@ -16057,13 +15863,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 argumentFields: new Set(["id", "version"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            sLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         const snap = engine.snapshot()
 
         // Native JSON round-trip: snapshot already has arrays, so they survive
@@ -16087,7 +15887,6 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         const restored = ArgumentEngine.fromSnapshot(
             serialized,
             aLib(),
-            sLib(),
             csLib()
         )
         const restoredSnap = restored.snapshot()
@@ -16107,13 +15906,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 premiseFields: new Set(["id", "argumentId"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            sLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -16142,7 +15935,6 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         const restored = ArgumentEngine.fromSnapshot(
             serialized,
             aLib(),
-            sLib(),
             csLib()
         )
         expect(restored.listPremiseIds()).toEqual(["p1"])
@@ -16157,13 +15949,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 variableFields: new Set(["id", "symbol"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            sLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -16234,13 +16020,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
                 premiseFields: new Set(["id", "argumentId"]),
             },
         }
-        const engine = new ArgumentEngine(
-            ARG,
-            aLib(),
-            sLib(),
-            csLib(),
-            customConfig
-        )
+        const engine = new ArgumentEngine(ARG, aLib(), csLib(), customConfig)
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -16265,7 +16045,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         // Native JSON round-trip: Sets → {}
         const serialized = JSON.parse(JSON.stringify(snap)) as typeof snap
 
-        const engine2 = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine2 = new ArgumentEngine(ARG, aLib(), csLib())
         // This should not throw — nested configs must be normalized
         engine2.rollback(serialized)
         expect(engine2.listPremiseIds()).toEqual(["p1"])
@@ -16275,7 +16055,7 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
 
 describe("hierarchical checksum schema", () => {
     it("expression entity includes descendantChecksum and combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
@@ -16293,7 +16073,7 @@ describe("hierarchical checksum schema", () => {
     })
 
     it("premise entity includes descendantChecksum and combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
@@ -16309,7 +16089,7 @@ describe("hierarchical checksum schema", () => {
     })
 
     it("argument entity includes descendantChecksum and combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const arg = engine.getArgument()
         expect(arg).toHaveProperty("checksum")
         expect(arg).toHaveProperty("descendantChecksum")
@@ -16320,7 +16100,7 @@ describe("hierarchical checksum schema", () => {
 
 describe("expression hierarchical checksums", () => {
     it("leaf expression has null descendantChecksum and combinedChecksum equals checksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
@@ -16333,7 +16113,7 @@ describe("expression hierarchical checksums", () => {
     })
 
     it("parent expression descendantChecksum reflects children", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -16388,7 +16168,7 @@ describe("expression hierarchical checksums", () => {
     })
 
     it("adding a child changes parent descendantChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -16429,7 +16209,7 @@ describe("expression hierarchical checksums", () => {
 
 describe("premise hierarchical checksums", () => {
     it("premise checksum is entity-only (meta)", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -16445,14 +16225,14 @@ describe("premise hierarchical checksums", () => {
     })
 
     it("premise descendantChecksum is null when no expressions", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = engine.createPremise()
 
         expect(pm.descendantChecksum()).toBeNull()
     })
 
     it("premise descendantChecksum equals root expression combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -16466,7 +16246,7 @@ describe("premise hierarchical checksums", () => {
     })
 
     it("premise getCollectionChecksum('expressions') equals descendantChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -16481,7 +16261,7 @@ describe("premise hierarchical checksums", () => {
     })
 
     it("premise combinedChecksum changes when expression tree changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -16526,7 +16306,7 @@ describe("premise hierarchical checksums", () => {
 
 describe("argument hierarchical checksums", () => {
     it("argument checksum includes role state", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.createPremise()
         const { result: pm2 } = engine.createPremise()
 
@@ -16541,12 +16321,12 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("argument descendantChecksum is null when no premises and no variables", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         expect(engine.descendantChecksum()).toBeNull()
     })
 
     it("argument getCollectionChecksum('premises') changes when premise expression changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -16582,7 +16362,7 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("argument getCollectionChecksum('variables') changes when variable is added", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
 
         engine.flushChecksums()
         const varsBefore = engine.getCollectionChecksum("variables")
@@ -16597,7 +16377,7 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("argument combinedChecksum changes when deep expression added but meta stays same", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -16637,7 +16417,7 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("snapshot includes all three checksum fields on argument", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(
@@ -16654,7 +16434,7 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("getArgument includes all three checksum fields", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(
@@ -16672,7 +16452,7 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("premise mutation propagates dirty to argument checksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -16689,7 +16469,7 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("descendantChecksum is computed from non-null collection checksums only", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
 
         // No premises, no variables — descendant is null
         expect(engine.descendantChecksum()).toBeNull()
@@ -16731,7 +16511,7 @@ describe("checksum verification on load", () => {
     }
 
     it("fromSnapshot with 'strict' passes when checksums match", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -16752,7 +16532,6 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-                sLib(),
                 csLib(),
                 undefined,
                 "strict"
@@ -16761,7 +16540,7 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'strict' throws when expression checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -16785,7 +16564,6 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-                sLib(),
                 csLib(),
                 undefined,
                 "strict"
@@ -16794,7 +16572,7 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'ignore' (default) does not throw on tampered checksums", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -16816,12 +16594,12 @@ describe("checksum verification on load", () => {
 
         // Default is "ignore" — should not throw
         expect(() =>
-            ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib())
+            ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
         ).not.toThrow()
     })
 
     it("fromSnapshot with 'strict' throws when premise checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -16847,7 +16625,6 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-                sLib(),
                 csLib(),
                 undefined,
                 "strict"
@@ -16856,7 +16633,7 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'strict' throws when argument checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
@@ -16871,7 +16648,6 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-                sLib(),
                 csLib(),
                 undefined,
                 "strict"
@@ -16880,7 +16656,7 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'strict' throws when variable checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
@@ -16895,7 +16671,6 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-                sLib(),
                 csLib(),
                 undefined,
                 "strict"
@@ -16904,7 +16679,7 @@ describe("checksum verification on load", () => {
     })
 
     it("fromData with 'strict' passes when checksums match", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -16931,7 +16706,6 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromData(
                 argData,
                 aLib(),
-                sLib(),
                 csLib(),
                 variables,
                 premises,
@@ -16945,7 +16719,7 @@ describe("checksum verification on load", () => {
     })
 
     it("fromData with 'strict' throws when variable checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -16975,7 +16749,6 @@ describe("checksum verification on load", () => {
             ArgumentEngine.fromData(
                 argData,
                 aLib(),
-                sLib(),
                 csLib(),
                 variables,
                 premises,
@@ -16995,7 +16768,7 @@ describe("checksum verification on load", () => {
 
 describe("hierarchical checksum propagation", () => {
     it("deep expression change propagates to premise and argument", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         engine.addVariable(makeVar("v3", "R"))
@@ -17079,7 +16852,7 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("operator collapse after removeExpression doesn't break flush", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -17126,7 +16899,7 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("insertExpression propagates checksum changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -17163,7 +16936,7 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("variable mutation changes argument but not premise combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -17189,7 +16962,7 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("snapshot round-trip preserves all hierarchical checksums", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -17223,12 +16996,7 @@ describe("hierarchical checksum propagation", () => {
 
         // Snapshot and restore
         const snap = engine.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         restored.flushChecksums()
 
@@ -17244,7 +17012,7 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("removeVariable cascades through to checksums", () => {
-        const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const engine = new ArgumentEngine(ARG, aLib(), csLib())
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -18374,16 +18142,15 @@ describe("forkArgument", () => {
                 return false
             }
         }
-        const eng = new NoForkEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new NoForkEngine(ARG, aLib(), csLib())
         expect(eng.canFork()).toBe(false)
     })
 
     it("forks a simple argument with new IDs", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
 
-        const eng = new ArgumentEngine(ARG, claimLib, sourceLib, csLibrary)
+        const eng = new ArgumentEngine(ARG, claimLib, csLibrary)
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         const premiseId = pm.getId()
@@ -18399,8 +18166,7 @@ describe("forkArgument", () => {
 
         // Fork
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
 
         let idCounter = 0
         const { engine: forked, remapTable } = forkArgumentEngine(
@@ -18408,8 +18174,7 @@ describe("forkArgument", () => {
             "forked-arg",
             {
                 claimLibrary: forkClaimLib,
-                sourceLibrary: forkSourceLib,
-                claimSourceLibrary: forkCsLib,
+                claimCitationLibrary: forkCsLib,
             },
             { generateId: () => `gen-${++idCounter}` }
         )
@@ -18472,12 +18237,11 @@ describe("forkArgument", () => {
 
     it("remaps parentId chains, variableIds, boundPremiseId, rootExpressionId, and conclusion", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
         const eng = new ArgumentEngine(
             { id: "src-arg", version: 2 },
             claimLib,
-            sourceLib,
+
             csLibrary
         )
 
@@ -18559,16 +18323,14 @@ describe("forkArgument", () => {
 
         // Fork
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
         let counter = 0
         const { engine: forked, remapTable } = forkArgumentEngine(
             eng,
             "fork-arg",
             {
                 claimLibrary: forkClaimLib,
-                sourceLibrary: forkSourceLib,
-                claimSourceLibrary: forkCsLib,
+                claimCitationLibrary: forkCsLib,
             },
             { generateId: () => `fk-${counter++}` }
         )
@@ -18638,12 +18400,11 @@ describe("forkArgument", () => {
 
     it("remap table covers all entities and all mapped IDs differ from originals", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
         const eng = new ArgumentEngine(
             { id: "src-arg", version: 0 },
             claimLib,
-            sourceLib,
+
             csLibrary
         )
 
@@ -18689,12 +18450,10 @@ describe("forkArgument", () => {
         })
 
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
         const { remapTable } = forkArgumentEngine(eng, "forked-arg", {
             claimLibrary: forkClaimLib,
-            sourceLibrary: forkSourceLib,
-            claimSourceLibrary: forkCsLib,
+            claimCitationLibrary: forkCsLib,
         })
 
         // Remap table has correct counts
@@ -18716,23 +18475,20 @@ describe("forkArgument", () => {
 
     it("forked engine is independent from source engine", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
         const eng = new ArgumentEngine(
             { id: "src-arg", version: 0 },
             claimLib,
-            sourceLib,
+
             csLibrary
         )
         eng.createPremiseWithId("prem-only")
 
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
         const { engine: forked } = forkArgumentEngine(eng, "forked-arg", {
             claimLibrary: forkClaimLib,
-            sourceLibrary: forkSourceLib,
-            claimSourceLibrary: forkCsLib,
+            claimCitationLibrary: forkCsLib,
         })
 
         // Mutate the fork
@@ -18749,12 +18505,11 @@ describe("forkArgument", () => {
 
     it("forked entities are fully mutable", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
         const eng = new ArgumentEngine(
             { id: "src-arg", version: 0 },
             claimLib,
-            sourceLib,
+
             csLibrary
         )
 
@@ -18808,15 +18563,13 @@ describe("forkArgument", () => {
         })
 
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
         const { engine: forked, remapTable } = forkArgumentEngine(
             eng,
             "forked-arg",
             {
                 claimLibrary: forkClaimLib,
-                sourceLibrary: forkSourceLib,
-                claimSourceLibrary: forkCsLib,
+                claimCitationLibrary: forkCsLib,
             }
         )
 
@@ -18840,12 +18593,11 @@ describe("forkArgument", () => {
 
     it("forked entity checksums diverge from source checksums", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
         const eng = new ArgumentEngine(
             { id: "src-arg", version: 0 },
             claimLib,
-            sourceLib,
+
             csLibrary
         )
 
@@ -18871,12 +18623,10 @@ describe("forkArgument", () => {
         })
 
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
         const { engine: forked } = forkArgumentEngine(eng, "forked-arg", {
             claimLibrary: forkClaimLib,
-            sourceLibrary: forkSourceLib,
-            claimSourceLibrary: forkCsLib,
+            claimCitationLibrary: forkCsLib,
         })
 
         const srcSnapshot = eng.snapshot()
@@ -18911,9 +18661,8 @@ describe("forkArgument", () => {
 
     it("diffArguments without matchers sees forked entities as removed + added", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
-        const eng = new ArgumentEngine(ARG, claimLib, sourceLib, csLibrary)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
+        const eng = new ArgumentEngine(ARG, claimLib, csLibrary)
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         pm.addExpression(
@@ -18921,12 +18670,10 @@ describe("forkArgument", () => {
         )
 
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
         const { engine: forked } = forkArgumentEngine(eng, "forked-arg", {
             claimLibrary: forkClaimLib,
-            sourceLibrary: forkSourceLib,
-            claimSourceLibrary: forkCsLib,
+            claimCitationLibrary: forkCsLib,
         })
 
         const diff = diffArguments(eng, forked)
@@ -18970,7 +18717,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("createPremise auto-creates a premise-bound variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm, changes } = eng.createPremise()
 
         // Changeset includes a variable addition
@@ -18991,7 +18738,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("createPremise accepts a custom symbol for the auto-variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { changes } = eng.createPremise(undefined, "MyPremise")
         const autoVar = changes.variables!.added.find((v) => isPremiseBound(v))!
         expect((autoVar as unknown as TPremiseBoundVariable).symbol).toBe(
@@ -19000,7 +18747,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("createPremise auto-generates unique symbols on collision", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { changes: c1 } = eng.createPremise()
         const { changes: c2 } = eng.createPremise()
         const sym1 = (
@@ -19027,7 +18774,7 @@ describe("cross-argument variable binding", () => {
                 return false
             }
         }
-        const eng = new RestrictedEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new RestrictedEngine(ARG, aLib(), csLib())
         expect(() =>
             eng.bindVariableToExternalPremise({
                 id: "v-ext",
@@ -19042,7 +18789,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("bindVariableToExternalPremise registers an externally bound variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: varResult } = eng.bindVariableToExternalPremise({
             id: "v-ext",
             argumentId: ARG.id,
@@ -19066,7 +18813,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("bindVariableToExternalPremise rejects internal binding", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         expect(() =>
             eng.bindVariableToExternalPremise({
                 id: "v-int",
@@ -19081,7 +18828,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("bindVariableToArgument sets boundPremiseId to conclusionPremiseId", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.bindVariableToArgument(
             {
                 id: "v-arg",
@@ -19102,7 +18849,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("evaluation: internal binding is still lazily resolved", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("v-p", "X"))
         const { result: pm1 } = eng.createPremiseWithId("p1")
         pm1.addExpression({
@@ -19153,7 +18900,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("evaluation: external binding is evaluator-assigned", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.bindVariableToExternalPremise({
             id: "v-ext",
             argumentId: ARG.id,
@@ -19188,7 +18935,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("truth table: external binding included in columns", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.bindVariableToExternalPremise({
             id: "v-ext",
             argumentId: ARG.id,
@@ -19219,7 +18966,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("fromSnapshot restores both internal and external bound variables", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("v-claim", "Claim"))
         eng.bindVariableToExternalPremise({
             id: "v-ext",
@@ -19246,12 +18993,7 @@ describe("cross-argument variable binding", () => {
         eng.setConclusionPremise("p1")
 
         const snap = eng.snapshot()
-        const restored = ArgumentEngine.fromSnapshot(
-            snap,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib(), csLib())
 
         const vars = restored.getVariables()
         const extVar = vars.find((v) => v.id === "v-ext")
@@ -19755,7 +19497,7 @@ describe("ExpressionManager — validate", () => {
 
 describe("VariableManager — validate", () => {
     it("returns ok for a valid set of variables", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         eng.addVariable(makeVar("var-q", "Q"))
         const vm = (eng as unknown as { variables: VariableManager }).variables
@@ -19772,7 +19514,7 @@ describe("VariableManager — validate", () => {
     })
 
     it("detects checksum mismatch after snapshot tampering", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         const snap = (
             eng as unknown as { variables: VariableManager }
@@ -20077,7 +19819,7 @@ describe("ArgumentEngine — validate", () => {
     const ARG = { id: "arg-1", version: 1 }
 
     it("valid argument with premises and variables → ok", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.createPremise()
         eng.addVariable(makeVar("v-extra", "X"))
 
@@ -20087,7 +19829,7 @@ describe("ArgumentEngine — validate", () => {
     })
 
     it("empty argument → ok", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         // Clear conclusion (constructor doesn't auto-assign without premises)
         const result = eng.validate()
         expect(result.ok).toBe(true)
@@ -20097,7 +19839,7 @@ describe("ArgumentEngine — validate", () => {
     it("detects claim reference to non-existent claim", () => {
         // Create engine with a claim-bound variable referencing claim-default
         const claimLib = aLib()
-        const eng = new ArgumentEngine(ARG, claimLib, sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, claimLib, csLib(claimLib))
         eng.addVariable(makeVar("v1", "A"))
 
         // Snapshot, then restore with an empty ClaimLibrary
@@ -20109,8 +19851,7 @@ describe("ArgumentEngine — validate", () => {
         const engine2 = new ArgumentEngine(
             snap.argument,
             emptyClaimLib,
-            sLib(),
-            new ClaimSourceLibrary(emptyClaimLib, sLib())
+            new ClaimCitationLibrary(emptyClaimLib)
         )
         // Inject variables directly into the VariableManager via snapshot restore
         const vm = VariableManager.fromSnapshot(snap.variables)
@@ -20126,7 +19867,7 @@ describe("ArgumentEngine — validate", () => {
     })
 
     it("detects conclusion referencing non-existent premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.createPremise()
 
         const snap = eng.snapshot()
@@ -20138,7 +19879,6 @@ describe("ArgumentEngine — validate", () => {
             ArgumentEngine.fromSnapshot(
                 snap,
                 aLib(),
-                sLib(),
                 csLib(),
                 undefined,
                 "ignore"
@@ -20147,7 +19887,7 @@ describe("ArgumentEngine — validate", () => {
     })
 
     it("detects ownership mismatch on variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.createPremise()
 
         // Snapshot normally, then restore to get a clean engine
@@ -20155,7 +19895,6 @@ describe("ArgumentEngine — validate", () => {
         const restored = ArgumentEngine.fromSnapshot(
             snap,
             aLib(),
-            sLib(),
             csLib(),
             undefined,
             "ignore"
@@ -20204,7 +19943,7 @@ describe("ClaimLibrary — validate", () => {
 
     it("detects frozen claim without successor", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "claim-a" })
+        lib.create({ id: "claim-a", type: "normal" })
         // First freeze: version 0 (frozen) + version 1 (unfrozen)
         lib.freeze("claim-a")
         // Second freeze: version 1 (frozen) + version 2 (unfrozen)
@@ -20230,7 +19969,7 @@ describe("ClaimLibrary — validate", () => {
 
     it("detects claim failing schema check", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "claim-b" })
+        lib.create({ id: "claim-b", type: "normal" })
         const snap = lib.snapshot()
         // Tamper: remove the checksum field to break schema
         const tampered = snap.claims.map((c) => {
@@ -20252,143 +19991,94 @@ describe("ClaimLibrary — validate", () => {
 })
 
 // ---------------------------------------------------------------------------
-// SourceLibrary — validate
+// ClaimCitationLibrary — validate
 // ---------------------------------------------------------------------------
 
-describe("SourceLibrary — validate", () => {
-    it("returns ok for a valid library", () => {
-        const lib = new SourceLibrary()
-        const result = lib.validate()
-        expect(result.ok).toBe(true)
-        expect(result.violations).toHaveLength(0)
-    })
-
-    it("returns ok after adding a source", () => {
-        const lib = new SourceLibrary()
-        lib.create({ id: "source-a" })
-        const result = lib.validate()
-        expect(result.ok).toBe(true)
-        expect(result.violations).toHaveLength(0)
-    })
-
-    it("detects source failing schema check", () => {
-        const lib = new SourceLibrary()
-        lib.create({ id: "source-b" })
-        const snap = lib.snapshot()
-        const tampered = snap.sources.map((s) => {
-            const { checksum: _omit, ...rest } = s
-            return rest
-        })
-        const restored = SourceLibrary.fromSnapshot({
-            sources: tampered as Parameters<
-                typeof SourceLibrary.fromSnapshot
-            >[0]["sources"],
-        })
-        const result = restored.validate()
-        expect(result.ok).toBe(false)
-        const violations = result.violations.filter(
-            (v) => v.code === SOURCE_SCHEMA_INVALID
-        )
-        expect(violations.length).toBeGreaterThan(0)
-    })
-})
-
-// ---------------------------------------------------------------------------
-// ClaimSourceLibrary — validate
-// ---------------------------------------------------------------------------
-
-describe("ClaimSourceLibrary — validate", () => {
-    it("returns ok for a library with valid associations", () => {
+describe("ClaimCitationLibrary — validate", () => {
+    it("returns ok for a library with valid citations", () => {
         const claimLib = new ClaimLibrary()
-        claimLib.create({ id: "claim-x" })
-        const sourceLib = new SourceLibrary()
-        sourceLib.create({ id: "source-x" })
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
-        csLibrary.add({
-            id: "assoc-1",
-            claimId: "claim-x",
-            claimVersion: 0,
-            sourceId: "source-x",
-            sourceVersion: 0,
+        claimLib.create({ id: "claim-x", type: "normal" })
+        claimLib.create({ id: "source-x", type: "citation" })
+        const ccLibrary = new ClaimCitationLibrary(claimLib)
+        ccLibrary.add({
+            id: "cit-1",
+            citingClaimId: "claim-x",
+            citingClaimVersion: 0,
+            sourceClaimId: "source-x",
+            sourceClaimVersion: 0,
         })
-        const result = csLibrary.validate()
+        const result = ccLibrary.validate()
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
     })
 
     it("returns ok for an empty library", () => {
-        const csLibrary = new ClaimSourceLibrary(aLib(), sLib())
-        const result = csLibrary.validate()
+        const ccLibrary = new ClaimCitationLibrary(aLib())
+        const result = ccLibrary.validate()
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
     })
 
-    it("detects association referencing non-existent claim", () => {
+    it("detects citation referencing non-existent citing claim", () => {
         const claimLib = new ClaimLibrary()
-        claimLib.create({ id: "claim-y" })
-        const sourceLib = new SourceLibrary()
-        sourceLib.create({ id: "source-y" })
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
-        csLibrary.add({
-            id: "assoc-2",
-            claimId: "claim-y",
-            claimVersion: 0,
-            sourceId: "source-y",
-            sourceVersion: 0,
+        claimLib.create({ id: "claim-y", type: "normal" })
+        claimLib.create({ id: "source-y", type: "citation" })
+        const ccLibrary = new ClaimCitationLibrary(claimLib)
+        ccLibrary.add({
+            id: "cit-2",
+            citingClaimId: "claim-y",
+            citingClaimVersion: 0,
+            sourceClaimId: "source-y",
+            sourceClaimVersion: 0,
         })
 
-        // Restore against an empty ClaimLibrary so the claim ref is not found
-        const snap = csLibrary.snapshot()
+        // Restore against an empty ClaimLibrary so neither ref is found
+        const snap = ccLibrary.snapshot()
         const emptyClaimLib = new ClaimLibrary()
-        const restored = ClaimSourceLibrary.fromSnapshot(
-            snap,
-            emptyClaimLib,
-            sourceLib
-        )
+        const restored = ClaimCitationLibrary.fromSnapshot(snap, emptyClaimLib)
         const result = restored.validate()
         expect(result.ok).toBe(false)
         const violations = result.violations.filter(
-            (v) => v.code === ASSOC_CLAIM_REF_NOT_FOUND
+            (v) => v.code === CITATION_CITING_REF_NOT_FOUND
         )
         expect(violations.length).toBe(1)
-        expect(violations[0].entityId).toBe("assoc-2")
+        expect(violations[0].entityId).toBe("cit-2")
     })
 
-    it("detects association referencing non-existent source", () => {
+    it("detects citation referencing non-existent source claim", () => {
         const claimLib = new ClaimLibrary()
-        claimLib.create({ id: "claim-z" })
-        const sourceLib = new SourceLibrary()
-        sourceLib.create({ id: "source-z" })
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
-        csLibrary.add({
-            id: "assoc-3",
-            claimId: "claim-z",
-            claimVersion: 0,
-            sourceId: "source-z",
-            sourceVersion: 0,
+        claimLib.create({ id: "claim-z", type: "normal" })
+        claimLib.create({ id: "source-z", type: "citation" })
+        const ccLibrary = new ClaimCitationLibrary(claimLib)
+        ccLibrary.add({
+            id: "cit-3",
+            citingClaimId: "claim-z",
+            citingClaimVersion: 0,
+            sourceClaimId: "source-z",
+            sourceClaimVersion: 0,
         })
 
-        // Restore against an empty SourceLibrary so the source ref is not found
-        const snap = csLibrary.snapshot()
-        const emptySourceLib = new SourceLibrary()
-        const restored = ClaimSourceLibrary.fromSnapshot(
+        // Restore against a ClaimLibrary that only has the citing claim, not the source
+        const snap = ccLibrary.snapshot()
+        const partialClaimLib = new ClaimLibrary()
+        partialClaimLib.create({ id: "claim-z", type: "normal" })
+        const restored = ClaimCitationLibrary.fromSnapshot(
             snap,
-            claimLib,
-            emptySourceLib
+            partialClaimLib
         )
         const result = restored.validate()
         expect(result.ok).toBe(false)
         const violations = result.violations.filter(
-            (v) => v.code === ASSOC_SOURCE_REF_NOT_FOUND
+            (v) => v.code === CITATION_SOURCE_REF_NOT_FOUND
         )
         expect(violations.length).toBe(1)
-        expect(violations[0].entityId).toBe("assoc-3")
+        expect(violations[0].entityId).toBe("cit-3")
     })
 })
 
 describe("ArgumentEngine — withValidation bracket", () => {
     it("valid operations still work after wrapping", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -20396,7 +20086,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
     })
 
     it("existing per-operation errors still throw with rollback", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         expect(() =>
             eng.addVariable({ ...makeVar("v1", "P"), argumentId: "wrong-arg" })
         ).toThrow()
@@ -20404,7 +20094,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
     })
 
     it("state is consistent after successful removePremise", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         eng.removePremise(pm.getId())
         expect(eng.hasPremise(pm.getId())).toBe(false)
@@ -20414,7 +20104,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
 
 describe("PremiseEngine — withValidation bracket", () => {
     it("triggers argument-level validation on expression mutation", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -20422,7 +20112,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("rolls back on failed expression mutation (nonexistent variable)", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         expect(() =>
             pm.addExpression(
@@ -20435,7 +20125,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("rolls back appendExpression on failure", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         expect(() =>
             pm.appendExpression(null, {
@@ -20451,7 +20141,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("valid operations through PremiseEngine produce correct state", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         eng.addVariable(makeVar("var-q", "Q"))
         const { result: pm } = eng.createPremise()
@@ -20490,7 +20180,7 @@ describe("PremiseEngine — withValidation bracket", () => {
         // Build a valid premise with a single variable expression, then try
         // removing it — the premise itself stays valid (empty is fine) so
         // this should succeed and not roll back.
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -20500,7 +20190,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("setExtras succeeds under validation", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         pm.setExtras({ label: "test" })
         expect(pm.getExtras()).toEqual({ label: "test" })
@@ -20508,7 +20198,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("updateExpression rolls back on nonexistent variable reference", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -20522,7 +20212,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("expression index is restored on rollback", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         // Try adding an expression referencing a nonexistent variable
         expect(() =>
@@ -20540,105 +20230,82 @@ describe("PremiseEngine — withValidation bracket", () => {
 describe("Library — withValidation brackets", () => {
     it("ClaimLibrary validates after create", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "c1" })
+        lib.create({ id: "c1", type: "normal" })
         expect(lib.validate().ok).toBe(true)
     })
 
     it("ClaimLibrary validates after freeze", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "c1" })
+        lib.create({ id: "c1", type: "normal" })
         lib.freeze("c1")
         expect(lib.validate().ok).toBe(true)
     })
 
     it("ClaimLibrary rolls back on duplicate create", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "c1" })
-        expect(() => lib.create({ id: "c1" })).toThrow()
+        lib.create({ id: "c1", type: "normal" })
+        expect(() => lib.create({ id: "c1", type: "normal" })).toThrow()
         // Only one entry should exist after rollback
         expect(lib.getAll()).toHaveLength(1)
     })
 
-    it("SourceLibrary validates after create", () => {
-        const lib = new SourceLibrary()
-        lib.create({ id: "s1" })
-        expect(lib.validate().ok).toBe(true)
-    })
-
-    it("SourceLibrary validates after freeze", () => {
-        const lib = new SourceLibrary()
-        lib.create({ id: "s1" })
-        lib.freeze("s1")
-        expect(lib.validate().ok).toBe(true)
-    })
-
-    it("SourceLibrary rolls back on duplicate create", () => {
-        const lib = new SourceLibrary()
-        lib.create({ id: "s1" })
-        expect(() => lib.create({ id: "s1" })).toThrow()
-        expect(lib.getAll()).toHaveLength(1)
-    })
-
-    it("ClaimSourceLibrary validates after add", () => {
+    it("ClaimCitationLibrary validates after add", () => {
         const cl = aLib()
-        const sl = sLib()
-        sl.create({ id: "s1" })
-        const csl = new ClaimSourceLibrary(cl, sl)
-        csl.add({
+        cl.create({ id: "s1", type: "citation" })
+        const ccl = new ClaimCitationLibrary(cl)
+        ccl.add({
             id: "a1",
-            claimId: "claim-default",
-            claimVersion: 0,
-            sourceId: "s1",
-            sourceVersion: 0,
+            citingClaimId: "claim-default",
+            citingClaimVersion: 0,
+            sourceClaimId: "s1",
+            sourceClaimVersion: 0,
         })
-        expect(csl.validate().ok).toBe(true)
+        expect(ccl.validate().ok).toBe(true)
     })
 
-    it("ClaimSourceLibrary validates after remove", () => {
+    it("ClaimCitationLibrary validates after remove", () => {
         const cl = aLib()
-        const sl = sLib()
-        sl.create({ id: "s1" })
-        const csl = new ClaimSourceLibrary(cl, sl)
-        csl.add({
+        cl.create({ id: "s1", type: "citation" })
+        const ccl = new ClaimCitationLibrary(cl)
+        ccl.add({
             id: "a1",
-            claimId: "claim-default",
-            claimVersion: 0,
-            sourceId: "s1",
-            sourceVersion: 0,
+            citingClaimId: "claim-default",
+            citingClaimVersion: 0,
+            sourceClaimId: "s1",
+            sourceClaimVersion: 0,
         })
-        csl.remove("a1")
-        expect(csl.validate().ok).toBe(true)
-        expect(csl.getAll()).toHaveLength(0)
+        ccl.remove("a1")
+        expect(ccl.validate().ok).toBe(true)
+        expect(ccl.getAll()).toHaveLength(0)
     })
 
-    it("ClaimSourceLibrary rolls back on duplicate add", () => {
+    it("ClaimCitationLibrary rolls back on duplicate add", () => {
         const cl = aLib()
-        const sl = sLib()
-        sl.create({ id: "s1" })
-        const csl = new ClaimSourceLibrary(cl, sl)
-        csl.add({
+        cl.create({ id: "s1", type: "citation" })
+        const ccl = new ClaimCitationLibrary(cl)
+        ccl.add({
             id: "a1",
-            claimId: "claim-default",
-            claimVersion: 0,
-            sourceId: "s1",
-            sourceVersion: 0,
+            citingClaimId: "claim-default",
+            citingClaimVersion: 0,
+            sourceClaimId: "s1",
+            sourceClaimVersion: 0,
         })
         expect(() =>
-            csl.add({
+            ccl.add({
                 id: "a1",
-                claimId: "claim-default",
-                claimVersion: 0,
-                sourceId: "s1",
-                sourceVersion: 0,
+                citingClaimId: "claim-default",
+                citingClaimVersion: 0,
+                sourceClaimId: "s1",
+                sourceClaimVersion: 0,
             })
         ).toThrow()
-        expect(csl.getAll()).toHaveLength(1)
+        expect(ccl.getAll()).toHaveLength(1)
     })
 })
 
 describe("ArgumentEngine — bulk path validation", () => {
     it("fromSnapshot validates loaded state", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
         const { result: pm } = eng.createPremise()
@@ -20654,7 +20321,7 @@ describe("ArgumentEngine — bulk path validation", () => {
         const snap = eng.snapshot()
         // Loading with strict config should throw — and→or violates formula-between-operators
         expect(() =>
-            ArgumentEngine.fromSnapshot(snap, aLib(), sLib(), csLib(), {
+            ArgumentEngine.fromSnapshot(snap, aLib(), csLib(), {
                 enforceFormulaBetweenOperators: true,
                 autoNormalize: false,
             })
@@ -20662,7 +20329,7 @@ describe("ArgumentEngine — bulk path validation", () => {
     })
 
     it("fromData validates loaded state", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
         const { result: pm } = eng.createPremise()
@@ -20676,12 +20343,12 @@ describe("ArgumentEngine — bulk path validation", () => {
             })
         )
         const snap = eng.snapshot()
-        expect(() =>
+        expect(() => {
+            const fromDataClaimLib = aLib()
             ArgumentEngine.fromData(
                 snap.argument,
-                aLib(),
-                sLib(),
-                new ClaimSourceLibrary(aLib(), sLib()),
+                fromDataClaimLib,
+                new ClaimCitationLibrary(fromDataClaimLib),
                 snap.variables.variables,
                 snap.premises.map((p) => p.premise),
                 snap.premises.flatMap((p) => p.expressions.expressions),
@@ -20697,11 +20364,11 @@ describe("ArgumentEngine — bulk path validation", () => {
                     autoNormalize: false,
                 }
             )
-        ).toThrow()
+        }).toThrow()
     })
 
     it("rollback validates and rejects invalid snapshot", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         const premiseId = pm.getId()
         const goodSnap = eng.snapshot()
@@ -20782,7 +20449,6 @@ describe("Changeset includes ancestor checksum updates", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const v1 = {
@@ -22044,33 +21710,32 @@ describe("empty lookup constants", () => {
         expect(EMPTY_CLAIM_LOOKUP.get("any", 0)).toBeUndefined()
     })
 
-    it("EMPTY_SOURCE_LOOKUP.get returns undefined", () => {
-        expect(EMPTY_SOURCE_LOOKUP.get("any", 0)).toBeUndefined()
+    it("EMPTY_CLAIM_CITATION_LOOKUP.get returns undefined", () => {
+        expect(EMPTY_CLAIM_CITATION_LOOKUP.get("any")).toBeUndefined()
     })
 
-    it("EMPTY_CLAIM_SOURCE_LOOKUP.get returns undefined", () => {
-        expect(EMPTY_CLAIM_SOURCE_LOOKUP.get("any")).toBeUndefined()
+    it("EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForCitingClaim returns empty array", () => {
+        expect(
+            EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForCitingClaim("any")
+        ).toEqual([])
     })
 
-    it("EMPTY_CLAIM_SOURCE_LOOKUP.getForClaim returns empty array", () => {
-        expect(EMPTY_CLAIM_SOURCE_LOOKUP.getForClaim("any")).toEqual([])
-    })
-
-    it("EMPTY_CLAIM_SOURCE_LOOKUP.getForSource returns empty array", () => {
-        expect(EMPTY_CLAIM_SOURCE_LOOKUP.getForSource("any")).toEqual([])
+    it("EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForSourceClaim returns empty array", () => {
+        expect(
+            EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForSourceClaim("any")
+        ).toEqual([])
     })
 })
 
 describe("forkArgumentEngine", () => {
     it("produces identical results to the engine method", () => {
         const claimLib = aLib()
-        const sourceLib = sLib()
-        const csLibrary = new ClaimSourceLibrary(claimLib, sourceLib)
+        const csLibrary = new ClaimCitationLibrary(claimLib)
 
         const eng = new ArgumentEngine(
             { id: "src-arg", version: 2 },
             claimLib,
-            sourceLib,
+
             csLibrary
         )
 
@@ -22098,8 +21763,7 @@ describe("forkArgumentEngine", () => {
         eng.setConclusionPremise("prem-1")
 
         const forkClaimLib = aLib()
-        const forkSourceLib = sLib()
-        const forkCsLib = new ClaimSourceLibrary(forkClaimLib, forkSourceLib)
+        const forkCsLib = new ClaimCitationLibrary(forkClaimLib)
 
         let counter = 0
         const { engine: forked, remapTable } = forkArgumentEngine(
@@ -22107,8 +21771,7 @@ describe("forkArgumentEngine", () => {
             "fork-arg",
             {
                 claimLibrary: forkClaimLib,
-                sourceLibrary: forkSourceLib,
-                claimSourceLibrary: forkCsLib,
+                claimCitationLibrary: forkCsLib,
             },
             { generateId: () => `fk-${counter++}` }
         )
@@ -22158,13 +21821,12 @@ describe("forkArgumentEngine", () => {
                 return false
             }
         }
-        const eng = new NoForkEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new NoForkEngine(ARG, aLib(), csLib())
         // Standalone function should NOT check canFork
         expect(() =>
             forkArgumentEngine(eng, "new-arg", {
                 claimLibrary: aLib(),
-                sourceLibrary: sLib(),
-                claimSourceLibrary: csLib(),
+                claimCitationLibrary: csLib(),
             })
         ).not.toThrow()
     })
@@ -22239,24 +21901,6 @@ describe("ForkRecordSchemas", () => {
 
             const withVersion = { ...base, forkedFromEntityVersion: 2 }
             expect(Value.Check(CoreClaimForkRecordSchema, withVersion)).toBe(
-                true
-            )
-        })
-    })
-
-    describe("CoreSourceForkRecordSchema", () => {
-        it("should require forkedFromEntityVersion", () => {
-            const base = {
-                entityId: crypto.randomUUID(),
-                forkedFromEntityId: crypto.randomUUID(),
-                forkedFromArgumentId: crypto.randomUUID(),
-                forkedFromArgumentVersion: 0,
-                forkId: crypto.randomUUID(),
-            }
-            expect(Value.Check(CoreSourceForkRecordSchema, base)).toBe(false)
-
-            const withVersion = { ...base, forkedFromEntityVersion: 1 }
-            expect(Value.Check(CoreSourceForkRecordSchema, withVersion)).toBe(
                 true
             )
         })
@@ -22379,14 +22023,13 @@ describe("ForkLibrary", () => {
         ...overrides,
     })
 
-    it("should expose six namespaces", () => {
+    it("should expose five namespaces", () => {
         const lib = new ForkLibrary()
         expect(lib.arguments).toBeInstanceOf(ForkNamespace)
         expect(lib.premises).toBeInstanceOf(ForkNamespace)
         expect(lib.expressions).toBeInstanceOf(ForkNamespace)
         expect(lib.variables).toBeInstanceOf(ForkNamespace)
         expect(lib.claims).toBeInstanceOf(ForkNamespace)
-        expect(lib.sources).toBeInstanceOf(ForkNamespace)
     })
 
     it("should round-trip all namespaces via snapshot/fromSnapshot", () => {
@@ -22403,10 +22046,6 @@ describe("ForkLibrary", () => {
             ...makeBaseRecord({ forkId }),
             forkedFromEntityVersion: 2,
         } as TCoreClaimForkRecord)
-        const sourceRecord = lib.sources.create({
-            ...makeBaseRecord({ forkId }),
-            forkedFromEntityVersion: 1,
-        } as TCoreSourceForkRecord)
 
         const snap = lib.snapshot()
         const restored = ForkLibrary.fromSnapshot(snap)
@@ -22418,9 +22057,6 @@ describe("ForkLibrary", () => {
         )
         expect(restored.variables.get(varRecord.entityId)).toEqual(varRecord)
         expect(restored.claims.get(claimRecord.entityId)).toEqual(claimRecord)
-        expect(restored.sources.get(sourceRecord.entityId)).toEqual(
-            sourceRecord
-        )
     })
 
     it("should merge validation results from all namespaces", () => {
@@ -22439,12 +22075,8 @@ describe("ArgumentLibrary", () => {
 
     const makeLibraries = () => {
         const claimLibrary = new ClaimLibrary()
-        const sourceLibrary = new SourceLibrary()
-        const claimSourceLibrary = new ClaimSourceLibrary(
-            claimLibrary,
-            sourceLibrary
-        )
-        return { claimLibrary, sourceLibrary, claimSourceLibrary }
+        const claimCitationLibrary = new ClaimCitationLibrary(claimLibrary)
+        return { claimLibrary, claimCitationLibrary }
     }
 
     it("should create and retrieve an engine", () => {
@@ -22511,8 +22143,7 @@ describe("ArgumentLibrary", () => {
         const engine = new ArgumentEngine(
             arg,
             libs.claimLibrary,
-            libs.sourceLibrary,
-            libs.claimSourceLibrary
+            libs.claimCitationLibrary
         )
         argLib.register(engine)
         expect(argLib.get(arg.id)).toBe(engine)
@@ -22526,8 +22157,7 @@ describe("ArgumentLibrary", () => {
         const engine = new ArgumentEngine(
             arg,
             libs.claimLibrary,
-            libs.sourceLibrary,
-            libs.claimSourceLibrary
+            libs.claimCitationLibrary
         )
         expect(() => argLib.register(engine)).toThrow(/already exists/)
     })
@@ -22538,26 +22168,19 @@ describe("PropositCore", () => {
         const core = new PropositCore()
         expect(core.arguments).toBeInstanceOf(ArgumentLibrary)
         expect(core.claims).toBeInstanceOf(ClaimLibrary)
-        expect(core.sources).toBeInstanceOf(SourceLibrary)
-        expect(core.claimSources).toBeInstanceOf(ClaimSourceLibrary)
+        expect(core.claimCitations).toBeInstanceOf(ClaimCitationLibrary)
         expect(core.forks).toBeInstanceOf(ForkLibrary)
     })
 
     it("should accept pre-constructed libraries", () => {
         const claimLibrary = new ClaimLibrary()
-        const sourceLibrary = new SourceLibrary()
-        const claimSourceLibrary = new ClaimSourceLibrary(
-            claimLibrary,
-            sourceLibrary
-        )
+        const claimCitationLibrary = new ClaimCitationLibrary(claimLibrary)
         const core = new PropositCore({
             claimLibrary,
-            sourceLibrary,
-            claimSourceLibrary,
+            claimCitationLibrary,
         })
         expect(core.claims).toBe(claimLibrary)
-        expect(core.sources).toBe(sourceLibrary)
-        expect(core.claimSources).toBe(claimSourceLibrary)
+        expect(core.claimCitations).toBe(claimCitationLibrary)
     })
 
     it("should accept a pre-constructed fork library", () => {
@@ -22568,20 +22191,14 @@ describe("PropositCore", () => {
 
     it("should accept a pre-constructed argument library", () => {
         const claimLibrary = new ClaimLibrary()
-        const sourceLibrary = new SourceLibrary()
-        const claimSourceLibrary = new ClaimSourceLibrary(
-            claimLibrary,
-            sourceLibrary
-        )
+        const claimCitationLibrary = new ClaimCitationLibrary(claimLibrary)
         const argumentLibrary = new ArgumentLibrary({
             claimLibrary,
-            sourceLibrary,
-            claimSourceLibrary,
+            claimCitationLibrary,
         })
         const core = new PropositCore({
             claimLibrary,
-            sourceLibrary,
-            claimSourceLibrary,
+            claimCitationLibrary,
             argumentLibrary,
         })
         expect(core.arguments).toBe(argumentLibrary)
@@ -22589,26 +22206,16 @@ describe("PropositCore", () => {
 
     it("should round-trip via snapshot/fromSnapshot with claims", () => {
         const core = new PropositCore()
-        const claim = core.claims.create({ id: crypto.randomUUID() })
+        const claim = core.claims.create({
+            id: crypto.randomUUID(),
+            type: "normal",
+        })
 
         const snap = core.snapshot()
         const restored = PropositCore.fromSnapshot(snap)
 
         expect(restored.claims.get(claim.id, claim.version)).toBeDefined()
         expect(restored.claims.get(claim.id, claim.version)!.id).toBe(claim.id)
-    })
-
-    it("should round-trip via snapshot/fromSnapshot with sources", () => {
-        const core = new PropositCore()
-        const source = core.sources.create({ id: crypto.randomUUID() })
-
-        const snap = core.snapshot()
-        const restored = PropositCore.fromSnapshot(snap)
-
-        expect(restored.sources.get(source.id, source.version)).toBeDefined()
-        expect(restored.sources.get(source.id, source.version)!.id).toBe(
-            source.id
-        )
     })
 
     it("should round-trip via snapshot/fromSnapshot with arguments", () => {
@@ -22622,25 +22229,33 @@ describe("PropositCore", () => {
         expect(restored.arguments.get(argId)).toBeDefined()
     })
 
-    it("should round-trip via snapshot/fromSnapshot with claim-source associations", () => {
+    it("should round-trip via snapshot/fromSnapshot with claim citations", () => {
         const core = new PropositCore()
-        const claim = core.claims.create({ id: crypto.randomUUID() })
-        core.claims.freeze(claim.id)
-        const source = core.sources.create({ id: crypto.randomUUID() })
-        core.sources.freeze(source.id)
-        const assoc = core.claimSources.add({
+        const claim = core.claims.create({
             id: crypto.randomUUID(),
-            claimId: claim.id,
-            claimVersion: 0,
-            sourceId: source.id,
-            sourceVersion: 0,
+            type: "normal",
+        })
+        core.claims.freeze(claim.id)
+        const source = core.claims.create({
+            id: crypto.randomUUID(),
+            type: "citation",
+        })
+        core.claims.freeze(source.id)
+        const cit = core.claimCitations.add({
+            id: crypto.randomUUID(),
+            citingClaimId: claim.id,
+            citingClaimVersion: 0,
+            sourceClaimId: source.id,
+            sourceClaimVersion: 0,
         })
 
         const snap = core.snapshot()
         const restored = PropositCore.fromSnapshot(snap)
 
-        expect(restored.claimSources.get(assoc.id)).toBeDefined()
-        expect(restored.claimSources.get(assoc.id)!.claimId).toBe(claim.id)
+        expect(restored.claimCitations.get(cit.id)).toBeDefined()
+        expect(restored.claimCitations.get(cit.id)!.citingClaimId).toBe(
+            claim.id
+        )
     })
 
     it("should round-trip via snapshot/fromSnapshot with fork records", () => {
@@ -22664,21 +22279,25 @@ describe("PropositCore", () => {
     it("should round-trip a full snapshot with all library types", () => {
         const core = new PropositCore()
 
-        // Populate claims
-        const claim = core.claims.create({ id: crypto.randomUUID() })
-        core.claims.freeze(claim.id)
-
-        // Populate sources
-        const source = core.sources.create({ id: crypto.randomUUID() })
-        core.sources.freeze(source.id)
-
-        // Populate associations
-        core.claimSources.add({
+        // Populate claims (one normal, one citation)
+        const claim = core.claims.create({
             id: crypto.randomUUID(),
-            claimId: claim.id,
-            claimVersion: 0,
-            sourceId: source.id,
-            sourceVersion: 0,
+            type: "normal",
+        })
+        core.claims.freeze(claim.id)
+        const source = core.claims.create({
+            id: crypto.randomUUID(),
+            type: "citation",
+        })
+        core.claims.freeze(source.id)
+
+        // Populate citations
+        core.claimCitations.add({
+            id: crypto.randomUUID(),
+            citingClaimId: claim.id,
+            citingClaimVersion: 0,
+            sourceClaimId: source.id,
+            sourceClaimVersion: 0,
         })
 
         // Populate arguments
@@ -22696,9 +22315,8 @@ describe("PropositCore", () => {
         const snap = core.snapshot()
         const restored = PropositCore.fromSnapshot(snap)
 
-        expect(restored.claims.getAll()).toHaveLength(2) // frozen + successor
-        expect(restored.sources.getAll()).toHaveLength(2) // frozen + successor
-        expect(restored.claimSources.getAll()).toHaveLength(1)
+        expect(restored.claims.getAll()).toHaveLength(4) // 2× (frozen + successor)
+        expect(restored.claimCitations.getAll()).toHaveLength(1)
         expect(restored.arguments.getAll()).toHaveLength(1)
         expect(restored.forks.arguments.getAll()).toHaveLength(1)
     })
@@ -22714,10 +22332,16 @@ describe("PropositCore", () => {
         const core = new PropositCore()
 
         // Populate with valid data
-        const claim = core.claims.create({ id: crypto.randomUUID() })
+        const claim = core.claims.create({
+            id: crypto.randomUUID(),
+            type: "normal",
+        })
         core.claims.freeze(claim.id)
-        const source = core.sources.create({ id: crypto.randomUUID() })
-        core.sources.freeze(source.id)
+        const source = core.claims.create({
+            id: crypto.randomUUID(),
+            type: "citation",
+        })
+        core.claims.freeze(source.id)
         core.arguments.create({ id: crypto.randomUUID(), version: 0 })
 
         const result = core.validate()
@@ -22743,21 +22367,27 @@ describe("PropositCore", () => {
         const setupForFork = () => {
             const core = new PropositCore()
 
-            // Create a claim and freeze it
-            const claim = core.claims.create({ id: crypto.randomUUID() })
+            // Create a normal claim and freeze it
+            const claim = core.claims.create({
+                id: crypto.randomUUID(),
+                type: "normal",
+            })
             const frozenResult = core.claims.freeze(claim.id)
 
-            // Create a source and freeze it
-            const source = core.sources.create({ id: crypto.randomUUID() })
-            const frozenSource = core.sources.freeze(source.id)
-
-            // Create claim-source association
-            const assoc = core.claimSources.add({
+            // Create a citation-typed claim (the source-side endpoint) and freeze it
+            const source = core.claims.create({
                 id: crypto.randomUUID(),
-                claimId: frozenResult.frozen.id,
-                claimVersion: frozenResult.frozen.version,
-                sourceId: frozenSource.frozen.id,
-                sourceVersion: frozenSource.frozen.version,
+                type: "citation",
+            })
+            const frozenSource = core.claims.freeze(source.id)
+
+            // Create a citation linking citing claim → source claim
+            const cit = core.claimCitations.add({
+                id: crypto.randomUUID(),
+                citingClaimId: frozenResult.frozen.id,
+                citingClaimVersion: frozenResult.frozen.version,
+                sourceClaimId: frozenSource.frozen.id,
+                sourceClaimVersion: frozenSource.frozen.version,
             })
 
             // Create an argument with a variable referencing the frozen claim
@@ -22790,27 +22420,27 @@ describe("PropositCore", () => {
                 engine,
                 claim: frozenResult.frozen,
                 source: frozenSource.frozen,
-                assoc,
+                cit,
                 variable,
                 premiseId,
             }
         }
 
-        it("should fork an argument with cloned claims, sources, and associations", () => {
+        it("should fork an argument with cloned claims and citations", () => {
             const { core, arg, premiseId } = setupForFork()
             const newArgId = crypto.randomUUID()
             const result = core.forkArgument(arg.id, newArgId)
 
             expect(core.arguments.get(newArgId)).toBeDefined()
             expect(result.engine.getArgument().id).toBe(newArgId)
-            expect(result.claimRemap.size).toBe(1)
-            expect(result.sourceRemap.size).toBe(1)
+            // claimRemap covers the claim-bound variable's claim plus the
+            // citation-typed source claim transitively pulled in.
+            expect(result.claimRemap.size).toBe(2)
             expect(result.argumentFork).toBeDefined()
             expect(core.forks.arguments.getAll()).toHaveLength(1)
             expect(core.forks.premises.getAll().length).toBeGreaterThan(0)
             expect(core.forks.variables.getAll().length).toBeGreaterThan(0)
-            expect(core.forks.claims.getAll()).toHaveLength(1)
-            expect(core.forks.sources.getAll()).toHaveLength(1)
+            expect(core.forks.claims.getAll()).toHaveLength(2)
             expect(core.forks.expressions.getAll().length).toBeGreaterThan(0)
             const exprFork = core.forks.expressions.getAll()[0]
             expect(exprFork.forkedFromPremiseId).toBe(premiseId)
@@ -22845,8 +22475,7 @@ describe("PropositCore", () => {
             const noFork = new NoForkEngine(
                 engine.getArgument(),
                 core.claims,
-                core.sources,
-                core.claimSources
+                core.claimCitations
             )
             core.arguments.register(noFork)
 
@@ -22862,16 +22491,19 @@ describe("PropositCore", () => {
             ).toThrow(/not found/)
         })
 
-        it("should create cloned claim-source associations", () => {
+        it("should create cloned claim citations", () => {
             const { core, arg } = setupForFork()
-            const assocsBefore = core.claimSources.getAll().length
+            const citsBefore = core.claimCitations.getAll().length
             core.forkArgument(arg.id, crypto.randomUUID())
-            expect(core.claimSources.getAll().length).toBe(assocsBefore + 1)
+            expect(core.claimCitations.getAll().length).toBe(citsBefore + 1)
         })
 
         it("should dedup claims when multiple variables reference the same claim", () => {
             const core = new PropositCore()
-            const claim = core.claims.create({ id: crypto.randomUUID() })
+            const claim = core.claims.create({
+                id: crypto.randomUUID(),
+                type: "normal",
+            })
 
             const arg = { id: crypto.randomUUID(), version: 0 }
             const engine = core.arguments.create(arg)
@@ -22924,7 +22556,10 @@ describe("PropositCore", () => {
                 }
             }
             const core = new CustomCore()
-            const claim = core.claims.create({ id: crypto.randomUUID() })
+            const claim = core.claims.create({
+                id: crypto.randomUUID(),
+                type: "normal",
+            })
             const arg = { id: crypto.randomUUID(), version: 0 }
             const engine = core.arguments.create(arg)
             engine.createPremise()
@@ -22941,26 +22576,22 @@ describe("PropositCore", () => {
             expect(hookCalled).toBe(true)
         })
 
-        it("should record forkedFromEntityVersion on claim and source fork records", () => {
-            const { core, arg, claim, source } = setupForFork()
+        it("should record forkedFromEntityVersion on claim fork records", () => {
+            const { core, arg, claim } = setupForFork()
             const currentClaimVersion = core.claims.getCurrent(
                 claim.id
             )!.version
-            const currentSourceVersion = core.sources.getCurrent(
-                source.id
-            )!.version
             core.forkArgument(arg.id, crypto.randomUUID())
 
-            const claimFork = core.forks.claims.getAll()[0]
-            expect(claimFork.forkedFromEntityVersion).toBe(currentClaimVersion)
-
-            const sourceFork = core.forks.sources.getAll()[0]
-            expect(sourceFork.forkedFromEntityVersion).toBe(
-                currentSourceVersion
+            const claimForks = core.forks.claims.getAll()
+            const matching = claimForks.find(
+                (cf) => cf.forkedFromEntityId === claim.id
             )
+            expect(matching).toBeDefined()
+            expect(matching!.forkedFromEntityVersion).toBe(currentClaimVersion)
         })
 
-        it("should propagate a custom forkId to all six fork record namespaces", () => {
+        it("should propagate a custom forkId to all five fork record namespaces", () => {
             const { core, arg } = setupForFork()
             const customForkId = "custom-fork-id"
             core.forkArgument(arg.id, crypto.randomUUID(), {
@@ -22992,11 +22623,6 @@ describe("PropositCore", () => {
                     .getAll()
                     .every((r) => r.forkId === customForkId)
             ).toBe(true)
-            expect(
-                core.forks.sources
-                    .getAll()
-                    .every((r) => r.forkId === customForkId)
-            ).toBe(true)
         })
     })
 
@@ -23015,7 +22641,10 @@ describe("PropositCore", () => {
 
         it("should automatically pair forked entities via fork records", () => {
             const core = new PropositCore()
-            const claim = core.claims.create({ id: crypto.randomUUID() })
+            const claim = core.claims.create({
+                id: crypto.randomUUID(),
+                type: "normal",
+            })
             const arg = { id: crypto.randomUUID(), version: 0 }
             const engine = core.arguments.create(arg)
             engine.createPremise()
@@ -23212,7 +22841,7 @@ describe("PropositCore", () => {
             let counter = 0
             const generateId = () => `ae-id-${++counter}`
 
-            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+            const engine = new ArgumentEngine(ARG, aLib(), csLib(), {
                 generateId,
             })
 
@@ -23231,7 +22860,7 @@ describe("PropositCore", () => {
             let counter = 0
             const generateId = () => `ae-id-${++counter}`
 
-            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+            const engine = new ArgumentEngine(ARG, aLib(), csLib(), {
                 generateId,
                 grammarConfig: {
                     enforceFormulaBetweenOperators: true,
@@ -23284,7 +22913,7 @@ describe("PropositCore", () => {
         })
 
         it("falls back to default generateId when none provided", () => {
-            const engine = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const engine = new ArgumentEngine(ARG, aLib(), csLib())
             const { result: pm } = engine.createPremise()
 
             // Default generates valid UUIDs
@@ -23307,8 +22936,7 @@ describe("generateId injection — ArgumentLibrary", () => {
         const lib = new ArgumentLibrary(
             {
                 claimLibrary: aLib(),
-                sourceLibrary: sLib(),
-                claimSourceLibrary: csLib(),
+                claimCitationLibrary: csLib(),
             },
             { generateId }
         )
@@ -23327,8 +22955,7 @@ describe("generateId injection — ArgumentLibrary", () => {
         const lib = new ArgumentLibrary(
             {
                 claimLibrary: aLib(),
-                sourceLibrary: sLib(),
-                claimSourceLibrary: csLib(),
+                claimCitationLibrary: csLib(),
             },
             { generateId }
         )
@@ -23344,8 +22971,7 @@ describe("generateId injection — ArgumentLibrary", () => {
             snap,
             {
                 claimLibrary: aLib(),
-                sourceLibrary: sLib(),
-                claimSourceLibrary: csLib(),
+                claimCitationLibrary: csLib(),
             },
             { generateId: restoreGenerateId }
         )
@@ -23364,8 +22990,7 @@ describe("generateId injection — ArgumentLibrary", () => {
         const lib = new ArgumentLibrary(
             {
                 claimLibrary: claimLib,
-                sourceLibrary: sLib(),
-                claimSourceLibrary: csLib(),
+                claimCitationLibrary: csLib(),
             },
             { generateId }
         )
@@ -23402,8 +23027,7 @@ describe("generateId injection — ArgumentLibrary", () => {
             snap,
             {
                 claimLibrary: claimLib,
-                sourceLibrary: sLib(),
-                claimSourceLibrary: csLib(),
+                claimCitationLibrary: csLib(),
             },
             { generateId: restoreGenerateId }
         )
@@ -23449,7 +23073,7 @@ describe("generateId injection — PropositCore", () => {
         })
 
         // Add a claim-bound variable and a premise
-        const claim = core.claims.create({ id: "pc-id-2" })
+        const claim = core.claims.create({ id: "pc-id-2", type: "normal" })
         engine.addVariable({
             id: "pc-id-3",
             argumentId: "pc-id-1",
@@ -23502,7 +23126,8 @@ describe("generateId injection — ArgumentParser", () => {
                     {
                         miniId: "C1",
                         role: "premise",
-                        sourceMiniIds: [],
+                        type: "normal",
+                        citationMiniIds: [],
                     },
                 ],
                 variables: [
@@ -23512,7 +23137,6 @@ describe("generateId injection — ArgumentParser", () => {
                         claimMiniId: "C1",
                     },
                 ],
-                sources: [],
                 premises: [
                     {
                         miniId: "P1",
@@ -23558,7 +23182,6 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         const eng1 = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng1.addVariable({
@@ -23584,7 +23207,6 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         const eng2 = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng2.addVariable({
@@ -23619,7 +23241,6 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         const eng1 = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng1.addVariable({
@@ -23634,7 +23255,6 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         const eng2 = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng2.addVariable({
@@ -23658,7 +23278,6 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         const eng1 = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm1 } = eng1.createPremiseWithId("prem-AAA")
@@ -23666,7 +23285,6 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         const eng2 = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm2 } = eng2.createPremiseWithId("prem-BBB")
@@ -23681,13 +23299,11 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         const eng1 = new ArgumentEngine(
             { id: "arg-AAA", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const eng2 = new ArgumentEngine(
             { id: "arg-BBB", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
 
@@ -23703,10 +23319,9 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
         expect(DEFAULT_CHECKSUM_CONFIG.premiseFields!.has("id")).toBe(false)
         expect(DEFAULT_CHECKSUM_CONFIG.argumentFields!.has("id")).toBe(false)
         expect(DEFAULT_CHECKSUM_CONFIG.claimFields!.has("id")).toBe(false)
-        expect(DEFAULT_CHECKSUM_CONFIG.sourceFields!.has("id")).toBe(false)
-        expect(
-            DEFAULT_CHECKSUM_CONFIG.claimSourceAssociationFields!.has("id")
-        ).toBe(false)
+        expect(DEFAULT_CHECKSUM_CONFIG.claimCitationFields!.has("id")).toBe(
+            false
+        )
     })
 })
 
@@ -23716,7 +23331,7 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
 
 describe("operator constraint propagation", () => {
     it("implies accepted, antecedent true -> consequent derived true", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -23752,7 +23367,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("implies accepted, consequent false -> antecedent derived false", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -23786,7 +23401,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("and accepted -> both children derived true", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -23821,7 +23436,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("or accepted, one child false -> other derived true", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -23855,7 +23470,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("not accepted -> child derived false", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         eng.addVariable(vA)
 
@@ -23880,7 +23495,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("iff accepted -> bidirectional propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -23914,7 +23529,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("cross-premise fixed-point propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         const vC = makeVar("vC", "C")
@@ -23974,7 +23589,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("user assignment wins over propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -24013,7 +23628,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("no propagation for unset operators", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -24049,7 +23664,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("or accepted, both unknown -> no propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -24095,7 +23710,7 @@ describe("evaluateArgument (standalone)", () => {
 
     /** Build an engine with P, Q variables and a P->Q supporting premise plus a Q conclusion. */
     function buildModusPonensEngine() {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -24148,7 +23763,7 @@ describe("evaluateArgument (standalone)", () => {
 
     describe("propagateOperatorConstraints", () => {
         it("propagates accepted AND: all children become true", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const eng = new ArgumentEngine(ARG, aLib(), csLib())
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm } = eng.createPremise({ title: "P and Q" })
@@ -24176,7 +23791,7 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("propagates rejected OR: all children become false", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const eng = new ArgumentEngine(ARG, aLib(), csLib())
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm } = eng.createPremise({ title: "P or Q" })
@@ -24204,7 +23819,7 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("never overwrites user-assigned values", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const eng = new ArgumentEngine(ARG, aLib(), csLib())
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm } = eng.createPremise({ title: "P and Q" })
@@ -24233,7 +23848,7 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("returns unchanged variables when no operator assignments given", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const eng = new ArgumentEngine(ARG, aLib(), csLib())
             eng.addVariable(VAR_P)
             const { result: pm } = eng.createPremise({ title: "P" })
             pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
@@ -24306,7 +23921,7 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("runs validateEvaluability when validateFirst is true (default)", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const eng = new ArgumentEngine(ARG, aLib(), csLib())
             // Empty engine with no premises — validateEvaluability will fail
             const ctx = ctxFrom(eng)
             const result = evaluateArgument(ctx, {
@@ -24331,7 +23946,7 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("finds a counterexample for an invalid argument", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const eng = new ArgumentEngine(ARG, aLib(), csLib())
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -24457,7 +24072,7 @@ describe("validateArgument (standalone)", () => {
 
     describe("collectArgumentReferencedVariables", () => {
         it("indexes variables by ID and symbol across premises", () => {
-            const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+            const eng = new ArgumentEngine(ARG, aLib(), csLib())
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm1 } = eng.createPremise({ title: "pm1" })
@@ -25508,7 +25123,7 @@ describe("validateArgument (standalone)", () => {
 
 describe("PremiseEngine.normalizeExpressions", () => {
     it("normalizes unjustified formulas and returns changeset", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
         eng.addVariable(VAR_P)
@@ -25545,7 +25160,7 @@ describe("PremiseEngine.normalizeExpressions", () => {
 
 describe("ArgumentEngine.normalizeAllExpressions", () => {
     it("normalizes all premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
         eng.addVariable(VAR_P)
@@ -25667,7 +25282,6 @@ describe("post-load normalization", () => {
         const engine = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -25748,7 +25362,6 @@ describe("post-load normalization", () => {
         const engine = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -25764,7 +25377,7 @@ describe("post-load normalization", () => {
     })
 
     it("fromSnapshot normalizes unjustified formulas when autoNormalize is true", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib(), {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
         eng.addVariable(VAR_P)
@@ -25795,12 +25408,7 @@ describe("post-load normalization", () => {
         const snapshot = eng.snapshot()
 
         // Restore with auto-normalize on (default)
-        const restored = ArgumentEngine.fromSnapshot(
-            snapshot,
-            aLib(),
-            sLib(),
-            csLib()
-        )
+        const restored = ArgumentEngine.fromSnapshot(snapshot, aLib(), csLib())
 
         const restoredPe = restored.findPremiseByExpressionId("v-p")!
         expect(restoredPe.getExpression("formula-1")).toBeUndefined()
@@ -26449,7 +26057,6 @@ describe("fromData checksum idempotency", () => {
         const engineA = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -26462,7 +26069,6 @@ describe("fromData checksum idempotency", () => {
         const engineB = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -26519,7 +26125,6 @@ describe("fromData checksum idempotency", () => {
         const engineTopo = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -26532,7 +26137,6 @@ describe("fromData checksum idempotency", () => {
         const engineReversed = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -26545,7 +26149,6 @@ describe("fromData checksum idempotency", () => {
         const engineShuffled = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -26604,7 +26207,6 @@ describe("fromData checksum idempotency", () => {
             ArgumentEngine.fromData(
                 arg,
                 aLib(),
-                sLib(),
                 csLib(),
                 variables,
                 premises,
@@ -26623,8 +26225,7 @@ describe("fromData checksum idempotency", () => {
         const engine = new ArgumentEngine(
             { id: "arg-1", version: 1 },
             claimLibrary,
-            sLib(),
-            csLib(),
+            csLib(claimLibrary),
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
         )
         engine.addVariable(makeVar("v1", "P"))
@@ -26661,8 +26262,7 @@ describe("fromData checksum idempotency", () => {
             ArgumentEngine.fromSnapshot(
                 snapshot,
                 claimLibrary,
-                sLib(),
-                csLib(),
+                csLib(claimLibrary),
                 GRANULAR_GRAMMAR_CONFIG,
                 "ignore"
             )
@@ -26693,7 +26293,6 @@ describe("fromData checksum idempotency", () => {
         const engine = ArgumentEngine.fromData(
             arg,
             aLib(),
-            sLib(),
             csLib(),
             variables,
             premises,
@@ -27133,7 +26732,6 @@ describe("PremiseEngine.setExtras — changeset", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -27153,7 +26751,6 @@ describe("PremiseEngine.setExtras — changeset", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -27170,7 +26767,6 @@ describe("PremiseEngine.setExtras — changeset", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -27191,7 +26787,7 @@ describe("PremiseEngine.setExtras — changeset", () => {
     })
 
     it("changeset contains no expressions or variables", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise()
         eng.addVariable(makeVar("v1", "P"))
         pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
@@ -27213,7 +26809,6 @@ describe("PremiseEngine.updateExtras", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise({ a: "1", b: "2" })
@@ -27227,7 +26822,6 @@ describe("PremiseEngine.updateExtras", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise()
@@ -27243,7 +26837,6 @@ describe("PremiseEngine.updateExtras", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         const { result: pm } = eng.createPremise({ title: "Old" })
@@ -27262,7 +26855,6 @@ describe("ArgumentEngine — extras", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 } as TOptionalChecksum<TCoreArgument>,
             aLib(),
-            sLib(),
             csLib()
         )
         eng.setExtras({ title: "My Argument" })
@@ -27277,7 +26869,6 @@ describe("ArgumentEngine — extras", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 } as TOptionalChecksum<TCoreArgument>,
             aLib(),
-            sLib(),
             csLib()
         )
         eng.setExtras({ title: "Old", description: "Desc" })
@@ -27295,7 +26886,6 @@ describe("ArgumentEngine — extras", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 } as TOptionalChecksum<TCoreArgument>,
             aLib(),
-            sLib(),
             csLib()
         )
         eng.setExtras({ title: "Title", description: "Desc" })
@@ -27310,7 +26900,6 @@ describe("ArgumentEngine — extras", () => {
         const eng = new ArgumentEngine(
             { id: "arg1", version: 0 },
             aLib(),
-            sLib(),
             csLib()
         )
         eng.setExtras({ id: "hacked", version: 999 })
@@ -27719,7 +27308,7 @@ describe("review helper errors", () => {
 
 describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     it("returns [or] for a single or(a,b)", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise({ title: "P or Q" })
@@ -27736,7 +27325,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("returns [and, or] in pre-order for and(or(a,b), c)", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(makeVar("var-r", "R"))
@@ -27765,7 +27354,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("excludes NOT inside a premise: and(not(a), b) returns [and]", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise({ title: "not(P) and Q" })
@@ -27792,7 +27381,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("excludes wrapping NOT but keeps inner AND: not(and(a,b)) returns [and]", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise({ title: "not(P and Q)" })
@@ -27823,7 +27412,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("returns [] for a single-variable premise with no operators", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "P" })
         pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
@@ -27831,7 +27420,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("returns [] for an empty premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         const { result: pm } = eng.createPremise({ title: "empty" })
         expect(pm.getDecidableOperatorExpressions()).toEqual([])
     })
@@ -27855,7 +27444,7 @@ describe("collectArgumentReferencedClaims", () => {
     }
 
     it("returns only the conclusion's claims when there are no supporting premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "P" })
         pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
@@ -27869,7 +27458,7 @@ describe("collectArgumentReferencedClaims", () => {
     })
 
     it("emits a claim once at its first occurrence when shared across premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: support } = eng.createPremise({ title: "P (support)" })
         const { result: conclusion } = eng.createPremise({ title: "P (conc)" })
@@ -27886,7 +27475,7 @@ describe("collectArgumentReferencedClaims", () => {
     })
 
     it("skips premise-bound variables (no bound claim)", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: inner } = eng.createPremise({ title: "inner: P" })
         inner.addExpression(makeVarExpr(`${inner.getId()}-p`, VAR_P.id))
@@ -27901,16 +27490,11 @@ describe("collectArgumentReferencedClaims", () => {
 
     it("throws InvalidArgumentStructureError when two variables bind the same claim with different versions", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "claim-shared" })
+        lib.create({ id: "claim-shared", type: "normal" })
         // freeze() leaves v0 (frozen) AND v1 (new mutable copy) both reachable.
         lib.freeze("claim-shared")
 
-        const eng = new ArgumentEngine(
-            ARG,
-            lib,
-            sLib(),
-            new ClaimSourceLibrary(lib, sLib())
-        )
+        const eng = new ArgumentEngine(ARG, lib, new ClaimCitationLibrary(lib))
         eng.addVariable({
             id: "var-v0",
             argumentId: ARG.id,
@@ -27951,14 +27535,9 @@ describe("collectArgumentReferencedClaims", () => {
 
     it("orders claims by supporting → conclusion → constraint, then by first tree-order reference", () => {
         const lib = new ClaimLibrary()
-        lib.create({ id: "claim-a" })
-        lib.create({ id: "claim-b" })
-        const eng = new ArgumentEngine(
-            ARG,
-            lib,
-            sLib(),
-            new ClaimSourceLibrary(lib, sLib())
-        )
+        lib.create({ id: "claim-a", type: "normal" })
+        lib.create({ id: "claim-b", type: "normal" })
+        const eng = new ArgumentEngine(ARG, lib, new ClaimCitationLibrary(lib))
         eng.addVariable({
             id: "var-a",
             argumentId: ARG.id,
@@ -28025,7 +27604,7 @@ describe("canonicalizeOperatorAssignments", () => {
         andId: string
         orId: string
     } {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(makeVar("var-r", "R"))
@@ -28104,7 +27683,7 @@ describe("canonicalizeOperatorAssignments", () => {
     })
 
     it("NOT override throws NotOperatorNotDecidableError with reason=is-not-operator", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "not P" })
         const notId = `${pm.getId()}-not`
@@ -28138,7 +27717,7 @@ describe("canonicalizeOperatorAssignments", () => {
     })
 
     it("override on a non-operator expression throws NotOperatorNotDecidableError with reason=not-an-operator-type", () => {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "P" })
         const varExprId = `${pm.getId()}-p`
@@ -28178,7 +27757,7 @@ describe("evaluateArgument — propagatedVariableValues", () => {
     }
 
     function buildModusPonensEng() {
-        const eng = new ArgumentEngine(ARG, aLib(), sLib(), csLib())
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -28268,5 +27847,266 @@ describe("evaluateArgument — propagatedVariableValues", () => {
         expect(result.ok).toBe(true)
         const keys = Object.keys(result.propagatedVariableValues!).sort()
         expect(keys).toEqual([...result.referencedVariableIds!].sort())
+    })
+})
+
+describe("CoreClaimSchema type field", () => {
+    it("rejects a claim without a type field", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(false)
+    })
+    it("accepts a claim with type: 'normal'", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+            type: "normal" as const,
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(true)
+    })
+    it("accepts a claim with type: 'citation'", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+            type: "citation" as const,
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(true)
+    })
+    it("rejects a claim with an unknown type", () => {
+        const claim = {
+            id: "00000000-0000-0000-0000-000000000001",
+            version: 0,
+            frozen: false,
+            checksum: "abc",
+            type: "axiom",
+        }
+        expect(Value.Check(CoreClaimSchema, claim)).toBe(false)
+    })
+})
+
+describe("ClaimCitationLibrary strict source-side type", () => {
+    it("rejects a citation where sourceClaimId references a normal claim", () => {
+        const claimLib = new ClaimLibrary()
+        const normalClaim = claimLib.create({ type: "normal" })
+        const anotherNormalClaim = claimLib.create({ type: "normal" })
+        const citationLib = new ClaimCitationLibrary({
+            get: (id, version) => claimLib.get(id, version),
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000010",
+                citingClaimId: normalClaim.id,
+                citingClaimVersion: normalClaim.version,
+                sourceClaimId: anotherNormalClaim.id,
+                sourceClaimVersion: anotherNormalClaim.version,
+            })
+        ).toThrow(/only 'citation' is permitted/)
+    })
+    it("accepts a citation where sourceClaimId references a citation claim", () => {
+        const claimLib = new ClaimLibrary()
+        const normalClaim = claimLib.create({ type: "normal" })
+        const citationClaim = claimLib.create({ type: "citation" })
+        const citationLib = new ClaimCitationLibrary({
+            get: (id, version) => claimLib.get(id, version),
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000011",
+                citingClaimId: normalClaim.id,
+                citingClaimVersion: normalClaim.version,
+                sourceClaimId: citationClaim.id,
+                sourceClaimVersion: citationClaim.version,
+            })
+        ).not.toThrow()
+    })
+})
+
+describe("ClaimCitationLibrary acyclicity", () => {
+    function makeLibs() {
+        const claimLib = new ClaimLibrary()
+        const claimLookup = {
+            get: (id: string, version: number) => claimLib.get(id, version),
+        }
+        const citationLib = new ClaimCitationLibrary(claimLookup)
+        return { claimLib, citationLib }
+    }
+    it("rejects a direct A↔B cycle", () => {
+        const { claimLib, citationLib } = makeLibs()
+        const a = claimLib.create({ type: "citation" })
+        const b = claimLib.create({ type: "citation" })
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000001",
+            citingClaimId: a.id,
+            citingClaimVersion: a.version,
+            sourceClaimId: b.id,
+            sourceClaimVersion: b.version,
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000002",
+                citingClaimId: b.id,
+                citingClaimVersion: b.version,
+                sourceClaimId: a.id,
+                sourceClaimVersion: a.version,
+            })
+        ).toThrow(/cycle/i)
+    })
+    it("rejects a transitive A→B→C→A cycle", () => {
+        const { claimLib, citationLib } = makeLibs()
+        const a = claimLib.create({ type: "citation" })
+        const b = claimLib.create({ type: "citation" })
+        const c = claimLib.create({ type: "citation" })
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000010",
+            citingClaimId: a.id,
+            citingClaimVersion: a.version,
+            sourceClaimId: b.id,
+            sourceClaimVersion: b.version,
+        })
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000011",
+            citingClaimId: b.id,
+            citingClaimVersion: b.version,
+            sourceClaimId: c.id,
+            sourceClaimVersion: c.version,
+        })
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000012",
+                citingClaimId: c.id,
+                citingClaimVersion: c.version,
+                sourceClaimId: a.id,
+                sourceClaimVersion: a.version,
+            })
+        ).toThrow(/cycle/i)
+    })
+    it("treats version-different edges as projecting to the same ID-only graph", () => {
+        const { claimLib, citationLib } = makeLibs()
+        const a = claimLib.create({ type: "citation" })
+        const b = claimLib.create({ type: "citation" })
+        // First edge: A@v0 → B@v0
+        citationLib.add({
+            id: "00000000-0000-0000-0000-000000000020",
+            citingClaimId: a.id,
+            citingClaimVersion: 0,
+            sourceClaimId: b.id,
+            sourceClaimVersion: 0,
+        })
+        // Freeze A to bump it to a new version (v1)
+        claimLib.freeze(a.id)
+        // Try B@v0 → A@v1 — same ID-only cycle as the first edge's reverse
+        expect(() =>
+            citationLib.add({
+                id: "00000000-0000-0000-0000-000000000021",
+                citingClaimId: b.id,
+                citingClaimVersion: 0,
+                sourceClaimId: a.id,
+                sourceClaimVersion: 1,
+            })
+        ).toThrow(/cycle/i)
+    })
+})
+
+describe("ClaimLibrary type immutability", () => {
+    it("rejects an update that changes the type field", () => {
+        const claimLib = new ClaimLibrary()
+        const c = claimLib.create({ type: "normal" })
+        expect(() =>
+            claimLib.update(c.id, { type: "citation" } as never)
+        ).toThrow(/type is immutable/)
+    })
+    it("allows an update that does not change the type field", () => {
+        const claimLib = new ClaimLibrary()
+        const c = claimLib.create({ type: "normal" })
+        // Update some other field via additionalProperties
+        expect(() =>
+            claimLib.update(c.id, { customField: "new value" } as never)
+        ).not.toThrow()
+    })
+    it("allows an update that re-asserts the same type", () => {
+        const claimLib = new ClaimLibrary()
+        const c = claimLib.create({ type: "normal" })
+        expect(() =>
+            claimLib.update(c.id, { type: "normal" } as never)
+        ).not.toThrow()
+    })
+})
+
+describe("ClaimLibrary legacy snapshot detection", () => {
+    it("emits LEGACY_CLAIM_MISSING_TYPE when restoring a snapshot with a typeless claim", () => {
+        const legacySnapshot = {
+            claims: [
+                {
+                    id: "00000000-0000-0000-0000-000000000001",
+                    version: 0,
+                    frozen: false,
+                    checksum: "abc",
+                    // type field intentionally missing
+                },
+            ],
+        }
+        expect(() =>
+            ClaimLibrary.fromSnapshot(
+                legacySnapshot as Parameters<
+                    typeof ClaimLibrary.fromSnapshot
+                >[0]
+            )
+        ).toThrow(/missing the 'type' field|pre-v0\.10\.0/)
+    })
+    it("accepts a snapshot where every claim has a type field", () => {
+        const validSnapshot = {
+            claims: [
+                {
+                    id: "00000000-0000-0000-0000-000000000001",
+                    version: 0,
+                    frozen: false,
+                    checksum: "abc",
+                    type: "normal" as const,
+                },
+            ],
+        }
+        expect(() =>
+            ClaimLibrary.fromSnapshot(
+                validSnapshot as Parameters<typeof ClaimLibrary.fromSnapshot>[0]
+            )
+        ).not.toThrow()
+    })
+})
+
+describe("ForkLibrary 5-namespace shape", () => {
+    it("snapshot contains exactly 5 namespaces", () => {
+        const lib = new ForkLibrary()
+        const snapshot = lib.snapshot()
+        expect(Object.keys(snapshot).sort()).toEqual([
+            "arguments",
+            "claims",
+            "expressions",
+            "premises",
+            "variables",
+        ])
+    })
+})
+
+describe("Fork record schema equality across namespaces", () => {
+    it("claim fork records validate via CoreClaimForkRecordSchema", () => {
+        const claimForkRecord = {
+            entityId: "00000000-0000-0000-0000-000000000002",
+            forkedFromEntityId: "00000000-0000-0000-0000-000000000003",
+            forkedFromArgumentId: "00000000-0000-0000-0000-000000000004",
+            forkedFromArgumentVersion: 0,
+            forkedFromEntityVersion: 0,
+            forkId: "00000000-0000-0000-0000-000000000005",
+        }
+        expect(Value.Check(CoreClaimForkRecordSchema, claimForkRecord)).toBe(
+            true
+        )
     })
 })

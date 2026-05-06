@@ -8,8 +8,7 @@ import {
 import { hydratePropositCore, persistEngine, persistCore } from "../engine.js"
 import { PropositCore } from "../../lib/core/proposit-core.js"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
-import { SourceLibrary } from "../../lib/core/source-library.js"
-import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
+import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import { cliLog } from "../logging.js"
 import { errorExit, printJson, printLine, printWarning } from "../output.js"
 import { resolveApiKey, createLlmProvider } from "../llm/index.js"
@@ -187,29 +186,21 @@ export function registerParseCommand(args: Command): void {
                         ...built.claimLibrary.snapshot().claims,
                     ],
                 })
-                const mergedSources = SourceLibrary.fromSnapshot({
-                    sources: [
-                        ...existing.sources.snapshot().sources,
-                        ...built.sourceLibrary.snapshot().sources,
-                    ],
-                })
-                const mergedAssocs = ClaimSourceLibrary.fromSnapshot(
+                const mergedCitations = ClaimCitationLibrary.fromSnapshot(
                     {
-                        claimSourceAssociations: [
-                            ...existing.claimSources.snapshot()
-                                .claimSourceAssociations,
-                            ...built.claimSourceLibrary.snapshot()
-                                .claimSourceAssociations,
+                        claimCitations: [
+                            ...existing.claimCitations.snapshot()
+                                .claimCitations,
+                            ...built.claimCitationLibrary.snapshot()
+                                .claimCitations,
                         ],
                     },
-                    mergedClaims,
-                    mergedSources
+                    mergedClaims
                 )
 
                 const merged = new PropositCore({
                     claimLibrary: mergedClaims,
-                    sourceLibrary: mergedSources,
-                    claimSourceLibrary: mergedAssocs,
+                    claimCitationLibrary: mergedCitations,
                     forkLibrary: existing.forks,
                 })
 

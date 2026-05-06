@@ -50,7 +50,7 @@ describeIf("parse API integration", () => {
         systemPrompt = buildParsingPrompt(BasicsParsingSchema)
     })
 
-    it("parses text with URL sources into url + optional text fields", async () => {
+    it("parses text with URL references into citation-typed claims", async () => {
         const inputText = `
 Climate change is accelerating according to recent studies.
 
@@ -74,36 +74,31 @@ See also: https://www.ipcc.ch/report/ar6/
         expect(response.argument).not.toBeNull()
         const arg = response.argument!
 
-        // Should have extracted sources with URLs
-        expect(arg.sources.length).toBeGreaterThanOrEqual(1)
-
-        for (const source of arg.sources) {
-            // Every source must have a url
-            expect(source).toHaveProperty("url")
-            expect(typeof source.url).toBe("string")
-            expect(source.url.length).toBeGreaterThan(0)
-        }
-
-        // At least one source should have a text field (the NASA link has anchor text)
-        const sourcesWithText = arg.sources.filter(
-            (s) =>
-                "text" in s && typeof s.text === "string" && s.text.length > 0
-        )
+        // Should have extracted at least one citation-typed claim
+        const citationClaims = arg.claims.filter((c) => c.type === "citation")
+        expect(citationClaims.length).toBeGreaterThanOrEqual(1)
 
         // Build engine to verify full pipeline
         const built = parser.build(response, { strict: false })
         expect(built.engine).toBeDefined()
-        expect(built.sourceLibrary.getAll().length).toBeGreaterThanOrEqual(1)
+        const allClaims = built.claimLibrary.getAll()
+        const builtCitationClaims = allClaims.filter(
+            (c) => (c as Record<string, unknown>).type === "citation"
+        )
+        expect(builtCitationClaims.length).toBeGreaterThanOrEqual(1)
 
         // Log for manual inspection
-        console.log("=== Parsed sources ===")
-        for (const source of arg.sources) {
+        console.log("=== Parsed claims ===")
+        for (const claim of arg.claims) {
+            const extras = claim as Record<string, unknown>
             console.log(
-                `  ${source.miniId}: url=${source.url}${source.text ? ` text="${source.text}"` : ""}`
+                `  ${claim.miniId} [${claim.type}]: title="${
+                    typeof extras.title === "string" ? extras.title : ""
+                }"`
             )
         }
         console.log(
-            `Sources with text: ${sourcesWithText.length}/${arg.sources.length}`
+            `Citation claims: ${citationClaims.length}/${arg.claims.length}`
         )
         console.log(`Warnings: ${built.warnings.length}`)
         for (const w of built.warnings) {
@@ -111,7 +106,7 @@ See also: https://www.ipcc.ch/report/ar6/
         }
     }, 60_000)
 
-    it("parses text without sources and returns empty sources array", async () => {
+    it("parses text without citations and returns no citation-typed claims", async () => {
         const inputText = `
 If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.
             `.trim()
@@ -126,9 +121,15 @@ If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.
         const response = parser.validate(raw)
 
         expect(response.argument).not.toBeNull()
-        expect(response.argument!.sources).toEqual([])
+        const citationClaims = response.argument!.claims.filter(
+            (c) => c.type === "citation"
+        )
+        expect(citationClaims).toEqual([])
 
         const built = parser.build(response, { strict: false })
-        expect(built.sourceLibrary.getAll()).toHaveLength(0)
+        const builtCitationClaims = built.claimLibrary
+            .getAll()
+            .filter((c) => (c as Record<string, unknown>).type === "citation")
+        expect(builtCitationClaims).toHaveLength(0)
     }, 60_000)
 })

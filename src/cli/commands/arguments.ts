@@ -11,8 +11,7 @@ import {
     persistCore,
 } from "../engine.js"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
-import { SourceLibrary } from "../../lib/core/source-library.js"
-import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
+import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import {
     errorExit,
     printJson,
@@ -80,29 +79,21 @@ export function registerArgumentCommands(program: Command): void {
 
             // Merge new libraries into existing global libraries
             const existing = await hydratePropositCore()
-            const mergedClaims = ClaimLibrary.fromSnapshot({
+            const _mergedClaims = ClaimLibrary.fromSnapshot({
                 claims: [
                     ...existing.claims.snapshot().claims,
                     ...result.claimLibrary.snapshot().claims,
                 ],
             })
-            const mergedSources = SourceLibrary.fromSnapshot({
-                sources: [
-                    ...existing.sources.snapshot().sources,
-                    ...result.sourceLibrary.snapshot().sources,
-                ],
-            })
-            const _mergedAssocs = ClaimSourceLibrary.fromSnapshot(
+            const _mergedCitations = ClaimCitationLibrary.fromSnapshot(
                 {
-                    claimSourceAssociations: [
-                        ...existing.claimSources.snapshot()
-                            .claimSourceAssociations,
-                        ...result.claimSourceLibrary.snapshot()
-                            .claimSourceAssociations,
+                    claimCitations: [
+                        ...existing.claimCitations.snapshot().claimCitations,
+                        ...result.claimCitationLibrary.snapshot()
+                            .claimCitations,
                     ],
                 },
-                mergedClaims,
-                mergedSources
+                _mergedClaims
             )
 
             await persistEngine(result.engine)

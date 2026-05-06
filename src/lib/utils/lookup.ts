@@ -1,7 +1,6 @@
 import type {
     TClaimLookup,
-    TSourceLookup,
-    TClaimSourceLookup,
+    TClaimCitationLookup,
 } from "../core/interfaces/library.interfaces.js"
 
 /**
@@ -10,9 +9,8 @@ import type {
  * exposes a `get(id, version)` method that reconstructs the same key
  * internally.
  *
- * Use this to build the `TClaimLookup` or `TSourceLookup` required by
- * `ArgumentEngine`'s constructor from flat arrays (e.g. database query
- * results).
+ * Use this to build the `TClaimLookup` required by `ArgumentEngine`'s
+ * constructor from flat arrays (e.g. database query results).
  *
  * @param items - The array of items to index.
  * @param getKey - A function that produces the composite key for each item.
@@ -25,8 +23,7 @@ import type {
  * @example
  * ```ts
  * const claimLookup = createLookup(claims, (c) => `${c.id}:${c.version}`)
- * const sourceLookup = createLookup(sources, (s) => `${s.id}:${s.version}`)
- * const engine = new ArgumentEngine(arg, claimLookup, sourceLookup, ...)
+ * const engine = new ArgumentEngine(arg, claimLookup, ...)
  * ```
  */
 export function createLookup<T>(
@@ -54,20 +51,11 @@ export const EMPTY_CLAIM_LOOKUP: TClaimLookup = {
 }
 
 /**
- * A no-op source lookup that always returns `undefined`. Use this when the
- * consumer does not use sources.
+ * A no-op claim-citation lookup that always returns `undefined` or empty
+ * arrays. Use this when the consumer does not use claim citations.
  */
-export const EMPTY_SOURCE_LOOKUP: TSourceLookup = {
-    get: () => undefined,
-}
-
-/**
- * A no-op claim-source association lookup that always returns `undefined`
- * or empty arrays. Use this when the consumer does not use claim-source
- * associations.
- */
-export const EMPTY_CLAIM_SOURCE_LOOKUP: TClaimSourceLookup = {
-    getForClaim: () => [],
-    getForSource: () => [],
+export const EMPTY_CLAIM_CITATION_LOOKUP: TClaimCitationLookup = {
+    getCitationsForCitingClaim: () => [],
+    getCitationsForSourceClaim: () => [],
     get: () => undefined,
 }

@@ -22,12 +22,10 @@ import {
 } from "./storage/arguments.js"
 import {
     readClaimLibrary,
-    readSourceLibrary,
-    readClaimSourceLibrary,
+    readClaimCitationLibrary,
     readForkLibrary,
     writeClaimLibrary,
-    writeSourceLibrary,
-    writeClaimSourceLibrary,
+    writeClaimCitationLibrary,
     writeForkLibrary,
 } from "./storage/libraries.js"
 import {
@@ -37,23 +35,24 @@ import {
     writePremiseData,
     writePremiseMeta,
 } from "./storage/premises.js"
+import { migrateV010 } from "./storage/migrate-v0.10.js"
 import { readRoles, writeRoles } from "./storage/roles.js"
 import { readVariables, writeVariables } from "./storage/variables.js"
 
 export async function hydratePropositCore(): Promise<PropositCore> {
-    const [claimLibrary, sourceLibrary, forkLibrary] = await Promise.all([
+    // Run the v0.10.0 one-time data migration before any library hydration.
+    // The migration is idempotent — a `.proposit-v0.10` marker short-circuits
+    // it on subsequent invocations.
+    await migrateV010()
+
+    const [claimLibrary, forkLibrary] = await Promise.all([
         readClaimLibrary(),
-        readSourceLibrary(),
         readForkLibrary(),
     ])
-    const claimSourceLibrary = await readClaimSourceLibrary(
-        claimLibrary,
-        sourceLibrary
-    )
+    const claimCitationLibrary = await readClaimCitationLibrary(claimLibrary)
     return new PropositCore({
         claimLibrary,
-        sourceLibrary,
-        claimSourceLibrary,
+        claimCitationLibrary,
         forkLibrary,
     })
 }
@@ -61,8 +60,7 @@ export async function hydratePropositCore(): Promise<PropositCore> {
 export async function persistCore(core: PropositCore): Promise<void> {
     await Promise.all([
         writeClaimLibrary(core.claims),
-        writeSourceLibrary(core.sources),
-        writeClaimSourceLibrary(core.claimSources),
+        writeClaimCitationLibrary(core.claimCitations),
         writeForkLibrary(core.forks),
     ])
 }
@@ -119,6 +117,7 @@ export async function hydrateEngine(
                 version: missing.version,
                 frozen: true,
                 checksum: "",
+                type: "normal",
             } as (typeof snapshot.claims)[number])
         }
         claimLibrary = ClaimLibrary.fromSnapshot(snapshot)
@@ -194,8 +193,7 @@ export async function hydrateEngine(
     const engine = ArgumentEngine.fromSnapshot(
         engineSnapshot,
         claimLibrary,
-        resolvedCore.sources,
-        resolvedCore.claimSources,
+        resolvedCore.claimCitations,
         cliGrammarConfig,
         "ignore"
     )

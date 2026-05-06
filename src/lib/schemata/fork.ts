@@ -67,18 +67,3 @@ export const CoreClaimForkRecordSchema = Type.Intersect(
     { additionalProperties: true }
 )
 export type TCoreClaimForkRecord = Static<typeof CoreClaimForkRecordSchema>
-
-/** Source fork record. Adds version tracking for independently versioned sources. */
-export const CoreSourceForkRecordSchema = Type.Intersect(
-    [
-        CoreEntityForkRecordSchema,
-        Type.Object({
-            forkedFromEntityVersion: Type.Number({
-                minimum: 0,
-                description: "Source version that was cloned",
-            }),
-        }),
-    ],
-    { additionalProperties: true }
-)
-export type TCoreSourceForkRecord = Static<typeof CoreSourceForkRecordSchema>

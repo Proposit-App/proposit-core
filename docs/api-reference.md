@@ -2,9 +2,9 @@
 
 ## `ArgumentEngine`
 
-### `new ArgumentEngine(argument, claimLibrary, sourceLibrary, claimSourceLibrary, options?)`
+### `new ArgumentEngine(argument, claimLibrary, claimCitationLibrary, options?)`
 
-Creates an engine scoped to `argument` (`{ id, version, title, description }`, without `checksum` — it is computed lazily). Requires a `claimLibrary` implementing `TClaimLookup` (used to validate claim references on variables), a `sourceLibrary` implementing `TSourceLookup`, and a `claimSourceLibrary` implementing `TClaimSourceLookup` (the global claim-source association store). Accepts an optional `config?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums) and `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
+Creates an engine scoped to `argument` (`{ id, version, title, description }`, without `checksum` — it is computed lazily). Requires a `claimLibrary` implementing `TClaimLookup` (used to validate claim references on variables) and a `claimCitationLibrary` implementing `TClaimCitationLookup` (the global claim-citation graph). As of v0.10.0 the previously separate `sourceLibrary` and `claimSourceLibrary` are gone — sources are now claims with `type: 'citation'` and live in the unified `ClaimLibrary`. Accepts an optional `config?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums) and `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
 
 ---
 
@@ -280,9 +280,9 @@ Returns a serialisable snapshot of the full engine state (`{ argument, variables
 
 ---
 
-### `static fromSnapshot(snapshot, claimLibrary, sourceLibrary, claimSourceLibrary, grammarConfig?)` → `ArgumentEngine`
+### `static fromSnapshot(snapshot, claimLibrary, claimCitationLibrary, grammarConfig?, checksumVerification?, generateId?)` → `ArgumentEngine`
 
-Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `claimLibrary` (implementing `TClaimLookup`), `sourceLibrary` (implementing `TSourceLookup`), and `claimSourceLibrary` (implementing `TClaimSourceLookup`) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`. The optional `grammarConfig` parameter overrides expression-tree grammar enforcement during restoration — defaults to `PERMISSIVE_GRAMMAR_CONFIG` so that previously saved trees load without validation errors.
+Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `claimLibrary` (implementing `TClaimLookup`) and `claimCitationLibrary` (implementing `TClaimCitationLookup`) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`. The optional `grammarConfig` parameter overrides expression-tree grammar enforcement during restoration — defaults to `PERMISSIVE_GRAMMAR_CONFIG` so that previously saved trees load without validation errors. The optional `checksumVerification` (`"ignore" | "strict"`) controls whether stored checksums are verified or ignored on load; the optional `generateId` overrides the snapshot's persisted ID generator.
 
 ---
 
@@ -298,9 +298,9 @@ Restores the engine's internal state in place from a previously captured snapsho
 
 ---
 
-### `static fromData(argument, claimLibrary, sourceLibrary, claimSourceLibrary, variables, premises, expressions, roles, config?, grammarConfig?)` → `ArgumentEngine`
+### `static fromData(argument, claimLibrary, claimCitationLibrary, variables, premises, expressions, roles, config?, grammarConfig?, checksumVerification?)` → `ArgumentEngine`
 
-Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `claimLibrary`, `sourceLibrary`, and `claimSourceLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments. The optional `grammarConfig` parameter controls grammar enforcement during loading — defaults to the config in `options`, or `DEFAULT_GRAMMAR_CONFIG` if none is provided. Validates the loaded state; throws `InvariantViolationError` if the data is invalid under the grammar config.
+Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `claimLibrary` and `claimCitationLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments. The optional `grammarConfig` parameter controls grammar enforcement during loading — defaults to the config in `options`, or `DEFAULT_GRAMMAR_CONFIG` if none is provided. Validates the loaded state; throws `InvariantViolationError` if the data is invalid under the grammar config.
 
 ---
 
@@ -312,44 +312,46 @@ Returns whether this argument may be forked. Default implementation returns `tru
 
 ## `PropositCore`
 
-Top-level orchestrator that owns all five libraries and provides unified snapshot/restore, validation, and cross-library operations. Recommended entry point for new applications.
+Top-level orchestrator that owns all four libraries and provides unified snapshot/restore, validation, and cross-library operations. Recommended entry point for new applications.
 
 ### `new PropositCore(options?)`
 
-Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → sources → claimSources → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `grammarConfig`).
+Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → claimCitations → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `grammarConfig`).
 
 Public library fields:
 
 - `core.claims` — `ClaimLibrary`
-- `core.sources` — `SourceLibrary`
-- `core.claimSources` — `ClaimSourceLibrary`
+- `core.claimCitations` — `ClaimCitationLibrary`
 - `core.forks` — `ForkLibrary`
 - `core.arguments` — `ArgumentLibrary`
 
+As of v0.10.0 the previously separate `sources` and `claimSources` libraries are gone — sources are now claims with `type: 'citation'` and the citation graph lives in `claimCitations`.
+
 ---
 
-### `forkArgument(argumentId, newArgumentId, options?)` → `{ engine, remapTable, claimRemap, sourceRemap, argumentFork }`
+### `forkArgument(argumentId, newArgumentId, options?)` → `{ engine, remapTable, claimRemap, argumentFork }`
 
 Full fork orchestration:
 
 1. Retrieves the source engine from `ArgumentLibrary`; calls `engine.canFork()`.
-2. Clones all referenced claims (unique `claimId` values from the source engine's variables).
-3. Clones all sources referenced by associations of those claims.
-4. Clones all claim-source associations for the cloned claims/sources.
+2. Walks the citation graph from the source engine's claim-bound variables to compute the closure of claims that must be cloned (both `'normal'` and `'citation'` claims).
+3. Clones every claim in the closure into the unified `ClaimLibrary`.
+4. Clones every citation edge between the cloned claims into `ClaimCitationLibrary`.
 5. Forks the engine via `forkArgumentEngine()` with new UUIDs.
 6. Remaps variable claim references to point at the cloned claims.
 7. Registers the forked engine in `ArgumentLibrary`.
-8. Creates fork records in all six `ForkLibrary` namespaces.
+8. Creates fork records in all five `ForkLibrary` namespaces.
 
-Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`, `sourceForkExtras`) and an optional `forkId`.
+Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`) and an optional `forkId`.
 
 Returns:
 
 - `engine` — the new `ArgumentEngine`
 - `remapTable` — `TForkRemapTable` mapping original entity IDs to new IDs
-- `claimRemap` — `Map<string, string>` mapping original claim IDs to cloned claim IDs
-- `sourceRemap` — `Map<string, string>` mapping original source IDs to cloned source IDs
+- `claimRemap` — `Map<string, string>` mapping original claim IDs to cloned claim IDs (covers both `'normal'` and `'citation'` claims)
 - `argumentFork` — the created `TArgFork` record
+
+> The legacy `sourceRemap` field is gone — citation-typed claims are remapped through `claimRemap` alongside normal claims, since sources are no longer a separate entity type.
 
 ---
 
@@ -361,7 +363,7 @@ Computes a structural diff between two managed arguments. Automatically injects 
 
 ### `snapshot()` → `TPropositCoreSnapshot`
 
-Returns a serializable snapshot of the entire system state (all five libraries).
+Returns a serializable snapshot of the entire system state (all four libraries: `claims`, `claimCitations`, `forks`, `arguments`).
 
 ---
 
@@ -373,7 +375,7 @@ Restores a `PropositCore` from a snapshot. Libraries are restored in dependency 
 
 ### `validate()` → `TInvariantValidationResult`
 
-Runs invariant validation across all five libraries and merges the results.
+Runs invariant validation across all four libraries and merges the results.
 
 ---
 
@@ -383,7 +385,7 @@ Engine registry with lifecycle management. Stores `ArgumentEngine` instances key
 
 ### `new ArgumentLibrary(libraries, options?)`
 
-Creates an empty library. `libraries` must include `claimLibrary`, `sourceLibrary`, and `claimSourceLibrary`. `options` is the shared `TLogicEngineOptions` applied to all created engines.
+Creates an empty library. `libraries` must include `claimLibrary` and `claimCitationLibrary`. `options` is the shared `TLogicEngineOptions` applied to all created engines.
 
 ---
 
@@ -437,24 +439,25 @@ Restores an `ArgumentLibrary` from a snapshot by calling `ArgumentEngine.fromSna
 
 ## `ForkLibrary`
 
-Unified store for fork provenance records, organized into six namespaces. Fork records are immutable after creation and carry no checksums.
+Unified store for fork provenance records, organized into five namespaces. Fork records are immutable after creation and carry no checksums.
 
 ### `new ForkLibrary()`
 
-Creates an empty library with six `ForkNamespace` instances:
+Creates an empty library with five `ForkNamespace` instances:
 
 - `forks.arguments` — argument fork records (`TCoreArgumentForkRecord`)
 - `forks.premises` — premise fork records (`TCorePremiseForkRecord`)
 - `forks.expressions` — expression fork records (`TCoreExpressionForkRecord`)
 - `forks.variables` — variable fork records (`TCoreVariableForkRecord`)
 - `forks.claims` — claim fork records (`TCoreClaimForkRecord`)
-- `forks.sources` — source fork records (`TCoreSourceForkRecord`)
+
+As of v0.10.0 the legacy `forks.sources` namespace is gone — citation-typed claims now travel through `forks.claims` alongside normal claims.
 
 ---
 
 ### `snapshot()` → `TForkLibrarySnapshot`
 
-Returns a serializable snapshot of all six namespaces.
+Returns a serializable snapshot of all five namespaces. Pre-v0.10.0 snapshots that contained a `sources` namespace are not supported by `fromSnapshot`; callers must convert them via the CLI migration before invoking `fromSnapshot`. Any stray `sources` key on an input snapshot is silently ignored.
 
 ---
 
@@ -466,7 +469,7 @@ Restores a `ForkLibrary` from a snapshot.
 
 ### `validate()` → `TInvariantValidationResult`
 
-Validates all fork records across all six namespaces.
+Validates all fork records across all five namespaces.
 
 ---
 
@@ -530,11 +533,11 @@ Validates all records against the namespace schema.
 
 ## `forkArgumentEngine(engine, newArgumentId, libraries, options?)` → `{ engine, remapTable }`
 
-Standalone low-level function for argument forking without fork record management or claim/source cloning. Creates an independent copy of the source engine with new UUIDs for all entities. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. Does NOT set `forkedFrom*` fields on entities (those fields were removed from entity schemas) and does NOT create fork records — use `PropositCore.forkArgument()` for full orchestration. The forked engine starts at version `0`.
+Standalone low-level function for argument forking without fork record management or claim cloning. Creates an independent copy of the source engine with new UUIDs for all entities. Internal references (expression `parentId`, `premiseId`, `variableId`, premise-bound variable `boundPremiseId`, conclusion role) are remapped to the new IDs. Does NOT set `forkedFrom*` fields on entities (those fields were removed from entity schemas) and does NOT create fork records — use `PropositCore.forkArgument()` for full orchestration. The forked engine starts at version `0`.
 
 - `engine` — the source `ArgumentEngine`
 - `newArgumentId` — ID for the new argument
-- `libraries` — `{ claimLibrary, sourceLibrary, claimSourceLibrary }` for the new engine
+- `libraries` — `{ claimLibrary, claimCitationLibrary }` for the new engine
 - `options?` — `TForkArgumentOptions`
 
 Returns `{ engine, remapTable }` where `engine` is the new `ArgumentEngine` and `remapTable` maps original entity IDs to their forked counterparts.
@@ -554,99 +557,107 @@ Renders the full argument as a multi-line string. Each premise is prefixed with 
 
 ---
 
-## `ClaimSourceLibrary<TAssoc>`
+## `ClaimCitationLibrary<TCitation>`
 
-Global standalone repository for claim-source associations. Implements `TClaimSourceLibraryManagement<TAssoc>` (which extends `TClaimSourceLookup<TAssoc>`). Associations link a claim version to a source version. Create-or-delete only — no update path.
+Global standalone repository for citations between claims (renamed from `ClaimSourceLibrary` in v0.10.0). Implements `TClaimCitationLibraryManagement<TCitation>` (which extends `TClaimCitationLookup<TCitation>`). A citation is a directed edge `(citingClaimId@citingClaimVersion → sourceClaimId@sourceClaimVersion)` in the global claim-citation graph. Create-or-delete only — no update path.
 
-Pass an instance to `ArgumentEngine` constructor (and `fromSnapshot`) as the fourth parameter.
+Pass an instance to `ArgumentEngine` constructor (and `fromSnapshot`) as the third parameter.
 
-### `new ClaimSourceLibrary(claimLookup, sourceLookup, options?)`
+### `new ClaimCitationLibrary(claimLookup, options?)`
 
-Creates an empty library. Validates against `claimLookup` (implementing `TClaimLookup`) and `sourceLookup` (implementing `TSourceLookup`) on every `add()` call. Accepts an optional `{ checksumConfig? }` parameter.
-
----
-
-### `add(assoc)` → `TAssoc`
-
-Adds a new association (without `checksum` — it is computed automatically). The `assoc` parameter is `Omit<TAssoc, "checksum">`. Throws if an association with the given `id` already exists, or if the referenced claim version or source version does not exist in the respective lookup.
+Creates an empty library. Takes a single `claimLookup` (implementing `TClaimLookup`) — both endpoints of every citation reference the unified claim library. Accepts an optional `{ checksumConfig? }` parameter.
 
 ---
 
-### `remove(id)` → `TAssoc`
+### `add(citation)` → `TCitation`
 
-Removes an association by ID and returns the removed entity. Throws if the association does not exist.
+Adds a new citation edge (without `checksum` — it is computed automatically). The `citation` parameter is `Omit<TCitation, "checksum">`. Validates:
 
----
-
-### `get(id)` → `TAssoc | undefined`
-
-Returns an association by ID, or `undefined` if not found.
-
----
-
-### `getForClaim(claimId)` → `TAssoc[]`
-
-Returns all associations for the given claim ID (across all versions).
+- Both `citingClaimId@citingClaimVersion` and `sourceClaimId@sourceClaimVersion` resolve in the claim lookup (`CITATION_CITING_REF_NOT_FOUND`, `CITATION_SOURCE_REF_NOT_FOUND`).
+- The source-side claim has `type: 'citation'` (`CITATION_SOURCE_NOT_CITATION_TYPE`).
+- The citation does not introduce a cycle in the global claim-citation graph (`CITATION_CYCLE_DETECTED`). Cycle detection is ID-only — versions don't disambiguate.
+- No citation with the given `id` already exists (`CITATION_DUPLICATE_ID`).
 
 ---
 
-### `getForSource(sourceId)` → `TAssoc[]`
+### `remove(id)` → `TCitation`
 
-Returns all associations for the given source ID (across all versions).
-
----
-
-### `getAll()` → `TAssoc[]`
-
-Returns all associations.
+Removes a citation by ID and returns the removed entity. Throws if the citation does not exist.
 
 ---
 
-### `filter(predicate)` → `TAssoc[]`
+### `get(id)` → `TCitation | undefined`
 
-Returns associations matching the given predicate.
+Returns a citation by ID, or `undefined` if not found.
+
+---
+
+### `getCitationsForCitingClaim(citingClaimId)` → `TCitation[]`
+
+Returns all citations where the given claim is the citing-side endpoint.
+
+---
+
+### `getCitationsForSourceClaim(sourceClaimId)` → `TCitation[]`
+
+Returns all citations where the given claim is the source-side endpoint.
+
+---
+
+### `getAll()` → `TCitation[]`
+
+Returns all citations.
+
+---
+
+### `filter(predicate)` → `TCitation[]`
+
+Returns citations matching the given predicate.
 
 ---
 
 ### `validate()` → `TInvariantValidationResult`
 
-Validates all associations: schema conformance, claim reference integrity, source reference integrity. Called automatically after every mutation.
+Validates all citations: schema conformance, both endpoints resolve in the claim lookup, source-side endpoints have `type: 'citation'`. Called automatically after every mutation.
 
 ---
 
-### `snapshot()` → `TClaimSourceLibrarySnapshot<TAssoc>`
+### `snapshot()` → `TClaimCitationLibrarySnapshot<TCitation>`
 
-Returns a serialisable snapshot `{ claimSourceAssociations: TAssoc[] }`.
+Returns a serialisable snapshot `{ claimCitations: TCitation[] }`.
 
 ---
 
-### `static fromSnapshot(snapshot, claimLookup, sourceLookup, options?)` → `ClaimSourceLibrary<TAssoc>`
+### `static fromSnapshot(snapshot, claimLookup, options?)` → `ClaimCitationLibrary<TCitation>`
 
-Reconstructs a `ClaimSourceLibrary` from a previously captured snapshot. Does not re-validate associations against the lookups.
+Reconstructs a `ClaimCitationLibrary` from a previously captured snapshot. Does not re-validate citations against the lookup.
 
 ---
 
 ## `ClaimLibrary<TClaim>`
 
-Global versioned repository for claim entities. Implements `TClaimLibraryManagement<TClaim>` (which extends `TClaimLookup<TClaim>`). Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable claim reference validation on variables.
+Global versioned repository for claim entities (unified across the legacy `Claim`/`Source` split as of v0.10.0). Implements `TClaimLibraryManagement<TClaim>` (which extends `TClaimLookup<TClaim>`). Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable claim reference validation on variables.
 
-Each claim has a `version` (starting at `0`) and a `frozen` flag. Freezing locks the current version and auto-creates a new mutable copy at the next version number.
+Each claim has:
+
+- A `version` (starting at `0`) and a `frozen` flag — freezing locks the current version and auto-creates a new mutable copy at the next version number.
+- An immutable `type: 'normal' | 'citation'` discriminator. `'normal'` claims are primary-reasoning propositions; `'citation'` claims represent external/cited content (the unified replacement for the former separate `Source` entity, and the only kind allowed on the source side of a citation edge).
 
 ### `new ClaimLibrary(options?)`
 
-Creates an empty library. Accepts an optional `{ checksumConfig? }` parameter.
+Creates an empty library. Accepts an optional `{ checksumConfig?, generateId? }` parameter.
 
 ---
 
 ### `create(claim)` → `TClaim`
 
-Creates a new claim at version `0` (unfrozen). The `claim` parameter omits `version`, `frozen`, and `checksum` fields — these are set automatically. Throws if a claim with the given ID already exists.
+Creates a new claim at version `0` (unfrozen). The `claim` parameter omits `version`, `frozen`, and `checksum` fields — these are set automatically. The `type` field is required and is fixed for the lifetime of the claim. `id` may be omitted (auto-generated). Throws if a claim with the given ID already exists.
 
 ---
 
 ### `update(id, updates)` → `TClaim`
 
-Updates fields on the latest (unfrozen) version of a claim. Throws if the claim does not exist or its latest version is frozen.
+Updates fields on the latest (unfrozen) version of a claim. Throws if the claim does not exist or its latest version is frozen. Rejects any update that changes the immutable `type` field with `CLAIM_TYPE_IMMUTABLE`.
 
 ---
 
@@ -694,79 +705,7 @@ Returns a serialisable snapshot `{ claims: TClaim[] }` containing all claim enti
 
 ### `static fromSnapshot(snapshot, options?)` → `ClaimLibrary<TClaim>`
 
-Reconstructs a `ClaimLibrary` from a previously captured snapshot.
-
----
-
-## `SourceLibrary<TSource>`
-
-Global versioned repository for source entities. Implements `TSourceLibraryManagement<TSource>` (which extends `TSourceLookup<TSource>`). Pass an instance to `ArgumentEngine` constructor and `fromSnapshot` to enable source reference validation on `ClaimSourceLibrary` associations.
-
-Has the same versioning and freeze semantics as `ClaimLibrary`.
-
-### `new SourceLibrary(options?)`
-
-Creates an empty library. Accepts an optional `{ checksumConfig? }` parameter.
-
----
-
-### `create(source)` → `TSource`
-
-Creates a new source at version `0` (unfrozen). The `source` parameter omits `version`, `frozen`, and `checksum` fields. Throws if a source with the given ID already exists.
-
----
-
-### `update(id, updates)` → `TSource`
-
-Updates fields on the latest (unfrozen) version of a source. Throws if the source does not exist or its latest version is frozen.
-
----
-
-### `freeze(id)` → `{ frozen: TSource; current: TSource }`
-
-Marks the current version as frozen and creates the next mutable version. Returns both the frozen and new current entity. Throws if the source does not exist or is already frozen.
-
----
-
-### `get(id, version)` → `TSource | undefined`
-
-Returns a specific version of a source, or `undefined` if not found.
-
----
-
-### `getCurrent(id)` → `TSource | undefined`
-
-Returns the latest version of a source, or `undefined` if not found.
-
----
-
-### `getAll()` → `TSource[]`
-
-Returns all source entities across all versions and IDs.
-
----
-
-### `getVersions(id)` → `TSource[]`
-
-Returns all versions of a given source ID, sorted by version number ascending.
-
----
-
-### `validate()` → `TInvariantValidationResult`
-
-Validates all sources: schema conformance, frozen sources have successor versions. Called automatically after every mutation.
-
----
-
-### `snapshot()` → `TSourceLibrarySnapshot<TSource>`
-
-Returns a serialisable snapshot `{ sources: TSource[] }` containing all source entities across all versions.
-
----
-
-### `static fromSnapshot(snapshot, options?)` → `SourceLibrary<TSource>`
-
-Reconstructs a `SourceLibrary` from a previously captured snapshot.
+Reconstructs a `ClaimLibrary` from a previously captured snapshot. Pre-screens for legacy (pre-v0.10.0) claim entries that lack the required `type` field and emits `LEGACY_CLAIM_MISSING_TYPE` so the caller gets a clear migration signal rather than a generic schema error.
 
 ---
 
@@ -1075,7 +1014,7 @@ const ast: TFormulaAST = parseFormula("(P and Q) implies R")
 
 ### `DEFAULT_CHECKSUM_CONFIG`
 
-Readonly default checksum configuration with `Set<string>` fields for each entity type (`expressionFields`, `variableFields`, `premiseFields`, `argumentFields`, `roleFields`, `claimFields`, `sourceFields`, `claimSourceAssociationFields`). Used by `ArgumentEngine`, `PremiseEngine`, and `ClaimSourceLibrary` when no custom config is provided.
+Readonly default checksum configuration with `Set<string>` fields for each entity type (`expressionFields`, `variableFields`, `premiseFields`, `argumentFields`, `roleFields`, `claimFields`, `claimCitationFields`). Used by `ArgumentEngine`, `PremiseEngine`, `ClaimLibrary`, and `ClaimCitationLibrary` when no custom config is provided.
 
 ---
 
@@ -1208,20 +1147,19 @@ A version of `TPropositionalExpression` with both the `position` and `checksum` 
 
 Hierarchical snapshot types for capturing and restoring engine state:
 
-| Type                          | Contains                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------- |
-| `TExpressionManagerSnapshot`  | `expressions` (with checksums), `config`                                                    |
-| `TVariableManagerSnapshot`    | `variables`, `config`                                                                       |
-| `TPremiseEngineSnapshot`      | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                    |
-| `TArgumentEngineSnapshot`     | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config`     |
-| `TReactiveSnapshot`           | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles` |
-| `TReactivePremiseSnapshot`    | `premise`, `expressions` (Record by ID), `rootExpressionId`                                 |
-| `TClaimLibrarySnapshot`       | `claims` (all versions of all claims)                                                       |
-| `TSourceLibrarySnapshot`      | `sources` (all versions of all sources)                                                     |
-| `TClaimSourceLibrarySnapshot` | `claimSourceAssociations` (all associations)                                                |
-| `TArgumentLibrarySnapshot`    | `arguments` (array of `TArgumentEngineSnapshot`)                                            |
-| `TForkLibrarySnapshot`        | Six arrays (`arguments`, `premises`, `expressions`, `variables`, `claims`, `sources`)       |
-| `TPropositCoreSnapshot`       | All five library snapshots in one object                                                    |
+| Type                            | Contains                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------- |
+| `TExpressionManagerSnapshot`    | `expressions` (with checksums), `config`                                                    |
+| `TVariableManagerSnapshot`      | `variables`, `config`                                                                       |
+| `TPremiseEngineSnapshot`        | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                    |
+| `TArgumentEngineSnapshot`       | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config`     |
+| `TReactiveSnapshot`             | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles` |
+| `TReactivePremiseSnapshot`      | `premise`, `expressions` (Record by ID), `rootExpressionId`                                 |
+| `TClaimLibrarySnapshot`         | `claims` (all versions of all claims, both `'normal'` and `'citation'`)                     |
+| `TClaimCitationLibrarySnapshot` | `claimCitations` (all citation edges)                                                       |
+| `TArgumentLibrarySnapshot`      | `arguments` (array of `TArgumentEngineSnapshot`)                                            |
+| `TForkLibrarySnapshot`          | Five arrays (`arguments`, `premises`, `expressions`, `variables`, `claims`)                 |
+| `TPropositCoreSnapshot`         | All four library snapshots in one object                                                    |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
@@ -1258,37 +1196,48 @@ Premise-bound variables enable hierarchical argument structure: variable Q bound
 | `TCoreExpressionForkRecord`      | Extends base with `forkedFromPremiseId`                                                                        |
 | `TCoreVariableForkRecord`        | Alias for `TCoreEntityForkRecord` (no extra fields)                                                            |
 | `TCoreClaimForkRecord`           | Extends base with `forkedFromEntityVersion` (claim version that was cloned)                                    |
-| `TCoreSourceForkRecord`          | Extends base with `forkedFromEntityVersion` (source version that was cloned)                                   |
-| `TForkLibrarySnapshot`           | Snapshot type for `ForkLibrary` (six arrays, one per namespace)                                                |
+| `TForkLibrarySnapshot`           | Snapshot type for `ForkLibrary` (five arrays, one per namespace)                                               |
 | `TArgumentLibrarySnapshot`       | Snapshot type for `ArgumentLibrary` (`{ arguments: TArgumentEngineSnapshot[] }`)                               |
-| `TPropositCoreSnapshot`          | Snapshot type for `PropositCore` (all five library snapshots)                                                  |
+| `TPropositCoreSnapshot`          | Snapshot type for `PropositCore` (all four library snapshots)                                                  |
 | `CoreEntityForkRecordSchema`     | Typebox schema for `TCoreEntityForkRecord`                                                                     |
 | `CoreExpressionForkRecordSchema` | Typebox schema for `TCoreExpressionForkRecord`                                                                 |
 | `CoreClaimForkRecordSchema`      | Typebox schema for `TCoreClaimForkRecord`                                                                      |
-| `CoreSourceForkRecordSchema`     | Typebox schema for `TCoreSourceForkRecord`                                                                     |
 
 Fork provenance lives entirely in `ForkLibrary` — entity schemas (argument, premises, expressions, variables) do NOT carry `forkedFrom*` or `forkId` fields. Use `ForkLibrary.arguments.get(entityId)` (or the appropriate namespace) to look up whether an entity was forked and from which original.
 
 ---
 
-### Source and Claim-Source Types
+### Claim and Claim-Citation Types
 
-| Type                            | Description                                                                                                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TCoreSource`                   | Base source entity (`{ id, version, frozen, checksum }`)                                                                                                      |
-| `TCoreClaim`                    | Base claim entity (`{ id, version, frozen, checksum }`)                                                                                                       |
-| `TCoreClaimSourceAssociation`   | Links a claim version to a source version (`{ claimId, claimVersion, sourceId, sourceVersion, … }`)                                                           |
-| `TClaimLookup`                  | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                             |
-| `TClaimLibraryManagement`       | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)   |
-| `TSourceLookup`                 | Narrow read-only interface for source lookups (`get(id, version)`)                                                                                            |
-| `TSourceLibraryManagement`      | Full management interface for `SourceLibrary` (extends `TSourceLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`) |
-| `TClaimSourceLookup`            | Narrow read-only interface for claim-source lookups (`getForClaim`, `getForSource`, `get`)                                                                    |
-| `TClaimSourceLibraryManagement` | Full management interface for `ClaimSourceLibrary` (extends `TClaimSourceLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`)                       |
-| `TClaimLibrarySnapshot`         | Snapshot type for `ClaimLibrary` state                                                                                                                        |
-| `TSourceLibrarySnapshot`        | Snapshot type for `SourceLibrary` state                                                                                                                       |
-| `TClaimSourceLibrarySnapshot`   | Snapshot type for `ClaimSourceLibrary` state                                                                                                                  |
+As of v0.10.0 the previously separate `Source` / `ClaimSourceAssociation` types are gone. Sources are now claims with `type: 'citation'`, and `ClaimSourceAssociation` is replaced by `TCoreClaimCitation` — a directed edge between two claim versions in the unified claim library.
+
+| Type                              | Description                                                                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TCoreClaim`                      | Base claim entity (`{ id, version, frozen, checksum, type: 'normal' \| 'citation' }`); `type` is immutable post-creation                                                                    |
+| `TCoreClaimCitation`              | Citation edge in the global claim citation graph (`{ id, citingClaimId, citingClaimVersion, sourceClaimId, sourceClaimVersion, checksum }`); source-side claim must have `type: 'citation'` |
+| `TClaimLookup`                    | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                                                           |
+| `TClaimLibraryManagement`         | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)                                 |
+| `TClaimCitationLookup`            | Narrow read-only interface for citation lookups (`getCitationsForCitingClaim`, `getCitationsForSourceClaim`, `get`)                                                                         |
+| `TClaimCitationLibraryManagement` | Full management interface for `ClaimCitationLibrary` (extends `TClaimCitationLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`)                                                 |
+| `TClaimLibrarySnapshot`           | Snapshot type for `ClaimLibrary` state (`{ claims: TClaim[] }`)                                                                                                                             |
+| `TClaimCitationLibrarySnapshot`   | Snapshot type for `ClaimCitationLibrary` state (`{ claimCitations: TCitation[] }`)                                                                                                          |
 
 ## Errors
+
+### Claim and citation error codes (v0.10.0)
+
+These codes are emitted as `TInvariantViolation.code` values by `ClaimLibrary` and `ClaimCitationLibrary`:
+
+| Code                                | Source                                | Meaning                                                                                                       |
+| ----------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `CLAIM_TYPE_IMMUTABLE`              | `ClaimLibrary.update()`               | An update tried to change a claim's `type` discriminator after creation.                                      |
+| `LEGACY_CLAIM_MISSING_TYPE`         | `ClaimLibrary.fromSnapshot()`         | A claim entry in the snapshot lacks the `type` field (pre-v0.10 data); migration required.                    |
+| `CITATION_SCHEMA_INVALID`           | `ClaimCitationLibrary.validate()`     | A citation does not match `CoreClaimCitationSchema`.                                                          |
+| `CITATION_DUPLICATE_ID`             | `ClaimCitationLibrary.add()`          | A citation with the given `id` already exists.                                                                |
+| `CITATION_CITING_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()` | The citation's `citingClaimId@citingClaimVersion` does not resolve in the claim lookup.                       |
+| `CITATION_SOURCE_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()` | The citation's `sourceClaimId@sourceClaimVersion` does not resolve in the claim lookup.                       |
+| `CITATION_SOURCE_NOT_CITATION_TYPE` | `ClaimCitationLibrary.add/validate()` | The source-side claim has `type !== 'citation'`. Only citation-typed claims are valid as the source endpoint. |
+| `CITATION_CYCLE_DETECTED`           | `ClaimCitationLibrary.add()`          | Adding the citation would introduce a cycle in the global claim-citation graph (ID-only — versions ignored).  |
 
 ### `InvalidArgumentStructureError`
 

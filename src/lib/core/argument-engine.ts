@@ -5,12 +5,11 @@ import {
     type TPremiseBoundVariable,
     type TCoreArgument,
     type TCoreClaim,
-    type TCoreClaimSourceAssociation,
+    type TCoreClaimCitation,
     type TCorePremise,
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
     type TOptionalChecksum,
-    type TCoreSource,
 } from "../schemata/index.js"
 import type {
     TCoreArgumentEvaluationOptions,
@@ -72,9 +71,8 @@ import type {
     TDisplayable,
     THierarchicalChecksummable,
     TClaimLookup,
-    TSourceLookup,
-    TClaimSourceLookup,
 } from "./interfaces/index.js"
+import type { TClaimCitationLookup } from "./interfaces/library.interfaces.js"
 
 /** Default ID generator using the Web Crypto API (Node.js 20+, all modern browsers). */
 export const defaultGenerateId = (): string => globalThis.crypto.randomUUID()
@@ -112,9 +110,8 @@ export class ArgumentEngine<
     TPremise extends TCorePremise = TCorePremise,
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-    TSource extends TCoreSource = TCoreSource,
     TClaim extends TCoreClaim = TCoreClaim,
-    TAssoc extends TCoreClaimSourceAssociation = TCoreClaimSourceAssociation,
+    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 >
     implements
         TPremiseCrud<TArg, TPremise, TExpr, TVar>,
@@ -131,8 +128,7 @@ export class ArgumentEngine<
     private premises: Map<string, PremiseEngine<TArg, TPremise, TExpr, TVar>>
     private variables: VariableManager<TVar>
     private claimLibrary: TClaimLookup<TClaim>
-    private sourceLibrary: TSourceLookup<TSource>
-    private claimSourceLibrary: TClaimSourceLookup<TAssoc>
+    private claimCitationLibrary: TClaimCitationLookup<TCitation>
     private conclusionPremiseId: string | undefined
     private checksumConfig?: TCoreChecksumConfig
     private positionConfig?: TCorePositionConfig
@@ -161,14 +157,12 @@ export class ArgumentEngine<
     constructor(
         argument: TOptionalChecksum<TArg>,
         claimLibrary: TClaimLookup<TClaim>,
-        sourceLibrary: TSourceLookup<TSource>,
-        claimSourceLibrary: TClaimSourceLookup<TAssoc>,
+        claimCitationLibrary: TClaimCitationLookup<TCitation>,
         options?: TLogicEngineOptions
     ) {
         this.argument = { ...argument }
         this.claimLibrary = claimLibrary
-        this.sourceLibrary = sourceLibrary
-        this.claimSourceLibrary = claimSourceLibrary
+        this.claimCitationLibrary = claimCitationLibrary
         this.premises = new Map()
         this.checksumConfig = options?.checksumConfig
         this.positionConfig = options?.positionConfig
@@ -1247,32 +1241,27 @@ export class ArgumentEngine<
         TExpr extends TCorePropositionalExpression =
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-        TSource extends TCoreSource = TCoreSource,
         TClaim extends TCoreClaim = TCoreClaim,
-        TAssoc extends TCoreClaimSourceAssociation =
-            TCoreClaimSourceAssociation,
+        TCitation extends TCoreClaimCitation = TCoreClaimCitation,
     >(
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>,
         claimLibrary: TClaimLookup<TClaim>,
-        sourceLibrary: TSourceLookup<TSource>,
-        claimSourceLibrary: TClaimSourceLookup<TAssoc>,
+        claimCitationLibrary: TClaimCitationLookup<TCitation>,
         grammarConfig?: TGrammarConfig,
         checksumVerification?: "ignore" | "strict",
         generateId?: () => string
-    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc> {
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation> {
         const engine = new ArgumentEngine<
             TArg,
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc
+            TCitation
         >(
             snapshot.argument,
             claimLibrary,
-            sourceLibrary,
-            claimSourceLibrary,
+            claimCitationLibrary,
             snapshot.config
                 ? {
                       ...snapshot.config,
@@ -1384,15 +1373,12 @@ export class ArgumentEngine<
         TExpr extends TCorePropositionalExpression =
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
-        TSource extends TCoreSource = TCoreSource,
         TClaim extends TCoreClaim = TCoreClaim,
-        TAssoc extends TCoreClaimSourceAssociation =
-            TCoreClaimSourceAssociation,
+        TCitation extends TCoreClaimCitation = TCoreClaimCitation,
     >(
         argument: TOptionalChecksum<TArg>,
         claimLibrary: TClaimLookup<TClaim>,
-        sourceLibrary: TSourceLookup<TSource>,
-        claimSourceLibrary: TClaimSourceLookup<TAssoc>,
+        claimCitationLibrary: TClaimCitationLookup<TCitation>,
         variables: TOptionalChecksum<TVar>[],
         premises: TOptionalChecksum<TPremise>[],
         expressions: TExpressionInput<TExpr>[],
@@ -1400,7 +1386,7 @@ export class ArgumentEngine<
         config?: TLogicEngineOptions,
         grammarConfig?: TGrammarConfig,
         checksumVerification?: "ignore" | "strict"
-    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TSource, TClaim, TAssoc> {
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation> {
         const loadingGrammarConfig =
             grammarConfig ?? config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
         const normalizedConfig = config
@@ -1420,16 +1406,9 @@ export class ArgumentEngine<
             TPremise,
             TExpr,
             TVar,
-            TSource,
             TClaim,
-            TAssoc
-        >(
-            argument,
-            claimLibrary,
-            sourceLibrary,
-            claimSourceLibrary,
-            loadingConfig
-        )
+            TCitation
+        >(argument, claimLibrary, claimCitationLibrary, loadingConfig)
         engine.restoringFromSnapshot = true
 
         // Register claim-bound variables first (no dependencies)
@@ -1543,19 +1522,10 @@ export class ArgumentEngine<
         TPremise extends TCorePremise,
         TExpr extends TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable,
-        TSource extends TCoreSource,
         TClaim extends TCoreClaim,
-        TAssoc extends TCoreClaimSourceAssociation,
+        TCitation extends TCoreClaimCitation,
     >(
-        engine: ArgumentEngine<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TSource,
-            TClaim,
-            TAssoc
-        >,
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation>,
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
     ): void {
         const checksumFields = [
@@ -1649,19 +1619,10 @@ export class ArgumentEngine<
         TPremise extends TCorePremise,
         TExpr extends TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable,
-        TSource extends TCoreSource,
         TClaim extends TCoreClaim,
-        TAssoc extends TCoreClaimSourceAssociation,
+        TCitation extends TCoreClaimCitation,
     >(
-        engine: ArgumentEngine<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TSource,
-            TClaim,
-            TAssoc
-        >,
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation>,
         argument: TOptionalChecksum<TArg>,
         variables: TOptionalChecksum<TVar>[],
         premises: TOptionalChecksum<TPremise>[]
