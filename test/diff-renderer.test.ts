@@ -197,6 +197,7 @@ describe("renderDiff", () => {
                         checksum: "x",
                         descendantChecksum: null,
                         combinedChecksum: "x",
+                        type: "freeform" as const,
                     } as TCorePremise,
                 ],
                 removed: [
@@ -210,6 +211,7 @@ describe("renderDiff", () => {
                         checksum: "x",
                         descendantChecksum: null,
                         combinedChecksum: "x",
+                        type: "freeform" as const,
                     } as TCorePremise,
                 ],
                 modified: [
@@ -224,6 +226,7 @@ describe("renderDiff", () => {
                             checksum: "x",
                             descendantChecksum: null,
                             combinedChecksum: "x",
+                            type: "freeform" as const,
                         } as TCorePremise,
                         after: {
                             id: "p1",
@@ -235,6 +238,7 @@ describe("renderDiff", () => {
                             checksum: "x",
                             descendantChecksum: null,
                             combinedChecksum: "x",
+                            type: "freeform" as const,
                         } as TCorePremise,
                         changes: [
                             {

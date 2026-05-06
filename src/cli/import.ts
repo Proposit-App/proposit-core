@@ -309,9 +309,9 @@ export function importArgumentFromYaml(yamlString: string): {
     // Create premises and build expression trees
     for (let i = 0; i < input.premises.length; i++) {
         const premiseDef = input.premises[i]
-        const { result: pm } = engine.createPremise(
-            premiseDef.metadata ? { ...premiseDef.metadata } : undefined
-        )
+        const { result: pm } = premiseDef.metadata
+            ? engine.createPremise({ ...premiseDef.metadata })
+            : engine.createPremise()
 
         // Build expression tree from parsed AST
         buildExpressions(

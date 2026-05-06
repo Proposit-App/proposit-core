@@ -153,6 +153,7 @@ export async function hydrateEngine(
                 id: premiseId,
                 argumentId,
                 argumentVersion: version,
+                type: "freeform" as const,
                 ...premiseExtras,
             },
             rootExpressionId: data.rootExpressionId,

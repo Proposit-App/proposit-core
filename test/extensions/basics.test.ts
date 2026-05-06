@@ -93,6 +93,7 @@ describe("Basics extension", () => {
                 checksum: "abc",
                 descendantChecksum: null,
                 combinedChecksum: "abc",
+                type: "freeform",
                 title: "My premise",
             }
             expect(() =>

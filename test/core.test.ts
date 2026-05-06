@@ -332,6 +332,7 @@ function makePremise(extras?: Record<string, unknown>): PremiseEngine {
             id: "premise-1",
             argumentId: ARG.id,
             argumentVersion: ARG.version,
+            type: "freeform" as const,
             ...extras,
         } as unknown as TCorePremise,
         { argument: ARG, variables: vm }
@@ -1845,6 +1846,7 @@ describe("PremiseEngine — toData", () => {
                 argumentId: ARG.id,
                 argumentVersion: ARG.version,
                 title: "My Premise",
+                type: "freeform" as const,
             } as unknown as TCorePremise,
             { argument: ARG, variables: new VariableManager() }
         )
@@ -2469,6 +2471,7 @@ describe("diffArguments", () => {
                 checksum: "x",
                 descendantChecksum: null,
                 combinedChecksum: "x",
+                type: "freeform" as const,
             }
             const after = {
                 id: "p1",
@@ -2477,6 +2480,7 @@ describe("diffArguments", () => {
                 checksum: "x",
                 descendantChecksum: null,
                 combinedChecksum: "x",
+                type: "freeform" as const,
             }
             expect(defaultComparePremise(before, after)).toEqual([])
         })
@@ -2489,6 +2493,7 @@ describe("diffArguments", () => {
                 checksum: "x",
                 descendantChecksum: null,
                 combinedChecksum: "x",
+                type: "freeform" as const,
             }
             const after = {
                 id: "p1",
@@ -2497,6 +2502,7 @@ describe("diffArguments", () => {
                 checksum: "y",
                 descendantChecksum: null,
                 combinedChecksum: "y",
+                type: "freeform" as const,
             }
             expect(defaultComparePremise(before, after)).toEqual([])
         })
@@ -4939,6 +4945,7 @@ describe("ChangeCollector", () => {
             checksum: "x",
             descendantChecksum: null,
             combinedChecksum: "x",
+            type: "freeform" as const,
         } as TCorePremise
         collector.addedPremise(p)
         const cs = collector.toChangeset()
@@ -7401,6 +7408,7 @@ describe("configurable position range", () => {
                 id: "p1",
                 argumentId: ARG.id,
                 argumentVersion: ARG.version,
+                type: "freeform" as const,
             } as unknown as TCorePremise,
             { argument: ARG, variables: vm },
             { positionConfig: config }
@@ -7677,6 +7685,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TCorePremise,
             { argument: ARG as TCoreArgument, variables: vm }
         )
@@ -7738,6 +7747,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TCorePremise,
             { argument: ARG as TCoreArgument, variables: vm }
         )
@@ -8111,11 +8121,13 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
             {
                 id: "p2",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
         ]
         const expressions = [
@@ -8193,11 +8205,13 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
             {
                 id: "p2",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
         ]
         const expressions = [
@@ -8260,6 +8274,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
         ]
         // Expressions out of order — child before parent
@@ -8556,6 +8571,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8576,6 +8592,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8597,6 +8614,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8633,6 +8651,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8660,6 +8679,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8693,6 +8713,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             { argument: arg as TCoreArgument, variables: vm }
         )
@@ -8710,6 +8731,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8751,6 +8773,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -14351,7 +14374,12 @@ describe("operator nesting restriction", () => {
                 },
             ]
             const premises: TOptionalChecksum<TCorePremise>[] = [
-                { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+                {
+                    id: "p1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    type: "freeform" as const,
+                },
             ]
             const expressions = [
                 {
@@ -15621,7 +15649,12 @@ describe("grammar enforcement config", () => {
                 },
             ]
             const premises: TOptionalChecksum<TCorePremise>[] = [
-                { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+                {
+                    id: "p1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    type: "freeform" as const,
+                },
             ]
             const expressions = [
                 {
@@ -19670,6 +19703,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -19691,6 +19725,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -19716,6 +19751,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -19766,6 +19802,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -21130,6 +21167,7 @@ describe("orderChangeset", () => {
                         checksum: "c",
                         descendantChecksum: null,
                         combinedChecksum: "c",
+                        type: "freeform" as const,
                     },
                 ],
             },
@@ -21188,6 +21226,7 @@ describe("orderChangeset", () => {
                         checksum: "c",
                         descendantChecksum: null,
                         combinedChecksum: "c",
+                        type: "freeform" as const,
                     },
                 ],
                 modified: [],
@@ -21249,6 +21288,7 @@ describe("orderChangeset", () => {
                         checksum: "c2",
                         descendantChecksum: null,
                         combinedChecksum: "c2",
+                        type: "freeform" as const,
                     },
                 ],
                 removed: [
@@ -21259,6 +21299,7 @@ describe("orderChangeset", () => {
                         checksum: "c",
                         descendantChecksum: null,
                         combinedChecksum: "c",
+                        type: "freeform" as const,
                     },
                 ],
             },
@@ -22772,6 +22813,7 @@ describe("PropositCore", () => {
                     id: "premise-1",
                     argumentId: ARG.id,
                     argumentVersion: ARG.version,
+                    type: "freeform" as const,
                 } as TCorePremise,
                 { argument: ARG, variables: vm },
                 { generateId }
@@ -22807,6 +22849,7 @@ describe("PropositCore", () => {
                     id: "premise-1",
                     argumentId: ARG.id,
                     argumentVersion: ARG.version,
+                    type: "freeform" as const,
                 } as TCorePremise,
                 { argument: ARG, variables: vm },
                 {
@@ -25248,7 +25291,12 @@ describe("post-load normalization", () => {
             },
         ]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         const expressions = [
             {
@@ -25328,7 +25376,12 @@ describe("post-load normalization", () => {
             },
         ]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         const expressions = [
             {
@@ -26028,7 +26081,12 @@ describe("fromData checksum idempotency", () => {
         makeVar("v3", "R"),
     ]
     const premises: TOptionalChecksum<TCorePremise>[] = [
-        { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+        {
+            id: "p1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "freeform" as const,
+        },
     ]
     const roles = { conclusionPremiseId: "p1" }
 
@@ -26188,7 +26246,12 @@ describe("fromData checksum idempotency", () => {
         const arg = { id: "arg-1", version: 1 }
         const variables = [makeVar("v1", "P"), makeVar("v2", "Q")]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         // AND(OR(P, Q)) — no formula buffer between AND and OR
         const expressions = [
@@ -26285,7 +26348,12 @@ describe("fromData checksum idempotency", () => {
         const arg = { id: "arg-1", version: 1 }
         const variables = [makeVar("v1", "P")]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         // Simple tree: AND(P)
         const expressions = [
@@ -28234,7 +28302,11 @@ describe("validateDerivationStructure", () => {
 
     it("accepts naked-Q form (root = variable expression for derivedClaimId)", () => {
         const { premise, expressions, variables } = makeNakedQ()
-        const result = validateDerivationStructure(premise, expressions, variables)
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            variables
+        )
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
     })
@@ -28298,7 +28370,11 @@ describe("validateDerivationStructure", () => {
                 combinedChecksum: "x",
             },
         ]
-        const result = validateDerivationStructure(premise, expressions, allVariables)
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
     })
@@ -28362,7 +28438,11 @@ describe("validateDerivationStructure", () => {
                 combinedChecksum: "x",
             },
         ]
-        const result = validateDerivationStructure(premise, expressions, allVariables)
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
     })
@@ -28390,7 +28470,11 @@ describe("validateDerivationStructure", () => {
             descendantChecksum: null,
             combinedChecksum: "x",
         }
-        const result = validateDerivationStructure(premise, [...expressions, secondRoot], variables)
+        const result = validateDerivationStructure(
+            premise,
+            [...expressions, secondRoot],
+            variables
+        )
         expect(result.ok).toBe(false)
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
@@ -28411,7 +28495,11 @@ describe("validateDerivationStructure", () => {
             descendantChecksum: null,
             combinedChecksum: "x",
         }
-        const result = validateDerivationStructure(premise, [andRoot], variables)
+        const result = validateDerivationStructure(
+            premise,
+            [andRoot],
+            variables
+        )
         expect(result.ok).toBe(false)
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
@@ -28450,7 +28538,11 @@ describe("validateDerivationStructure", () => {
                 combinedChecksum: "x",
             },
         ]
-        const result = validateDerivationStructure(premise, expressions, variables)
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            variables
+        )
         expect(result.ok).toBe(false)
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
@@ -28516,7 +28608,11 @@ describe("validateDerivationStructure", () => {
                 combinedChecksum: "x",
             },
         ]
-        const result = validateDerivationStructure(premise, expressions, allVariables)
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
         expect(result.ok).toBe(false)
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
@@ -28592,7 +28688,11 @@ describe("validateDerivationStructure", () => {
                 combinedChecksum: "x",
             },
         ]
-        const result = validateDerivationStructure(premise, expressions, allVariables)
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
         expect(result.ok).toBe(false)
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
@@ -28629,7 +28729,11 @@ describe("validateDerivationStructure", () => {
                 combinedChecksum: "x",
             },
         ]
-        const result = validateDerivationStructure(premise, expressions, allVariables)
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
         expect(result.ok).toBe(false)
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
@@ -28658,7 +28762,11 @@ describe("validateDerivationStructure", () => {
             descendantChecksum: null,
             combinedChecksum: "x",
         }
-        const result = validateDerivationStructure(premise, [formulaRoot], variables)
+        const result = validateDerivationStructure(
+            premise,
+            [formulaRoot],
+            variables
+        )
         expect(result.ok).toBe(false)
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
@@ -28815,11 +28923,19 @@ describe("ManagedDerivationPremiseEngine.fromSnapshot", () => {
         const root = exprs[0]
         expect(root.type).toBe("variable")
         // The single expression references the consequent variable.
-        expect((root as { variableId: string }).variableId).toBe(consequentVarId)
+        expect((root as { variableId: string }).variableId).toBe(
+            consequentVarId
+        )
         // Confirm the variable is claim-bound to derivedClaimId.
-        const variable = engine.getVariables().find((v) => v.id === consequentVarId)!
-        expect(isClaimBound(variable as unknown as TCorePropositionalVariable)).toBe(true)
-        expect((variable as unknown as TClaimBoundVariable).claimId).toBe(claimId)
+        const variable = engine
+            .getVariables()
+            .find((v) => v.id === consequentVarId)!
+        expect(
+            isClaimBound(variable as unknown as TCorePropositionalVariable)
+        ).toBe(true)
+        expect((variable as unknown as TClaimBoundVariable).claimId).toBe(
+            claimId
+        )
     })
 })
 
@@ -28885,7 +29001,14 @@ function makeNakedDerivationEngine() {
         ARG_OBJ,
         vm
     )
-    return { engine, argId, premiseId, claimId, consequentVarId, consequentExprId }
+    return {
+        engine,
+        argId,
+        premiseId,
+        claimId,
+        consequentVarId,
+        consequentExprId,
+    }
 }
 
 /**
@@ -29175,7 +29298,9 @@ describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
         // updateExpression on the antecedent (position field change) is fine.
         const { engine, antecedentExprId } = makeImpliesDerivationEngine()
         expect(() =>
-            engine.updateExpression(antecedentExprId, { position: POSITION_INITIAL + 1 })
+            engine.updateExpression(antecedentExprId, {
+                position: POSITION_INITIAL + 1,
+            })
         ).not.toThrow()
     })
 
@@ -29302,7 +29427,11 @@ describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
         }
 
         const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
-        const engine = ManagedDerivationPremiseEngine.fromSnapshot(snap, ARG_OBJ, vm)
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap,
+            ARG_OBJ,
+            vm
+        )
 
         // addExpression adds a second child to the antecedent AND — should not throw.
         const newChildId = "00000000-0000-0000-0000-00000000xa05"
@@ -29384,7 +29513,9 @@ describe("ensureClaimBoundVariable", () => {
         const variable = argumentEngine.ensureClaimBoundVariable(claimId)
         expect(variable.claimId).toBe(claimId)
         expect(variable.symbol).toMatch(/^[A-Z]/)
-        expect(argumentEngine.getVariables().find((v) => v.id === variable.id)).toBeDefined()
+        expect(
+            argumentEngine.getVariables().find((v) => v.id === variable.id)
+        ).toBeDefined()
     })
 
     it("returns the existing variable when one is already bound to the claim", () => {
@@ -29404,8 +29535,235 @@ describe("ensureClaimBoundVariable", () => {
 
     it("throws CLAIM_NOT_FOUND when the claim is not in the library", () => {
         const { argumentEngine } = setupArgumentWithClaim()
-        expect(() => argumentEngine.ensureClaimBoundVariable("00000000-0000-0000-0000-000000000999"))
-            .toThrow(/CLAIM_NOT_FOUND/)
+        expect(() =>
+            argumentEngine.ensureClaimBoundVariable(
+                "00000000-0000-0000-0000-000000000999"
+            )
+        ).toThrow(/CLAIM_NOT_FOUND/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// createPremise typed-bag overload + derivation init flow (Task 9)
+// ---------------------------------------------------------------------------
+
+describe("createPremise with type and derivedClaimId", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimLib, claimId }
+    }
+
+    it("creates a freeform premise when type is omitted (default)", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise()
+        expect(pm.toPremiseData().type).toBe("freeform")
+    })
+
+    it("creates a freeform premise via explicit type: 'freeform'", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "freeform",
+        })
+        expect(pm.toPremiseData().type).toBe("freeform")
+    })
+
+    it("creates a derivation premise with naked-Q expression tree", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        const premiseData = pm.toPremiseData()
+        expect(premiseData.type).toBe("derivation")
+        expect((premiseData as TCoreDerivationPremise).derivedClaimId).toBe(
+            claimId
+        )
+        // Verify the premise's expression tree is a single naked-Q variable expression.
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        const root = expressions.find((e) => e.parentId === null)
+        expect(root?.type).toBe("variable")
+    })
+
+    it("ensures a claim-bound variable for the derivedClaimId", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const variablesBefore = argumentEngine.getVariables().length
+        argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        const variablesAfter = argumentEngine.getVariables().length
+        // Two variables created: one premise-bound (auto) + one claim-bound (for derivedClaimId)
+        expect(variablesAfter).toBeGreaterThan(variablesBefore)
+        const claimBoundVar = argumentEngine
+            .getVariables()
+            .find(
+                (v) =>
+                    isClaimBound(
+                        v as unknown as import("../src/lib/schemata").TCorePropositionalVariable
+                    ) &&
+                    (v as unknown as TClaimBoundVariable).claimId === claimId
+            )
+        expect(claimBoundVar).toBeDefined()
+    })
+
+    it("is idempotent: calling ensureClaimBoundVariable twice reuses the variable", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        // Ensure the variable once first.
+        argumentEngine.ensureClaimBoundVariable(claimId)
+        const variablesBefore = argumentEngine.getVariables().length
+        // Creating a derivation premise with the same claimId should NOT add another claim-bound variable.
+        argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        const variablesAfter = argumentEngine.getVariables().length
+        // Only the premise-bound variable (auto) should be new.
+        expect(variablesAfter).toBe(variablesBefore + 1)
+    })
+
+    it("throws CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID when type=derivation has no derivedClaimId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremise({ type: "derivation" })
+        ).toThrow(/CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID/)
+    })
+
+    it("throws CREATE_DERIVATION_CLAIM_NOT_FOUND when claim is missing", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremise({
+                type: "derivation",
+                derivedClaimId: "00000000-0000-0000-0000-000000000999",
+            })
+        ).toThrow(/CREATE_DERIVATION_CLAIM_NOT_FOUND/)
+    })
+})
+
+describe("createPremise legacy positional signature (backward compat)", () => {
+    it("accepts no arguments", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        expect(pm.toPremiseData().type).toBe("freeform")
+    })
+
+    it("accepts (extras) positional", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: pm } = eng.createPremise({ title: "hello" })
+        const data = pm.toPremiseData()
+        expect(data.type).toBe("freeform")
+        expect((data as Record<string, unknown>).title).toBe("hello")
+    })
+
+    it("accepts (extras, symbol) positional", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: pm } = eng.createPremise({ title: "hello" }, "MySymbol")
+        const data = pm.toPremiseData()
+        expect(data.type).toBe("freeform")
+        expect((data as Record<string, unknown>).title).toBe("hello")
+        const vars = eng.getVariables()
+        const premiseBound = vars.find(
+            (v) =>
+                isPremiseBound(
+                    v as unknown as import("../src/lib/schemata").TCorePropositionalVariable
+                ) &&
+                (v as unknown as TPremiseBoundVariable).symbol === "MySymbol"
+        )
+        expect(premiseBound).toBeDefined()
+    })
+
+    it("accepts (undefined, symbol) positional", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: _pm } = eng.createPremise(undefined, "XSym")
+        const vars = eng.getVariables()
+        const premiseBound = vars.find(
+            (v) =>
+                isPremiseBound(
+                    v as unknown as import("../src/lib/schemata").TCorePropositionalVariable
+                ) && (v as unknown as TPremiseBoundVariable).symbol === "XSym"
+        )
+        expect(premiseBound).toBeDefined()
+    })
+})
+
+describe("createPremiseWithId with derivation type", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimLib, claimId }
+    }
+
+    it("creates a derivation premise with given id", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const customId = "00000000-0000-0000-0000-000000000111"
+        const { result: pm } = argumentEngine.createPremiseWithId(customId, {
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        expect(pm.getId()).toBe(customId)
+        expect(pm.toPremiseData().type).toBe("derivation")
+        expect(
+            (pm.toPremiseData() as TCoreDerivationPremise).derivedClaimId
+        ).toBe(claimId)
+    })
+
+    it("creates naked-Q expression tree via createPremiseWithId", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremiseWithId(
+            "00000000-0000-0000-0000-000000000222",
+            { type: "derivation", derivedClaimId: claimId }
+        )
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].type).toBe("variable")
+    })
+
+    it("legacy positional still works via createPremiseWithId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremiseWithId(
+            "00000000-0000-0000-0000-000000000333",
+            { title: "legacy" }
+        )
+        const data = pm.toPremiseData()
+        expect(data.type).toBe("freeform")
+    })
+
+    it("throws CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID from createPremiseWithId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremiseWithId(
+                "00000000-0000-0000-0000-000000000444",
+                {
+                    type: "derivation",
+                }
+            )
+        ).toThrow(/CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID/)
+    })
+
+    it("throws CREATE_DERIVATION_CLAIM_NOT_FOUND from createPremiseWithId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremiseWithId(
+                "00000000-0000-0000-0000-000000000555",
+                {
+                    type: "derivation",
+                    derivedClaimId: "00000000-0000-0000-0000-000000000999",
+                }
+            )
+        ).toThrow(/CREATE_DERIVATION_CLAIM_NOT_FOUND/)
     })
 })
 
@@ -29454,14 +29812,20 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         }
 
         // Build ArgumentEngine.
-        const argumentEngine = new ArgumentEngine(ARG_OBJ, claimLib, citationLib)
+        const argumentEngine = new ArgumentEngine(
+            ARG_OBJ,
+            claimLib,
+            citationLib
+        )
 
         // Build ManagedDerivationPremiseEngine in naked-Q form.
         // Q variable must already exist in the variable manager (shared with argumentEngine).
-        const consequentVariable = argumentEngine.ensureClaimBoundVariable(derivedClaim.id)
+        const consequentVariable = argumentEngine.ensureClaimBoundVariable(
+            derivedClaim.id
+        )
         const premiseId = "00000000-0000-0000-0000-999000000p01"
         const consequentExprId = "00000000-0000-0000-0000-999000000x01"
-        const vm = argumentEngine["variables"] as VariableManager
+        const vm = (argumentEngine as unknown as Record<string, unknown>)["variables"] as VariableManager
 
         const snap = {
             premise: {
@@ -29491,7 +29855,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             },
         }
 
-        const engine = ManagedDerivationPremiseEngine.fromSnapshot(snap, ARG_OBJ, vm)
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap,
+            ARG_OBJ,
+            vm
+        )
 
         return {
             engine,
@@ -29507,7 +29875,8 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     }
 
     it("leaves naked-Q form unchanged when citation library has no citations", () => {
-        const { engine, argumentEngine, citationLib } = setupDerivationWithCitations(0)
+        const { engine, argumentEngine, citationLib } =
+            setupDerivationWithCitations(0)
         const expressionsBefore = engine.getExpressions().length
         engine.populateFromCitations(citationLib, argumentEngine)
         // No change: still naked-Q with a single variable expression.
@@ -29517,8 +29886,13 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     })
 
     it("produces IMPLIES(S1, Q) when there is exactly one citation", () => {
-        const { engine, argumentEngine, citationLib, sourceClaimIds, consequentVarId } =
-            setupDerivationWithCitations(1)
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            sourceClaimIds,
+            consequentVarId,
+        } = setupDerivationWithCitations(1)
         engine.populateFromCitations(citationLib, argumentEngine)
 
         const exprs = engine.getExpressions()
@@ -29527,7 +29901,9 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
 
         const root = exprs.find((e) => e.parentId === null)!
         expect(root.type).toBe("operator")
-        expect((root as unknown as { operator: string }).operator).toBe("implies")
+        expect((root as unknown as { operator: string }).operator).toBe(
+            "implies"
+        )
 
         const children = exprs
             .filter((e) => e.parentId === root.id)
@@ -29539,18 +29915,30 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         expect(antecedent.type).toBe("variable")
         const antecedentVar = argumentEngine
             .getVariables()
-            .find((v) => v.id === (antecedent as { variableId: string }).variableId)!
-        expect((antecedentVar as TClaimBoundVariable).claimId).toBe(sourceClaimIds[0])
+            .find(
+                (v) =>
+                    v.id === (antecedent as { variableId: string }).variableId
+            )!
+        expect((antecedentVar as TClaimBoundVariable).claimId).toBe(
+            sourceClaimIds[0]
+        )
 
         // Consequent (higher position) is a variable expression for Q.
         const consequent = children[1]
         expect(consequent.type).toBe("variable")
-        expect((consequent as { variableId: string }).variableId).toBe(consequentVarId)
+        expect((consequent as { variableId: string }).variableId).toBe(
+            consequentVarId
+        )
     })
 
     it("produces IMPLIES(OR(S1, ..., Sn), Q) when there are n ≥ 2 citations", () => {
-        const { engine, argumentEngine, citationLib, sourceClaimIds, consequentVarId } =
-            setupDerivationWithCitations(3)
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            sourceClaimIds,
+            consequentVarId,
+        } = setupDerivationWithCitations(3)
         engine.populateFromCitations(citationLib, argumentEngine)
 
         const exprs = engine.getExpressions()
@@ -29559,7 +29947,9 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
 
         const root = exprs.find((e) => e.parentId === null)!
         expect(root.type).toBe("operator")
-        expect((root as unknown as { operator: string }).operator).toBe("implies")
+        expect((root as unknown as { operator: string }).operator).toBe(
+            "implies"
+        )
 
         const impliesChildren = exprs
             .filter((e) => e.parentId === root.id)
@@ -29574,7 +29964,9 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         // Consequent (higher position) is Q variable.
         const consequent = impliesChildren[1]
         expect(consequent.type).toBe("variable")
-        expect((consequent as { variableId: string }).variableId).toBe(consequentVarId)
+        expect((consequent as { variableId: string }).variableId).toBe(
+            consequentVarId
+        )
 
         // OR has 3 source variable children.
         const orChildren = exprs.filter((e) => e.parentId === orNode.id)
@@ -29606,8 +29998,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
                 .getVariables()
                 .find(
                     (v) =>
-                        isClaimBound(v as unknown as TCorePropositionalVariable) &&
-                        (v as unknown as TClaimBoundVariable).claimId === sourceClaimId
+                        isClaimBound(
+                            v as unknown as TCorePropositionalVariable
+                        ) &&
+                        (v as unknown as TClaimBoundVariable).claimId ===
+                            sourceClaimId
                 )
             expect(found).toBeDefined()
         }
@@ -29617,7 +30012,9 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         const { engine, argumentEngine, citationLib, sourceClaimIds } =
             setupDerivationWithCitations(1)
         // Pre-create the variable for the source claim.
-        const existingVar = argumentEngine.ensureClaimBoundVariable(sourceClaimIds[0])
+        const existingVar = argumentEngine.ensureClaimBoundVariable(
+            sourceClaimIds[0]
+        )
         const varsBefore = argumentEngine.getVariables().length
         engine.populateFromCitations(citationLib, argumentEngine)
         // Variable count should not increase (ensureClaimBoundVariable is idempotent).
@@ -29626,12 +30023,17 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         const exprs = engine.getExpressions()
         const antecedent = exprs
             .filter((e) => e.parentId !== null)
-            .find((e) => e.type === "variable" && (e as { variableId: string }).variableId === existingVar.id)
+            .find(
+                (e) =>
+                    e.type === "variable" &&
+                    (e as { variableId: string }).variableId === existingVar.id
+            )
         expect(antecedent).toBeDefined()
     })
 
     it("rejects with DERIVATION_ANTECEDENT_NON_EMPTY when premise already has an antecedent", () => {
-        const { engine, argumentEngine, citationLib } = setupDerivationWithCitations(1)
+        const { engine, argumentEngine, citationLib } =
+            setupDerivationWithCitations(1)
         // Populate once.
         engine.populateFromCitations(citationLib, argumentEngine)
         // Populate again — should throw because antecedent is now non-empty.
@@ -29641,7 +30043,8 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     })
 
     it("throws InvariantViolationError with DERIVATION_ANTECEDENT_NON_EMPTY code", () => {
-        const { engine, argumentEngine, citationLib } = setupDerivationWithCitations(1)
+        const { engine, argumentEngine, citationLib } =
+            setupDerivationWithCitations(1)
         engine.populateFromCitations(citationLib, argumentEngine)
         let caught: unknown
         try {
@@ -29682,15 +30085,24 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             citingClaimId: sourceClaim.id,
             citingClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
             sourceClaimId: grandSourceClaim.id,
-            sourceClaimVersion: claimLib.getCurrent(grandSourceClaim.id)!.version,
+            sourceClaimVersion: claimLib.getCurrent(grandSourceClaim.id)!
+                .version,
         })
 
-        const argumentEngine = new ArgumentEngine(ARG_OBJ, claimLib, citationLib)
+        const argumentEngine = new ArgumentEngine(
+            ARG_OBJ,
+            claimLib,
+            citationLib
+        )
 
         // Build two derivation premise engines.
-        const consequentVar = argumentEngine.ensureClaimBoundVariable(derivedClaim.id)
-        const sourceVar = argumentEngine.ensureClaimBoundVariable(sourceClaim.id)
-        const vm = argumentEngine["variables"] as VariableManager
+        const consequentVar = argumentEngine.ensureClaimBoundVariable(
+            derivedClaim.id
+        )
+        const sourceVar = argumentEngine.ensureClaimBoundVariable(
+            sourceClaim.id
+        )
+        const vm = (argumentEngine as unknown as Record<string, unknown>)["variables"] as VariableManager
 
         // First engine: derivedClaim premise (naked-Q).
         const prem1Id = "00000000-0000-0000-0000-999000000p11"
@@ -29722,7 +30134,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
                 ],
             },
         }
-        const engine1 = ManagedDerivationPremiseEngine.fromSnapshot(snap1, ARG_OBJ, vm)
+        const engine1 = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap1,
+            ARG_OBJ,
+            vm
+        )
 
         // Second engine: sourceClaim premise (naked-Q for sourceClaim).
         const prem2Id = "00000000-0000-0000-0000-999000000p12"
@@ -29754,7 +30170,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
                 ],
             },
         }
-        const engine2 = ManagedDerivationPremiseEngine.fromSnapshot(snap2, ARG_OBJ, vm)
+        const engine2 = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap2,
+            ARG_OBJ,
+            vm
+        )
 
         // Engine2 before: 1 expression (naked-Q).
         expect(engine2.getExpressions()).toHaveLength(1)
