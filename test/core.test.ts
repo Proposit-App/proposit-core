@@ -161,6 +161,7 @@ import {
     DERIVATION_TYPE_MISMATCH,
     DERIVATION_CONSEQUENT_LOCKED,
     DERIVATION_ROOT_OPERATOR_INVALID,
+    DERIVATION_ANTECEDENT_NON_EMPTY,
 } from "../src/lib/types/validation"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
@@ -28714,9 +28715,17 @@ describe("ManagedDerivationPremiseEngine constructor validation", () => {
         expect(err.violations[0].code).toBe(DERIVATION_TYPE_MISMATCH)
     })
 
-    it.todo(
-        "constructs successfully on a well-formed naked-Q derivation premise (gated on Task 8/9: createPremise({type:'derivation',...}) not yet implemented)"
-    )
+    it("constructs successfully on a well-formed naked-Q derivation premise", () => {
+        // makeNakedDerivationEngine() builds a fully valid naked-Q derivation
+        // engine via fromSnapshot — verify the constructor path accepts it.
+        const { engine, premiseId } = makeNakedDerivationEngine()
+        expect(engine).toBeDefined()
+        // The engine wraps the correct premise.
+        const exprs = engine.getExpressions()
+        expect(exprs).toHaveLength(1)
+        expect(exprs[0].type).toBe("variable")
+        expect(exprs[0].premiseId).toBe(premiseId)
+    })
 })
 
 describe("ManagedDerivationPremiseEngine.fromSnapshot", () => {
@@ -28796,9 +28805,22 @@ describe("ManagedDerivationPremiseEngine.fromSnapshot", () => {
         ).toThrow(/DERIVATION_STRUCTURE_INVALID/)
     })
 
-    it.todo(
-        "validates structure when restoring a well-formed snapshot (gated on Task 8/9: need createPremise({type:'derivation',...}) to produce a valid fixture)"
-    )
+    it("validates structure when restoring a well-formed snapshot", () => {
+        // makeNakedDerivationEngine() uses fromSnapshot internally —
+        // verify it succeeds and produces a structurally valid engine.
+        const { engine, claimId, consequentVarId } = makeNakedDerivationEngine()
+        expect(engine).toBeDefined()
+        const exprs = engine.getExpressions()
+        expect(exprs).toHaveLength(1)
+        const root = exprs[0]
+        expect(root.type).toBe("variable")
+        // The single expression references the consequent variable.
+        expect((root as { variableId: string }).variableId).toBe(consequentVarId)
+        // Confirm the variable is claim-bound to derivedClaimId.
+        const variable = engine.getVariables().find((v) => v.id === consequentVarId)!
+        expect(isClaimBound(variable as unknown as TCorePropositionalVariable)).toBe(true)
+        expect((variable as unknown as TClaimBoundVariable).claimId).toBe(claimId)
+    })
 })
 
 // ---------------------------------------------------------------------------
@@ -29384,5 +29406,367 @@ describe("ensureClaimBoundVariable", () => {
         const { argumentEngine } = setupArgumentWithClaim()
         expect(() => argumentEngine.ensureClaimBoundVariable("00000000-0000-0000-0000-000000000999"))
             .toThrow(/CLAIM_NOT_FOUND/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ManagedDerivationPremiseEngine.populateFromCitations (Task 8)
+// ---------------------------------------------------------------------------
+
+describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
+    /**
+     * Hand-builds a setup with:
+     *   - A ClaimLibrary that has a derived claim (normal) and N source claims
+     *     (citation-type) where N = citationCount.
+     *   - A ClaimCitationLibrary populated with N citations from derivedClaim
+     *     to each source claim.
+     *   - An ArgumentEngine that knows about derivedClaim.
+     *   - A ManagedDerivationPremiseEngine in naked-Q form for derivedClaim.
+     *
+     * Returns the engine, argumentEngine, citationLib, and relevant IDs.
+     */
+    function setupDerivationWithCitations(citationCount: number) {
+        const argId = "00000000-0000-0000-0000-999000000001"
+        const argVersion = 1
+        const ARG_OBJ = { id: argId, version: argVersion } as TCoreArgument
+
+        // Build claim library.
+        const claimLib = new ClaimLibrary()
+        const derivedClaim = claimLib.create({ type: "normal" })
+        const sourceClaimIds: string[] = []
+        for (let i = 0; i < citationCount; i++) {
+            const sourceClaim = claimLib.create({ type: "citation" })
+            sourceClaimIds.push(sourceClaim.id)
+        }
+
+        // Build citation library.
+        const citationLib = new ClaimCitationLibrary(claimLib)
+        for (let i = 0; i < citationCount; i++) {
+            const sourceClaim = claimLib.getCurrent(sourceClaimIds[i])!
+            const derivedClaimCurrent = claimLib.getCurrent(derivedClaim.id)!
+            citationLib.add({
+                id: `cit-${argId}-${i}`,
+                citingClaimId: derivedClaim.id,
+                citingClaimVersion: derivedClaimCurrent.version,
+                sourceClaimId: sourceClaimIds[i],
+                sourceClaimVersion: sourceClaim.version,
+            })
+        }
+
+        // Build ArgumentEngine.
+        const argumentEngine = new ArgumentEngine(ARG_OBJ, claimLib, citationLib)
+
+        // Build ManagedDerivationPremiseEngine in naked-Q form.
+        // Q variable must already exist in the variable manager (shared with argumentEngine).
+        const consequentVariable = argumentEngine.ensureClaimBoundVariable(derivedClaim.id)
+        const premiseId = "00000000-0000-0000-0000-999000000p01"
+        const consequentExprId = "00000000-0000-0000-0000-999000000x01"
+        const vm = argumentEngine["variables"] as VariableManager
+
+        const snap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: derivedClaim.id,
+            } as TCorePremise,
+            rootExpressionId: consequentExprId,
+            expressions: {
+                expressions: [
+                    {
+                        id: consequentExprId,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: consequentVariable.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot(snap, ARG_OBJ, vm)
+
+        return {
+            engine,
+            argumentEngine,
+            citationLib,
+            derivedClaimId: derivedClaim.id,
+            sourceClaimIds,
+            consequentVarId: consequentVariable.id,
+            premiseId,
+            argId,
+            argVersion,
+        }
+    }
+
+    it("leaves naked-Q form unchanged when citation library has no citations", () => {
+        const { engine, argumentEngine, citationLib } = setupDerivationWithCitations(0)
+        const expressionsBefore = engine.getExpressions().length
+        engine.populateFromCitations(citationLib, argumentEngine)
+        // No change: still naked-Q with a single variable expression.
+        expect(engine.getExpressions()).toHaveLength(expressionsBefore)
+        const root = engine.getExpressions()[0]
+        expect(root.type).toBe("variable")
+    })
+
+    it("produces IMPLIES(S1, Q) when there is exactly one citation", () => {
+        const { engine, argumentEngine, citationLib, sourceClaimIds, consequentVarId } =
+            setupDerivationWithCitations(1)
+        engine.populateFromCitations(citationLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
+        // Should have 3 expressions: IMPLIES root, S1 var, Q var.
+        expect(exprs).toHaveLength(3)
+
+        const root = exprs.find((e) => e.parentId === null)!
+        expect(root.type).toBe("operator")
+        expect((root as unknown as { operator: string }).operator).toBe("implies")
+
+        const children = exprs
+            .filter((e) => e.parentId === root.id)
+            .sort((a, b) => a.position - b.position)
+        expect(children).toHaveLength(2)
+
+        // Antecedent (lower position) is a variable expression for S1.
+        const antecedent = children[0]
+        expect(antecedent.type).toBe("variable")
+        const antecedentVar = argumentEngine
+            .getVariables()
+            .find((v) => v.id === (antecedent as { variableId: string }).variableId)!
+        expect((antecedentVar as TClaimBoundVariable).claimId).toBe(sourceClaimIds[0])
+
+        // Consequent (higher position) is a variable expression for Q.
+        const consequent = children[1]
+        expect(consequent.type).toBe("variable")
+        expect((consequent as { variableId: string }).variableId).toBe(consequentVarId)
+    })
+
+    it("produces IMPLIES(OR(S1, ..., Sn), Q) when there are n ≥ 2 citations", () => {
+        const { engine, argumentEngine, citationLib, sourceClaimIds, consequentVarId } =
+            setupDerivationWithCitations(3)
+        engine.populateFromCitations(citationLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
+        // Expect: IMPLIES root, OR antecedent, S1 var, S2 var, S3 var, Q var = 6 exprs.
+        expect(exprs).toHaveLength(6)
+
+        const root = exprs.find((e) => e.parentId === null)!
+        expect(root.type).toBe("operator")
+        expect((root as unknown as { operator: string }).operator).toBe("implies")
+
+        const impliesChildren = exprs
+            .filter((e) => e.parentId === root.id)
+            .sort((a, b) => a.position - b.position)
+        expect(impliesChildren).toHaveLength(2)
+
+        // Antecedent (lower position) is an OR operator.
+        const orNode = impliesChildren[0]
+        expect(orNode.type).toBe("operator")
+        expect((orNode as unknown as { operator: string }).operator).toBe("or")
+
+        // Consequent (higher position) is Q variable.
+        const consequent = impliesChildren[1]
+        expect(consequent.type).toBe("variable")
+        expect((consequent as { variableId: string }).variableId).toBe(consequentVarId)
+
+        // OR has 3 source variable children.
+        const orChildren = exprs.filter((e) => e.parentId === orNode.id)
+        expect(orChildren).toHaveLength(3)
+        const orChildClaimIds = orChildren
+            .map((c) => {
+                const varId = (c as { variableId: string }).variableId
+                const variable = argumentEngine
+                    .getVariables()
+                    .find((v) => v.id === varId)! as TClaimBoundVariable
+                return variable.claimId
+            })
+            .sort()
+        expect(orChildClaimIds).toEqual([...sourceClaimIds].sort())
+    })
+
+    it("creates new claim-bound variables for cited claims that lack them", () => {
+        const { engine, argumentEngine, citationLib, sourceClaimIds } =
+            setupDerivationWithCitations(2)
+        const varsBefore = argumentEngine.getVariables().length
+        // Source claims have no variables yet in argumentEngine.
+        engine.populateFromCitations(citationLib, argumentEngine)
+        const varsAfter = argumentEngine.getVariables().length
+        // Two new variables should have been created (one per source claim).
+        expect(varsAfter).toBe(varsBefore + 2)
+        // Each source claim ID is covered by a claim-bound variable.
+        for (const sourceClaimId of sourceClaimIds) {
+            const found = argumentEngine
+                .getVariables()
+                .find(
+                    (v) =>
+                        isClaimBound(v as unknown as TCorePropositionalVariable) &&
+                        (v as unknown as TClaimBoundVariable).claimId === sourceClaimId
+                )
+            expect(found).toBeDefined()
+        }
+    })
+
+    it("does not create duplicate variables when a variable already exists for a cited claim", () => {
+        const { engine, argumentEngine, citationLib, sourceClaimIds } =
+            setupDerivationWithCitations(1)
+        // Pre-create the variable for the source claim.
+        const existingVar = argumentEngine.ensureClaimBoundVariable(sourceClaimIds[0])
+        const varsBefore = argumentEngine.getVariables().length
+        engine.populateFromCitations(citationLib, argumentEngine)
+        // Variable count should not increase (ensureClaimBoundVariable is idempotent).
+        expect(argumentEngine.getVariables().length).toBe(varsBefore)
+        // The antecedent expression references the pre-existing variable.
+        const exprs = engine.getExpressions()
+        const antecedent = exprs
+            .filter((e) => e.parentId !== null)
+            .find((e) => e.type === "variable" && (e as { variableId: string }).variableId === existingVar.id)
+        expect(antecedent).toBeDefined()
+    })
+
+    it("rejects with DERIVATION_ANTECEDENT_NON_EMPTY when premise already has an antecedent", () => {
+        const { engine, argumentEngine, citationLib } = setupDerivationWithCitations(1)
+        // Populate once.
+        engine.populateFromCitations(citationLib, argumentEngine)
+        // Populate again — should throw because antecedent is now non-empty.
+        expect(() =>
+            engine.populateFromCitations(citationLib, argumentEngine)
+        ).toThrow(/DERIVATION_ANTECEDENT_NON_EMPTY/)
+    })
+
+    it("throws InvariantViolationError with DERIVATION_ANTECEDENT_NON_EMPTY code", () => {
+        const { engine, argumentEngine, citationLib } = setupDerivationWithCitations(1)
+        engine.populateFromCitations(citationLib, argumentEngine)
+        let caught: unknown
+        try {
+            engine.populateFromCitations(citationLib, argumentEngine)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ANTECEDENT_NON_EMPTY)
+    })
+
+    it("does not modify cited claims' own derivation premises (non-recursive)", () => {
+        // Set up: derivedClaim cites sourceA. sourceA is a citation-type claim
+        // and has its OWN derivation premise (backed by sourceA itself as
+        // derivedClaimId on a second engine). populateFromCitations on the first
+        // engine must not touch the second engine.
+        const argId = "00000000-0000-0000-0000-999000000002"
+        const argVersion = 1
+        const ARG_OBJ = { id: argId, version: argVersion } as TCoreArgument
+
+        const claimLib = new ClaimLibrary()
+        const derivedClaim = claimLib.create({ type: "normal" })
+        const sourceClaim = claimLib.create({ type: "citation" })
+        // A second "normal" claim that sourceA itself cites.
+        const grandSourceClaim = claimLib.create({ type: "citation" })
+
+        const citationLib = new ClaimCitationLibrary(claimLib)
+        citationLib.add({
+            id: "cit-main",
+            citingClaimId: derivedClaim.id,
+            citingClaimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
+            sourceClaimId: sourceClaim.id,
+            sourceClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
+        })
+        citationLib.add({
+            id: "cit-source",
+            citingClaimId: sourceClaim.id,
+            citingClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
+            sourceClaimId: grandSourceClaim.id,
+            sourceClaimVersion: claimLib.getCurrent(grandSourceClaim.id)!.version,
+        })
+
+        const argumentEngine = new ArgumentEngine(ARG_OBJ, claimLib, citationLib)
+
+        // Build two derivation premise engines.
+        const consequentVar = argumentEngine.ensureClaimBoundVariable(derivedClaim.id)
+        const sourceVar = argumentEngine.ensureClaimBoundVariable(sourceClaim.id)
+        const vm = argumentEngine["variables"] as VariableManager
+
+        // First engine: derivedClaim premise (naked-Q).
+        const prem1Id = "00000000-0000-0000-0000-999000000p11"
+        const expr1Id = "00000000-0000-0000-0000-999000000x11"
+        const snap1 = {
+            premise: {
+                id: prem1Id,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: derivedClaim.id,
+            } as TCorePremise,
+            rootExpressionId: expr1Id,
+            expressions: {
+                expressions: [
+                    {
+                        id: expr1Id,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId: prem1Id,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: consequentVar.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+        const engine1 = ManagedDerivationPremiseEngine.fromSnapshot(snap1, ARG_OBJ, vm)
+
+        // Second engine: sourceClaim premise (naked-Q for sourceClaim).
+        const prem2Id = "00000000-0000-0000-0000-999000000p12"
+        const expr2Id = "00000000-0000-0000-0000-999000000x12"
+        const snap2 = {
+            premise: {
+                id: prem2Id,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: sourceClaim.id,
+            } as TCorePremise,
+            rootExpressionId: expr2Id,
+            expressions: {
+                expressions: [
+                    {
+                        id: expr2Id,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId: prem2Id,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: sourceVar.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+        const engine2 = ManagedDerivationPremiseEngine.fromSnapshot(snap2, ARG_OBJ, vm)
+
+        // Engine2 before: 1 expression (naked-Q).
+        expect(engine2.getExpressions()).toHaveLength(1)
+
+        // Populate engine1 only.
+        engine1.populateFromCitations(citationLib, argumentEngine)
+
+        // Engine1 should now have IMPLIES(S_sourceA, Q) = 3 expressions.
+        expect(engine1.getExpressions()).toHaveLength(3)
+
+        // Engine2 must remain unchanged (still naked-Q = 1 expression).
+        expect(engine2.getExpressions()).toHaveLength(1)
+        expect(engine2.getExpressions()[0].type).toBe("variable")
     })
 })

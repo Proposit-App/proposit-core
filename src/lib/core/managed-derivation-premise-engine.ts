@@ -6,19 +6,36 @@ import {
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
     type TOptionalChecksum,
+    type TClaimBoundVariable,
 } from "../schemata/index.js"
 import {
     PremiseEngine,
     type TPremiseEngineSnapshot,
 } from "./premise-engine.js"
 import { VariableManager } from "./variable-manager.js"
-import type { TLogicEngineOptions } from "./argument-engine.js"
-import type { TGrammarConfig } from "../types/grammar.js"
+import {
+    defaultGenerateId,
+    type TLogicEngineOptions,
+} from "./argument-engine.js"
+
+/**
+ * Minimal structural interface needed by `populateFromCitations`. Using a
+ * structural type rather than the concrete `ArgumentEngine<…>` class prevents
+ * generic-parameter variance errors when the caller uses default type params.
+ */
+type TVariableMaterializer = {
+    ensureClaimBoundVariable(claimId: string): TClaimBoundVariable
+}
+import {
+    PERMISSIVE_GRAMMAR_CONFIG,
+    type TGrammarConfig,
+} from "../types/grammar.js"
 import {
     DERIVATION_TYPE_MISMATCH,
     DERIVATION_STRUCTURE_INVALID,
     DERIVATION_CONSEQUENT_LOCKED,
     DERIVATION_ROOT_OPERATOR_INVALID,
+    DERIVATION_ANTECEDENT_NON_EMPTY,
 } from "../types/validation.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 import { validateDerivationStructure } from "../utils/derivation-validation.js"
@@ -28,6 +45,7 @@ import type {
     TExpressionUpdate,
 } from "./expression-manager.js"
 import type { TCoreMutationResult } from "../types/mutation.js"
+import type { ClaimCitationLibrary } from "./claim-citation-library.js"
 
 /**
  * A managed engine for derivation premises that enforces structural rules
@@ -58,6 +76,13 @@ export class ManagedDerivationPremiseEngine<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
 > extends PremiseEngine<TArg, TPremise, TExpr, TVar> {
+    /**
+     * Captured from `config.generateId` (or the default UUID generator) for
+     * use in `populateFromCitations`, which needs to mint new expression IDs.
+     * Stored separately because `PremiseEngine.generateId` is private.
+     */
+    private readonly _generateId: () => string
+
     constructor(
         premise: TOptionalChecksum<TPremise>,
         deps: {
@@ -68,6 +93,7 @@ export class ManagedDerivationPremiseEngine<
         config?: TLogicEngineOptions
     ) {
         super(premise, deps, config)
+        this._generateId = config?.generateId ?? defaultGenerateId
         // Validate premise type immediately — no expressions needed.
         // Structural validation (assertWellFormed) is deferred to fromSnapshot
         // and mutation overrides because PremiseEngine is always constructed
@@ -131,6 +157,11 @@ export class ManagedDerivationPremiseEngine<
             TExpr,
             TVar
         >
+
+        // Inject the generateId captured from config (or the default) so that
+        // populateFromCitations can mint new expression IDs.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(engine as any)._generateId = generateId ?? defaultGenerateId
 
         // Validate the full tree — expressions are fully loaded at this point.
         // (Type was already checked at the top before delegating to the parent.)
@@ -334,6 +365,172 @@ export class ManagedDerivationPremiseEngine<
             throw new InvariantViolationError(prefixed)
         }
         super.loadExpressions(expressions)
+    }
+
+    // -------------------------------------------------------------------------
+    // Public one-shot helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * One-shot snapshot helper that builds the antecedent of this derivation
+     * premise from the current global citations of the derived claim.
+     *
+     * Behavior by citation count:
+     *   - n = 0: no change. Premise stays in its current form (typically
+     *     naked-Q, indicating "no support given").
+     *   - n = 1: produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
+     *   - n ≥ 2: produces `IMPLIES(OR(VariableExpression(S1), …,
+     *     VariableExpression(Sn)), VariableExpression(Q))`.
+     *
+     * Materializes a claim-bound variable for each cited source via
+     * `argumentEngine.ensureClaimBoundVariable(citation.sourceClaimId)`.
+     *
+     * **Tree construction approach:** Mutations are performed via `super.*`
+     * calls, bypassing this class's overrides (which call `assertWellFormed()`
+     * after every mutation and would reject intermediate states during
+     * multi-step construction). For n ≥ 2 the grammar is temporarily switched
+     * to `PERMISSIVE_GRAMMAR_CONFIG` so that the OR operator can sit directly
+     * under IMPLIES without triggering an auto-inserted formula buffer. The
+     * grammar is restored and `assertWellFormed()` is called at the end to
+     * validate the final state.
+     *
+     * @throws InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY) when the
+     *         derivation premise already has a non-empty antecedent (i.e., the
+     *         root is `implies`/`iff` with a position-0 child). The caller
+     *         decides whether to delete and re-create the premise.
+     *
+     * @since 0.11.0
+     */
+    public populateFromCitations(
+        citationLib: ClaimCitationLibrary,
+        argumentEngine: TVariableMaterializer
+    ): void {
+        const premise = this.premise as TCoreDerivationPremise
+        const derivedClaimId = premise.derivedClaimId
+
+        // 1. Reject if antecedent is already non-empty.
+        const rootId = this.rootExpressionId
+        if (rootId !== undefined) {
+            const root = this.expressions.getExpression(rootId)
+            if (
+                root &&
+                root.type === "operator" &&
+                (root.operator === "implies" || root.operator === "iff")
+            ) {
+                // Sort children by position; lowest-position child is the antecedent.
+                const children = this.expressions
+                    .getChildExpressions(rootId)
+                    .sort((a, b) => a.position - b.position)
+                const antecedent = children[0]
+                if (antecedent) {
+                    throw new InvariantViolationError([
+                        {
+                            code: DERIVATION_ANTECEDENT_NON_EMPTY,
+                            message: `${DERIVATION_ANTECEDENT_NON_EMPTY}: derivation premise already has a non-empty antecedent`,
+                            entityType: "premise",
+                            entityId: premise.id,
+                            premiseId: premise.id,
+                        },
+                    ])
+                }
+            }
+        }
+
+        // 2. Look up citations for the derived claim.
+        const citations = citationLib.getCitationsForCitingClaim(derivedClaimId)
+        if (citations.length === 0) return
+
+        // 3. Materialize a claim-bound variable for each cited source.
+        const sourceVariables = citations.map((c) =>
+            argumentEngine.ensureClaimBoundVariable(c.sourceClaimId)
+        )
+
+        // 4. Build the antecedent expression tree. Mutations go via super.*
+        //    to bypass this class's overrides, which validate after every call
+        //    and would reject intermediate (partially built) tree states.
+        const argId = (this.premise as TCorePremise).argumentId
+        const argVersion = (this.premise as TCorePremise).argumentVersion
+        const premiseId = (this.premise as TCorePremise).id
+
+        // qRootExprId is the ID of the current naked-Q root variable expression.
+        const qRootExprId = this.rootExpressionId!
+
+        if (citations.length === 1) {
+            // n = 1: wrap naked-Q with IMPLIES using rightNodeId so that Q lands
+            // at the midpoint (consequent) position and S1 lands at initial.
+            const impliesId = this._generateId()
+            const s1ExprId = this._generateId()
+            const impliesOp = {
+                id: impliesId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                premiseId,
+                parentId: null,
+                type: "operator" as const,
+                operator: "implies" as const,
+            } as TExpressionWithoutPosition<TExpr>
+            const s1VarExpr = {
+                id: s1ExprId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                premiseId,
+                parentId: null, // wrapExpression sets the parentId internally
+                type: "variable" as const,
+                variableId: sourceVariables[0].id,
+            } as TExpressionWithoutPosition<TExpr>
+            // rightNodeId=qRootExprId: existing node (Q) → midpoint (consequent),
+            // newSibling (S1) → initial (antecedent).
+            super.wrapExpression(impliesOp, s1VarExpr, undefined, qRootExprId)
+        } else {
+            // n ≥ 2: build IMPLIES(OR(S1,...,Sn), Q).
+            // Temporarily use permissive grammar so OR can sit directly under
+            // IMPLIES without an auto-inserted formula buffer.
+            const savedGrammarConfig = this.grammarConfig
+            this.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
+            try {
+                const impliesId = this._generateId()
+                const orId = this._generateId()
+                const impliesOp = {
+                    id: impliesId,
+                    argumentId: argId,
+                    argumentVersion: argVersion,
+                    premiseId,
+                    parentId: null,
+                    type: "operator" as const,
+                    operator: "implies" as const,
+                } as TExpressionWithoutPosition<TExpr>
+                const orOp = {
+                    id: orId,
+                    argumentId: argId,
+                    argumentVersion: argVersion,
+                    premiseId,
+                    parentId: null, // wrapExpression sets the parentId internally
+                    type: "operator" as const,
+                    operator: "or" as const,
+                } as TExpressionWithoutPosition<TExpr>
+                // rightNodeId=qRootExprId: Q → midpoint (consequent), OR → initial (antecedent).
+                super.wrapExpression(impliesOp, orOp, undefined, qRootExprId)
+                // Append each source variable expression as a child of OR.
+                for (const sourceVar of sourceVariables) {
+                    const srcExprId = this._generateId()
+                    const srcVarExpr = {
+                        id: srcExprId,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId,
+                        parentId: orId,
+                        type: "variable" as const,
+                        variableId: sourceVar.id,
+                    } as TExpressionWithoutPosition<TExpr>
+                    super.appendExpression(orId, srcVarExpr)
+                }
+            } finally {
+                this.setGrammarConfig(savedGrammarConfig)
+            }
+        }
+
+        // 5. Validate the final tree is well-formed.
+        this.assertWellFormed()
     }
 
     // -------------------------------------------------------------------------
