@@ -376,19 +376,14 @@ export class ManagedDerivationPremiseEngine<
 
     /**
      * Reject an `insertExpression` call that would place a new node into the
-     * consequent slot (position 1) of the root `implies`/`iff`.
+     * consequent slot of the root `implies`/`iff`.
      *
-     * The check: root is `implies`/`iff` AND the new expression's parentId
-     * equals the root id AND it will be inserted at the position-1 slot.
-     * Since insertExpression takes an already-positioned expression, we detect
-     * the consequent slot by checking that parentId === rootId and the
-     * expression will become the second child (i.e., it is being reparented
-     * into position-1 via wrapping — which is how insertExpression is used).
-     *
-     * Specifically: `insertExpression(expr, leftNodeId, rightNodeId)` inserts
-     * `expr` between `leftNodeId` and `rightNodeId`. We block the call when
-     * `expr.parentId === rootId` AND the existing consequent would be displaced
-     * (i.e., `rightNodeId` is the current consequent).
+     * Detection is by parentId + position on the input: we block when
+     * `expression.parentId === rootId` AND `expression.position >= consequent.position`.
+     * For `implies`/`iff` the consequent sits at position 1, so this blocks
+     * insertions into position 1 (which would displace the consequent) and
+     * positions beyond (which would exceed arity 2). Insertions at position 0
+     * (antecedent slot) pass through.
      */
     private assertNotConsequentSlot(expression: TExpressionInput<TExpr>): void {
         const rootId = this.rootExpressionId
