@@ -28,6 +28,7 @@ import {
 } from "../types/grammar.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
+import { CLAIM_NOT_FOUND } from "../types/validation.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
@@ -783,6 +784,70 @@ export class ArgumentEngine<
                 changes,
             }
         })
+    }
+
+    /**
+     * Ensures a claim-bound variable for the given claim exists in this
+     * argument. If one already exists, returns it. Otherwise creates a new
+     * claim-bound variable with a fresh UUID, the current version of the claim
+     * from the ClaimLibrary, and an auto-generated symbol.
+     *
+     * @throws InvariantViolationError(CLAIM_NOT_FOUND) when the claim is not in
+     *         the library.
+     *
+     * @since 0.11.0
+     */
+    public ensureClaimBoundVariable(claimId: string): TClaimBoundVariable {
+        // Return existing claim-bound variable if one is already bound to this claim.
+        const existing = this.variables
+            .toArray()
+            .find(
+                (v) =>
+                    isClaimBound(v as unknown as TCorePropositionalVariable) &&
+                    (v as unknown as TClaimBoundVariable).claimId === claimId
+            )
+        if (existing) {
+            return existing as unknown as TClaimBoundVariable
+        }
+
+        // Verify the claim exists in the library.
+        // getCurrent is optional on TClaimLookup (lightweight read-only lookups
+        // built with createLookup may or may not implement it). If the backing
+        // lookup does not support getCurrent, we cannot determine the current
+        // version, so we throw a configuration error.
+        if (!this.claimLibrary.getCurrent) {
+            throw new Error(
+                "ensureClaimBoundVariable requires a claim lookup that implements getCurrent(). " +
+                    "Use a ClaimLibrary instance or createLookup() rather than a bare { get } object."
+            )
+        }
+        const currentClaim = this.claimLibrary.getCurrent(claimId)
+        if (!currentClaim) {
+            throw new InvariantViolationError([
+                {
+                    code: CLAIM_NOT_FOUND,
+                    message: `${CLAIM_NOT_FOUND}: Claim ${claimId} not found in claim library`,
+                    entityType: "claim",
+                    entityId: claimId,
+                },
+            ])
+        }
+
+        const rawVariable: TOptionalChecksum<TClaimBoundVariable> & Record<string, unknown> = {
+            id: this.generateId(),
+            argumentId: this.argument.id,
+            argumentVersion: this.argument.version,
+            symbol: this.generateUniqueSymbol(),
+            claimId,
+            claimVersion: currentClaim.version,
+        }
+
+        const withChecksum = this.attachVariableChecksum(
+            rawVariable as unknown as TOptionalChecksum<TVar>
+        )
+        this.variables.addVariable(withChecksum)
+        this.markAllPremisesDirty()
+        return withChecksum as unknown as TClaimBoundVariable
     }
 
     public bindVariableToPremise(

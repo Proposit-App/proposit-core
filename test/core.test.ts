@@ -29340,3 +29340,46 @@ describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
         }
     })
 })
+
+describe("ensureClaimBoundVariable", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimLib, claimId }
+    }
+
+    it("creates a new claim-bound variable when none exists", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const variable = argumentEngine.ensureClaimBoundVariable(claimId)
+        expect(variable.claimId).toBe(claimId)
+        expect(variable.symbol).toMatch(/^[A-Z]/)
+        expect(argumentEngine.getVariables().find((v) => v.id === variable.id)).toBeDefined()
+    })
+
+    it("returns the existing variable when one is already bound to the claim", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const first = argumentEngine.ensureClaimBoundVariable(claimId)
+        const second = argumentEngine.ensureClaimBoundVariable(claimId)
+        expect(second.id).toBe(first.id)
+    })
+
+    it("pins to the current claim version from the library", () => {
+        const { argumentEngine, claimLib, claimId } = setupArgumentWithClaim()
+        // freeze() bumps the version to 1 (the new current)
+        claimLib.freeze(claimId)
+        const variable = argumentEngine.ensureClaimBoundVariable(claimId)
+        expect(variable.claimVersion).toBe(1)
+    })
+
+    it("throws CLAIM_NOT_FOUND when the claim is not in the library", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() => argumentEngine.ensureClaimBoundVariable("00000000-0000-0000-0000-000000000999"))
+            .toThrow(/CLAIM_NOT_FOUND/)
+    })
+})
