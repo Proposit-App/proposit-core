@@ -7,6 +7,8 @@ import {
     writeClaimLibrary,
     writeClaimCitationLibrary,
 } from "./libraries.js"
+import { entityChecksum } from "../../lib/core/checksum.js"
+import { DEFAULT_CHECKSUM_CONFIG } from "../../lib/consts.js"
 
 const MARKER = ".proposit-v0.10"
 
@@ -54,14 +56,18 @@ export async function migrateV010(): Promise<void> {
     // Step 6: Forks fold.
     await foldForkSourcesIntoClaims(stateDir)
 
-    // Step 7: Checksum recompute (also exercises acyclicity validation via
-    // ClaimCitationLibrary.fromSnapshot path).
-    await recomputeChecksums()
+    // Step 7: Checksum recompute. Pre-v0.10 claim and citation entities were
+    // hashed without the new `type`, `citingClaim*`, and `sourceClaim*` fields
+    // (and without the field-renaming applied above), so the stored checksums
+    // no longer match their content. Rewrite each entity's checksum directly
+    // from disk before hydrating, so consumers that verify stored-vs-computed
+    // checksums don't see mismatches.
+    await recomputeChecksums(stateDir)
 
-    // Step 8: Acyclicity validation log (already exercised in step 7).
-    process.stderr.write(
-        `[proposit migration] Citation graph validated (no cycles)\n`
-    )
+    // Step 8: Acyclicity validation — hydrate the libraries (which exercises
+    // ClaimCitationLibrary.fromSnapshot's cycle check) and write back so any
+    // structural normalization is captured.
+    await validateAndRewriteLibraries()
 
     // Step 9: Marker write.
     await fs.writeFile(markerPath, new Date().toISOString())
@@ -216,13 +222,51 @@ async function foldForkSourcesIntoClaims(stateDir: string): Promise<void> {
     )
 }
 
-async function recomputeChecksums(): Promise<void> {
-    // Hydrate libraries via fromSnapshot, which also exercises the new
-    // ClaimCitationLibrary acyclicity / type strictness validation paths.
-    // Then write back through the standard storage helpers so any
-    // structural normalization (e.g., ordering, key shapes) is captured.
-    // Order matters: hydrate claims first so the citation library has a
-    // populated claim lookup.
+async function recomputeChecksums(stateDir: string): Promise<void> {
+    const claimFields =
+        DEFAULT_CHECKSUM_CONFIG.claimFields ?? new Set<string>()
+    const claimCitationFields =
+        DEFAULT_CHECKSUM_CONFIG.claimCitationFields ?? new Set<string>()
+
+    // Recompute claim checksums.
+    const claimsPath = path.join(stateDir, "claims.json")
+    const claimsSnapshot = await readJsonFile<{
+        claims?: Array<Record<string, unknown>>
+    }>(claimsPath)
+    let claimCount = 0
+    if (claimsSnapshot?.claims) {
+        for (const claim of claimsSnapshot.claims) {
+            claim.checksum = entityChecksum(claim, claimFields)
+            claimCount++
+        }
+        await writeJsonFile(claimsPath, claimsSnapshot)
+    }
+
+    // Recompute citation checksums.
+    const citationsPath = path.join(stateDir, "claim-citations.json")
+    const citationsSnapshot = await readJsonFile<{
+        claimCitations?: Array<Record<string, unknown>>
+    }>(citationsPath)
+    let citationCount = 0
+    if (citationsSnapshot?.claimCitations) {
+        for (const citation of citationsSnapshot.claimCitations) {
+            citation.checksum = entityChecksum(citation, claimCitationFields)
+            citationCount++
+        }
+        await writeJsonFile(citationsPath, citationsSnapshot)
+    }
+
+    process.stderr.write(
+        `[proposit migration] Recomputed checksums for ${claimCount} claim(s) and ${citationCount} citation(s)\n`
+    )
+}
+
+async function validateAndRewriteLibraries(): Promise<void> {
+    // Hydrate libraries via fromSnapshot — exercises ClaimCitationLibrary's
+    // acyclicity and type-strictness validation paths — then write back
+    // through the standard storage helpers so any structural normalization
+    // (e.g., ordering, key shapes) is captured. Order matters: hydrate claims
+    // first so the citation library has a populated claim lookup.
     const claimLibrary = await readClaimLibrary()
     await writeClaimLibrary(claimLibrary)
 
@@ -230,6 +274,6 @@ async function recomputeChecksums(): Promise<void> {
     await writeClaimCitationLibrary(claimCitationLibrary)
 
     process.stderr.write(
-        `[proposit migration] Recomputed claim and citation checksums\n`
+        `[proposit migration] Citation graph validated (no cycles)\n`
     )
 }
