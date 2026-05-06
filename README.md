@@ -229,6 +229,73 @@ Citations between claims are managed by `ClaimCitationLibrary<TCitation>` — a 
 
 The `@proposit/proposit-core/extensions/ieee` subpath export provides `IEEECitationClaimSchema` — an extended citation-claim type with IEEE reference schemas covering 33 reference types.
 
+### Derivation Premises
+
+As of v0.11.0, every premise carries an immutable `type` discriminator:
+
+- **Freeform** (`type: "freeform"`) — the classic premise with no structural constraints. Allows any well-formed expression tree. This is the default when no `type` is specified.
+- **Derivation** (`type: "derivation"`) — a structurally-constrained premise that commits to deriving a specific named claim. Requires a `derivedClaimId` at creation time. The expression tree is restricted to one of two canonical forms:
+    - **Naked-Q** — a single variable expression at the root, referencing the consequent variable bound to `derivedClaimId`. This is the initial state created automatically on `createPremise({ type: "derivation", derivedClaimId })` and represents "no support given yet."
+    - **Implication/biconditional form** — `IMPLIES(antecedent, Q)` or `IFF(antecedent, Q)`, where Q is the consequent variable and the antecedent can be any valid expression tree (typically a variable or `OR` of source variables).
+
+The consequent slot (the Q variable expression) is locked — it cannot be removed, reassigned, or negated. The root operator can only be swapped between `implies` and `iff` — not changed to `and`, `or`, or `not`.
+
+Use `ManagedDerivationPremiseEngine` (an opt-in subclass of `PremiseEngine`) to enforce these rules on every mutation:
+
+```typescript
+import {
+    PropositCore,
+    ManagedDerivationPremiseEngine,
+} from "@proposit/proposit-core"
+
+const core = new PropositCore()
+
+// Create the claim to be derived
+const claim = core.claims.create({ type: "normal", text: "It rains" })
+
+// Create a citation claim (external support)
+const citeA = core.claims.create({
+    type: "citation",
+    text: "Weather report, 2024",
+})
+
+// Add a citation edge: claim cites citeA as support
+core.claimCitations.add({
+    id: "edge-1",
+    citingClaimId: claim.id,
+    citingClaimVersion: claim.version,
+    sourceClaimId: citeA.id,
+    sourceClaimVersion: citeA.version,
+})
+
+const engine = core.arguments.create({
+    id: "arg-1",
+    version: 0,
+    title: "Rain argument",
+    description: "",
+})
+
+// Create a derivation premise — auto-initializes to naked-Q form
+const { result: pm } = engine.createPremise({
+    type: "derivation",
+    derivedClaimId: claim.id,
+})
+
+// pm is a PremiseEngine; upgrade to the managed engine for mutation safety
+// (In practice, pass a factory to ArgumentEngine so engines are created as managed)
+
+// One-shot populate from citations: builds IMPLIES(VariableS1, Q)
+// (Requires a ManagedDerivationPremiseEngine instance)
+```
+
+The `populateFromCitations` helper on `ManagedDerivationPremiseEngine` is the recommended way to build the antecedent from the global citation graph:
+
+- `n = 0` citations: no change (premise stays in naked-Q form)
+- `n = 1` citation: produces `IMPLIES(S1, Q)`
+- `n ≥ 2` citations: produces `IMPLIES(OR(S1, ..., Sn), Q)`
+
+`populateFromCitations` is one-shot: it rejects calls on premises that already have a non-empty antecedent. Delete and re-create the premise to repopulate.
+
 ### Auto-variable creation
 
 When a premise is created via `createPremise()` or `createPremiseWithId()`, the engine automatically creates a **premise-bound variable** for it. This variable allows other premises in the same argument to reference the premise's truth value in their expression trees without manual variable setup.
@@ -739,18 +806,30 @@ The engine enforces structural invariants at two levels: **construction-time** (
 
 ### Premises — prevented at construction time
 
-| Invalid construction                                            | What happens |
-| --------------------------------------------------------------- | ------------ |
-| Duplicate premise ID                                            | Throws       |
-| Adding a second root expression (`parentId: null`) to a premise | Throws       |
+| Invalid construction                                                                    | What happens / error code                              |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Duplicate premise ID                                                                    | Throws                                                 |
+| Adding a second root expression (`parentId: null`) to a premise                         | Throws                                                 |
+| `createPremise({ type: "derivation" })` without `derivedClaimId`                        | Throws — `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` |
+| `createPremise({ type: "derivation", derivedClaimId })` when claim not in library       | Throws — `CREATE_DERIVATION_CLAIM_NOT_FOUND`           |
+| `ManagedDerivationPremiseEngine` constructed on a non-derivation premise                | Throws — `DERIVATION_TYPE_MISMATCH`                    |
+| `ManagedDerivationPremiseEngine.fromSnapshot` on a structurally invalid tree            | Throws — `DERIVATION_STRUCTURE_INVALID`                |
+| Removing or negating the consequent expression on a managed derivation premise          | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
+| Updating the consequent variable ID or operator on a managed derivation premise         | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
+| Inserting an expression into the consequent slot of a managed derivation premise        | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
+| Swapping root operator to `and`/`or`/`not` on a managed derivation premise              | Throws — `DERIVATION_ROOT_OPERATOR_INVALID`            |
+| `populateFromCitations` on a derivation premise that already has a non-empty antecedent | Throws — `DERIVATION_ANTECEDENT_NON_EMPTY`             |
+| `ensureClaimBoundVariable(claimId)` when the claim is not in the library                | Throws — `CLAIM_NOT_FOUND`                             |
+| Restoring a pre-v0.11 snapshot whose premises lack the `type` field                     | Throws — `LEGACY_PREMISE_MISSING_TYPE`                 |
 
 ### Premises — detected by validation
 
-| Invalid construction                             | Error code              |
-| ------------------------------------------------ | ----------------------- |
-| Premise has no expressions                       | `PREMISE_EMPTY`         |
-| Premise has expressions but no root              | `PREMISE_ROOT_MISSING`  |
-| `rootExpressionId` doesn't match the actual root | `PREMISE_ROOT_MISMATCH` |
+| Invalid construction                                          | Error code                                   |
+| ------------------------------------------------------------- | -------------------------------------------- |
+| Premise has no expressions                                    | `PREMISE_EMPTY`                              |
+| Premise has expressions but no root                           | `PREMISE_ROOT_MISSING`                       |
+| `rootExpressionId` doesn't match the actual root              | `PREMISE_ROOT_MISMATCH`                      |
+| Derivation premise tree is structurally broken (at eval time) | `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` |
 
 ### Argument — detected by validation
 

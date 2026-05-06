@@ -112,14 +112,14 @@ export class PremiseEngine<
         TFormulaTreeWalking,
         THierarchicalChecksummable<"expressions">
 {
-    private premise: TOptionalChecksum<TPremise>
-    private rootExpressionId: string | undefined
-    private variables: VariableManager<TVar>
-    private expressions: ExpressionManager<TExpr>
+    protected premise: TOptionalChecksum<TPremise>
+    protected rootExpressionId: string | undefined
+    protected variables: VariableManager<TVar>
+    protected expressions: ExpressionManager<TExpr>
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TOptionalChecksum<TArg>
     private checksumConfig?: TCoreChecksumConfig
-    private grammarConfig: TGrammarConfig
+    protected grammarConfig: TGrammarConfig
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -1107,6 +1107,8 @@ export class PremiseEngine<
             checksum: _checksum,
             descendantChecksum: _descendantChecksum,
             combinedChecksum: _combinedChecksum,
+            type: _type,
+            derivedClaimId: _derivedClaimId,
             ...extras
         } = this.premise as Record<string, unknown>
         return { ...extras }
@@ -1122,7 +1124,7 @@ export class PremiseEngine<
         TArg
     > {
         return this.withValidation(() => {
-            // Strip old extras and replace with new ones
+            // Strip old extras and replace with new ones, preserving structural fields.
             const {
                 id,
                 argumentId,
@@ -1130,12 +1132,16 @@ export class PremiseEngine<
                 checksum,
                 descendantChecksum,
                 combinedChecksum,
+                type,
+                derivedClaimId,
             } = this.premise as Record<string, unknown>
             this.premise = {
                 ...extras,
                 id,
                 argumentId,
                 argumentVersion,
+                type,
+                ...(derivedClaimId !== undefined ? { derivedClaimId } : {}),
                 ...(checksum !== undefined ? { checksum } : {}),
                 ...(descendantChecksum !== undefined
                     ? { descendantChecksum }

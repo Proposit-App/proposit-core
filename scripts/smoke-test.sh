@@ -473,6 +473,103 @@ $CLI citations unlink "$CITATION"
 $CLI citations list
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 9p. DERIVATION PREMISES (v0.11.0)
+# ─────────────────────────────────────────────────────────────────────────────
+section "9p. derivation premises — create"
+
+# Create an explicit freeform premise to exercise the --type flag.
+FREEFORM_P=$($CLI "$ARG" latest premises create \
+    --type=freeform --title "Explicit freeform premise")
+echo "FREEFORM_P=$FREEFORM_P"
+$CLI "$ARG" latest premises show "$FREEFORM_P"
+
+# Create a derivation premise bound to CLAIM1 (created in section 9m).
+# The CLI prints "<uuid> (derivation for claim <claimId>)" on stdout; extract
+# just the UUID via awk.
+DERIV_P_RAW=$($CLI "$ARG" latest premises create \
+    --type=derivation --derived-claim="$CLAIM1")
+echo "DERIV_P_RAW: $DERIV_P_RAW"
+DERIV_P=$(echo "$DERIV_P_RAW" | awk '{print $1}')
+echo "DERIV_P=$DERIV_P"
+$CLI "$ARG" latest premises show "$DERIV_P"
+
+section "9p2. derivation premises — error cases"
+
+# --type=derivation without --derived-claim must be rejected.
+echo "--- expecting failure: --type=derivation without --derived-claim ---"
+if $CLI "$ARG" latest premises create --type=derivation \
+       2>/tmp/proposit-deriv-err1; then
+    echo "FAIL: premises create accepted --type=derivation without --derived-claim"
+    exit 1
+fi
+grep -q "requires --derived-claim" /tmp/proposit-deriv-err1 || {
+    echo "FAIL: expected 'requires --derived-claim' in error output"
+    cat /tmp/proposit-deriv-err1
+    exit 1
+}
+echo "--- got expected error: ---"
+cat /tmp/proposit-deriv-err1
+rm -f /tmp/proposit-deriv-err1
+
+# An invalid --type value must be rejected.
+echo "--- expecting failure: --type=invalid ---"
+if $CLI "$ARG" latest premises create --type=invalid \
+       2>/tmp/proposit-deriv-err2; then
+    echo "FAIL: premises create accepted --type=invalid"
+    exit 1
+fi
+grep -q "must be 'freeform' or 'derivation'" /tmp/proposit-deriv-err2 || {
+    echo "FAIL: expected rejection message for --type=invalid"
+    cat /tmp/proposit-deriv-err2
+    exit 1
+}
+echo "--- got expected error: ---"
+cat /tmp/proposit-deriv-err2
+rm -f /tmp/proposit-deriv-err2
+
+section "9p3. derivation premises — populate-citations"
+
+# Re-add the citation that was unlinked in section 9n2 so that
+# populate-citations has a source to pull from (CLAIM1 → CITE_CLAIM).
+CITATION2=$($CLI citations add "$CLAIM1" "$CITE_CLAIM")
+echo "CITATION2=$CITATION2 (temporary, will be unlinked after populate-citations)"
+
+# Populate the derivation premise's antecedent from CLAIM1's current citations.
+$CLI "$ARG" latest premises populate-citations "$DERIV_P" \
+    || { echo "FAIL: populate-citations"; exit 1; }
+
+# Render should now show an implication (S → Q shape).
+$CLI "$ARG" latest premises render "$DERIV_P"
+
+# Unlink the temporary citation we added for this test.
+$CLI citations unlink "$CITATION2"
+$CLI citations list
+
+section "9p4. derivation premises — [derivation] badge in list"
+
+# The derivation premise must appear with a [derivation] badge in 'premises list'.
+# Capture to a variable first to avoid EPIPE with pipefail when grep -q exits
+# early after finding the first match.
+PREMISES_LIST=$($CLI "$ARG" latest premises list)
+echo "$PREMISES_LIST" | grep -q "\[derivation\]" || {
+    echo "FAIL: [derivation] badge missing from 'premises list' output"
+    exit 1
+}
+echo "[derivation] badge confirmed in premises list output."
+
+# Clean up the extra premises added in this section.
+$CLI "$ARG" latest premises delete "$FREEFORM_P" --confirm
+$CLI "$ARG" latest premises delete "$DERIV_P" --confirm
+
+# Note: v0.11 migration (backfilling type:'freeform' on premises that lack it)
+# is covered comprehensively by Vitest unit/integration tests in Task 17
+# (src/cli/storage/migrate-v0.11.ts). End-to-end smoke coverage is omitted
+# here because constructing a valid pre-v0.11 state directory (per-premise
+# meta.json files without a 'type' field, inside the full argument directory
+# tree) is verbose, and the migration logic is not meaningfully exercised
+# by a bash script beyond what the unit tests already prove.
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 9o. MIGRATION — legacy v0.9 state directory upgraded to v0.10 layout
 # ─────────────────────────────────────────────────────────────────────────────
 section "9o. migration — pre-v0.10 state directory"

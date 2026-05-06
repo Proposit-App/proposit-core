@@ -33,6 +33,20 @@ export interface TClaimLookup<TClaim extends TCoreClaim = TCoreClaim> {
      * @returns The claim entity, or `undefined`.
      */
     get(id: string, version: number): TClaim | undefined
+
+    /**
+     * Returns the latest version of a claim for the given ID, or `undefined`
+     * if the claim does not exist in this lookup.
+     *
+     * Implementations backed by a flat array (e.g. `createLookup`) return the
+     * item with the highest version number for the given ID. The full
+     * `ClaimLibrary` class tracks versions natively and returns its internal
+     * latest version directly.
+     *
+     * @param id - The claim ID.
+     * @returns The latest claim entity, or `undefined`.
+     */
+    getCurrent(id: string): TClaim | undefined
 }
 
 /**

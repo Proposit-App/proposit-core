@@ -46,6 +46,7 @@ import {
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
     type TCorePremise,
+    type TCoreDerivationPremise,
 } from "../src/lib/schemata"
 import { ChangeCollector } from "../src/lib/core/change-collector"
 import { VariableManager } from "../src/lib/core/variable-manager"
@@ -133,6 +134,7 @@ import {
     CLAIM_FROZEN_NO_SUCCESSOR,
     CITATION_CITING_REF_NOT_FOUND,
     CITATION_SOURCE_REF_NOT_FOUND,
+    DERIVATION_STRUCTURE_INVALID,
 } from "../src/lib/types/validation"
 import {
     ParsedClaimSchema,
@@ -152,6 +154,15 @@ import { buildParsingPrompt } from "../src/lib/parsing/prompt-builder"
 import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
 import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
+import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
+import { ManagedDerivationPremiseEngine } from "../src/lib/core/managed-derivation-premise-engine"
+import { InvariantViolationError } from "../src/lib/index"
+import {
+    DERIVATION_TYPE_MISMATCH,
+    DERIVATION_CONSEQUENT_LOCKED,
+    DERIVATION_ROOT_OPERATOR_INVALID,
+    DERIVATION_ANTECEDENT_NON_EMPTY,
+} from "../src/lib/types/validation"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 
@@ -321,6 +332,7 @@ function makePremise(extras?: Record<string, unknown>): PremiseEngine {
             id: "premise-1",
             argumentId: ARG.id,
             argumentVersion: ARG.version,
+            type: "freeform" as const,
             ...extras,
         } as unknown as TCorePremise,
         { argument: ARG, variables: vm }
@@ -1834,6 +1846,7 @@ describe("PremiseEngine — toData", () => {
                 argumentId: ARG.id,
                 argumentVersion: ARG.version,
                 title: "My Premise",
+                type: "freeform" as const,
             } as unknown as TCorePremise,
             { argument: ARG, variables: new VariableManager() }
         )
@@ -2458,6 +2471,7 @@ describe("diffArguments", () => {
                 checksum: "x",
                 descendantChecksum: null,
                 combinedChecksum: "x",
+                type: "freeform" as const,
             }
             const after = {
                 id: "p1",
@@ -2466,6 +2480,7 @@ describe("diffArguments", () => {
                 checksum: "x",
                 descendantChecksum: null,
                 combinedChecksum: "x",
+                type: "freeform" as const,
             }
             expect(defaultComparePremise(before, after)).toEqual([])
         })
@@ -2478,6 +2493,7 @@ describe("diffArguments", () => {
                 checksum: "x",
                 descendantChecksum: null,
                 combinedChecksum: "x",
+                type: "freeform" as const,
             }
             const after = {
                 id: "p1",
@@ -2486,6 +2502,7 @@ describe("diffArguments", () => {
                 checksum: "y",
                 descendantChecksum: null,
                 combinedChecksum: "y",
+                type: "freeform" as const,
             }
             expect(defaultComparePremise(before, after)).toEqual([])
         })
@@ -3525,6 +3542,7 @@ describe("schema shapes with additionalProperties", () => {
             id: "p-1",
             argumentId: "a-1",
             argumentVersion: 0,
+            type: "freeform",
             claimId: "claim-default",
             claimVersion: 0,
             variables: [],
@@ -4927,6 +4945,7 @@ describe("ChangeCollector", () => {
             checksum: "x",
             descendantChecksum: null,
             combinedChecksum: "x",
+            type: "freeform" as const,
         } as TCorePremise
         collector.addedPremise(p)
         const cs = collector.toChangeset()
@@ -7389,6 +7408,7 @@ describe("configurable position range", () => {
                 id: "p1",
                 argumentId: ARG.id,
                 argumentVersion: ARG.version,
+                type: "freeform" as const,
             } as unknown as TCorePremise,
             { argument: ARG, variables: vm },
             { positionConfig: config }
@@ -7665,6 +7685,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TCorePremise,
             { argument: ARG as TCoreArgument, variables: vm }
         )
@@ -7726,6 +7747,7 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TCorePremise,
             { argument: ARG as TCoreArgument, variables: vm }
         )
@@ -8099,11 +8121,13 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
             {
                 id: "p2",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
         ]
         const expressions = [
@@ -8181,11 +8205,13 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
             {
                 id: "p2",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
         ]
         const expressions = [
@@ -8248,6 +8274,7 @@ describe("ArgumentEngine — fromData bulk loading", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             },
         ]
         // Expressions out of order — child before parent
@@ -8544,6 +8571,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8564,6 +8592,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8585,6 +8614,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8621,6 +8651,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8648,6 +8679,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8681,6 +8713,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             { argument: arg as TCoreArgument, variables: vm }
         )
@@ -8698,6 +8731,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -8739,6 +8773,7 @@ describe("PremiseEngine — shared expression index", () => {
                 id: "p1",
                 argumentId: "arg-1",
                 argumentVersion: 0,
+                type: "freeform" as const,
             } as TCorePremise,
             {
                 argument: arg as TCoreArgument,
@@ -14339,7 +14374,12 @@ describe("operator nesting restriction", () => {
                 },
             ]
             const premises: TOptionalChecksum<TCorePremise>[] = [
-                { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+                {
+                    id: "p1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    type: "freeform" as const,
+                },
             ]
             const expressions = [
                 {
@@ -15609,7 +15649,12 @@ describe("grammar enforcement config", () => {
                 },
             ]
             const premises: TOptionalChecksum<TCorePremise>[] = [
-                { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+                {
+                    id: "p1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    type: "freeform" as const,
+                },
             ]
             const expressions = [
                 {
@@ -19658,6 +19703,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -19679,6 +19725,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -19704,6 +19751,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -19754,6 +19802,7 @@ describe("PremiseEngine — validate", () => {
                 id: "premise-1",
                 argumentId: "arg-1",
                 argumentVersion: 1,
+                type: "freeform" as const,
             } as TOptionalChecksum<TCorePremise>,
             { argument: ARG, variables: vm },
             { grammarConfig: PERMISSIVE_GRAMMAR_CONFIG }
@@ -21118,6 +21167,7 @@ describe("orderChangeset", () => {
                         checksum: "c",
                         descendantChecksum: null,
                         combinedChecksum: "c",
+                        type: "freeform" as const,
                     },
                 ],
             },
@@ -21176,6 +21226,7 @@ describe("orderChangeset", () => {
                         checksum: "c",
                         descendantChecksum: null,
                         combinedChecksum: "c",
+                        type: "freeform" as const,
                     },
                 ],
                 modified: [],
@@ -21237,6 +21288,7 @@ describe("orderChangeset", () => {
                         checksum: "c2",
                         descendantChecksum: null,
                         combinedChecksum: "c2",
+                        type: "freeform" as const,
                     },
                 ],
                 removed: [
@@ -21247,6 +21299,7 @@ describe("orderChangeset", () => {
                         checksum: "c",
                         descendantChecksum: null,
                         combinedChecksum: "c",
+                        type: "freeform" as const,
                     },
                 ],
             },
@@ -22760,6 +22813,7 @@ describe("PropositCore", () => {
                     id: "premise-1",
                     argumentId: ARG.id,
                     argumentVersion: ARG.version,
+                    type: "freeform" as const,
                 } as TCorePremise,
                 { argument: ARG, variables: vm },
                 { generateId }
@@ -22795,6 +22849,7 @@ describe("PropositCore", () => {
                     id: "premise-1",
                     argumentId: ARG.id,
                     argumentVersion: ARG.version,
+                    type: "freeform" as const,
                 } as TCorePremise,
                 { argument: ARG, variables: vm },
                 {
@@ -25236,7 +25291,12 @@ describe("post-load normalization", () => {
             },
         ]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         const expressions = [
             {
@@ -25316,7 +25376,12 @@ describe("post-load normalization", () => {
             },
         ]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         const expressions = [
             {
@@ -26016,7 +26081,12 @@ describe("fromData checksum idempotency", () => {
         makeVar("v3", "R"),
     ]
     const premises: TOptionalChecksum<TCorePremise>[] = [
-        { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+        {
+            id: "p1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            type: "freeform" as const,
+        },
     ]
     const roles = { conclusionPremiseId: "p1" }
 
@@ -26176,7 +26246,12 @@ describe("fromData checksum idempotency", () => {
         const arg = { id: "arg-1", version: 1 }
         const variables = [makeVar("v1", "P"), makeVar("v2", "Q")]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         // AND(OR(P, Q)) — no formula buffer between AND and OR
         const expressions = [
@@ -26273,7 +26348,12 @@ describe("fromData checksum idempotency", () => {
         const arg = { id: "arg-1", version: 1 }
         const variables = [makeVar("v1", "P")]
         const premises: TOptionalChecksum<TCorePremise>[] = [
-            { id: "p1", argumentId: "arg-1", argumentVersion: 1 },
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+            },
         ]
         // Simple tree: AND(P)
         const expressions = [
@@ -27899,6 +27979,7 @@ describe("ClaimCitationLibrary strict source-side type", () => {
         const anotherNormalClaim = claimLib.create({ type: "normal" })
         const citationLib = new ClaimCitationLibrary({
             get: (id, version) => claimLib.get(id, version),
+            getCurrent: (id) => claimLib.getCurrent(id),
         })
         expect(() =>
             citationLib.add({
@@ -27916,6 +27997,7 @@ describe("ClaimCitationLibrary strict source-side type", () => {
         const citationClaim = claimLib.create({ type: "citation" })
         const citationLib = new ClaimCitationLibrary({
             get: (id, version) => claimLib.get(id, version),
+            getCurrent: (id) => claimLib.getCurrent(id),
         })
         expect(() =>
             citationLib.add({
@@ -27934,6 +28016,7 @@ describe("ClaimCitationLibrary acyclicity", () => {
         const claimLib = new ClaimLibrary()
         const claimLookup = {
             get: (id: string, version: number) => claimLib.get(id, version),
+            getCurrent: (id: string) => claimLib.getCurrent(id),
         }
         const citationLib = new ClaimCitationLibrary(claimLookup)
         return { claimLib, citationLib }
@@ -28108,5 +28191,2263 @@ describe("Fork record schema equality across namespaces", () => {
         expect(Value.Check(CoreClaimForkRecordSchema, claimForkRecord)).toBe(
             true
         )
+    })
+})
+
+describe("Premise type discriminator", () => {
+    it("accepts a freeform premise via Value.Check", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "freeform",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
+    })
+
+    it("accepts a derivation premise with derivedClaimId", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "derivation",
+            derivedClaimId: "00000000-0000-0000-0000-000000000003",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
+    })
+
+    it("rejects a derivation premise without derivedClaimId", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "derivation",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(false)
+    })
+
+    it("rejects an unknown type literal", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "axiomatic",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(false)
+    })
+})
+
+describe("validateDerivationStructure", () => {
+    const argumentId = "00000000-0000-0000-0000-000000000001"
+    const claimId = "00000000-0000-0000-0000-00000000c0a1"
+    const variableId = "00000000-0000-0000-0000-00000000a000"
+    const exprId = "00000000-0000-0000-0000-00000000e000"
+    const premiseId = "00000000-0000-0000-0000-00000000d001"
+
+    function makeNakedQ(): {
+        premise: TCoreDerivationPremise
+        expressions: TCorePropositionalExpression[]
+        variables: TCorePropositionalVariable[]
+    } {
+        const premise: TCoreDerivationPremise = {
+            id: premiseId,
+            argumentId,
+            argumentVersion: 1,
+            type: "derivation",
+            derivedClaimId: claimId,
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const variables: TCorePropositionalVariable[] = [
+            {
+                id: variableId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "Q",
+                claimId,
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: exprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId: premise.id,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        return { premise, expressions, variables }
+    }
+
+    it("accepts naked-Q form (root = variable expression for derivedClaimId)", () => {
+        const { premise, expressions, variables } = makeNakedQ()
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            variables
+        )
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("accepts IMPLIES(antecedent, Q) form", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000010"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a001"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000011"
+        const consequentExprId = "00000000-0000-0000-0000-000000000012"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "P",
+                claimId: "00000000-0000-0000-0000-00000000c0b1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                id: consequentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("accepts IFF(antecedent, Q) form", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000020"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a002"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000021"
+        const consequentExprId = "00000000-0000-0000-0000-000000000022"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "R",
+                claimId: "00000000-0000-0000-0000-00000000c0c1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "iff",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                id: consequentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
+
+    it("rejects missing root expression", () => {
+        const { premise, variables } = makeNakedQ()
+        const result = validateDerivationStructure(premise, [], variables)
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects multiple root expressions", () => {
+        const { premise, expressions, variables } = makeNakedQ()
+        const secondRoot: TCorePropositionalExpression = {
+            id: "00000000-0000-0000-0000-000000000030",
+            argumentId,
+            argumentVersion: 1,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL + 1,
+            type: "variable",
+            variableId,
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const result = validateDerivationStructure(
+            premise,
+            [...expressions, secondRoot],
+            variables
+        )
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects root operator that is not implies/iff/variable (e.g., AND root)", () => {
+        const { premise, variables } = makeNakedQ()
+        const andRoot: TCorePropositionalExpression = {
+            id: "00000000-0000-0000-0000-000000000040",
+            argumentId,
+            argumentVersion: 1,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "operator",
+            operator: "and",
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const result = validateDerivationStructure(
+            premise,
+            [andRoot],
+            variables
+        )
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects implies arity != 2", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000050"
+        const onlyChildExprId = "00000000-0000-0000-0000-000000000051"
+        // implies with only 1 child (consequent slot missing antecedent)
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: onlyChildExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            variables
+        )
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects consequent slot containing non-variable expression (e.g., AND subtree)", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000060"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a003"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000061"
+        const badConsequentId = "00000000-0000-0000-0000-000000000062"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "S",
+                claimId: "00000000-0000-0000-0000-00000000c0d1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                // consequent slot is an AND operator, not a variable
+                id: badConsequentId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "operator",
+                operator: "and",
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects consequent slot containing different variable (not Q)", () => {
+        const { premise, variables } = makeNakedQ()
+        const rootId = "00000000-0000-0000-0000-000000000070"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000a004"
+        const wrongConsequentVarId = "00000000-0000-0000-0000-00000000a005"
+        const antecedentExprId = "00000000-0000-0000-0000-000000000071"
+        const wrongConsequentExprId = "00000000-0000-0000-0000-000000000072"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: antecedentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "T",
+                claimId: "00000000-0000-0000-0000-00000000c0e1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+            {
+                id: wrongConsequentVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "U",
+                claimId: "00000000-0000-0000-0000-00000000c0f1",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: rootId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator",
+                operator: "implies",
+                checksum: "x",
+                descendantChecksum: "x",
+                combinedChecksum: "x",
+            },
+            {
+                id: antecedentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 0,
+                type: "variable",
+                variableId: antecedentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+            {
+                // consequent slot references a variable that is NOT Q (not derivedClaimId's var)
+                id: wrongConsequentExprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: rootId,
+                position: 1,
+                type: "variable",
+                variableId: wrongConsequentVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects naked variable that does not reference derivedClaimId", () => {
+        const { premise, variables } = makeNakedQ()
+        const wrongVarId = "00000000-0000-0000-0000-00000000a006"
+        const allVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: wrongVarId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "V",
+                claimId: "00000000-0000-0000-0000-00000000c0a2",
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        // Root variable references wrongVarId, not variableId (Q)
+        const expressions: TCorePropositionalExpression[] = [
+            {
+                id: exprId,
+                argumentId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "variable",
+                variableId: wrongVarId,
+                checksum: "x",
+                descendantChecksum: null,
+                combinedChecksum: "x",
+            },
+        ]
+        const result = validateDerivationStructure(
+            premise,
+            expressions,
+            allVariables
+        )
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects when no claim-bound variable for derivedClaimId exists in `variables`", () => {
+        const { premise, expressions } = makeNakedQ()
+        // Pass empty variables — no claim-bound variable for claimId
+        const result = validateDerivationStructure(premise, expressions, [])
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("rejects formula as root (formula is not allowed as root)", () => {
+        const { premise, variables } = makeNakedQ()
+        const formulaRoot: TCorePropositionalExpression = {
+            id: "00000000-0000-0000-0000-000000000080",
+            argumentId,
+            argumentVersion: 1,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "formula",
+            checksum: "x",
+            descendantChecksum: null,
+            combinedChecksum: "x",
+        }
+        const result = validateDerivationStructure(
+            premise,
+            [formulaRoot],
+            variables
+        )
+        expect(result.ok).toBe(false)
+        expect(result.violations).toHaveLength(1)
+        expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ManagedDerivationPremiseEngine
+// ---------------------------------------------------------------------------
+
+describe("ManagedDerivationPremiseEngine constructor validation", () => {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+
+    it("throws DERIVATION_TYPE_MISMATCH when wrapping a freeform premise", () => {
+        const vm = new VariableManager()
+        const freeformPremise = {
+            id: "00000000-0000-0000-0000-00000000d001",
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "freeform" as const,
+        } as TCorePremise
+        expect(
+            () =>
+                new ManagedDerivationPremiseEngine(
+                    freeformPremise,
+                    { argument: ARG_OBJ, variables: vm },
+                    undefined
+                )
+        ).toThrow(/DERIVATION_TYPE_MISMATCH/)
+    })
+
+    it("throws InvariantViolationError with DERIVATION_TYPE_MISMATCH violation code", () => {
+        const vm = new VariableManager()
+        const freeformPremise = {
+            id: "00000000-0000-0000-0000-00000000d002",
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "freeform" as const,
+        } as TCorePremise
+        let caught: unknown
+        try {
+            new ManagedDerivationPremiseEngine(
+                freeformPremise,
+                { argument: ARG_OBJ, variables: vm },
+                undefined
+            )
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations).toHaveLength(1)
+        expect(err.violations[0].code).toBe(DERIVATION_TYPE_MISMATCH)
+    })
+
+    it("constructs successfully on a well-formed naked-Q derivation premise", () => {
+        // makeNakedDerivationEngine() builds a fully valid naked-Q derivation
+        // engine via fromSnapshot — verify the constructor path accepts it.
+        const { engine, premiseId } = makeNakedDerivationEngine()
+        expect(engine).toBeDefined()
+        // The engine wraps the correct premise.
+        const exprs = engine.getExpressions()
+        expect(exprs).toHaveLength(1)
+        expect(exprs[0].type).toBe("variable")
+        expect(exprs[0].premiseId).toBe(premiseId)
+    })
+})
+
+describe("ManagedDerivationPremiseEngine.fromSnapshot", () => {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const premiseId = "00000000-0000-0000-0000-00000000d010"
+    const claimId = "00000000-0000-0000-0000-00000000c0a1"
+    const variableId = "00000000-0000-0000-0000-00000000a000"
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+
+    it("rejects a freeform snapshot with DERIVATION_TYPE_MISMATCH", () => {
+        const vm = new VariableManager()
+        const freeformSnap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: 1,
+                type: "freeform" as const,
+            } as TCorePremise,
+            rootExpressionId: undefined,
+            expressions: { expressions: [] },
+        }
+        expect(() =>
+            ManagedDerivationPremiseEngine.fromSnapshot(
+                freeformSnap,
+                ARG_OBJ,
+                vm
+            )
+        ).toThrow(/DERIVATION_TYPE_MISMATCH/)
+    })
+
+    it("rejects a tampered snapshot with AND root (DERIVATION_STRUCTURE_INVALID)", () => {
+        // Build a variable manager with the consequent variable.
+        const vm = new VariableManager()
+        vm.addVariable({
+            id: variableId,
+            argumentId: argId,
+            argumentVersion: 1,
+            symbol: "Q",
+            claimId,
+            claimVersion: 1,
+            checksum: "x",
+        })
+        const andRootId = "00000000-0000-0000-0000-000000000020"
+        const tamperedSnap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: 1,
+                type: "derivation" as const,
+                derivedClaimId: claimId,
+            } as TCorePremise,
+            rootExpressionId: andRootId,
+            expressions: {
+                expressions: [
+                    {
+                        id: andRootId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "operator" as const,
+                        operator: "and" as const,
+                        checksum: "x",
+                        descendantChecksum: null,
+                        combinedChecksum: "x",
+                    },
+                ],
+            },
+        }
+        expect(() =>
+            ManagedDerivationPremiseEngine.fromSnapshot(
+                tamperedSnap,
+                ARG_OBJ,
+                vm
+            )
+        ).toThrow(/DERIVATION_STRUCTURE_INVALID/)
+    })
+
+    it("validates structure when restoring a well-formed snapshot", () => {
+        // makeNakedDerivationEngine() uses fromSnapshot internally —
+        // verify it succeeds and produces a structurally valid engine.
+        const { engine, claimId, consequentVarId } = makeNakedDerivationEngine()
+        expect(engine).toBeDefined()
+        const exprs = engine.getExpressions()
+        expect(exprs).toHaveLength(1)
+        const root = exprs[0]
+        expect(root.type).toBe("variable")
+        // The single expression references the consequent variable.
+        expect((root as { variableId: string }).variableId).toBe(
+            consequentVarId
+        )
+        // Confirm the variable is claim-bound to derivedClaimId.
+        const variable = engine
+            .getVariables()
+            .find((v) => v.id === consequentVarId)!
+        expect(
+            isClaimBound(variable as unknown as TCorePropositionalVariable)
+        ).toBe(true)
+        expect((variable as unknown as TClaimBoundVariable).claimId).toBe(
+            claimId
+        )
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ManagedDerivationPremiseEngine mutation enforcement (Task 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hand-builds a well-formed derivation engine in the naked-Q form:
+ *   root → variable(consequentVarId)
+ *
+ * Returns the engine plus the IDs needed for assertions.
+ */
+function makeNakedDerivationEngine() {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const premiseId = "00000000-0000-0000-0000-00000000e001"
+    const claimId = "00000000-0000-0000-0000-00000000c0b1"
+    const consequentVarId = "00000000-0000-0000-0000-00000000v001"
+    const consequentExprId = "00000000-0000-0000-0000-00000000x001"
+
+    const vm = new VariableManager()
+    vm.addVariable({
+        id: consequentVarId,
+        argumentId: argId,
+        argumentVersion: 1,
+        symbol: "Q",
+        claimId,
+        claimVersion: 1,
+        checksum: "dummy",
+    })
+
+    const snap = {
+        premise: {
+            id: premiseId,
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "derivation" as const,
+            derivedClaimId: claimId,
+        } as TCorePremise,
+        rootExpressionId: consequentExprId,
+        expressions: {
+            expressions: [
+                {
+                    id: consequentExprId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: null,
+                    position: POSITION_INITIAL,
+                    type: "variable" as const,
+                    variableId: consequentVarId,
+                    checksum: "dummy",
+                    descendantChecksum: null,
+                    combinedChecksum: "dummy",
+                },
+            ],
+        },
+    }
+
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+    const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+        snap,
+        ARG_OBJ,
+        vm
+    )
+    return {
+        engine,
+        argId,
+        premiseId,
+        claimId,
+        consequentVarId,
+        consequentExprId,
+    }
+}
+
+/**
+ * Hand-builds a well-formed derivation engine in the implication form:
+ *   root → implies(antecedentExprId, consequentExprId)
+ *
+ * antecedentExprId is a variable expression for antecedentVarId.
+ * consequentExprId is a variable expression for consequentVarId.
+ */
+function makeImpliesDerivationEngine() {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const premiseId = "00000000-0000-0000-0000-00000000e002"
+    const claimId = "00000000-0000-0000-0000-00000000c0b2"
+    const antecedentClaimId = "00000000-0000-0000-0000-00000000c0b3"
+    const consequentVarId = "00000000-0000-0000-0000-00000000v002"
+    const antecedentVarId = "00000000-0000-0000-0000-00000000v003"
+    const rootOpId = "00000000-0000-0000-0000-00000000x010"
+    const antecedentExprId = "00000000-0000-0000-0000-00000000x011"
+    const consequentExprId = "00000000-0000-0000-0000-00000000x012"
+
+    const vm = new VariableManager()
+    vm.addVariable({
+        id: consequentVarId,
+        argumentId: argId,
+        argumentVersion: 1,
+        symbol: "Q",
+        claimId,
+        claimVersion: 1,
+        checksum: "dummy",
+    })
+    vm.addVariable({
+        id: antecedentVarId,
+        argumentId: argId,
+        argumentVersion: 1,
+        symbol: "P",
+        claimId: antecedentClaimId,
+        claimVersion: 1,
+        checksum: "dummy",
+    })
+
+    const snap = {
+        premise: {
+            id: premiseId,
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "derivation" as const,
+            derivedClaimId: claimId,
+        } as TCorePremise,
+        rootExpressionId: rootOpId,
+        expressions: {
+            expressions: [
+                {
+                    id: rootOpId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: null,
+                    position: POSITION_INITIAL,
+                    type: "operator" as const,
+                    operator: "implies" as const,
+                    checksum: "dummy",
+                    descendantChecksum: "dummy",
+                    combinedChecksum: "dummy",
+                },
+                {
+                    id: antecedentExprId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: rootOpId,
+                    position: POSITION_INITIAL,
+                    type: "variable" as const,
+                    variableId: antecedentVarId,
+                    checksum: "dummy",
+                    descendantChecksum: null,
+                    combinedChecksum: "dummy",
+                },
+                {
+                    id: consequentExprId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: rootOpId,
+                    position: 1073741823, // midpoint(0, POSITION_MAX)
+                    type: "variable" as const,
+                    variableId: consequentVarId,
+                    checksum: "dummy",
+                    descendantChecksum: null,
+                    combinedChecksum: "dummy",
+                },
+            ],
+        },
+    }
+
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+    const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+        snap,
+        ARG_OBJ,
+        vm
+    )
+    return {
+        engine,
+        argId,
+        premiseId,
+        claimId,
+        antecedentClaimId,
+        consequentVarId,
+        antecedentVarId,
+        rootOpId,
+        antecedentExprId,
+        consequentExprId,
+    }
+}
+
+describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
+    it("rejects insertExpression at the consequent slot with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const {
+            engine,
+            argId,
+            premiseId,
+            antecedentVarId,
+            rootOpId,
+            consequentExprId,
+        } = makeImpliesDerivationEngine()
+        // Try to insert a new variable expression into the root implies at
+        // a position >= the consequent position (i.e. at or after it).
+        const consequentExpr = engine.getExpression(consequentExprId)!
+        let caught: unknown
+        try {
+            engine.insertExpression(
+                {
+                    id: "00000000-0000-0000-0000-000000000099",
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: rootOpId,
+                    position: consequentExpr.position + 1,
+                    type: "variable" as const,
+                    variableId: antecedentVarId,
+                },
+                consequentExprId
+            )
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects removeExpression of the consequent variable with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, consequentExprId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.removeExpression(consequentExprId, false)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects removeExpression of the naked consequent with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, consequentExprId } = makeNakedDerivationEngine()
+        let caught: unknown
+        try {
+            engine.removeExpression(consequentExprId, false)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects updateExpression that swaps the consequent's variableId with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, antecedentVarId, consequentExprId } =
+            makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.updateExpression(consequentExprId, {
+                variableId: antecedentVarId,
+            })
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects toggleNegation on the consequent expression with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, consequentExprId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.toggleNegation(consequentExprId)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects changeOperator that swaps root implies → and with DERIVATION_ROOT_OPERATOR_INVALID", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.changeOperator(rootOpId, "and")
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ROOT_OPERATOR_INVALID)
+    })
+
+    it("rejects changeOperator that swaps root implies → or with DERIVATION_ROOT_OPERATOR_INVALID", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.changeOperator(rootOpId, "or")
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ROOT_OPERATOR_INVALID)
+    })
+
+    it("rejects changeOperator that swaps root implies → not with DERIVATION_ROOT_OPERATOR_INVALID", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.changeOperator(rootOpId, "not")
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ROOT_OPERATOR_INVALID)
+    })
+
+    it("rejects loadExpressions with a tree that violates derivation structure with DERIVATION_STRUCTURE_INVALID", () => {
+        const { engine, argId, premiseId, consequentVarId } =
+            makeImpliesDerivationEngine()
+        // Provide a tree with an AND root — violates derivation structure.
+        const andRootId = "00000000-0000-0000-0000-000000000088"
+        const varExprId = "00000000-0000-0000-0000-000000000089"
+        // Intentionally malformed (AND root violates derivation structure) — cast bypasses
+        // the parameter's narrower operator-literal type so the override's rejection runs.
+        const malformed = [
+            {
+                id: andRootId,
+                argumentId: argId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: null,
+                position: POSITION_INITIAL,
+                type: "operator" as const,
+                operator: "and" as const,
+            },
+            {
+                id: varExprId,
+                argumentId: argId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: andRootId,
+                position: POSITION_INITIAL,
+                type: "variable" as const,
+                variableId: consequentVarId,
+            },
+        ] as unknown as Parameters<typeof engine.loadExpressions>[0]
+        let caught: unknown
+        try {
+            engine.loadExpressions(malformed)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("permits antecedent edits — updateExpression on the antecedent does not throw", () => {
+        // updateExpression on the antecedent (position field change) is fine.
+        const { engine, antecedentExprId } = makeImpliesDerivationEngine()
+        expect(() =>
+            engine.updateExpression(antecedentExprId, {
+                position: POSITION_INITIAL + 1,
+            })
+        ).not.toThrow()
+    })
+
+    it("permits antecedent edits — addExpression adds a child to an antecedent operator", () => {
+        // Build a derivation engine in the form:
+        //   implies(formula(and(P-var)), Q-var)
+        // The formula buffer sits between implies and and (required by
+        // enforceFormulaBetweenOperators). With one child in the AND, a second
+        // child can be added via addExpression without violating derivation structure.
+        const argId = "00000000-0000-0000-0000-000000000001"
+        const premiseId = "00000000-0000-0000-0000-00000000e003"
+        const claimId = "00000000-0000-0000-0000-00000000c0b4"
+        const antecedentClaimId = "00000000-0000-0000-0000-00000000c0b5"
+        const consequentVarId = "00000000-0000-0000-0000-00000000v010"
+        const antecedentVarId = "00000000-0000-0000-0000-00000000v011"
+        const rootOpId = "00000000-0000-0000-0000-00000000xa00"
+        const formulaId = "00000000-0000-0000-0000-00000000xa01"
+        const antecedentOpId = "00000000-0000-0000-0000-00000000xa02"
+        const antecedentChildId = "00000000-0000-0000-0000-00000000xa03"
+        const consequentExprId = "00000000-0000-0000-0000-00000000xa04"
+
+        const vm = new VariableManager()
+        vm.addVariable({
+            id: consequentVarId,
+            argumentId: argId,
+            argumentVersion: 1,
+            symbol: "Q",
+            claimId,
+            claimVersion: 1,
+            checksum: "dummy",
+        })
+        vm.addVariable({
+            id: antecedentVarId,
+            argumentId: argId,
+            argumentVersion: 1,
+            symbol: "P",
+            claimId: antecedentClaimId,
+            claimVersion: 1,
+            checksum: "dummy",
+        })
+
+        const snap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: 1,
+                type: "derivation" as const,
+                derivedClaimId: claimId,
+            } as TCorePremise,
+            rootExpressionId: rootOpId,
+            expressions: {
+                expressions: [
+                    // implies(formula(and(P)), Q)
+                    {
+                        id: rootOpId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "operator" as const,
+                        operator: "implies" as const,
+                        checksum: "dummy",
+                        descendantChecksum: "dummy",
+                        combinedChecksum: "dummy",
+                    },
+                    // formula wrapper (required between implies and and)
+                    {
+                        id: formulaId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: rootOpId,
+                        position: POSITION_INITIAL,
+                        type: "formula" as const,
+                        checksum: "dummy",
+                        descendantChecksum: "dummy",
+                        combinedChecksum: "dummy",
+                    },
+                    // and operator (antecedent, one child — room for a second)
+                    {
+                        id: antecedentOpId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: formulaId,
+                        position: POSITION_INITIAL,
+                        type: "operator" as const,
+                        operator: "and" as const,
+                        checksum: "dummy",
+                        descendantChecksum: "dummy",
+                        combinedChecksum: "dummy",
+                    },
+                    // P-var: existing child of and
+                    {
+                        id: antecedentChildId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: antecedentOpId,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: antecedentVarId,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                    // Q-var: consequent (last child of implies by position)
+                    {
+                        id: consequentExprId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: rootOpId,
+                        position: 1073741823,
+                        type: "variable" as const,
+                        variableId: consequentVarId,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+
+        const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap,
+            ARG_OBJ,
+            vm
+        )
+
+        // addExpression adds a second child to the antecedent AND — should not throw.
+        const newChildId = "00000000-0000-0000-0000-00000000xa05"
+        expect(() =>
+            engine.addExpression({
+                id: newChildId,
+                argumentId: argId,
+                argumentVersion: 1,
+                premiseId,
+                parentId: antecedentOpId,
+                position: POSITION_INITIAL + 1,
+                type: "variable" as const,
+                variableId: antecedentVarId,
+            })
+        ).not.toThrow()
+    })
+
+    it("normalizeExpressions — happy path: does not throw on a well-formed derivation", () => {
+        // The override calls super.normalizeExpressions() then assertWellFormed().
+        // A well-formed tree should survive intact.
+        const { engine } = makeImpliesDerivationEngine()
+        expect(() => engine.normalizeExpressions()).not.toThrow()
+    })
+
+    // TODO: It is currently not feasible to construct a state where
+    // normalizeExpressions() destroys the derivation structure, because the
+    // parent PremiseEngine's normalizeExpressions is robust enough that it
+    // never produces a derivation-violating tree from a previously-valid one
+    // (the consequent variable leaf has no collapse trigger, and the implies
+    // root is never collapsed). If a future refactor creates such a path, this
+    // test should be un-skipped and a destruction-state fixture added.
+    it.skip("normalizeExpressions — destruction path: throws DERIVATION_STRUCTURE_INVALID when normalization destroys the consequent", () => {
+        // Construct a managed engine wrapping a derivation premise whose tree
+        // has been put into a bad intermediate state via direct expression-manager
+        // manipulation, then verify normalizeExpressions() throws.
+        expect(true).toBe(false) // placeholder — implement when path is reachable
+    })
+
+    it("permits root operator swap implies ↔ iff", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        // Should not throw — implies ↔ iff is the one permitted root swap.
+        expect(() => engine.changeOperator(rootOpId, "iff")).not.toThrow()
+        // After the swap the root should now be iff.
+        const root = engine.getExpression(rootOpId)
+        expect(root?.type).toBe("operator")
+        if (root?.type === "operator") {
+            expect(root.operator).toBe("iff")
+        }
+    })
+
+    it("permits root operator swap iff ↔ implies after previous swap", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        // Swap implies → iff, then iff → implies.
+        engine.changeOperator(rootOpId, "iff")
+        expect(() => engine.changeOperator(rootOpId, "implies")).not.toThrow()
+        const root = engine.getExpression(rootOpId)
+        expect(root?.type).toBe("operator")
+        if (root?.type === "operator") {
+            expect(root.operator).toBe("implies")
+        }
+    })
+})
+
+describe("ensureClaimBoundVariable", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimLib, claimId }
+    }
+
+    it("creates a new claim-bound variable when none exists", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const variable = argumentEngine.ensureClaimBoundVariable(claimId)
+        expect(variable.claimId).toBe(claimId)
+        expect(variable.symbol).toMatch(/^[A-Z]/)
+        expect(
+            argumentEngine.getVariables().find((v) => v.id === variable.id)
+        ).toBeDefined()
+    })
+
+    it("returns the existing variable when one is already bound to the claim", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const first = argumentEngine.ensureClaimBoundVariable(claimId)
+        const second = argumentEngine.ensureClaimBoundVariable(claimId)
+        expect(second.id).toBe(first.id)
+    })
+
+    it("pins to the current claim version from the library", () => {
+        const { argumentEngine, claimLib, claimId } = setupArgumentWithClaim()
+        // freeze() bumps the version to 1 (the new current)
+        claimLib.freeze(claimId)
+        const variable = argumentEngine.ensureClaimBoundVariable(claimId)
+        expect(variable.claimVersion).toBe(1)
+    })
+
+    it("throws CLAIM_NOT_FOUND when the claim is not in the library", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.ensureClaimBoundVariable(
+                "00000000-0000-0000-0000-000000000999"
+            )
+        ).toThrow(/CLAIM_NOT_FOUND/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// createPremise typed-bag overload + derivation init flow (Task 9)
+// ---------------------------------------------------------------------------
+
+describe("createPremise with type and derivedClaimId", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimLib, claimId }
+    }
+
+    it("creates a freeform premise when type is omitted (default)", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise()
+        expect(pm.toPremiseData().type).toBe("freeform")
+    })
+
+    it("creates a freeform premise via explicit type: 'freeform'", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "freeform",
+        })
+        expect(pm.toPremiseData().type).toBe("freeform")
+    })
+
+    it("creates a derivation premise with naked-Q expression tree", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        const premiseData = pm.toPremiseData()
+        expect(premiseData.type).toBe("derivation")
+        expect((premiseData as TCoreDerivationPremise).derivedClaimId).toBe(
+            claimId
+        )
+        // Verify the premise's expression tree is a single naked-Q variable expression.
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        const root = expressions.find((e) => e.parentId === null)
+        expect(root?.type).toBe("variable")
+    })
+
+    it("ensures a claim-bound variable for the derivedClaimId", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const variablesBefore = argumentEngine.getVariables().length
+        argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        const variablesAfter = argumentEngine.getVariables().length
+        // Two variables created: one premise-bound (auto) + one claim-bound (for derivedClaimId)
+        expect(variablesAfter).toBeGreaterThan(variablesBefore)
+        const claimBoundVar = argumentEngine
+            .getVariables()
+            .find(
+                (v) =>
+                    isClaimBound(
+                        v as unknown as import("../src/lib/schemata").TCorePropositionalVariable
+                    ) &&
+                    (v as unknown as TClaimBoundVariable).claimId === claimId
+            )
+        expect(claimBoundVar).toBeDefined()
+    })
+
+    it("is idempotent: calling ensureClaimBoundVariable twice reuses the variable", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        // Ensure the variable once first.
+        argumentEngine.ensureClaimBoundVariable(claimId)
+        const variablesBefore = argumentEngine.getVariables().length
+        // Creating a derivation premise with the same claimId should NOT add another claim-bound variable.
+        argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        const variablesAfter = argumentEngine.getVariables().length
+        // Only the premise-bound variable (auto) should be new.
+        expect(variablesAfter).toBe(variablesBefore + 1)
+    })
+
+    it("throws CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID when type=derivation has no derivedClaimId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremise({ type: "derivation" })
+        ).toThrow(/CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID/)
+    })
+
+    it("throws CREATE_DERIVATION_CLAIM_NOT_FOUND when claim is missing", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremise({
+                type: "derivation",
+                derivedClaimId: "00000000-0000-0000-0000-000000000999",
+            })
+        ).toThrow(/CREATE_DERIVATION_CLAIM_NOT_FOUND/)
+    })
+})
+
+describe("createPremise legacy positional signature (backward compat)", () => {
+    it("accepts no arguments", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: pm } = eng.createPremise()
+        expect(pm.toPremiseData().type).toBe("freeform")
+    })
+
+    it("accepts (extras) positional", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: pm } = eng.createPremise({ title: "hello" })
+        const data = pm.toPremiseData()
+        expect(data.type).toBe("freeform")
+        expect((data as Record<string, unknown>).title).toBe("hello")
+    })
+
+    it("accepts (extras, symbol) positional", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: pm } = eng.createPremise({ title: "hello" }, "MySymbol")
+        const data = pm.toPremiseData()
+        expect(data.type).toBe("freeform")
+        expect((data as Record<string, unknown>).title).toBe("hello")
+        const vars = eng.getVariables()
+        const premiseBound = vars.find(
+            (v) =>
+                isPremiseBound(
+                    v as unknown as import("../src/lib/schemata").TCorePropositionalVariable
+                ) &&
+                (v as unknown as TPremiseBoundVariable).symbol === "MySymbol"
+        )
+        expect(premiseBound).toBeDefined()
+    })
+
+    it("accepts (undefined, symbol) positional", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), csLib())
+        const { result: _pm } = eng.createPremise(undefined, "XSym")
+        const vars = eng.getVariables()
+        const premiseBound = vars.find(
+            (v) =>
+                isPremiseBound(
+                    v as unknown as import("../src/lib/schemata").TCorePropositionalVariable
+                ) && (v as unknown as TPremiseBoundVariable).symbol === "XSym"
+        )
+        expect(premiseBound).toBeDefined()
+    })
+})
+
+describe("createPremiseWithId with derivation type", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimLib, claimId }
+    }
+
+    it("creates a derivation premise with given id", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const customId = "00000000-0000-0000-0000-000000000111"
+        const { result: pm } = argumentEngine.createPremiseWithId(customId, {
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        expect(pm.getId()).toBe(customId)
+        expect(pm.toPremiseData().type).toBe("derivation")
+        expect(
+            (pm.toPremiseData() as TCoreDerivationPremise).derivedClaimId
+        ).toBe(claimId)
+    })
+
+    it("creates naked-Q expression tree via createPremiseWithId", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremiseWithId(
+            "00000000-0000-0000-0000-000000000222",
+            { type: "derivation", derivedClaimId: claimId }
+        )
+        const expressions = pm.getExpressions()
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].type).toBe("variable")
+    })
+
+    it("legacy positional still works via createPremiseWithId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremiseWithId(
+            "00000000-0000-0000-0000-000000000333",
+            { title: "legacy" }
+        )
+        const data = pm.toPremiseData()
+        expect(data.type).toBe("freeform")
+        expect((data as Record<string, unknown>).title).toBe("legacy")
+    })
+
+    it("throws CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID from createPremiseWithId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremiseWithId(
+                "00000000-0000-0000-0000-000000000444",
+                {
+                    type: "derivation",
+                }
+            )
+        ).toThrow(/CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID/)
+    })
+
+    it("throws CREATE_DERIVATION_CLAIM_NOT_FOUND from createPremiseWithId", () => {
+        const { argumentEngine } = setupArgumentWithClaim()
+        expect(() =>
+            argumentEngine.createPremiseWithId(
+                "00000000-0000-0000-0000-000000000555",
+                {
+                    type: "derivation",
+                    derivedClaimId: "00000000-0000-0000-0000-000000000999",
+                }
+            )
+        ).toThrow(/CREATE_DERIVATION_CLAIM_NOT_FOUND/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Derivation premise extras handling (Task 9 regression)
+// ---------------------------------------------------------------------------
+
+describe("derivation premise extras handling", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimId }
+    }
+
+    it("getExtras() does not include type or derivedClaimId on a derivation premise", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+            extras: { foo: "bar" },
+        })
+        const extras = pm.getExtras()
+        expect(extras).not.toHaveProperty("type")
+        expect(extras).not.toHaveProperty("derivedClaimId")
+        expect(extras).toMatchObject({ foo: "bar" })
+    })
+
+    it("setExtras() preserves type and derivedClaimId after replacement", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        pm.setExtras({ note: "replacement" })
+        const premise = pm.toPremiseData()
+        expect(premise.type).toBe("derivation")
+        expect((premise as TCoreDerivationPremise).derivedClaimId).toBe(claimId)
+        expect(pm.getExtras()).toMatchObject({ note: "replacement" })
+    })
+})
+
+// ---------------------------------------------------------------------------
+// ManagedDerivationPremiseEngine.populateFromCitations (Task 8)
+// ---------------------------------------------------------------------------
+
+describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
+    /**
+     * Hand-builds a setup with:
+     *   - A ClaimLibrary that has a derived claim (normal) and N source claims
+     *     (citation-type) where N = citationCount.
+     *   - A ClaimCitationLibrary populated with N citations from derivedClaim
+     *     to each source claim.
+     *   - An ArgumentEngine that knows about derivedClaim.
+     *   - A ManagedDerivationPremiseEngine in naked-Q form for derivedClaim.
+     *
+     * Returns the engine, argumentEngine, citationLib, and relevant IDs.
+     */
+    function setupDerivationWithCitations(citationCount: number) {
+        const argId = "00000000-0000-0000-0000-999000000001"
+        const argVersion = 1
+        const ARG_OBJ = { id: argId, version: argVersion } as TCoreArgument
+
+        // Build claim library.
+        const claimLib = new ClaimLibrary()
+        const derivedClaim = claimLib.create({ type: "normal" })
+        const sourceClaimIds: string[] = []
+        for (let i = 0; i < citationCount; i++) {
+            const sourceClaim = claimLib.create({ type: "citation" })
+            sourceClaimIds.push(sourceClaim.id)
+        }
+
+        // Build citation library.
+        const citationLib = new ClaimCitationLibrary(claimLib)
+        for (let i = 0; i < citationCount; i++) {
+            const sourceClaim = claimLib.getCurrent(sourceClaimIds[i])!
+            const derivedClaimCurrent = claimLib.getCurrent(derivedClaim.id)!
+            citationLib.add({
+                id: `cit-${argId}-${i}`,
+                citingClaimId: derivedClaim.id,
+                citingClaimVersion: derivedClaimCurrent.version,
+                sourceClaimId: sourceClaimIds[i],
+                sourceClaimVersion: sourceClaim.version,
+            })
+        }
+
+        // Build ArgumentEngine.
+        const argumentEngine = new ArgumentEngine(
+            ARG_OBJ,
+            claimLib,
+            citationLib
+        )
+
+        // Build ManagedDerivationPremiseEngine in naked-Q form.
+        // Q variable must already exist in the variable manager (shared with argumentEngine).
+        const consequentVariable = argumentEngine.ensureClaimBoundVariable(
+            derivedClaim.id
+        )
+        const premiseId = "00000000-0000-0000-0000-999000000p01"
+        const consequentExprId = "00000000-0000-0000-0000-999000000x01"
+        const vm = (argumentEngine as unknown as Record<string, unknown>)
+            .variables as VariableManager
+
+        const snap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: derivedClaim.id,
+            } as TCorePremise,
+            rootExpressionId: consequentExprId,
+            expressions: {
+                expressions: [
+                    {
+                        id: consequentExprId,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: consequentVariable.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap,
+            ARG_OBJ,
+            vm
+        )
+
+        return {
+            engine,
+            argumentEngine,
+            citationLib,
+            derivedClaimId: derivedClaim.id,
+            sourceClaimIds,
+            consequentVarId: consequentVariable.id,
+            premiseId,
+            argId,
+            argVersion,
+        }
+    }
+
+    it("leaves naked-Q form unchanged when citation library has no citations", () => {
+        const { engine, argumentEngine, citationLib } =
+            setupDerivationWithCitations(0)
+        const expressionsBefore = engine.getExpressions().length
+        engine.populateFromCitations(citationLib, argumentEngine)
+        // No change: still naked-Q with a single variable expression.
+        expect(engine.getExpressions()).toHaveLength(expressionsBefore)
+        const root = engine.getExpressions()[0]
+        expect(root.type).toBe("variable")
+    })
+
+    it("produces IMPLIES(S1, Q) when there is exactly one citation", () => {
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            sourceClaimIds,
+            consequentVarId,
+        } = setupDerivationWithCitations(1)
+        engine.populateFromCitations(citationLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
+        // Should have 3 expressions: IMPLIES root, S1 var, Q var.
+        expect(exprs).toHaveLength(3)
+
+        const root = exprs.find((e) => e.parentId === null)!
+        expect(root.type).toBe("operator")
+        expect((root as unknown as { operator: string }).operator).toBe(
+            "implies"
+        )
+
+        const children = exprs
+            .filter((e) => e.parentId === root.id)
+            .sort((a, b) => a.position - b.position)
+        expect(children).toHaveLength(2)
+
+        // Antecedent (lower position) is a variable expression for S1.
+        const antecedent = children[0]
+        expect(antecedent.type).toBe("variable")
+        const antecedentVar = argumentEngine
+            .getVariables()
+            .find(
+                (v) =>
+                    v.id === (antecedent as { variableId: string }).variableId
+            )!
+        expect((antecedentVar as TClaimBoundVariable).claimId).toBe(
+            sourceClaimIds[0]
+        )
+
+        // Consequent (higher position) is a variable expression for Q.
+        const consequent = children[1]
+        expect(consequent.type).toBe("variable")
+        expect((consequent as { variableId: string }).variableId).toBe(
+            consequentVarId
+        )
+    })
+
+    it("produces IMPLIES(OR(S1, ..., Sn), Q) when there are n ≥ 2 citations", () => {
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            sourceClaimIds,
+            consequentVarId,
+        } = setupDerivationWithCitations(3)
+        engine.populateFromCitations(citationLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
+        // Expect: IMPLIES root, OR antecedent, S1 var, S2 var, S3 var, Q var = 6 exprs.
+        expect(exprs).toHaveLength(6)
+
+        const root = exprs.find((e) => e.parentId === null)!
+        expect(root.type).toBe("operator")
+        expect((root as unknown as { operator: string }).operator).toBe(
+            "implies"
+        )
+
+        const impliesChildren = exprs
+            .filter((e) => e.parentId === root.id)
+            .sort((a, b) => a.position - b.position)
+        expect(impliesChildren).toHaveLength(2)
+
+        // Antecedent (lower position) is an OR operator.
+        const orNode = impliesChildren[0]
+        expect(orNode.type).toBe("operator")
+        expect((orNode as unknown as { operator: string }).operator).toBe("or")
+
+        // Consequent (higher position) is Q variable.
+        const consequent = impliesChildren[1]
+        expect(consequent.type).toBe("variable")
+        expect((consequent as { variableId: string }).variableId).toBe(
+            consequentVarId
+        )
+
+        // OR has 3 source variable children.
+        const orChildren = exprs.filter((e) => e.parentId === orNode.id)
+        expect(orChildren).toHaveLength(3)
+        const orChildClaimIds = orChildren
+            .map((c) => {
+                const varId = (c as { variableId: string }).variableId
+                const variable = argumentEngine
+                    .getVariables()
+                    .find((v) => v.id === varId)! as TClaimBoundVariable
+                return variable.claimId
+            })
+            .sort()
+        expect(orChildClaimIds).toEqual([...sourceClaimIds].sort())
+    })
+
+    it("creates new claim-bound variables for cited claims that lack them", () => {
+        const { engine, argumentEngine, citationLib, sourceClaimIds } =
+            setupDerivationWithCitations(2)
+        const varsBefore = argumentEngine.getVariables().length
+        // Source claims have no variables yet in argumentEngine.
+        engine.populateFromCitations(citationLib, argumentEngine)
+        const varsAfter = argumentEngine.getVariables().length
+        // Two new variables should have been created (one per source claim).
+        expect(varsAfter).toBe(varsBefore + 2)
+        // Each source claim ID is covered by a claim-bound variable.
+        for (const sourceClaimId of sourceClaimIds) {
+            const found = argumentEngine
+                .getVariables()
+                .find(
+                    (v) =>
+                        isClaimBound(
+                            v as unknown as TCorePropositionalVariable
+                        ) &&
+                        (v as unknown as TClaimBoundVariable).claimId ===
+                            sourceClaimId
+                )
+            expect(found).toBeDefined()
+        }
+    })
+
+    it("does not create duplicate variables when a variable already exists for a cited claim", () => {
+        const { engine, argumentEngine, citationLib, sourceClaimIds } =
+            setupDerivationWithCitations(1)
+        // Pre-create the variable for the source claim.
+        const existingVar = argumentEngine.ensureClaimBoundVariable(
+            sourceClaimIds[0]
+        )
+        const varsBefore = argumentEngine.getVariables().length
+        engine.populateFromCitations(citationLib, argumentEngine)
+        // Variable count should not increase (ensureClaimBoundVariable is idempotent).
+        expect(argumentEngine.getVariables().length).toBe(varsBefore)
+        // The antecedent expression references the pre-existing variable.
+        const exprs = engine.getExpressions()
+        const antecedent = exprs
+            .filter((e) => e.parentId !== null)
+            .find(
+                (e) =>
+                    e.type === "variable" &&
+                    (e as { variableId: string }).variableId === existingVar.id
+            )
+        expect(antecedent).toBeDefined()
+    })
+
+    it("rejects with DERIVATION_ANTECEDENT_NON_EMPTY when premise already has an antecedent", () => {
+        const { engine, argumentEngine, citationLib } =
+            setupDerivationWithCitations(1)
+        // Populate once.
+        engine.populateFromCitations(citationLib, argumentEngine)
+        // Populate again — should throw because antecedent is now non-empty.
+        expect(() =>
+            engine.populateFromCitations(citationLib, argumentEngine)
+        ).toThrow(/DERIVATION_ANTECEDENT_NON_EMPTY/)
+    })
+
+    it("throws InvariantViolationError with DERIVATION_ANTECEDENT_NON_EMPTY code", () => {
+        const { engine, argumentEngine, citationLib } =
+            setupDerivationWithCitations(1)
+        engine.populateFromCitations(citationLib, argumentEngine)
+        let caught: unknown
+        try {
+            engine.populateFromCitations(citationLib, argumentEngine)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ANTECEDENT_NON_EMPTY)
+    })
+
+    it("does not modify cited claims' own derivation premises (non-recursive)", () => {
+        // Set up: derivedClaim cites sourceA. sourceA is a citation-type claim
+        // and has its OWN derivation premise (backed by sourceA itself as
+        // derivedClaimId on a second engine). populateFromCitations on the first
+        // engine must not touch the second engine.
+        const argId = "00000000-0000-0000-0000-999000000002"
+        const argVersion = 1
+        const ARG_OBJ = { id: argId, version: argVersion } as TCoreArgument
+
+        const claimLib = new ClaimLibrary()
+        const derivedClaim = claimLib.create({ type: "normal" })
+        const sourceClaim = claimLib.create({ type: "citation" })
+        // A second "normal" claim that sourceA itself cites.
+        const grandSourceClaim = claimLib.create({ type: "citation" })
+
+        const citationLib = new ClaimCitationLibrary(claimLib)
+        citationLib.add({
+            id: "cit-main",
+            citingClaimId: derivedClaim.id,
+            citingClaimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
+            sourceClaimId: sourceClaim.id,
+            sourceClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
+        })
+        citationLib.add({
+            id: "cit-source",
+            citingClaimId: sourceClaim.id,
+            citingClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
+            sourceClaimId: grandSourceClaim.id,
+            sourceClaimVersion: claimLib.getCurrent(grandSourceClaim.id)!
+                .version,
+        })
+
+        const argumentEngine = new ArgumentEngine(
+            ARG_OBJ,
+            claimLib,
+            citationLib
+        )
+
+        // Build two derivation premise engines.
+        const consequentVar = argumentEngine.ensureClaimBoundVariable(
+            derivedClaim.id
+        )
+        const sourceVar = argumentEngine.ensureClaimBoundVariable(
+            sourceClaim.id
+        )
+        const vm = (argumentEngine as unknown as Record<string, unknown>)
+            .variables as VariableManager
+
+        // First engine: derivedClaim premise (naked-Q).
+        const prem1Id = "00000000-0000-0000-0000-999000000p11"
+        const expr1Id = "00000000-0000-0000-0000-999000000x11"
+        const snap1 = {
+            premise: {
+                id: prem1Id,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: derivedClaim.id,
+            } as TCorePremise,
+            rootExpressionId: expr1Id,
+            expressions: {
+                expressions: [
+                    {
+                        id: expr1Id,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId: prem1Id,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: consequentVar.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+        const engine1 = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap1,
+            ARG_OBJ,
+            vm
+        )
+
+        // Second engine: sourceClaim premise (naked-Q for sourceClaim).
+        const prem2Id = "00000000-0000-0000-0000-999000000p12"
+        const expr2Id = "00000000-0000-0000-0000-999000000x12"
+        const snap2 = {
+            premise: {
+                id: prem2Id,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: sourceClaim.id,
+            } as TCorePremise,
+            rootExpressionId: expr2Id,
+            expressions: {
+                expressions: [
+                    {
+                        id: expr2Id,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId: prem2Id,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: sourceVar.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+        const engine2 = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap2,
+            ARG_OBJ,
+            vm
+        )
+
+        // Engine2 before: 1 expression (naked-Q).
+        expect(engine2.getExpressions()).toHaveLength(1)
+
+        // Populate engine1 only.
+        engine1.populateFromCitations(citationLib, argumentEngine)
+
+        // Engine1 should now have IMPLIES(S_sourceA, Q) = 3 expressions.
+        expect(engine1.getExpressions()).toHaveLength(3)
+
+        // Engine2 must remain unchanged (still naked-Q = 1 expression).
+        expect(engine2.getExpressions()).toHaveLength(1)
+        expect(engine2.getExpressions()[0].type).toBe("variable")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Fork integration with derivation premises (Task 10)
+// ---------------------------------------------------------------------------
+
+describe("Fork integration with derivation premises", () => {
+    /**
+     * Sets up a PropositCore with one argument containing one derivation
+     * premise. The derivation premise is bound to a single "normal" claim.
+     * Returns the core, the argument ID, and the original claim ID.
+     */
+    function setupArgumentWithDerivationPremise() {
+        const propositCore = new PropositCore()
+
+        // Create the claim that the derivation premise will reference.
+        const claim = propositCore.claims.create({ type: "normal" })
+        const claimId = claim.id
+
+        // Create the argument and its derivation premise.
+        const argId = crypto.randomUUID()
+        const engine = propositCore.arguments.create({
+            id: argId,
+            version: 0,
+        })
+        engine.createPremise({ type: "derivation", derivedClaimId: claimId })
+
+        return { propositCore, argumentId: argId, claimId }
+    }
+
+    it("propagates type and derivedClaimId through forkArgument", () => {
+        const { propositCore, argumentId, claimId } =
+            setupArgumentWithDerivationPremise()
+        const { engine: forkedEngine, claimRemap } =
+            propositCore.forkArgument(argumentId)
+
+        const forkedPremises = forkedEngine.listPremises()
+        const forkedDerivation = forkedPremises.find(
+            (p) => p.toPremiseData().type === "derivation"
+        )
+        expect(forkedDerivation).toBeDefined()
+        expect(
+            (forkedDerivation!.toPremiseData() as TCoreDerivationPremise)
+                .derivedClaimId
+        ).toBe(claimRemap.get(claimId))
+    })
+
+    it("forks a derivation premise's expression tree with the consequent referencing the cloned variable", () => {
+        const { propositCore, argumentId } =
+            setupArgumentWithDerivationPremise()
+        const { engine: forkedEngine } = propositCore.forkArgument(argumentId)
+
+        const derivationPremise = forkedEngine
+            .listPremises()
+            .find((p) => p.toPremiseData().type === "derivation")!
+        expect(derivationPremise).toBeDefined()
+
+        // Build a VariableManager from the forked engine's variables so we
+        // can pass it to ManagedDerivationPremiseEngine.fromSnapshot.
+        const vm = new VariableManager()
+        for (const v of forkedEngine.getVariables()) {
+            vm.addVariable(v)
+        }
+
+        const snap = derivationPremise.snapshot()
+
+        // Verifies the snapshot's tree is well-formed (does not throw).
+        expect(() =>
+            ManagedDerivationPremiseEngine.fromSnapshot(
+                snap,
+                forkedEngine.getArgument(),
+                vm
+            )
+        ).not.toThrow()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// validateEvaluability derivation pre-flight + validateDerivationStructures (Task 11)
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine validateEvaluability with derivation pre-flight", () => {
+    /**
+     * Builds an ArgumentEngine whose single derivation premise has an empty
+     * expression tree (no root expression → structure violation).
+     */
+    function setupArgumentWithBrokenDerivation() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const csLibLocal = new ClaimCitationLibrary(claimLib)
+
+        const engine = new ArgumentEngine(
+            { id: "arg-broken", version: 1 },
+            claimLib,
+            csLibLocal
+        )
+        engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
+
+        // Take snapshot and strip all expressions from the derivation premise.
+        const snap = engine.snapshot()
+        const derivPremSnap = snap.premises.find(
+            (p) => (p.premise as Record<string, unknown>).type === "derivation"
+        )!
+        derivPremSnap.expressions = { expressions: [] }
+        derivPremSnap.rootExpressionId = undefined
+
+        // Restore via ArgumentEngine.fromSnapshot — uses PremiseEngine (no
+        // derivation structure check), so the broken tree loads without error.
+        const argumentEngine = ArgumentEngine.fromSnapshot(
+            snap,
+            claimLib,
+            csLibLocal
+        )
+        return { argumentEngine }
+    }
+
+    /**
+     * Builds an ArgumentEngine with a well-formed derivation premise
+     * (naked-Q form created by createPremise).
+     */
+    function setupArgumentWithGoodDerivation() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const csLibLocal = new ClaimCitationLibrary(claimLib)
+
+        const engine = new ArgumentEngine(
+            { id: "arg-good", version: 1 },
+            claimLib,
+            csLibLocal
+        )
+        engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
+        return { argumentEngine: engine }
+    }
+
+    it("flags a structurally-broken derivation premise with DERIVATION_STRUCTURE_INVALID_AT_EVALUATION", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.validateEvaluability()
+        expect(
+            result.issues.some(
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+            )
+        ).toBe(true)
+    })
+
+    it("evaluate returns {ok: false} when derivation premise is broken", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.evaluate({
+            variables: {},
+            operatorAssignments: {},
+        })
+        expect(result.ok).toBe(false)
+        expect(
+            result.validation?.issues.some(
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+            )
+        ).toBe(true)
+    })
+
+    it("checkValidity flags broken derivation premises (parity with evaluate)", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.checkValidity()
+        expect(
+            result.validation?.issues.some(
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+            )
+        ).toBe(true)
+    })
+
+    it("does not flag well-formed derivation premises", () => {
+        const { argumentEngine } = setupArgumentWithGoodDerivation()
+        const result = argumentEngine.validateEvaluability()
+        const derivationIssues = result.issues.filter(
+            (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+        )
+        expect(derivationIssues).toEqual([])
+    })
+})
+
+describe("ArgumentEngine.validateDerivationStructures", () => {
+    function setupArgumentWithBrokenDerivation() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const csLibLocal = new ClaimCitationLibrary(claimLib)
+
+        const engine = new ArgumentEngine(
+            { id: "arg-broken2", version: 1 },
+            claimLib,
+            csLibLocal
+        )
+        engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
+
+        const snap = engine.snapshot()
+        const derivPremSnap = snap.premises.find(
+            (p) => (p.premise as Record<string, unknown>).type === "derivation"
+        )!
+        derivPremSnap.expressions = { expressions: [] }
+        derivPremSnap.rootExpressionId = undefined
+
+        const argumentEngine = ArgumentEngine.fromSnapshot(
+            snap,
+            claimLib,
+            csLibLocal
+        )
+        return { argumentEngine }
+    }
+
+    it("returns the derivation-specific subset of validateEvaluability checks", () => {
+        const { argumentEngine } = setupArgumentWithBrokenDerivation()
+        const result = argumentEngine.validateDerivationStructures()
+        expect(result.violations.length).toBeGreaterThan(0)
+        for (const v of result.violations) {
+            expect(v.code).toBe("DERIVATION_STRUCTURE_INVALID_AT_EVALUATION")
+        }
     })
 })

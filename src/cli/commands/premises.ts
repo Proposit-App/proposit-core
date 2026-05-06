@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { Command } from "commander"
 import { PremiseEngine } from "../../lib/core/premise-engine.js"
 import { VariableManager } from "../../lib/core/variable-manager.js"
+import { ManagedDerivationPremiseEngine } from "../../lib/core/managed-derivation-premise-engine.js"
 import type { TCoreArgument, TCorePremise } from "../../lib/schemata/index.js"
 import type { TOptionalChecksum } from "../../lib/schemata/shared.js"
 import {
@@ -18,7 +19,7 @@ import {
     readPremiseData,
     readPremiseMeta,
 } from "../storage/premises.js"
-import { hydrateEngine, persistEngine } from "../engine.js"
+import { hydrateEngine, hydratePropositCore, persistEngine } from "../engine.js"
 import { readVariables } from "../storage/variables.js"
 
 async function assertNotPublished(
@@ -61,23 +62,67 @@ export function registerPremiseCommands(
             "--symbol <symbol>",
             "Symbol for the auto-created premise-bound variable"
         )
-        .action(async (opts: { title?: string; symbol?: string }) => {
-            await assertNotPublished(argumentId, version)
-            const engine = await hydrateEngine(argumentId, version)
+        .option(
+            "--type <type>",
+            "Premise type: 'freeform' or 'derivation' (default: freeform)"
+        )
+        .option(
+            "--derived-claim <claimId>",
+            "Required when --type=derivation; the id of the derived claim"
+        )
+        .action(
+            async (opts: {
+                title?: string
+                symbol?: string
+                type?: string
+                derivedClaim?: string
+            }) => {
+                const premiseType = opts.type ?? "freeform"
+                if (
+                    premiseType !== "freeform" &&
+                    premiseType !== "derivation"
+                ) {
+                    errorExit(
+                        `--type must be 'freeform' or 'derivation' (got '${premiseType}')`
+                    )
+                }
+                if (premiseType === "derivation" && !opts.derivedClaim) {
+                    errorExit(
+                        "premises create --type=derivation requires --derived-claim <claimId>"
+                    )
+                }
 
-            const id = randomUUID()
-            const extras: Record<string, unknown> = {}
-            if (opts.title) extras.title = opts.title
+                await assertNotPublished(argumentId, version)
+                const engine = await hydrateEngine(argumentId, version)
 
-            try {
-                engine.createPremiseWithId(id, extras, opts.symbol)
-            } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                const id = randomUUID()
+                const extras: Record<string, unknown> = {}
+                if (opts.title) extras.title = opts.title
+
+                try {
+                    if (premiseType === "derivation") {
+                        engine.createPremiseWithId(id, {
+                            type: "derivation",
+                            derivedClaimId: opts.derivedClaim,
+                            extras,
+                            symbol: opts.symbol,
+                        })
+                    } else {
+                        engine.createPremiseWithId(id, extras, opts.symbol)
+                    }
+                } catch (err) {
+                    errorExit(err instanceof Error ? err.message : String(err))
+                }
+
+                await persistEngine(engine)
+                printLine(
+                    id +
+                        (premiseType === "derivation"
+                            ? ` (derivation for claim ${opts.derivedClaim})`
+                            : "")
+                )
             }
-
-            await persistEngine(engine)
-            printLine(id)
-        })
+        )
 
     premises
         .command("list")
@@ -165,8 +210,11 @@ export function registerPremiseCommands(
                     const premiseType = pm.isInference()
                         ? "inference"
                         : "constraint"
+                    const metaRecord = meta as Record<string, unknown>
+                    const typeBadge =
+                        metaRecord.type === "derivation" ? " [derivation]" : ""
                     printLine(
-                        `${meta.id} | ${premiseType} | ${display} | ${title}`
+                        `${meta.id}${typeBadge} | ${premiseType} | ${display} | ${title}`
                     )
                 }
             }
@@ -267,9 +315,12 @@ export function registerPremiseCommands(
                         rootExpr.operator === "iff")
                         ? "inference"
                         : "constraint"
+                const metaRecord = meta as Record<string, unknown>
+                const derivationBadge =
+                    metaRecord.type === "derivation" ? " [derivation]" : ""
                 printLine(`id:           ${meta.id}`)
                 printLine(`title:        ${meta.title ?? "(untitled)"}`)
-                printLine(`type:         ${premiseType}`)
+                printLine(`type:         ${premiseType}${derivationBadge}`)
                 printLine(`root expr id: ${data.rootExpressionId ?? "(none)"}`)
                 printLine(`variables:    ${data.variables.length}`)
                 printLine(`expressions:  ${data.expressions.length}`)
@@ -338,5 +389,79 @@ export function registerPremiseCommands(
             }
 
             printLine(pm.toDisplayString())
+        })
+
+    premises
+        .command("populate-citations <premiseId>")
+        .description(
+            "Populate a derivation premise's antecedent from current citations of its derived claim"
+        )
+        .action(async (premiseId: string) => {
+            await assertNotPublished(argumentId, version)
+
+            const propositCore = await hydratePropositCore()
+            const engine = await hydrateEngine(
+                argumentId,
+                version,
+                propositCore
+            )
+
+            const livePremise = engine.getPremise(premiseId)
+            if (!livePremise) {
+                errorExit(
+                    `Premise "${premiseId}" not found in active argument.`
+                )
+            }
+
+            const premiseData = livePremise.toPremiseData()
+            if (premiseData.type !== "derivation") {
+                errorExit(
+                    `Premise "${premiseId}" is not a derivation premise (type=${premiseData.type ?? "freeform"}).`
+                )
+            }
+
+            // Build a VariableManager populated with the live engine's current
+            // variables. The managed engine needs at least the consequent
+            // variable (bound to derivedClaimId) for structural validation.
+            const variableManager = new VariableManager()
+            for (const v of engine.getVariables()) {
+                variableManager.addVariable(v)
+            }
+
+            // Take a snapshot of the live premise and restore it into a
+            // ManagedDerivationPremiseEngine (independent copy).
+            const premiseSnapshot = livePremise.snapshot()
+
+            let managed: ManagedDerivationPremiseEngine
+            try {
+                managed = ManagedDerivationPremiseEngine.fromSnapshot(
+                    premiseSnapshot,
+                    engine.getArgument(),
+                    variableManager
+                )
+            } catch (err) {
+                errorExit(err instanceof Error ? err.message : String(err))
+            }
+
+            // populateFromCitations mutates the managed engine's expression tree
+            // and calls engine.ensureClaimBoundVariable for each source citation,
+            // which adds new claim-bound variables to the live engine.
+            try {
+                managed.populateFromCitations(
+                    propositCore.claimCitations,
+                    engine
+                )
+            } catch (err) {
+                errorExit(err instanceof Error ? err.message : String(err))
+            }
+
+            // Reflow: push the managed engine's updated expression tree into the
+            // live premise engine. The live premise (a plain PremiseEngine) uses
+            // loadExpressions without derivation validation — that already ran
+            // inside populateFromCitations via assertWellFormed().
+            livePremise.loadExpressions(managed.getExpressions())
+
+            await persistEngine(engine)
+            printLine(`Populated derivation premise "${premiseId}".`)
         })
 }

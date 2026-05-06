@@ -303,6 +303,90 @@ proposit-core citations unlink <citation-id>
 
 ---
 
+## 7b. Derivation Premises
+
+A **derivation premise** is structurally committed to deriving a specific named claim. It carries a `derivedClaimId` that never changes, and its expression tree is locked to either naked-Q form (no antecedent yet) or `IMPLIES(antecedent, Q)` / `IFF(antecedent, Q)` form.
+
+The `populate-citations` command is the recommended way to build the antecedent automatically from the citation graph.
+
+### Step 1: Create a citation claim (the external support)
+
+```bash
+proposit-core claims add --type=citation \
+    --title "Smith et al., Journal of Atmospheric Sciences 2024"
+# → <citation-claim-id>
+```
+
+### Step 2: Create the claim to be derived
+
+```bash
+proposit-core claims add --title "It is raining"
+# → <normal-claim-id>
+```
+
+### Step 3: Add a citation edge (normal claim cites the citation claim as support)
+
+```bash
+proposit-core citations add <normal-claim-id> <citation-claim-id>
+# → <citation-edge-id>
+```
+
+### Step 4: Create a derivation premise
+
+```bash
+proposit-core <argument-id> latest premises create \
+    --type=derivation \
+    --derived-claim=<normal-claim-id> \
+    --title "Rain is supported"
+# → <derivation-premise-id>
+```
+
+The premise is initialized to **naked-Q form** — a single variable expression referencing the consequent variable bound to `<normal-claim-id>`. Render it to confirm:
+
+```bash
+proposit-core <argument-id> latest premises render <derivation-premise-id>
+# → [derivation] Q          (naked-Q: no antecedent yet)
+```
+
+### Step 5: Populate citations
+
+`populate-citations` reads the current citations for the derived claim and builds the antecedent:
+
+```bash
+proposit-core <argument-id> latest premises populate-citations <derivation-premise-id>
+```
+
+Render again to see the result:
+
+```bash
+proposit-core <argument-id> latest premises render <derivation-premise-id>
+# → [derivation] (S0 → Q)   (one citation: IMPLIES(S1, Q))
+```
+
+With two citations it would produce `[derivation] ((S0 ∨ S1) → Q)`.
+
+### populate-citations rules
+
+- **0 citations** — no change; premise stays in naked-Q form.
+- **1 citation** — builds `IMPLIES(VariableS, Q)`.
+- **≥ 2 citations** — builds `IMPLIES(OR(VariableS1, …, VariableSn), Q)`.
+- The command is **one-shot**: it fails if the premise already has a non-empty antecedent. Delete and re-create the premise to repopulate.
+
+### Rendering and listing derivation premises
+
+Derivation premises are tagged `[derivation]` in all listing and rendering output, mirroring the `[citation]` convention for citation-typed claims:
+
+```bash
+proposit-core <argument-id> latest premises list
+# → [derivation] <derivation-premise-id>  Rain is supported
+# →              <premise-id>             P implies Q
+
+proposit-core <argument-id> latest premises render <derivation-premise-id>
+# → [derivation] (S0 → Q)
+```
+
+---
+
 ## 8. Render
 
 Print the full argument with metadata:

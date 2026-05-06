@@ -303,3 +303,65 @@ describe("free-speech-misinformation.yaml", () => {
         expect(ce.assignment.variables[vars.get("PublicSafety")!]).toBe(true)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Derivation Premise Example
+// ---------------------------------------------------------------------------
+
+describe("derivation-example.yaml", () => {
+    const { engine } = importArgumentFromYaml(
+        loadExample("derivation-example.yaml")
+    )
+
+    it("has the correct title", () => {
+        expect((engine.getArgument() as Record<string, unknown>).title).toBe(
+            "Derivation Premise Example"
+        )
+    })
+
+    it("has 3 premises: 2 freeform + 1 derivation", () => {
+        const premises = engine.listPremises()
+        expect(premises).toHaveLength(3)
+        const types = premises.map(
+            (p) => (p.toPremiseData() as Record<string, unknown>).type as string
+        )
+        expect(types.filter((t) => t === "freeform")).toHaveLength(2)
+        expect(types.filter((t) => t === "derivation")).toHaveLength(1)
+    })
+
+    it("derivation premise has the correct derivedClaimId", () => {
+        const derivationPremise = engine
+            .listPremises()
+            .find(
+                (p) =>
+                    (p.toPremiseData() as Record<string, unknown>).type ===
+                    "derivation"
+            )
+        expect(derivationPremise).toBeDefined()
+        const data = derivationPremise!.toPremiseData() as Record<
+            string,
+            unknown
+        >
+        expect(data.derivedClaimId).toBe("00000000-0000-0000-0000-000000000001")
+    })
+
+    it("derivation premise is assigned as conclusion", () => {
+        const conclusion = engine.getConclusionPremise()
+        expect(conclusion).not.toBeNull()
+        const data = conclusion!.toPremiseData() as Record<string, unknown>
+        expect(data.type).toBe("derivation")
+    })
+
+    it("derivation premise has a root expression (naked Q)", () => {
+        const derivationPremise = engine
+            .listPremises()
+            .find(
+                (p) =>
+                    (p.toPremiseData() as Record<string, unknown>).type ===
+                    "derivation"
+            )!
+        const expressions = derivationPremise.getExpressions()
+        expect(expressions).toHaveLength(1)
+        expect(expressions[0].type).toBe("variable")
+    })
+})

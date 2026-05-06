@@ -48,6 +48,7 @@ export function createLookup<T>(
  */
 export const EMPTY_CLAIM_LOOKUP: TClaimLookup = {
     get: () => undefined,
+    getCurrent: () => undefined,
 }
 
 /**

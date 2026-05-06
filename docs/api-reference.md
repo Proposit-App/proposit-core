@@ -8,11 +8,63 @@ Creates an engine scoped to `argument` (`{ id, version, title, description }`, w
 
 ---
 
-### `createPremise(extras?, symbol?)` → `TCoreMutationResult<PremiseEngine>`
+### `createPremise(options?)` → `TCoreMutationResult<PremiseEngine>`
 
 Creates a new `PremiseEngine`, registers it with the engine, and returns it wrapped in a mutation result with the changeset. If no conclusion is currently set, the new premise is automatically designated as the conclusion (reflected in the changeset's `roles` field).
 
-Also auto-creates a premise-bound variable for the new premise, included in the changeset's `variables.added`. The optional `symbol` parameter sets the variable's symbol; if omitted, an auto-generated symbol (`"P0"`, `"P1"`, ...) is used with collision avoidance.
+Also auto-creates a premise-bound variable for the new premise, included in the changeset's `variables.added`.
+
+**Typed-bag form (preferred since v0.11.0):**
+
+```typescript
+engine.createPremise({
+    type: "freeform" | "derivation", // default: "freeform"
+    derivedClaimId: string, // required when type === "derivation"
+    extras: Record<string, unknown>, // optional extension fields
+    symbol: string, // optional auto-created variable symbol
+})
+```
+
+When `type === "derivation"`, the engine looks up `derivedClaimId` in the claim library, materializes a claim-bound variable for it via `ensureClaimBoundVariable` (if one does not already exist), and initializes the expression tree to **naked-Q form** — a single variable expression at the root referencing the consequent.
+
+**Legacy positional form (still supported for backward compatibility):**
+
+```typescript
+engine.createPremise(extras?, symbol?)  // always creates a freeform premise
+```
+
+Throws:
+
+- `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` — when `type === "derivation"` and `derivedClaimId` is absent.
+- `CREATE_DERIVATION_CLAIM_NOT_FOUND` — when `type === "derivation"` and the claim is not in the library.
+
+---
+
+### `createPremiseWithId(id, options?)` → `TCoreMutationResult<PremiseEngine>`
+
+Same as `createPremise` but accepts an explicit `id` as the first argument instead of generating one. Mirrors `createPremise` in both typed-bag and legacy positional forms. Throws if a premise with the given ID already exists.
+
+---
+
+### `ensureClaimBoundVariable(claimId)` → `TClaimBoundVariable`
+
+Idempotent lookup-or-create for a claim-bound variable. If a claim-bound variable for `claimId` already exists in this argument, it is returned as-is. Otherwise a new variable is created with a fresh UUID, the current version of the claim from the `ClaimLibrary`, and an auto-generated symbol (`"P0"`, `"P1"`, ...) with collision avoidance.
+
+Used internally by derivation premise initialization but also available to callers that need to pin a claim as a propositional variable without creating a full premise.
+
+Throws `CLAIM_NOT_FOUND` when `claimId` is not present in the claim library.
+
+_Since v0.11.0._
+
+---
+
+### `validateDerivationStructures()` → `TInvariantValidationResult`
+
+Returns the derivation-specific subset of `validateEvaluability` checks. Only `type: "derivation"` premises are inspected; freeform premises are ignored. Useful for pre-checking derivation structure before entering the full evaluation pipeline, without requiring a conclusion or complete role state.
+
+Derivation premises with broken trees produce violations with code `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`.
+
+_Since v0.11.0._
 
 ---
 
@@ -213,7 +265,7 @@ Returns a cross-premise summary of every variable referenced by expressions, key
 
 ### `validateEvaluability()` → `TValidationResult`
 
-Checks whether the argument is structurally ready to evaluate. Returns `{ ok, issues }`.
+Checks whether the argument is structurally ready to evaluate. Returns `{ ok, issues }`. As of v0.11.0, the sweep includes a derivation premise pre-flight: every `type: "derivation"` premise is validated via `validateDerivationStructure`. Broken derivation premises produce issues with code `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` and prevent `evaluate()` and `checkValidity()` from proceeding. Use `validateDerivationStructures()` to isolate derivation checks without running the full evaluability sweep.
 
 ---
 
@@ -905,6 +957,102 @@ Returns a snapshot of the premise's owned state (premise metadata, expression sn
 ### `static fromSnapshot(snapshot, argument, variables, expressionIndex?)` → `PremiseEngine`
 
 Reconstructs a `PremiseEngine` from a snapshot, with the argument and `VariableManager` passed as dependencies. An optional `expressionIndex` map (expressionId → premiseId) is populated with the restored expressions.
+
+---
+
+## `ManagedDerivationPremiseEngine`
+
+Opt-in subclass of `PremiseEngine` that enforces the derivation premise invariants on every mutation. Import from `@proposit/proposit-core`.
+
+_Since v0.11.0._
+
+### `new ManagedDerivationPremiseEngine(premise, deps, config?)`
+
+Constructs a managed engine. Validates immediately that `premise.type === "derivation"` — throws `InvariantViolationError(DERIVATION_TYPE_MISMATCH)` otherwise. Expression-tree structural validation is deferred to `fromSnapshot` and mutation overrides because premises are always constructed before expressions are loaded.
+
+- `premise` — `TOptionalChecksum<TPremise>` with `type: "derivation"` and `derivedClaimId`.
+- `deps` — `{ argument, variables, expressionIndex? }` (same as `PremiseEngine` constructor).
+- `config?` — optional `TLogicEngineOptions`.
+
+---
+
+### `static fromSnapshot(snapshot, argument, variables, expressionIndex?, grammarConfig?, generateId?)` → `ManagedDerivationPremiseEngine`
+
+Reconstructs a `ManagedDerivationPremiseEngine` from a snapshot. Delegates to `PremiseEngine.fromSnapshot` for full restoration, then upgrades the prototype and validates:
+
+1. Checks `snapshot.premise.type === "derivation"` — throws `DERIVATION_TYPE_MISMATCH` if not.
+2. Restores all expressions via the parent's restoration logic.
+3. Validates the full tree against derivation structural rules — throws `DERIVATION_STRUCTURE_INVALID` if the tree is malformed.
+
+The `generateId` parameter is stored on the instance for use by `populateFromCitations`.
+
+---
+
+### `populateFromCitations(citationLib, argumentEngine)` → `void`
+
+One-shot helper that builds the antecedent of this derivation premise from the current global citations of the derived claim. Behavior by citation count:
+
+- **`n = 0`** — no change; the premise stays in its current form (typically naked-Q).
+- **`n = 1`** — produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
+- **`n ≥ 2`** — produces `IMPLIES(OR(VariableExpression(S1), …, VariableExpression(Sn)), VariableExpression(Q))`.
+
+For each cited source, calls `argumentEngine.ensureClaimBoundVariable(citation.sourceClaimId)` to materialize a claim-bound variable. The antecedent construction uses `super.*` calls internally to bypass per-mutation overrides, then validates the final tree with `assertWellFormed()`.
+
+Throws `InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY)` when the derivation premise already has a non-empty antecedent (i.e., root is `implies`/`iff` with a position-0 child). Delete and re-create the premise to repopulate.
+
+---
+
+### Mutation overrides
+
+All `PremiseEngine` mutation methods are overridden to enforce derivation rules. Each override calls `assertWellFormed()` after the mutation (or before, for `loadExpressions`):
+
+| Method                  | Additional enforcement                                                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `addExpression`         | Validates tree after.                                                                                                                              |
+| `appendExpression`      | Validates tree after.                                                                                                                              |
+| `addExpressionRelative` | Validates tree after.                                                                                                                              |
+| `updateExpression`      | Blocks changes to the consequent's `variableId` or `operator` (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                              |
+| `removeExpression`      | Blocks removal of the consequent expression (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                                |
+| `insertExpression`      | Blocks insertion into the consequent slot (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                                  |
+| `toggleNegation`        | Blocks negation of the consequent expression (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                               |
+| `wrapExpression`        | Blocks wrapping of the consequent expression (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                               |
+| `changeOperator`        | Blocks swapping the root operator to `and`/`or`/`not` (`DERIVATION_ROOT_OPERATOR_INVALID`); only `implies↔iff` is permitted; validates tree after. |
+| `normalizeExpressions`  | Validates tree after normalization (normalization could destroy the consequent structure).                                                         |
+| `loadExpressions`       | Validates the entire proposed expression set before mutation — atomically rejects malformed bulk loads.                                            |
+
+---
+
+## `validateDerivationStructure(premise, expressions, variables)` → `TInvariantValidationResult`
+
+Standalone pure function. Validates that a derivation premise's expression tree conforms to the structural rules:
+
+- Root must be either a single variable expression for the derived claim's variable (naked form), or an `implies`/`iff` operator with arity 2.
+- In implication/biconditional form: position-1 child (consequent slot) must be the variable expression for `derivedClaimId`'s variable. Position-0 child (antecedent) can be any valid expression.
+
+Returns a `TInvariantValidationResult` with one violation per detected rule break, all using `DERIVATION_STRUCTURE_INVALID` (the message differentiates them). Has no engine dependencies; takes raw arrays of expressions and variables.
+
+Exported from `@proposit/proposit-core`.
+
+_Since v0.11.0._
+
+---
+
+## Error Codes
+
+### Derivation premise errors (v0.11.0)
+
+| Code                                          | When thrown                                                                                                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DERIVATION_TYPE_MISMATCH`                    | `ManagedDerivationPremiseEngine` constructed or restored on a non-derivation premise.                                                                               |
+| `DERIVATION_STRUCTURE_INVALID`                | Expression tree violates derivation structural rules (used by `validateDerivationStructure`, `ManagedDerivationPremiseEngine.fromSnapshot`, and `loadExpressions`). |
+| `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`  | A derivation premise tree is broken at `validateEvaluability()` / `validateDerivationStructures()` call time.                                                       |
+| `DERIVATION_CONSEQUENT_LOCKED`                | Mutation targets the locked consequent expression — removal, negation, variable change, operator change, or insertion into consequent slot.                         |
+| `DERIVATION_ROOT_OPERATOR_INVALID`            | `changeOperator` attempted to swap root `implies`/`iff` to a non-implication operator.                                                                              |
+| `DERIVATION_ANTECEDENT_NON_EMPTY`             | `populateFromCitations` called on a premise that already has a non-empty antecedent.                                                                                |
+| `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` | `createPremise({ type: "derivation" })` called without `derivedClaimId`.                                                                                            |
+| `CREATE_DERIVATION_CLAIM_NOT_FOUND`           | `createPremise({ type: "derivation", derivedClaimId })` but claim is not in the library.                                                                            |
+| `CLAIM_NOT_FOUND`                             | `ensureClaimBoundVariable(claimId)` but claim is not in the library.                                                                                                |
+| `LEGACY_PREMISE_MISSING_TYPE`                 | Snapshot restore encountered a premise record without the `type` field (pre-v0.11 data). Use this as a migration trigger.                                           |
 
 ---
 
