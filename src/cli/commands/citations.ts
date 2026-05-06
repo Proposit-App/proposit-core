@@ -66,13 +66,20 @@ export function registerCitationCommands(program: Command): void {
             if (!sourceClaim) {
                 errorExit(`Claim "${sourceClaimId}" not found.`)
             }
-            const citation = core.claimCitations.add({
-                id: randomUUID(),
-                citingClaimId: citingClaim.id,
-                citingClaimVersion: citingClaim.version,
-                sourceClaimId: sourceClaim.id,
-                sourceClaimVersion: sourceClaim.version,
-            })
+            let citation
+            try {
+                citation = core.claimCitations.add({
+                    id: randomUUID(),
+                    citingClaimId: citingClaim.id,
+                    citingClaimVersion: citingClaim.version,
+                    sourceClaimId: sourceClaim.id,
+                    sourceClaimVersion: sourceClaim.version,
+                })
+            } catch (error) {
+                errorExit(
+                    error instanceof Error ? error.message : String(error)
+                )
+            }
             await persistCore(core)
             printLine(citation.id)
         })
