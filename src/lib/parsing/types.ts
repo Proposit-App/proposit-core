@@ -6,7 +6,6 @@ export type TPromptOptions = {
 
 export type TParsingSchemaOptions = {
     claimSchema?: TSchema
-    sourceSchema?: TSchema
     variableSchema?: TSchema
     premiseSchema?: TSchema
     parsedArgumentSchema?: TSchema
@@ -14,7 +13,7 @@ export type TParsingSchemaOptions = {
 }
 
 export type TParserWarningCode =
-    | "UNRESOLVED_SOURCE_MINIID"
+    | "UNRESOLVED_CITATION_MINIID"
     | "UNRESOLVED_CLAIM_MINIID"
     | "UNRESOLVED_CONCLUSION_MINIID"
     | "UNDECLARED_VARIABLE_SYMBOL"

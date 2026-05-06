@@ -1,8 +1,8 @@
 export {
     ParsedClaimRoleType,
+    ParsedClaimTypeType,
     ParsedClaimSchema,
     ParsedVariableSchema,
-    ParsedSourceSchema,
     ParsedPremiseSchema,
     ParsedArgumentSchema,
     ParsedArgumentResponseSchema,
@@ -12,7 +12,6 @@ export {
 export type {
     TParsedClaim,
     TParsedVariable,
-    TParsedSource,
     TParsedPremise,
     TParsedArgument,
     TParsedArgumentResponse,
