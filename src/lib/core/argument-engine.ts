@@ -603,9 +603,9 @@ export class ArgumentEngine<
             const premiseData = {
                 ...extras,
                 id,
-                type: "freeform" as const,
                 argumentId: this.argument.id,
                 argumentVersion: this.argument.version,
+                type: "freeform" as const,
             } as TOptionalChecksum<TPremise>
             const pm = new PremiseEngine<TArg, TPremise, TExpr, TVar>(
                 premiseData,

@@ -205,7 +205,7 @@ export const CoreFreeformPremiseSchema = Type.Object(
     {
         additionalProperties: true,
         description:
-            "A freeform premise — any valid expression tree. Default premise type pre-v0.11.",
+            "A freeform premise — any valid expression tree. Default premise type.",
     }
 )
 
