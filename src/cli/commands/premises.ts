@@ -61,23 +61,64 @@ export function registerPremiseCommands(
             "--symbol <symbol>",
             "Symbol for the auto-created premise-bound variable"
         )
-        .action(async (opts: { title?: string; symbol?: string }) => {
-            await assertNotPublished(argumentId, version)
-            const engine = await hydrateEngine(argumentId, version)
+        .option(
+            "--type <type>",
+            "Premise type: 'freeform' or 'derivation' (default: freeform)"
+        )
+        .option(
+            "--derived-claim <claimId>",
+            "Required when --type=derivation; the id of the derived claim"
+        )
+        .action(
+            async (opts: {
+                title?: string
+                symbol?: string
+                type?: string
+                derivedClaim?: string
+            }) => {
+                const premiseType = opts.type ?? "freeform"
+                if (premiseType !== "freeform" && premiseType !== "derivation") {
+                    errorExit(
+                        `--type must be 'freeform' or 'derivation' (got '${premiseType}')`
+                    )
+                }
+                if (premiseType === "derivation" && !opts.derivedClaim) {
+                    errorExit(
+                        "premises create --type=derivation requires --derived-claim <claimId>"
+                    )
+                }
 
-            const id = randomUUID()
-            const extras: Record<string, unknown> = {}
-            if (opts.title) extras.title = opts.title
+                await assertNotPublished(argumentId, version)
+                const engine = await hydrateEngine(argumentId, version)
 
-            try {
-                engine.createPremiseWithId(id, extras, opts.symbol)
-            } catch (err) {
-                errorExit(err instanceof Error ? err.message : String(err))
+                const id = randomUUID()
+                const extras: Record<string, unknown> = {}
+                if (opts.title) extras.title = opts.title
+
+                try {
+                    if (premiseType === "derivation") {
+                        engine.createPremiseWithId(id, {
+                            type: "derivation",
+                            derivedClaimId: opts.derivedClaim,
+                            extras,
+                            symbol: opts.symbol,
+                        })
+                    } else {
+                        engine.createPremiseWithId(id, extras, opts.symbol)
+                    }
+                } catch (err) {
+                    errorExit(err instanceof Error ? err.message : String(err))
+                }
+
+                await persistEngine(engine)
+                printLine(
+                    id +
+                        (premiseType === "derivation"
+                            ? ` (derivation for claim ${opts.derivedClaim})`
+                            : "")
+                )
             }
-
-            await persistEngine(engine)
-            printLine(id)
-        })
+        )
 
     premises
         .command("list")
