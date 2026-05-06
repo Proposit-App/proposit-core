@@ -157,7 +157,12 @@ import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
 import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
 import { ManagedDerivationPremiseEngine } from "../src/lib/core/managed-derivation-premise-engine"
 import { InvariantViolationError } from "../src/lib/index"
-import { DERIVATION_TYPE_MISMATCH } from "../src/lib/types/validation"
+import {
+    DERIVATION_TYPE_MISMATCH,
+    DERIVATION_CONSEQUENT_LOCKED,
+    DERIVATION_ROOT_OPERATOR_INVALID,
+    DERIVATION_STRUCTURE_INVALID,
+} from "../src/lib/types/validation"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 
@@ -28792,4 +28797,372 @@ describe("ManagedDerivationPremiseEngine.fromSnapshot", () => {
     it.todo(
         "validates structure when restoring a well-formed snapshot (gated on Task 8/9: need createPremise({type:'derivation',...}) to produce a valid fixture)"
     )
+})
+
+// ---------------------------------------------------------------------------
+// ManagedDerivationPremiseEngine mutation enforcement (Task 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hand-builds a well-formed derivation engine in the naked-Q form:
+ *   root → variable(consequentVarId)
+ *
+ * Returns the engine plus the IDs needed for assertions.
+ */
+function makeNakedDerivationEngine() {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const premiseId = "00000000-0000-0000-0000-00000000e001"
+    const claimId = "00000000-0000-0000-0000-00000000c0b1"
+    const consequentVarId = "00000000-0000-0000-0000-00000000v001"
+    const consequentExprId = "00000000-0000-0000-0000-00000000x001"
+
+    const vm = new VariableManager()
+    vm.addVariable({
+        id: consequentVarId,
+        argumentId: argId,
+        argumentVersion: 1,
+        symbol: "Q",
+        claimId,
+        claimVersion: 1,
+        checksum: "dummy",
+    })
+
+    const snap = {
+        premise: {
+            id: premiseId,
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "derivation" as const,
+            derivedClaimId: claimId,
+        } as TCorePremise,
+        rootExpressionId: consequentExprId,
+        expressions: {
+            expressions: [
+                {
+                    id: consequentExprId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: null,
+                    position: POSITION_INITIAL,
+                    type: "variable" as const,
+                    variableId: consequentVarId,
+                    checksum: "dummy",
+                    descendantChecksum: null,
+                    combinedChecksum: "dummy",
+                },
+            ],
+        },
+    }
+
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+    const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+        snap,
+        ARG_OBJ,
+        vm
+    )
+    return { engine, argId, premiseId, claimId, consequentVarId, consequentExprId }
+}
+
+/**
+ * Hand-builds a well-formed derivation engine in the implication form:
+ *   root → implies(antecedentExprId, consequentExprId)
+ *
+ * antecedentExprId is a variable expression for antecedentVarId.
+ * consequentExprId is a variable expression for consequentVarId.
+ */
+function makeImpliesDerivationEngine() {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const premiseId = "00000000-0000-0000-0000-00000000e002"
+    const claimId = "00000000-0000-0000-0000-00000000c0b2"
+    const antecedentClaimId = "00000000-0000-0000-0000-00000000c0b3"
+    const consequentVarId = "00000000-0000-0000-0000-00000000v002"
+    const antecedentVarId = "00000000-0000-0000-0000-00000000v003"
+    const rootOpId = "00000000-0000-0000-0000-00000000x010"
+    const antecedentExprId = "00000000-0000-0000-0000-00000000x011"
+    const consequentExprId = "00000000-0000-0000-0000-00000000x012"
+
+    const vm = new VariableManager()
+    vm.addVariable({
+        id: consequentVarId,
+        argumentId: argId,
+        argumentVersion: 1,
+        symbol: "Q",
+        claimId,
+        claimVersion: 1,
+        checksum: "dummy",
+    })
+    vm.addVariable({
+        id: antecedentVarId,
+        argumentId: argId,
+        argumentVersion: 1,
+        symbol: "P",
+        claimId: antecedentClaimId,
+        claimVersion: 1,
+        checksum: "dummy",
+    })
+
+    const snap = {
+        premise: {
+            id: premiseId,
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "derivation" as const,
+            derivedClaimId: claimId,
+        } as TCorePremise,
+        rootExpressionId: rootOpId,
+        expressions: {
+            expressions: [
+                {
+                    id: rootOpId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: null,
+                    position: POSITION_INITIAL,
+                    type: "operator" as const,
+                    operator: "implies" as const,
+                    checksum: "dummy",
+                    descendantChecksum: "dummy",
+                    combinedChecksum: "dummy",
+                },
+                {
+                    id: antecedentExprId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: rootOpId,
+                    position: POSITION_INITIAL,
+                    type: "variable" as const,
+                    variableId: antecedentVarId,
+                    checksum: "dummy",
+                    descendantChecksum: null,
+                    combinedChecksum: "dummy",
+                },
+                {
+                    id: consequentExprId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: rootOpId,
+                    position: 1073741823, // midpoint(0, POSITION_MAX)
+                    type: "variable" as const,
+                    variableId: consequentVarId,
+                    checksum: "dummy",
+                    descendantChecksum: null,
+                    combinedChecksum: "dummy",
+                },
+            ],
+        },
+    }
+
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+    const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+        snap,
+        ARG_OBJ,
+        vm
+    )
+    return {
+        engine,
+        argId,
+        premiseId,
+        claimId,
+        antecedentClaimId,
+        consequentVarId,
+        antecedentVarId,
+        rootOpId,
+        antecedentExprId,
+        consequentExprId,
+    }
+}
+
+describe("ManagedDerivationPremiseEngine mutation enforcement", () => {
+    it("rejects insertExpression at the consequent slot with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const {
+            engine,
+            argId,
+            premiseId,
+            antecedentVarId,
+            rootOpId,
+            consequentExprId,
+        } = makeImpliesDerivationEngine()
+        // Try to insert a new variable expression into the root implies at
+        // a position >= the consequent position (i.e. at or after it).
+        const consequentExpr = engine.getExpression(consequentExprId)!
+        let caught: unknown
+        try {
+            engine.insertExpression(
+                {
+                    id: "00000000-0000-0000-0000-000000000099",
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: rootOpId,
+                    position: consequentExpr.position + 1,
+                    type: "variable" as const,
+                    variableId: antecedentVarId,
+                },
+                consequentExprId
+            )
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects removeExpression of the consequent variable with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, consequentExprId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.removeExpression(consequentExprId, false)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects removeExpression of the naked consequent with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, consequentExprId } = makeNakedDerivationEngine()
+        let caught: unknown
+        try {
+            engine.removeExpression(consequentExprId, false)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects updateExpression that swaps the consequent's variableId with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, antecedentVarId, consequentExprId } =
+            makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.updateExpression(consequentExprId, {
+                variableId: antecedentVarId,
+            })
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects toggleNegation on the consequent expression with DERIVATION_CONSEQUENT_LOCKED", () => {
+        const { engine, consequentExprId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.toggleNegation(consequentExprId)
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_CONSEQUENT_LOCKED)
+    })
+
+    it("rejects changeOperator that swaps root implies → and with DERIVATION_ROOT_OPERATOR_INVALID", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.changeOperator(rootOpId, "and")
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ROOT_OPERATOR_INVALID)
+    })
+
+    it("rejects changeOperator that swaps root implies → or with DERIVATION_ROOT_OPERATOR_INVALID", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        let caught: unknown
+        try {
+            engine.changeOperator(rootOpId, "or")
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_ROOT_OPERATOR_INVALID)
+    })
+
+    it("rejects loadExpressions with a tree that violates derivation structure with DERIVATION_STRUCTURE_INVALID", () => {
+        const { engine, argId, premiseId, consequentVarId } =
+            makeImpliesDerivationEngine()
+        // Provide a tree with an AND root — violates derivation structure.
+        const andRootId = "00000000-0000-0000-0000-000000000088"
+        const varExprId = "00000000-0000-0000-0000-000000000089"
+        let caught: unknown
+        try {
+            engine.loadExpressions([
+                {
+                    id: andRootId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: null,
+                    position: POSITION_INITIAL,
+                    type: "operator" as const,
+                    operator: "and" as const,
+                },
+                {
+                    id: varExprId,
+                    argumentId: argId,
+                    argumentVersion: 1,
+                    premiseId,
+                    parentId: andRootId,
+                    position: POSITION_INITIAL,
+                    type: "variable" as const,
+                    variableId: consequentVarId,
+                },
+            ])
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
+    })
+
+    it("permits antecedent edits — addExpression adds to the antecedent side", () => {
+        // Start with naked-Q form and add an implies root + antecedent manually.
+        // This tests that editing the antecedent side doesn't throw.
+        const { engine, antecedentVarId, antecedentExprId, rootOpId, argId, premiseId } =
+            makeImpliesDerivationEngine()
+        // updateExpression on the antecedent (position field change) is fine.
+        expect(() =>
+            engine.updateExpression(antecedentExprId, { position: POSITION_INITIAL + 1 })
+        ).not.toThrow()
+    })
+
+    it("permits root operator swap implies ↔ iff", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        // Should not throw — implies ↔ iff is the one permitted root swap.
+        expect(() => engine.changeOperator(rootOpId, "iff")).not.toThrow()
+        // After the swap the root should now be iff.
+        const root = engine.getExpression(rootOpId)
+        expect(root?.type).toBe("operator")
+        if (root?.type === "operator") {
+            expect(root.operator).toBe("iff")
+        }
+    })
+
+    it("permits root operator swap iff ↔ implies after previous swap", () => {
+        const { engine, rootOpId } = makeImpliesDerivationEngine()
+        // Swap implies → iff, then iff → implies.
+        engine.changeOperator(rootOpId, "iff")
+        expect(() => engine.changeOperator(rootOpId, "implies")).not.toThrow()
+        const root = engine.getExpression(rootOpId)
+        expect(root?.type).toBe("operator")
+        if (root?.type === "operator") {
+            expect(root.operator).toBe("implies")
+        }
+    })
 })

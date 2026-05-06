@@ -1,21 +1,33 @@
 import {
     type TCoreArgument,
     type TCoreDerivationPremise,
+    type TCoreLogicalOperatorType,
     type TCorePremise,
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
     type TOptionalChecksum,
 } from "../schemata/index.js"
-import { PremiseEngine, type TPremiseEngineSnapshot } from "./premise-engine.js"
+import {
+    PremiseEngine,
+    type TPremiseEngineSnapshot,
+} from "./premise-engine.js"
 import { VariableManager } from "./variable-manager.js"
 import type { TLogicEngineOptions } from "./argument-engine.js"
 import type { TGrammarConfig } from "../types/grammar.js"
 import {
     DERIVATION_TYPE_MISMATCH,
     DERIVATION_STRUCTURE_INVALID,
+    DERIVATION_CONSEQUENT_LOCKED,
+    DERIVATION_ROOT_OPERATOR_INVALID,
 } from "../types/validation.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 import { validateDerivationStructure } from "../utils/derivation-validation.js"
+import type {
+    TExpressionInput,
+    TExpressionWithoutPosition,
+    TExpressionUpdate,
+} from "./expression-manager.js"
+import type { TCoreMutationResult } from "../types/mutation.js"
 
 /**
  * A managed engine for derivation premises that enforces structural rules
@@ -166,6 +178,331 @@ export class ManagedDerivationPremiseEngine<
                 message: `${DERIVATION_STRUCTURE_INVALID}: ${v.message}`,
             }))
             throw new InvariantViolationError(prefixed)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Mutation overrides — enforce derivation invariants on every change
+    // -------------------------------------------------------------------------
+
+    public override addExpression(
+        expression: TExpressionInput<TExpr>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        const result = super.addExpression(expression)
+        this.assertWellFormed()
+        return result
+    }
+
+    public override appendExpression(
+        parentId: string | null,
+        expression: TExpressionWithoutPosition<TExpr>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        const result = super.appendExpression(parentId, expression)
+        this.assertWellFormed()
+        return result
+    }
+
+    public override addExpressionRelative(
+        siblingId: string,
+        relativePosition: "before" | "after",
+        expression: TExpressionWithoutPosition<TExpr>
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        const result = super.addExpressionRelative(
+            siblingId,
+            relativePosition,
+            expression
+        )
+        this.assertWellFormed()
+        return result
+    }
+
+    public override updateExpression(
+        expressionId: string,
+        updates: TExpressionUpdate
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        this.assertConsequentNotMutated(expressionId, updates)
+        const result = super.updateExpression(expressionId, updates)
+        this.assertWellFormed()
+        return result
+    }
+
+    public override removeExpression(
+        expressionId: string,
+        deleteSubtree: boolean
+    ): TCoreMutationResult<TExpr | undefined, TExpr, TVar, TPremise, TArg> {
+        this.assertNotConsequentExpression(expressionId)
+        const result = super.removeExpression(expressionId, deleteSubtree)
+        this.assertWellFormed()
+        return result
+    }
+
+    public override insertExpression(
+        expression: TExpressionInput<TExpr>,
+        leftNodeId?: string,
+        rightNodeId?: string
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        this.assertNotConsequentSlot(expression)
+        const result = super.insertExpression(expression, leftNodeId, rightNodeId)
+        this.assertWellFormed()
+        return result
+    }
+
+    public override toggleNegation(
+        expressionId: string,
+        extraFields?: Partial<TExpr>
+    ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
+        this.assertNotConsequentExpression(expressionId)
+        const result = super.toggleNegation(expressionId, extraFields)
+        this.assertWellFormed()
+        return result
+    }
+
+    public override wrapExpression(
+        operator: TExpressionWithoutPosition<TExpr>,
+        newSibling: TExpressionWithoutPosition<TExpr>,
+        leftNodeId?: string,
+        rightNodeId?: string
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        this.assertNotConsequentExpression(
+            leftNodeId ?? rightNodeId ?? operator.id
+        )
+        const result = super.wrapExpression(
+            operator,
+            newSibling,
+            leftNodeId,
+            rightNodeId
+        )
+        this.assertWellFormed()
+        return result
+    }
+
+    public override changeOperator(
+        expressionId: string,
+        newOperator: TCoreLogicalOperatorType,
+        sourceChildId?: string,
+        targetChildId?: string,
+        extraFields?: Partial<TExpr>
+    ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg> {
+        this.assertRootOperatorChangeValid(expressionId, newOperator)
+        const result = super.changeOperator(
+            expressionId,
+            newOperator,
+            sourceChildId,
+            targetChildId,
+            extraFields
+        )
+        this.assertWellFormed()
+        return result
+    }
+
+    public override normalizeExpressions(): TCoreMutationResult<
+        void,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    > {
+        const result = super.normalizeExpressions()
+        // Post-validate: normalization could destroy the consequent structure.
+        // assertWellFormed throws DERIVATION_STRUCTURE_INVALID if so.
+        this.assertWellFormed()
+        return result
+    }
+
+    public override loadExpressions(
+        expressions: TExpressionInput<TExpr>[]
+    ): void {
+        // Pre-validate the proposed expression set BEFORE mutation because
+        // loadExpressions is a bulk replace — we need to reject the whole set
+        // atomically rather than rolling back after the fact.
+        const premise = this.premise as TCoreDerivationPremise
+        const validationResult = validateDerivationStructure(
+            premise,
+            // TExpressionInput strips checksum fields, but validateDerivationStructure
+            // only reads parentId, type, variableId, operator, position, premiseId —
+            // all of which are present on TExpressionInput.
+            expressions as unknown as TCorePropositionalExpression[],
+            this.variables.toArray()
+        )
+        if (validationResult.violations.length > 0) {
+            const prefixed = validationResult.violations.map((v) => ({
+                ...v,
+                message: `${DERIVATION_STRUCTURE_INVALID}: ${v.message}`,
+            }))
+            throw new InvariantViolationError(prefixed)
+        }
+        super.loadExpressions(expressions)
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns the ID of the consequent expression, or `undefined` if the tree
+     * has no root yet.
+     *
+     * - Naked form (root is a variable expression): the root IS the consequent.
+     * - Implication/biconditional form (root is `implies`/`iff`): the position-1
+     *   child of the root is the consequent.
+     */
+    private getConsequentExpressionId(): string | undefined {
+        const rootId = this.rootExpressionId
+        if (rootId === undefined) {
+            return undefined
+        }
+        const root = this.expressions.getExpression(rootId)
+        if (!root) {
+            return undefined
+        }
+        if (root.type === "variable") {
+            // Naked form — root IS the consequent.
+            return rootId
+        }
+        if (
+            root.type === "operator" &&
+            (root.operator === "implies" || root.operator === "iff")
+        ) {
+            // Implication/biconditional form — position-1 child is the consequent.
+            const children = this.expressions
+                .getChildExpressions(rootId)
+                .sort((a, b) => a.position - b.position)
+            return children[1]?.id
+        }
+        return undefined
+    }
+
+    /**
+     * Reject an `insertExpression` call that would place a new node into the
+     * consequent slot (position 1) of the root `implies`/`iff`.
+     *
+     * The check: root is `implies`/`iff` AND the new expression's parentId
+     * equals the root id AND it will be inserted at the position-1 slot.
+     * Since insertExpression takes an already-positioned expression, we detect
+     * the consequent slot by checking that parentId === rootId and the
+     * expression will become the second child (i.e., it is being reparented
+     * into position-1 via wrapping — which is how insertExpression is used).
+     *
+     * Specifically: `insertExpression(expr, leftNodeId, rightNodeId)` inserts
+     * `expr` between `leftNodeId` and `rightNodeId`. We block the call when
+     * `expr.parentId === rootId` AND the existing consequent would be displaced
+     * (i.e., `rightNodeId` is the current consequent).
+     */
+    private assertNotConsequentSlot(expression: TExpressionInput<TExpr>): void {
+        const rootId = this.rootExpressionId
+        if (rootId === undefined) {
+            return
+        }
+        const root = this.expressions.getExpression(rootId)
+        if (
+            !root ||
+            root.type !== "operator" ||
+            (root.operator !== "implies" && root.operator !== "iff")
+        ) {
+            return
+        }
+        // The consequent is the position-1 child of the root operator.
+        const consequentId = this.getConsequentExpressionId()
+        if (!consequentId) {
+            return
+        }
+        // Block if the incoming expression is being inserted directly under root
+        // with position 1 (i.e., it claims the consequent slot).
+        if (expression.parentId === rootId) {
+            // Determine the consequent's current position to compare.
+            const consequentExpr =
+                this.expressions.getExpression(consequentId)
+            if (
+                consequentExpr &&
+                expression.position >= consequentExpr.position
+            ) {
+                throw new InvariantViolationError([
+                    {
+                        code: DERIVATION_CONSEQUENT_LOCKED,
+                        message: `${DERIVATION_CONSEQUENT_LOCKED}: Cannot insert an expression into the consequent slot of a derivation premise`,
+                        entityType: "expression",
+                        entityId: expression.id,
+                        premiseId: (this.premise as TCorePremise).id,
+                    },
+                ])
+            }
+        }
+    }
+
+    /**
+     * Reject `removeExpression` and `toggleNegation` calls on the consequent
+     * expression.
+     */
+    private assertNotConsequentExpression(exprId: string): void {
+        const consequentId = this.getConsequentExpressionId()
+        if (consequentId !== undefined && exprId === consequentId) {
+            throw new InvariantViolationError([
+                {
+                    code: DERIVATION_CONSEQUENT_LOCKED,
+                    message: `${DERIVATION_CONSEQUENT_LOCKED}: Cannot remove or negate the consequent expression of a derivation premise`,
+                    entityType: "expression",
+                    entityId: exprId,
+                    premiseId: (this.premise as TCorePremise).id,
+                },
+            ])
+        }
+    }
+
+    /**
+     * Reject `updateExpression` calls that change the consequent's `variableId`
+     * or `type`.
+     */
+    private assertConsequentNotMutated(
+        exprId: string,
+        updates: TExpressionUpdate
+    ): void {
+        const consequentId = this.getConsequentExpressionId()
+        if (consequentId === undefined || exprId !== consequentId) {
+            return
+        }
+        if (updates.variableId !== undefined || updates.operator !== undefined) {
+            throw new InvariantViolationError([
+                {
+                    code: DERIVATION_CONSEQUENT_LOCKED,
+                    message: `${DERIVATION_CONSEQUENT_LOCKED}: Cannot change the variable or operator of the consequent expression of a derivation premise`,
+                    entityType: "expression",
+                    entityId: exprId,
+                    premiseId: (this.premise as TCorePremise).id,
+                },
+            ])
+        }
+    }
+
+    /**
+     * Reject `changeOperator` calls that would swap the root `implies`/`iff`
+     * to a non-implication operator (`and`, `or`, `not`).
+     */
+    private assertRootOperatorChangeValid(
+        exprId: string,
+        newOperator: TCoreLogicalOperatorType
+    ): void {
+        const rootId = this.rootExpressionId
+        if (rootId === undefined || exprId !== rootId) {
+            return
+        }
+        const root = this.expressions.getExpression(rootId)
+        if (
+            !root ||
+            root.type !== "operator" ||
+            (root.operator !== "implies" && root.operator !== "iff")
+        ) {
+            return
+        }
+        if (newOperator !== "implies" && newOperator !== "iff") {
+            throw new InvariantViolationError([
+                {
+                    code: DERIVATION_ROOT_OPERATOR_INVALID,
+                    message: `${DERIVATION_ROOT_OPERATOR_INVALID}: Cannot change a derivation premise's root operator from "${root.operator}" to "${newOperator}" — only implies↔iff swaps are permitted`,
+                    entityType: "expression",
+                    entityId: exprId,
+                    premiseId: (this.premise as TCorePremise).id,
+                },
+            ])
         }
     }
 }
