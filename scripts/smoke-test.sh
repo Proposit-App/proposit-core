@@ -426,23 +426,176 @@ $CLI claims freeze "$CLAIM1"
 $CLI claims show "$CLAIM1"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9n. SOURCES — add, list, show, link-claim, unlink
+# 9n. CITATIONS — citation-typed claims, citation edges, strict-type rejection
 # ─────────────────────────────────────────────────────────────────────────────
-section "9n. sources"
-SRC1=$($CLI sources add --text "Journal of Atmospheric Sciences, 2024")
-echo "SRC1=$SRC1"
+section "9n. citations"
 
-$CLI sources list
-$CLI sources list --json
-$CLI sources show "$SRC1"
-$CLI sources show "$SRC1" --json
+# Create a citation-typed claim (the source side of a citation edge).
+CITE_CLAIM=$($CLI claims add --type=citation \
+    --title "Journal of Atmospheric Sciences, 2024" \
+    --body "Smith et al., \"Rainfall and pavement friction\"")
+echo "CITE_CLAIM=$CITE_CLAIM"
 
-# Link the source to the claim (use the frozen version: v0)
-ASSOC=$($CLI sources link-claim "$SRC1" "$CLAIM1")
-echo "ASSOC=$ASSOC"
+# Verify the claim list now includes the new citation-typed claim.
+$CLI claims list
+$CLI claims list --json
 
-# Unlink
-$CLI sources unlink "$ASSOC"
+# Citation library should be empty before any edges are added.
+$CLI citations list
+$CLI citations list --json
+
+# Add a citation edge: CLAIM1 (normal) cites CITE_CLAIM (citation).
+CITATION=$($CLI citations add "$CLAIM1" "$CITE_CLAIM")
+echo "CITATION=$CITATION"
+
+# List and show the new citation edge.
+$CLI citations list
+$CLI citations list --json
+$CLI citations show "$CITATION"
+$CLI citations show "$CITATION" --json
+
+# Strict source-side type rule: a normal claim must not appear on the source
+# side. Inverting the order (citation cites normal) must be rejected by the
+# library and surfaced as a non-zero exit.
+section "9n2. citations — strict source-side type rejection"
+echo "--- expecting failure: cannot cite a normal claim as a source ---"
+if $CLI citations add "$CITE_CLAIM" "$CLAIM1" 2>/tmp/proposit-cite-err; then
+    echo "FAIL: citations add accepted a normal claim on the source side"
+    cat /tmp/proposit-cite-err
+    exit 1
+fi
+echo "--- got expected error: ---"
+cat /tmp/proposit-cite-err
+rm -f /tmp/proposit-cite-err
+
+# Unlink the citation edge created above.
+$CLI citations unlink "$CITATION"
+$CLI citations list
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9o. MIGRATION — legacy v0.9 state directory upgraded to v0.10 layout
+# ─────────────────────────────────────────────────────────────────────────────
+section "9o. migration — pre-v0.10 state directory"
+
+# Use a fresh isolated state dir for the migration run so it doesn't disturb
+# the main smoke-test corpus. Pre-populate it with legacy snapshots: a
+# `sources.json` file (pre-v0.10 source library) and a
+# `claim-source-associations.json` file (pre-v0.10 association library).
+# These snapshot shapes match what pre-v0.10 CLIs would have written.
+MIGRATE_HOME="$(mktemp -d)"
+trap 'rm -rf "$PROPOSIT_HOME" "$MIGRATE_HOME"' EXIT
+
+cat > "$MIGRATE_HOME/claims.json" <<'JSON'
+{
+    "claims": [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "version": 0,
+            "frozen": true,
+            "checksum": "deadbeef",
+            "title": "Pre-existing normal claim"
+        }
+    ]
+}
+JSON
+
+cat > "$MIGRATE_HOME/sources.json" <<'JSON'
+{
+    "sources": [
+        {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "version": 0,
+            "frozen": true,
+            "checksum": "cafebabe",
+            "text": "Legacy source: Atmospheric Sciences Vol. 12"
+        }
+    ]
+}
+JSON
+
+cat > "$MIGRATE_HOME/claim-source-associations.json" <<'JSON'
+{
+    "claimSourceAssociations": [
+        {
+            "id": "33333333-3333-3333-3333-333333333333",
+            "claimId": "11111111-1111-1111-1111-111111111111",
+            "claimVersion": 0,
+            "sourceId": "22222222-2222-2222-2222-222222222222",
+            "sourceVersion": 0,
+            "checksum": "f00dface"
+        }
+    ]
+}
+JSON
+
+# Sanity check: marker should not exist yet.
+if [ -f "$MIGRATE_HOME/.proposit-v0.10" ]; then
+    echo "FAIL: migration marker exists before first CLI invocation"
+    exit 1
+fi
+
+# Trigger migration by running any command that hydrates the core. Note: any
+# state-touching command runs `migrateV010` first.
+PROPOSIT_HOME="$MIGRATE_HOME" $CLI claims list
+
+# Marker file must now exist.
+if [ ! -f "$MIGRATE_HOME/.proposit-v0.10" ]; then
+    echo "FAIL: migration marker missing after migration run"
+    ls -la "$MIGRATE_HOME"
+    exit 1
+fi
+echo "marker present: $(ls "$MIGRATE_HOME/.proposit-v0.10")"
+
+# Legacy files must be gone.
+if [ -f "$MIGRATE_HOME/sources.json" ]; then
+    echo "FAIL: sources.json still present post-migration"
+    exit 1
+fi
+if [ -f "$MIGRATE_HOME/claim-source-associations.json" ]; then
+    echo "FAIL: claim-source-associations.json still present post-migration"
+    exit 1
+fi
+
+# Post-migration files must exist with the new shape.
+if [ ! -f "$MIGRATE_HOME/claims.json" ]; then
+    echo "FAIL: claims.json missing post-migration"
+    exit 1
+fi
+if [ ! -f "$MIGRATE_HOME/claim-citations.json" ]; then
+    echo "FAIL: claim-citations.json missing post-migration"
+    exit 1
+fi
+
+# claims.json should now contain both the original normal claim (with
+# type='normal' backfilled) and the migrated source as a citation-typed
+# claim. claim-citations.json should hold the renamed citation edge.
+echo "--- migrated claims.json ---"
+cat "$MIGRATE_HOME/claims.json"
+echo "--- migrated claim-citations.json ---"
+cat "$MIGRATE_HOME/claim-citations.json"
+
+# Verify shape via grep: both 'normal' and 'citation' types must appear, and
+# the citation edge must use the renamed citingClaimId/sourceClaimId fields.
+grep -q '"type": "normal"' "$MIGRATE_HOME/claims.json" || {
+    echo "FAIL: pre-existing claim was not backfilled with type='normal'"
+    exit 1
+}
+grep -q '"type": "citation"' "$MIGRATE_HOME/claims.json" || {
+    echo "FAIL: legacy source was not converted to a citation-typed claim"
+    exit 1
+}
+grep -q '"citingClaimId"' "$MIGRATE_HOME/claim-citations.json" || {
+    echo "FAIL: migrated citation does not use citingClaimId field"
+    exit 1
+}
+grep -q '"sourceClaimId"' "$MIGRATE_HOME/claim-citations.json" || {
+    echo "FAIL: migrated citation does not use sourceClaimId field"
+    exit 1
+}
+
+# Re-running the CLI must be a no-op for migration (marker prevents re-run).
+PROPOSIT_HOME="$MIGRATE_HOME" $CLI claims list
+echo "migration is idempotent (marker honored)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 10. PUBLISH and VERSION SELECTORS
