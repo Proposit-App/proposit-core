@@ -2198,13 +2198,6 @@ export class ArgumentEngine<
      *
      * @since 0.11.0
      */
-    /**
-     * Returns the derivation-specific subset of `validateEvaluability` checks.
-     * Apps can pre-check derivation premise structures before invoking the full
-     * evaluation pipeline.
-     *
-     * @since 0.11.0
-     */
     public validateDerivationStructures(): TInvariantValidationResult {
         const violations: TInvariantValidationResult["violations"] = []
         for (const { violation } of this.collectDerivationViolations()) {
