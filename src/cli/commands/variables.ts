@@ -54,6 +54,7 @@ export function registerVariableCommands(
             // Auto-create a frozen claim for the variable
             const claim = core.claims.create({
                 id: randomUUID(),
+                type: "normal",
                 title: symbol,
             } as Parameters<typeof core.claims.create>[0])
             core.claims.freeze(claim.id)

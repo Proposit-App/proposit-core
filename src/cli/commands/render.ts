@@ -91,47 +91,79 @@ export function registerRenderCommand(
                 }
             }
 
-            // Claims — only those referenced by this argument's variables
-            const referencedClaims = variables
+            // Claims — those referenced by this argument's variables, plus
+            // any citation-typed claims reachable via citation edges.
+            // Citation-typed claims render inline with a [citation] badge.
+            const directlyReferencedClaims = variables
                 .map((v) => v as unknown as TCorePropositionalVariable)
                 .filter(isClaimBound)
                 .map((v) => core.claims.get(v.claimId, v.claimVersion))
                 .filter((c) => c !== undefined)
+
+            // Walk the citation graph from the directly referenced claims,
+            // collecting every reachable claim (and the citation edges
+            // between them) so the render output covers the full closure.
+            const claimByKey = new Map<string, (typeof directlyReferencedClaims)[number]>()
+            for (const claim of directlyReferencedClaims) {
+                claimByKey.set(`${claim.id}@${claim.version}`, claim)
+            }
+            const referencedCitations: ReturnType<
+                typeof core.claimCitations.getAll
+            > = []
+            const seenCitationIds = new Set<string>()
+            const frontier: string[] = directlyReferencedClaims.map(
+                (c) => c.id
+            )
+            const visitedClaimIds = new Set(frontier)
+            while (frontier.length > 0) {
+                const claimId = frontier.pop()!
+                const outgoing =
+                    core.claimCitations.getCitationsForCitingClaim(claimId)
+                for (const citation of outgoing) {
+                    if (seenCitationIds.has(citation.id)) continue
+                    seenCitationIds.add(citation.id)
+                    referencedCitations.push(citation)
+                    const sourceClaim = core.claims.get(
+                        citation.sourceClaimId,
+                        citation.sourceClaimVersion
+                    )
+                    if (sourceClaim) {
+                        const key = `${sourceClaim.id}@${sourceClaim.version}`
+                        if (!claimByKey.has(key)) {
+                            claimByKey.set(key, sourceClaim)
+                        }
+                        if (!visitedClaimIds.has(sourceClaim.id)) {
+                            visitedClaimIds.add(sourceClaim.id)
+                            frontier.push(sourceClaim.id)
+                        }
+                    }
+                }
+            }
+
+            const referencedClaims = Array.from(claimByKey.values())
             if (referencedClaims.length > 0) {
                 printLine("")
                 printLine("Claims:")
                 for (const claim of referencedClaims) {
                     const extras = claim as Record<string, unknown>
                     const frozen = claim.frozen ? " [frozen]" : ""
+                    const typeBadge =
+                        claim.type === "citation" ? " [citation]" : ""
                     const meta = extrasString(extras, ["title", "body"])
-                    printLine(`  ${claim.id}@${claim.version}${frozen}${meta}`)
+                    printLine(
+                        `  ${claim.id}@${claim.version}${frozen}${typeBadge}${meta}`
+                    )
                 }
             }
 
-            // Sources — only those associated with referenced claims
-            const referencedClaimKeys = new Set(
-                referencedClaims.map((c) => `${c.id}@${c.version}`)
-            )
-            const allAssocs = core.claimSources.getAll()
-            const referencedSourceKeys = new Set(
-                allAssocs
-                    .filter((a) =>
-                        referencedClaimKeys.has(
-                            `${a.claimId}@${a.claimVersion}`
-                        )
-                    )
-                    .map((a) => `${a.sourceId}@${a.sourceVersion}`)
-            )
-            const referencedSources = core.sources
-                .getAll()
-                .filter((s) => referencedSourceKeys.has(`${s.id}@${s.version}`))
-            if (referencedSources.length > 0) {
+            // Citations — edges between claims (citing -> source).
+            if (referencedCitations.length > 0) {
                 printLine("")
-                printLine("Sources:")
-                for (const source of referencedSources) {
-                    const extras = source as Record<string, unknown>
-                    const meta = extrasString(extras, ["text"])
-                    printLine(`  ${source.id}@${source.version}${meta}`)
+                printLine("Citations:")
+                for (const citation of referencedCitations) {
+                    printLine(
+                        `  ${citation.id} | ${citation.citingClaimId}@${citation.citingClaimVersion} -> ${citation.sourceClaimId}@${citation.sourceClaimVersion}`
+                    )
                 }
             }
         })

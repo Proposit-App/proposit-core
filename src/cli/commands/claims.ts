@@ -21,11 +21,15 @@ export function registerClaimCommands(program: Command): void {
                 for (const claim of all) {
                     const extras = claim as Record<string, unknown>
                     const frozen = claim.frozen ? " [frozen]" : ""
+                    const typeBadge =
+                        claim.type === "citation" ? " [citation]" : ""
                     const title =
                         typeof extras.title === "string"
                             ? ` | ${extras.title}`
                             : ""
-                    printLine(`${claim.id}@${claim.version}${frozen}${title}`)
+                    printLine(
+                        `${claim.id}@${claim.version}${frozen}${typeBadge}${title}`
+                    )
                 }
             }
         })
@@ -46,7 +50,9 @@ export function registerClaimCommands(program: Command): void {
                 for (const v of versions) {
                     const extras = v as Record<string, unknown>
                     const frozen = v.frozen ? " [frozen]" : ""
-                    printLine(`v${v.version}${frozen}`)
+                    const typeBadge =
+                        v.type === "citation" ? " [citation]" : ""
+                    printLine(`v${v.version}${frozen}${typeBadge}`)
                     if (typeof extras.title === "string") {
                         printLine(`  title: ${extras.title}`)
                     }
@@ -60,18 +66,36 @@ export function registerClaimCommands(program: Command): void {
     claims
         .command("add")
         .description("Create a new claim")
+        .option(
+            "--type <type>",
+            "Claim type: 'normal' or 'citation' (default: normal)",
+            "normal"
+        )
         .option("--title <title>", "Short title summarizing the claim")
         .option("--body <body>", "Detailed description of the claim")
-        .action(async (opts: { title?: string; body?: string }) => {
-            const core = await hydratePropositCore()
-            const claim = core.claims.create({
-                id: randomUUID(),
-                ...(opts.title !== undefined ? { title: opts.title } : {}),
-                ...(opts.body !== undefined ? { body: opts.body } : {}),
-            } as Parameters<typeof core.claims.create>[0])
-            await persistCore(core)
-            printLine(claim.id)
-        })
+        .action(
+            async (opts: {
+                type?: string
+                title?: string
+                body?: string
+            }) => {
+                const claimType = opts.type ?? "normal"
+                if (claimType !== "normal" && claimType !== "citation") {
+                    errorExit(
+                        `Invalid --type value "${claimType}". Must be "normal" or "citation".`
+                    )
+                }
+                const core = await hydratePropositCore()
+                const claim = core.claims.create({
+                    id: randomUUID(),
+                    type: claimType,
+                    ...(opts.title !== undefined ? { title: opts.title } : {}),
+                    ...(opts.body !== undefined ? { body: opts.body } : {}),
+                } as Parameters<typeof core.claims.create>[0])
+                await persistCore(core)
+                printLine(claim.id)
+            }
+        )
 
     claims
         .command("update <claim_id>")

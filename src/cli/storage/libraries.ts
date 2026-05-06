@@ -1,25 +1,17 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
-import { SourceLibrary } from "../../lib/core/source-library.js"
-import { ClaimSourceLibrary } from "../../lib/core/claim-source-library.js"
+import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import { ForkLibrary } from "../../lib/core/fork-library.js"
-import type {
-    TClaimLookup,
-    TSourceLookup,
-} from "../../lib/core/interfaces/library.interfaces.js"
+import type { TClaimLookup } from "../../lib/core/interfaces/library.interfaces.js"
 import { getStateDir } from "../config.js"
 
 function claimsPath(): string {
     return path.join(getStateDir(), "claims.json")
 }
 
-function sourcesPath(): string {
-    return path.join(getStateDir(), "sources.json")
-}
-
-function claimSourceAssociationsPath(): string {
-    return path.join(getStateDir(), "claim-source-associations.json")
+function claimCitationsPath(): string {
+    return path.join(getStateDir(), "claim-citations.json")
 }
 
 export async function readClaimLibrary(): Promise<ClaimLibrary> {
@@ -34,37 +26,17 @@ export async function readClaimLibrary(): Promise<ClaimLibrary> {
     }
 }
 
-export async function readSourceLibrary(): Promise<SourceLibrary> {
+export async function readClaimCitationLibrary(
+    claimLookup: TClaimLookup
+): Promise<ClaimCitationLibrary> {
     try {
-        const content = await fs.readFile(sourcesPath(), "utf-8")
+        const content = await fs.readFile(claimCitationsPath(), "utf-8")
         const snapshot = JSON.parse(content) as ReturnType<
-            SourceLibrary["snapshot"]
+            ClaimCitationLibrary["snapshot"]
         >
-        return SourceLibrary.fromSnapshot(snapshot)
+        return ClaimCitationLibrary.fromSnapshot(snapshot, claimLookup)
     } catch {
-        return new SourceLibrary()
-    }
-}
-
-export async function readClaimSourceLibrary(
-    claimLookup: TClaimLookup,
-    sourceLookup: TSourceLookup
-): Promise<ClaimSourceLibrary> {
-    try {
-        const content = await fs.readFile(
-            claimSourceAssociationsPath(),
-            "utf-8"
-        )
-        const snapshot = JSON.parse(content) as ReturnType<
-            ClaimSourceLibrary["snapshot"]
-        >
-        return ClaimSourceLibrary.fromSnapshot(
-            snapshot,
-            claimLookup,
-            sourceLookup
-        )
-    } catch {
-        return new ClaimSourceLibrary(claimLookup, sourceLookup)
+        return new ClaimCitationLibrary(claimLookup)
     }
 }
 
@@ -74,18 +46,10 @@ export async function writeClaimLibrary(library: ClaimLibrary): Promise<void> {
     await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
 }
 
-export async function writeSourceLibrary(
-    library: SourceLibrary
+export async function writeClaimCitationLibrary(
+    library: ClaimCitationLibrary
 ): Promise<void> {
-    const filePath = sourcesPath()
-    await fs.mkdir(path.dirname(filePath), { recursive: true })
-    await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
-}
-
-export async function writeClaimSourceLibrary(
-    library: ClaimSourceLibrary
-): Promise<void> {
-    const filePath = claimSourceAssociationsPath()
+    const filePath = claimCitationsPath()
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
 }
