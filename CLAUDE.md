@@ -7,19 +7,6 @@
 - All TypeScript development work must use the `brain-style` skill (specifically its TypeScript sub-skill). Invoke it before writing or reviewing any TypeScript code to ensure naming conventions, casing rules, and style guidelines are followed. Use the TypeScript language server (LSP tool) to verify types, check for errors, and navigate definitions during development.
 - After completing a major set of changes, offer to cut a new version via `pnpm version patch|minor|major`. Use `patch` for most changes, `minor` for major feature work, and `major` only when explicitly instructed. When versioning, rename `docs/release-notes/upcoming.md` to `docs/release-notes/v{version}.md` and `docs/changelogs/upcoming.md` to `docs/changelogs/v{version}.md`, then start fresh `upcoming.md` files for subsequent work. After the version bump commit, create a git tag at that commit: `git tag v{version}`. This tag triggers the release and docs deployment workflows.
 
-## Broker coordination
-
-This repo's Claude Code agent coordinates with sibling repos (`proposit-shared`, `proposit-server`, `proposit-mobile`) and the workspace orchestrator at `/Users/brian/Projects/Proposit-App/` via the `skill-cefailures:broker` skill. Invoke that skill for CLI reference, signal vocabulary (`READY` / `BLOCKED` / `DECISION` / `QUESTION`), and canonical patterns.
-
-- **Identity:** run `broker whoami` to confirm what the CLI will use from this cwd. Identity is auto-derived (workspace `.broker/config.json` → nearest `package.json` → git remote). To address another agent, compute their identity from their repo — there is no directory to browse.
-- **Session startup for multi-repo work:** start a single background follow so incoming DMs stream live, then carry on:
-
-    ```bash
-    broker follow
-    ```
-
-    Run it via `Bash(run_in_background: true)`. Do not `broker read` first — it would advance the cursor past the backlog.
-
 ## Change requests
 
 Detailed change requests live in `docs/change-requests/` as markdown files. When the user mentions a change request, list the files in that folder and check if any filename pertains to the request. If a match looks likely, ask the user to confirm before reading the file. Once confirmed, read the file and use it as the specification for the work. After a change request is fully implemented, delete its markdown file from `docs/change-requests/`.
