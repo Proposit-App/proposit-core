@@ -30235,3 +30235,78 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         expect(engine2.getExpressions()[0].type).toBe("variable")
     })
 })
+
+// ---------------------------------------------------------------------------
+// Fork integration with derivation premises (Task 10)
+// ---------------------------------------------------------------------------
+
+describe("Fork integration with derivation premises", () => {
+    /**
+     * Sets up a PropositCore with one argument containing one derivation
+     * premise. The derivation premise is bound to a single "normal" claim.
+     * Returns the core, the argument ID, and the original claim ID.
+     */
+    function setupArgumentWithDerivationPremise() {
+        const propositCore = new PropositCore()
+
+        // Create the claim that the derivation premise will reference.
+        const claim = propositCore.claims.create({ type: "normal" })
+        const claimId = claim.id
+
+        // Create the argument and its derivation premise.
+        const argId = crypto.randomUUID()
+        const engine = propositCore.arguments.create({
+            id: argId,
+            version: 0,
+        })
+        engine.createPremise({ type: "derivation", derivedClaimId: claimId })
+
+        return { propositCore, argumentId: argId, claimId }
+    }
+
+    it("propagates type and derivedClaimId through forkArgument", () => {
+        const { propositCore, argumentId, claimId } =
+            setupArgumentWithDerivationPremise()
+        const { engine: forkedEngine, claimRemap } =
+            propositCore.forkArgument(argumentId)
+
+        const forkedPremises = forkedEngine.listPremises()
+        const forkedDerivation = forkedPremises.find(
+            (p) => p.toPremiseData().type === "derivation"
+        )
+        expect(forkedDerivation).toBeDefined()
+        expect(
+            (forkedDerivation!.toPremiseData() as TCoreDerivationPremise)
+                .derivedClaimId
+        ).toBe(claimRemap.get(claimId))
+    })
+
+    it("forks a derivation premise's expression tree with the consequent referencing the cloned variable", () => {
+        const { propositCore, argumentId } =
+            setupArgumentWithDerivationPremise()
+        const { engine: forkedEngine } = propositCore.forkArgument(argumentId)
+
+        const derivationPremise = forkedEngine
+            .listPremises()
+            .find((p) => p.toPremiseData().type === "derivation")!
+        expect(derivationPremise).toBeDefined()
+
+        // Build a VariableManager from the forked engine's variables so we
+        // can pass it to ManagedDerivationPremiseEngine.fromSnapshot.
+        const vm = new VariableManager()
+        for (const v of forkedEngine.getVariables()) {
+            vm.addVariable(v)
+        }
+
+        const snap = derivationPremise.snapshot()
+
+        // Verifies the snapshot's tree is well-formed (does not throw).
+        expect(() =>
+            ManagedDerivationPremiseEngine.fromSnapshot(
+                snap,
+                forkedEngine.getArgument(),
+                vm
+            )
+        ).not.toThrow()
+    })
+})

@@ -1,6 +1,7 @@
 import type {
     TCoreArgument,
     TCorePremise,
+    TCoreDerivationPremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
 } from "../schemata/index.js"
@@ -505,6 +506,24 @@ export class PropositCore<
             }
             return v
         })
+
+        // Remap derivedClaimId in derivation premises
+        for (const ps of snap.premises) {
+            const premise = ps.premise as TCorePremise
+            if (premise.type === "derivation") {
+                const originalDerivedClaimId = (
+                    premise as unknown as TCoreDerivationPremise
+                ).derivedClaimId
+                const remappedDerivedClaimId =
+                    claimRemap.get(originalDerivedClaimId)
+                if (remappedDerivedClaimId) {
+                    ps.premise = {
+                        ...ps.premise,
+                        derivedClaimId: remappedDerivedClaimId,
+                    } as typeof ps.premise
+                }
+            }
+        }
 
         // TODO Phase 7: ArgumentEngine.fromSnapshot will take
         // (snapshot, claimLibrary, claimCitationLibrary, ...) once its
