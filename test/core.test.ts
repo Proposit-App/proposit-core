@@ -29739,6 +29739,7 @@ describe("createPremiseWithId with derivation type", () => {
         )
         const data = pm.toPremiseData()
         expect(data.type).toBe("freeform")
+        expect((data as Record<string, unknown>).title).toBe("legacy")
     })
 
     it("throws CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID from createPremiseWithId", () => {
@@ -29764,6 +29765,50 @@ describe("createPremiseWithId with derivation type", () => {
                 }
             )
         ).toThrow(/CREATE_DERIVATION_CLAIM_NOT_FOUND/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Derivation premise extras handling (Task 9 regression)
+// ---------------------------------------------------------------------------
+
+describe("derivation premise extras handling", () => {
+    function setupArgumentWithClaim() {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ type: "normal" })
+        const claimId = claim.id
+        const argumentEngine = new ArgumentEngine(
+            ARG,
+            claimLib,
+            new ClaimCitationLibrary(claimLib)
+        )
+        return { argumentEngine, claimId }
+    }
+
+    it("getExtras() does not include type or derivedClaimId on a derivation premise", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+            extras: { foo: "bar" },
+        })
+        const extras = pm.getExtras()
+        expect(extras).not.toHaveProperty("type")
+        expect(extras).not.toHaveProperty("derivedClaimId")
+        expect(extras).toMatchObject({ foo: "bar" })
+    })
+
+    it("setExtras() preserves type and derivedClaimId after replacement", () => {
+        const { argumentEngine, claimId } = setupArgumentWithClaim()
+        const { result: pm } = argumentEngine.createPremise({
+            type: "derivation",
+            derivedClaimId: claimId,
+        })
+        pm.setExtras({ note: "replacement" })
+        const premise = pm.toPremiseData()
+        expect(premise.type).toBe("derivation")
+        expect((premise as TCoreDerivationPremise).derivedClaimId).toBe(claimId)
+        expect(pm.getExtras()).toMatchObject({ note: "replacement" })
     })
 })
 

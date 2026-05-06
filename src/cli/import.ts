@@ -309,6 +309,7 @@ export function importArgumentFromYaml(yamlString: string): {
     // Create premises and build expression trees
     for (let i = 0; i < input.premises.length; i++) {
         const premiseDef = input.premises[i]
+        // Note: typed-bag heuristic — YAML authors who put `type` in premise metadata will route through the typed-bag path (e.g. type:"derivation" with derivedClaimId triggers the derivation init flow).
         const { result: pm } = premiseDef.metadata
             ? engine.createPremise({ ...premiseDef.metadata })
             : engine.createPremise()
