@@ -3525,6 +3525,7 @@ describe("schema shapes with additionalProperties", () => {
             id: "p-1",
             argumentId: "a-1",
             argumentVersion: 0,
+            type: "freeform",
             claimId: "claim-default",
             claimVersion: 0,
             variables: [],
@@ -28108,5 +28109,60 @@ describe("Fork record schema equality across namespaces", () => {
         expect(Value.Check(CoreClaimForkRecordSchema, claimForkRecord)).toBe(
             true
         )
+    })
+})
+
+describe("Premise type discriminator", () => {
+    it("accepts a freeform premise via Value.Check", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "freeform",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
+    })
+
+    it("accepts a derivation premise with derivedClaimId", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "derivation",
+            derivedClaimId: "00000000-0000-0000-0000-000000000003",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(true)
+    })
+
+    it("rejects a derivation premise without derivedClaimId", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "derivation",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(false)
+    })
+
+    it("rejects an unknown type literal", () => {
+        const premise = {
+            id: "00000000-0000-0000-0000-000000000001",
+            argumentId: "00000000-0000-0000-0000-000000000002",
+            argumentVersion: 1,
+            type: "axiomatic",
+            checksum: "abcd",
+            descendantChecksum: null,
+            combinedChecksum: "abcd",
+        }
+        expect(Value.Check(CorePremiseSchema, premise)).toBe(false)
     })
 })

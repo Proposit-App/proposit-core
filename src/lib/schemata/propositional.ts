@@ -180,28 +180,56 @@ export function isExternallyBound(
     return v.boundArgumentId !== argumentId
 }
 
-export const CorePremiseSchema = Type.Object(
+const CommonPremiseFields = {
+    id: UUID,
+    argumentId: UUID,
+    argumentVersion: Type.Number(),
+    checksum: Type.String({
+        description: "Premise-level checksum for sync detection.",
+    }),
+    descendantChecksum: Nullable(Type.String(), {
+        description:
+            "Checksum derived from descendant expression tree. Null if premise has no expressions.",
+    }),
+    combinedChecksum: Type.String({
+        description:
+            "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
+    }),
+}
+
+export const CoreFreeformPremiseSchema = Type.Object(
     {
-        id: UUID,
-        argumentId: UUID,
-        argumentVersion: Type.Number(),
-        checksum: Type.String({
-            description: "Premise-level checksum for sync detection.",
-        }),
-        descendantChecksum: Nullable(Type.String(), {
-            description:
-                "Checksum derived from descendant expression tree. Null if premise has no expressions.",
-        }),
-        combinedChecksum: Type.String({
-            description:
-                "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
-        }),
+        ...CommonPremiseFields,
+        type: Type.Literal("freeform"),
     },
     {
         additionalProperties: true,
         description:
-            "A premise entity with identity and metadata. Expressions and variables are managed by PremiseEngine.",
+            "A freeform premise — any valid expression tree. Default premise type pre-v0.11.",
     }
 )
 
+export const CoreDerivationPremiseSchema = Type.Object(
+    {
+        ...CommonPremiseFields,
+        type: Type.Literal("derivation"),
+        derivedClaimId: UUID,
+    },
+    {
+        additionalProperties: true,
+        description:
+            "A derivation premise — derives a single named claim. Consequent slot is locked to the derived claim's variable.",
+    }
+)
+
+export const CorePremiseSchema = Type.Union(
+    [CoreFreeformPremiseSchema, CoreDerivationPremiseSchema],
+    {
+        description:
+            "A premise entity with identity and metadata. Discriminated on `type`. Expressions and variables are managed by PremiseEngine.",
+    }
+)
+
+export type TCoreFreeformPremise = Static<typeof CoreFreeformPremiseSchema>
+export type TCoreDerivationPremise = Static<typeof CoreDerivationPremiseSchema>
 export type TCorePremise = Static<typeof CorePremiseSchema>
