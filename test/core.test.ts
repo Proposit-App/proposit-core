@@ -155,6 +155,9 @@ import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
 import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
 import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
+import { ManagedDerivationPremiseEngine } from "../src/lib/core/managed-derivation-premise-engine"
+import { InvariantViolationError } from "../src/lib/index"
+import { DERIVATION_TYPE_MISMATCH } from "../src/lib/types/validation"
 
 type TVariableInput = TOptionalChecksum<TClaimBoundVariable>
 
@@ -28652,4 +28655,141 @@ describe("validateDerivationStructure", () => {
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
     })
+})
+
+// ---------------------------------------------------------------------------
+// ManagedDerivationPremiseEngine
+// ---------------------------------------------------------------------------
+
+describe("ManagedDerivationPremiseEngine constructor validation", () => {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+
+    it("throws DERIVATION_TYPE_MISMATCH when wrapping a freeform premise", () => {
+        const vm = new VariableManager()
+        const freeformPremise = {
+            id: "00000000-0000-0000-0000-00000000d001",
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "freeform" as const,
+        } as TCorePremise
+        expect(
+            () =>
+                new ManagedDerivationPremiseEngine(
+                    freeformPremise,
+                    { argument: ARG_OBJ, variables: vm },
+                    undefined
+                )
+        ).toThrow(/DERIVATION_TYPE_MISMATCH/)
+    })
+
+    it("throws InvariantViolationError with DERIVATION_TYPE_MISMATCH violation code", () => {
+        const vm = new VariableManager()
+        const freeformPremise = {
+            id: "00000000-0000-0000-0000-00000000d002",
+            argumentId: argId,
+            argumentVersion: 1,
+            type: "freeform" as const,
+        } as TCorePremise
+        let caught: unknown
+        try {
+            new ManagedDerivationPremiseEngine(
+                freeformPremise,
+                { argument: ARG_OBJ, variables: vm },
+                undefined
+            )
+        } catch (e) {
+            caught = e
+        }
+        expect(caught).toBeInstanceOf(InvariantViolationError)
+        const err = caught as InvariantViolationError
+        expect(err.violations).toHaveLength(1)
+        expect(err.violations[0].code).toBe(DERIVATION_TYPE_MISMATCH)
+    })
+
+    it.todo(
+        "constructs successfully on a well-formed naked-Q derivation premise (gated on Task 8/9: createPremise({type:'derivation',...}) not yet implemented)"
+    )
+})
+
+describe("ManagedDerivationPremiseEngine.fromSnapshot", () => {
+    const argId = "00000000-0000-0000-0000-000000000001"
+    const premiseId = "00000000-0000-0000-0000-00000000d010"
+    const claimId = "00000000-0000-0000-0000-00000000c0a1"
+    const variableId = "00000000-0000-0000-0000-00000000a000"
+    const ARG_OBJ = { id: argId, version: 1 } as TCoreArgument
+
+    it("rejects a freeform snapshot with DERIVATION_TYPE_MISMATCH", () => {
+        const vm = new VariableManager()
+        const freeformSnap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: 1,
+                type: "freeform" as const,
+            } as TCorePremise,
+            rootExpressionId: undefined,
+            expressions: { expressions: [] },
+        }
+        expect(() =>
+            ManagedDerivationPremiseEngine.fromSnapshot(
+                freeformSnap,
+                ARG_OBJ,
+                vm
+            )
+        ).toThrow(/DERIVATION_TYPE_MISMATCH/)
+    })
+
+    it("rejects a tampered snapshot with AND root (DERIVATION_STRUCTURE_INVALID)", () => {
+        // Build a variable manager with the consequent variable.
+        const vm = new VariableManager()
+        vm.addVariable({
+            id: variableId,
+            argumentId: argId,
+            argumentVersion: 1,
+            symbol: "Q",
+            claimId,
+            claimVersion: 1,
+            checksum: "x",
+        })
+        const andRootId = "00000000-0000-0000-0000-000000000020"
+        const tamperedSnap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: 1,
+                type: "derivation" as const,
+                derivedClaimId: claimId,
+            } as TCorePremise,
+            rootExpressionId: andRootId,
+            expressions: {
+                expressions: [
+                    {
+                        id: andRootId,
+                        argumentId: argId,
+                        argumentVersion: 1,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "operator" as const,
+                        operator: "and" as const,
+                        checksum: "x",
+                        descendantChecksum: null,
+                        combinedChecksum: "x",
+                    },
+                ],
+            },
+        }
+        expect(() =>
+            ManagedDerivationPremiseEngine.fromSnapshot(
+                tamperedSnap,
+                ARG_OBJ,
+                vm
+            )
+        ).toThrow(/DERIVATION_STRUCTURE_INVALID/)
+    })
+
+    it.todo(
+        "validates structure when restoring a well-formed snapshot (gated on Task 8/9: need createPremise({type:'derivation',...}) to produce a valid fixture)"
+    )
 })
