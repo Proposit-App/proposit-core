@@ -1107,6 +1107,8 @@ export class PremiseEngine<
             checksum: _checksum,
             descendantChecksum: _descendantChecksum,
             combinedChecksum: _combinedChecksum,
+            type: _type,
+            derivedClaimId: _derivedClaimId,
             ...extras
         } = this.premise as Record<string, unknown>
         return { ...extras }
@@ -1122,7 +1124,7 @@ export class PremiseEngine<
         TArg
     > {
         return this.withValidation(() => {
-            // Strip old extras and replace with new ones
+            // Strip old extras and replace with new ones, preserving structural fields.
             const {
                 id,
                 argumentId,
@@ -1130,12 +1132,16 @@ export class PremiseEngine<
                 checksum,
                 descendantChecksum,
                 combinedChecksum,
+                type,
+                derivedClaimId,
             } = this.premise as Record<string, unknown>
             this.premise = {
                 ...extras,
                 id,
                 argumentId,
                 argumentVersion,
+                type,
+                ...(derivedClaimId !== undefined ? { derivedClaimId } : {}),
                 ...(checksum !== undefined ? { checksum } : {}),
                 ...(descendantChecksum !== undefined
                     ? { descendantChecksum }

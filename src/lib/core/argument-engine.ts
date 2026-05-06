@@ -6,6 +6,7 @@ import {
     type TCoreArgument,
     type TCoreClaim,
     type TCoreClaimCitation,
+    type TCoreDerivationPremise,
     type TCorePremise,
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
@@ -28,7 +29,11 @@ import {
 } from "../types/grammar.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
-import { CLAIM_NOT_FOUND } from "../types/validation.js"
+import {
+    CLAIM_NOT_FOUND,
+    CREATE_DERIVATION_CLAIM_NOT_FOUND,
+    CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
+} from "../types/validation.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
@@ -573,8 +578,70 @@ export class ArgumentEngine<
         return lines.join("\n")
     }
 
+    /** @internal Normalized options bag used internally by createPremise/createPremiseWithId. */
+    private static parsePremiseArgsInternal(
+        arg1:
+            | Record<string, unknown>
+            | {
+                  type?: "freeform" | "derivation"
+                  derivedClaimId?: string
+                  extras?: Record<string, unknown>
+                  symbol?: string
+              }
+            | undefined,
+        arg2: string | undefined
+    ): {
+        type: "freeform" | "derivation"
+        derivedClaimId?: string
+        extras?: Record<string, unknown>
+        symbol?: string
+    } {
+        const isTypedBag =
+            arg1 !== null &&
+            arg1 !== undefined &&
+            (typeof (arg1 as Record<string, unknown>).type === "string" ||
+                typeof (arg1 as Record<string, unknown>).derivedClaimId ===
+                    "string")
+        if (isTypedBag) {
+            const bag = arg1 as {
+                type?: "freeform" | "derivation"
+                derivedClaimId?: string
+                extras?: Record<string, unknown>
+                symbol?: string
+            }
+            return {
+                type: bag.type ?? "freeform",
+                derivedClaimId: bag.derivedClaimId,
+                extras: bag.extras,
+                symbol: bag.symbol,
+            }
+        }
+        return {
+            type: "freeform",
+            extras: arg1 as Record<string, unknown> | undefined,
+            symbol: arg2,
+        }
+    }
+
+    public createPremise(): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
     public createPremise(
-        extras?: Record<string, unknown>,
+        extras: Record<string, unknown> | undefined,
+        symbol: string
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    public createPremise(
+        extras: Record<string, unknown>,
         symbol?: string
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
@@ -582,8 +649,41 @@ export class ArgumentEngine<
         TVar,
         TPremise,
         TArg
+    >
+    public createPremise(options: {
+        type?: "freeform" | "derivation"
+        derivedClaimId?: string
+        extras?: Record<string, unknown>
+        symbol?: string
+    }): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    public createPremise(
+        arg1?:
+            | Record<string, unknown>
+            | {
+                  type?: "freeform" | "derivation"
+                  derivedClaimId?: string
+                  extras?: Record<string, unknown>
+                  symbol?: string
+              },
+        arg2?: string
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
     > {
-        return this.createPremiseWithId(this.generateId(), extras, symbol)
+        return this.createPremiseWithId(
+            this.generateId(),
+            arg1 as Record<string, unknown> | undefined,
+            arg2
+        )
     }
 
     public createPremiseWithId(
@@ -596,18 +696,93 @@ export class ArgumentEngine<
         TVar,
         TPremise,
         TArg
+    >
+    public createPremiseWithId(
+        id: string,
+        options: {
+            type?: "freeform" | "derivation"
+            derivedClaimId?: string
+            extras?: Record<string, unknown>
+            symbol?: string
+        }
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    public createPremiseWithId(
+        id: string,
+        arg2?:
+            | Record<string, unknown>
+            | {
+                  type?: "freeform" | "derivation"
+                  derivedClaimId?: string
+                  extras?: Record<string, unknown>
+                  symbol?: string
+              },
+        arg3?: string
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
     > {
+        const options = ArgumentEngine.parsePremiseArgsInternal(arg2, arg3)
         return this.withValidation(() => {
             if (this.premises.has(id)) {
                 throw new Error(`Premise "${id}" already exists.`)
             }
-            const premiseData = {
-                ...extras,
-                id,
-                argumentId: this.argument.id,
-                argumentVersion: this.argument.version,
-                type: "freeform" as const,
-            } as TOptionalChecksum<TPremise>
+
+            // Derivation init flow — only when not restoring from snapshot.
+            if (options.type === "derivation" && !this.restoringFromSnapshot) {
+                if (!options.derivedClaimId) {
+                    throw new InvariantViolationError([
+                        {
+                            code: CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
+                            message: `${CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID}: createPremise with type "derivation" requires derivedClaimId`,
+                            entityType: "premise",
+                            entityId: id,
+                            premiseId: id,
+                        },
+                    ])
+                }
+                const claim = this.claimLibrary.getCurrent(
+                    options.derivedClaimId
+                )
+                if (!claim) {
+                    throw new InvariantViolationError([
+                        {
+                            code: CREATE_DERIVATION_CLAIM_NOT_FOUND,
+                            message: `${CREATE_DERIVATION_CLAIM_NOT_FOUND}: claim ${options.derivedClaimId} not found in claim library`,
+                            entityType: "claim",
+                            entityId: options.derivedClaimId,
+                        },
+                    ])
+                }
+            }
+
+            const premiseType: "freeform" | "derivation" =
+                options.type ?? "freeform"
+            const premiseData: TOptionalChecksum<TPremise> =
+                premiseType === "derivation" && options.derivedClaimId
+                    ? ({
+                          ...options.extras,
+                          id,
+                          argumentId: this.argument.id,
+                          argumentVersion: this.argument.version,
+                          type: "derivation" as const,
+                          derivedClaimId: options.derivedClaimId,
+                      } as unknown as TOptionalChecksum<TCoreDerivationPremise> as TOptionalChecksum<TPremise>)
+                    : ({
+                          ...options.extras,
+                          id,
+                          argumentId: this.argument.id,
+                          argumentVersion: this.argument.version,
+                          type: "freeform" as const,
+                      } as TOptionalChecksum<TPremise>)
             const pm = new PremiseEngine<TArg, TPremise, TExpr, TVar>(
                 premiseData,
                 {
@@ -647,7 +822,7 @@ export class ArgumentEngine<
 
             // Auto-create a premise-bound variable for this premise
             if (!this.restoringFromSnapshot) {
-                const autoSymbol = symbol ?? this.generateUniqueSymbol()
+                const autoSymbol = options.symbol ?? this.generateUniqueSymbol()
                 const autoVariable = {
                     id: this.generateId(),
                     argumentId: this.argument.id,
@@ -663,6 +838,53 @@ export class ArgumentEngine<
                 this.variables.addVariable(withChecksum)
                 collector.addedVariable(withChecksum)
                 this.markAllPremisesDirty()
+            }
+
+            // Derivation init: add naked-Q root expression for the consequent variable.
+            // Only runs when not restoring from snapshot.
+            if (
+                options.type === "derivation" &&
+                options.derivedClaimId &&
+                !this.restoringFromSnapshot
+            ) {
+                // Track existing variables before ensureClaimBoundVariable so we
+                // can detect whether a new variable was materialized.
+                const variablesBefore = new Set(
+                    this.variables.toArray().map((v) => v.id)
+                )
+                const consequentVariable = this.ensureClaimBoundVariable(
+                    options.derivedClaimId
+                )
+                // If ensureClaimBoundVariable created a new variable, record it.
+                if (!variablesBefore.has(consequentVariable.id)) {
+                    collector.addedVariable(
+                        consequentVariable as unknown as TVar
+                    )
+                    this.markAllPremisesDirty()
+                }
+                // Add the naked-Q root expression via appendExpression.
+                const { changes: exprChanges } = pm.appendExpression(null, {
+                    id: this.generateId(),
+                    type: "variable" as const,
+                    variableId: consequentVariable.id,
+                    premiseId: id,
+                    argumentId: this.argument.id,
+                    argumentVersion: this.argument.version,
+                } as unknown as import("./expression-manager.js").TExpressionWithoutPosition<TExpr>)
+                // Merge expression changes into the outer collector.
+                if (exprChanges.expressions) {
+                    for (const e of exprChanges.expressions.added) {
+                        collector.addedExpression(e)
+                    }
+                    for (const e of exprChanges.expressions.modified) {
+                        collector.modifiedExpression(e)
+                    }
+                }
+                if (exprChanges.premises) {
+                    for (const p of exprChanges.premises.modified) {
+                        collector.modifiedPremise(p)
+                    }
+                }
             }
 
             const changes = this.finalizeChanges(collector)
@@ -823,7 +1045,8 @@ export class ArgumentEngine<
             ])
         }
 
-        const rawVariable: TOptionalChecksum<TClaimBoundVariable> & Record<string, unknown> = {
+        const rawVariable: TOptionalChecksum<TClaimBoundVariable> &
+            Record<string, unknown> = {
             id: this.generateId(),
             argumentId: this.argument.id,
             argumentVersion: this.argument.version,

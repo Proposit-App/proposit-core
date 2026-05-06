@@ -35,13 +35,44 @@ export interface TPremiseCrud<
      * Creates a new premise with an auto-generated UUID and registers it
      * with this engine.
      *
-     * @param extras - Optional extra metadata to attach to the premise.
+     * Legacy positional form: `createPremise(extras?, symbol?)`.
+     * Typed-bag form: `createPremise({ type?, derivedClaimId?, extras?, symbol? })`.
+     *
      * @returns The newly created PremiseEngine instance and changeset.
      */
+    createPremise(): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
     createPremise(
-        extras?: Record<string, unknown>,
+        extras: Record<string, unknown> | undefined,
+        symbol: string
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    createPremise(
+        extras: Record<string, unknown>,
         symbol?: string
     ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    createPremise(options: {
+        type?: "freeform" | "derivation"
+        derivedClaimId?: string
+        extras?: Record<string, unknown>
+        symbol?: string
+    }): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
         TVar,
@@ -52,15 +83,31 @@ export interface TPremiseCrud<
      * Creates a premise with a caller-supplied ID and registers it with
      * this engine.
      *
+     * Legacy positional form: `createPremiseWithId(id, extras?, symbol?)`.
+     * Typed-bag form: `createPremiseWithId(id, { type?, derivedClaimId?, extras?, symbol? })`.
+     *
      * @param id - The ID to assign to the new premise.
-     * @param extras - Optional extra metadata to attach to the premise.
-     * @returns The newly created PremiseEngine instance and changeset.
      * @throws If a premise with the given ID already exists.
      */
     createPremiseWithId(
         id: string,
         extras?: Record<string, unknown>,
         symbol?: string
+    ): TCoreMutationResult<
+        PremiseEngine<TArg, TPremise, TExpr, TVar>,
+        TExpr,
+        TVar,
+        TPremise,
+        TArg
+    >
+    createPremiseWithId(
+        id: string,
+        options: {
+            type?: "freeform" | "derivation"
+            derivedClaimId?: string
+            extras?: Record<string, unknown>
+            symbol?: string
+        }
     ): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
