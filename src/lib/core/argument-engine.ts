@@ -1711,17 +1711,28 @@ export class ArgumentEngine<
             PremiseEngine<TArg, TPremise, TExpr, TVar>
         >()
         for (const premise of premises) {
+            // Restoration shape: every sibling property on the row that isn't
+            // an entity-id or hierarchical-checksum field is a project extra.
+            // Pull `type` / `derivedClaimId` out explicitly and pass the rest
+            // under the typed-bag's `extras` slot so they survive the parser.
+            // Pre-CR-2026-05-07: passing the row directly tripped the
+            // typed-bag heuristic on `type: string` and dropped every sibling.
             const {
                 id: _id,
                 argumentId: _argumentId,
                 argumentVersion: _argumentVersion,
                 checksum: _checksum,
-                ...extras
+                descendantChecksum: _descendantChecksum,
+                combinedChecksum: _combinedChecksum,
+                type,
+                derivedClaimId,
+                ...siblingExtras
             } = premise as unknown as Record<string, unknown>
-            const { result: pe } = engine.createPremiseWithId(
-                premise.id,
-                extras
-            )
+            const { result: pe } = engine.createPremiseWithId(premise.id, {
+                type: type as "freeform" | "derivation" | undefined,
+                derivedClaimId: derivedClaimId as string | undefined,
+                extras: siblingExtras,
+            })
             premiseEngines.set(premise.id, pe)
         }
 

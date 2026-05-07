@@ -30451,3 +30451,149 @@ describe("ArgumentEngine.validateDerivationStructures", () => {
         }
     })
 })
+
+// ---------------------------------------------------------------------------
+// fromData premise-extras preservation (CR 2026-05-07)
+//
+// Regression coverage for the typed-bag misinterpretation: when a DB row
+// carries `type: "freeform"` (or `"derivation"`) plus sibling extras, the
+// restore path used to send the row through parsePremiseArgsInternal, which
+// classified it as a typed-bag and silently dropped every property other than
+// type/derivedClaimId/extras/symbol. The restore path must instead preserve
+// all sibling properties on the premise as extras.
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine.fromData — premise extras preservation", () => {
+    it("preserves DB-shape sibling properties as extras", () => {
+        const arg = { id: "arg-1", version: 1 }
+        const createdOn = new Date("2026-01-01T00:00:00Z")
+        const premises = [
+            {
+                id: "p1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                type: "freeform" as const,
+                title: "Some premise title",
+                role: "supporting",
+                createdOn,
+                creatorId: "u1",
+            },
+        ] as unknown as TOptionalChecksum<TCorePremise>[]
+        const engine = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            csLib(),
+            [],
+            premises,
+            [],
+            {}
+        )
+        const restored = engine.getPremise("p1")!.toPremiseData() as Record<
+            string,
+            unknown
+        >
+        expect(restored.title).toBe("Some premise title")
+        expect(restored.role).toBe("supporting")
+        expect(restored.createdOn).toEqual(createdOn)
+        expect(restored.creatorId).toBe("u1")
+        expect(restored.type).toBe("freeform")
+    })
+
+    it("round-trips extras through createPremise → snapshot → fromData", () => {
+        const claimLib = aLib()
+        const csLibrary = csLib(claimLib)
+        const engine = new ArgumentEngine(ARG, claimLib, csLibrary)
+        const { result: pm } = engine.createPremise({
+            type: "freeform",
+            extras: { title: "X", role: "supporting" },
+        })
+        const premiseId = pm.toPremiseData().id
+
+        const snapshot = engine.snapshot()
+        const variables = snapshot.variables.variables
+        const premises = snapshot.premises.map((ps) => ps.premise)
+        const expressions: TExpressionInput<TCorePropositionalExpression>[] = []
+        for (const ps of snapshot.premises) {
+            for (const e of ps.expressions.expressions) {
+                expressions.push({
+                    ...(e as unknown as Record<string, unknown>),
+                    premiseId: ps.premise.id,
+                } as unknown as TExpressionInput<TCorePropositionalExpression>)
+            }
+        }
+
+        const restoredEngine = ArgumentEngine.fromData(
+            snapshot.argument,
+            claimLib,
+            csLibrary,
+            variables,
+            premises,
+            expressions,
+            { conclusionPremiseId: snapshot.conclusionPremiseId }
+        )
+        const restoredData = restoredEngine
+            .getPremise(premiseId)!
+            .toPremiseData() as Record<string, unknown>
+        expect(restoredData.title).toBe("X")
+        expect(restoredData.role).toBe("supporting")
+    })
+
+    it("createPremise typed-bag still treats `extras` as the extras source (no regression)", () => {
+        const claimLib = new ClaimLibrary()
+        const claim = claimLib.create({ id: "c1", type: "normal" })
+        const csLibrary = new ClaimCitationLibrary(claimLib)
+        const engine = new ArgumentEngine(ARG, claimLib, csLibrary)
+        const { result: pm } = engine.createPremise({
+            type: "derivation",
+            derivedClaimId: claim.id,
+            extras: { title: "Y" },
+        })
+        const data = pm.toPremiseData() as Record<string, unknown>
+        expect(data.title).toBe("Y")
+        expect(data.type).toBe("derivation")
+        expect(data.derivedClaimId).toBe(claim.id)
+    })
+
+    it("premise checksum is identical with or without sibling extras (extras excluded from hash)", () => {
+        const arg = { id: "arg-1", version: 1 }
+        const bare = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            csLib(),
+            [],
+            [
+                {
+                    id: "p1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    type: "freeform" as const,
+                },
+            ] as TOptionalChecksum<TCorePremise>[],
+            [],
+            {}
+        )
+        const withExtras = ArgumentEngine.fromData(
+            arg,
+            aLib(),
+            csLib(),
+            [],
+            [
+                {
+                    id: "p1",
+                    argumentId: "arg-1",
+                    argumentVersion: 1,
+                    type: "freeform" as const,
+                    title: "X",
+                    role: "supporting",
+                    createdOn: new Date("2026-01-01T00:00:00Z"),
+                    creatorId: "u1",
+                },
+            ] as unknown as TOptionalChecksum<TCorePremise>[],
+            [],
+            {}
+        )
+        expect(bare.getPremise("p1")!.checksum()).toBe(
+            withExtras.getPremise("p1")!.checksum()
+        )
+    })
+})
