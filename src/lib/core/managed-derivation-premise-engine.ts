@@ -23,10 +23,7 @@ import {
 export type TVariableMaterializer = {
     ensureClaimBoundVariable(claimId: string): TClaimBoundVariable
 }
-import {
-    PERMISSIVE_GRAMMAR_CONFIG,
-    type TGrammarConfig,
-} from "../types/grammar.js"
+import { type TGrammarConfig } from "../types/grammar.js"
 import {
     DERIVATION_TYPE_MISMATCH,
     DERIVATION_STRUCTURE_INVALID,
@@ -380,8 +377,10 @@ export class ManagedDerivationPremiseEngine<
      *   - n = 0: no change. Premise stays in its current form (typically
      *     naked-Q, indicating "no support given").
      *   - n = 1: produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
-     *   - n ≥ 2: produces `IMPLIES(OR(VariableExpression(S1), …,
-     *     VariableExpression(Sn)), VariableExpression(Q))`.
+     *   - n ≥ 2: produces `IMPLIES(formula(OR(VariableExpression(S1), …,
+     *     VariableExpression(Sn))), VariableExpression(Q))`. The formula
+     *     buffer between IMPLIES and OR is auto-inserted by the engine's
+     *     standard grammar (`wrapInsertFormula`).
      *
      * Materializes a claim-bound variable for each cited source via
      * `argumentEngine.ensureClaimBoundVariable(citation.sourceClaimId)`.
@@ -389,11 +388,10 @@ export class ManagedDerivationPremiseEngine<
      * **Tree construction approach:** Mutations are performed via `super.*`
      * calls, bypassing this class's overrides (which call `assertWellFormed()`
      * after every mutation and would reject intermediate states during
-     * multi-step construction). For n ≥ 2 the grammar is temporarily switched
-     * to `PERMISSIVE_GRAMMAR_CONFIG` so that the OR operator can sit directly
-     * under IMPLIES without triggering an auto-inserted formula buffer. The
-     * grammar is restored and `assertWellFormed()` is called at the end to
-     * validate the final state.
+     * multi-step construction). Standard grammar is used throughout — the
+     * engine's `wrapInsertFormula` rule inserts a formula buffer between
+     * IMPLIES and OR for n ≥ 2 automatically. `assertWellFormed()` is called
+     * at the end to validate the final state.
      *
      * @throws InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY) when the
      *         derivation premise already has a non-empty antecedent (i.e., the
@@ -493,50 +491,46 @@ export class ManagedDerivationPremiseEngine<
             // newSibling (S1) → initial (antecedent).
             super.wrapExpression(impliesOp, s1VarExpr, undefined, qRootExprId)
         } else {
-            // n ≥ 2: build IMPLIES(OR(S1,...,Sn), Q).
-            // Temporarily use permissive grammar so OR can sit directly under
-            // IMPLIES without an auto-inserted formula buffer.
-            const savedGrammarConfig = this.grammarConfig
-            this.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
-            try {
-                const impliesId = this.generateIdFn()
-                const orId = this.generateIdFn()
-                const impliesOp = {
-                    id: impliesId,
+            // n ≥ 2: build IMPLIES(formula(OR(S1,...,Sn)), Q). Standard grammar
+            // throughout — the engine's wrapInsertFormula rule auto-inserts a
+            // formula buffer between IMPLIES and OR. The OR keeps its original
+            // ID, so subsequent appendExpression(orId, ...) calls still attach
+            // the source variables to the same OR node.
+            const impliesId = this.generateIdFn()
+            const orId = this.generateIdFn()
+            const impliesOp = {
+                id: impliesId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                premiseId,
+                parentId: null,
+                type: "operator" as const,
+                operator: "implies" as const,
+            } as TExpressionWithoutPosition<TExpr>
+            const orOp = {
+                id: orId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                premiseId,
+                parentId: null, // wrapExpression sets the parentId internally
+                type: "operator" as const,
+                operator: "or" as const,
+            } as TExpressionWithoutPosition<TExpr>
+            // rightNodeId=qRootExprId: Q → midpoint (consequent), OR → initial (antecedent).
+            super.wrapExpression(impliesOp, orOp, undefined, qRootExprId)
+            // Append each source variable expression as a child of OR.
+            for (const sourceVar of sourceVariables) {
+                const srcExprId = this.generateIdFn()
+                const srcVarExpr = {
+                    id: srcExprId,
                     argumentId: argId,
                     argumentVersion: argVersion,
                     premiseId,
-                    parentId: null,
-                    type: "operator" as const,
-                    operator: "implies" as const,
+                    parentId: orId,
+                    type: "variable" as const,
+                    variableId: sourceVar.id,
                 } as TExpressionWithoutPosition<TExpr>
-                const orOp = {
-                    id: orId,
-                    argumentId: argId,
-                    argumentVersion: argVersion,
-                    premiseId,
-                    parentId: null, // wrapExpression sets the parentId internally
-                    type: "operator" as const,
-                    operator: "or" as const,
-                } as TExpressionWithoutPosition<TExpr>
-                // rightNodeId=qRootExprId: Q → midpoint (consequent), OR → initial (antecedent).
-                super.wrapExpression(impliesOp, orOp, undefined, qRootExprId)
-                // Append each source variable expression as a child of OR.
-                for (const sourceVar of sourceVariables) {
-                    const srcExprId = this.generateIdFn()
-                    const srcVarExpr = {
-                        id: srcExprId,
-                        argumentId: argId,
-                        argumentVersion: argVersion,
-                        premiseId,
-                        parentId: orId,
-                        type: "variable" as const,
-                        variableId: sourceVar.id,
-                    } as TExpressionWithoutPosition<TExpr>
-                    super.appendExpression(orId, srcVarExpr)
-                }
-            } finally {
-                this.setGrammarConfig(savedGrammarConfig)
+                super.appendExpression(orId, srcVarExpr)
             }
         }
 

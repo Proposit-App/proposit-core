@@ -29910,6 +29910,7 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         return {
             engine,
             argumentEngine,
+            claimLib,
             citationLib,
             derivedClaimId: derivedClaim.id,
             sourceClaimIds,
@@ -29977,7 +29978,7 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         )
     })
 
-    it("produces IMPLIES(OR(S1, ..., Sn), Q) when there are n ≥ 2 citations", () => {
+    it("produces IMPLIES(formula(OR(S1, ..., Sn)), Q) when there are n ≥ 2 citations", () => {
         const {
             engine,
             argumentEngine,
@@ -29988,8 +29989,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         engine.populateFromCitations(citationLib, argumentEngine)
 
         const exprs = engine.getExpressions()
-        // Expect: IMPLIES root, OR antecedent, S1 var, S2 var, S3 var, Q var = 6 exprs.
-        expect(exprs).toHaveLength(6)
+        // Expect: IMPLIES root, formula buffer, OR antecedent, S1 var, S2 var,
+        // S3 var, Q var = 7 exprs. The formula buffer is auto-inserted by the
+        // engine's standard grammar (wrapInsertFormula) because OR is a non-not
+        // operator child of IMPLIES.
+        expect(exprs).toHaveLength(7)
 
         const root = exprs.find((e) => e.parentId === null)!
         expect(root.type).toBe("operator")
@@ -30002,10 +30006,9 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             .sort((a, b) => a.position - b.position)
         expect(impliesChildren).toHaveLength(2)
 
-        // Antecedent (lower position) is an OR operator.
-        const orNode = impliesChildren[0]
-        expect(orNode.type).toBe("operator")
-        expect((orNode as unknown as { operator: string }).operator).toBe("or")
+        // Antecedent (lower position) is a formula buffer wrapping the OR.
+        const formulaNode = impliesChildren[0]
+        expect(formulaNode.type).toBe("formula")
 
         // Consequent (higher position) is Q variable.
         const consequent = impliesChildren[1]
@@ -30013,6 +30016,15 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         expect((consequent as { variableId: string }).variableId).toBe(
             consequentVarId
         )
+
+        // formula has exactly one child: the OR operator.
+        const formulaChildren = exprs.filter(
+            (e) => e.parentId === formulaNode.id
+        )
+        expect(formulaChildren).toHaveLength(1)
+        const orNode = formulaChildren[0]
+        expect(orNode.type).toBe("operator")
+        expect((orNode as unknown as { operator: string }).operator).toBe("or")
 
         // OR has 3 source variable children.
         const orChildren = exprs.filter((e) => e.parentId === orNode.id)
@@ -30027,6 +30039,81 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             })
             .sort()
         expect(orChildClaimIds).toEqual([...sourceClaimIds].sort())
+    })
+
+    it("produces IMPLIES(formula(OR(S1, S2)), Q) when there are exactly two citations (n=2 formula-buffer regression)", () => {
+        // Locks the v0.11.2 fix that dropped PERMISSIVE_GRAMMAR_CONFIG bypass:
+        // the engine's wrapInsertFormula rule now inserts a formula between
+        // IMPLIES and OR rather than producing the legacy IMPLIES → OR shape.
+        const { engine, argumentEngine, citationLib } =
+            setupDerivationWithCitations(2)
+        engine.populateFromCitations(citationLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
+        const root = exprs.find((e) => e.parentId === null)!
+        expect(root.type).toBe("operator")
+        expect((root as unknown as { operator: string }).operator).toBe(
+            "implies"
+        )
+
+        const impliesChildren = exprs
+            .filter((e) => e.parentId === root.id)
+            .sort((a, b) => a.position - b.position)
+        expect(impliesChildren[0].type).toBe("formula")
+        expect(impliesChildren[1].type).toBe("variable")
+
+        const orNode = exprs.find((e) => e.parentId === impliesChildren[0].id)!
+        expect(orNode.type).toBe("operator")
+        expect((orNode as unknown as { operator: string }).operator).toBe("or")
+        const orChildren = exprs.filter((e) => e.parentId === orNode.id)
+        expect(orChildren).toHaveLength(2)
+    })
+
+    it("produces a tree where strict-load and auto-normalize-load yield identical combinedChecksum (v0.11.2 regression)", () => {
+        // Before v0.11.2, populateFromCitations bypassed standard grammar in
+        // the n≥2 branch and produced IMPLIES → OR (no formula). That shape
+        // could not survive a strict round trip with
+        // enforceFormulaBetweenOperators=true, and it produced a different
+        // combinedChecksum than auto-normalize-on reload (which would insert
+        // the formula). The fix uses standard grammar throughout so the
+        // produced shape is the canonical IMPLIES(formula(OR(...)), Q) and
+        // both load paths agree.
+        const { engine, argumentEngine, claimLib, citationLib } =
+            setupDerivationWithCitations(3)
+        engine.populateFromCitations(citationLib, argumentEngine)
+
+        // Compose a full ArgumentEngine snapshot from the live argumentEngine
+        // (which holds the variables) plus the standalone managed engine's
+        // premise snapshot. Post-load normalization runs only in
+        // ArgumentEngine.fromSnapshot, so the round trip must go through it.
+        const argSnap = argumentEngine.snapshot()
+        const fullSnap = {
+            ...argSnap,
+            premises: [engine.snapshot()],
+        }
+
+        const strictEngine = ArgumentEngine.fromSnapshot(
+            fullSnap,
+            claimLib,
+            citationLib,
+            {
+                autoNormalize: false,
+                enforceFormulaBetweenOperators: true,
+            }
+        )
+        const normalizedEngine = ArgumentEngine.fromSnapshot(
+            fullSnap,
+            claimLib,
+            citationLib,
+            {
+                autoNormalize: true,
+                enforceFormulaBetweenOperators: true,
+            }
+        )
+
+        expect(strictEngine.combinedChecksum()).toBe(
+            normalizedEngine.combinedChecksum()
+        )
     })
 
     it("creates new claim-bound variables for cited claims that lack them", () => {

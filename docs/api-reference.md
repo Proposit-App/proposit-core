@@ -994,11 +994,13 @@ One-shot helper that builds the antecedent of this derivation premise from the c
 
 - **`n = 0`** — no change; the premise stays in its current form (typically naked-Q).
 - **`n = 1`** — produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
-- **`n ≥ 2`** — produces `IMPLIES(OR(VariableExpression(S1), …, VariableExpression(Sn)), VariableExpression(Q))`.
+- **`n ≥ 2`** — produces `IMPLIES(formula(OR(VariableExpression(S1), …, VariableExpression(Sn))), VariableExpression(Q))`. The `formula` buffer between `IMPLIES` and `OR` is auto-inserted by the engine's standard grammar (`wrapInsertFormula`).
 
 For each cited source, calls `argumentEngine.ensureClaimBoundVariable(citation.sourceClaimId)` to materialize a claim-bound variable. The antecedent construction uses `super.*` calls internally to bypass per-mutation overrides, then validates the final tree with `assertWellFormed()`.
 
 Throws `InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY)` when the derivation premise already has a non-empty antecedent (i.e., root is `implies`/`iff` with a position-0 child). Delete and re-create the premise to repopulate.
+
+> **Changed in v0.11.2:** the n ≥ 2 branch now uses standard grammar throughout, so the produced shape matches what every other engine path (auto-normalize on load, manual rebuild) would emit. Pre-v0.11.2 produced `IMPLIES(OR(...), Q)` without the formula buffer by temporarily switching to `PERMISSIVE_GRAMMAR_CONFIG`. Stored pre-v0.11.2 data remains valid — `validateDerivationStructure` accepts both shapes — but consumer-side `combinedChecksum` checks may now report drift on pre-v0.11.2 trees and converge after a one-time normalization pass.
 
 ---
 
