@@ -1,5 +1,7 @@
 import type { TCoreClaim } from "../../schemata/claim.js"
 import type { TCoreClaimCitation } from "../../schemata/claim-citation.js"
+import type { TCoreClaimConnection } from "../../schemata/claim-connection.js"
+import type { TCoreClaimAxiom } from "../../schemata/claim-axiom.js"
 import type {
     TCoreArgumentForkRecord,
     TCorePremiseForkRecord,
@@ -143,97 +145,42 @@ export interface TClaimLibraryManagement<
 }
 
 /**
- * Narrow read-only interface for claim-citation lookups.
- * Implemented by `ClaimCitationLibrary`.
+ * Narrow read-only interface for claim-connection lookups.
+ * Implemented by `ClaimCitationLibrary` and `ClaimAxiomLibrary`.
  */
-export interface TClaimCitationLookup<
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+export interface TClaimConnectionLookup<
+    TConn extends TCoreClaimConnection = TCoreClaimConnection,
 > {
     /**
-     * Returns all citations where the given claim is the citing-side endpoint.
-     *
-     * @param citingClaimId - The citing claim ID to filter by.
-     * @returns An array of matching citations.
+     * Returns all connections where the given claim is the supported endpoint.
      */
-    getCitationsForCitingClaim(citingClaimId: string): TCitation[]
+    getConnectionsForClaim(claimId: string): TConn[]
 
-    /**
-     * Returns all citations where the given claim is the source-side endpoint.
-     *
-     * @param sourceClaimId - The source claim ID to filter by.
-     * @returns An array of matching citations.
-     */
-    getCitationsForSourceClaim(sourceClaimId: string): TCitation[]
-
-    /**
-     * Returns a citation by ID, or `undefined` if not found.
-     *
-     * @param id - The citation ID.
-     * @returns The citation entity, or `undefined`.
-     */
-    get(id: string): TCitation | undefined
+    /** Returns a connection by ID, or `undefined` if not found. */
+    get(id: string): TConn | undefined
 }
 
 /**
- * Full management interface for a claim-citation library. Extends
- * `TClaimCitationLookup` with mutation, query, and snapshot methods.
- * Citations are create-or-delete only — no update path.
+ * Full management interface for a claim-connection library. Extends
+ * `TClaimConnectionLookup` with mutation, query, and snapshot methods.
+ * Connections are create-or-delete only — no update path.
  */
-export interface TClaimCitationLibraryManagement<
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-> extends TClaimCitationLookup<TCitation> {
-    /**
-     * Creates a claim citation. Validates that both the citing and source
-     * claims exist in the claim library, that the source-side claim has
-     * type='citation', and that the new edge does not introduce a cycle in
-     * the global claim-citation graph.
-     *
-     * @param citation - The citation data without the `checksum` field.
-     * @returns The created citation with checksum populated.
-     * @throws If a citation with the same ID already exists.
-     * @throws If the referenced citing or source claim does not exist.
-     * @throws If the source-side claim has type !== 'citation'.
-     * @throws If the citation would create a cycle.
-     */
-    add(citation: Omit<TCitation, "checksum">): TCitation
-
-    /**
-     * Removes a claim citation by ID.
-     *
-     * @param id - The citation ID to remove.
-     * @returns The removed citation entity.
-     * @throws If the citation does not exist.
-     */
-    remove(id: string): TCitation
-
-    /**
-     * Returns all citations in the library.
-     *
-     * @returns An array of all citation entities.
-     */
-    getAll(): TCitation[]
-
-    /**
-     * Returns all citations matching the predicate.
-     *
-     * @param predicate - A filter function applied to each citation.
-     * @returns An array of matching citations.
-     */
-    filter(predicate: (c: TCitation) => boolean): TCitation[]
-
-    /**
-     * Returns a serializable snapshot of all citations in the library.
-     *
-     * @returns The claim-citation library snapshot.
-     */
-    snapshot(): TClaimCitationLibrarySnapshot<TCitation>
-
-    /**
-     * Run invariant validation on the claim-citation library.
-     *
-     * @returns The invariant validation result.
-     */
+export interface TClaimConnectionLibraryManagement<
+    TConn extends TCoreClaimConnection = TCoreClaimConnection,
+> extends TClaimConnectionLookup<TConn> {
+    add(connection: Omit<TConn, "checksum">): TConn
+    remove(id: string): TConn
+    getAll(): TConn[]
+    filter(predicate: (c: TConn) => boolean): TConn[]
+    snapshot(): TClaimConnectionLibrarySnapshot<TConn>
     validate(): TInvariantValidationResult
+}
+
+export type TClaimConnectionLibrarySnapshot<
+    TConn extends TCoreClaimConnection = TCoreClaimConnection,
+> = {
+    /** All claim-connection entities in the library. */
+    connections: TConn[]
 }
 
 /**
@@ -243,17 +190,6 @@ export interface TClaimCitationLibraryManagement<
 export type TClaimLibrarySnapshot<TClaim extends TCoreClaim = TCoreClaim> = {
     /** All claim entities in the library. */
     claims: TClaim[]
-}
-
-/**
- * Serializable snapshot of a `ClaimCitationLibrary`. Contains all citation
- * entities.
- */
-export type TClaimCitationLibrarySnapshot<
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-> = {
-    /** All claim citation entities in the library. */
-    claimCitations: TCitation[]
 }
 
 /**
@@ -295,7 +231,8 @@ export type TArgumentLibrarySnapshot<
 
 /**
  * Serializable snapshot of a `PropositCore` instance. Contains snapshots of
- * all managed libraries: arguments, claims, claim citations, and fork records.
+ * all managed libraries: arguments, claims, claim citations, axioms, and fork
+ * records.
  */
 export type TPropositCoreSnapshot<
     TArg extends TCoreArgument = TCoreArgument,
@@ -304,6 +241,7 @@ export type TPropositCoreSnapshot<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
     TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+    TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
@@ -315,7 +253,9 @@ export type TPropositCoreSnapshot<
     /** Snapshot of the claim library. */
     claims: TClaimLibrarySnapshot<TClaim>
     /** Snapshot of the claim-citation library. */
-    claimCitations: TClaimCitationLibrarySnapshot<TCitation>
+    citations: TClaimConnectionLibrarySnapshot<TCitation>
+    /** Snapshot of the claim-axiom library. */
+    axioms: TClaimConnectionLibrarySnapshot<TAxiom>
     /** Snapshot of the fork library. */
     forks: TForkLibrarySnapshot<
         TArgFork,
