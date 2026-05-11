@@ -14,9 +14,10 @@ The change spans:
 2. A new `ClaimAxiomLibrary` parallel to `ClaimCitationLibrary`, both implementing a generalized `TClaimConnectionLibraryManagement<TConn>` interface.
 3. A breaking rename of citation-library terminology and snapshot shape ("edge" → "connection", `citingClaimId`/`sourceClaimId` → `claimId`/`supportingClaimId`).
 4. A unified `populateFromSupports` helper on `ManagedDerivationPremiseEngine` (replaces `populateFromCitations`).
-5. Evaluation semantics that auto-evaluate axiomatic claim-bound variables as `true` (non-overridable) and default citation claim-bound variables to `true` (overridable).
-6. A `.proposit-v0.12` CLI snapshot migration.
+5. Evaluation semantics that auto-evaluate axiomatic claim-bound variables as `true` (non-overridable). Citation and normal claim-bound variables continue to behave exactly as today — caller must assign explicitly. Apps that want auto-true defaults for citations implement that policy at the consumer layer (e.g., the CLI's `analysis create` command).
+6. A `.proposit-v0.12` CLI multi-file snapshot migration (rewrites `claim-citations.json` shape, initializes `claim-axioms.json`).
 7. CLI extensions demonstrating the consumer-extension pattern: a typed `reasonCode` field on axiomatic CLI claims, with three preset reasons (`true-by-definition`, `historically-established`, `logically-required`), and a new `axioms` command group.
+8. YAML import + LLM-extraction (`src/lib/parsing/`) widened to accept the `axiomatic` type.
 
 ## Motivation
 
@@ -37,7 +38,7 @@ A third claim type, `axiomatic`, makes this case first-class. Its evaluation sem
 - **Terminology:** "connection" replaces "edge" (no graph-theory jargon in public API). Edge endpoint fields rename `citingClaimId` → `claimId` and `sourceClaimId` → `supportingClaimId`.
 - **Reverse lookup dropped:** `getCitationsForSourceClaim` had zero production callers. The generic interface exposes only the forward direction (`getConnectionsForClaim`).
 - **Single populate helper:** `populateFromSupports(citationLib, axiomLib, argEngine)` replaces `populateFromCitations`. The combined case is the most realistic call; the two-helper alternative would have required relaxing the naked-Q precondition.
-- **Evaluation:** axiomatic claim-bound variables always evaluate to `true` and cannot be overridden. Citation claim-bound variables default to `true` but the caller may override. Normal claim-bound variables behave as today. The axiom-rejection mechanism is the existing `toggleNegation` on the variable expression in the antecedent (`not(true) = false`).
+- **Evaluation:** axiomatic claim-bound variables always evaluate to `true` and cannot be overridden. Citation and normal claim-bound variables behave as today (caller assigns explicitly; unassigned → `null`). The axiom-rejection mechanism is the existing `toggleNegation` on the variable expression in the antecedent (`not(true) = false`).
 - **Snapshot migration:** v0.12 CLI marker; library throws `LEGACY_MISSING_AXIOM_SLOT` on a pre-v0.12 snapshot in non-CLI contexts, forcing explicit migration.
 
 ## Capability changes
@@ -146,11 +147,12 @@ Deleted: `TClaimCitationLookup`, `TClaimCitationLibraryManagement`, `TClaimCitat
   - Supporting-side `claim.type === "axiomatic"` (`AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE`).
   - Dependent-side `claim.type === "normal"` (`AXIOM_CLAIM_NOT_NORMAL_TYPE`). Citation claims cannot be supported by axioms — axioms support primary-reasoning claims only.
 - **No cycle detection.** Axiomatic claims cannot appear on the dependent side (enforced by `AXIOM_CLAIM_NOT_NORMAL_TYPE`), so cycles are structurally impossible. `validate()` skips the cycle pass; this is documented as an intentional asymmetry from the citation library.
+- **`wouldCreateCycle` short-circuit rename.** The existing optimization in `ClaimCitationLibrary.wouldCreateCycle` (current code: bails when `citingClaimType === "normal"`) becomes "bails when the supported-side claim has `type === "normal"`" — the supported side is what would need to also appear on a supporting side to close a cycle, and `normal` claims cannot be on a supporting side. Same logic, renamed reference.
 - `validate()` re-runs the supporting-side-type, dependent-side-type, resolution, and schema checks (catches tampered snapshots).
 - `fromSnapshot(snapshot, claimLookup, options)` — symmetric with `ClaimCitationLibrary.fromSnapshot`.
 - `entityType` on all violations is `"axiom"`.
 
-**`src/lib/utils/lookup.ts`** — `EMPTY_CLAIM_CITATION_LOOKUP` becomes `EMPTY_CLAIM_CONNECTION_LOOKUP` (single empty stub serves both libraries via the generic interface). Old export deleted (no deprecation alias — bundled into the v0.12 break).
+**`src/lib/utils/lookup.ts`** — `EMPTY_CLAIM_CITATION_LOOKUP` becomes a generic factory `emptyClaimConnectionLookup<TConn extends TCoreClaimConnection>(): TClaimConnectionLookup<TConn>`. A bare constant won't type-check at both `TClaimConnectionLookup<TCoreClaimCitation>` and `TClaimConnectionLookup<TCoreClaimAxiom>` callsites without casts; the factory closes over the generic parameter so each callsite gets a properly narrowed empty. Old export deleted (no deprecation alias — bundled into the v0.12 break).
 
 **Checksum config** — `claimCitationFields` value updates (field renames). New sibling `claimAxiomFields` with the same default field list. Both fire fresh checksum computation during v0.12 CLI migration.
 
@@ -161,7 +163,7 @@ Deleted: `TClaimCitationLookup`, `TClaimCitationLibraryManagement`, `TClaimCitat
 - New public field `axioms: ClaimAxiomLibrary<TAxiom>` parallel to `claimCitations`.
 - Constructor wires both libraries against the same `claimLookup` adapter.
 - New generic type parameter `TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom`.
-- `forkArgument` transitive walk gains one additional reachability step: after collecting citation-supporting claims via `claimCitations.getConnectionsForClaim(currentId)`, also collect `axioms.getConnectionsForClaim(currentId)` supporting claims into the same frontier. Both sets feed the same `claimRemap`. Cloned citation connections go into the new fork's `claimCitations`; cloned axiom connections go into the new fork's `axioms`. Endpoints in each are remapped through `claimRemap`.
+- `forkArgument` transitive walk gains one additional reachability step: after collecting citation-supporting claims via `claimCitations.getConnectionsForClaim(currentId)`, also collect `axioms.getConnectionsForClaim(currentId)` supporting claims into the same frontier. Both sets feed the same `claimRemap`. Cloned citation connections go into the new fork's `claimCitations`; cloned axiom connections go into the new fork's `axioms`. Endpoints in each are remapped through `claimRemap`. Cloned axiom connections pin to `claimVersion: 0` and `supportingClaimVersion: 0` (parallel to the existing citation-clone behavior at `proposit-core.ts:466-470`).
 - `diffArguments` unaffected — connections are global, not per-argument.
 
 **`src/lib/core/fork-library.ts`** — no namespace change. Axiomatic claims live in the existing `claims` namespace. No fork records for axiom connections (matches the citation precedent).
@@ -192,22 +194,43 @@ Deleted: `TClaimCitationLookup`, `TClaimCitationLibraryManagement`, `TClaimCitat
 
 ### 5. Snapshot migration (v0.12)
 
-Two shape changes need to flow through stored data:
+CLI state is stored across multiple files (not a single state file):
 
-1. **Connection wrapper field rename.** `claimCitations` wrapper switches from `{ claimCitations: TCitation[] }` to `{ connections: TCitation[] }`. New sibling `claimAxioms: { connections: TAxiom[] }`.
-2. **Edge field renames.** Each citation entity's `citingClaimId` → `claimId`, `citingClaimVersion` → `claimVersion`, `sourceClaimId` → `supportingClaimId`, `sourceClaimVersion` → `supportingClaimVersion`. Stored `checksum` becomes stale; recomputed from new field names + updated config.
+- `{stateDir}/claims.json` — claim library snapshot
+- `{stateDir}/claim-citations.json` — citation library snapshot (legacy shape: `{ claimCitations: [...with citingClaimId/sourceClaimId fields...] }`)
+- `{stateDir}/forks.json` — fork library snapshot
+- `{stateDir}/arguments/{argId}/{version}/...` — per-argument tree
 
-**Approach: CLI-gated one-shot backfill**, matching v0.11's pattern.
+Three shape changes need to flow through stored data:
+
+1. **Citation wrapper field rename.** `claim-citations.json` switches from `{ claimCitations: TCitation[] }` to `{ connections: TCitation[] }`.
+2. **Citation edge field renames.** Each citation entity's `citingClaimId` → `claimId`, `citingClaimVersion` → `claimVersion`, `sourceClaimId` → `supportingClaimId`, `sourceClaimVersion` → `supportingClaimVersion`. Stored `checksum` becomes stale; recomputed from new field names + updated `claimCitationFields` config.
+3. **New axiom snapshot file.** `claim-axioms.json` must exist initialized to `{ connections: [] }`.
+
+`claims.json` and per-argument files are unchanged shape-wise (no field renames or new required fields land on those entities).
+
+**Approach: CLI-gated one-shot backfill** (`src/cli/storage/migrate-v0.12.ts`), matching the v0.11 and v0.10 migration pattern.
 
 - **`.proposit-v0.12` marker file** in the CLI state directory. Presence means "this state has already been migrated to v0.12."
 - **CLI startup migration step**, gated by marker absence:
-  1. Read the raw state file JSON.
-  2. For `claimCitations`: detect the legacy inner key (`claimCitations: [...]`) and rewrite to `connections: [...]`. Walk each citation, rename the four edge fields.
-  3. Recompute each citation's `checksum` using v0.12 `claimCitationFields`.
-  4. Initialize `claimAxioms: { connections: [] }` — this is a required, explicit step.
-  5. Write migrated state back. Write `.proposit-v0.12` marker.
-- **Strict in-memory model.** `ClaimCitationLibrary.fromSnapshot` throws `LEGACY_CLAIM_CITATION_SHAPE` on legacy-shaped data. `PropositCore.fromSnapshot` throws `LEGACY_MISSING_AXIOM_SLOT` when `claimAxioms` is absent (not silently filled).
-- **Forward compatibility.** Snapshots written by v0.12 may contain claims with `type: "axiomatic"`. Older library versions will fail `Value.Check` against the union — no back-compat path. The version bump signals the break.
+  1. Read `{stateDir}/claim-citations.json` as raw JSON.
+  2. Detect legacy shape by structural check: `"claimCitations" in snapshot && !("connections" in snapshot)`. (If the file is fresh-format already — e.g., user manually re-created state — skip the rewrite; just verify shape.)
+  3. Rewrite the outer wrapper: `{ claimCitations: [...] }` → `{ connections: [...] }`.
+  4. Walk each citation, rename the four edge fields.
+  5. Recompute each citation's `checksum` from v0.12 `claimCitationFields` (use the same `entityChecksum` helper the library uses at runtime).
+  6. Write the rewritten content back to `claim-citations.json`.
+  7. If `{stateDir}/claim-axioms.json` does not exist, create it with `{ connections: [] }`.
+  8. Write `.proposit-v0.12` marker.
+- **Wiring.** `migrateV012()` is invoked from `src/cli/engine.ts` ahead of `hydratePropositCore`, in the same place v0.11 and v0.10 migrations run today.
+- **Storage updates.** `src/cli/storage/libraries.ts` gains `claimAxiomsPath()`, `readClaimAxiomLibrary()`, and `writeClaimAxiomLibrary()` parallel to the existing citation helpers. `hydratePropositCore` reads `claim-axioms.json` and threads it into `PropositCore`'s constructor.
+
+**Strict in-memory model.** Library-side detection must happen on the raw JSON shape before TypeScript coerces it to the new typed snapshot.
+
+- `ClaimCitationLibrary.fromSnapshot(snapshot, claimLookup, options)` runs a structural pre-check on `snapshot` before treating it as `TClaimConnectionLibrarySnapshot<TCoreClaimCitation>`: if `snapshot` contains the legacy `claimCitations` field or any element has the legacy `citingClaimId` field, throw `LEGACY_CLAIM_CITATION_SHAPE` with an actionable message ("run the v0.12 CLI migration"). The check uses unknown-typed inspection, not the typed `Value.Check`, so legacy shapes don't silently coerce.
+- `PropositCore.fromSnapshot(snapshot, …)` runs the same kind of pre-check: if `claimAxioms` is absent from `snapshot`, throw `LEGACY_MISSING_AXIOM_SLOT` with an actionable message.
+- These guards protect non-CLI consumers (server, mobile, library users with their own persistence layer) from silently loading legacy data.
+
+**Forward compatibility.** Snapshots written by v0.12 may contain claims with `type: "axiomatic"`. Older library versions will fail `Value.Check` against the union — no back-compat path. The version bump signals the break.
 
 ### 6. Errors, tests, base docs
 
@@ -226,6 +249,10 @@ Two shape changes need to flow through stored data:
 - Snapshot round-trip — `PropositCore.fromSnapshot` with `claimAxioms` present; throws `LEGACY_MISSING_AXIOM_SLOT` when absent; throws `LEGACY_CLAIM_CITATION_SHAPE` for legacy citation wrapper.
 - Forking — fork an argument whose derived claims have both citation and axiom support; verify the new fork's `axioms` library has clones with remapped claim IDs.
 - Claim type guard — creating a `type: "axiomatic"` claim; `ClaimLibrary.update` rejects type changes from/to `'axiomatic'`.
+
+**YAML import schema** (`src/lib/schemata/import.ts`) — `CoreYamlClaimSchema.type` is currently `Type.Union([Type.Literal("normal"), Type.Literal("citation")])`. Widen to include `Type.Literal("axiomatic")`. The optional consumer-extension `reasonCode` field rides on `additionalProperties` (core stays minimal — the import schema accepts any extra fields, and the CLI parser/loader is responsible for validating `reasonCode` against `CliAxiomReasonCode` if it's present). Document this in the YAML import section of `README.md`.
+
+**Parser/prompt builder** (`src/lib/parsing/prompt-builder.ts` and `src/lib/parsing/schemata.ts`) — currently restrict the LLM-extraction claim type to `normal | citation`. Update the schema and prompt to support `axiomatic` claims. The prompt-builder needs updated examples and the "claim type rules" section needs an axiomatic entry. (If we choose not to teach the parser axioms in this pass, document the restriction explicitly and add a TODO; my recommendation is to include them since they're now a first-class type. Open question — see Risks.)
 
 **Examples** (`examples/arguments/*.yaml`) — add one fixture with an axiom-backed derivation premise. `test/examples.test.ts` picks it up via the existing glob.
 
@@ -279,7 +306,7 @@ export type TCliClaim = Static<typeof CliClaimSchema>
 - New flag: `--reason <code>`. Required when `--type axiomatic`; rejected for `normal`/`citation`. Validated against `CliAxiomReasonCode`.
 - `--title` and `--body` continue to work as application metadata.
 
-**`claims update` enforcement** — reason code is immutable. The update command rejects `--reason <code>` for any claim (mirroring the core `type` immutability), preserving the "reason determines the axiom's identity" invariant at the CLI layer.
+**`claims update` enforcement** — reason code is immutable. The update command does not declare a `--reason` flag, so commander rejects it as an unknown option automatically. No additional command-level guard is needed; documentation in `claims update --help` notes that reason codes are set at creation only.
 
 **`claims list` / `claims show`** — display a reason badge for axiomatic claims (`[axiom: true-by-definition]`), parallel to citations' `[citation]` badge.
 
@@ -287,7 +314,7 @@ export type TCliClaim = Static<typeof CliClaimSchema>
 
 - `axioms list [--json]` — list all axiom connections via `core.axioms.getAll()`.
 - `axioms show <connection_id> [--json]` — show a single connection.
-- `axioms add --claim-id <id> --supporting-claim-id <axiomId>` — create a connection. Errors propagate from `ClaimAxiomLibrary.add`.
+- `axioms add --claim-id <id> --axiom-id <axiomId>` — create a connection. Errors propagate from `ClaimAxiomLibrary.add`. (Flag name differs from `citations add --supporting-claim-id` because in the axiom command group, the supporting side is always an axiom claim — the more specific name reads better at the call site.)
 - `axioms remove <connection_id>` — delete a connection.
 
 Registered in the CLI program alongside the citations group.
@@ -299,7 +326,7 @@ Registered in the CLI program alongside the citations group.
 - Create an axiomatic claim of each reason kind.
 - Reject `claims add --type axiomatic` without `--reason`.
 - Reject `claims add --type axiomatic --reason bogus`.
-- Reject `claims update --reason ...` for an axiomatic claim.
+- `claims update` rejects `--reason ...` automatically (unknown flag), for any claim type.
 - Create an axiom connection; verify it appears in `axioms list`.
 - Reject an axiom connection where the supporting claim is not `type: axiomatic`.
 - Reject an axiom connection where the supported claim is not `type: normal`.
@@ -308,41 +335,47 @@ Registered in the CLI program alongside the citations group.
 
 ### 8. Evaluation semantics
 
-**Three behaviors by claim type for claim-bound variables:**
+**Behaviors by claim type for claim-bound variables:**
 
 | Claim type | Evaluation behavior | Caller override |
 |---|---|---|
-| `normal` | Caller assigns; unassigned → `null` (today's behavior) | N/A |
-| `citation` | Defaults to `true` if caller doesn't assign | Yes — caller may assign `true`/`false`/`null` |
+| `normal` | Caller assigns; unassigned → `null` | Yes — standard |
+| `citation` | Caller assigns; unassigned → `null` | Yes — standard |
 | `axiomatic` | Forced to `true` | No — caller attempts are rejected pre-flight |
 
+Only axiomatic claims gain new evaluation semantics. Citations and normal claims continue to behave exactly as today — the caller is responsible for assigning truth values. Apps that want to treat unassigned citations as `true` by default implement that policy at their own layer (e.g., the CLI's `analysis create` command can auto-assign `true` for all citation-bound variables at analysis creation time).
+
 **Rejection mechanism for axioms.** The supported pattern for expressing "I want this derivation NOT to be supported by this axiom" is to negate the variable expression in the antecedent via existing `toggleNegation`. `not(true) = false`, so the negated axiom contributes `false` to its parent operator. This works today with no new mechanism — it's the engine's standard negation, applied to the axiom's variable expression in the antecedent only (the consequent variable expression remains protected by `assertNotConsequentExpression`).
+
+**`iff` interaction note.** Per the existing CLAUDE.md note, `iff`-rooted derivations propagate in both directions: an axiom-backed derivation rooted at `iff` forces the consequent `Q` from the axiom's `true`, and (via biconditional) forces the antecedent from a known-true `Q`. This composes correctly under Kleene semantics — the axiom's value is fixed, the biconditional propagation runs as today — but it's worth noting because it means an axiom-backed `iff` derivation can drive truth values into other premises sharing the same claim-bound variable for `Q`.
 
 **Implementation location.** `ArgumentEngine` already holds a reference to `claimLibrary` via its constructor, so the evaluator can resolve claim types without an API change. A pre-pass at the start of `evaluate()` and `checkValidity()` walks the argument's claim-bound variables, looks up each claim's type, and produces an "effective assignments" map:
 
 - For `type === "axiomatic"` variables: force `true`, regardless of any caller value.
-- For `type === "citation"` variables: fill `true` when the caller's map has no entry; honor the caller's value otherwise.
-- For `type === "normal"` variables: pass through caller's value (or `null` if absent), same as today.
+- For `type === "citation"` and `type === "normal"` variables: pass through caller's value unchanged.
 
 The rest of the evaluator operates on the effective map and stays type-agnostic.
 
 **Pre-flight validation (`validateEvaluability`)**:
 
-- Axiomatic variables are excluded from "missing assignment" warnings.
-- Citation variables are excluded from "missing assignment" warnings.
-- Normal variables remain flagged for missing assignment as today.
 - New violation: `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` — fires when the caller's assignment map contains an entry for an axiomatic-bound variable, regardless of the assigned value. Blocks `evaluate()` and `checkValidity()` from running. The message names the variable and the claim and points the caller at the "negate the antecedent variable expression" pattern.
+- No other pre-flight changes. `validateEvaluability` does not currently emit "missing assignment" warnings for any claim-bound variable, and this design does not add them.
 
-**Behavior change for existing citation callers.** Previously, an unassigned citation-bound variable evaluated as `null`; now it evaluates as `true` by default. Callers depending on the `null`-as-unassigned behavior must start explicitly assigning `null`. Likely rare in practice; documented in release notes.
+**`checkArgumentValidity` enumeration carve-out.** `checkArgumentValidity` enumerates `2^n` truth assignments over the argument's claim-bound variables to find admissible assignments and counterexamples. Axiomatic-bound variables must be **excluded** from the enumeration set — their value is fixed at `true` and they are not a free choice. Concretely:
+
+- `checkedVariableIds` excludes any variable where the bound claim has `type === "axiomatic"`.
+- Each generated `assignment.variables` map implicitly fixes axiomatic-bound variables to `true` via the same pre-pass that `evaluate()` runs.
+- Citation-bound variables remain in the enumeration set (they are free choices for validity-check purposes, same as normal variables).
+- Counts (`numAdmissibleAssignments`, counterexample search space) are computed against the reduced enumeration set.
 
 **Tests:**
 
 - Axiomatic variable evaluates to `true`; explicit caller assignment is rejected pre-flight (`AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`).
-- Citation variable defaults to `true` when unassigned.
-- Citation variable honors explicit assignment (`true`, `false`, `null`).
-- Pre-flight does NOT emit missing-assignment for axiomatic or citation variables.
+- Citation and normal variables behave unchanged from today's tests (regression check — no behavior shift).
 - `not(axiomVar)` in an antecedent contributes `false` (regression test for the rejection pattern).
 - Round-trip: a derivation premise backed by an axiom where the antecedent's `OR` includes `not(axiom1)` — the negated axiom doesn't pull the antecedent true on its own.
+- `checkArgumentValidity` over an argument that includes axiomatic-bound variables: enumeration excludes them; counts reflect `2^(n - axiomatic_count)`.
+- `iff`-rooted derivation backed by an axiom forces the consequent `Q` to `true` (propagation through biconditional).
 
 ## Documentation Sync triggers
 
@@ -356,15 +389,16 @@ All entries below fire and are covered by per-section notes above:
 - `src/lib/core/interfaces/library.interfaces.ts` — `Public-Engine-API`. JSDoc for renamed/new interfaces.
 - `src/lib/core/proposit-core.ts` — `Public-API`. JSDoc for new `axioms` field and `forkArgument`'s expanded reachability walk.
 - `examples/arguments/*.yaml` — `Argument-Schema`. New axiom-backed example.
-- `docs/release-notes/upcoming.md` — `Public-API`. User-facing summary: new axiomatic claim type, axiom library, support helper rename, eval semantics change for citations, snapshot migration.
+- `docs/release-notes/upcoming.md` — `Public-API`. User-facing summary: new axiomatic claim type, axiom library, support helper rename, axiomatic evaluation semantics, snapshot migration. No citation behavior change to call out (citations continue to require explicit assignment).
 - `docs/changelogs/upcoming.md` — `Any-Code-Change`. Developer changelog with commit ranges.
 
 ## Risks and open questions
 
-- **Citation eval behavior change.** Defaulting unassigned citation variables to `true` is a semantic change for existing arguments. Mitigation: clear release-note call-out; behavior is what most callers actually want.
 - **Cycle detection asymmetry.** `ClaimCitationLibrary` runs cycle detection; `ClaimAxiomLibrary` does not. Justified by the structural impossibility (axiomatic claims can't be on the dependent side), but documented as an intentional difference in `CLAUDE.md`.
 - **Connection-vs-edge naming.** "Connection" is informal but unambiguous. We considered "association" and "relation" — "relation" overloads with DB/math terminology; "association" reads more clinical.
 - **Deprecation cycle.** No deprecation window for `populateFromCitations`, `getCitationsForCitingClaim`, `EMPTY_CLAIM_CITATION_LOOKUP`, or `CITATION_SOURCE_NOT_CITATION_TYPE`. Direct rename in v0.12, justified by the existing v0.12 breaking-change cycle.
+- **Parser/prompt-builder coverage.** Open question whether the LLM extraction path (`src/lib/parsing/prompt-builder.ts`) should learn about axiomatic claims in this same release, or wait for a follow-up. Recommendation: include in scope so the new type isn't second-class on day one. Implementation lands as part of section 6 work.
+- **Default reason for parsed/imported axioms.** If a user supplies an axiomatic claim via YAML import or LLM parse without a `reasonCode`, the CLI layer needs to either reject the input or supply a default. Recommendation: reject with a clear error (the consumer-extension contract is that `reasonCode` is required for axiomatic claims at the CLI level). Library imports without `reasonCode` are accepted by core (since `additionalProperties` is permissive) but the CLI rejects post-import.
 
 ## Out of scope
 
