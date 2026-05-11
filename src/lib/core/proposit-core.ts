@@ -467,23 +467,35 @@ export class PropositCore<
             }
         }
 
-        // DFS through the citation graph from the seed set, accumulating
-        // every reachable claim along outgoing citation edges. Both ends of
-        // any citation we plan to clone must themselves be cloned.
+        // DFS through both the citation and axiom graphs from the seed set,
+        // accumulating every reachable claim along outgoing supporting-side
+        // edges. Both ends of any connection we plan to clone must themselves
+        // be cloned.
         const citationsToClone: TCitation[] = []
-        // Invariant: every push to citationFrontier is gated by !uniqueClaimIds.has(...),
+        const axiomsToClone: TAxiom[] = []
+        // Invariant: every push to connectionFrontier is gated by !uniqueClaimIds.has(...),
         // so each claim id is processed at most once. No separate visited set needed.
-        const citationFrontier: string[] = Array.from(uniqueClaimIds)
-        while (citationFrontier.length > 0) {
-            const currentId = citationFrontier.pop()!
+        const connectionFrontier: string[] = Array.from(uniqueClaimIds)
+        while (connectionFrontier.length > 0) {
+            const currentId = connectionFrontier.pop()!
 
-            const outgoing =
-                this.citations.getCitationsForCitingClaim(currentId)
-            for (const citation of outgoing) {
+            const outgoingCitations =
+                this.citations.getConnectionsForClaim(currentId)
+            for (const citation of outgoingCitations) {
                 citationsToClone.push(citation)
-                if (!uniqueClaimIds.has(citation.sourceClaimId)) {
-                    uniqueClaimIds.add(citation.sourceClaimId)
-                    citationFrontier.push(citation.sourceClaimId)
+                if (!uniqueClaimIds.has(citation.supportingClaimId)) {
+                    uniqueClaimIds.add(citation.supportingClaimId)
+                    connectionFrontier.push(citation.supportingClaimId)
+                }
+            }
+
+            const outgoingAxioms =
+                this.axioms.getConnectionsForClaim(currentId)
+            for (const axiom of outgoingAxioms) {
+                axiomsToClone.push(axiom)
+                if (!uniqueClaimIds.has(axiom.supportingClaimId)) {
+                    uniqueClaimIds.add(axiom.supportingClaimId)
+                    connectionFrontier.push(axiom.supportingClaimId)
                 }
             }
         }
@@ -514,17 +526,36 @@ export class PropositCore<
 
         // Step 5: Clone citation edges between the cloned claims
         for (const citation of citationsToClone) {
-            const remappedCitingId = claimRemap.get(citation.citingClaimId)
-            const remappedSourceId = claimRemap.get(citation.sourceClaimId)
-            if (!remappedCitingId || !remappedSourceId) continue
+            const remappedClaimId = claimRemap.get(citation.claimId)
+            const remappedSupportingId = claimRemap.get(
+                citation.supportingClaimId
+            )
+            if (!remappedClaimId || !remappedSupportingId) continue
             this.citations.add({
                 ...citation,
                 id: this.generateId(),
-                citingClaimId: remappedCitingId,
-                citingClaimVersion: 0,
-                sourceClaimId: remappedSourceId,
-                sourceClaimVersion: 0,
+                claimId: remappedClaimId,
+                claimVersion: 0,
+                supportingClaimId: remappedSupportingId,
+                supportingClaimVersion: 0,
             } as Omit<TCitation, "checksum">)
+        }
+
+        // Step 5b: Clone axiom edges between the cloned claims
+        for (const axiom of axiomsToClone) {
+            const remappedClaimId = claimRemap.get(axiom.claimId)
+            const remappedSupportingId = claimRemap.get(
+                axiom.supportingClaimId
+            )
+            if (!remappedClaimId || !remappedSupportingId) continue
+            this.axioms.add({
+                ...axiom,
+                id: this.generateId(),
+                claimId: remappedClaimId,
+                claimVersion: 0,
+                supportingClaimId: remappedSupportingId,
+                supportingClaimVersion: 0,
+            } as Omit<TAxiom, "checksum">)
         }
 
         // Step 6: Fork engine
