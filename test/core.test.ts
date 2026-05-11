@@ -31227,3 +31227,162 @@ describe("Propagator interaction with axiomatic variables (v0.12)", () => {
         expect(baseline.conclusion?.variableValues?.[axiomVar.id]).toBe(true)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Task 21: ManagedDerivationPremiseEngine.populateFromSupports (v0.12)
+// — failing tests, to be made green by Task 22 (helper rewrite).
+// ---------------------------------------------------------------------------
+
+describe("ManagedDerivationPremiseEngine.populateFromSupports (v0.12)", () => {
+    function setup() {
+        const core = new PropositCore()
+        const derivedClaim = core.claims.create({ type: "normal" })
+        const cit1 = core.claims.create({ type: "citation" })
+        const cit2 = core.claims.create({ type: "citation" })
+        const ax1 = core.claims.create({ type: "axiomatic" })
+        const ax2 = core.claims.create({ type: "axiomatic" })
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+        const engine = core.arguments.get(argId)!
+        return { core, derivedClaim, cit1, cit2, ax1, ax2, argId, engine }
+    }
+
+    it("no-op when both libraries have no connections for derivedClaim (naked-Q)", () => {
+        const { core, derivedClaim, engine } = setup()
+        const { result: pm } = engine.createPremise({
+            type: "derivation",
+            derivedClaimId: derivedClaim.id,
+        })
+        ;(
+            pm as unknown as {
+                populateFromSupports: (
+                    c: typeof core.citations,
+                    a: typeof core.axioms,
+                    e: typeof engine
+                ) => void
+            }
+        ).populateFromSupports(core.citations, core.axioms, engine)
+        // Still naked-Q — root is a single variable expression for derivedClaim.
+        const root = pm.getExpressions().find((e) => e.parentId === null)
+        expect(root?.type).toBe("variable")
+    })
+
+    it("n=1 citation only: builds IMPLIES(varCit1, Q)", () => {
+        const { core, derivedClaim, cit1, engine } = setup()
+        core.citations.add({
+            id: crypto.randomUUID(),
+            claimId: derivedClaim.id,
+            claimVersion: 0,
+            supportingClaimId: cit1.id,
+            supportingClaimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise({
+            type: "derivation",
+            derivedClaimId: derivedClaim.id,
+        })
+        ;(
+            pm as unknown as {
+                populateFromSupports: (
+                    c: typeof core.citations,
+                    a: typeof core.axioms,
+                    e: typeof engine
+                ) => void
+            }
+        ).populateFromSupports(core.citations, core.axioms, engine)
+        const root = pm.getExpressions().find((e) => e.parentId === null)
+        expect(root?.type).toBe("operator")
+        expect((root as unknown as { operator?: string }).operator).toBe(
+            "implies"
+        )
+    })
+
+    it("n=2 mixed: builds IMPLIES(formula(OR(varCit1, varAx1)), Q)", () => {
+        const { core, derivedClaim, cit1, ax1, engine } = setup()
+        core.citations.add({
+            id: crypto.randomUUID(),
+            claimId: derivedClaim.id,
+            claimVersion: 0,
+            supportingClaimId: cit1.id,
+            supportingClaimVersion: 0,
+        })
+        core.axioms.add({
+            id: crypto.randomUUID(),
+            claimId: derivedClaim.id,
+            claimVersion: 0,
+            supportingClaimId: ax1.id,
+            supportingClaimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise({
+            type: "derivation",
+            derivedClaimId: derivedClaim.id,
+        })
+        ;(
+            pm as unknown as {
+                populateFromSupports: (
+                    c: typeof core.citations,
+                    a: typeof core.axioms,
+                    e: typeof engine
+                ) => void
+            }
+        ).populateFromSupports(core.citations, core.axioms, engine)
+        const exprs = pm.getExpressions()
+        const root = exprs.find((e) => e.parentId === null)!
+        expect((root as unknown as { operator?: string }).operator).toBe(
+            "implies"
+        )
+        // Antecedent (position-0 child) is formula; inside is OR with 2 children.
+        const children = exprs
+            .filter((e) => e.parentId === root.id)
+            .sort((a, b) => a.position - b.position)
+        const antecedent = children[0]
+        expect(antecedent.type).toBe("formula")
+        const orNodes = exprs.filter((e) => e.parentId === antecedent.id)
+        expect(orNodes).toHaveLength(1)
+        expect((orNodes[0] as unknown as { operator?: string }).operator).toBe(
+            "or"
+        )
+    })
+
+    it("rejects when antecedent is already non-empty", () => {
+        const { core, derivedClaim, cit1, ax1, engine } = setup()
+        core.citations.add({
+            id: crypto.randomUUID(),
+            claimId: derivedClaim.id,
+            claimVersion: 0,
+            supportingClaimId: cit1.id,
+            supportingClaimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise({
+            type: "derivation",
+            derivedClaimId: derivedClaim.id,
+        })
+        ;(
+            pm as unknown as {
+                populateFromSupports: (
+                    c: typeof core.citations,
+                    a: typeof core.axioms,
+                    e: typeof engine
+                ) => void
+            }
+        ).populateFromSupports(core.citations, core.axioms, engine)
+        // Try again — antecedent is now populated.
+        core.axioms.add({
+            id: crypto.randomUUID(),
+            claimId: derivedClaim.id,
+            claimVersion: 0,
+            supportingClaimId: ax1.id,
+            supportingClaimVersion: 0,
+        })
+        expect(() =>
+            (
+                pm as unknown as {
+                    populateFromSupports: (
+                        c: typeof core.citations,
+                        a: typeof core.axioms,
+                        e: typeof engine
+                    ) => void
+                }
+            ).populateFromSupports(core.citations, core.axioms, engine)
+        ).toThrow(/DERIVATION_ANTECEDENT_NON_EMPTY/)
+    })
+})
