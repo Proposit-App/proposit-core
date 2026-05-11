@@ -12,6 +12,8 @@ export interface TCoreChecksumConfig {
     roleFields?: Set<string>
     /** Fields to hash for claim entities. Defaults to ["version", "type"]. */
     claimFields?: Set<string>
-    /** Fields to hash for claim citations. Defaults to ["citingClaimId", "citingClaimVersion", "sourceClaimId", "sourceClaimVersion"]. */
+    /** Fields to hash for claim citations. Defaults to ["claimId", "claimVersion", "supportingClaimId", "supportingClaimVersion"]. */
     claimCitationFields?: Set<string>
+    /** Fields to hash for claim axioms. Defaults to ["claimId", "claimVersion", "supportingClaimId", "supportingClaimVersion"]. */
+    claimAxiomFields?: Set<string>
 }
