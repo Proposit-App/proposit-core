@@ -30824,3 +30824,62 @@ describe("ClaimAxiomLibrary (v0.12)", () => {
         expect(normalClaim).toBeDefined() // suppress unused
     })
 })
+
+describe("PropositCore axioms field (v0.12)", () => {
+    it("exposes axioms as a public field", () => {
+        const core = new PropositCore()
+        expect(core.axioms).toBeInstanceOf(ClaimAxiomLibrary)
+    })
+
+    it("citations field is named 'citations' (renamed from claimCitations)", () => {
+        const core = new PropositCore()
+        expect(core.citations).toBeInstanceOf(ClaimCitationLibrary)
+        expect("claimCitations" in core).toBe(false)
+    })
+
+    it("snapshot includes citations and axioms slots", () => {
+        const core = new PropositCore()
+        const snap = core.snapshot()
+        expect(snap).toHaveProperty("citations")
+        expect(snap).toHaveProperty("axioms")
+        expect(snap.citations).toEqual({ connections: [] })
+        expect(snap.axioms).toEqual({ connections: [] })
+    })
+
+    it("fromSnapshot throws LEGACY_MISSING_AXIOM_SLOT when 'axioms' is absent", () => {
+        const legacy = {
+            arguments: { arguments: [] },
+            claims: { claims: [] },
+            citations: { connections: [] },
+            forks: {
+                arguments: [],
+                premises: [],
+                expressions: [],
+                variables: [],
+                claims: [],
+            },
+        } as unknown
+        expect(() =>
+            PropositCore.fromSnapshot(legacy as never)
+        ).toThrow(/LEGACY_MISSING_AXIOM_SLOT/)
+    })
+
+    it("fromSnapshot throws LEGACY_CLAIM_CITATION_SHAPE when 'claimCitations' slot present", () => {
+        const legacy = {
+            arguments: { arguments: [] },
+            claims: { claims: [] },
+            claimCitations: { claimCitations: [] }, // pre-v0.12 shape
+            axioms: { connections: [] },
+            forks: {
+                arguments: [],
+                premises: [],
+                expressions: [],
+                variables: [],
+                claims: [],
+            },
+        } as unknown
+        expect(() =>
+            PropositCore.fromSnapshot(legacy as never)
+        ).toThrow(/LEGACY_CLAIM_CITATION_SHAPE/)
+    })
+})
