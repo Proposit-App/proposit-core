@@ -443,12 +443,14 @@ export function registerPremiseCommands(
                 errorExit(err instanceof Error ? err.message : String(err))
             }
 
-            // populateFromCitations mutates the managed engine's expression tree
-            // and calls engine.ensureClaimBoundVariable for each source citation,
-            // which adds new claim-bound variables to the live engine.
+            // populateFromSupports mutates the managed engine's expression tree
+            // and calls engine.ensureClaimBoundVariable for each supporting
+            // claim (citations + axioms), which adds new claim-bound variables
+            // to the live engine.
             try {
-                managed.populateFromCitations(
+                managed.populateFromSupports(
                     propositCore.claimCitations,
+                    propositCore.axioms,
                     engine
                 )
             } catch (err) {
@@ -458,7 +460,7 @@ export function registerPremiseCommands(
             // Reflow: push the managed engine's updated expression tree into the
             // live premise engine. The live premise (a plain PremiseEngine) uses
             // loadExpressions without derivation validation — that already ran
-            // inside populateFromCitations via assertWellFormed().
+            // inside populateFromSupports via assertWellFormed().
             livePremise.loadExpressions(managed.getExpressions())
 
             await persistEngine(engine)

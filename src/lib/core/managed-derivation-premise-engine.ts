@@ -16,7 +16,7 @@ import {
 } from "./argument-engine.js"
 
 /**
- * Minimal structural interface needed by `populateFromCitations`. Using a
+ * Minimal structural interface needed by `populateFromSupports`. Using a
  * structural type rather than the concrete `ArgumentEngine<…>` class prevents
  * generic-parameter variance errors when the caller uses default type params.
  */
@@ -40,6 +40,7 @@ import type {
 } from "./expression-manager.js"
 import type { TCoreMutationResult } from "../types/mutation.js"
 import type { ClaimCitationLibrary } from "./claim-citation-library.js"
+import type { ClaimAxiomLibrary } from "./claim-axiom-library.js"
 
 /**
  * A managed engine for derivation premises that enforces structural rules
@@ -72,7 +73,7 @@ export class ManagedDerivationPremiseEngine<
 > extends PremiseEngine<TArg, TPremise, TExpr, TVar> {
     /**
      * Captured from `config.generateId` (or the default UUID generator) for
-     * use in `populateFromCitations`, which needs to mint new expression IDs.
+     * use in `populateFromSupports`, which needs to mint new expression IDs.
      * Stored separately because `PremiseEngine`'s generateId is private.
      * Not `readonly` because `fromSnapshot` re-injects it after the prototype
      * upgrade.
@@ -156,7 +157,7 @@ export class ManagedDerivationPremiseEngine<
         >
 
         // Inject the generateId captured from config (or the default) so that
-        // populateFromCitations can mint new expression IDs.
+        // populateFromSupports can mint new expression IDs.
         engine.generateIdFn = generateId ?? defaultGenerateId
 
         // Validate the full tree — expressions are fully loaded at this point.
@@ -370,20 +371,21 @@ export class ManagedDerivationPremiseEngine<
     // -------------------------------------------------------------------------
 
     /**
-     * One-shot snapshot helper that builds the antecedent of this derivation
-     * premise from the current global citations of the derived claim.
+     * One-shot helper that builds the antecedent of this derivation premise
+     * from the current global support (citations + axiom invocations) of the
+     * derived claim.
      *
-     * Behavior by citation count:
+     * Behavior by total support count `n = citations + axioms`:
      *   - n = 0: no change. Premise stays in its current form (typically
      *     naked-Q, indicating "no support given").
-     *   - n = 1: produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
-     *   - n ≥ 2: produces `IMPLIES(formula(OR(VariableExpression(S1), …,
-     *     VariableExpression(Sn))), VariableExpression(Q))`. The formula
-     *     buffer between IMPLIES and OR is auto-inserted by the engine's
-     *     standard grammar (`wrapInsertFormula`).
+     *   - n = 1: `IMPLIES(VarExpr(S1), Q)`.
+     *   - n ≥ 2: `IMPLIES(formula(OR(VarExpr(S1), …, VarExpr(Sn))), Q)`.
+     *     Citations come first, axioms second; source order preserved within
+     *     each. The formula buffer between IMPLIES and OR is auto-inserted by
+     *     the engine's standard grammar.
      *
-     * Materializes a claim-bound variable for each cited source via
-     * `argumentEngine.ensureClaimBoundVariable(citation.sourceClaimId)`.
+     * Materializes a claim-bound variable for each supporting claim via
+     * `argumentEngine.ensureClaimBoundVariable(supportingClaimId)`.
      *
      * **Tree construction approach:** Mutations are performed via `super.*`
      * calls, bypassing this class's overrides (which call `assertWellFormed()`
@@ -393,15 +395,14 @@ export class ManagedDerivationPremiseEngine<
      * IMPLIES and OR for n ≥ 2 automatically. `assertWellFormed()` is called
      * at the end to validate the final state.
      *
-     * @throws InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY) when the
-     *         derivation premise already has a non-empty antecedent (i.e., the
-     *         root is `implies`/`iff` with a position-0 child). The caller
-     *         decides whether to delete and re-create the premise.
+     * @throws InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY) when
+     *         the antecedent slot is already filled.
      *
-     * @since 0.11.0
+     * @since 0.12.0
      */
-    public populateFromCitations(
+    public populateFromSupports(
         citationLib: ClaimCitationLibrary,
+        axiomLib: ClaimAxiomLibrary,
         argumentEngine: TVariableMaterializer
     ): void {
         const premise = this.premise as TCoreDerivationPremise
@@ -435,28 +436,63 @@ export class ManagedDerivationPremiseEngine<
             }
         }
 
-        // 2. Look up citations for the derived claim.
-        const citations = citationLib.getCitationsForCitingClaim(derivedClaimId)
-        if (citations.length === 0) return
+        // 2. Collect supporting connections from both libraries (citations
+        //    first, axioms second; source order preserved within each).
+        const citationConnections =
+            citationLib.getConnectionsForClaim(derivedClaimId)
+        const axiomConnections =
+            axiomLib.getConnectionsForClaim(derivedClaimId)
+        const totalCount =
+            citationConnections.length + axiomConnections.length
+        if (totalCount === 0) return
 
-        // 3. Materialize a claim-bound variable for each cited source.
+        // 3. Materialize claim-bound variables for each support.
         // ensureClaimBoundVariable adds the variable to the live argumentEngine,
         // but the managed engine has its own VariableManager snapshot that was
         // taken before these new variables were created. Register each newly
         // returned variable into this engine's VariableManager so that the
         // variable expressions we construct below pass assertVariableExpressionValid.
-        const sourceVariables = citations.map((c) =>
-            argumentEngine.ensureClaimBoundVariable(c.sourceClaimId)
-        )
-        for (const sv of sourceVariables) {
+        const supportingVariables: TClaimBoundVariable[] = []
+        for (const conn of citationConnections) {
+            supportingVariables.push(
+                argumentEngine.ensureClaimBoundVariable(conn.supportingClaimId)
+            )
+        }
+        for (const conn of axiomConnections) {
+            supportingVariables.push(
+                argumentEngine.ensureClaimBoundVariable(conn.supportingClaimId)
+            )
+        }
+        for (const sv of supportingVariables) {
             if (!this.variables.hasVariable(sv.id)) {
                 this.variables.addVariable(sv as unknown as TVar)
             }
         }
 
-        // 4. Build the antecedent expression tree. Mutations go via super.*
-        //    to bypass this class's overrides, which validate after every call
-        //    and would reject intermediate (partially built) tree states.
+        // 4. Build the antecedent expression tree.
+        this.buildAntecedentFromSupportingVariables(supportingVariables)
+
+        // 5. Validate the final tree is well-formed.
+        this.assertWellFormed()
+    }
+
+    /**
+     * Build the antecedent expression tree from a list of already-materialized
+     * supporting variables. Shared between populate helpers.
+     *
+     * - n=0 → no-op (caller decides whether to leave the naked-Q form intact).
+     * - n=1 → IMPLIES(VarExpr(S1), Q) using wrapExpression with rightNodeId=Q.
+     * - n≥2 → IMPLIES(formula(OR(S1, ..., Sn)), Q) via wrapExpression + appendExpression.
+     *
+     * Uses `super.*` mutation calls to bypass this class's overrides during
+     * multi-step construction. Caller is responsible for the final
+     * `assertWellFormed()`.
+     */
+    private buildAntecedentFromSupportingVariables(
+        supportingVars: TClaimBoundVariable[]
+    ): void {
+        if (supportingVars.length === 0) return
+
         const argId = (this.premise as TCorePremise).argumentId
         const argVersion = (this.premise as TCorePremise).argumentVersion
         const premiseId = (this.premise as TCorePremise).id
@@ -464,7 +500,7 @@ export class ManagedDerivationPremiseEngine<
         // qRootExprId is the ID of the current naked-Q root variable expression.
         const qRootExprId = this.rootExpressionId!
 
-        if (citations.length === 1) {
+        if (supportingVars.length === 1) {
             // n = 1: wrap naked-Q with IMPLIES using rightNodeId so that Q lands
             // at the midpoint (consequent) position and S1 lands at initial.
             const impliesId = this.generateIdFn()
@@ -485,7 +521,7 @@ export class ManagedDerivationPremiseEngine<
                 premiseId,
                 parentId: null, // wrapExpression sets the parentId internally
                 type: "variable" as const,
-                variableId: sourceVariables[0].id,
+                variableId: supportingVars[0].id,
             } as TExpressionWithoutPosition<TExpr>
             // rightNodeId=qRootExprId: existing node (Q) → midpoint (consequent),
             // newSibling (S1) → initial (antecedent).
@@ -495,7 +531,7 @@ export class ManagedDerivationPremiseEngine<
             // throughout — the engine's wrapInsertFormula rule auto-inserts a
             // formula buffer between IMPLIES and OR. The OR keeps its original
             // ID, so subsequent appendExpression(orId, ...) calls still attach
-            // the source variables to the same OR node.
+            // the supporting variables to the same OR node.
             const impliesId = this.generateIdFn()
             const orId = this.generateIdFn()
             const impliesOp = {
@@ -518,8 +554,8 @@ export class ManagedDerivationPremiseEngine<
             } as TExpressionWithoutPosition<TExpr>
             // rightNodeId=qRootExprId: Q → midpoint (consequent), OR → initial (antecedent).
             super.wrapExpression(impliesOp, orOp, undefined, qRootExprId)
-            // Append each source variable expression as a child of OR.
-            for (const sourceVar of sourceVariables) {
+            // Append each supporting variable expression as a child of OR.
+            for (const sourceVar of supportingVars) {
                 const srcExprId = this.generateIdFn()
                 const srcVarExpr = {
                     id: srcExprId,
@@ -533,9 +569,6 @@ export class ManagedDerivationPremiseEngine<
                 super.appendExpression(orId, srcVarExpr)
             }
         }
-
-        // 5. Validate the final tree is well-formed.
-        this.assertWellFormed()
     }
 
     // -------------------------------------------------------------------------

@@ -29814,20 +29814,21 @@ describe("derivation premise extras handling", () => {
 })
 
 // ---------------------------------------------------------------------------
-// ManagedDerivationPremiseEngine.populateFromCitations (Task 8)
+// ManagedDerivationPremiseEngine.populateFromSupports (Task 22) — citation-only fixtures
 // ---------------------------------------------------------------------------
 
-describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
+describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)", () => {
     /**
      * Hand-builds a setup with:
      *   - A ClaimLibrary that has a derived claim (normal) and N source claims
      *     (citation-type) where N = citationCount.
      *   - A ClaimCitationLibrary populated with N citations from derivedClaim
      *     to each source claim.
+     *   - An (empty) ClaimAxiomLibrary for the second populateFromSupports arg.
      *   - An ArgumentEngine that knows about derivedClaim.
      *   - A ManagedDerivationPremiseEngine in naked-Q form for derivedClaim.
      *
-     * Returns the engine, argumentEngine, citationLib, and relevant IDs.
+     * Returns the engine, argumentEngine, citationLib, axiomLib, and relevant IDs.
      */
     function setupDerivationWithCitations(citationCount: number) {
         const argId = "00000000-0000-0000-0000-999000000001"
@@ -29850,12 +29851,15 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             const derivedClaimCurrent = claimLib.getCurrent(derivedClaim.id)!
             citationLib.add({
                 id: `cit-${argId}-${i}`,
-                citingClaimId: derivedClaim.id,
-                citingClaimVersion: derivedClaimCurrent.version,
-                sourceClaimId: sourceClaimIds[i],
-                sourceClaimVersion: sourceClaim.version,
+                claimId: derivedClaim.id,
+                claimVersion: derivedClaimCurrent.version,
+                supportingClaimId: sourceClaimIds[i],
+                supportingClaimVersion: sourceClaim.version,
             })
         }
+
+        // Build (empty) axiom library — populateFromSupports requires both libs.
+        const axiomLib = new ClaimAxiomLibrary(claimLib)
 
         // Build ArgumentEngine.
         const argumentEngine = new ArgumentEngine(
@@ -29913,6 +29917,7 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             argumentEngine,
             claimLib,
             citationLib,
+            axiomLib,
             derivedClaimId: derivedClaim.id,
             sourceClaimIds,
             consequentVarId: consequentVariable.id,
@@ -29923,10 +29928,10 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     }
 
     it("leaves naked-Q form unchanged when citation library has no citations", () => {
-        const { engine, argumentEngine, citationLib } =
+        const { engine, argumentEngine, citationLib, axiomLib } =
             setupDerivationWithCitations(0)
         const expressionsBefore = engine.getExpressions().length
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         // No change: still naked-Q with a single variable expression.
         expect(engine.getExpressions()).toHaveLength(expressionsBefore)
         const root = engine.getExpressions()[0]
@@ -29938,10 +29943,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             engine,
             argumentEngine,
             citationLib,
+            axiomLib,
             sourceClaimIds,
             consequentVarId,
         } = setupDerivationWithCitations(1)
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
 
         const exprs = engine.getExpressions()
         // Should have 3 expressions: IMPLIES root, S1 var, Q var.
@@ -29984,10 +29990,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
             engine,
             argumentEngine,
             citationLib,
+            axiomLib,
             sourceClaimIds,
             consequentVarId,
         } = setupDerivationWithCitations(3)
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
 
         const exprs = engine.getExpressions()
         // Expect: IMPLIES root, formula buffer, OR antecedent, S1 var, S2 var,
@@ -30046,9 +30053,9 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         // Locks the v0.11.2 fix that dropped PERMISSIVE_GRAMMAR_CONFIG bypass:
         // the engine's wrapInsertFormula rule now inserts a formula between
         // IMPLIES and OR rather than producing the legacy IMPLIES → OR shape.
-        const { engine, argumentEngine, citationLib } =
+        const { engine, argumentEngine, citationLib, axiomLib } =
             setupDerivationWithCitations(2)
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
 
         const exprs = engine.getExpressions()
         const root = exprs.find((e) => e.parentId === null)!
@@ -30071,17 +30078,17 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     })
 
     it("produces a tree where strict-load and auto-normalize-load yield identical combinedChecksum (v0.11.2 regression)", () => {
-        // Before v0.11.2, populateFromCitations bypassed standard grammar in
-        // the n≥2 branch and produced IMPLIES → OR (no formula). That shape
-        // could not survive a strict round trip with
+        // Before v0.11.2, populateFromSupports (then populateFromCitations)
+        // bypassed standard grammar in the n≥2 branch and produced IMPLIES → OR
+        // (no formula). That shape could not survive a strict round trip with
         // enforceFormulaBetweenOperators=true, and it produced a different
         // combinedChecksum than auto-normalize-on reload (which would insert
         // the formula). The fix uses standard grammar throughout so the
         // produced shape is the canonical IMPLIES(formula(OR(...)), Q) and
         // both load paths agree.
-        const { engine, argumentEngine, claimLib, citationLib } =
+        const { engine, argumentEngine, claimLib, citationLib, axiomLib } =
             setupDerivationWithCitations(3)
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
 
         // Compose a full ArgumentEngine snapshot from the live argumentEngine
         // (which holds the variables) plus the standalone managed engine's
@@ -30118,11 +30125,11 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     })
 
     it("creates new claim-bound variables for cited claims that lack them", () => {
-        const { engine, argumentEngine, citationLib, sourceClaimIds } =
+        const { engine, argumentEngine, citationLib, axiomLib, sourceClaimIds } =
             setupDerivationWithCitations(2)
         const varsBefore = argumentEngine.getVariables().length
         // Source claims have no variables yet in argumentEngine.
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         const varsAfter = argumentEngine.getVariables().length
         // Two new variables should have been created (one per source claim).
         expect(varsAfter).toBe(varsBefore + 2)
@@ -30143,14 +30150,14 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     })
 
     it("does not create duplicate variables when a variable already exists for a cited claim", () => {
-        const { engine, argumentEngine, citationLib, sourceClaimIds } =
+        const { engine, argumentEngine, citationLib, axiomLib, sourceClaimIds } =
             setupDerivationWithCitations(1)
         // Pre-create the variable for the source claim.
         const existingVar = argumentEngine.ensureClaimBoundVariable(
             sourceClaimIds[0]
         )
         const varsBefore = argumentEngine.getVariables().length
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         // Variable count should not increase (ensureClaimBoundVariable is idempotent).
         expect(argumentEngine.getVariables().length).toBe(varsBefore)
         // The antecedent expression references the pre-existing variable.
@@ -30166,23 +30173,23 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     })
 
     it("rejects with DERIVATION_ANTECEDENT_NON_EMPTY when premise already has an antecedent", () => {
-        const { engine, argumentEngine, citationLib } =
+        const { engine, argumentEngine, citationLib, axiomLib } =
             setupDerivationWithCitations(1)
         // Populate once.
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         // Populate again — should throw because antecedent is now non-empty.
         expect(() =>
-            engine.populateFromCitations(citationLib, argumentEngine)
+            engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         ).toThrow(/DERIVATION_ANTECEDENT_NON_EMPTY/)
     })
 
     it("throws InvariantViolationError with DERIVATION_ANTECEDENT_NON_EMPTY code", () => {
-        const { engine, argumentEngine, citationLib } =
+        const { engine, argumentEngine, citationLib, axiomLib } =
             setupDerivationWithCitations(1)
-        engine.populateFromCitations(citationLib, argumentEngine)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         let caught: unknown
         try {
-            engine.populateFromCitations(citationLib, argumentEngine)
+            engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         } catch (e) {
             caught = e
         }
@@ -30194,7 +30201,7 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
     it("does not modify cited claims' own derivation premises (non-recursive)", () => {
         // Set up: derivedClaim cites sourceA. sourceA is a citation-type claim
         // and has its OWN derivation premise (backed by sourceA itself as
-        // derivedClaimId on a second engine). populateFromCitations on the first
+        // derivedClaimId on a second engine). populateFromSupports on the first
         // engine must not touch the second engine.
         const argId = "00000000-0000-0000-0000-999000000002"
         const argVersion = 1
@@ -30209,19 +30216,20 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         const citationLib = new ClaimCitationLibrary(claimLib)
         citationLib.add({
             id: "cit-main",
-            citingClaimId: derivedClaim.id,
-            citingClaimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
-            sourceClaimId: sourceClaim.id,
-            sourceClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
+            claimId: derivedClaim.id,
+            claimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
+            supportingClaimId: sourceClaim.id,
+            supportingClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
         })
         citationLib.add({
             id: "cit-source",
-            citingClaimId: sourceClaim.id,
-            citingClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
-            sourceClaimId: grandSourceClaim.id,
-            sourceClaimVersion: claimLib.getCurrent(grandSourceClaim.id)!
+            claimId: sourceClaim.id,
+            claimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
+            supportingClaimId: grandSourceClaim.id,
+            supportingClaimVersion: claimLib.getCurrent(grandSourceClaim.id)!
                 .version,
         })
+        const axiomLib = new ClaimAxiomLibrary(claimLib)
 
         const argumentEngine = new ArgumentEngine(
             ARG_OBJ,
@@ -30315,7 +30323,7 @@ describe("ManagedDerivationPremiseEngine.populateFromCitations", () => {
         expect(engine2.getExpressions()).toHaveLength(1)
 
         // Populate engine1 only.
-        engine1.populateFromCitations(citationLib, argumentEngine)
+        engine1.populateFromSupports(citationLib, axiomLib, argumentEngine)
 
         // Engine1 should now have IMPLIES(S_sourceA, Q) = 3 expressions.
         expect(engine1.getExpressions()).toHaveLength(3)
