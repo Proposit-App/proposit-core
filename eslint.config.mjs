@@ -77,15 +77,15 @@ export default tseslint.config(
         },
         rules: {
             semi: "off",
-            "@typescript-eslint/no-explicit-any": "warn",
+            "@typescript-eslint/no-explicit-any": "error",
             "@typescript-eslint/no-empty-object-type": "warn",
             "@typescript-eslint/no-floating-promises": "error",
             "@typescript-eslint/no-misused-promises": [
                 "error",
                 { checksVoidReturn: { arguments: true, attributes: false } },
             ],
-            "@typescript-eslint/require-await": "warn",
-            "@typescript-eslint/no-unsafe-assignment": "warn",
+            "@typescript-eslint/require-await": "error",
+            "@typescript-eslint/no-unsafe-assignment": "error",
             "prefer-promise-reject-errors": "off",
             "@typescript-eslint/prefer-promise-reject-errors": [
                 "error",

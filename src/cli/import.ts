@@ -222,7 +222,7 @@ export function importArgumentFromYaml(yamlString: string): {
     claimLibrary: ClaimLibrary
     claimCitationLibrary: ClaimCitationLibrary
 } {
-    const raw = parseYaml(yamlString)
+    const raw: unknown = parseYaml(yamlString)
     const input: TCoreYamlArgument = Value.Parse(CoreYamlArgumentSchema, raw)
 
     // Validate premise shapes before any parsing
