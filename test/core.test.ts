@@ -31155,3 +31155,75 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
         expect(result.numAdmissibleAssignments).toBe(2)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Task 20: Propagator interaction with axiomatic variables (v0.12)
+// ---------------------------------------------------------------------------
+
+describe("Propagator interaction with axiomatic variables (v0.12)", () => {
+    it("rejecting an operator whose only unknown child is axiom-bound does not flip the axiom", () => {
+        const core = new PropositCore()
+        const axiomClaim = core.claims.create({ type: "axiomatic" })
+        const normalClaim = core.claims.create({ type: "normal" })
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+        const engine = core.arguments.get(argId)!
+        const normalVar = engine.ensureClaimBoundVariable(normalClaim.id)
+        const axiomVar = engine.ensureClaimBoundVariable(axiomClaim.id)
+        const { result: pm } = engine.createPremise({ type: "freeform" })
+        const premiseId = pm.toPremiseData().id
+        const andId = crypto.randomUUID()
+        pm.addExpression({
+            id: andId,
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "operator",
+            operator: "and",
+        })
+        pm.appendExpression(andId, {
+            id: crypto.randomUUID(),
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId,
+            parentId: andId,
+            type: "variable",
+            variableId: normalVar.id,
+        })
+        pm.appendExpression(andId, {
+            id: crypto.randomUUID(),
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId,
+            parentId: andId,
+            type: "variable",
+            variableId: axiomVar.id,
+        })
+        // Evaluate with the AND operator REJECTED. The propagator wants to
+        // flip one child to false; the axiomatic-bound variable is
+        // force-true and lives in the propagator's `userAssigned` set, so
+        // it is immune to overwrite.
+        const rejectedResult = engine.evaluate({
+            variables: {},
+            operatorAssignments: { [andId]: "rejected" },
+        })
+        // The axiomatic variable stays true (forced); the rejection's
+        // downstream propagation halts gracefully — the premise still
+        // evaluates without throwing.
+        expect(rejectedResult.ok).toBe(true)
+        expect(rejectedResult.conclusion).toBeDefined()
+        expect(rejectedResult.conclusion?.variableValues?.[axiomVar.id]).toBe(
+            true
+        )
+        // Re-evaluate without rejection — baseline sanity.
+        const baseline = engine.evaluate({
+            variables: {},
+            operatorAssignments: {},
+        })
+        expect(baseline.ok).toBe(true)
+        expect(baseline.conclusion).toBeDefined()
+        expect(baseline.conclusion?.variableValues?.[axiomVar.id]).toBe(true)
+    })
+})

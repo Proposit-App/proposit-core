@@ -77,6 +77,13 @@ export interface TEvaluablePremise {
  * Run fixed-point constraint propagation over accepted/rejected operators.
  * Fills unknown (null) variable values based on operator semantics.
  * Never overwrites user-assigned values (true/false).
+ *
+ * Axiomatic-bound variables are forced to `true` by `ArgumentEngine`'s
+ * pre-pass before this function runs; they land in the propagator's
+ * `userAssigned` set and are immune to overwrite. Rejecting an operator
+ * whose only unknown child is axiom-bound is therefore a propagation no-op
+ * on that branch — the axiom stays true and the rejection's downstream
+ * propagation halts gracefully.
  */
 export function propagateOperatorConstraints(
     ctx: TArgumentEvaluationContext,
