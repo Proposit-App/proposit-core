@@ -30967,3 +30967,189 @@ describe("PropositCore.forkArgument transitive closure across axioms (v0.12)", (
         expect(claimRemap.get(axiomForA.id)).toBeDefined()
     })
 })
+
+// ---------------------------------------------------------------------------
+// Task 17: ArgumentEngine.evaluate / checkValidity axiom force-true semantics
+// (v0.12) — failing tests, to be made green by Tasks 18-20.
+// ---------------------------------------------------------------------------
+
+describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
+    it("forces axiomatic-bound variables to true with no caller assignment", () => {
+        const core = new PropositCore()
+        const claim = core.claims.create({ type: "axiomatic" })
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+        const engine = core.arguments.get(argId)!
+        const variable = engine.ensureClaimBoundVariable(claim.id)
+        // Build a trivial premise with the variable as its expression. With
+        // a single variable expression at the root, it is a constraint
+        // premise; because it is the first premise added, it is also
+        // auto-designated as the conclusion.
+        const { result: pm } = engine.createPremise({ type: "freeform" })
+        const premiseId = pm.toPremiseData().id
+        pm.addExpression({
+            id: crypto.randomUUID(),
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "variable",
+            variableId: variable.id,
+        })
+        const result = engine.evaluate({
+            variables: {},
+            operatorAssignments: {},
+        })
+        // The premise's expression should evaluate to true because the
+        // axiomatic-bound variable is force-true.
+        expect(result.ok).toBe(true)
+        expect(result.conclusion?.rootValue).toBe(true)
+    })
+
+    it("rejects an explicit assignment of an axiomatic-bound variable", () => {
+        const core = new PropositCore()
+        const claim = core.claims.create({ type: "axiomatic" })
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+        const engine = core.arguments.get(argId)!
+        const variable = engine.ensureClaimBoundVariable(claim.id)
+        expect(() =>
+            engine.evaluate({
+                variables: { [variable.id]: true },
+                operatorAssignments: {},
+            })
+        ).toThrow(/AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN/)
+        expect(() =>
+            engine.evaluate({
+                variables: { [variable.id]: false },
+                operatorAssignments: {},
+            })
+        ).toThrow(/AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN/)
+        expect(() =>
+            engine.evaluate({
+                variables: { [variable.id]: null },
+                operatorAssignments: {},
+            })
+        ).toThrow(/AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN/)
+    })
+
+    // The forward direction relies on `populateFromSupports` (Task 22) to build
+    // an `IMPLIES(axiomVar, Q)` antecedent and then swap the root to `iff`. The
+    // helper does not yet exist; the test is skipped here and will be revisited
+    // alongside Task 22.
+    it.skip("iff-rooted derivation backed by an axiom forces consequent Q to true (blocked by Task 22 populateFromSupports)", () => {
+        // An axiom-backed derivation whose root operator is iff propagates
+        // bidirectionally: axiom forces antecedent true → Q true; and
+        // a known-true Q would force the antecedent true. Verify the forward
+        // direction lands Q at true.
+        const core = new PropositCore()
+        const derivedClaim = core.claims.create({ type: "normal" })
+        const axiomClaim = core.claims.create({ type: "axiomatic" })
+        core.axioms.add({
+            id: "iff-a",
+            claimId: derivedClaim.id,
+            claimVersion: 0,
+            supportingClaimId: axiomClaim.id,
+            supportingClaimVersion: 0,
+        })
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+        const engine = core.arguments.get(argId)!
+        const { result: premEngine } = engine.createPremise({
+            type: "derivation",
+            derivedClaimId: derivedClaim.id,
+        })
+        // Populate the antecedent via supports, then swap root operator
+        // implies → iff. `populateFromSupports` is Task 22; until it exists
+        // this test is skipped.
+        ;(
+            premEngine as unknown as {
+                populateFromSupports: (
+                    c: typeof core.citations,
+                    a: typeof core.axioms,
+                    e: typeof engine
+                ) => void
+            }
+        ).populateFromSupports(core.citations, core.axioms, engine)
+        const root = (premEngine as unknown as { rootExpressionId: string })
+            .rootExpressionId
+        ;(
+            premEngine as unknown as {
+                changeOperator: (id: string, op: string) => void
+            }
+        ).changeOperator(root, "iff")
+        engine.setConclusionPremise(premEngine.toPremiseData().id)
+        const result = engine.evaluate({
+            variables: {},
+            operatorAssignments: {},
+        })
+        const consequentVar = engine
+            .getVariables()
+            .find(
+                (v) =>
+                    isClaimBound(
+                        v as unknown as TCorePropositionalVariable
+                    ) &&
+                    (v as unknown as TClaimBoundVariable).claimId ===
+                        derivedClaim.id
+            )
+        expect(consequentVar).toBeDefined()
+        // Inspect the conclusion premise's variable values map (no
+        // propagatedVariableValues without includeDiagnostics).
+        expect(result.conclusion?.variableValues?.[consequentVar!.id]).toBe(
+            true
+        )
+    })
+
+    it("checkValidity excludes axiomatic-bound variables from enumeration", () => {
+        const core = new PropositCore()
+        const normalClaim = core.claims.create({ type: "normal" })
+        const axiomClaim = core.claims.create({ type: "axiomatic" })
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+        const engine = core.arguments.get(argId)!
+        const normalVar = engine.ensureClaimBoundVariable(normalClaim.id)
+        const axiomVar = engine.ensureClaimBoundVariable(axiomClaim.id)
+        // Conclusion premise: P ∧ axiom — counts admissible assignments over
+        // the free vars (just P; axiom is forced true).
+        const { result: pm } = engine.createPremise({ type: "freeform" })
+        const premiseId = pm.toPremiseData().id
+        const andId = crypto.randomUUID()
+        pm.addExpression({
+            id: andId,
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId,
+            parentId: null,
+            position: POSITION_INITIAL,
+            type: "operator",
+            operator: "and",
+        })
+        pm.appendExpression(andId, {
+            id: crypto.randomUUID(),
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId,
+            parentId: andId,
+            type: "variable",
+            variableId: normalVar.id,
+        })
+        pm.appendExpression(andId, {
+            id: crypto.randomUUID(),
+            argumentId: argId,
+            argumentVersion: 0,
+            premiseId,
+            parentId: andId,
+            type: "variable",
+            variableId: axiomVar.id,
+        })
+        engine.setConclusionPremise(premiseId)
+        const result = engine.checkValidity({ mode: "exhaustive" })
+        expect(result.ok).toBe(true)
+        // 2^1 = 2 enumerated assignments (normalVar true/false), not 2^2 = 4.
+        // Admissible (where conclusion is true) is exactly 1: normalVar=true.
+        expect(result.numAssignmentsChecked).toBe(2)
+        expect(result.numAdmissibleAssignments).toBe(1)
+    })
+})
