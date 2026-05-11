@@ -220,8 +220,7 @@ export class ClaimCitationLibrary<
             throw new InvariantViolationError([
                 {
                     code: LEGACY_CLAIM_CITATION_SHAPE,
-                    message:
-                        "Snapshot uses pre-v0.12 wrapper field 'claimCitations'. Run the v0.12 CLI migration.",
+                    message: `${LEGACY_CLAIM_CITATION_SHAPE}: Snapshot uses pre-v0.12 wrapper field 'claimCitations'. Run the v0.12 CLI migration.`,
                     entityType: "citation",
                     entityId: "<snapshot>",
                 },
@@ -244,7 +243,7 @@ export class ClaimCitationLibrary<
                 throw new InvariantViolationError([
                     {
                         code: LEGACY_CLAIM_CITATION_SHAPE,
-                        message: `Citation "${id}" uses pre-v0.12 field names (citingClaimId/sourceClaimId). Run the v0.12 CLI migration.`,
+                        message: `${LEGACY_CLAIM_CITATION_SHAPE}: Citation "${id}" uses pre-v0.12 field names (citingClaimId/sourceClaimId). Run the v0.12 CLI migration.`,
                         entityType: "citation",
                         entityId: id,
                     },

@@ -4,6 +4,7 @@ import type {
     TCoreDerivationPremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
+    TCoreClaimAxiom,
 } from "../schemata/index.js"
 import type { TCoreClaim } from "../schemata/claim.js"
 import type { TCoreClaimCitation } from "../schemata/claim-citation.js"
@@ -22,16 +23,22 @@ import type {
     TInvariantValidationResult,
     TInvariantViolation,
 } from "../types/validation.js"
+import {
+    LEGACY_CLAIM_CITATION_SHAPE,
+    LEGACY_MISSING_AXIOM_SLOT,
+} from "../types/validation.js"
 import type { TForkArgumentOptions, TForkRemapTable } from "../types/fork.js"
 import type { TCoreArgumentDiff, TCoreDiffOptions } from "../types/diff.js"
 import { isClaimBound } from "../schemata/propositional.js"
 import { ClaimLibrary } from "./claim-library.js"
 import { ClaimCitationLibrary } from "./claim-citation-library.js"
+import { ClaimAxiomLibrary } from "./claim-axiom-library.js"
 import { ArgumentLibrary } from "./argument-library.js"
 import { ArgumentEngine, defaultGenerateId } from "./argument-engine.js"
 import { ForkLibrary } from "./fork-library.js"
 import { forkArgumentEngine } from "./fork.js"
 import { diffArguments as standaloneDiffArguments } from "./diff.js"
+import { InvariantViolationError } from "./invariant-violation-error.js"
 
 /**
  * Options for constructing a `PropositCore` instance. Accepts optional
@@ -46,6 +53,7 @@ export type TPropositCoreOptions<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
     TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+    TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
@@ -56,6 +64,8 @@ export type TPropositCoreOptions<
     claimLibrary?: ClaimLibrary<TClaim>
     /** Pre-constructed claim-citation library instance. */
     claimCitationLibrary?: ClaimCitationLibrary<TCitation>
+    /** Pre-constructed claim-axiom library instance. */
+    claimAxiomLibrary?: ClaimAxiomLibrary<TAxiom>
     /** Pre-constructed fork library instance. */
     forkLibrary?: ForkLibrary<
         TArgFork,
@@ -94,6 +104,7 @@ export class PropositCore<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
     TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+    TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
@@ -101,7 +112,8 @@ export class PropositCore<
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
 > {
     public readonly claims: ClaimLibrary<TClaim>
-    public readonly claimCitations: ClaimCitationLibrary<TCitation>
+    public readonly citations: ClaimCitationLibrary<TCitation>
+    public readonly axioms: ClaimAxiomLibrary<TAxiom>
     public readonly forks: ForkLibrary<
         TArgFork,
         TPremiseFork,
@@ -127,6 +139,7 @@ export class PropositCore<
             TVar,
             TClaim,
             TCitation,
+            TAxiom,
             TArgFork,
             TPremiseFork,
             TExprFork,
@@ -140,13 +153,17 @@ export class PropositCore<
             ? { checksumConfig: options.checksumConfig }
             : undefined
 
-        // Dependency order: claims -> claimCitations -> forks -> arguments
+        // Dependency order: claims -> citations/axioms -> forks -> arguments
         this.claims =
             options?.claimLibrary ?? new ClaimLibrary<TClaim>(checksumOpts)
 
-        this.claimCitations =
+        this.citations =
             options?.claimCitationLibrary ??
             new ClaimCitationLibrary<TCitation>(this.claims, checksumOpts)
+
+        this.axioms =
+            options?.claimAxiomLibrary ??
+            new ClaimAxiomLibrary<TAxiom>(this.claims, checksumOpts)
 
         this.forks =
             options?.forkLibrary ??
@@ -163,7 +180,7 @@ export class PropositCore<
             new ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim, TCitation>(
                 {
                     claimLibrary: this.claims,
-                    claimCitationLibrary: this.claimCitations,
+                    claimCitationLibrary: this.citations,
                 },
                 {
                     checksumConfig: options?.checksumConfig,
@@ -185,6 +202,7 @@ export class PropositCore<
         TVar,
         TClaim,
         TCitation,
+        TAxiom,
         TArgFork,
         TPremiseFork,
         TExprFork,
@@ -194,7 +212,8 @@ export class PropositCore<
         return {
             arguments: this.arguments.snapshot(),
             claims: this.claims.snapshot(),
-            claimCitations: this.claimCitations.snapshot(),
+            citations: this.citations.snapshot(),
+            axioms: this.axioms.snapshot(),
             forks: this.forks.snapshot(),
         }
     }
@@ -216,6 +235,7 @@ export class PropositCore<
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
         TClaim extends TCoreClaim = TCoreClaim,
         TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+        TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
         TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
         TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
         TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
@@ -229,6 +249,7 @@ export class PropositCore<
             TVar,
             TClaim,
             TCitation,
+            TAxiom,
             TArgFork,
             TPremiseFork,
             TExprFork,
@@ -243,23 +264,55 @@ export class PropositCore<
         TVar,
         TClaim,
         TCitation,
+        TAxiom,
         TArgFork,
         TPremiseFork,
         TExprFork,
         TVarFork,
         TClaimFork
     > {
+        // Pre-typecheck on raw shape. PropositCore.fromSnapshot is called with an
+        // `unknown`-typed payload in real callers; the typed signature does not
+        // prevent legacy data from sneaking in. Run structural checks before any
+        // typed coercion.
+        const raw = snapshot as unknown as Record<string, unknown>
+        if ("claimCitations" in raw) {
+            throw new InvariantViolationError([
+                {
+                    code: LEGACY_CLAIM_CITATION_SHAPE,
+                    message: `${LEGACY_CLAIM_CITATION_SHAPE}: PropositCore snapshot uses pre-v0.12 slot 'claimCitations'. Run the v0.12 CLI migration.`,
+                    entityType: "citation",
+                    entityId: "<snapshot>",
+                },
+            ])
+        }
+        if (!("axioms" in raw)) {
+            throw new InvariantViolationError([
+                {
+                    code: LEGACY_MISSING_AXIOM_SLOT,
+                    message: `${LEGACY_MISSING_AXIOM_SLOT}: PropositCore snapshot is missing the 'axioms' slot. Run the v0.12 CLI migration to add it.`,
+                    entityType: "axiom",
+                    entityId: "<snapshot>",
+                },
+            ])
+        }
+
         const checksumOpts = config?.checksumConfig
             ? { checksumConfig: config.checksumConfig }
             : undefined
 
-        // Dependency order: claims -> claimCitations -> forks -> arguments
+        // Dependency order: claims -> citations/axioms -> forks -> arguments
         const claims = ClaimLibrary.fromSnapshot<TClaim>(
             snapshot.claims,
             checksumOpts
         )
-        const claimCitations = ClaimCitationLibrary.fromSnapshot<TCitation>(
-            snapshot.claimCitations,
+        const citations = ClaimCitationLibrary.fromSnapshot<TCitation>(
+            snapshot.citations,
+            claims,
+            checksumOpts
+        )
+        const axioms = ClaimAxiomLibrary.fromSnapshot<TAxiom>(
+            snapshot.axioms,
             claims,
             checksumOpts
         )
@@ -281,7 +334,7 @@ export class PropositCore<
             snapshot.arguments,
             {
                 claimLibrary: claims,
-                claimCitationLibrary: claimCitations,
+                claimCitationLibrary: citations,
             },
             {
                 checksumConfig: config?.checksumConfig,
@@ -298,6 +351,7 @@ export class PropositCore<
             TVar,
             TClaim,
             TCitation,
+            TAxiom,
             TArgFork,
             TPremiseFork,
             TExprFork,
@@ -305,7 +359,8 @@ export class PropositCore<
             TClaimFork
         >({
             claimLibrary: claims,
-            claimCitationLibrary: claimCitations,
+            claimCitationLibrary: citations,
+            claimAxiomLibrary: axioms,
             forkLibrary: forks,
             argumentLibrary: restoredArguments,
         })
@@ -324,7 +379,8 @@ export class PropositCore<
     public validate(): TInvariantValidationResult {
         const violations: TInvariantViolation[] = [
             ...this.claims.validate().violations,
-            ...this.claimCitations.validate().violations,
+            ...this.citations.validate().violations,
+            ...this.axioms.validate().violations,
             ...this.forks.validate().violations,
             ...this.arguments.validate().violations,
         ]
@@ -421,7 +477,7 @@ export class PropositCore<
             const currentId = citationFrontier.pop()!
 
             const outgoing =
-                this.claimCitations.getCitationsForCitingClaim(currentId)
+                this.citations.getCitationsForCitingClaim(currentId)
             for (const citation of outgoing) {
                 citationsToClone.push(citation)
                 if (!uniqueClaimIds.has(citation.sourceClaimId)) {
@@ -460,7 +516,7 @@ export class PropositCore<
             const remappedCitingId = claimRemap.get(citation.citingClaimId)
             const remappedSourceId = claimRemap.get(citation.sourceClaimId)
             if (!remappedCitingId || !remappedSourceId) continue
-            this.claimCitations.add({
+            this.citations.add({
                 ...citation,
                 id: this.generateId(),
                 citingClaimId: remappedCitingId,
@@ -483,7 +539,7 @@ export class PropositCore<
             resolvedNewArgumentId,
             {
                 claimLibrary: this.claims,
-                claimCitationLibrary: this.claimCitations,
+                claimCitationLibrary: this.citations,
             },
             {
                 ...options,
@@ -537,7 +593,7 @@ export class PropositCore<
         >(
             snap,
             this.claims,
-            this.claimCitations,
+            this.citations,
             snap.config?.grammarConfig,
             "ignore",
             this.generateId
