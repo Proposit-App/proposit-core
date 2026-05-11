@@ -20,6 +20,7 @@ import type {
     TCoreValidationResult,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
+    TCoreVariableAssignment,
 } from "../types/evaluation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import {
@@ -30,6 +31,7 @@ import {
 import type { TCorePositionConfig } from "../utils/position.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 import {
+    AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN,
     CLAIM_NOT_FOUND,
     CREATE_DERIVATION_CLAIM_NOT_FOUND,
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
@@ -2309,13 +2311,57 @@ export class ArgumentEngine<
         }
     }
 
+    /**
+     * For each claim-bound variable in this argument, look up the bound claim's
+     * type. If the type is "axiomatic":
+     *   - Reject any caller-provided assignment for the variable
+     *     (AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN).
+     *   - Force the variable's effective assignment to `true`.
+     * Returns the rewritten assignment map; non-axiomatic variables pass through.
+     */
+    private applyAxiomaticForcedAssignments(
+        callerVariables: TCoreVariableAssignment
+    ): TCoreVariableAssignment {
+        const effective: TCoreVariableAssignment = { ...callerVariables }
+        for (const variable of this.variables.toArray()) {
+            if (!isClaimBound(variable as unknown as TCorePropositionalVariable))
+                continue
+            const claimBound =
+                variable as unknown as TClaimBoundVariable
+            const claim = this.claimLibrary.get(
+                claimBound.claimId,
+                claimBound.claimVersion
+            )
+            if (claim?.type !== "axiomatic") continue
+            if (callerVariables[claimBound.id] !== undefined) {
+                throw new InvariantViolationError([
+                    {
+                        code: AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN,
+                        message: `${AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN}: Cannot assign axiomatic-bound variable "${claimBound.id}" (claim "${claimBound.claimId}"). Axiomatic variables are always true. To reject an axiom's contribution to a specific derivation, negate its variable expression in the antecedent.`,
+                        entityType: "variable",
+                        entityId: claimBound.id,
+                    },
+                ])
+            }
+            effective[claimBound.id] = true
+        }
+        return effective
+    }
+
     public evaluate(
         assignment: TCoreExpressionAssignment,
         options?: TCoreArgumentEvaluationOptions
     ): TCoreArgumentEvaluationResult {
+        const callerVariables = assignment.variables ?? {}
+        const effectiveVariables =
+            this.applyAxiomaticForcedAssignments(callerVariables)
+        const effectiveAssignment: TCoreExpressionAssignment = {
+            ...assignment,
+            variables: effectiveVariables,
+        }
         return evaluateArgumentStandalone(
             this.asEvaluationContext(),
-            assignment,
+            effectiveAssignment,
             options
         )
     }
