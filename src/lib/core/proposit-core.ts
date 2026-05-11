@@ -91,11 +91,12 @@ export type TPropositCoreOptions<
  * unified snapshot/restore and validation.
  *
  * Construction order follows dependency order:
- * claims -> claimCitations -> forks -> arguments.
+ * claims -> citations -> axioms -> forks -> arguments.
  *
  * As of v0.10.0 the legacy `sources` and `claimSources` libraries have been
- * folded into `claims` and `claimCitations` respectively — sources are now
- * claims with `type: "citation"`.
+ * folded into `claims` and `citations` respectively — sources are now
+ * claims with `type: "citation"`. As of v0.12.0 a parallel `axioms` library
+ * holds axiomatic-claim connections (a third claim type `"axiomatic"`).
  */
 export class PropositCore<
     TArg extends TCoreArgument = TCoreArgument,
@@ -220,7 +221,7 @@ export class PropositCore<
 
     /**
      * Restores a `PropositCore` instance from a snapshot. Libraries are
-     * restored in dependency order: claims -> claimCitations -> forks ->
+     * restored in dependency order: claims -> citations -> axioms -> forks ->
      * arguments.
      *
      * @param snapshot - The serialized PropositCore snapshot.
