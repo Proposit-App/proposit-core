@@ -2348,6 +2348,26 @@ export class ArgumentEngine<
         return effective
     }
 
+    /**
+     * Returns IDs of claim-bound variables whose bound claim has type
+     * `"axiomatic"` — these are forced-true at evaluation time and must be
+     * excluded from `checkValidity`'s free-choice enumeration.
+     */
+    private getAxiomaticBoundVariableIds(): Set<string> {
+        const ids = new Set<string>()
+        for (const variable of this.variables.toArray()) {
+            const v = variable as unknown as TCorePropositionalVariable
+            if (!isClaimBound(v)) continue
+            const claimBound = v as unknown as TClaimBoundVariable
+            const claim = this.claimLibrary.get(
+                claimBound.claimId,
+                claimBound.claimVersion
+            )
+            if (claim?.type === "axiomatic") ids.add(claimBound.id)
+        }
+        return ids
+    }
+
     public evaluate(
         assignment: TCoreExpressionAssignment,
         options?: TCoreArgumentEvaluationOptions
@@ -2369,10 +2389,23 @@ export class ArgumentEngine<
     public checkValidity(
         options?: TCoreValidityCheckOptions
     ): TCoreValidityCheckResult {
-        return checkArgumentValidityStandalone(
-            this.asEvaluationContext(),
-            options
-        )
+        const axiomaticIds = this.getAxiomaticBoundVariableIds()
+        // Axiomatic-bound variables are both excluded from the 2^n enumeration
+        // and pinned to `true` in every generated assignment. Union the
+        // engine's axiomatic set with any explicit sets the caller passed.
+        const excludedVariableIds = new Set<string>(axiomaticIds)
+        for (const id of options?.excludedVariableIds ?? []) {
+            excludedVariableIds.add(id)
+        }
+        const forcedTrueVariableIds = new Set<string>(axiomaticIds)
+        for (const id of options?.forcedTrueVariableIds ?? []) {
+            forcedTrueVariableIds.add(id)
+        }
+        return checkArgumentValidityStandalone(this.asEvaluationContext(), {
+            ...options,
+            excludedVariableIds,
+            forcedTrueVariableIds,
+        })
     }
 
     // -----------------------------------------------------------------

@@ -580,6 +580,12 @@ export function evaluateArgument(
 
 /**
  * Enumerates all 2^n variable assignments and checks for counterexamples.
+ *
+ * The optional `options.excludedVariableIds` set removes the listed IDs from
+ * the enumeration — typically axiomatic-bound variables that the engine
+ * forces to `true`. The optional `options.forcedTrueVariableIds` set fixes
+ * the listed IDs to `true` in every generated assignment. Callers normally
+ * pass the same set for both.
  */
 export function checkArgumentValidity(
     ctx: TArgumentEvaluationContext,
@@ -632,8 +638,13 @@ export function checkArgumentValidity(
     ].sort()
 
     // Claim-bound and externally-bound premise variables get truth-table columns;
-    // internally-bound premise variables are resolved lazily.
+    // internally-bound premise variables are resolved lazily. Variables in
+    // `excludedVariableIds` (e.g. axiomatic-bound) are removed entirely so they
+    // do not appear as free choices in the 2^n enumeration.
+    const excludedVariableIds = options?.excludedVariableIds
+    const forcedTrueVariableIds = options?.forcedTrueVariableIds
     const checkedVariableIds = allVariableIdsForCheck.filter((vid) => {
+        if (excludedVariableIds?.has(vid)) return false
         const v = ctx.getVariable(vid)
         if (v == null) return false
         if (isClaimBound(v)) return true
@@ -682,6 +693,11 @@ export function checkArgumentValidity(
             assignment.variables[checkedVariableIds[i]] = Boolean(
                 mask & (1 << i)
             )
+        }
+        if (forcedTrueVariableIds) {
+            for (const vid of forcedTrueVariableIds) {
+                assignment.variables[vid] = true
+            }
         }
 
         const result = evaluateArgument(ctx, assignment, {

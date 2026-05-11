@@ -178,6 +178,18 @@ export interface TCoreValidityCheckOptions {
     includeCounterexampleEvaluations?: boolean
     /** Run evaluability validation before truth-table search. */
     validateFirst?: boolean
+    /**
+     * IDs to exclude from the 2^n enumeration. Used for axiomatic-bound
+     * variables that are forced-true by the engine — they do not appear as
+     * free choices in the truth-table search.
+     */
+    excludedVariableIds?: Set<string>
+    /**
+     * IDs that are fixed to `true` in every generated assignment. Typically
+     * the same set as `excludedVariableIds` — axiomatic-bound variables are
+     * both excluded from enumeration and pinned to `true` in each row.
+     */
+    forcedTrueVariableIds?: Set<string>
 }
 
 export interface TCoreCounterexample {
