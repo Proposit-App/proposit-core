@@ -157,6 +157,7 @@ import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
 import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
 import { ManagedDerivationPremiseEngine } from "../src/lib/core/managed-derivation-premise-engine"
 import { InvariantViolationError } from "../src/lib/index"
+import { ClaimAxiomLibrary } from "../src/lib/core/claim-axiom-library"
 import {
     DERIVATION_TYPE_MISMATCH,
     DERIVATION_CONSEQUENT_LOCKED,
@@ -30704,5 +30705,122 @@ describe("ClaimLibrary axiomatic claim type (v0.12)", () => {
         expect(() => lib.update(axiomatic.id, { type: "normal" } as never)).toThrow(
             /type is immutable/
         )
+    })
+})
+
+describe("ClaimAxiomLibrary (v0.12)", () => {
+    function setup() {
+        const claims = new ClaimLibrary()
+        const normalClaim = claims.create({ type: "normal" })
+        const axiomClaim = claims.create({ type: "axiomatic" })
+        const citationClaim = claims.create({ type: "citation" })
+        const axioms = new ClaimAxiomLibrary(claims)
+        return { claims, normalClaim, axiomClaim, citationClaim, axioms }
+    }
+
+    it("creates an axiom connection between a normal claim and an axiomatic claim", () => {
+        const { normalClaim, axiomClaim, axioms } = setup()
+        const conn = axioms.add({
+            id: "ax-1",
+            claimId: normalClaim.id,
+            claimVersion: 0,
+            supportingClaimId: axiomClaim.id,
+            supportingClaimVersion: 0,
+        })
+        expect(conn.id).toBe("ax-1")
+        expect(conn.checksum).not.toBe("")
+        expect(axioms.getAll()).toHaveLength(1)
+        expect(axioms.getConnectionsForClaim(normalClaim.id)).toHaveLength(1)
+    })
+
+    it("rejects a connection whose supporting claim is not axiomatic", () => {
+        const { normalClaim, citationClaim, axioms } = setup()
+        expect(() =>
+            axioms.add({
+                id: "ax-2",
+                claimId: normalClaim.id,
+                claimVersion: 0,
+                supportingClaimId: citationClaim.id,
+                supportingClaimVersion: 0,
+            })
+        ).toThrow(/AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE/)
+    })
+
+    it("rejects a connection whose supported claim is not normal", () => {
+        const { citationClaim, axiomClaim, axioms } = setup()
+        expect(() =>
+            axioms.add({
+                id: "ax-3",
+                claimId: citationClaim.id,
+                claimVersion: 0,
+                supportingClaimId: axiomClaim.id,
+                supportingClaimVersion: 0,
+            })
+        ).toThrow(/AXIOM_CLAIM_NOT_NORMAL_TYPE/)
+    })
+
+    it("rejects a connection with unknown claim refs", () => {
+        const { axiomClaim, axioms } = setup()
+        expect(() =>
+            axioms.add({
+                id: "ax-4",
+                claimId: "missing-id",
+                claimVersion: 0,
+                supportingClaimId: axiomClaim.id,
+                supportingClaimVersion: 0,
+            })
+        ).toThrow(/AXIOM_CLAIM_REF_NOT_FOUND/)
+    })
+
+    it("rejects duplicate IDs", () => {
+        const { normalClaim, axiomClaim, axioms } = setup()
+        axioms.add({
+            id: "dup",
+            claimId: normalClaim.id,
+            claimVersion: 0,
+            supportingClaimId: axiomClaim.id,
+            supportingClaimVersion: 0,
+        })
+        expect(() =>
+            axioms.add({
+                id: "dup",
+                claimId: normalClaim.id,
+                claimVersion: 0,
+                supportingClaimId: axiomClaim.id,
+                supportingClaimVersion: 0,
+            })
+        ).toThrow(/AXIOM_DUPLICATE_ID/)
+    })
+
+    it("snapshot and fromSnapshot round-trip", () => {
+        const { claims, normalClaim, axiomClaim, axioms } = setup()
+        axioms.add({
+            id: "ax-rt",
+            claimId: normalClaim.id,
+            claimVersion: 0,
+            supportingClaimId: axiomClaim.id,
+            supportingClaimVersion: 0,
+        })
+        const snap = axioms.snapshot()
+        const restored = ClaimAxiomLibrary.fromSnapshot(snap, claims)
+        expect(restored.getAll()).toHaveLength(1)
+        expect(restored.get("ax-rt")?.id).toBe("ax-rt")
+    })
+
+    it("axioms cannot form cycles by structural impossibility", () => {
+        // Axiomatic claims can never appear on the dependent side, so cycles
+        // cannot be constructed. This test documents the invariant.
+        const { axiomClaim, normalClaim, axioms } = setup()
+        // Try to make an axiom point AT another axiom (depend on it).
+        expect(() =>
+            axioms.add({
+                id: "ax-cycle",
+                claimId: axiomClaim.id,
+                claimVersion: 0,
+                supportingClaimId: axiomClaim.id,
+                supportingClaimVersion: 0,
+            })
+        ).toThrow(/AXIOM_CLAIM_NOT_NORMAL_TYPE/)
+        expect(normalClaim).toBeDefined() // suppress unused
     })
 })
