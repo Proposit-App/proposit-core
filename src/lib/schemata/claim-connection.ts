@@ -27,7 +27,7 @@ export const CoreClaimConnectionSchema = Type.Object(
     {
         additionalProperties: true,
         description:
-            "A directional support edge between two claims. The supported claim is at claimId; the claim that supplies the support is at supportingClaimId. Specialized into citation and axiom connections by which library the entity lives in.",
+            "A directional support edge between two claims. The supported claim is at claimId; the claim that supplies the support is at supportingClaimId. Specialized into citation and axiom connections by which library the entity lives in. Extended via additionalProperties for app-level fields.",
     }
 )
 export type TCoreClaimConnection = Static<typeof CoreClaimConnectionSchema>
