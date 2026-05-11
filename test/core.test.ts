@@ -31148,8 +31148,10 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
         const result = engine.checkValidity({ mode: "exhaustive" })
         expect(result.ok).toBe(true)
         // 2^1 = 2 enumerated assignments (normalVar true/false), not 2^2 = 4.
-        // Admissible (where conclusion is true) is exactly 1: normalVar=true.
+        // The axiomatic variable is forced-true and excluded from enumeration.
         expect(result.numAssignmentsChecked).toBe(2)
-        expect(result.numAdmissibleAssignments).toBe(1)
+        // No constraint premises, so every enumerated row is admissible
+        // (admissibility is over constraints, not the conclusion).
+        expect(result.numAdmissibleAssignments).toBe(2)
     })
 })
