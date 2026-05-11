@@ -1,7 +1,8 @@
 import type {
     TClaimLookup,
-    TClaimCitationLookup,
+    TClaimConnectionLookup,
 } from "../core/interfaces/library.interfaces.js"
+import type { TCoreClaimConnection } from "../schemata/claim-connection.js"
 
 /**
  * Creates a keyed lookup from an array of items. Items are indexed by a
@@ -52,11 +53,19 @@ export const EMPTY_CLAIM_LOOKUP: TClaimLookup = {
 }
 
 /**
- * A no-op claim-citation lookup that always returns `undefined` or empty
- * arrays. Use this when the consumer does not use claim citations.
+ * Returns an empty claim-connection lookup. Use this in tests and contexts
+ * that need the lookup contract but have no actual data. Each call returns
+ * a fresh empty implementation; values are stateless.
+ *
+ * @example
+ *   const emptyCitations = emptyClaimConnectionLookup<TCoreClaimCitation>()
+ *   const emptyAxioms = emptyClaimConnectionLookup<TCoreClaimAxiom>()
  */
-export const EMPTY_CLAIM_CITATION_LOOKUP: TClaimCitationLookup = {
-    getCitationsForCitingClaim: () => [],
-    getCitationsForSourceClaim: () => [],
-    get: () => undefined,
+export function emptyClaimConnectionLookup<
+    TConn extends TCoreClaimConnection = TCoreClaimConnection,
+>(): TClaimConnectionLookup<TConn> {
+    return {
+        getConnectionsForClaim: () => [],
+        get: () => undefined,
+    }
 }
