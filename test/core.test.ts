@@ -30684,3 +30684,25 @@ describe("ArgumentEngine.fromData — premise extras preservation", () => {
         )
     })
 })
+
+describe("ClaimLibrary axiomatic claim type (v0.12)", () => {
+    it("creates a claim with type 'axiomatic'", () => {
+        const lib = new ClaimLibrary()
+        const claim = lib.create({ type: "axiomatic" })
+        expect(claim.type).toBe("axiomatic")
+        expect(claim.version).toBe(0)
+        expect(claim.frozen).toBe(false)
+    })
+
+    it("rejects an update that changes type to or from 'axiomatic'", () => {
+        const lib = new ClaimLibrary()
+        const normal = lib.create({ type: "normal" })
+        const axiomatic = lib.create({ type: "axiomatic" })
+        expect(() => lib.update(normal.id, { type: "axiomatic" } as never)).toThrow(
+            /type is immutable/
+        )
+        expect(() => lib.update(axiomatic.id, { type: "normal" } as never)).toThrow(
+            /type is immutable/
+        )
+    })
+})

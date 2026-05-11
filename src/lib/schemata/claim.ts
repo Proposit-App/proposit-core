@@ -14,10 +14,13 @@ export const CoreClaimSchema = Type.Object(
         checksum: Type.String({
             description: "Entity-level checksum for sync detection.",
         }),
-        type: Type.Union([Type.Literal("normal"), Type.Literal("citation")], {
-            description:
-                "Distinguishes a primary-reasoning claim ('normal') from a cited external-content claim ('citation'). Immutable post-creation.",
-        }),
+        type: Type.Union(
+            [Type.Literal("normal"), Type.Literal("citation"), Type.Literal("axiomatic")],
+            {
+                description:
+                    "Distinguishes claim roles: 'normal' = primary-reasoning, 'citation' = external cited content, 'axiomatic' = self-evident invoked claim. Immutable post-creation.",
+            }
+        ),
     },
     {
         additionalProperties: true,
