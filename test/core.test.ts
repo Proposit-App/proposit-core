@@ -30883,3 +30883,87 @@ describe("PropositCore axioms field (v0.12)", () => {
         ).toThrow(/LEGACY_CLAIM_CITATION_SHAPE/)
     })
 })
+
+describe("PropositCore.forkArgument transitive closure across axioms (v0.12)", () => {
+    it("clones a normal claim, its cited citation, and its supporting axiom", () => {
+        const core = new PropositCore()
+        const normalClaim = core.claims.create({ type: "normal" })
+        const cited = core.claims.create({ type: "citation" })
+        const axiom = core.claims.create({ type: "axiomatic" })
+        core.citations.add({
+            id: crypto.randomUUID(),
+            claimId: normalClaim.id,
+            claimVersion: normalClaim.version,
+            supportingClaimId: cited.id,
+            supportingClaimVersion: cited.version,
+        })
+        core.axioms.add({
+            id: crypto.randomUUID(),
+            claimId: normalClaim.id,
+            claimVersion: normalClaim.version,
+            supportingClaimId: axiom.id,
+            supportingClaimVersion: axiom.version,
+        })
+
+        const arg = { id: crypto.randomUUID(), version: 0 }
+        core.arguments.create(arg)
+        // Add a claim-bound variable for normalClaim so the seed walk picks it up.
+        const engine = core.arguments.get(arg.id)!
+        engine.ensureClaimBoundVariable(normalClaim.id)
+
+        const { claimRemap } = core.forkArgument(arg.id, crypto.randomUUID())
+
+        // All three claims should be cloned.
+        expect(claimRemap.size).toBe(3)
+        expect(claimRemap.get(normalClaim.id)).toBeDefined()
+        expect(claimRemap.get(cited.id)).toBeDefined()
+        expect(claimRemap.get(axiom.id)).toBeDefined()
+
+        // Cloned citation/axiom connections live in the same PropositCore's libraries,
+        // pointing at the cloned claims.
+        const newNormalId = claimRemap.get(normalClaim.id)!
+        expect(core.citations.getConnectionsForClaim(newNormalId)).toHaveLength(
+            1
+        )
+        expect(core.axioms.getConnectionsForClaim(newNormalId)).toHaveLength(1)
+        const citationConn = core.citations.getConnectionsForClaim(
+            newNormalId
+        )[0]
+        const axiomConn = core.axioms.getConnectionsForClaim(newNormalId)[0]
+        expect(citationConn.claimVersion).toBe(0)
+        expect(citationConn.supportingClaimVersion).toBe(0)
+        expect(axiomConn.claimVersion).toBe(0)
+        expect(axiomConn.supportingClaimVersion).toBe(0)
+    })
+
+    it("walks multi-hop closure: normal claim A supported by both citation B and axiom X", () => {
+        const core = new PropositCore()
+        const a = core.claims.create({ type: "normal" })
+        const b = core.claims.create({ type: "citation" })
+        const axiomForA = core.claims.create({ type: "axiomatic" })
+        core.citations.add({
+            id: crypto.randomUUID(),
+            claimId: a.id,
+            claimVersion: a.version,
+            supportingClaimId: b.id,
+            supportingClaimVersion: b.version,
+        })
+        core.axioms.add({
+            id: crypto.randomUUID(),
+            claimId: a.id,
+            claimVersion: a.version,
+            supportingClaimId: axiomForA.id,
+            supportingClaimVersion: axiomForA.version,
+        })
+
+        const arg = { id: crypto.randomUUID(), version: 0 }
+        core.arguments.create(arg)
+        const engine = core.arguments.get(arg.id)!
+        engine.ensureClaimBoundVariable(a.id)
+
+        const { claimRemap } = core.forkArgument(arg.id, crypto.randomUUID())
+        expect(claimRemap.get(a.id)).toBeDefined()
+        expect(claimRemap.get(b.id)).toBeDefined()
+        expect(claimRemap.get(axiomForA.id)).toBeDefined()
+    })
+})
