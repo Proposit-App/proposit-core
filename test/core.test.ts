@@ -12098,7 +12098,6 @@ describe("Parsing — response schemas", () => {
                 miniId: "c1",
                 role: "premise",
                 type: "normal",
-                citationMiniIds: ["s1"],
             }
             expect(Value.Check(ParsedClaimSchema, claim)).toBe(true)
         })
@@ -12155,13 +12154,11 @@ describe("Parsing — response schemas", () => {
                             miniId: "c1",
                             role: "premise",
                             type: "normal",
-                            citationMiniIds: ["s1"],
                         },
                         {
                             miniId: "s1",
                             role: "premise",
                             type: "citation",
-                            citationMiniIds: [],
                         },
                     ],
                     variables: [
@@ -12512,19 +12509,16 @@ describe("Parsing — response schemas", () => {
                             miniId: "C1",
                             role: "premise",
                             type: "normal",
-                            citationMiniIds: [],
                         },
                         {
                             miniId: "C2",
                             role: "conclusion",
                             type: "normal",
-                            citationMiniIds: [],
                         },
                         {
                             miniId: "S1",
                             role: "premise",
                             type: "citation",
-                            citationMiniIds: [],
                         },
                     ],
                     variables: [
@@ -12757,7 +12751,13 @@ describe("Parsing — response schemas", () => {
                 const resp = validResponse()
                 // The old citation-walking pass would have thrown here; the
                 // new formula-inference pass ignores citationMiniIds entirely.
-                resp.argument!.claims[0].citationMiniIds = ["BOGUS"]
+                // Cast since citationMiniIds is no longer in the schema, but
+                // additionalProperties: true lets it through at runtime.
+                ;(
+                    resp.argument!.claims[0] as TParsedClaim & {
+                        citationMiniIds: string[]
+                    }
+                ).citationMiniIds = ["BOGUS"]
                 expect(() => parser.build(resp)).not.toThrow()
             })
         })
@@ -12771,13 +12771,11 @@ describe("Parsing — response schemas", () => {
                                 miniId: "C1",
                                 role: "premise",
                                 type: "normal",
-                                citationMiniIds: [],
                             },
                             {
                                 miniId: "C2",
                                 role: "conclusion",
                                 type: "normal",
-                                citationMiniIds: [],
                             },
                         ],
                         variables: [
@@ -12833,12 +12831,14 @@ describe("Parsing — response schemas", () => {
                 // Add a citation-typed claim S1 and a variable bound to it,
                 // then put S in the antecedent of an implies premise so the
                 // new formula-inference pass produces a single edge.
+                // Cast the claim literal: citationMiniIds is no longer in the
+                // schema, but additionalProperties: true lets it through.
                 resp.argument!.claims.push({
                     miniId: "S1",
                     role: "premise",
                     type: "citation",
                     citationMiniIds: [],
-                })
+                } as TParsedClaim)
                 resp.argument!.variables.push({
                     miniId: "V3",
                     symbol: "S",
@@ -12849,7 +12849,11 @@ describe("Parsing — response schemas", () => {
                     formula: "(P and S) implies Q",
                 }
                 // citationMiniIds is now ignored — bogus values do not warn.
-                resp.argument!.claims[0].citationMiniIds = ["S1", "BOGUS"]
+                ;(
+                    resp.argument!.claims[0] as TParsedClaim & {
+                        citationMiniIds: string[]
+                    }
+                ).citationMiniIds = ["S1", "BOGUS"]
                 const result = parser.build(resp, { strict: false })
                 // 2 normal claims + 1 citation claim; one citation edge from
                 // the formula's antecedent.
@@ -13189,7 +13193,6 @@ describe("CliArgumentParser metadata injection", () => {
                         miniId: "C1",
                         role: "premise" as const,
                         type: "normal" as const,
-                        citationMiniIds: [],
                     },
                 ],
                 variables: [{ miniId: "V1", symbol: "A", claimMiniId: "C1" }],
@@ -22783,7 +22786,6 @@ describe("generateId injection — ArgumentParser", () => {
                         miniId: "C1",
                         role: "premise",
                         type: "normal",
-                        citationMiniIds: [],
                     },
                 ],
                 variables: [
