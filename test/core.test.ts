@@ -7,7 +7,6 @@ import {
     orderChangeset,
     createLookup,
     EMPTY_CLAIM_LOOKUP,
-    EMPTY_CLAIM_CITATION_LOOKUP,
     forkArgumentEngine,
     ForkNamespace,
     ForkLibrary,
@@ -47,6 +46,7 @@ import {
     type TCorePropositionalVariable,
     type TCorePremise,
     type TCoreDerivationPremise,
+    type TCoreClaimCitation,
 } from "../src/lib/schemata"
 import { ChangeCollector } from "../src/lib/core/change-collector"
 import { VariableManager } from "../src/lib/core/variable-manager"
@@ -132,8 +132,8 @@ import {
     ARG_CLAIM_REF_NOT_FOUND,
     CLAIM_SCHEMA_INVALID,
     CLAIM_FROZEN_NO_SUCCESSOR,
-    CITATION_CITING_REF_NOT_FOUND,
-    CITATION_SOURCE_REF_NOT_FOUND,
+    CITATION_CLAIM_REF_NOT_FOUND,
+    CITATION_SUPPORTING_REF_NOT_FOUND,
     DERIVATION_STRUCTURE_INVALID,
 } from "../src/lib/types/validation"
 import {
@@ -155,6 +155,7 @@ import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
 import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"
 import { validateDerivationStructure } from "../src/lib/utils/derivation-validation.js"
+import { emptyClaimConnectionLookup } from "../src/lib/utils/lookup"
 import { ManagedDerivationPremiseEngine } from "../src/lib/core/managed-derivation-premise-engine"
 import { InvariantViolationError } from "../src/lib/index"
 import { ClaimAxiomLibrary } from "../src/lib/core/claim-axiom-library"
@@ -10260,14 +10261,14 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, source1 } = makeFixtures()
             const cit = lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             expect(cit.id).toBe("cit-1")
-            expect(cit.citingClaimId).toBe("claim-1")
-            expect(cit.sourceClaimId).toBe("source-1")
+            expect(cit.claimId).toBe("claim-1")
+            expect(cit.supportingClaimId).toBe("source-1")
             expect(cit.checksum).toBeTruthy()
             expect(typeof cit.checksum).toBe("string")
         })
@@ -10276,18 +10277,18 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             expect(() =>
                 lib.add({
                     id: "cit-1",
-                    citingClaimId: claim1.id,
-                    citingClaimVersion: claim1.version,
-                    sourceClaimId: source1.id,
-                    sourceClaimVersion: source1.version,
+                    claimId: claim1.id,
+                    claimVersion: claim1.version,
+                    supportingClaimId: source1.id,
+                    supportingClaimVersion: source1.version,
                 })
             ).toThrow()
         })
@@ -10297,10 +10298,10 @@ describe("ClaimCitationLibrary", () => {
             expect(() =>
                 lib.add({
                     id: "cit-1",
-                    citingClaimId: "nonexistent-claim",
-                    citingClaimVersion: 0,
-                    sourceClaimId: source1.id,
-                    sourceClaimVersion: source1.version,
+                    claimId: "nonexistent-claim",
+                    claimVersion: 0,
+                    supportingClaimId: source1.id,
+                    supportingClaimVersion: source1.version,
                 })
             ).toThrow()
         })
@@ -10310,10 +10311,10 @@ describe("ClaimCitationLibrary", () => {
             expect(() =>
                 lib.add({
                     id: "cit-1",
-                    citingClaimId: claim1.id,
-                    citingClaimVersion: 999,
-                    sourceClaimId: source1.id,
-                    sourceClaimVersion: source1.version,
+                    claimId: claim1.id,
+                    claimVersion: 999,
+                    supportingClaimId: source1.id,
+                    supportingClaimVersion: source1.version,
                 })
             ).toThrow()
         })
@@ -10323,10 +10324,10 @@ describe("ClaimCitationLibrary", () => {
             expect(() =>
                 lib.add({
                     id: "cit-1",
-                    citingClaimId: claim1.id,
-                    citingClaimVersion: claim1.version,
-                    sourceClaimId: "nonexistent-source",
-                    sourceClaimVersion: 0,
+                    claimId: claim1.id,
+                    claimVersion: claim1.version,
+                    supportingClaimId: "nonexistent-source",
+                    supportingClaimVersion: 0,
                 })
             ).toThrow()
         })
@@ -10336,10 +10337,10 @@ describe("ClaimCitationLibrary", () => {
             expect(() =>
                 lib.add({
                     id: "cit-1",
-                    citingClaimId: claim1.id,
-                    citingClaimVersion: claim1.version,
-                    sourceClaimId: source1.id,
-                    sourceClaimVersion: 999,
+                    claimId: claim1.id,
+                    claimVersion: claim1.version,
+                    supportingClaimId: source1.id,
+                    supportingClaimVersion: 999,
                 })
             ).toThrow()
         })
@@ -10350,10 +10351,10 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, source1 } = makeFixtures()
             const added = lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             const removed = lib.remove("cit-1")
             expect(removed).toEqual(added)
@@ -10369,54 +10370,42 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             lib.remove("cit-1")
-            expect(lib.getCitationsForCitingClaim(claim1.id)).toEqual([])
+            expect(lib.getConnectionsForClaim(claim1.id)).toEqual([])
         })
 
-        it("cleans up source-claim index on remove", () => {
-            const { lib, claim1, source1 } = makeFixtures()
-            lib.add({
-                id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
-            })
-            lib.remove("cit-1")
-            expect(lib.getCitationsForSourceClaim(source1.id)).toEqual([])
-        })
     })
 
-    describe("getCitationsForCitingClaim", () => {
+    describe("getConnectionsForClaim", () => {
         it("returns all citations for a given citing-claim ID", () => {
             const { lib, claim1, claim2, source1, source2 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             lib.add({
                 id: "cit-2",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source2.id,
-                sourceClaimVersion: source2.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source2.id,
+                supportingClaimVersion: source2.version,
             })
             lib.add({
                 id: "cit-3",
-                citingClaimId: claim2.id,
-                citingClaimVersion: claim2.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
-            const result = lib.getCitationsForCitingClaim(claim1.id)
+            const result = lib.getConnectionsForClaim(claim1.id)
             expect(result).toHaveLength(2)
             expect(result.map((a) => a.id)).toContain("cit-1")
             expect(result.map((a) => a.id)).toContain("cit-2")
@@ -10424,43 +10413,7 @@ describe("ClaimCitationLibrary", () => {
 
         it("returns empty array when no citations exist for the citing claim", () => {
             const { lib, claim1 } = makeFixtures()
-            expect(lib.getCitationsForCitingClaim(claim1.id)).toEqual([])
-        })
-    })
-
-    describe("getCitationsForSourceClaim", () => {
-        it("returns all citations for a given source-claim ID", () => {
-            const { lib, claim1, claim2, source1, source2 } = makeFixtures()
-            lib.add({
-                id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
-            })
-            lib.add({
-                id: "cit-2",
-                citingClaimId: claim2.id,
-                citingClaimVersion: claim2.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
-            })
-            lib.add({
-                id: "cit-3",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source2.id,
-                sourceClaimVersion: source2.version,
-            })
-            const result = lib.getCitationsForSourceClaim(source1.id)
-            expect(result).toHaveLength(2)
-            expect(result.map((a) => a.id)).toContain("cit-1")
-            expect(result.map((a) => a.id)).toContain("cit-2")
-        })
-
-        it("returns empty array when no citations exist for the source claim", () => {
-            const { lib, source1 } = makeFixtures()
-            expect(lib.getCitationsForSourceClaim(source1.id)).toEqual([])
+            expect(lib.getConnectionsForClaim(claim1.id)).toEqual([])
         })
     })
 
@@ -10469,10 +10422,10 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             const result = lib.get("cit-1")
             expect(result).toBeDefined()
@@ -10490,17 +10443,17 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, claim2, source1, source2 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             lib.add({
                 id: "cit-2",
-                citingClaimId: claim2.id,
-                citingClaimVersion: claim2.version,
-                sourceClaimId: source2.id,
-                sourceClaimVersion: source2.version,
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                supportingClaimId: source2.id,
+                supportingClaimVersion: source2.version,
             })
             expect(lib.getAll()).toHaveLength(2)
         })
@@ -10516,19 +10469,19 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, claim2, source1, source2 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             lib.add({
                 id: "cit-2",
-                citingClaimId: claim2.id,
-                citingClaimVersion: claim2.version,
-                sourceClaimId: source2.id,
-                sourceClaimVersion: source2.version,
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                supportingClaimId: source2.id,
+                supportingClaimVersion: source2.version,
             })
-            const result = lib.filter((a) => a.citingClaimId === claim1.id)
+            const result = lib.filter((a) => a.claimId === claim1.id)
             expect(result).toHaveLength(1)
             expect(result[0].id).toBe("cit-1")
         })
@@ -10537,10 +10490,10 @@ describe("ClaimCitationLibrary", () => {
             const { lib, claim1, source1 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             expect(lib.filter(() => false)).toEqual([])
         })
@@ -10552,20 +10505,20 @@ describe("ClaimCitationLibrary", () => {
                 makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             lib.add({
                 id: "cit-2",
-                citingClaimId: claim2.id,
-                citingClaimVersion: claim2.version,
-                sourceClaimId: source2.id,
-                sourceClaimVersion: source2.version,
+                claimId: claim2.id,
+                claimVersion: claim2.version,
+                supportingClaimId: source2.id,
+                supportingClaimVersion: source2.version,
             })
             const snap = lib.snapshot()
-            expect(snap.claimCitations).toHaveLength(2)
+            expect(snap.connections).toHaveLength(2)
 
             const restored = ClaimCitationLibrary.fromSnapshot(snap, claimLib)
             expect(restored.getAll()).toHaveLength(2)
@@ -10573,28 +10526,30 @@ describe("ClaimCitationLibrary", () => {
             expect(restored.get("cit-2")).toEqual(lib.get("cit-2"))
         })
 
-        it("restores citing- and source-claim indexes correctly", () => {
+        it("restores citing- and supporting-claim indexes correctly", () => {
             const { lib, claimLib, claim1, source1 } = makeFixtures()
             lib.add({
                 id: "cit-1",
-                citingClaimId: claim1.id,
-                citingClaimVersion: claim1.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim1.id,
+                claimVersion: claim1.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
             })
             const snap = lib.snapshot()
             const restored = ClaimCitationLibrary.fromSnapshot(snap, claimLib)
-            expect(restored.getCitationsForCitingClaim(claim1.id)).toHaveLength(
+            expect(restored.getConnectionsForClaim(claim1.id)).toHaveLength(
                 1
             )
             expect(
-                restored.getCitationsForSourceClaim(source1.id)
+                restored
+                    .getAll()
+                    .filter((c) => c.supportingClaimId === source1.id)
             ).toHaveLength(1)
         })
 
         it("snapshot of empty library returns empty array", () => {
             const { lib } = makeFixtures()
-            expect(lib.snapshot()).toEqual({ claimCitations: [] })
+            expect(lib.snapshot()).toEqual({ connections: [] })
         })
     })
 
@@ -10612,10 +10567,10 @@ describe("ClaimCitationLibrary", () => {
 
             type TExtCitation = {
                 id: string
-                citingClaimId: string
-                citingClaimVersion: number
-                sourceClaimId: string
-                sourceClaimVersion: number
+                claimId: string
+                claimVersion: number
+                supportingClaimId: string
+                supportingClaimVersion: number
                 checksum: string
                 createdBy: string
             }
@@ -10623,10 +10578,10 @@ describe("ClaimCitationLibrary", () => {
             const lib = new ClaimCitationLibrary<TExtCitation>(claimLib)
             const cit = lib.add({
                 id: "cit-ext",
-                citingClaimId: claim.id,
-                citingClaimVersion: claim.version,
-                sourceClaimId: source.id,
-                sourceClaimVersion: source.version,
+                claimId: claim.id,
+                claimVersion: claim.version,
+                supportingClaimId: source.id,
+                supportingClaimVersion: source.version,
                 createdBy: "user-1",
             })
             expect(cit.createdBy).toBe("user-1")
@@ -10635,7 +10590,7 @@ describe("ClaimCitationLibrary", () => {
             expect(fetched?.createdBy).toBe("user-1")
 
             const snap = lib.snapshot()
-            expect(snap.claimCitations[0].createdBy).toBe("user-1")
+            expect(snap.connections[0].createdBy).toBe("user-1")
 
             const restored = ClaimCitationLibrary.fromSnapshot<TExtCitation>(
                 snap,
@@ -10661,10 +10616,10 @@ describe("ClaimCitationLibrary", () => {
 
             type TExtCitation = {
                 id: string
-                citingClaimId: string
-                citingClaimVersion: number
-                sourceClaimId: string
-                sourceClaimVersion: number
+                claimId: string
+                claimVersion: number
+                supportingClaimId: string
+                supportingClaimVersion: number
                 checksum: string
                 tag: string
             }
@@ -10672,18 +10627,18 @@ describe("ClaimCitationLibrary", () => {
             const lib = new ClaimCitationLibrary<TExtCitation>(claimLib)
             lib.add({
                 id: "cit-ext-a",
-                citingClaimId: claim.id,
-                citingClaimVersion: claim.version,
-                sourceClaimId: source1.id,
-                sourceClaimVersion: source1.version,
+                claimId: claim.id,
+                claimVersion: claim.version,
+                supportingClaimId: source1.id,
+                supportingClaimVersion: source1.version,
                 tag: "alpha",
             })
             lib.add({
                 id: "cit-ext-b",
-                citingClaimId: claim.id,
-                citingClaimVersion: claim.version,
-                sourceClaimId: source2.id,
-                sourceClaimVersion: source2.version,
+                claimId: claim.id,
+                claimVersion: claim.version,
+                supportingClaimId: source2.id,
+                supportingClaimVersion: source2.version,
                 tag: "beta",
             })
             const result = lib.filter((a) => a.tag === "alpha")
@@ -13337,10 +13292,10 @@ describe("Parsing — response schemas", () => {
                 class Custom extends ArgumentParser {
                     protected override mapClaimCitation(
                         parsed: TParsedClaim,
-                        citingClaimId: string,
-                        _sourceClaimId: string
+                        claimId: string,
+                        _supportingClaimId: string
                     ): Record<string, unknown> {
-                        return { link: `${parsed.miniId}-${citingClaimId}` }
+                        return { link: `${parsed.miniId}-${claimId}` }
                     }
                 }
                 const parser = new Custom()
@@ -13494,10 +13449,10 @@ describe("Library persistence", () => {
         const ccLib = new ClaimCitationLibrary(claimLib)
         ccLib.add({
             id: "a1",
-            citingClaimId: "c1",
-            citingClaimVersion: 0,
-            sourceClaimId: "s1",
-            sourceClaimVersion: 0,
+            claimId: "c1",
+            claimVersion: 0,
+            supportingClaimId: "s1",
+            supportingClaimVersion: 0,
         })
         const snapshot = ccLib.snapshot()
         const restored = ClaimCitationLibrary.fromSnapshot(snapshot, claimLib)
@@ -20052,10 +20007,10 @@ describe("ClaimCitationLibrary — validate", () => {
         const ccLibrary = new ClaimCitationLibrary(claimLib)
         ccLibrary.add({
             id: "cit-1",
-            citingClaimId: "claim-x",
-            citingClaimVersion: 0,
-            sourceClaimId: "source-x",
-            sourceClaimVersion: 0,
+            claimId: "claim-x",
+            claimVersion: 0,
+            supportingClaimId: "source-x",
+            supportingClaimVersion: 0,
         })
         const result = ccLibrary.validate()
         expect(result.ok).toBe(true)
@@ -20076,10 +20031,10 @@ describe("ClaimCitationLibrary — validate", () => {
         const ccLibrary = new ClaimCitationLibrary(claimLib)
         ccLibrary.add({
             id: "cit-2",
-            citingClaimId: "claim-y",
-            citingClaimVersion: 0,
-            sourceClaimId: "source-y",
-            sourceClaimVersion: 0,
+            claimId: "claim-y",
+            claimVersion: 0,
+            supportingClaimId: "source-y",
+            supportingClaimVersion: 0,
         })
 
         // Restore against an empty ClaimLibrary so neither ref is found
@@ -20089,7 +20044,7 @@ describe("ClaimCitationLibrary — validate", () => {
         const result = restored.validate()
         expect(result.ok).toBe(false)
         const violations = result.violations.filter(
-            (v) => v.code === CITATION_CITING_REF_NOT_FOUND
+            (v) => v.code === CITATION_CLAIM_REF_NOT_FOUND
         )
         expect(violations.length).toBe(1)
         expect(violations[0].entityId).toBe("cit-2")
@@ -20102,10 +20057,10 @@ describe("ClaimCitationLibrary — validate", () => {
         const ccLibrary = new ClaimCitationLibrary(claimLib)
         ccLibrary.add({
             id: "cit-3",
-            citingClaimId: "claim-z",
-            citingClaimVersion: 0,
-            sourceClaimId: "source-z",
-            sourceClaimVersion: 0,
+            claimId: "claim-z",
+            claimVersion: 0,
+            supportingClaimId: "source-z",
+            supportingClaimVersion: 0,
         })
 
         // Restore against a ClaimLibrary that only has the citing claim, not the source
@@ -20119,7 +20074,7 @@ describe("ClaimCitationLibrary — validate", () => {
         const result = restored.validate()
         expect(result.ok).toBe(false)
         const violations = result.violations.filter(
-            (v) => v.code === CITATION_SOURCE_REF_NOT_FOUND
+            (v) => v.code === CITATION_SUPPORTING_REF_NOT_FOUND
         )
         expect(violations.length).toBe(1)
         expect(violations[0].entityId).toBe("cit-3")
@@ -20305,10 +20260,10 @@ describe("Library — withValidation brackets", () => {
         const ccl = new ClaimCitationLibrary(cl)
         ccl.add({
             id: "a1",
-            citingClaimId: "claim-default",
-            citingClaimVersion: 0,
-            sourceClaimId: "s1",
-            sourceClaimVersion: 0,
+            claimId: "claim-default",
+            claimVersion: 0,
+            supportingClaimId: "s1",
+            supportingClaimVersion: 0,
         })
         expect(ccl.validate().ok).toBe(true)
     })
@@ -20319,10 +20274,10 @@ describe("Library — withValidation brackets", () => {
         const ccl = new ClaimCitationLibrary(cl)
         ccl.add({
             id: "a1",
-            citingClaimId: "claim-default",
-            citingClaimVersion: 0,
-            sourceClaimId: "s1",
-            sourceClaimVersion: 0,
+            claimId: "claim-default",
+            claimVersion: 0,
+            supportingClaimId: "s1",
+            supportingClaimVersion: 0,
         })
         ccl.remove("a1")
         expect(ccl.validate().ok).toBe(true)
@@ -20335,18 +20290,18 @@ describe("Library — withValidation brackets", () => {
         const ccl = new ClaimCitationLibrary(cl)
         ccl.add({
             id: "a1",
-            citingClaimId: "claim-default",
-            citingClaimVersion: 0,
-            sourceClaimId: "s1",
-            sourceClaimVersion: 0,
+            claimId: "claim-default",
+            claimVersion: 0,
+            supportingClaimId: "s1",
+            supportingClaimVersion: 0,
         })
         expect(() =>
             ccl.add({
                 id: "a1",
-                citingClaimId: "claim-default",
-                citingClaimVersion: 0,
-                sourceClaimId: "s1",
-                sourceClaimVersion: 0,
+                claimId: "claim-default",
+                claimVersion: 0,
+                supportingClaimId: "s1",
+                supportingClaimVersion: 0,
             })
         ).toThrow()
         expect(ccl.getAll()).toHaveLength(1)
@@ -21764,19 +21719,17 @@ describe("empty lookup constants", () => {
         expect(EMPTY_CLAIM_LOOKUP.get("any", 0)).toBeUndefined()
     })
 
-    it("EMPTY_CLAIM_CITATION_LOOKUP.get returns undefined", () => {
-        expect(EMPTY_CLAIM_CITATION_LOOKUP.get("any")).toBeUndefined()
+    it("emptyClaimConnectionLookup().get returns undefined", () => {
+        expect(
+            emptyClaimConnectionLookup<TCoreClaimCitation>().get("any")
+        ).toBeUndefined()
     })
 
-    it("EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForCitingClaim returns empty array", () => {
+    it("emptyClaimConnectionLookup().getConnectionsForClaim returns empty array", () => {
         expect(
-            EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForCitingClaim("any")
-        ).toEqual([])
-    })
-
-    it("EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForSourceClaim returns empty array", () => {
-        expect(
-            EMPTY_CLAIM_CITATION_LOOKUP.getCitationsForSourceClaim("any")
+            emptyClaimConnectionLookup<TCoreClaimCitation>().getConnectionsForClaim(
+                "any"
+            )
         ).toEqual([])
     })
 })
@@ -22222,7 +22175,7 @@ describe("PropositCore", () => {
         const core = new PropositCore()
         expect(core.arguments).toBeInstanceOf(ArgumentLibrary)
         expect(core.claims).toBeInstanceOf(ClaimLibrary)
-        expect(core.claimCitations).toBeInstanceOf(ClaimCitationLibrary)
+        expect(core.citations).toBeInstanceOf(ClaimCitationLibrary)
         expect(core.forks).toBeInstanceOf(ForkLibrary)
     })
 
@@ -22234,7 +22187,7 @@ describe("PropositCore", () => {
             claimCitationLibrary,
         })
         expect(core.claims).toBe(claimLibrary)
-        expect(core.claimCitations).toBe(claimCitationLibrary)
+        expect(core.citations).toBe(claimCitationLibrary)
     })
 
     it("should accept a pre-constructed fork library", () => {
@@ -22295,19 +22248,19 @@ describe("PropositCore", () => {
             type: "citation",
         })
         core.claims.freeze(source.id)
-        const cit = core.claimCitations.add({
+        const cit = core.citations.add({
             id: crypto.randomUUID(),
-            citingClaimId: claim.id,
-            citingClaimVersion: 0,
-            sourceClaimId: source.id,
-            sourceClaimVersion: 0,
+            claimId: claim.id,
+            claimVersion: 0,
+            supportingClaimId: source.id,
+            supportingClaimVersion: 0,
         })
 
         const snap = core.snapshot()
         const restored = PropositCore.fromSnapshot(snap)
 
-        expect(restored.claimCitations.get(cit.id)).toBeDefined()
-        expect(restored.claimCitations.get(cit.id)!.citingClaimId).toBe(
+        expect(restored.citations.get(cit.id)).toBeDefined()
+        expect(restored.citations.get(cit.id)!.claimId).toBe(
             claim.id
         )
     })
@@ -22346,12 +22299,12 @@ describe("PropositCore", () => {
         core.claims.freeze(source.id)
 
         // Populate citations
-        core.claimCitations.add({
+        core.citations.add({
             id: crypto.randomUUID(),
-            citingClaimId: claim.id,
-            citingClaimVersion: 0,
-            sourceClaimId: source.id,
-            sourceClaimVersion: 0,
+            claimId: claim.id,
+            claimVersion: 0,
+            supportingClaimId: source.id,
+            supportingClaimVersion: 0,
         })
 
         // Populate arguments
@@ -22370,7 +22323,7 @@ describe("PropositCore", () => {
         const restored = PropositCore.fromSnapshot(snap)
 
         expect(restored.claims.getAll()).toHaveLength(4) // 2× (frozen + successor)
-        expect(restored.claimCitations.getAll()).toHaveLength(1)
+        expect(restored.citations.getAll()).toHaveLength(1)
         expect(restored.arguments.getAll()).toHaveLength(1)
         expect(restored.forks.arguments.getAll()).toHaveLength(1)
     })
@@ -22436,12 +22389,12 @@ describe("PropositCore", () => {
             const frozenSource = core.claims.freeze(source.id)
 
             // Create a citation linking citing claim → source claim
-            const cit = core.claimCitations.add({
+            const cit = core.citations.add({
                 id: crypto.randomUUID(),
-                citingClaimId: frozenResult.frozen.id,
-                citingClaimVersion: frozenResult.frozen.version,
-                sourceClaimId: frozenSource.frozen.id,
-                sourceClaimVersion: frozenSource.frozen.version,
+                claimId: frozenResult.frozen.id,
+                claimVersion: frozenResult.frozen.version,
+                supportingClaimId: frozenSource.frozen.id,
+                supportingClaimVersion: frozenSource.frozen.version,
             })
 
             // Create an argument with a variable referencing the frozen claim
@@ -22529,7 +22482,7 @@ describe("PropositCore", () => {
             const noFork = new NoForkEngine(
                 engine.getArgument(),
                 core.claims,
-                core.claimCitations
+                core.citations
             )
             core.arguments.register(noFork)
 
@@ -22547,9 +22500,9 @@ describe("PropositCore", () => {
 
         it("should create cloned claim citations", () => {
             const { core, arg } = setupForFork()
-            const citsBefore = core.claimCitations.getAll().length
+            const citsBefore = core.citations.getAll().length
             core.forkArgument(arg.id, crypto.randomUUID())
-            expect(core.claimCitations.getAll().length).toBe(citsBefore + 1)
+            expect(core.citations.getAll().length).toBe(citsBefore + 1)
         })
 
         it("should dedup claims when multiple variables reference the same claim", () => {
@@ -27974,7 +27927,7 @@ describe("CoreClaimSchema type field", () => {
 })
 
 describe("ClaimCitationLibrary strict source-side type", () => {
-    it("rejects a citation where sourceClaimId references a normal claim", () => {
+    it("rejects a citation where supportingClaimId references a normal claim", () => {
         const claimLib = new ClaimLibrary()
         const normalClaim = claimLib.create({ type: "normal" })
         const anotherNormalClaim = claimLib.create({ type: "normal" })
@@ -27985,14 +27938,14 @@ describe("ClaimCitationLibrary strict source-side type", () => {
         expect(() =>
             citationLib.add({
                 id: "00000000-0000-0000-0000-000000000010",
-                citingClaimId: normalClaim.id,
-                citingClaimVersion: normalClaim.version,
-                sourceClaimId: anotherNormalClaim.id,
-                sourceClaimVersion: anotherNormalClaim.version,
+                claimId: normalClaim.id,
+                claimVersion: normalClaim.version,
+                supportingClaimId: anotherNormalClaim.id,
+                supportingClaimVersion: anotherNormalClaim.version,
             })
         ).toThrow(/only 'citation' is permitted/)
     })
-    it("accepts a citation where sourceClaimId references a citation claim", () => {
+    it("accepts a citation where supportingClaimId references a citation claim", () => {
         const claimLib = new ClaimLibrary()
         const normalClaim = claimLib.create({ type: "normal" })
         const citationClaim = claimLib.create({ type: "citation" })
@@ -28003,10 +27956,10 @@ describe("ClaimCitationLibrary strict source-side type", () => {
         expect(() =>
             citationLib.add({
                 id: "00000000-0000-0000-0000-000000000011",
-                citingClaimId: normalClaim.id,
-                citingClaimVersion: normalClaim.version,
-                sourceClaimId: citationClaim.id,
-                sourceClaimVersion: citationClaim.version,
+                claimId: normalClaim.id,
+                claimVersion: normalClaim.version,
+                supportingClaimId: citationClaim.id,
+                supportingClaimVersion: citationClaim.version,
             })
         ).not.toThrow()
     })
@@ -28028,18 +27981,18 @@ describe("ClaimCitationLibrary acyclicity", () => {
         const b = claimLib.create({ type: "citation" })
         citationLib.add({
             id: "00000000-0000-0000-0000-000000000001",
-            citingClaimId: a.id,
-            citingClaimVersion: a.version,
-            sourceClaimId: b.id,
-            sourceClaimVersion: b.version,
+            claimId: a.id,
+            claimVersion: a.version,
+            supportingClaimId: b.id,
+            supportingClaimVersion: b.version,
         })
         expect(() =>
             citationLib.add({
                 id: "00000000-0000-0000-0000-000000000002",
-                citingClaimId: b.id,
-                citingClaimVersion: b.version,
-                sourceClaimId: a.id,
-                sourceClaimVersion: a.version,
+                claimId: b.id,
+                claimVersion: b.version,
+                supportingClaimId: a.id,
+                supportingClaimVersion: a.version,
             })
         ).toThrow(/cycle/i)
     })
@@ -28050,25 +28003,25 @@ describe("ClaimCitationLibrary acyclicity", () => {
         const c = claimLib.create({ type: "citation" })
         citationLib.add({
             id: "00000000-0000-0000-0000-000000000010",
-            citingClaimId: a.id,
-            citingClaimVersion: a.version,
-            sourceClaimId: b.id,
-            sourceClaimVersion: b.version,
+            claimId: a.id,
+            claimVersion: a.version,
+            supportingClaimId: b.id,
+            supportingClaimVersion: b.version,
         })
         citationLib.add({
             id: "00000000-0000-0000-0000-000000000011",
-            citingClaimId: b.id,
-            citingClaimVersion: b.version,
-            sourceClaimId: c.id,
-            sourceClaimVersion: c.version,
+            claimId: b.id,
+            claimVersion: b.version,
+            supportingClaimId: c.id,
+            supportingClaimVersion: c.version,
         })
         expect(() =>
             citationLib.add({
                 id: "00000000-0000-0000-0000-000000000012",
-                citingClaimId: c.id,
-                citingClaimVersion: c.version,
-                sourceClaimId: a.id,
-                sourceClaimVersion: a.version,
+                claimId: c.id,
+                claimVersion: c.version,
+                supportingClaimId: a.id,
+                supportingClaimVersion: a.version,
             })
         ).toThrow(/cycle/i)
     })
@@ -28079,10 +28032,10 @@ describe("ClaimCitationLibrary acyclicity", () => {
         // First edge: A@v0 → B@v0
         citationLib.add({
             id: "00000000-0000-0000-0000-000000000020",
-            citingClaimId: a.id,
-            citingClaimVersion: 0,
-            sourceClaimId: b.id,
-            sourceClaimVersion: 0,
+            claimId: a.id,
+            claimVersion: 0,
+            supportingClaimId: b.id,
+            supportingClaimVersion: 0,
         })
         // Freeze A to bump it to a new version (v1)
         claimLib.freeze(a.id)
@@ -28090,10 +28043,10 @@ describe("ClaimCitationLibrary acyclicity", () => {
         expect(() =>
             citationLib.add({
                 id: "00000000-0000-0000-0000-000000000021",
-                citingClaimId: b.id,
-                citingClaimVersion: 0,
-                sourceClaimId: a.id,
-                sourceClaimVersion: 1,
+                claimId: b.id,
+                claimVersion: 0,
+                supportingClaimId: a.id,
+                supportingClaimVersion: 1,
             })
         ).toThrow(/cycle/i)
     })
@@ -29838,22 +29791,22 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
         // Build claim library.
         const claimLib = new ClaimLibrary()
         const derivedClaim = claimLib.create({ type: "normal" })
-        const sourceClaimIds: string[] = []
+        const supportingClaimIds: string[] = []
         for (let i = 0; i < citationCount; i++) {
             const sourceClaim = claimLib.create({ type: "citation" })
-            sourceClaimIds.push(sourceClaim.id)
+            supportingClaimIds.push(sourceClaim.id)
         }
 
         // Build citation library.
         const citationLib = new ClaimCitationLibrary(claimLib)
         for (let i = 0; i < citationCount; i++) {
-            const sourceClaim = claimLib.getCurrent(sourceClaimIds[i])!
+            const sourceClaim = claimLib.getCurrent(supportingClaimIds[i])!
             const derivedClaimCurrent = claimLib.getCurrent(derivedClaim.id)!
             citationLib.add({
                 id: `cit-${argId}-${i}`,
                 claimId: derivedClaim.id,
                 claimVersion: derivedClaimCurrent.version,
-                supportingClaimId: sourceClaimIds[i],
+                supportingClaimId: supportingClaimIds[i],
                 supportingClaimVersion: sourceClaim.version,
             })
         }
@@ -29919,7 +29872,7 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
             citationLib,
             axiomLib,
             derivedClaimId: derivedClaim.id,
-            sourceClaimIds,
+            supportingClaimIds,
             consequentVarId: consequentVariable.id,
             premiseId,
             argId,
@@ -29944,7 +29897,7 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
             argumentEngine,
             citationLib,
             axiomLib,
-            sourceClaimIds,
+            supportingClaimIds,
             consequentVarId,
         } = setupDerivationWithCitations(1)
         engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
@@ -29974,7 +29927,7 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
                     v.id === (antecedent as { variableId: string }).variableId
             )!
         expect((antecedentVar as TClaimBoundVariable).claimId).toBe(
-            sourceClaimIds[0]
+            supportingClaimIds[0]
         )
 
         // Consequent (higher position) is a variable expression for Q.
@@ -29991,7 +29944,7 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
             argumentEngine,
             citationLib,
             axiomLib,
-            sourceClaimIds,
+            supportingClaimIds,
             consequentVarId,
         } = setupDerivationWithCitations(3)
         engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
@@ -30046,7 +29999,7 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
                 return variable.claimId
             })
             .sort()
-        expect(orChildClaimIds).toEqual([...sourceClaimIds].sort())
+        expect(orChildClaimIds).toEqual([...supportingClaimIds].sort())
     })
 
     it("produces IMPLIES(formula(OR(S1, S2)), Q) when there are exactly two citations (n=2 formula-buffer regression)", () => {
@@ -30125,7 +30078,7 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
     })
 
     it("creates new claim-bound variables for cited claims that lack them", () => {
-        const { engine, argumentEngine, citationLib, axiomLib, sourceClaimIds } =
+        const { engine, argumentEngine, citationLib, axiomLib, supportingClaimIds } =
             setupDerivationWithCitations(2)
         const varsBefore = argumentEngine.getVariables().length
         // Source claims have no variables yet in argumentEngine.
@@ -30134,7 +30087,7 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
         // Two new variables should have been created (one per source claim).
         expect(varsAfter).toBe(varsBefore + 2)
         // Each source claim ID is covered by a claim-bound variable.
-        for (const sourceClaimId of sourceClaimIds) {
+        for (const supportingClaimId of supportingClaimIds) {
             const found = argumentEngine
                 .getVariables()
                 .find(
@@ -30143,18 +30096,18 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
                             v as unknown as TCorePropositionalVariable
                         ) &&
                         (v as unknown as TClaimBoundVariable).claimId ===
-                            sourceClaimId
+                            supportingClaimId
                 )
             expect(found).toBeDefined()
         }
     })
 
     it("does not create duplicate variables when a variable already exists for a cited claim", () => {
-        const { engine, argumentEngine, citationLib, axiomLib, sourceClaimIds } =
+        const { engine, argumentEngine, citationLib, axiomLib, supportingClaimIds } =
             setupDerivationWithCitations(1)
         // Pre-create the variable for the source claim.
         const existingVar = argumentEngine.ensureClaimBoundVariable(
-            sourceClaimIds[0]
+            supportingClaimIds[0]
         )
         const varsBefore = argumentEngine.getVariables().length
         engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
