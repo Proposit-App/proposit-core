@@ -94,8 +94,9 @@ Every claim has a \`type\` field, which is one of:
 
 - **\`"normal"\`**: a claim authored as part of the argument's primary reasoning (the propositions being argued for or from). Most claims are normal.
 - **\`"citation"\`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** \`claims\` array as normal claims; they are NOT a separate array.
+- **\`"axiomatic"\`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: "true by definition," "logically required," "historically established." Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied. Apps using this library may extend axiomatic claims with a \`reasonCode\` field describing the category of self-evidence; the core parser does not require it.
 
-A citation claim is just a claim whose propositional content is "the cited material says/shows X". Logical relationships between *normal* claims are expressed through variables, formulas, and premises; citation evidence is expressed through the \`citationMiniIds\` link described below.
+A citation claim is just a claim whose propositional content is "the cited material says/shows X". Logical relationships between *normal* claims are expressed through variables, formulas, and premises; citation evidence is expressed through the \`citationMiniIds\` link described below. Axiomatic claims, by contrast, do not carry a separate cross-reference field in the core parse — emit them as standalone claims with \`type: "axiomatic"\` and the consuming application will wire them into the argument's logical structure.
 
 ## Citation Links
 
@@ -121,12 +122,13 @@ Each entity type uses a distinct prefix for its miniId to avoid cross-reference 
 
 - Normal claims: \`c1\`, \`c2\`, \`c3\`, ...
 - Citation claims: \`s1\`, \`s2\`, \`s3\`, ... (the \`s\` prefix is a UX convention to mark the cited-evidence role; semantically these are claims in the same \`claims\` array, distinguished only by their \`type: "citation"\` field)
+- Axiomatic claims: \`a1\`, \`a2\`, \`a3\`, ... (the \`a\` prefix is a UX convention to mark the self-evident role; semantically these are claims in the same \`claims\` array, distinguished only by their \`type: "axiomatic"\` field)
 - Variables: \`v1\`, \`v2\`, \`v3\`, ...
 - Premises: \`p1\`, \`p2\`, \`p3\`, ...
 
 Always use the correct prefix when referencing entities. Cross-type references are strict:
-- \`citationMiniIds\` on a claim → only miniIds of claims with \`type: "citation"\` (typically \`s\`-prefixed by convention)
-- \`claimMiniId\` on a variable → any claim in the \`claims\` array (typically \`c\`-prefixed; \`s\`-prefixed citation claims may also be referenced when their propositional content is part of the reasoning)
+- \`citationMiniIds\` on a claim → only miniIds of claims with \`type: "citation"\` (typically \`s\`-prefixed by convention). It must NOT contain miniIds of \`"axiomatic"\` claims — axiom linkage is not expressed in the parsed output.
+- \`claimMiniId\` on a variable → any claim in the \`claims\` array (typically \`c\`-prefixed; \`s\`-prefixed citation claims and \`a\`-prefixed axiomatic claims may also be referenced when their propositional content is part of the reasoning)
 - \`conclusionPremiseMiniId\` → only \`p\`-prefixed miniIds (premises)
 
 ## Self-Check
@@ -136,8 +138,8 @@ Before finalizing your response, verify:
 2. Every variable's \`claimMiniId\` references an existing claim in the \`claims\` array
 3. The \`conclusionPremiseMiniId\` references an existing premise in the \`premises\` array
 4. No \`implies\` or \`iff\` operator is nested inside another operator in any formula
-5. \`citationMiniIds\` on each claim contains only miniIds of claims whose \`type\` is \`"citation"\`, never miniIds of \`"normal"\`-typed claims
-6. Every claim has a \`type\` field set to either \`"normal"\` or \`"citation"\``
+5. \`citationMiniIds\` on each claim contains only miniIds of claims whose \`type\` is \`"citation"\`, never miniIds of \`"normal"\`-typed or \`"axiomatic"\`-typed claims
+6. Every claim has a \`type\` field set to one of \`"normal"\`, \`"citation"\`, or \`"axiomatic"\``
 
 type TSchemaLike = {
     properties?: Record<string, TSchemaLike>

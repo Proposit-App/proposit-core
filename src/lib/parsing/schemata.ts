@@ -11,6 +11,7 @@ export const ParsedClaimRoleType = Type.Union([
 export const ParsedClaimTypeType = Type.Union([
     Type.Literal("normal"),
     Type.Literal("citation"),
+    Type.Literal("axiomatic"),
 ])
 
 export const ParsedClaimSchema = Type.Object(
