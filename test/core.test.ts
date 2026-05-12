@@ -12512,7 +12512,7 @@ describe("Parsing — response schemas", () => {
                             miniId: "C1",
                             role: "premise",
                             type: "normal",
-                            citationMiniIds: ["S1"],
+                            citationMiniIds: [],
                         },
                         {
                             miniId: "C2",
@@ -12530,9 +12530,10 @@ describe("Parsing — response schemas", () => {
                     variables: [
                         { miniId: "V1", symbol: "P", claimMiniId: "C1" },
                         { miniId: "V2", symbol: "Q", claimMiniId: "C2" },
+                        { miniId: "V3", symbol: "S", claimMiniId: "S1" },
                     ],
                     premises: [
-                        { miniId: "P1", formula: "P implies Q" },
+                        { miniId: "P1", formula: "(P and S) implies Q" },
                         { miniId: "P2", formula: "P" },
                     ],
                     conclusionPremiseMiniId: "P1",
@@ -12598,10 +12599,10 @@ describe("Parsing — response schemas", () => {
                 const vars = snap.variables.variables
                 const claimBoundVars = vars.filter((v) => isClaimBound(v))
                 const premiseBoundVars = vars.filter((v) => isPremiseBound(v))
-                expect(claimBoundVars).toHaveLength(2)
+                expect(claimBoundVars).toHaveLength(3)
                 expect(premiseBoundVars).toHaveLength(2) // auto-created for each premise
                 const claimSymbols = claimBoundVars.map((v) => v.symbol).sort()
-                expect(claimSymbols).toEqual(["P", "Q"])
+                expect(claimSymbols).toEqual(["P", "Q", "S"])
             })
 
             it("creates premises with expression trees", () => {
@@ -12609,9 +12610,9 @@ describe("Parsing — response schemas", () => {
                 const result = parser.build(validResponse())
                 const snap = result.engine.snapshot()
                 expect(snap.premises).toHaveLength(2)
-                // One premise "P -> Q" has 3 expressions (implies + 2 vars)
+                // One premise "(P and S) implies Q" has more than 1 expression
                 const impliesPremise = snap.premises.find(
-                    (p) => p.expressions.expressions.length === 3
+                    (p) => p.expressions.expressions.length > 1
                 )!
                 expect(impliesPremise).toBeDefined()
                 // The other premise "P" has 1 expression (variable)
@@ -12635,7 +12636,9 @@ describe("Parsing — response schemas", () => {
                 const parser = new ArgumentParser()
                 const result = parser.build(validResponse())
                 const assocs = result.claimCitationLibrary.getAll()
-                // C1 has citationMiniIds: ["S1"], C2 has none
+                // Premise "(P and S) implies Q" puts citation-bound S in the
+                // antecedent and normal-bound Q in the consequent, yielding
+                // a single Q → S citation edge.
                 expect(assocs).toHaveLength(1)
             })
 
@@ -12749,11 +12752,13 @@ describe("Parsing — response schemas", () => {
                 expect(result.warnings).toEqual([])
             })
 
-            it("throws on claim referencing undeclared source miniId", () => {
+            it("ignores citationMiniIds (deprecated field; edges now come from formulas)", () => {
                 const parser = new ArgumentParser()
                 const resp = validResponse()
+                // The old citation-walking pass would have thrown here; the
+                // new formula-inference pass ignores citationMiniIds entirely.
                 resp.argument!.claims[0].citationMiniIds = ["BOGUS"]
-                expect(() => parser.build(resp)).toThrow(/BOGUS/)
+                expect(() => parser.build(resp)).not.toThrow()
             })
         })
 
@@ -12822,28 +12827,36 @@ describe("Parsing — response schemas", () => {
                 expect(result.warnings[0].context.premiseMiniId).toBe("P3")
             })
 
-            it("skips bad citation reference and emits UNRESOLVED_CITATION_MINIID", () => {
+            it("ignores citationMiniIds (no longer wired into the parser) even in lenient mode", () => {
                 const parser = new ArgumentParser()
                 const resp = validResponse()
-                // Add a citation-typed claim S1 so one of two citationMiniIds resolves
+                // Add a citation-typed claim S1 and a variable bound to it,
+                // then put S in the antecedent of an implies premise so the
+                // new formula-inference pass produces a single edge.
                 resp.argument!.claims.push({
                     miniId: "S1",
                     role: "premise",
                     type: "citation",
                     citationMiniIds: [],
                 })
+                resp.argument!.variables.push({
+                    miniId: "V3",
+                    symbol: "S",
+                    claimMiniId: "S1",
+                })
+                resp.argument!.premises[0] = {
+                    miniId: "P1",
+                    formula: "(P and S) implies Q",
+                }
+                // citationMiniIds is now ignored — bogus values do not warn.
                 resp.argument!.claims[0].citationMiniIds = ["S1", "BOGUS"]
                 const result = parser.build(resp, { strict: false })
-                // 2 normal claims + 1 citation claim; one citation wired, one skipped
+                // 2 normal claims + 1 citation claim; one citation edge from
+                // the formula's antecedent.
                 expect(result.claimLibrary.getAll()).toHaveLength(3)
                 const cits = result.claimCitationLibrary.getAll()
                 expect(cits).toHaveLength(1)
-                expect(result.warnings).toHaveLength(1)
-                expect(result.warnings[0].code).toBe(
-                    "UNRESOLVED_CITATION_MINIID"
-                )
-                expect(result.warnings[0].context.claimMiniId).toBe("C1")
-                expect(result.warnings[0].context.citationMiniId).toBe("BOGUS")
+                expect(result.warnings).toEqual([])
             })
 
             it("skips variable with bad claim ref and emits UNRESOLVED_CLAIM_MINIID", () => {
@@ -12979,11 +12992,6 @@ describe("Parsing — response schemas", () => {
                 r4.argument!.conclusionPremiseMiniId = "P1"
                 expect(() => parser.build(r4)).toThrow(/C99/)
 
-                // UNRESOLVED_SOURCE_MINIID
-                const r5 = validResponse()
-                r5.argument!.claims[0].citationMiniIds = ["BOGUS"]
-                expect(() => parser.build(r5)).toThrow(/BOGUS/)
-
                 // UNRESOLVED_CONCLUSION_MINIID
                 const r6 = validResponse()
                 r6.argument!.conclusionPremiseMiniId = "P99"
@@ -13082,8 +13090,10 @@ describe("Parsing — response schemas", () => {
                 const cits = result.claimCitationLibrary.getAll()
                 expect(cits).toHaveLength(1)
                 const link = (cits[0] as Record<string, unknown>).link as string
-                // Link format is "claimMiniId-realCitingClaimUUID"
-                expect(link).toMatch(/^C1-/)
+                // Link format is "claimMiniId-realDependentClaimUUID". The
+                // dependent claim is the consequent of the implies premise
+                // — C2 in this fixture.
+                expect(link).toMatch(/^C2-/)
             })
         })
     })
