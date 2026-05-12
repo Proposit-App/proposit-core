@@ -241,11 +241,11 @@ The `@proposit/proposit-core/extensions/ieee` subpath export provides `IEEECitat
 
 Claim-bound variables evaluate differently depending on the bound claim's type:
 
-| Claim type   | Evaluation behavior                 | Caller override                              |
-| ------------ | ----------------------------------- | -------------------------------------------- |
-| `normal`     | Caller assigns; unassigned → `null` | Yes — standard                               |
-| `citation`   | Caller assigns; unassigned → `null` | Yes — standard                               |
-| `axiomatic`  | Forced to `true`                    | No — caller attempts are rejected pre-flight |
+| Claim type  | Evaluation behavior                 | Caller override                              |
+| ----------- | ----------------------------------- | -------------------------------------------- |
+| `normal`    | Caller assigns; unassigned → `null` | Yes — standard                               |
+| `citation`  | Caller assigns; unassigned → `null` | Yes — standard                               |
+| `axiomatic` | Forced to `true`                    | No — caller attempts are rejected pre-flight |
 
 Citations and normal claims continue to require explicit assignment. Apps that want auto-`true` defaults for citations implement that policy at their own layer. Axiomatic claim-bound variables are forced to `true` by a pre-pass in `ArgumentEngine.evaluate` and `ArgumentEngine.checkValidity`; a caller assignment for an axiomatic-bound variable raises `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` before evaluation runs.
 
@@ -828,21 +828,21 @@ The engine enforces structural invariants at two levels: **construction-time** (
 
 ### Premises — prevented at construction time
 
-| Invalid construction                                                                    | What happens / error code                              |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Duplicate premise ID                                                                    | Throws                                                 |
-| Adding a second root expression (`parentId: null`) to a premise                         | Throws                                                 |
-| `createPremise({ type: "derivation" })` without `derivedClaimId`                        | Throws — `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` |
-| `createPremise({ type: "derivation", derivedClaimId })` when claim not in library       | Throws — `CREATE_DERIVATION_CLAIM_NOT_FOUND`           |
-| `ManagedDerivationPremiseEngine` constructed on a non-derivation premise                | Throws — `DERIVATION_TYPE_MISMATCH`                    |
-| `ManagedDerivationPremiseEngine.fromSnapshot` on a structurally invalid tree            | Throws — `DERIVATION_STRUCTURE_INVALID`                |
-| Removing or negating the consequent expression on a managed derivation premise          | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
-| Updating the consequent variable ID or operator on a managed derivation premise         | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
-| Inserting an expression into the consequent slot of a managed derivation premise        | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
-| Swapping root operator to `and`/`or`/`not` on a managed derivation premise              | Throws — `DERIVATION_ROOT_OPERATOR_INVALID`            |
-| `populateFromSupports` on a derivation premise that already has a non-empty antecedent  | Throws — `DERIVATION_ANTECEDENT_NON_EMPTY`             |
-| `ensureClaimBoundVariable(claimId)` when the claim is not in the library                | Throws — `CLAIM_NOT_FOUND`                             |
-| Restoring a pre-v0.11 snapshot whose premises lack the `type` field                     | Throws — `LEGACY_PREMISE_MISSING_TYPE`                 |
+| Invalid construction                                                                   | What happens / error code                              |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Duplicate premise ID                                                                   | Throws                                                 |
+| Adding a second root expression (`parentId: null`) to a premise                        | Throws                                                 |
+| `createPremise({ type: "derivation" })` without `derivedClaimId`                       | Throws — `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` |
+| `createPremise({ type: "derivation", derivedClaimId })` when claim not in library      | Throws — `CREATE_DERIVATION_CLAIM_NOT_FOUND`           |
+| `ManagedDerivationPremiseEngine` constructed on a non-derivation premise               | Throws — `DERIVATION_TYPE_MISMATCH`                    |
+| `ManagedDerivationPremiseEngine.fromSnapshot` on a structurally invalid tree           | Throws — `DERIVATION_STRUCTURE_INVALID`                |
+| Removing or negating the consequent expression on a managed derivation premise         | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
+| Updating the consequent variable ID or operator on a managed derivation premise        | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
+| Inserting an expression into the consequent slot of a managed derivation premise       | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
+| Swapping root operator to `and`/`or`/`not` on a managed derivation premise             | Throws — `DERIVATION_ROOT_OPERATOR_INVALID`            |
+| `populateFromSupports` on a derivation premise that already has a non-empty antecedent | Throws — `DERIVATION_ANTECEDENT_NON_EMPTY`             |
+| `ensureClaimBoundVariable(claimId)` when the claim is not in the library               | Throws — `CLAIM_NOT_FOUND`                             |
+| Restoring a pre-v0.11 snapshot whose premises lack the `type` field                    | Throws — `LEGACY_PREMISE_MISSING_TYPE`                 |
 
 ### Premises — detected by validation
 
@@ -864,23 +864,23 @@ The engine enforces structural invariants at two levels: **construction-time** (
 
 ### Claims, citations, and axioms — prevented at construction time
 
-| Invalid construction                                                                          | What happens / error code                                                  |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Updating a claim's `type` field after creation                                                | Throws — `CLAIM_TYPE_IMMUTABLE`                                            |
-| Restoring a pre-v0.10 snapshot whose claims lack the `type` field                             | Throws — `LEGACY_CLAIM_MISSING_TYPE`                                       |
-| Adding a citation whose `id` already exists                                                   | Throws — `CITATION_DUPLICATE_ID`                                           |
-| Adding a citation whose `claimId@claimVersion` is not in the lookup                           | Throws — `CITATION_CLAIM_REF_NOT_FOUND`                                    |
-| Adding a citation whose `supportingClaimId@supportingClaimVersion` is not in the lookup       | Throws — `CITATION_SUPPORTING_REF_NOT_FOUND`                               |
-| Supporting-side claim of a citation has `type !== 'citation'`                                 | Throws — `CITATION_SUPPORTING_NOT_CITATION_TYPE`                           |
-| Citation that would create a cycle in the global claim-citation graph                         | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate) |
-| Adding an axiom connection whose `id` already exists                                          | Throws — `AXIOM_DUPLICATE_ID`                                              |
-| Adding an axiom connection whose `claimId@claimVersion` is not in the lookup                  | Throws — `AXIOM_CLAIM_REF_NOT_FOUND`                                       |
-| Adding an axiom connection whose `supportingClaimId@supportingClaimVersion` is not in lookup  | Throws — `AXIOM_SUPPORTING_REF_NOT_FOUND`                                  |
-| Supporting-side claim of an axiom connection has `type !== 'axiomatic'`                       | Throws — `AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE`                             |
-| Dependent-side claim of an axiom connection has `type !== 'normal'`                           | Throws — `AXIOM_CLAIM_NOT_NORMAL_TYPE`                                     |
-| Caller passes an assignment for an axiomatic-bound variable to `evaluate` or `checkValidity`  | Throws — `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` (use `toggleNegation` to reject the axiom in the antecedent instead) |
-| Restoring a pre-v0.12 snapshot whose citation-library wrapper or entities use legacy fields   | Throws — `LEGACY_CLAIM_CITATION_SHAPE` (run the v0.12 CLI migration)       |
-| Restoring a pre-v0.12 `PropositCore` snapshot that lacks an `axioms` slot                     | Throws — `LEGACY_MISSING_AXIOM_SLOT` (run the v0.12 CLI migration)         |
+| Invalid construction                                                                         | What happens / error code                                                                                           |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Updating a claim's `type` field after creation                                               | Throws — `CLAIM_TYPE_IMMUTABLE`                                                                                     |
+| Restoring a pre-v0.10 snapshot whose claims lack the `type` field                            | Throws — `LEGACY_CLAIM_MISSING_TYPE`                                                                                |
+| Adding a citation whose `id` already exists                                                  | Throws — `CITATION_DUPLICATE_ID`                                                                                    |
+| Adding a citation whose `claimId@claimVersion` is not in the lookup                          | Throws — `CITATION_CLAIM_REF_NOT_FOUND`                                                                             |
+| Adding a citation whose `supportingClaimId@supportingClaimVersion` is not in the lookup      | Throws — `CITATION_SUPPORTING_REF_NOT_FOUND`                                                                        |
+| Supporting-side claim of a citation has `type !== 'citation'`                                | Throws — `CITATION_SUPPORTING_NOT_CITATION_TYPE`                                                                    |
+| Citation that would create a cycle in the global claim-citation graph                        | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate)                                          |
+| Adding an axiom connection whose `id` already exists                                         | Throws — `AXIOM_DUPLICATE_ID`                                                                                       |
+| Adding an axiom connection whose `claimId@claimVersion` is not in the lookup                 | Throws — `AXIOM_CLAIM_REF_NOT_FOUND`                                                                                |
+| Adding an axiom connection whose `supportingClaimId@supportingClaimVersion` is not in lookup | Throws — `AXIOM_SUPPORTING_REF_NOT_FOUND`                                                                           |
+| Supporting-side claim of an axiom connection has `type !== 'axiomatic'`                      | Throws — `AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE`                                                                      |
+| Dependent-side claim of an axiom connection has `type !== 'normal'`                          | Throws — `AXIOM_CLAIM_NOT_NORMAL_TYPE`                                                                              |
+| Caller passes an assignment for an axiomatic-bound variable to `evaluate` or `checkValidity` | Throws — `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` (use `toggleNegation` to reject the axiom in the antecedent instead) |
+| Restoring a pre-v0.12 snapshot whose citation-library wrapper or entities use legacy fields  | Throws — `LEGACY_CLAIM_CITATION_SHAPE` (run the v0.12 CLI migration)                                                |
+| Restoring a pre-v0.12 `PropositCore` snapshot that lacks an `axioms` slot                    | Throws — `LEGACY_MISSING_AXIOM_SLOT` (run the v0.12 CLI migration)                                                  |
 
 ### Removal cascades
 
