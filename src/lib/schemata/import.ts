@@ -39,7 +39,11 @@ export type TCoreYamlPremise = Static<typeof CoreYamlPremiseSchema>
 export const CoreYamlClaimSchema = Type.Object(
     {
         id: UUID,
-        type: Type.Union([Type.Literal("normal"), Type.Literal("citation")]),
+        type: Type.Union([
+            Type.Literal("normal"),
+            Type.Literal("citation"),
+            Type.Literal("axiomatic"),
+        ]),
         title: Type.Optional(Type.String()),
     },
     { additionalProperties: true }
