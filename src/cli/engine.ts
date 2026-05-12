@@ -22,10 +22,12 @@ import {
 } from "./storage/arguments.js"
 import {
     readClaimLibrary,
-    readClaimCitationLibrary,
+    readCitationLibrary,
+    readAxiomLibrary,
     readForkLibrary,
     writeClaimLibrary,
-    writeClaimCitationLibrary,
+    writeCitationLibrary,
+    writeAxiomLibrary,
     writeForkLibrary,
 } from "./storage/libraries.js"
 import {
@@ -51,10 +53,14 @@ export async function hydratePropositCore(): Promise<PropositCore> {
         readClaimLibrary(),
         readForkLibrary(),
     ])
-    const claimCitationLibrary = await readClaimCitationLibrary(claimLibrary)
+    const [claimCitationLibrary, claimAxiomLibrary] = await Promise.all([
+        readCitationLibrary(claimLibrary),
+        readAxiomLibrary(claimLibrary),
+    ])
     return new PropositCore({
         claimLibrary,
         claimCitationLibrary,
+        claimAxiomLibrary,
         forkLibrary,
     })
 }
@@ -62,7 +68,8 @@ export async function hydratePropositCore(): Promise<PropositCore> {
 export async function persistCore(core: PropositCore): Promise<void> {
     await Promise.all([
         writeClaimLibrary(core.claims),
-        writeClaimCitationLibrary(core.citations),
+        writeCitationLibrary(core.citations),
+        writeAxiomLibrary(core.axioms),
         writeForkLibrary(core.forks),
     ])
 }

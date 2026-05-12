@@ -3,9 +3,9 @@ import path from "node:path"
 import { getStateDir } from "../config.js"
 import {
     readClaimLibrary,
-    readClaimCitationLibrary,
+    readCitationLibrary,
     writeClaimLibrary,
-    writeClaimCitationLibrary,
+    writeCitationLibrary,
 } from "./libraries.js"
 import { entityChecksum } from "../../lib/core/checksum.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../../lib/consts.js"
@@ -267,8 +267,8 @@ async function validateAndRewriteLibraries(): Promise<void> {
     const claimLibrary = await readClaimLibrary()
     await writeClaimLibrary(claimLibrary)
 
-    const claimCitationLibrary = await readClaimCitationLibrary(claimLibrary)
-    await writeClaimCitationLibrary(claimCitationLibrary)
+    const claimCitationLibrary = await readCitationLibrary(claimLibrary)
+    await writeCitationLibrary(claimCitationLibrary)
 
     process.stderr.write(
         `[proposit migration] Citation graph validated (no cycles)\n`

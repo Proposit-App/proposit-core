@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
 import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
+import { ClaimAxiomLibrary } from "../../lib/core/claim-axiom-library.js"
 import { ForkLibrary } from "../../lib/core/fork-library.js"
 import type { TClaimLookup } from "../../lib/core/interfaces/library.interfaces.js"
 import { getStateDir } from "../config.js"
@@ -10,8 +11,12 @@ function claimsPath(): string {
     return path.join(getStateDir(), "claims.json")
 }
 
-function claimCitationsPath(): string {
-    return path.join(getStateDir(), "claim-citations.json")
+export function citationsPath(): string {
+    return path.join(getStateDir(), "citations.json")
+}
+
+export function axiomsPath(): string {
+    return path.join(getStateDir(), "axioms.json")
 }
 
 export async function readClaimLibrary(): Promise<ClaimLibrary> {
@@ -26,11 +31,11 @@ export async function readClaimLibrary(): Promise<ClaimLibrary> {
     }
 }
 
-export async function readClaimCitationLibrary(
+export async function readCitationLibrary(
     claimLookup: TClaimLookup
 ): Promise<ClaimCitationLibrary> {
     try {
-        const content = await fs.readFile(claimCitationsPath(), "utf-8")
+        const content = await fs.readFile(citationsPath(), "utf-8")
         const snapshot = JSON.parse(content) as ReturnType<
             ClaimCitationLibrary["snapshot"]
         >
@@ -40,16 +45,38 @@ export async function readClaimCitationLibrary(
     }
 }
 
+export async function readAxiomLibrary(
+    claimLookup: TClaimLookup
+): Promise<ClaimAxiomLibrary> {
+    try {
+        const content = await fs.readFile(axiomsPath(), "utf-8")
+        const snapshot = JSON.parse(content) as ReturnType<
+            ClaimAxiomLibrary["snapshot"]
+        >
+        return ClaimAxiomLibrary.fromSnapshot(snapshot, claimLookup)
+    } catch {
+        return new ClaimAxiomLibrary(claimLookup)
+    }
+}
+
 export async function writeClaimLibrary(library: ClaimLibrary): Promise<void> {
     const filePath = claimsPath()
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
 }
 
-export async function writeClaimCitationLibrary(
+export async function writeCitationLibrary(
     library: ClaimCitationLibrary
 ): Promise<void> {
-    const filePath = claimCitationsPath()
+    const filePath = citationsPath()
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
+}
+
+export async function writeAxiomLibrary(
+    library: ClaimAxiomLibrary
+): Promise<void> {
+    const filePath = axiomsPath()
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
 }
