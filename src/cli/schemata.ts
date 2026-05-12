@@ -110,3 +110,46 @@ export const CliPremiseDataSchema = Type.Object({
     }),
 })
 export type TCliPremiseData = Static<typeof CliPremiseDataSchema>
+
+// ---------------------------------------------------------------------------
+// Axiomatic claim reason codes (v0.12)
+// ---------------------------------------------------------------------------
+export const CliAxiomReasonCode = Type.Union([
+    Type.Literal("true-by-definition"),
+    Type.Literal("historically-established"),
+    Type.Literal("logically-required"),
+])
+export type TCliAxiomReasonCode = Static<typeof CliAxiomReasonCode>
+
+export const CLI_AXIOM_REASON_CODES: readonly TCliAxiomReasonCode[] = [
+    "true-by-definition",
+    "historically-established",
+    "logically-required",
+]
+
+// ---------------------------------------------------------------------------
+// CLI claim schema — discriminated union over claim type. Axiomatic claims
+// require a reasonCode at the CLI layer; core remains permissive.
+// ---------------------------------------------------------------------------
+const CliClaimBase = Type.Object({
+    id: UUID,
+    version: Type.Number(),
+    frozen: Type.Boolean(),
+    checksum: Type.String(),
+    title: Type.Optional(Type.String()),
+    body: Type.Optional(Type.String()),
+})
+
+export const CliClaimSchema = Type.Union([
+    Type.Interface([CliClaimBase], {
+        type: Type.Literal("normal"),
+    }),
+    Type.Interface([CliClaimBase], {
+        type: Type.Literal("citation"),
+    }),
+    Type.Interface([CliClaimBase], {
+        type: Type.Literal("axiomatic"),
+        reasonCode: CliAxiomReasonCode,
+    }),
+])
+export type TCliClaim = Static<typeof CliClaimSchema>
