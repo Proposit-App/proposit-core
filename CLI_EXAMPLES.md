@@ -246,11 +246,14 @@ proposit-core <argument-id> latest roles clear-conclusion
 
 ---
 
-## 7. Claims and Citations
+## 7. Claims, Citations, and Axioms
 
-Claims are the global library of propositional content (separate from argument-scoped data). As of v0.10.0 every claim has an immutable `type` discriminator: `normal` (the default — primary-reasoning content) or `citation` (external/cited content; the unified replacement for the former separate `Source` entity).
+Claims are the global library of propositional content (separate from argument-scoped data). Every claim has an immutable `type` discriminator: `normal` (the default — primary-reasoning content), `citation` (external/cited content; the unified replacement for the former separate `Source` entity, added in v0.10.0), or `axiomatic` (self-evident invoked propositions, added in v0.12.0).
 
-Citations are directed edges between claims, stored in the global claim-citation graph. The source side of a citation must be a `type=citation` claim.
+Two parallel **connection libraries** track the support edges between claims:
+
+- **Citations** — directed connections from a claim to a `type=citation` supporting claim, stored in the global claim-citation graph. Cycle detection runs on `add`.
+- **Axioms** (v0.12.0) — directed connections from a `type=normal` claim to a `type=axiomatic` supporting claim. No cycle detection is needed because axiomatic claims cannot appear on the dependent side.
 
 ### Claims
 
@@ -264,13 +267,13 @@ proposit-core claims add --type=citation --title "Journal of Atmospheric Science
     --body "Smith et al., 'Patterns of urban precipitation', JAS 81(4), 2024"
 # → <citation-claim-id>
 
-# List all claims (citation-typed claims are tagged [citation])
+# List all claims (citations tagged [citation]; axiomatic tagged [axiom: <reasonCode>])
 proposit-core claims list
 
 # Show versions of a claim
 proposit-core claims show <claim-id>
 
-# Update claim metadata (type is immutable — cannot be changed)
+# Update claim metadata (type and reasonCode are immutable — cannot be changed)
 proposit-core claims update <claim-id> --title "New title" --body "New description"
 
 # Freeze a claim version
@@ -279,27 +282,95 @@ proposit-core claims freeze <claim-id>
 
 ### Citations
 
+> **Breaking change in v0.12.0.** The `citations` command group switched from positional arguments + `unlink` to flag arguments + `remove`. Update scripts that used `citations add <citing> <source>` or `citations unlink <id>` to the flag form below.
+
 ```bash
-# Cite a citation-typed claim from another claim
-# (the source claim must have type=citation)
-proposit-core citations add <citing-claim-id> <citation-claim-id>
-# → <citation-edge-id>
+# Cite a citation-typed claim as supporting another claim
+# (the supporting claim must have type=citation)
+proposit-core citations add \
+    --claim-id <claim-id> \
+    --supporting-claim-id <citation-claim-id>
+# → <citation-connection-id>
 
-# List all citation edges
+# List all citation connections
 proposit-core citations list
-# → <citation-id> | <citingClaimId>@<v> -> <sourceClaimId>@<v>
+# → <connection-id> | <claimId>@<v> -> <supportingClaimId>@<v>
 
-# Show a single citation edge
-proposit-core citations show <citation-id>
-# → id:                  <citation-id>
-# → citingClaimId:       <citingClaimId>
-# → citingClaimVersion:  0
-# → sourceClaimId:       <sourceClaimId>
-# → sourceClaimVersion:  0
+# Show a single citation connection
+proposit-core citations show <connection-id>
+# → id:                       <connection-id>
+# → claimId:                  <claimId>
+# → claimVersion:             0
+# → supportingClaimId:        <supportingClaimId>
+# → supportingClaimVersion:   0
 
-# Remove a citation edge
-proposit-core citations unlink <citation-id>
+# Remove a citation connection
+proposit-core citations remove <connection-id>
 ```
+
+---
+
+## 7a. Axiomatic Claims and Axiom Connections
+
+Axiomatic claims (v0.12.0) represent self-evident propositions that justify a derived claim's truth without further support — propositions that hold by definition, by historical convention, or by logical necessity. The CLI requires a `reasonCode` from a fixed set when creating one:
+
+- `true-by-definition`
+- `historically-established`
+- `logically-required`
+
+### Create an axiomatic claim
+
+```bash
+# --reason is required when --type=axiomatic
+proposit-core claims add \
+    --type axiomatic \
+    --reason true-by-definition \
+    --title "All bachelors are unmarried"
+# → <axiomatic-claim-id>
+
+# Listings tag axiomatic claims with [axiom: <reasonCode>]
+proposit-core claims list
+# → <axiomatic-claim-id>@0 [axiom: true-by-definition] | All bachelors are unmarried
+```
+
+The `reasonCode` is set at creation time and is immutable — `claims update` rejects `--reason` as an unknown option.
+
+### Wire an axiom into a normal claim's support set
+
+Axiom connections always go from a `type=normal` claim to a `type=axiomatic` claim:
+
+```bash
+# Create the normal claim being supported
+proposit-core claims add --title "Bachelors are unmarried men"
+# → <normal-claim-id>
+
+# Add an axiom connection
+proposit-core axioms add \
+    --claim-id <normal-claim-id> \
+    --axiom-id <axiomatic-claim-id>
+# → <axiom-connection-id>
+
+# List, show, remove
+proposit-core axioms list
+# → <connection-id> | <claimId>@<v> -> <supportingClaimId>@<v>
+
+proposit-core axioms show <axiom-connection-id>
+# → id:                       <connection-id>
+# → claimId:                  <normal-claim-id>
+# → claimVersion:             0
+# → supportingClaimId:        <axiomatic-claim-id>
+# → supportingClaimVersion:   0
+
+proposit-core axioms remove <axiom-connection-id>
+```
+
+### Render shows axiom support
+
+When an argument's `render` output lists claims and connections, axiom-backed derivations appear alongside citation-backed ones — the render walk reads both `core.citations` and `core.axioms` for each claim. Derivation premises whose `populateFromSupports` ran see the axiomatic claim's variable in the antecedent.
+
+### Evaluation note
+
+Axiomatic claim-bound variables are forced to `true` at evaluation time. Passing an explicit assignment for one (e.g., `analysis set <symbol> false`) raises `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` before the evaluator runs. To express "this derivation should not be supported by this axiom," wrap the axiom's variable expression in the antecedent with `not` — `not(true) = false`, so the negated reference contributes `false` to its parent operator.
 
 ---
 
@@ -307,7 +378,7 @@ proposit-core citations unlink <citation-id>
 
 A **derivation premise** is structurally committed to deriving a specific named claim. It carries a `derivedClaimId` that never changes, and its expression tree is locked to either naked-Q form (no antecedent yet) or `IMPLIES(antecedent, Q)` / `IFF(antecedent, Q)` form.
 
-The `populate-citations` command is the recommended way to build the antecedent automatically from the citation graph.
+The `populate-citations` command is the recommended way to build the antecedent automatically. As of v0.12.0 it wraps `ManagedDerivationPremiseEngine.populateFromSupports` and pulls supporting connections from both `core.citations` and `core.axioms` — the CLI command keeps its v0.11 name for backward compatibility, but its behavior now covers axioms too.
 
 ### Step 1: Create a citation claim (the external support)
 
@@ -324,11 +395,13 @@ proposit-core claims add --title "It is raining"
 # → <normal-claim-id>
 ```
 
-### Step 3: Add a citation edge (normal claim cites the citation claim as support)
+### Step 3: Add a citation connection (normal claim is supported by the citation claim)
 
 ```bash
-proposit-core citations add <normal-claim-id> <citation-claim-id>
-# → <citation-edge-id>
+proposit-core citations add \
+    --claim-id <normal-claim-id> \
+    --supporting-claim-id <citation-claim-id>
+# → <citation-connection-id>
 ```
 
 ### Step 4: Create a derivation premise
@@ -348,9 +421,9 @@ proposit-core <argument-id> latest premises render <derivation-premise-id>
 # → [derivation] Q          (naked-Q: no antecedent yet)
 ```
 
-### Step 5: Populate citations
+### Step 5: Populate supports
 
-`populate-citations` reads the current citations for the derived claim and builds the antecedent:
+`populate-citations` reads the current citations and axiom connections for the derived claim and builds the antecedent:
 
 ```bash
 proposit-core <argument-id> latest premises populate-citations <derivation-premise-id>
@@ -360,16 +433,17 @@ Render again to see the result:
 
 ```bash
 proposit-core <argument-id> latest premises render <derivation-premise-id>
-# → [derivation] (S0 → Q)   (one citation: IMPLIES(S1, Q))
+# → [derivation] (S0 → Q)   (one support: IMPLIES(S1, Q))
 ```
 
-With two citations it would produce `[derivation] ((S0 ∨ S1) → Q)`.
+With two supports it would produce `[derivation] ((S0 ∨ S1) → Q)`.
 
 ### populate-citations rules
 
-- **0 citations** — no change; premise stays in naked-Q form.
-- **1 citation** — builds `IMPLIES(VariableS, Q)`.
-- **≥ 2 citations** — builds `IMPLIES(OR(VariableS1, …, VariableSn), Q)`.
+- **0 supports** — no change; premise stays in naked-Q form.
+- **1 support** — builds `IMPLIES(VariableS, Q)`.
+- **≥ 2 supports** — builds `IMPLIES(OR(VariableS1, …, VariableSn), Q)`.
+- Source ordering: citations are listed first, axioms second; source order is preserved within each group.
 - The command is **one-shot**: it fails if the premise already has a non-empty antecedent. Delete and re-create the premise to repopulate.
 
 ### Rendering and listing derivation premises
