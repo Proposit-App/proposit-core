@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto"
 import { Command } from "commander"
 import { hydratePropositCore, persistCore } from "../engine.js"
 import { errorExit, printJson, printLine } from "../output.js"
+import {
+    CLI_AXIOM_REASON_CODES,
+    type TCliAxiomReasonCode,
+} from "../schemata.js"
 
 export function registerClaimCommands(program: Command): void {
     const claims = program
@@ -22,7 +26,11 @@ export function registerClaimCommands(program: Command): void {
                     const extras = claim as Record<string, unknown>
                     const frozen = claim.frozen ? " [frozen]" : ""
                     const typeBadge =
-                        claim.type === "citation" ? " [citation]" : ""
+                        claim.type === "citation"
+                            ? " [citation]"
+                            : claim.type === "axiomatic"
+                              ? ` [axiom: ${(claim as { reasonCode?: string }).reasonCode ?? "?"}]`
+                              : ""
                     const title =
                         typeof extras.title === "string"
                             ? ` | ${extras.title}`
@@ -50,13 +58,24 @@ export function registerClaimCommands(program: Command): void {
                 for (const v of versions) {
                     const extras = v as Record<string, unknown>
                     const frozen = v.frozen ? " [frozen]" : ""
-                    const typeBadge = v.type === "citation" ? " [citation]" : ""
+                    const typeBadge =
+                        v.type === "citation"
+                            ? " [citation]"
+                            : v.type === "axiomatic"
+                              ? ` [axiom: ${(v as { reasonCode?: string }).reasonCode ?? "?"}]`
+                              : ""
                     printLine(`v${v.version}${frozen}${typeBadge}`)
                     if (typeof extras.title === "string") {
                         printLine(`  title: ${extras.title}`)
                     }
                     if (typeof extras.body === "string") {
                         printLine(`  body:  ${extras.body}`)
+                    }
+                    if (
+                        v.type === "axiomatic" &&
+                        typeof extras.reasonCode === "string"
+                    ) {
+                        printLine(`  reason: ${extras.reasonCode}`)
                     }
                 }
             }
@@ -67,18 +86,49 @@ export function registerClaimCommands(program: Command): void {
         .description("Create a new claim")
         .option(
             "--type <type>",
-            "Claim type: 'normal' or 'citation' (default: normal)",
+            "Claim type: 'normal', 'citation', or 'axiomatic' (default: normal)",
             "normal"
+        )
+        .option(
+            "--reason <code>",
+            `Reason code (required for --type axiomatic). One of: ${CLI_AXIOM_REASON_CODES.join(", ")}`
         )
         .option("--title <title>", "Short title summarizing the claim")
         .option("--body <body>", "Detailed description of the claim")
         .action(
-            async (opts: { type?: string; title?: string; body?: string }) => {
+            async (opts: {
+                type?: string
+                reason?: string
+                title?: string
+                body?: string
+            }) => {
                 const claimType = opts.type ?? "normal"
-                if (claimType !== "normal" && claimType !== "citation") {
+                if (
+                    claimType !== "normal" &&
+                    claimType !== "citation" &&
+                    claimType !== "axiomatic"
+                ) {
                     errorExit(
-                        `Invalid --type value "${claimType}". Must be "normal" or "citation".`
+                        `Invalid --type value "${claimType}". Must be "normal", "citation", or "axiomatic".`
                     )
+                }
+                if (claimType === "axiomatic") {
+                    if (opts.reason === undefined) {
+                        errorExit(
+                            `--reason is required when --type=axiomatic. Valid codes: ${CLI_AXIOM_REASON_CODES.join(", ")}`
+                        )
+                    }
+                    if (
+                        !CLI_AXIOM_REASON_CODES.includes(
+                            opts.reason as TCliAxiomReasonCode
+                        )
+                    ) {
+                        errorExit(
+                            `Invalid --reason value "${opts.reason}". Valid codes: ${CLI_AXIOM_REASON_CODES.join(", ")}`
+                        )
+                    }
+                } else if (opts.reason !== undefined) {
+                    errorExit(`--reason is only valid with --type=axiomatic.`)
                 }
                 const core = await hydratePropositCore()
                 const claim = core.claims.create({
@@ -86,6 +136,9 @@ export function registerClaimCommands(program: Command): void {
                     type: claimType,
                     ...(opts.title !== undefined ? { title: opts.title } : {}),
                     ...(opts.body !== undefined ? { body: opts.body } : {}),
+                    ...(opts.reason !== undefined
+                        ? { reasonCode: opts.reason }
+                        : {}),
                 } as Parameters<typeof core.claims.create>[0])
                 await persistCore(core)
                 printLine(claim.id)
