@@ -11,6 +11,7 @@ import { ArgumentEngine } from "../lib/core/argument-engine.js"
 import { ClaimLibrary } from "../lib/core/claim-library.js"
 import { ClaimCitationLibrary } from "../lib/core/claim-citation-library.js"
 import { POSITION_INITIAL } from "../lib/utils/position.js"
+import { CLI_AXIOM_REASON_CODES, type TCliAxiomReasonCode } from "./schemata.js"
 
 /**
  * Validates that `implies` and `iff` nodes appear only at the AST root.
@@ -224,6 +225,24 @@ export function importArgumentFromYaml(yamlString: string): {
 } {
     const raw: unknown = parseYaml(yamlString)
     const input: TCoreYamlArgument = Value.Parse(CoreYamlArgumentSchema, raw)
+
+    // CLI-layer enforcement: every axiomatic claim must declare a valid
+    // `reasonCode`. Core itself stays permissive (consumer-extension territory),
+    // but the CLI's convention is to require one of the codes published in
+    // `CLI_AXIOM_REASON_CODES`.
+    const inputClaims = input.claims ?? []
+    for (const claim of inputClaims) {
+        if (claim.type !== "axiomatic") continue
+        const reasonCode = (claim as Record<string, unknown>).reasonCode
+        if (
+            typeof reasonCode !== "string" ||
+            !CLI_AXIOM_REASON_CODES.includes(reasonCode as TCliAxiomReasonCode)
+        ) {
+            throw new Error(
+                `Imported axiomatic claim "${claim.id ?? "?"}" is missing a valid 'reasonCode'. Valid codes: ${CLI_AXIOM_REASON_CODES.join(", ")}`
+            )
+        }
+    }
 
     // Validate premise shapes before any parsing
     for (let i = 0; i < input.premises.length; i++) {
