@@ -134,6 +134,8 @@ import {
     CLAIM_FROZEN_NO_SUCCESSOR,
     CITATION_CLAIM_REF_NOT_FOUND,
     CITATION_SUPPORTING_REF_NOT_FOUND,
+    CITATION_NOT_FOUND,
+    AXIOM_NOT_FOUND,
     DERIVATION_STRUCTURE_INVALID,
 } from "../src/lib/types/validation"
 import {
@@ -10205,6 +10207,19 @@ describe("ClaimCitationLibrary", () => {
             })
             lib.remove("cit-1")
             expect(lib.getConnectionsForClaim(claim1.id)).toEqual([])
+        })
+
+        it("throws InvariantViolationError with code CITATION_NOT_FOUND when removing a missing id", () => {
+            const { lib } = makeFixtures()
+            let caught: unknown
+            try {
+                lib.remove("does-not-exist")
+            } catch (e) {
+                caught = e
+            }
+            expect(caught).toBeInstanceOf(InvariantViolationError)
+            const err = caught as InvariantViolationError
+            expect(err.violations[0].code).toBe(CITATION_NOT_FOUND)
         })
     })
 
@@ -30396,6 +30411,22 @@ describe("ClaimAxiomLibrary (v0.12)", () => {
             })
         ).toThrow(/AXIOM_CLAIM_NOT_NORMAL_TYPE/)
         expect(normalClaim).toBeDefined() // suppress unused
+    })
+
+    describe("remove", () => {
+        it("throws InvariantViolationError with code AXIOM_NOT_FOUND when removing a missing id", () => {
+            const claimLib = new ClaimLibrary()
+            const lib = new ClaimAxiomLibrary(claimLib)
+            let caught: unknown
+            try {
+                lib.remove("does-not-exist")
+            } catch (e) {
+                caught = e
+            }
+            expect(caught).toBeInstanceOf(InvariantViolationError)
+            const err = caught as InvariantViolationError
+            expect(err.violations[0].code).toBe(AXIOM_NOT_FOUND)
+        })
     })
 })
 
