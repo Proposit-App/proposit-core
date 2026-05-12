@@ -52,40 +52,52 @@ export function registerCitationCommands(program: Command): void {
         })
 
     citations
-        .command("add <claim_id> <supporting_claim_id>")
+        .command("add")
         .description(
             "Add a citation edge between two claims (supporting claim must be a citation-typed claim)"
         )
-        .action(async (claimId: string, supportingClaimId: string) => {
-            const core = await hydratePropositCore()
-            const claim = core.claims.getCurrent(claimId)
-            if (!claim) {
-                errorExit(`Claim "${claimId}" not found.`)
-            }
-            const supportingClaim = core.claims.getCurrent(supportingClaimId)
-            if (!supportingClaim) {
-                errorExit(`Claim "${supportingClaimId}" not found.`)
-            }
-            let citation
-            try {
-                citation = core.citations.add({
-                    id: randomUUID(),
-                    claimId: claim.id,
-                    claimVersion: claim.version,
-                    supportingClaimId: supportingClaim.id,
-                    supportingClaimVersion: supportingClaim.version,
-                })
-            } catch (error) {
-                errorExit(
-                    error instanceof Error ? error.message : String(error)
+        .requiredOption(
+            "--claim-id <id>",
+            "Claim ID being supported (dependent)"
+        )
+        .requiredOption(
+            "--supporting-claim-id <id>",
+            "Supporting (cited) claim ID"
+        )
+        .action(
+            async (opts: { claimId: string; supportingClaimId: string }) => {
+                const core = await hydratePropositCore()
+                const claim = core.claims.getCurrent(opts.claimId)
+                if (!claim) {
+                    errorExit(`Claim "${opts.claimId}" not found.`)
+                }
+                const supportingClaim = core.claims.getCurrent(
+                    opts.supportingClaimId
                 )
+                if (!supportingClaim) {
+                    errorExit(`Claim "${opts.supportingClaimId}" not found.`)
+                }
+                let citation
+                try {
+                    citation = core.citations.add({
+                        id: randomUUID(),
+                        claimId: claim.id,
+                        claimVersion: claim.version,
+                        supportingClaimId: supportingClaim.id,
+                        supportingClaimVersion: supportingClaim.version,
+                    })
+                } catch (error) {
+                    errorExit(
+                        error instanceof Error ? error.message : String(error)
+                    )
+                }
+                await persistCore(core)
+                printLine(citation.id)
             }
-            await persistCore(core)
-            printLine(citation.id)
-        })
+        )
 
     citations
-        .command("unlink <citation_id>")
+        .command("remove <citation_id>")
         .description("Remove a citation edge")
         .action(async (citationId: string) => {
             const core = await hydratePropositCore()
