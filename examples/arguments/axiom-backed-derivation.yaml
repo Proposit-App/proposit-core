@@ -1,0 +1,26 @@
+metadata:
+    title: "Axiom-Backed Derivation Example"
+    description: >
+        Demonstrates a derivation premise whose derived claim is supported by
+        an axiomatic claim. The axiomatic claim invokes a self-evident truth
+        (true by definition) rather than empirical evidence. The derivation
+        premise is loaded in naked-Q form by the YAML importer; downstream
+        tooling (e.g. the CLI's `premises populate` command) shapes the
+        antecedent into IMPLIES(axiomVar, Q) using the axiom-supports graph.
+claims:
+    - id: "10000000-0000-0000-0000-000000000001"
+      type: "normal"
+      title: "Q: The derived conclusion claim"
+    - id: "10000000-0000-0000-0000-000000000002"
+      type: "normal"
+      title: "Supporting claim derived from an axiom"
+    - id: "10000000-0000-0000-0000-000000000003"
+      type: "axiomatic"
+      title: "A self-evident axiom"
+      reasonCode: "true-by-definition"
+premises:
+    - metadata:
+          title: "Derivation of Q"
+      role: "conclusion"
+      type: "derivation"
+      derivedClaimId: "10000000-0000-0000-0000-000000000001"
