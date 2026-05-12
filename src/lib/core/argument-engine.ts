@@ -2289,10 +2289,32 @@ export class ArgumentEngine<
     }
 
     /**
+     * Walks `this.variables.toArray()` once and returns every claim-bound
+     * variable whose bound claim has type `"axiomatic"`. Shared between
+     * `applyAxiomaticForcedAssignments` (the evaluate-time pre-pass) and
+     * `getAxiomaticBoundVariableIds` (the checkValidity carve-out).
+     */
+    private collectAxiomaticBoundVariables(): TClaimBoundVariable[] {
+        const out: TClaimBoundVariable[] = []
+        for (const variable of this.variables.toArray()) {
+            const v = variable as unknown as TCorePropositionalVariable
+            if (!isClaimBound(v)) continue
+            const claimBound = v as unknown as TClaimBoundVariable
+            const claim = this.claimLibrary.get(
+                claimBound.claimId,
+                claimBound.claimVersion
+            )
+            if (claim?.type === "axiomatic") out.push(claimBound)
+        }
+        return out
+    }
+
+    /**
      * For each claim-bound variable in this argument, look up the bound claim's
      * type. If the type is "axiomatic":
      *   - Reject any caller-provided assignment for the variable
-     *     (AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN).
+     *     (AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN). Key presence is checked via
+     *     `Object.hasOwn` so an explicit `undefined` value is also rejected.
      *   - Force the variable's effective assignment to `true`.
      * Returns the rewritten assignment map; non-axiomatic variables pass through.
      */
@@ -2300,18 +2322,8 @@ export class ArgumentEngine<
         callerVariables: TCoreVariableAssignment
     ): TCoreVariableAssignment {
         const effective: TCoreVariableAssignment = { ...callerVariables }
-        for (const variable of this.variables.toArray()) {
-            if (
-                !isClaimBound(variable as unknown as TCorePropositionalVariable)
-            )
-                continue
-            const claimBound = variable as unknown as TClaimBoundVariable
-            const claim = this.claimLibrary.get(
-                claimBound.claimId,
-                claimBound.claimVersion
-            )
-            if (claim?.type !== "axiomatic") continue
-            if (callerVariables[claimBound.id] !== undefined) {
+        for (const claimBound of this.collectAxiomaticBoundVariables()) {
+            if (Object.hasOwn(callerVariables, claimBound.id)) {
                 throw new InvariantViolationError([
                     {
                         code: AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN,
@@ -2332,18 +2344,7 @@ export class ArgumentEngine<
      * excluded from `checkValidity`'s free-choice enumeration.
      */
     private getAxiomaticBoundVariableIds(): Set<string> {
-        const ids = new Set<string>()
-        for (const variable of this.variables.toArray()) {
-            const v = variable as unknown as TCorePropositionalVariable
-            if (!isClaimBound(v)) continue
-            const claimBound = v as unknown as TClaimBoundVariable
-            const claim = this.claimLibrary.get(
-                claimBound.claimId,
-                claimBound.claimVersion
-            )
-            if (claim?.type === "axiomatic") ids.add(claimBound.id)
-        }
-        return ids
+        return new Set(this.collectAxiomaticBoundVariables().map((v) => v.id))
     }
 
     public evaluate(
