@@ -11,16 +11,19 @@ import type { TSchema } from "typebox"
 export function clampMaxLengths(schema: TSchema, data: unknown): void {
     if (data === null || data === undefined) return
 
-    // Handle Nullable / anyOf unions — find the non-null branch and recurse
+    // Handle Nullable / discriminated-union schemas — recurse into every
+    // non-null branch. For Nullable<T> this is just T. For an n-ary union
+    // (e.g. a discriminated claim union) each branch's properties are
+    // applied independently; fields absent from a branch are skipped, and
+    // string clamping is idempotent so branches with overlapping fields
+    // converge on the smallest maxLength.
     const anyOf = (schema as Record<string, unknown>).anyOf as
         | TSchema[]
         | undefined
     if (anyOf) {
-        const nonNull = anyOf.find(
-            (s) => (s as Record<string, unknown>).type !== "null"
-        )
-        if (nonNull) {
-            clampMaxLengths(nonNull, data)
+        for (const branch of anyOf) {
+            if ((branch as Record<string, unknown>).type === "null") continue
+            clampMaxLengths(branch, data)
         }
         return
     }

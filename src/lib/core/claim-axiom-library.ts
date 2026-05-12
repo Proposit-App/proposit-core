@@ -1,6 +1,6 @@
 import { Value } from "typebox/value"
-import type { TCoreClaimAxiom } from "../schemata/claim-axiom.js"
-import { CoreClaimAxiomSchema } from "../schemata/claim-axiom.js"
+import type { TCoreClaimConnection } from "../schemata/claim-connection.js"
+import { CoreClaimConnectionSchema } from "../schemata/claim-connection.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
@@ -34,7 +34,7 @@ import { InvariantViolationError } from "./invariant-violation-error.js"
  * so cycles are structurally impossible.
  */
 export class ClaimAxiomLibrary<
-    TConnection extends TCoreClaimAxiom = TCoreClaimAxiom,
+    TConnection extends TCoreClaimConnection = TCoreClaimConnection,
 > implements TClaimConnectionLibraryManagement<TConnection> {
     private axioms: Map<string, TConnection>
     private claimToConnections: Map<string, Set<string>>
@@ -216,7 +216,7 @@ export class ClaimAxiomLibrary<
 
     /** Restores a claim-axiom library from a snapshot, re-indexing all axioms. */
     public static fromSnapshot<
-        TConnection extends TCoreClaimAxiom = TCoreClaimAxiom,
+        TConnection extends TCoreClaimConnection = TCoreClaimConnection,
     >(
         snapshot: TClaimConnectionLibrarySnapshot<TConnection>,
         claimLookup: TClaimLookup,
@@ -239,7 +239,7 @@ export class ClaimAxiomLibrary<
     public validate(): TInvariantValidationResult {
         const violations: TInvariantViolation[] = []
         for (const [id, axiom] of this.axioms) {
-            if (!Value.Check(CoreClaimAxiomSchema, axiom)) {
+            if (!Value.Check(CoreClaimConnectionSchema, axiom)) {
                 violations.push({
                     code: AXIOM_SCHEMA_INVALID,
                     message: `${AXIOM_SCHEMA_INVALID}: axiom "${id}" does not conform to schema`,

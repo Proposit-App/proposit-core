@@ -1,6 +1,7 @@
 import Type, { type Static, type TObject, type TSchema } from "typebox"
 import { Nullable } from "../schemata/shared.js"
 import type { TParsingSchemaOptions } from "./types.js"
+import { CoreClaimTypeSchema } from "../schemata/claim.js"
 
 export const ParsedClaimRoleType = Type.Union([
     Type.Literal("premise"),
@@ -8,11 +9,7 @@ export const ParsedClaimRoleType = Type.Union([
     Type.Literal("intermediate"),
 ])
 
-export const ParsedClaimTypeType = Type.Union([
-    Type.Literal("normal"),
-    Type.Literal("citation"),
-    Type.Literal("axiomatic"),
-])
+export const ParsedClaimTypeType = CoreClaimTypeSchema
 
 export const ParsedClaimSchema = Type.Object(
     {
@@ -71,9 +68,35 @@ export type TParsedArgumentResponse = Static<
     typeof ParsedArgumentResponseSchema
 >
 
-function mergeObjectSchemas(base: TObject, extension: TObject): TObject {
+function mergeBaseWithExtension(base: TObject, extension: TSchema): TSchema {
+    const ext = extension as Record<string, unknown>
+    const anyOf = ext.anyOf as TSchema[] | undefined
+    if (Array.isArray(anyOf)) {
+        const branches = anyOf.map((branch) => {
+            const branchProps = (branch as Record<string, unknown>)
+                .properties as Record<string, TSchema> | undefined
+            if (!branchProps) {
+                throw new Error(
+                    "buildParsingResponseSchema: union extension branches must be object schemas."
+                )
+            }
+            return Type.Object(
+                { ...base.properties, ...branchProps },
+                { additionalProperties: true }
+            )
+        })
+        const description =
+            typeof ext.description === "string" ? ext.description : undefined
+        return Type.Union(branches, description ? { description } : undefined)
+    }
+    const objProps = ext.properties as Record<string, TSchema> | undefined
+    if (!objProps) {
+        throw new Error(
+            "buildParsingResponseSchema: extension must be a Type.Object or a Type.Union of Type.Objects."
+        )
+    }
     return Type.Object(
-        { ...base.properties, ...extension.properties },
+        { ...base.properties, ...objProps },
         { additionalProperties: true }
     )
 }
@@ -85,21 +108,15 @@ export function buildParsingResponseSchema(
     if (!options) return ParsedArgumentResponseSchema
 
     const claimSch = options.claimSchema
-        ? mergeObjectSchemas(ParsedClaimSchema, options.claimSchema as TObject)
+        ? mergeBaseWithExtension(ParsedClaimSchema, options.claimSchema)
         : ParsedClaimSchema
 
     const variableSch = options.variableSchema
-        ? mergeObjectSchemas(
-              ParsedVariableSchema,
-              options.variableSchema as TObject
-          )
+        ? mergeBaseWithExtension(ParsedVariableSchema, options.variableSchema)
         : ParsedVariableSchema
 
     const premiseSch = options.premiseSchema
-        ? mergeObjectSchemas(
-              ParsedPremiseSchema,
-              options.premiseSchema as TObject
-          )
+        ? mergeBaseWithExtension(ParsedPremiseSchema, options.premiseSchema)
         : ParsedPremiseSchema
 
     const baseArgProps = {

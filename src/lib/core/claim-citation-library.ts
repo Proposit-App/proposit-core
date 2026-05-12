@@ -1,6 +1,6 @@
 import { Value } from "typebox/value"
-import type { TCoreClaimCitation } from "../schemata/claim-citation.js"
-import { CoreClaimCitationSchema } from "../schemata/claim-citation.js"
+import type { TCoreClaimConnection } from "../schemata/claim-connection.js"
+import { CoreClaimConnectionSchema } from "../schemata/claim-connection.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
@@ -26,7 +26,7 @@ import {
 import { InvariantViolationError } from "./invariant-violation-error.js"
 
 export class ClaimCitationLibrary<
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
 > implements TClaimConnectionLibraryManagement<TCitation> {
     private citations: Map<string, TCitation>
     private claimToConnections: Map<string, Set<string>>
@@ -214,7 +214,7 @@ export class ClaimCitationLibrary<
 
     /** Restores a claim-citation library from a snapshot, re-indexing all citations. */
     public static fromSnapshot<
-        TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+        TCitation extends TCoreClaimConnection = TCoreClaimConnection,
     >(
         snapshot: TClaimConnectionLibrarySnapshot<TCitation>,
         claimLookup: TClaimLookup,
@@ -278,7 +278,7 @@ export class ClaimCitationLibrary<
     public validate(): TInvariantValidationResult {
         const violations: TInvariantViolation[] = []
         for (const [id, citation] of this.citations) {
-            if (!Value.Check(CoreClaimCitationSchema, citation)) {
+            if (!Value.Check(CoreClaimConnectionSchema, citation)) {
                 violations.push({
                     code: CITATION_SCHEMA_INVALID,
                     message: `Citation "${id}" does not conform to schema`,

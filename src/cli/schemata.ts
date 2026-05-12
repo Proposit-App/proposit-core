@@ -1,6 +1,11 @@
 import Type, { type Static } from "typebox"
 import { CoreLogicalOperatorType } from "../lib/schemata/propositional.js"
 import { EncodableDate, Nullable, UUID } from "../lib/schemata/shared.js"
+import {
+    CoreClaimAxiomaticTypeSchema,
+    CoreClaimCitationTypeSchema,
+    CoreClaimNormalTypeSchema,
+} from "../lib/index.js"
 
 // ---------------------------------------------------------------------------
 // Argument meta (stored in arguments/<id>/meta.json)
@@ -142,13 +147,13 @@ const CliClaimBase = Type.Object({
 
 export const CliClaimSchema = Type.Union([
     Type.Interface([CliClaimBase], {
-        type: Type.Literal("normal"),
+        type: CoreClaimNormalTypeSchema,
     }),
     Type.Interface([CliClaimBase], {
-        type: Type.Literal("citation"),
+        type: CoreClaimCitationTypeSchema,
     }),
     Type.Interface([CliClaimBase], {
-        type: Type.Literal("axiomatic"),
+        type: CoreClaimAxiomaticTypeSchema,
         reasonCode: CliAxiomReasonCode,
     }),
 ])

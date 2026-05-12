@@ -4,10 +4,9 @@ import type {
     TCoreDerivationPremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
-    TCoreClaimAxiom,
 } from "../schemata/index.js"
 import type { TCoreClaim } from "../schemata/claim.js"
-import type { TCoreClaimCitation } from "../schemata/claim-citation.js"
+import type { TCoreClaimConnection } from "../schemata/claim-connection.js"
 import type {
     TCoreArgumentForkRecord,
     TCorePremiseForkRecord,
@@ -52,8 +51,8 @@ export type TPropositCoreOptions<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-    TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+    TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
@@ -97,8 +96,8 @@ export class PropositCore<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-    TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+    TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
@@ -226,8 +225,8 @@ export class PropositCore<
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
         TClaim extends TCoreClaim = TCoreClaim,
-        TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-        TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
+        TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+        TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
         TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
         TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
         TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,

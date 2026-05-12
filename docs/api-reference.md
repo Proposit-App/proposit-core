@@ -779,7 +779,7 @@ Both `ClaimCitationLibrary` and `ClaimAxiomLibrary` implement the same generic i
 | `TClaimConnectionLibraryManagement<TConn>` | Full management interface extending `TClaimConnectionLookup`. Adds `add`, `remove`, `getAll`, `filter`, `snapshot`, `validate`. Both libraries satisfy this contract identically — no per-library extras leak through this surface. |
 | `TClaimConnectionLibrarySnapshot<TConn>`   | Snapshot wrapper type `{ connections: TConn[] }` shared by both library snapshot shapes.                                                                                                                                            |
 
-The `TConn` parameter defaults to the base `TCoreClaimConnection`; pass `TCoreClaimCitation` or `TCoreClaimAxiom` (or an extended app-layer type) to narrow it. The `emptyClaimConnectionLookup<TConn>()` factory returns an empty lookup that type-checks at either narrowing.
+The `TConn` parameter defaults to `TCoreClaimConnection`; pass an extended app-layer type to narrow it. The `emptyClaimConnectionLookup<TConn>()` factory returns an empty lookup that type-checks at any narrowing.
 
 ---
 
@@ -1462,20 +1462,21 @@ Fork provenance lives entirely in `ForkLibrary` — entity schemas (argument, pr
 
 ### Claim, Citation, and Axiom Types
 
-As of v0.10.0 the previously separate `Source` / `ClaimSourceAssociation` types are gone — sources are claims with `type: 'citation'`. As of v0.12.0 the citation-specific edge interfaces collapsed into a generic `TCoreClaimConnection` shape with neutral field names, and `TCoreClaimAxiom` was added for axiom-invocation connections.
+As of v0.10.0 the previously separate `Source` / `ClaimSourceAssociation` types are gone — sources are claims with `type: 'citation'`. As of v0.12.0 the citation-specific edge interfaces collapsed into a generic `TCoreClaimConnection` shape with neutral field names. Citation and axiom connections share that single shape; the supporting-side type-discriminator constraint is enforced by the owning library (`ClaimCitationLibrary` requires `type: 'citation'`; `ClaimAxiomLibrary` requires `type: 'axiomatic'` and `type: 'normal'` on the dependent side).
 
-| Type                                       | Description                                                                                                                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TCoreClaim`                               | Base claim entity (`{ id, version, frozen, checksum, type: 'normal' \| 'citation' \| 'axiomatic' }`); `type` is immutable post-creation                             |
-| `TCoreClaimConnection`                     | Generic support edge `{ id, claimId, claimVersion, supportingClaimId, supportingClaimVersion, checksum }`; specialised by which library holds it                    |
-| `TCoreClaimCitation`                       | Citation connection (alias of `TCoreClaimConnection`); supporting-side claim must have `type: 'citation'`                                                           |
-| `TCoreClaimAxiom`                          | Axiom-invocation connection (alias of `TCoreClaimConnection`); supporting-side claim must have `type: 'axiomatic'`, dependent-side claim must have `type: 'normal'` |
-| `TClaimLookup`                             | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                                   |
-| `TClaimLibraryManagement`                  | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)         |
-| `TClaimConnectionLookup<TConn>`            | Narrow read-only interface for connection lookups (`getConnectionsForClaim`, `get`); implemented by both citation and axiom libraries                               |
-| `TClaimConnectionLibraryManagement<TConn>` | Full management interface for a connection library (extends `TClaimConnectionLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`, `validate`)             |
-| `TClaimLibrarySnapshot`                    | Snapshot type for `ClaimLibrary` state (`{ claims: TClaim[] }`)                                                                                                     |
-| `TClaimConnectionLibrarySnapshot<TConn>`   | Snapshot type for both connection libraries (`{ connections: TConn[] }`); the wrapper key renamed from `claimCitations` to `connections` in v0.12.0                 |
+The `type` discriminator literal schemas are exported individually for use in app-layer extensions: `CoreClaimNormalTypeSchema` / `TCoreClaimNormalType`, `CoreClaimCitationTypeSchema` / `TCoreClaimCitationType`, `CoreClaimAxiomaticTypeSchema` / `TCoreClaimAxiomaticType`. The union schema is `CoreClaimTypeSchema` / `TCoreClaimType`.
+
+| Type                                       | Description                                                                                                                                                 |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TCoreClaim`                               | Base claim entity (`{ id, version, frozen, checksum, type: 'normal' \| 'citation' \| 'axiomatic' }`); `type` is immutable post-creation                     |
+| `TCoreClaimType`                           | Discriminator union (`'normal' \| 'citation' \| 'axiomatic'`)                                                                                               |
+| `TCoreClaimConnection`                     | Generic support edge `{ id, claimId, claimVersion, supportingClaimId, supportingClaimVersion, checksum }`; specialised by which library holds it            |
+| `TClaimLookup`                             | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                           |
+| `TClaimLibraryManagement`                  | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`) |
+| `TClaimConnectionLookup<TConn>`            | Narrow read-only interface for connection lookups (`getConnectionsForClaim`, `get`); implemented by both citation and axiom libraries                       |
+| `TClaimConnectionLibraryManagement<TConn>` | Full management interface for a connection library (extends `TClaimConnectionLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`, `validate`)     |
+| `TClaimLibrarySnapshot`                    | Snapshot type for `ClaimLibrary` state (`{ claims: TClaim[] }`)                                                                                             |
+| `TClaimConnectionLibrarySnapshot<TConn>`   | Snapshot type for both connection libraries (`{ connections: TConn[] }`); the wrapper key renamed from `claimCitations` to `connections` in v0.12.0         |
 
 ## Errors
 
@@ -1487,14 +1488,14 @@ These codes are emitted as `TInvariantViolation.code` values by `ClaimLibrary`, 
 | --------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CLAIM_TYPE_IMMUTABLE`                  | `ClaimLibrary.update()`                                           | An update tried to change a claim's `type` discriminator after creation.                                                                                             |
 | `LEGACY_CLAIM_MISSING_TYPE`             | `ClaimLibrary.fromSnapshot()`                                     | A claim entry in the snapshot lacks the `type` field (pre-v0.10 data); migration required.                                                                           |
-| `CITATION_SCHEMA_INVALID`               | `ClaimCitationLibrary.validate()`                                 | A citation does not match `CoreClaimCitationSchema`.                                                                                                                 |
+| `CITATION_SCHEMA_INVALID`               | `ClaimCitationLibrary.validate()`                                 | A citation does not match `CoreClaimConnectionSchema`.                                                                                                               |
 | `CITATION_DUPLICATE_ID`                 | `ClaimCitationLibrary.add()`                                      | A citation with the given `id` already exists.                                                                                                                       |
 | `CITATION_CLAIM_REF_NOT_FOUND`          | `ClaimCitationLibrary.add/validate()`                             | The citation's `claimId@claimVersion` does not resolve in the claim lookup.                                                                                          |
 | `CITATION_SUPPORTING_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()`                             | The citation's `supportingClaimId@supportingClaimVersion` does not resolve in the claim lookup.                                                                      |
 | `CITATION_SUPPORTING_NOT_CITATION_TYPE` | `ClaimCitationLibrary.add/validate()`                             | The supporting-side claim has `type !== 'citation'`. Only citation-typed claims are valid as the supporting endpoint.                                                |
 | `CITATION_CYCLE_DETECTED`               | `ClaimCitationLibrary.add()`                                      | Adding the citation would introduce a cycle in the global claim-citation graph (ID-only — versions ignored).                                                         |
 | `CITATION_NOT_FOUND`                    | `ClaimCitationLibrary.remove()`                                   | Calling `remove(id)` with an id that does not exist in the citation library.                                                                                         |
-| `AXIOM_SCHEMA_INVALID`                  | `ClaimAxiomLibrary.validate()`                                    | An axiom connection does not match `CoreClaimAxiomSchema`.                                                                                                           |
+| `AXIOM_SCHEMA_INVALID`                  | `ClaimAxiomLibrary.validate()`                                    | An axiom connection does not match `CoreClaimConnectionSchema`.                                                                                                      |
 | `AXIOM_DUPLICATE_ID`                    | `ClaimAxiomLibrary.add()`                                         | An axiom connection with the given `id` already exists.                                                                                                              |
 | `AXIOM_CLAIM_REF_NOT_FOUND`             | `ClaimAxiomLibrary.add/validate()`                                | The axiom's `claimId@claimVersion` does not resolve in the claim lookup.                                                                                             |
 | `AXIOM_SUPPORTING_REF_NOT_FOUND`        | `ClaimAxiomLibrary.add/validate()`                                | The axiom's `supportingClaimId@supportingClaimVersion` does not resolve in the claim lookup.                                                                         |

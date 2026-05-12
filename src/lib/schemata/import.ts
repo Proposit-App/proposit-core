@@ -1,5 +1,6 @@
 import Type, { type Static } from "typebox"
 import { UUID } from "./shared.js"
+import { CoreClaimTypeSchema } from "./claim.js"
 
 export const CoreYamlPremiseMetadataSchema = Type.Object(
     {
@@ -39,11 +40,7 @@ export type TCoreYamlPremise = Static<typeof CoreYamlPremiseSchema>
 export const CoreYamlClaimSchema = Type.Object(
     {
         id: UUID,
-        type: Type.Union([
-            Type.Literal("normal"),
-            Type.Literal("citation"),
-            Type.Literal("axiomatic"),
-        ]),
+        type: CoreClaimTypeSchema,
         title: Type.Optional(Type.String()),
     },
     { additionalProperties: true }

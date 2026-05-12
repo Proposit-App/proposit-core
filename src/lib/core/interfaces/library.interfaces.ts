@@ -1,7 +1,5 @@
 import type { TCoreClaim } from "../../schemata/claim.js"
-import type { TCoreClaimCitation } from "../../schemata/claim-citation.js"
 import type { TCoreClaimConnection } from "../../schemata/claim-connection.js"
-import type { TCoreClaimAxiom } from "../../schemata/claim-axiom.js"
 import type {
     TCoreArgumentForkRecord,
     TCorePremiseForkRecord,
@@ -305,8 +303,8 @@ export type TPropositCoreSnapshot<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-    TAxiom extends TCoreClaimAxiom = TCoreClaimAxiom,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+    TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
     TArgFork extends TCoreArgumentForkRecord = TCoreArgumentForkRecord,
     TPremiseFork extends TCorePremiseForkRecord = TCorePremiseForkRecord,
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,

@@ -46,7 +46,7 @@ import {
     type TCorePropositionalVariable,
     type TCorePremise,
     type TCoreDerivationPremise,
-    type TCoreClaimCitation,
+    type TCoreClaimConnection,
 } from "../src/lib/schemata"
 import { ChangeCollector } from "../src/lib/core/change-collector"
 import { VariableManager } from "../src/lib/core/variable-manager"
@@ -21385,13 +21385,13 @@ describe("empty lookup constants", () => {
 
     it("emptyClaimConnectionLookup().get returns undefined", () => {
         expect(
-            emptyClaimConnectionLookup<TCoreClaimCitation>().get("any")
+            emptyClaimConnectionLookup<TCoreClaimConnection>().get("any")
         ).toBeUndefined()
     })
 
     it("emptyClaimConnectionLookup().getConnectionsForClaim returns empty array", () => {
         expect(
-            emptyClaimConnectionLookup<TCoreClaimCitation>().getConnectionsForClaim(
+            emptyClaimConnectionLookup<TCoreClaimConnection>().getConnectionsForClaim(
                 "any"
             )
         ).toEqual([])

@@ -58,8 +58,8 @@ export const EMPTY_CLAIM_LOOKUP: TClaimLookup = {
  * a fresh empty implementation; values are stateless.
  *
  * @example
- *   const emptyCitations = emptyClaimConnectionLookup<TCoreClaimCitation>()
- *   const emptyAxioms = emptyClaimConnectionLookup<TCoreClaimAxiom>()
+ *   const emptyCitations = emptyClaimConnectionLookup<TCoreClaimConnection>()
+ *   const emptyAxioms = emptyClaimConnectionLookup<TCoreClaimConnection>()
  */
 export function emptyClaimConnectionLookup<
     TConn extends TCoreClaimConnection = TCoreClaimConnection,

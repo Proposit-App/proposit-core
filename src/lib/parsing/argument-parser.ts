@@ -7,7 +7,7 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
     TCoreClaim,
-    TCoreClaimCitation,
+    TCoreClaimConnection,
 } from "../schemata/index.js"
 import type { TClaimBoundVariable } from "../schemata/propositional.js"
 import { parseFormula } from "../core/parser/formula.js"
@@ -36,7 +36,7 @@ export type TArgumentParserResult<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
 > = {
     engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
     claimLibrary: ClaimLibrary<TClaim>
@@ -241,7 +241,7 @@ export class ArgumentParser<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
 > {
     protected readonly responseSchema: TSchema
 
