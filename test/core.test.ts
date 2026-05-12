@@ -31242,155 +31242,258 @@ describe("Propagator interaction with axiomatic variables (v0.12)", () => {
 // ---------------------------------------------------------------------------
 
 describe("ManagedDerivationPremiseEngine.populateFromSupports (v0.12)", () => {
-    function setup() {
-        const core = new PropositCore()
-        const derivedClaim = core.claims.create({ type: "normal" })
-        const cit1 = core.claims.create({ type: "citation" })
-        const cit2 = core.claims.create({ type: "citation" })
-        const ax1 = core.claims.create({ type: "axiomatic" })
-        const ax2 = core.claims.create({ type: "axiomatic" })
-        const argId = crypto.randomUUID()
-        core.arguments.create({ id: argId, version: 0 })
-        const engine = core.arguments.get(argId)!
-        return { core, derivedClaim, cit1, cit2, ax1, ax2, argId, engine }
+    /**
+     * Hand-builds a setup with citation + axiom supports for a derived claim.
+     * Mirrors `setupDerivationWithCitations` from the citations-only block but
+     * also creates `axiomCount` axiomatic claims and adds them to the axiom
+     * library. The managed engine is constructed via
+     * `ManagedDerivationPremiseEngine.fromSnapshot` so `populateFromSupports`
+     * is callable on the returned `engine` directly (no cast).
+     */
+    function setupDerivationWithSupports(
+        citationCount: number,
+        axiomCount: number
+    ) {
+        const argId = "00000000-0000-0000-0000-99900000a001"
+        const argVersion = 1
+        const ARG_OBJ = { id: argId, version: argVersion } as TCoreArgument
+
+        // Build claim library — derived claim plus N citation + M axiomatic
+        // supporting claims.
+        const claimLib = new ClaimLibrary()
+        const derivedClaim = claimLib.create({ type: "normal" })
+        const citationClaimIds: string[] = []
+        for (let i = 0; i < citationCount; i++) {
+            const c = claimLib.create({ type: "citation" })
+            citationClaimIds.push(c.id)
+        }
+        const axiomClaimIds: string[] = []
+        for (let i = 0; i < axiomCount; i++) {
+            const a = claimLib.create({ type: "axiomatic" })
+            axiomClaimIds.push(a.id)
+        }
+
+        // Build citation library and add edges from derivedClaim → each citation claim.
+        const citationLib = new ClaimCitationLibrary(claimLib)
+        const derivedClaimCurrent = claimLib.getCurrent(derivedClaim.id)!
+        for (let i = 0; i < citationCount; i++) {
+            const sourceClaim = claimLib.getCurrent(citationClaimIds[i])!
+            citationLib.add({
+                id: `cit-${argId}-${i}`,
+                claimId: derivedClaim.id,
+                claimVersion: derivedClaimCurrent.version,
+                supportingClaimId: citationClaimIds[i],
+                supportingClaimVersion: sourceClaim.version,
+            })
+        }
+
+        // Build axiom library and add edges from derivedClaim → each axiom claim.
+        const axiomLib = new ClaimAxiomLibrary(claimLib)
+        for (let i = 0; i < axiomCount; i++) {
+            const supportingClaim = claimLib.getCurrent(axiomClaimIds[i])!
+            axiomLib.add({
+                id: `ax-${argId}-${i}`,
+                claimId: derivedClaim.id,
+                claimVersion: derivedClaimCurrent.version,
+                supportingClaimId: axiomClaimIds[i],
+                supportingClaimVersion: supportingClaim.version,
+            })
+        }
+
+        // Build ArgumentEngine sharing the libraries.
+        const argumentEngine = new ArgumentEngine(
+            ARG_OBJ,
+            claimLib,
+            citationLib
+        )
+
+        // Build ManagedDerivationPremiseEngine in naked-Q form for derivedClaim.
+        // The Q variable must already exist in the variable manager (shared
+        // with argumentEngine).
+        const consequentVariable = argumentEngine.ensureClaimBoundVariable(
+            derivedClaim.id
+        )
+        const premiseId = "00000000-0000-0000-0000-99900000ap01"
+        const consequentExprId = "00000000-0000-0000-0000-99900000ax01"
+        const vm = (argumentEngine as unknown as Record<string, unknown>)
+            .variables as VariableManager
+
+        const snap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: derivedClaim.id,
+            } as TCorePremise,
+            rootExpressionId: consequentExprId,
+            expressions: {
+                expressions: [
+                    {
+                        id: consequentExprId,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: consequentVariable.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot(
+            snap,
+            ARG_OBJ,
+            vm
+        )
+
+        return {
+            engine,
+            argumentEngine,
+            claimLib,
+            citationLib,
+            axiomLib,
+            derivedClaimId: derivedClaim.id,
+            citationClaimIds,
+            axiomClaimIds,
+            consequentVarId: consequentVariable.id,
+            premiseId,
+            argId,
+            argVersion,
+        }
     }
 
     it("no-op when both libraries have no connections for derivedClaim (naked-Q)", () => {
-        const { core, derivedClaim, engine } = setup()
-        const { result: pm } = engine.createPremise({
-            type: "derivation",
-            derivedClaimId: derivedClaim.id,
-        })
-        ;(
-            pm as unknown as {
-                populateFromSupports: (
-                    c: typeof core.citations,
-                    a: typeof core.axioms,
-                    e: typeof engine
-                ) => void
-            }
-        ).populateFromSupports(core.citations, core.axioms, engine)
-        // Still naked-Q — root is a single variable expression for derivedClaim.
-        const root = pm.getExpressions().find((e) => e.parentId === null)
+        const { engine, argumentEngine, citationLib, axiomLib } =
+            setupDerivationWithSupports(0, 0)
+        const expressionsBefore = engine.getExpressions().length
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
+        // Still naked-Q — single variable expression for derivedClaim.
+        expect(engine.getExpressions()).toHaveLength(expressionsBefore)
+        const root = engine.getExpressions().find((e) => e.parentId === null)
         expect(root?.type).toBe("variable")
     })
 
     it("n=1 citation only: builds IMPLIES(varCit1, Q)", () => {
-        const { core, derivedClaim, cit1, engine } = setup()
-        core.citations.add({
-            id: crypto.randomUUID(),
-            claimId: derivedClaim.id,
-            claimVersion: 0,
-            supportingClaimId: cit1.id,
-            supportingClaimVersion: 0,
-        })
-        const { result: pm } = engine.createPremise({
-            type: "derivation",
-            derivedClaimId: derivedClaim.id,
-        })
-        ;(
-            pm as unknown as {
-                populateFromSupports: (
-                    c: typeof core.citations,
-                    a: typeof core.axioms,
-                    e: typeof engine
-                ) => void
-            }
-        ).populateFromSupports(core.citations, core.axioms, engine)
-        const root = pm.getExpressions().find((e) => e.parentId === null)
-        expect(root?.type).toBe("operator")
-        expect((root as unknown as { operator?: string }).operator).toBe(
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            axiomLib,
+            citationClaimIds,
+            consequentVarId,
+        } = setupDerivationWithSupports(1, 0)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
+        // Should have 3 expressions: IMPLIES root, citation var, Q var.
+        expect(exprs).toHaveLength(3)
+
+        const root = exprs.find((e) => e.parentId === null)!
+        expect(root.type).toBe("operator")
+        expect((root as unknown as { operator: string }).operator).toBe(
             "implies"
+        )
+
+        const children = exprs
+            .filter((e) => e.parentId === root.id)
+            .sort((a, b) => a.position - b.position)
+        expect(children).toHaveLength(2)
+
+        // Antecedent (lower position) is the citation-claim variable.
+        const antecedent = children[0]
+        expect(antecedent.type).toBe("variable")
+        const antecedentVar = argumentEngine
+            .getVariables()
+            .find(
+                (v) =>
+                    v.id === (antecedent as { variableId: string }).variableId
+            )!
+        expect((antecedentVar as TClaimBoundVariable).claimId).toBe(
+            citationClaimIds[0]
+        )
+
+        // Consequent (higher position) is Q.
+        const consequent = children[1]
+        expect(consequent.type).toBe("variable")
+        expect((consequent as { variableId: string }).variableId).toBe(
+            consequentVarId
         )
     })
 
     it("n=2 mixed: builds IMPLIES(formula(OR(varCit1, varAx1)), Q)", () => {
-        const { core, derivedClaim, cit1, ax1, engine } = setup()
-        core.citations.add({
-            id: crypto.randomUUID(),
-            claimId: derivedClaim.id,
-            claimVersion: 0,
-            supportingClaimId: cit1.id,
-            supportingClaimVersion: 0,
-        })
-        core.axioms.add({
-            id: crypto.randomUUID(),
-            claimId: derivedClaim.id,
-            claimVersion: 0,
-            supportingClaimId: ax1.id,
-            supportingClaimVersion: 0,
-        })
-        const { result: pm } = engine.createPremise({
-            type: "derivation",
-            derivedClaimId: derivedClaim.id,
-        })
-        ;(
-            pm as unknown as {
-                populateFromSupports: (
-                    c: typeof core.citations,
-                    a: typeof core.axioms,
-                    e: typeof engine
-                ) => void
-            }
-        ).populateFromSupports(core.citations, core.axioms, engine)
-        const exprs = pm.getExpressions()
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            axiomLib,
+            citationClaimIds,
+            axiomClaimIds,
+            consequentVarId,
+        } = setupDerivationWithSupports(1, 1)
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
         const root = exprs.find((e) => e.parentId === null)!
-        expect((root as unknown as { operator?: string }).operator).toBe(
+        expect(root.type).toBe("operator")
+        expect((root as unknown as { operator: string }).operator).toBe(
             "implies"
         )
-        // Antecedent (position-0 child) is formula; inside is OR with 2 children.
-        const children = exprs
+
+        // Antecedent (position-0 child) is a formula buffer; inside is OR with
+        // exactly two variable children — one for the citation, one for the
+        // axiom. Consequent (position-1) is Q.
+        const impliesChildren = exprs
             .filter((e) => e.parentId === root.id)
             .sort((a, b) => a.position - b.position)
-        const antecedent = children[0]
+        expect(impliesChildren).toHaveLength(2)
+
+        const antecedent = impliesChildren[0]
         expect(antecedent.type).toBe("formula")
-        const orNodes = exprs.filter((e) => e.parentId === antecedent.id)
-        expect(orNodes).toHaveLength(1)
-        expect((orNodes[0] as unknown as { operator?: string }).operator).toBe(
-            "or"
+
+        const consequent = impliesChildren[1]
+        expect(consequent.type).toBe("variable")
+        expect((consequent as { variableId: string }).variableId).toBe(
+            consequentVarId
+        )
+
+        const formulaChildren = exprs.filter(
+            (e) => e.parentId === antecedent.id
+        )
+        expect(formulaChildren).toHaveLength(1)
+        const orNode = formulaChildren[0]
+        expect(orNode.type).toBe("operator")
+        expect((orNode as unknown as { operator: string }).operator).toBe("or")
+
+        const orChildren = exprs.filter((e) => e.parentId === orNode.id)
+        expect(orChildren).toHaveLength(2)
+        const orChildClaimIds = orChildren
+            .map((c) => {
+                const varId = (c as { variableId: string }).variableId
+                const variable = argumentEngine
+                    .getVariables()
+                    .find((v) => v.id === varId)! as TClaimBoundVariable
+                return variable.claimId
+            })
+            .sort()
+        expect(orChildClaimIds).toEqual(
+            [...citationClaimIds, ...axiomClaimIds].sort()
         )
     })
 
     it("rejects when antecedent is already non-empty", () => {
-        const { core, derivedClaim, cit1, ax1, engine } = setup()
-        core.citations.add({
-            id: crypto.randomUUID(),
-            claimId: derivedClaim.id,
-            claimVersion: 0,
-            supportingClaimId: cit1.id,
-            supportingClaimVersion: 0,
-        })
-        const { result: pm } = engine.createPremise({
-            type: "derivation",
-            derivedClaimId: derivedClaim.id,
-        })
-        ;(
-            pm as unknown as {
-                populateFromSupports: (
-                    c: typeof core.citations,
-                    a: typeof core.axioms,
-                    e: typeof engine
-                ) => void
-            }
-        ).populateFromSupports(core.citations, core.axioms, engine)
-        // Try again — antecedent is now populated.
-        core.axioms.add({
-            id: crypto.randomUUID(),
-            claimId: derivedClaim.id,
-            claimVersion: 0,
-            supportingClaimId: ax1.id,
-            supportingClaimVersion: 0,
-        })
+        const { engine, argumentEngine, citationLib, axiomLib } =
+            setupDerivationWithSupports(1, 1)
+        // Populate once — antecedent becomes IMPLIES(formula(OR(...)), Q).
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
+        // Populate again — antecedent slot is already filled.
         expect(() =>
-            (
-                pm as unknown as {
-                    populateFromSupports: (
-                        c: typeof core.citations,
-                        a: typeof core.axioms,
-                        e: typeof engine
-                    ) => void
-                }
-            ).populateFromSupports(core.citations, core.axioms, engine)
+            engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
         ).toThrow(/DERIVATION_ANTECEDENT_NON_EMPTY/)
     })
 })
