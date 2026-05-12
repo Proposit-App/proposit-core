@@ -39,6 +39,7 @@ import {
 } from "./storage/premises.js"
 import { migrateV010 } from "./storage/migrate-v0.10.js"
 import { migrateV011 } from "./storage/migrate-v0.11.js"
+import { migrateV012 } from "./storage/migrate-v0.12.js"
 import { readRoles, writeRoles } from "./storage/roles.js"
 import { readVariables, writeVariables } from "./storage/variables.js"
 
@@ -48,6 +49,7 @@ export async function hydratePropositCore(): Promise<PropositCore> {
     // it on subsequent invocations.
     await migrateV010()
     await migrateV011()
+    await migrateV012()
 
     const [claimLibrary, forkLibrary] = await Promise.all([
         readClaimLibrary(),
