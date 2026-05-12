@@ -184,13 +184,13 @@ const citationClaim = core.claims.create({
     text: "Aristotle, Categories, ~350 BCE",
 })
 
-// Cite the citation claim from the normal claim
-core.claimCitations.add({
+// Cite the citation claim as supporting the normal claim
+core.citations.add({
     id: "edge-1",
-    citingClaimId: claim.id,
-    citingClaimVersion: claim.version,
-    sourceClaimId: citationClaim.id,
-    sourceClaimVersion: citationClaim.version,
+    claimId: claim.id,
+    claimVersion: claim.version,
+    supportingClaimId: citationClaim.id,
+    supportingClaimVersion: citationClaim.version,
 })
 
 // Create an argument engine — libraries are wired automatically
@@ -212,22 +212,44 @@ const snapshot = core.snapshot()
 const restored = PropositCore.fromSnapshot(snapshot)
 ```
 
-`PropositCore` is designed for subclassing. All library fields (`claims`, `claimCitations`, `forks`, `arguments`) are public and readable. Pass pre-constructed library instances via `TPropositCoreOptions` to inject custom implementations.
+`PropositCore` is designed for subclassing. All library fields (`claims`, `citations`, `axioms`, `forks`, `arguments`) are public and readable. Pass pre-constructed library instances via `TPropositCoreOptions` to inject custom implementations.
 
 ### No application metadata
 
 The core library does not deal in user IDs, timestamps, or display text. These are application-level concerns. The CLI adds some metadata (e.g., `createdAt`, `publishedAt`) for its own purposes, but the core schemas are intentionally minimal. Applications extend core entity types via generic parameters.
 
-### Claims and citations
+### Claims, citations, and axioms
 
-Every claim in the unified `ClaimLibrary` carries an immutable `type: 'normal' | 'citation'` discriminator set at creation:
+Every claim in the unified `ClaimLibrary` carries an immutable `type: 'normal' | 'citation' | 'axiomatic'` discriminator set at creation:
 
 - **Normal claims** (`type: 'normal'`) are primary-reasoning propositions referenced by an argument's variables.
 - **Citation claims** (`type: 'citation'`) represent external/cited content — papers, articles, URLs. They are the v0.10.0 unified replacement for the former separate `Source` entity. Application schemas (e.g. the IEEE extension) extend citation claims with structured reference data.
+- **Axiomatic claims** (`type: 'axiomatic'`, added in v0.12.0) represent self-evident propositions invoked as the bottom-level "proof" of a derived claim's truth — propositions that hold by definition, by historical convention, or by logical necessity. Axiomatic claim-bound variables are forced to `true` during evaluation (see "Evaluation semantics by claim type" below). Application layers attach a reason discriminator via the open `additionalProperties` slot — for example, the CLI schema requires `reasonCode: 'true-by-definition' | 'historically-established' | 'logically-required'`.
 
-Citations between claims are managed by `ClaimCitationLibrary<TCitation>` — a standalone global class that stores directed edges in the global claim citation graph. Each citation pins both endpoints to specific claim versions (`citingClaimId@citingClaimVersion → sourceClaimId@sourceClaimVersion`). The source-side endpoint must reference a claim with `type: 'citation'`. Citations are immutable (create or delete, no update). `ClaimCitationLibrary` validates both endpoints, the source-side type, and global graph acyclicity on `add()`.
+Two parallel **connection libraries** track the support edges between claims:
+
+- `ClaimCitationLibrary<TCitation>` — stores citation connections (`claimId → supportingClaimId`). The supporting-side endpoint must reference a claim with `type: 'citation'`. `ClaimCitationLibrary` validates both endpoints, the supporting-side type, and global-graph acyclicity on `add()`.
+- `ClaimAxiomLibrary<TAxiom>` (v0.12.0) — stores axiom-invocation connections (`claimId → supportingClaimId`). The supporting-side endpoint must reference a claim with `type: 'axiomatic'` and the dependent-side endpoint must reference a claim with `type: 'normal'`. `ClaimAxiomLibrary` skips cycle detection — cycles are structurally impossible because axiomatic claims cannot appear on the dependent side.
+
+Both libraries implement a generic `TClaimConnectionLibraryManagement` interface (`add`, `remove`, `get`, `getAll`, `getConnectionsForClaim`, `filter`, `snapshot`, `validate`), so consumers can write code that works against either flavour.
+
+Connections are immutable (create or delete, no update). Each connection pins both endpoints to specific claim versions. They live on `PropositCore` as `core.citations` and `core.axioms`.
 
 The `@proposit/proposit-core/extensions/ieee` subpath export provides `IEEECitationClaimSchema` — an extended citation-claim type with IEEE reference schemas covering 33 reference types.
+
+### Evaluation semantics by claim type
+
+Claim-bound variables evaluate differently depending on the bound claim's type:
+
+| Claim type   | Evaluation behavior                 | Caller override                              |
+| ------------ | ----------------------------------- | -------------------------------------------- |
+| `normal`     | Caller assigns; unassigned → `null` | Yes — standard                               |
+| `citation`   | Caller assigns; unassigned → `null` | Yes — standard                               |
+| `axiomatic`  | Forced to `true`                    | No — caller attempts are rejected pre-flight |
+
+Citations and normal claims continue to require explicit assignment. Apps that want auto-`true` defaults for citations implement that policy at their own layer. Axiomatic claim-bound variables are forced to `true` by a pre-pass in `ArgumentEngine.evaluate` and `ArgumentEngine.checkValidity`; a caller assignment for an axiomatic-bound variable raises `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` before evaluation runs.
+
+To express "this derivation should NOT be supported by this axiom," wrap the axiom's variable expression in the antecedent with `not` (`toggleNegation`). Because the axiom's value is fixed at `true`, the negated reference contributes `false` to its parent operator — the standard expression-tree negation, no new mechanism. The consequent variable expression is protected by `assertNotConsequentExpression` and cannot be negated.
 
 ### Derivation Premises
 
@@ -259,13 +281,13 @@ const citeA = core.claims.create({
     text: "Weather report, 2024",
 })
 
-// Add a citation edge: claim cites citeA as support
-core.claimCitations.add({
+// Add a citation connection: claim is supported by citeA
+core.citations.add({
     id: "edge-1",
-    citingClaimId: claim.id,
-    citingClaimVersion: claim.version,
-    sourceClaimId: citeA.id,
-    sourceClaimVersion: citeA.version,
+    claimId: claim.id,
+    claimVersion: claim.version,
+    supportingClaimId: citeA.id,
+    supportingClaimVersion: citeA.version,
 })
 
 const engine = core.arguments.create({
@@ -288,13 +310,13 @@ const { result: pm } = engine.createPremise({
 // (Requires a ManagedDerivationPremiseEngine instance)
 ```
 
-The `populateFromCitations` helper on `ManagedDerivationPremiseEngine` is the recommended way to build the antecedent from the global citation graph:
+The `populateFromSupports` helper on `ManagedDerivationPremiseEngine` is the recommended way to build the antecedent from the combined citation + axiom support set (renamed from `populateFromCitations` in v0.12.0):
 
-- `n = 0` citations: no change (premise stays in naked-Q form)
-- `n = 1` citation: produces `IMPLIES(S1, Q)`
-- `n ≥ 2` citations: produces `IMPLIES(OR(S1, ..., Sn), Q)`
+- `n = 0` supports: no change (premise stays in naked-Q form)
+- `n = 1` support: produces `IMPLIES(S1, Q)`
+- `n ≥ 2` supports: produces `IMPLIES(OR(S1, ..., Sn), Q)`
 
-`populateFromCitations` is one-shot: it rejects calls on premises that already have a non-empty antecedent. Delete and re-create the premise to repopulate.
+The helper takes `(citationLib, axiomLib, argumentEngine)`. Citations are listed first, axioms second; source order preserved within each. `populateFromSupports` is one-shot — it rejects calls on premises that already have a non-empty antecedent. Delete and re-create the premise to repopulate.
 
 ### Auto-variable creation
 
@@ -308,11 +330,11 @@ An argument can be **forked** via `PropositCore.forkArgument()` to create an ind
 
 - Creates a new argument with a new ID (version 0)
 - Assigns new UUIDs to all premises, expressions, and variables
-- Walks the citation graph from the source argument's claim-bound variables and clones every reachable claim (both `'normal'` and `'citation'`-typed) plus the citation edges between them
+- Walks the combined citation + axiom connection graph from the source argument's claim-bound variables (a single BFS that consults both `core.citations` and `core.axioms` at each frontier pop) and clones every reachable claim (`'normal'`, `'citation'`, and `'axiomatic'`) plus both kinds of connections between them
 - Creates fork records in all five `ForkLibrary` namespaces (arguments, premises, expressions, variables, claims)
 - Remaps all internal references (expression parent chains, variable bindings, conclusion role, claim references)
 - Registers the new engine in `ArgumentLibrary`
-- Returns the new engine, a remap table, a claim remap map (covering both normal and citation claims), and the argument fork record
+- Returns the new engine, a remap table, a claim remap map (covering normal, citation, and axiomatic claims), and the argument fork record
 
 The forked argument is fully independent — mutations don't affect the source. Fork-aware diffing is automatic via `PropositCore.diffArguments()`, which uses `ForkLibrary` records as entity matchers rather than ID-based pairing.
 
@@ -818,7 +840,7 @@ The engine enforces structural invariants at two levels: **construction-time** (
 | Updating the consequent variable ID or operator on a managed derivation premise         | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
 | Inserting an expression into the consequent slot of a managed derivation premise        | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
 | Swapping root operator to `and`/`or`/`not` on a managed derivation premise              | Throws — `DERIVATION_ROOT_OPERATOR_INVALID`            |
-| `populateFromCitations` on a derivation premise that already has a non-empty antecedent | Throws — `DERIVATION_ANTECEDENT_NON_EMPTY`             |
+| `populateFromSupports` on a derivation premise that already has a non-empty antecedent  | Throws — `DERIVATION_ANTECEDENT_NON_EMPTY`             |
 | `ensureClaimBoundVariable(claimId)` when the claim is not in the library                | Throws — `CLAIM_NOT_FOUND`                             |
 | Restoring a pre-v0.11 snapshot whose premises lack the `type` field                     | Throws — `LEGACY_PREMISE_MISSING_TYPE`                 |
 
@@ -840,17 +862,25 @@ The engine enforces structural invariants at two levels: **construction-time** (
 | Same variable ID used with multiple symbols across premises | `ARGUMENT_VARIABLE_ID_SYMBOL_MISMATCH` |
 | Same variable symbol used with multiple IDs across premises | `ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS`   |
 
-### Claims and citations — prevented at construction time
+### Claims, citations, and axioms — prevented at construction time
 
-| Invalid construction                                                            | What happens / error code                                                  |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Updating a claim's `type` field after creation                                  | Throws — `CLAIM_TYPE_IMMUTABLE`                                            |
-| Restoring a pre-v0.10 snapshot whose claims lack the `type` field               | Throws — `LEGACY_CLAIM_MISSING_TYPE`                                       |
-| Adding a citation whose `id` already exists                                     | Throws — `CITATION_DUPLICATE_ID`                                           |
-| Adding a citation whose `citingClaimId@citingClaimVersion` is not in the lookup | Throws — `CITATION_CITING_REF_NOT_FOUND`                                   |
-| Adding a citation whose `sourceClaimId@sourceClaimVersion` is not in the lookup | Throws — `CITATION_SOURCE_REF_NOT_FOUND`                                   |
-| Source-side claim of a citation has `type !== 'citation'`                       | Throws — `CITATION_SOURCE_NOT_CITATION_TYPE`                               |
-| Citation that would create a cycle in the global claim-citation graph           | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate) |
+| Invalid construction                                                                          | What happens / error code                                                  |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Updating a claim's `type` field after creation                                                | Throws — `CLAIM_TYPE_IMMUTABLE`                                            |
+| Restoring a pre-v0.10 snapshot whose claims lack the `type` field                             | Throws — `LEGACY_CLAIM_MISSING_TYPE`                                       |
+| Adding a citation whose `id` already exists                                                   | Throws — `CITATION_DUPLICATE_ID`                                           |
+| Adding a citation whose `claimId@claimVersion` is not in the lookup                           | Throws — `CITATION_CLAIM_REF_NOT_FOUND`                                    |
+| Adding a citation whose `supportingClaimId@supportingClaimVersion` is not in the lookup       | Throws — `CITATION_SUPPORTING_REF_NOT_FOUND`                               |
+| Supporting-side claim of a citation has `type !== 'citation'`                                 | Throws — `CITATION_SUPPORTING_NOT_CITATION_TYPE`                           |
+| Citation that would create a cycle in the global claim-citation graph                         | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate) |
+| Adding an axiom connection whose `id` already exists                                          | Throws — `AXIOM_DUPLICATE_ID`                                              |
+| Adding an axiom connection whose `claimId@claimVersion` is not in the lookup                  | Throws — `AXIOM_CLAIM_REF_NOT_FOUND`                                       |
+| Adding an axiom connection whose `supportingClaimId@supportingClaimVersion` is not in lookup  | Throws — `AXIOM_SUPPORTING_REF_NOT_FOUND`                                  |
+| Supporting-side claim of an axiom connection has `type !== 'axiomatic'`                       | Throws — `AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE`                             |
+| Dependent-side claim of an axiom connection has `type !== 'normal'`                           | Throws — `AXIOM_CLAIM_NOT_NORMAL_TYPE`                                     |
+| Caller passes an assignment for an axiomatic-bound variable to `evaluate` or `checkValidity`  | Throws — `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` (use `toggleNegation` to reject the axiom in the antecedent instead) |
+| Restoring a pre-v0.12 snapshot whose citation-library wrapper or entities use legacy fields   | Throws — `LEGACY_CLAIM_CITATION_SHAPE` (run the v0.12 CLI migration)       |
+| Restoring a pre-v0.12 `PropositCore` snapshot that lacks an `axioms` slot                     | Throws — `LEGACY_MISSING_AXIOM_SLOT` (run the v0.12 CLI migration)         |
 
 ### Removal cascades
 
@@ -935,18 +965,47 @@ proposit-core arguments delete [--all] [--confirm] <id>   Delete an argument or 
 proposit-core arguments publish <id>               Publish latest version, prepare new draft
 proposit-core arguments parse [text] [options]     Parse natural language into an argument via LLM
 proposit-core arguments import <yaml_file>         Import an argument from YAML
-proposit-core claims list [--json]                 List all claims (citation-typed claims tagged [citation])
+proposit-core claims list [--json]                 List all claims (citation tagged [citation]; axiomatic tagged [axiom: <reasonCode>])
 proposit-core claims show <claim_id> [--json]      Show all versions of a claim
-proposit-core claims add [--type <t>] [--title <t>] [--body <b>]  Create a new claim ('normal' default; 'citation' for cited content)
-proposit-core claims update <claim_id> [--title <t>] [--body <b>]  Update claim metadata (type is immutable)
+proposit-core claims add [--type <t>] [--reason <code>] [--title <t>] [--body <b>]  Create a new claim ('normal' default; 'citation' for cited content; 'axiomatic' requires --reason)
+proposit-core claims update <claim_id> [--title <t>] [--body <b>]  Update claim metadata (type and reasonCode are immutable)
 proposit-core claims freeze <claim_id>             Freeze current version
-proposit-core citations list [--json]              List all citation edges
+proposit-core citations list [--json]              List all citation connections
 proposit-core citations show <citation_id> [--json]  Show a single citation
-proposit-core citations add <citing_claim_id> <source_claim_id>  Add a citation edge (source must be type=citation)
-proposit-core citations unlink <citation_id>       Remove a citation edge
+proposit-core citations add --claim-id <id> --supporting-claim-id <id>  Add a citation connection (supporting claim must be type=citation)
+proposit-core citations remove <citation_id>       Remove a citation connection
+proposit-core axioms list [--json]                 List all axiom connections
+proposit-core axioms show <connection_id> [--json] Show a single axiom connection
+proposit-core axioms add --claim-id <id> --axiom-id <id>           Add an axiom connection (supporting claim must be type=axiomatic; dependent must be type=normal)
+proposit-core axioms remove <connection_id>        Remove an axiom connection
 ```
 
+> **Breaking change in v0.12.0.** The `citations` command group switched from positional arguments + `unlink` to flag arguments + `remove`, matching the new `axioms` group and the renamed schema fields. Scripts that used `citations add <citing_claim_id> <source_claim_id>` or `citations unlink <id>` need to update to `citations add --claim-id <id> --supporting-claim-id <id>` and `citations remove <id>`.
+
 By default `delete` removes only the latest version. Pass `--all` to remove the argument entirely. Both `delete` and `delete-unused` prompt for confirmation unless `--confirm` is supplied.
+
+### Axiomatic claims
+
+Axiomatic claims (v0.12.0) represent self-evident propositions invoked as the bottom-level support for a derived claim — propositions that hold by definition, by historical convention, or by logical necessity. Create one with the `--type axiomatic` flag plus a required `--reason <code>` from one of the three preset reason codes:
+
+- `true-by-definition` — the proposition is part of how a term is defined.
+- `historically-established` — the proposition is treated as fact by long-standing convention.
+- `logically-required` — the proposition follows from logical structure alone.
+
+```bash
+proposit-core claims add --type axiomatic --reason true-by-definition \
+    --title "All bachelors are unmarried"
+```
+
+The `reasonCode` is set at creation time and is immutable — `claims update` rejects `--reason` as an unknown option. Listings tag axiomatic claims with `[axiom: <reasonCode>]`.
+
+Use the `axioms` command group to wire an axiomatic claim into a normal claim's support set. The supporting endpoint must be `type=axiomatic`; the dependent endpoint must be `type=normal`. There is no acyclicity check — axiomatic claims cannot appear on the dependent side, so cycles are structurally impossible.
+
+```bash
+proposit-core axioms add --claim-id <normal-claim-id> --axiom-id <axiomatic-claim-id>
+```
+
+Axiomatic claim-bound variables are forced to `true` at evaluation time. Passing an explicit assignment for one to `analysis evaluate` raises `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` before the evaluator runs. To express "this derivation should not be supported by this axiom," wrap the axiom's variable expression in the antecedent with `not`.
 
 ### Version-scoped commands
 
@@ -975,8 +1034,9 @@ Renders the full argument with metadata. Output includes:
 - **Argument header** — title and description
 - **Premises** — one per line with formula display string and title (if present); conclusion marked with `*`
 - **Variables** — symbol and bound claim title (or premise binding)
-- **Claims** — ID, version, frozen status, type (`normal` or `citation`), title, and body
-- **Citations** — edges between claims (citing -> source), with both endpoints pinned to specific versions
+- **Claims** — ID, version, frozen status, type (`normal`, `citation`, or `axiomatic`), title, and body
+- **Citations** — connections between claims (`claimId → supportingClaimId`), with both endpoints pinned to specific versions
+- **Axioms** — axiom-invocation connections from a normal claim to an axiomatic claim, also pinned to specific versions
 
 Display strings use standard logical notation (¬ ∧ ∨ → ↔).
 
