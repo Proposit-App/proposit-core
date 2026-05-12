@@ -350,11 +350,7 @@ export function importArgumentFromYaml(yamlString: string): {
     }
 
     const claimCitationLibrary = new ClaimCitationLibrary(claimLibrary)
-    const engine = new ArgumentEngine(
-        argument,
-        claimLibrary,
-        claimCitationLibrary
-    )
+    const engine = new ArgumentEngine(argument, claimLibrary)
 
     // Create variables for freeform formula symbols
     const variablesByName = new Map<

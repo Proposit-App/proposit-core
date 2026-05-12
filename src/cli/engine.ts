@@ -205,7 +205,6 @@ export async function hydrateEngine(
     const engine = ArgumentEngine.fromSnapshot(
         engineSnapshot,
         claimLibrary,
-        resolvedCore.citations,
         cliGrammarConfig,
         "ignore"
     )

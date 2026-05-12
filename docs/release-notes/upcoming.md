@@ -79,6 +79,10 @@ The `getCitationsForCitingClaim` lookup method is now `getConnectionsForClaim`. 
 
 `PropositCore` library fields are now all single-word nouns: `claims`, `citations`, `axioms`, `forks`, `arguments`. The previous `claimCitations` field was renamed to `citations` for symmetry with the new `axioms` field.
 
+### `ArgumentEngine` and `ArgumentLibrary` no longer take a citation library
+
+The vestigial `claimCitationLibrary` parameter was dropped from `ArgumentEngine`'s constructor, `ArgumentEngine.fromSnapshot`, `ArgumentEngine.fromData`, the standalone `forkArgumentEngine` function, and the `ArgumentLibrary` constructor + `ArgumentLibrary.fromSnapshot` libraries object. The engine never read the citation library — it was threaded through for prospective future use that never materialized — so removal is purely a signature cleanup. `PropositCore` (the recommended entry point) is unchanged: it still accepts a `claimCitationLibrary` option and owns the live `ClaimCitationLibrary` instance via `core.citations`. Direct callers of `ArgumentEngine` / `ArgumentLibrary` / `forkArgumentEngine` need to drop the citation-library argument from each call site.
+
 ## Migration
 
 ### CLI users

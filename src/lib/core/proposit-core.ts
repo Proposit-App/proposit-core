@@ -75,14 +75,7 @@ export type TPropositCoreOptions<
         TClaimFork
     >
     /** Pre-constructed argument library instance. */
-    argumentLibrary?: ArgumentLibrary<
-        TArg,
-        TPremise,
-        TExpr,
-        TVar,
-        TClaim,
-        TCitation
-    >
+    argumentLibrary?: ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim>
 }
 
 /**
@@ -127,8 +120,7 @@ export class PropositCore<
         TPremise,
         TExpr,
         TVar,
-        TClaim,
-        TCitation
+        TClaim
     >
     protected generateId: () => string
 
@@ -178,10 +170,9 @@ export class PropositCore<
 
         this.arguments =
             options?.argumentLibrary ??
-            new ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim, TCitation>(
+            new ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim>(
                 {
                     claimLibrary: this.claims,
-                    claimCitationLibrary: this.citations,
                 },
                 {
                     checksumConfig: options?.checksumConfig,
@@ -329,13 +320,11 @@ export class PropositCore<
             TPremise,
             TExpr,
             TVar,
-            TClaim,
-            TCitation
+            TClaim
         >(
             snapshot.arguments,
             {
                 claimLibrary: claims,
-                claimCitationLibrary: citations,
             },
             {
                 checksumConfig: config?.checksumConfig,
@@ -421,8 +410,7 @@ export class PropositCore<
             >
         }
     ): {
-        // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
-        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar>
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
         remapTable: TForkRemapTable
         claimRemap: Map<string, string>
         argumentFork: TArgFork
@@ -561,14 +549,12 @@ export class PropositCore<
             TPremise,
             TExpr,
             TVar,
-            TClaim,
-            TCitation
+            TClaim
         >(
             engine,
             resolvedNewArgumentId,
             {
                 claimLibrary: this.claims,
-                claimCitationLibrary: this.citations,
             },
             {
                 ...options,
@@ -611,18 +597,15 @@ export class PropositCore<
             }
         }
 
-        // TODO Phase 7: ArgumentEngine.fromSnapshot will take
-        // (snapshot, claimLibrary, claimCitationLibrary, ...) once its
-        // generics are reduced to drop TSource/TAssoc.
         const finalEngine = ArgumentEngine.fromSnapshot<
             TArg,
             TPremise,
             TExpr,
-            TVar
+            TVar,
+            TClaim
         >(
             snap,
             this.claims,
-            this.citations,
             snap.config?.grammarConfig,
             "ignore",
             this.generateId

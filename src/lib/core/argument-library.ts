@@ -1,7 +1,6 @@
 import type {
     TCoreArgument,
     TCoreClaim,
-    TCoreClaimCitation,
     TCorePremise,
     TCorePropositionalExpression,
     TCorePropositionalVariable,
@@ -9,17 +8,13 @@ import type {
 } from "../schemata/index.js"
 import { ArgumentEngine, type TLogicEngineOptions } from "./argument-engine.js"
 import { ClaimLibrary } from "./claim-library.js"
-import { ClaimCitationLibrary } from "./claim-citation-library.js"
 import type { TArgumentLibrarySnapshot } from "./interfaces/library.interfaces.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 
-export type TArgumentLibraryLibraries<
-    TClaim extends TCoreClaim = TCoreClaim,
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
-> = {
-    claimLibrary: ClaimLibrary<TClaim>
-    claimCitationLibrary: ClaimCitationLibrary<TCitation>
-}
+export type TArgumentLibraryLibraries<TClaim extends TCoreClaim = TCoreClaim> =
+    {
+        claimLibrary: ClaimLibrary<TClaim>
+    }
 
 /**
  * Engine registry with lifecycle management. Stores `ArgumentEngine` instances
@@ -31,18 +26,16 @@ export class ArgumentLibrary<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
-    TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 > {
     private engines: Map<
         string,
-        // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
-        ArgumentEngine<TArg, TPremise, TExpr, TVar>
+        ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
     >
-    private libraries: TArgumentLibraryLibraries<TClaim, TCitation>
+    private libraries: TArgumentLibraryLibraries<TClaim>
     private options?: TLogicEngineOptions
 
     constructor(
-        libraries: TArgumentLibraryLibraries<TClaim, TCitation>,
+        libraries: TArgumentLibraryLibraries<TClaim>,
         options?: TLogicEngineOptions
     ) {
         this.engines = new Map()
@@ -60,20 +53,15 @@ export class ArgumentLibrary<
      */
     public create(
         argument: TOptionalChecksum<TArg>
-        // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
-    ): ArgumentEngine<TArg, TPremise, TExpr, TVar> {
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim> {
         if (this.engines.has(argument.id)) {
             throw new Error(
                 `ArgumentLibrary: argument "${argument.id}" already exists.`
             )
         }
-        // TODO Phase 7: ArgumentEngine constructor will take
-        // (argument, claimLibrary, claimCitationLibrary, options) once its
-        // generics are reduced to drop TSource/TAssoc.
-        const engine = new ArgumentEngine<TArg, TPremise, TExpr, TVar>(
+        const engine = new ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>(
             argument,
             this.libraries.claimLibrary,
-            this.libraries.claimCitationLibrary,
             this.options
         )
         this.engines.set(argument.id, engine)
@@ -88,8 +76,7 @@ export class ArgumentLibrary<
      * @throws If an engine with the same argument ID already exists.
      */
     public register(
-        // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
-        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar>
+        engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
     ): void {
         const id = engine.getArgument().id
         if (this.engines.has(id)) {
@@ -107,8 +94,7 @@ export class ArgumentLibrary<
      */
     public get(
         argumentId: string
-        // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
-    ): ArgumentEngine<TArg, TPremise, TExpr, TVar> | undefined {
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim> | undefined {
         return this.engines.get(argumentId)
     }
 
@@ -117,8 +103,7 @@ export class ArgumentLibrary<
      *
      * @returns An array of all managed engines.
      */
-    // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
-    public getAll(): ArgumentEngine<TArg, TPremise, TExpr, TVar>[] {
+    public getAll(): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>[] {
         return Array.from(this.engines.values())
     }
 
@@ -131,8 +116,7 @@ export class ArgumentLibrary<
      */
     public remove(
         argumentId: string
-        // TODO Phase 7: drop TSource/TAssoc generics from ArgumentEngine.
-    ): ArgumentEngine<TArg, TPremise, TExpr, TVar> {
+    ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim> {
         const engine = this.engines.get(argumentId)
         if (engine === undefined) {
             throw new Error(
@@ -175,7 +159,7 @@ export class ArgumentLibrary<
      * `ArgumentEngine.fromSnapshot()` for each engine snapshot.
      *
      * @param snapshot - The serialized library snapshot.
-     * @param libraries - The shared library instances (claim, claim-citation).
+     * @param libraries - The shared library instances (claim).
      * @param options - Optional engine construction options.
      * @returns A fully restored `ArgumentLibrary`.
      */
@@ -186,33 +170,25 @@ export class ArgumentLibrary<
             TCorePropositionalExpression,
         TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
         TClaim extends TCoreClaim = TCoreClaim,
-        TCitation extends TCoreClaimCitation = TCoreClaimCitation,
     >(
         snapshot: TArgumentLibrarySnapshot<TArg, TPremise, TExpr, TVar>,
-        libraries: TArgumentLibraryLibraries<TClaim, TCitation>,
+        libraries: TArgumentLibraryLibraries<TClaim>,
         options?: TLogicEngineOptions
-    ): ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim, TCitation> {
-        const lib = new ArgumentLibrary<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TClaim,
-            TCitation
-        >(libraries, options)
+    ): ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim> {
+        const lib = new ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim>(
+            libraries,
+            options
+        )
         for (const engineSnap of snapshot.arguments) {
-            // TODO Phase 7: ArgumentEngine.fromSnapshot will take
-            // (snapshot, claimLibrary, claimCitationLibrary, ...) once its
-            // generics are reduced to drop TSource/TAssoc.
             const engine = ArgumentEngine.fromSnapshot<
                 TArg,
                 TPremise,
                 TExpr,
-                TVar
+                TVar,
+                TClaim
             >(
                 engineSnap,
                 libraries.claimLibrary,
-                libraries.claimCitationLibrary,
                 undefined,
                 "ignore",
                 options?.generateId

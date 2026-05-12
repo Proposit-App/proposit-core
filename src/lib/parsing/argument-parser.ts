@@ -38,7 +38,7 @@ export type TArgumentParserResult<
     TClaim extends TCoreClaim = TCoreClaim,
     TCitation extends TCoreClaimCitation = TCoreClaimCitation,
 > = {
-    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim, TCitation>
+    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
     claimLibrary: ClaimLibrary<TClaim>
     claimCitationLibrary: ClaimCitationLibrary<TCitation>
     warnings: TParserWarning[]
@@ -403,20 +403,17 @@ export class ArgumentParser<
         }
 
         // 5. Create ArgumentEngine
-        const engine = new ArgumentEngine<
-            TArg,
-            TPremise,
-            TExpr,
-            TVar,
-            TClaim,
-            TCitation
-        >(argument, claimLibrary, claimCitationLibrary, {
-            grammarConfig: {
-                enforceFormulaBetweenOperators: true,
-                autoNormalize: true,
-            },
-            generateId: genId,
-        })
+        const engine = new ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>(
+            argument,
+            claimLibrary,
+            {
+                grammarConfig: {
+                    enforceFormulaBetweenOperators: true,
+                    autoNormalize: true,
+                },
+                generateId: genId,
+            }
+        )
 
         // 6. Create variables — resolve claimMiniId to real claim UUID
         const variablesBySymbol = new Map<
