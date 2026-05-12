@@ -525,6 +525,64 @@ export class ArgumentParser<
         const citationEdgeKeys = new Set<string>()
         const axiomEdgeKeys = new Set<string>()
 
+        const tryAddSupportEdge = <
+            TConnection extends TCoreClaimConnection,
+        >(params: {
+            library: {
+                add(connection: Omit<TConnection, "checksum">): TConnection
+            }
+            edgeKeys: Set<string>
+            edgeKey: string
+            mapHook: (
+                dep: TParsedClaim,
+                sup: TParsedClaim,
+                depId: string,
+                supId: string
+            ) => Record<string, unknown>
+            consequentParsed: TParsedClaim
+            supportingParsed: TParsedClaim
+            consequentClaimId: string
+            consequentClaimVersion: number
+            supportingClaim: TClaim
+            warningCode: "CITATION_EDGE_REJECTED" | "AXIOM_EDGE_REJECTED"
+            edgeKind: "Citation" | "Axiom"
+        }): void => {
+            if (params.edgeKeys.has(params.edgeKey)) return
+            params.edgeKeys.add(params.edgeKey)
+            const extras = params.mapHook(
+                params.consequentParsed,
+                params.supportingParsed,
+                params.consequentClaimId,
+                params.supportingClaim.id
+            )
+            try {
+                params.library.add({
+                    ...extras,
+                    id: genId(),
+                    claimId: params.consequentClaimId,
+                    claimVersion: params.consequentClaimVersion,
+                    supportingClaimId: params.supportingClaim.id,
+                    supportingClaimVersion: params.supportingClaim.version,
+                } as Omit<TConnection, "checksum">)
+            } catch (error) {
+                if (strict) throw error
+                const code =
+                    error instanceof Error && "violations" in error
+                        ? (error as { violations: { code: string }[] })
+                              .violations[0]?.code
+                        : "unknown"
+                warnings.push({
+                    code: params.warningCode,
+                    message: `${params.edgeKind} edge ${params.consequentClaimId} ← ${params.supportingClaim.id} rejected by library: ${code}`,
+                    context: {
+                        claimId: params.consequentClaimId,
+                        supportingClaimId: params.supportingClaim.id,
+                        libraryErrorCode: String(code),
+                    },
+                })
+            }
+        }
+
         for (const premise of engine.listPremises()) {
             const root = premise.getRootExpression()
             if (!root) continue
@@ -593,81 +651,34 @@ export class ArgumentParser<
                 const edgeKey = `${consequentClaimId}|${supportingClaim.id}`
 
                 if (supportingClaim.type === "citation") {
-                    if (citationEdgeKeys.has(edgeKey)) continue
-                    citationEdgeKeys.add(edgeKey)
-                    const extras = this.mapClaimCitation(
+                    tryAddSupportEdge<TCitation>({
+                        library: claimCitationLibrary,
+                        edgeKeys: citationEdgeKeys,
+                        edgeKey,
+                        mapHook: (a, b, c, d) =>
+                            this.mapClaimCitation(a, b, c, d),
                         consequentParsed,
                         supportingParsed,
                         consequentClaimId,
-                        supportingClaim.id
-                    )
-                    try {
-                        claimCitationLibrary.add({
-                            ...extras,
-                            id: genId(),
-                            claimId: consequentClaimId,
-                            claimVersion: consequentClaimVersion,
-                            supportingClaimId: supportingClaim.id,
-                            supportingClaimVersion: supportingClaim.version,
-                        } as Omit<TCitation, "checksum">)
-                    } catch (error) {
-                        if (strict) throw error
-                        const code =
-                            error instanceof Error && "violations" in error
-                                ? (
-                                      error as {
-                                          violations: { code: string }[]
-                                      }
-                                  ).violations[0]?.code
-                                : "unknown"
-                        warnings.push({
-                            code: "CITATION_EDGE_REJECTED",
-                            message: `Citation edge ${consequentClaimId} ← ${supportingClaim.id} rejected by library: ${code}`,
-                            context: {
-                                claimId: consequentClaimId,
-                                supportingClaimId: supportingClaim.id,
-                                libraryErrorCode: String(code),
-                            },
-                        })
-                    }
+                        consequentClaimVersion,
+                        supportingClaim,
+                        warningCode: "CITATION_EDGE_REJECTED",
+                        edgeKind: "Citation",
+                    })
                 } else if (supportingClaim.type === "axiomatic") {
-                    if (axiomEdgeKeys.has(edgeKey)) continue
-                    axiomEdgeKeys.add(edgeKey)
-                    const extras = this.mapClaimAxiom(
+                    tryAddSupportEdge<TAxiom>({
+                        library: claimAxiomLibrary,
+                        edgeKeys: axiomEdgeKeys,
+                        edgeKey,
+                        mapHook: (a, b, c, d) => this.mapClaimAxiom(a, b, c, d),
                         consequentParsed,
                         supportingParsed,
                         consequentClaimId,
-                        supportingClaim.id
-                    )
-                    try {
-                        claimAxiomLibrary.add({
-                            ...extras,
-                            id: genId(),
-                            claimId: consequentClaimId,
-                            claimVersion: consequentClaimVersion,
-                            supportingClaimId: supportingClaim.id,
-                            supportingClaimVersion: supportingClaim.version,
-                        } as Omit<TAxiom, "checksum">)
-                    } catch (error) {
-                        if (strict) throw error
-                        const code =
-                            error instanceof Error && "violations" in error
-                                ? (
-                                      error as {
-                                          violations: { code: string }[]
-                                      }
-                                  ).violations[0]?.code
-                                : "unknown"
-                        warnings.push({
-                            code: "AXIOM_EDGE_REJECTED",
-                            message: `Axiom edge ${consequentClaimId} ← ${supportingClaim.id} rejected by library: ${code}`,
-                            context: {
-                                claimId: consequentClaimId,
-                                supportingClaimId: supportingClaim.id,
-                                libraryErrorCode: String(code),
-                            },
-                        })
-                    }
+                        consequentClaimVersion,
+                        supportingClaim,
+                        warningCode: "AXIOM_EDGE_REJECTED",
+                        edgeKind: "Axiom",
+                    })
                 }
                 // type === 'normal' → no edge
             }
