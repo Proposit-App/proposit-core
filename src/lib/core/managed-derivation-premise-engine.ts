@@ -382,7 +382,10 @@ export class ManagedDerivationPremiseEngine<
      *   - n ≥ 2: `IMPLIES(formula(OR(VarExpr(S1), …, VarExpr(Sn))), Q)`.
      *     Citations come first, axioms second; source order preserved within
      *     each. The formula buffer between IMPLIES and OR is auto-inserted by
-     *     the engine's standard grammar.
+     *     the engine's standard grammar. A supporting claim referenced by
+     *     multiple connections — for example, two citations from this derived
+     *     claim to the same supporting claim — appears exactly once in the
+     *     antecedent, at its first source-order position.
      *
      * Materializes a claim-bound variable for each supporting claim via
      * `argumentEngine.ensureClaimBoundVariable(supportingClaimId)`.
@@ -444,23 +447,34 @@ export class ManagedDerivationPremiseEngine<
         const totalCount = citationConnections.length + axiomConnections.length
         if (totalCount === 0) return
 
-        // 3. Materialize claim-bound variables for each support.
-        // ensureClaimBoundVariable adds the variable to the live argumentEngine,
-        // but the managed engine has its own VariableManager snapshot that was
-        // taken before these new variables were created. Register each newly
-        // returned variable into this engine's VariableManager so that the
-        // variable expressions we construct below pass assertVariableExpressionValid.
-        const supportingVariables: TClaimBoundVariable[] = []
+        // 3. Dedupe by supportingClaimId in source order: a claim referenced by
+        //    multiple connections (e.g., two citations from this derived claim to
+        //    the same supporting claim) contributes exactly one OR child. Citation
+        //    duplicates collapse first, then axiom duplicates collapse against the
+        //    citation set (axioms keep their relative order behind citations).
+        const seenSupportingIds = new Set<string>()
+        const orderedSupportingIds: string[] = []
         for (const conn of citationConnections) {
-            supportingVariables.push(
-                argumentEngine.ensureClaimBoundVariable(conn.supportingClaimId)
-            )
+            if (!seenSupportingIds.has(conn.supportingClaimId)) {
+                seenSupportingIds.add(conn.supportingClaimId)
+                orderedSupportingIds.push(conn.supportingClaimId)
+            }
         }
         for (const conn of axiomConnections) {
-            supportingVariables.push(
-                argumentEngine.ensureClaimBoundVariable(conn.supportingClaimId)
-            )
+            if (!seenSupportingIds.has(conn.supportingClaimId)) {
+                seenSupportingIds.add(conn.supportingClaimId)
+                orderedSupportingIds.push(conn.supportingClaimId)
+            }
         }
+
+        // 4. Materialize claim-bound variables for each unique supporting claim.
+        // ensureClaimBoundVariable is idempotent, but the array also being unique
+        // ensures buildAntecedentFromSupportingVariables emits one OR child per
+        // distinct supporting claim.
+        const supportingVariables: TClaimBoundVariable[] =
+            orderedSupportingIds.map((claimId) =>
+                argumentEngine.ensureClaimBoundVariable(claimId)
+            )
         for (const sv of supportingVariables) {
             if (!this.variables.hasVariable(sv.id)) {
                 this.variables.addVariable(sv as unknown as TVar)
