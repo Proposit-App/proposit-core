@@ -30500,6 +30500,25 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
         ).toThrow(/AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN/)
     })
 
+    it("rejects an explicit `undefined` assignment of an axiomatic-bound variable", () => {
+        // Regression: a caller passing { [varId]: undefined } previously slipped
+        // past the `!== undefined` guard and was silently overwritten to true.
+        // Per Change 2 in v0.12.1, ANY explicit key on the assignment map for
+        // an axiomatic-bound variable must throw, including an explicit undefined.
+        const core = new PropositCore()
+        const claim = core.claims.create({ type: "axiomatic" })
+        const argId = crypto.randomUUID()
+        core.arguments.create({ id: argId, version: 0 })
+        const engine = core.arguments.get(argId)!
+        const variable = engine.ensureClaimBoundVariable(claim.id)
+        expect(() =>
+            engine.evaluate({
+                variables: { [variable.id]: undefined as unknown as boolean },
+                operatorAssignments: {},
+            })
+        ).toThrow(/AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN/)
+    })
+
     // The forward direction relies on `populateFromSupports` (Task 22) to build
     // an `IMPLIES(axiomVar, Q)` antecedent and then swap the root to `iff`. The
     // helper does not yet exist; the test is skipped here and will be revisited
