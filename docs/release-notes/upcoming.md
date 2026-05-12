@@ -59,3 +59,28 @@ discriminated union over claim `type`:
 `BasicsNormalClaimSchema`, `BasicsCitationClaimSchema`, and
 `BasicsAxiomaticClaimSchema` are exported individually so callers can
 narrow to a specific variant when needed.
+
+## Parser changes
+
+The argument parser no longer asks the LLM to list which citation- or
+axiomatic-typed claims back each normal claim as a separate field. Instead,
+support relationships are now expressed through the same propositional
+formulas that already encode the argument's reasoning: any citation- or
+axiomatic-typed claim whose variable appears in the left-hand side of an
+`implies` or `iff` premise becomes a support edge against the
+right-hand-side (consequent) claim.
+
+The parser's result now includes both a `ClaimCitationLibrary` and a
+`ClaimAxiomLibrary` (previously only the citation library was returned).
+Subclasses of `ArgumentParser` can override the new `mapClaimAxiom`
+protected method to attach extension fields to axiom edges, mirroring the
+existing `mapClaimCitation` hook.
+
+If you have a subclass of `ArgumentParser` that overrides
+`mapClaimCitation`, its signature has expanded to take the supporting
+parsed claim as a second argument. Update the override accordingly.
+
+The miniId convention in the LLM system prompt has been unified: all claims
+now use the `c1, c2, c3, ...` prefix regardless of type, and the `type`
+field on each claim distinguishes `"normal"`, `"citation"`, and
+`"axiomatic"`.

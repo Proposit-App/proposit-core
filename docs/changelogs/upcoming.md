@@ -57,6 +57,26 @@ citation/axiom connection schemata. No state-shape change.
 - `BasicsParsingSchema` now produces a discriminated-union response schema
   with per-variant `maxLength` constraints preserved end-to-end.
 
+## Parser changes
+
+- parsing: drop `citationMiniIds` from `ParsedClaimSchema`; the parser now
+  derives citation and axiom support edges from premise formulas. Any
+  `implies`/`iff` premise's right-hand operand identifies the supported
+  claim, and any citation- or axiomatic-typed claim referenced in the
+  left-hand subtree becomes a support edge in the corresponding library.
+- parsing: `ArgumentParser` and `TArgumentParserResult` gain a
+  `TAxiom extends TCoreClaimConnection` type parameter; result objects now
+  expose `claimAxiomLibrary` alongside `claimCitationLibrary`.
+- parsing: new protected `mapClaimAxiom` hook (mirror of `mapClaimCitation`);
+  both hooks' signatures expand to expose the supporting parsed claim
+  alongside the dependent.
+- parsing: warning codes — added `CITATION_EDGE_REJECTED` and
+  `AXIOM_EDGE_REJECTED` for non-strict wrapping of library `add()` throws;
+  removed `UNRESOLVED_CITATION_MINIID` (no longer reachable).
+- parsing: LLM system prompt rewritten — unified miniId convention (all
+  claims use the `c` prefix; `type` field discriminates kind);
+  `## Citation Links` section replaced by `## Support via Formulas`.
+
 ## Hash range
 
 eecddfd..HEAD
