@@ -17,6 +17,7 @@ import { POSITION_INITIAL } from "../utils/position.js"
 import { ArgumentEngine, defaultGenerateId } from "../core/argument-engine.js"
 import { ClaimLibrary } from "../core/claim-library.js"
 import { ClaimCitationLibrary } from "../core/claim-citation-library.js"
+import { ClaimAxiomLibrary } from "../core/claim-axiom-library.js"
 import { ParsedArgumentResponseSchema } from "./schemata.js"
 import { clampMaxLengths } from "./clamp-max-lengths.js"
 import type {
@@ -37,10 +38,12 @@ export type TArgumentParserResult<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
     TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+    TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
 > = {
     engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
     claimLibrary: ClaimLibrary<TClaim>
     claimCitationLibrary: ClaimCitationLibrary<TCitation>
+    claimAxiomLibrary: ClaimAxiomLibrary<TAxiom>
     warnings: TParserWarning[]
 }
 
@@ -242,6 +245,7 @@ export class ArgumentParser<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
     TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+    TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
 > {
     protected readonly responseSchema: TSchema
 
@@ -269,7 +273,15 @@ export class ArgumentParser<
     public build(
         response: TParsedArgumentResponse,
         options?: TParserBuildOptions
-    ): TArgumentParserResult<TArg, TPremise, TExpr, TVar, TClaim, TCitation> {
+    ): TArgumentParserResult<
+        TArg,
+        TPremise,
+        TExpr,
+        TVar,
+        TClaim,
+        TCitation,
+        TAxiom
+    > {
         const warnings: TParserWarning[] = []
         const strict = options?.strict ?? true
         const genId = options?.generateId ?? defaultGenerateId
@@ -365,6 +377,7 @@ export class ArgumentParser<
         const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(
             claimLibrary
         )
+        const claimAxiomLibrary = new ClaimAxiomLibrary<TAxiom>(claimLibrary)
 
         for (const parsedClaim of arg.claims) {
             const citingRef = claimMiniIdToId.get(parsedClaim.miniId)!
@@ -386,8 +399,12 @@ export class ArgumentParser<
                     })
                     continue
                 }
+                const supportingParsed = arg.claims.find(
+                    (c) => c.miniId === citationMiniId
+                )!
                 const extras = this.mapClaimCitation(
                     parsedClaim,
+                    supportingParsed,
                     citingRef.id,
                     sourceRef.id
                 )
@@ -527,6 +544,7 @@ export class ArgumentParser<
             engine,
             claimLibrary,
             claimCitationLibrary,
+            claimAxiomLibrary,
             warnings,
         }
     }
@@ -552,8 +570,18 @@ export class ArgumentParser<
     }
 
     protected mapClaimCitation(
-        _parsed: TParsedClaim,
-        _claimId: string,
+        _dependentParsed: TParsedClaim,
+        _supportingParsed: TParsedClaim,
+        _dependentClaimId: string,
+        _supportingClaimId: string
+    ): Record<string, unknown> {
+        return {}
+    }
+
+    protected mapClaimAxiom(
+        _dependentParsed: TParsedClaim,
+        _supportingParsed: TParsedClaim,
+        _dependentClaimId: string,
         _supportingClaimId: string
     ): Record<string, unknown> {
         return {}

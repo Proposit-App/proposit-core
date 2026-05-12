@@ -13067,11 +13067,14 @@ describe("Parsing — response schemas", () => {
             it("mapClaimCitation reflects on citation entities", () => {
                 class Custom extends ArgumentParser {
                     protected override mapClaimCitation(
-                        parsed: TParsedClaim,
-                        claimId: string,
+                        dependentParsed: TParsedClaim,
+                        _supportingParsed: TParsedClaim,
+                        dependentClaimId: string,
                         _supportingClaimId: string
                     ): Record<string, unknown> {
-                        return { link: `${parsed.miniId}-${claimId}` }
+                        return {
+                            link: `${dependentParsed.miniId}-${dependentClaimId}`,
+                        }
                     }
                 }
                 const parser = new Custom()
