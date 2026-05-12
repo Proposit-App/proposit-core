@@ -147,16 +147,31 @@ export interface TClaimLibraryManagement<
 /**
  * Narrow read-only interface for claim-connection lookups.
  * Implemented by `ClaimCitationLibrary` and `ClaimAxiomLibrary`.
+ *
+ * A claim connection is a directional support edge between two claims. The
+ * supported endpoint lives at `claimId`; the endpoint that supplies the
+ * support lives at `supportingClaimId`. Specializations (citation vs. axiom)
+ * differ in which library they live in and what type the supporting-side
+ * claim must have.
  */
 export interface TClaimConnectionLookup<
     TConn extends TCoreClaimConnection = TCoreClaimConnection,
 > {
     /**
-     * Returns all connections where the given claim is the supported endpoint.
+     * Returns all connections where the given claim is the supported
+     * endpoint (i.e. the `claimId` side of the edge).
+     *
+     * @param claimId - The supported claim ID to filter by.
+     * @returns An array of matching connections.
      */
     getConnectionsForClaim(claimId: string): TConn[]
 
-    /** Returns a connection by ID, or `undefined` if not found. */
+    /**
+     * Returns a connection by ID, or `undefined` if not found.
+     *
+     * @param id - The connection ID.
+     * @returns The connection entity, or `undefined`.
+     */
     get(id: string): TConn | undefined
 }
 
@@ -168,11 +183,61 @@ export interface TClaimConnectionLookup<
 export interface TClaimConnectionLibraryManagement<
     TConn extends TCoreClaimConnection = TCoreClaimConnection,
 > extends TClaimConnectionLookup<TConn> {
+    /**
+     * Creates a claim connection. Implementations validate that both the
+     * supported and supporting claims exist in the underlying claim library
+     * and that the supporting-side claim has the type required by this
+     * specialization (e.g. `'citation'` for `ClaimCitationLibrary`,
+     * `'axiomatic'` for `ClaimAxiomLibrary`). Citation libraries also
+     * reject any edge that would introduce a cycle in the global
+     * claim-citation graph.
+     *
+     * @param connection - The connection data without the `checksum` field.
+     * @returns The created connection with `checksum` populated.
+     * @throws If a connection with the same ID already exists.
+     * @throws If either referenced claim does not exist in the claim library.
+     * @throws If the supporting-side claim has the wrong `type` for this
+     *   specialization.
+     * @throws If the connection would create a cycle (citation library only).
+     */
     add(connection: Omit<TConn, "checksum">): TConn
+
+    /**
+     * Removes a claim connection by ID.
+     *
+     * @param id - The connection ID to remove.
+     * @returns The removed connection entity.
+     * @throws If the connection does not exist.
+     */
     remove(id: string): TConn
+
+    /**
+     * Returns all connections in the library.
+     *
+     * @returns An array of all connection entities.
+     */
     getAll(): TConn[]
+
+    /**
+     * Returns all connections matching the predicate.
+     *
+     * @param predicate - A filter function applied to each connection.
+     * @returns An array of matching connections.
+     */
     filter(predicate: (c: TConn) => boolean): TConn[]
+
+    /**
+     * Returns a serializable snapshot of all connections in the library.
+     *
+     * @returns The claim-connection library snapshot.
+     */
     snapshot(): TClaimConnectionLibrarySnapshot<TConn>
+
+    /**
+     * Run invariant validation on the claim-connection library.
+     *
+     * @returns The invariant validation result.
+     */
     validate(): TInvariantValidationResult
 }
 
