@@ -10,8 +10,6 @@ import {
     persistEngine,
     persistCore,
 } from "../engine.js"
-import { ClaimLibrary } from "../../lib/core/claim-library.js"
-import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import {
     errorExit,
     printJson,
@@ -77,23 +75,25 @@ export function registerArgumentCommands(program: Command): void {
                 )
             }
 
-            // Merge new libraries into existing global libraries
+            // Merge the imported claims and citations into the existing
+            // global libraries so they survive persistence. The engine's own
+            // claim/citation libraries are throwaway buffers — only the
+            // PropositCore's libraries are written to disk by `persistCore`.
             const existing = await hydratePropositCore()
-            const _mergedClaims = ClaimLibrary.fromSnapshot({
-                claims: [
-                    ...existing.claims.snapshot().claims,
-                    ...result.claimLibrary.snapshot().claims,
-                ],
-            })
-            const _mergedCitations = ClaimCitationLibrary.fromSnapshot(
-                {
-                    connections: [
-                        ...existing.citations.snapshot().connections,
-                        ...result.claimCitationLibrary.snapshot().connections,
-                    ],
-                },
-                _mergedClaims
-            )
+            for (const claim of result.claimLibrary.snapshot().claims) {
+                const {
+                    version: _v,
+                    frozen: _f,
+                    checksum: _c,
+                    ...createInput
+                } = claim
+                existing.claims.create(createInput)
+            }
+            for (const citation of result.claimCitationLibrary.snapshot()
+                .connections) {
+                const { checksum: _c, ...addInput } = citation
+                existing.citations.add(addInput)
+            }
 
             await persistEngine(result.engine)
             await persistCore(existing)
