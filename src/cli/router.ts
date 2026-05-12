@@ -10,6 +10,7 @@ const NAMED_COMMANDS = new Set([
     "-V",
     "arguments",
     "citations",
+    "axioms",
     "claims",
     "diff",
 ])

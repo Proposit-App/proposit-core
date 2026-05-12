@@ -11,6 +11,7 @@ import { registerAnalysisCommands } from "./cli/commands/analysis.js"
 import { registerValidateCommand } from "./cli/commands/validate.js"
 import { registerRepairCommand } from "./cli/commands/repair.js"
 import { registerCitationCommands } from "./cli/commands/citations.js"
+import { registerAxiomCommands } from "./cli/commands/axioms.js"
 import { registerClaimCommands } from "./cli/commands/claims.js"
 import { registerRenderCommand } from "./cli/commands/render.js"
 import { registerGraphCommand } from "./cli/commands/graph.js"
@@ -34,6 +35,7 @@ registerArgumentCommands(program)
 registerClaimCommands(program)
 registerDiffCommand(program)
 registerCitationCommands(program)
+registerAxiomCommands(program)
 
 // ── Version-scoped commands ───────────────────────────────────────────────────
 // If the first user argument is not a named command, treat it as an argument ID
