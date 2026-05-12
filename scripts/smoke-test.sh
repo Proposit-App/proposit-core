@@ -445,7 +445,7 @@ $CLI citations list
 $CLI citations list --json
 
 # Add a citation edge: CLAIM1 (normal) cites CITE_CLAIM (citation).
-CITATION=$($CLI citations add "$CLAIM1" "$CITE_CLAIM")
+CITATION=$($CLI citations add --claim-id "$CLAIM1" --supporting-claim-id "$CITE_CLAIM")
 echo "CITATION=$CITATION"
 
 # List and show the new citation edge.
@@ -459,7 +459,7 @@ $CLI citations show "$CITATION" --json
 # library and surfaced as a non-zero exit.
 section "9n2. citations — strict source-side type rejection"
 echo "--- expecting failure: cannot cite a normal claim as a source ---"
-if $CLI citations add "$CITE_CLAIM" "$CLAIM1" 2>/tmp/proposit-cite-err; then
+if $CLI citations add --claim-id "$CITE_CLAIM" --supporting-claim-id "$CLAIM1" 2>/tmp/proposit-cite-err; then
     echo "FAIL: citations add accepted a normal claim on the source side"
     cat /tmp/proposit-cite-err
     exit 1
@@ -468,9 +468,106 @@ echo "--- got expected error: ---"
 cat /tmp/proposit-cite-err
 rm -f /tmp/proposit-cite-err
 
-# Unlink the citation edge created above.
-$CLI citations unlink "$CITATION"
+# Remove the citation edge created above.
+$CLI citations remove "$CITATION"
 $CLI citations list
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9o0. AXIOMATIC CLAIM TYPE (v0.12.0)
+# ─────────────────────────────────────────────────────────────────────────────
+section "9o0. axiomatic claim type"
+
+# Create two axiomatic claims, one per supported reason code.
+AX_TBD_ID=$($CLI claims add --type axiomatic \
+    --reason true-by-definition --title "Self-evident")
+AX_HE_ID=$($CLI claims add --type axiomatic \
+    --reason historically-established --title "Historical")
+echo "Created axiom claims: $AX_TBD_ID $AX_HE_ID"
+
+# Confirm the [axiom: <reason>] badge is rendered by `claims list`.
+CLAIMS_LIST=$($CLI claims list)
+echo "$CLAIMS_LIST" | grep -q "\[axiom: true-by-definition\]" || {
+    echo "FAIL: [axiom: true-by-definition] badge missing from 'claims list'"
+    echo "$CLAIMS_LIST"
+    exit 1
+}
+echo "$CLAIMS_LIST" | grep -q "\[axiom: historically-established\]" || {
+    echo "FAIL: [axiom: historically-established] badge missing from 'claims list'"
+    echo "$CLAIMS_LIST"
+    exit 1
+}
+
+# Reject `claims add --type axiomatic` without --reason.
+echo "--- expecting failure: claims add --type axiomatic without --reason ---"
+if $CLI claims add --type axiomatic 2>/tmp/proposit-axiom-err1; then
+    echo "FAIL: claims add --type axiomatic without --reason should have errored"
+    exit 1
+fi
+grep -q "reason" /tmp/proposit-axiom-err1 || {
+    echo "FAIL: expected error message to mention --reason"
+    cat /tmp/proposit-axiom-err1
+    exit 1
+}
+cat /tmp/proposit-axiom-err1
+rm -f /tmp/proposit-axiom-err1
+
+# Reject an invalid reason code.
+echo "--- expecting failure: --reason bogus ---"
+if $CLI claims add --type axiomatic --reason bogus 2>/tmp/proposit-axiom-err2; then
+    echo "FAIL: bogus reason code should have errored"
+    exit 1
+fi
+cat /tmp/proposit-axiom-err2
+rm -f /tmp/proposit-axiom-err2
+
+# Reject --reason on a non-axiomatic claim.
+echo "--- expecting failure: --reason on a normal claim ---"
+if $CLI claims add --type normal --reason true-by-definition \
+        2>/tmp/proposit-axiom-err3; then
+    echo "FAIL: --reason on non-axiomatic should have errored"
+    exit 1
+fi
+cat /tmp/proposit-axiom-err3
+rm -f /tmp/proposit-axiom-err3
+
+# Create a normal claim and an axiom connection from the axiom claim to it.
+NORMAL_AX_ID=$($CLI claims add --type normal --title "Conclusion claim")
+AX_CONN_ID=$($CLI axioms add --claim-id "$NORMAL_AX_ID" --axiom-id "$AX_TBD_ID")
+echo "Created axiom connection: $AX_CONN_ID"
+
+# List and show it.
+$CLI axioms list
+$CLI axioms list --json
+$CLI axioms show "$AX_CONN_ID"
+$CLI axioms show "$AX_CONN_ID" --json
+
+# Reject a connection where the supporting claim is not axiomatic
+# (e.g., a citation-typed claim — reuse CITE_CLAIM from section 9n).
+echo "--- expecting failure: axiom add with citation supporting ---"
+if $CLI axioms add --claim-id "$NORMAL_AX_ID" --axiom-id "$CITE_CLAIM" \
+        2>/tmp/proposit-axiom-err4; then
+    echo "FAIL: axiom add with citation supporting should have errored"
+    exit 1
+fi
+cat /tmp/proposit-axiom-err4
+rm -f /tmp/proposit-axiom-err4
+
+# Reject a connection where the dependent claim is not normal
+# (cannot put an axiomatic claim on the dependent side).
+echo "--- expecting failure: axiom add with axiomatic dependent ---"
+if $CLI axioms add --claim-id "$AX_HE_ID" --axiom-id "$AX_TBD_ID" \
+        2>/tmp/proposit-axiom-err5; then
+    echo "FAIL: axiom add with axiomatic dependent should have errored"
+    exit 1
+fi
+cat /tmp/proposit-axiom-err5
+rm -f /tmp/proposit-axiom-err5
+
+# Remove the axiom connection.
+$CLI axioms remove "$AX_CONN_ID"
+$CLI axioms list
+
+echo "Axiomatic smoke OK"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 9p. DERIVATION PREMISES (v0.11.0)
@@ -529,10 +626,10 @@ rm -f /tmp/proposit-deriv-err2
 
 section "9p3. derivation premises — populate-citations"
 
-# Re-add the citation that was unlinked in section 9n2 so that
+# Re-add the citation that was removed in section 9n2 so that
 # populate-citations has a source to pull from (CLAIM1 → CITE_CLAIM).
-CITATION2=$($CLI citations add "$CLAIM1" "$CITE_CLAIM")
-echo "CITATION2=$CITATION2 (temporary, will be unlinked after populate-citations)"
+CITATION2=$($CLI citations add --claim-id "$CLAIM1" --supporting-claim-id "$CITE_CLAIM")
+echo "CITATION2=$CITATION2 (temporary, will be removed after populate-citations)"
 
 # Populate the derivation premise's antecedent from CLAIM1's current citations.
 $CLI "$ARG" latest premises populate-citations "$DERIV_P" \
@@ -541,8 +638,8 @@ $CLI "$ARG" latest premises populate-citations "$DERIV_P" \
 # Render should now show an implication (S → Q shape).
 $CLI "$ARG" latest premises render "$DERIV_P"
 
-# Unlink the temporary citation we added for this test.
-$CLI citations unlink "$CITATION2"
+# Remove the temporary citation we added for this test.
+$CLI citations remove "$CITATION2"
 $CLI citations list
 
 section "9p4. derivation premises — [derivation] badge in list"
@@ -632,18 +729,26 @@ if [ -f "$MIGRATE_HOME/.proposit-v0.10" ]; then
 fi
 
 # Trigger migration by running any command that hydrates the core. Note: any
-# state-touching command runs `migrateV010` first.
+# state-touching command runs `migrateV010`, then `migrateV011`, then
+# `migrateV012` — so a pre-v0.10 state directory is upgraded all the way to
+# the v0.12 layout in a single CLI invocation.
 PROPOSIT_HOME="$MIGRATE_HOME" $CLI claims list
 
-# Marker file must now exist.
+# All three migration markers must now exist.
 if [ ! -f "$MIGRATE_HOME/.proposit-v0.10" ]; then
-    echo "FAIL: migration marker missing after migration run"
+    echo "FAIL: v0.10 migration marker missing after migration run"
     ls -la "$MIGRATE_HOME"
     exit 1
 fi
-echo "marker present: $(ls "$MIGRATE_HOME/.proposit-v0.10")"
+if [ ! -f "$MIGRATE_HOME/.proposit-v0.12" ]; then
+    echo "FAIL: v0.12 migration marker missing after migration run"
+    ls -la "$MIGRATE_HOME"
+    exit 1
+fi
+echo "markers present:"
+ls "$MIGRATE_HOME/.proposit-v0.10" "$MIGRATE_HOME/.proposit-v0.12"
 
-# Legacy files must be gone.
+# Legacy v0.9 files must be gone.
 if [ -f "$MIGRATE_HOME/sources.json" ]; then
     echo "FAIL: sources.json still present post-migration"
     exit 1
@@ -652,27 +757,40 @@ if [ -f "$MIGRATE_HOME/claim-source-associations.json" ]; then
     echo "FAIL: claim-source-associations.json still present post-migration"
     exit 1
 fi
+# v0.10's intermediate `claim-citations.json` must also be gone (v0.12 renamed
+# it to citations.json on the same hydration pass).
+if [ -f "$MIGRATE_HOME/claim-citations.json" ]; then
+    echo "FAIL: claim-citations.json still present post-migration (v0.12 should have renamed it)"
+    exit 1
+fi
 
-# Post-migration files must exist with the new shape.
+# Post-migration files must exist with the v0.12 shape.
 if [ ! -f "$MIGRATE_HOME/claims.json" ]; then
     echo "FAIL: claims.json missing post-migration"
     exit 1
 fi
-if [ ! -f "$MIGRATE_HOME/claim-citations.json" ]; then
-    echo "FAIL: claim-citations.json missing post-migration"
+if [ ! -f "$MIGRATE_HOME/citations.json" ]; then
+    echo "FAIL: citations.json missing post-migration"
+    exit 1
+fi
+if [ ! -f "$MIGRATE_HOME/axioms.json" ]; then
+    echo "FAIL: axioms.json missing post-migration (v0.12 should have created an empty one)"
     exit 1
 fi
 
 # claims.json should now contain both the original normal claim (with
 # type='normal' backfilled) and the migrated source as a citation-typed
-# claim. claim-citations.json should hold the renamed citation edge.
+# claim. citations.json should hold the renamed citation edge in v0.12 shape.
 echo "--- migrated claims.json ---"
 cat "$MIGRATE_HOME/claims.json"
-echo "--- migrated claim-citations.json ---"
-cat "$MIGRATE_HOME/claim-citations.json"
+echo "--- migrated citations.json ---"
+cat "$MIGRATE_HOME/citations.json"
+echo "--- initialized axioms.json ---"
+cat "$MIGRATE_HOME/axioms.json"
 
-# Verify shape via grep: both 'normal' and 'citation' types must appear, and
-# the citation edge must use the renamed citingClaimId/sourceClaimId fields.
+# Verify shape via grep: both 'normal' and 'citation' types must appear in
+# claims.json, and the citation edge must use the v0.12 field names
+# (claimId/supportingClaimId, with the wrapper key `connections`).
 grep -q '"type": "normal"' "$MIGRATE_HOME/claims.json" || {
     echo "FAIL: pre-existing claim was not backfilled with type='normal'"
     exit 1
@@ -681,18 +799,161 @@ grep -q '"type": "citation"' "$MIGRATE_HOME/claims.json" || {
     echo "FAIL: legacy source was not converted to a citation-typed claim"
     exit 1
 }
-grep -q '"citingClaimId"' "$MIGRATE_HOME/claim-citations.json" || {
-    echo "FAIL: migrated citation does not use citingClaimId field"
+grep -q '"connections"' "$MIGRATE_HOME/citations.json" || {
+    echo "FAIL: citations.json does not use the v0.12 'connections' wrapper key"
     exit 1
 }
-grep -q '"sourceClaimId"' "$MIGRATE_HOME/claim-citations.json" || {
-    echo "FAIL: migrated citation does not use sourceClaimId field"
+grep -q '"supportingClaimId"' "$MIGRATE_HOME/citations.json" || {
+    echo "FAIL: migrated citation does not use the v0.12 supportingClaimId field"
+    exit 1
+}
+if grep -q '"citingClaimId"' "$MIGRATE_HOME/citations.json"; then
+    echo "FAIL: citations.json still uses the pre-v0.12 citingClaimId field"
+    exit 1
+fi
+if grep -q '"sourceClaimId"' "$MIGRATE_HOME/citations.json"; then
+    echo "FAIL: citations.json still uses the pre-v0.12 sourceClaimId field"
+    exit 1
+fi
+grep -q '"connections"' "$MIGRATE_HOME/axioms.json" || {
+    echo "FAIL: axioms.json missing the 'connections' wrapper key"
     exit 1
 }
 
-# Re-running the CLI must be a no-op for migration (marker prevents re-run).
+# Re-running the CLI must be a no-op for migration (markers prevent re-run).
 PROPOSIT_HOME="$MIGRATE_HOME" $CLI claims list
-echo "migration is idempotent (marker honored)"
+echo "migration is idempotent (markers honored)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9o2. MIGRATION — pre-v0.12 state directory (v0.10/11 markers already set)
+# ─────────────────────────────────────────────────────────────────────────────
+section "9o2. migration — pre-v0.12 state directory"
+
+# Simulate a state directory that has already been through v0.10/v0.11
+# migrations but not v0.12: it has a `claim-citations.json` (v0.10 layout
+# wrapper key + per-edge field names), a `claims.json` with type-tagged
+# claims, and the v0.10/v0.11 markers in place. The v0.12 migration should
+# (a) rename `claim-citations.json` → `citations.json` with field renames,
+# (b) create an empty `axioms.json`, and (c) write the `.proposit-v0.12`
+# marker.
+V012_HOME="$(mktemp -d)"
+trap 'rm -rf "$PROPOSIT_HOME" "$MIGRATE_HOME" "$V012_HOME"' EXIT
+
+# Pre-v0.12 claims.json (already in v0.10 type-tagged shape).
+cat > "$V012_HOME/claims.json" <<'JSON'
+{
+    "claims": [
+        {
+            "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "version": 0,
+            "type": "normal",
+            "frozen": false,
+            "checksum": "11111111",
+            "title": "Dependent claim"
+        },
+        {
+            "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "version": 0,
+            "type": "citation",
+            "frozen": false,
+            "checksum": "22222222",
+            "title": "Source claim"
+        }
+    ]
+}
+JSON
+
+# Pre-v0.12 claim-citations.json with the legacy wrapper key and per-edge
+# field names that v0.12 must rewrite.
+cat > "$V012_HOME/claim-citations.json" <<'JSON'
+{
+    "claimCitations": [
+        {
+            "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            "citingClaimId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "citingClaimVersion": 0,
+            "sourceClaimId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "sourceClaimVersion": 0,
+            "checksum": "stale-checksum"
+        }
+    ]
+}
+JSON
+
+# Pre-existing v0.10 + v0.11 markers — they short-circuit those migrations
+# so we know any work observed in this section is the v0.12 migration's
+# doing.
+echo "v0.10 marker" > "$V012_HOME/.proposit-v0.10"
+echo "v0.11 marker" > "$V012_HOME/.proposit-v0.11"
+
+# Sanity check: v0.12 marker, citations.json, axioms.json should not exist yet.
+if [ -f "$V012_HOME/.proposit-v0.12" ]; then
+    echo "FAIL: v0.12 marker already exists before CLI invocation"
+    exit 1
+fi
+if [ -f "$V012_HOME/citations.json" ]; then
+    echo "FAIL: citations.json already exists before CLI invocation"
+    exit 1
+fi
+if [ -f "$V012_HOME/axioms.json" ]; then
+    echo "FAIL: axioms.json already exists before CLI invocation"
+    exit 1
+fi
+
+# Trigger the v0.12 migration by hydrating the core.
+PROPOSIT_HOME="$V012_HOME" $CLI claims list > /dev/null
+
+# Post-migration assertions.
+if [ ! -f "$V012_HOME/.proposit-v0.12" ]; then
+    echo "FAIL: v0.12 migration did not write the marker"
+    ls -la "$V012_HOME"
+    exit 1
+fi
+if [ ! -f "$V012_HOME/citations.json" ]; then
+    echo "FAIL: v0.12 migration did not create citations.json"
+    exit 1
+fi
+if [ -f "$V012_HOME/claim-citations.json" ]; then
+    echo "FAIL: v0.12 migration did not remove the legacy claim-citations.json"
+    exit 1
+fi
+if [ ! -f "$V012_HOME/axioms.json" ]; then
+    echo "FAIL: v0.12 migration did not create axioms.json"
+    exit 1
+fi
+
+echo "--- migrated citations.json ---"
+cat "$V012_HOME/citations.json"
+echo "--- initialized axioms.json ---"
+cat "$V012_HOME/axioms.json"
+
+# Field-rename assertions on citations.json: must use v0.12 names and not the
+# pre-v0.12 names.
+grep -q '"connections"' "$V012_HOME/citations.json" || {
+    echo "FAIL: citations.json missing 'connections' wrapper key"
+    exit 1
+}
+grep -q '"supportingClaimId"' "$V012_HOME/citations.json" || {
+    echo "FAIL: citations.json does not use 'supportingClaimId'"
+    exit 1
+}
+if grep -q '"citingClaimId"' "$V012_HOME/citations.json"; then
+    echo "FAIL: citations.json still uses pre-v0.12 'citingClaimId'"
+    exit 1
+fi
+if grep -q '"sourceClaimId"' "$V012_HOME/citations.json"; then
+    echo "FAIL: citations.json still uses pre-v0.12 'sourceClaimId'"
+    exit 1
+fi
+# axioms.json should be initialized empty.
+grep -q '"connections"' "$V012_HOME/axioms.json" || {
+    echo "FAIL: axioms.json missing 'connections' wrapper key"
+    exit 1
+}
+
+# Re-running the CLI must be a no-op (marker honored).
+PROPOSIT_HOME="$V012_HOME" $CLI claims list > /dev/null
+echo "v0.12 migration is idempotent (marker honored)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 10. PUBLISH and VERSION SELECTORS
