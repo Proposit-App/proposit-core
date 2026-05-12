@@ -32,17 +32,24 @@ export async function migrateV012(): Promise<void> {
     const stateDir = getStateDir()
     const markerPath = path.join(stateDir, MARKER)
 
-    // Step 1: Detection — skip if marker exists.
+    // Step 1: Detection — skip if marker exists. Surface non-ENOENT errors
+    // (e.g., EACCES) so a broken permissions setup fails loudly rather than
+    // re-running the migration on every invocation.
     try {
         await fs.access(markerPath)
         return // Already migrated.
-    } catch {
+    } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+            throw err
+        }
         // Marker missing — proceed with migration.
     }
 
     // If the state dir doesn't exist yet (fresh install), there's nothing to
     // migrate. Create the directory and drop the marker so we don't re-check
-    // every invocation.
+    // every invocation. mkdir is best-effort — unlike the marker check above,
+    // any real failure will surface later when the subsequent file writes try
+    // to touch this directory and produce a path-specific error.
     try {
         await fs.mkdir(stateDir, { recursive: true })
     } catch {
