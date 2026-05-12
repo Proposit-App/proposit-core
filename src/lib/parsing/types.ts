@@ -19,6 +19,8 @@ export type TParserWarningCode =
     | "UNDECLARED_VARIABLE_SYMBOL"
     | "FORMULA_PARSE_ERROR"
     | "FORMULA_STRUCTURE_ERROR"
+    | "CITATION_EDGE_REJECTED"
+    | "AXIOM_EDGE_REJECTED"
 
 export type TParserWarning = {
     code: TParserWarningCode
