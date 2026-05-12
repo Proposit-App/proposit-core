@@ -94,11 +94,9 @@ Every claim has a \`type\` field, which is one of:
 
 - **\`"normal"\`**: a claim authored as part of the argument's primary reasoning (the propositions being argued for or from). Most claims are normal.
 - **\`"citation"\`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** \`claims\` array as normal claims; they are NOT a separate array.
-- **\`"axiomatic"\`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: "true by definition," "logically required," "historically established." Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied. Apps using this library may extend axiomatic claims with a \`reasonCode\` field describing the category of self-evidence; the core parser does not require it.
+- **\`"axiomatic"\`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: "true by definition," "logically required," "historically established." Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied. Apps using this library may extend axiomatic claims with a \`reasonCode\` field describing the category of self-evidence, and may constrain that field to a closed enum of allowed values via their schema extension; the core parser does not require any such field.
 
 A citation claim is just a claim whose propositional content is "the cited material says/shows X". Logical relationships between all claim kinds — normal, citation, axiomatic — are expressed through variables, formulas, and premises. The parser derives the citation and axiom support graphs from those formulas; you do not list supports as a separate field.
-
-Apps using this library may extend axiomatic claims with a \`reasonCode\` field describing the category of self-evidence, and may constrain that field to a closed enum of allowed values via their schema extension. The core parser does not require any such field.
 
 ## Support via Formulas
 
