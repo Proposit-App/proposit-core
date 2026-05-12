@@ -16,6 +16,7 @@ import type {
 import {
     CITATION_SCHEMA_INVALID,
     CITATION_DUPLICATE_ID,
+    CITATION_NOT_FOUND,
     CITATION_CLAIM_REF_NOT_FOUND,
     CITATION_SUPPORTING_REF_NOT_FOUND,
     CITATION_SUPPORTING_NOT_CITATION_TYPE,
@@ -166,7 +167,14 @@ export class ClaimCitationLibrary<
         return this.withValidation(() => {
             const citation = this.citations.get(id)
             if (!citation) {
-                throw new Error(`ClaimCitation "${id}" not found.`)
+                throw new InvariantViolationError([
+                    {
+                        code: CITATION_NOT_FOUND,
+                        message: `${CITATION_NOT_FOUND}: citation with id "${id}" not found`,
+                        entityType: "citation",
+                        entityId: id,
+                    },
+                ])
             }
 
             this.citations.delete(id)

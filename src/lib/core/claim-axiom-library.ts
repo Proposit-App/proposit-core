@@ -16,6 +16,7 @@ import type {
 import {
     AXIOM_SCHEMA_INVALID,
     AXIOM_DUPLICATE_ID,
+    AXIOM_NOT_FOUND,
     AXIOM_CLAIM_REF_NOT_FOUND,
     AXIOM_SUPPORTING_REF_NOT_FOUND,
     AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE,
@@ -168,7 +169,14 @@ export class ClaimAxiomLibrary<
         return this.withValidation(() => {
             const axiom = this.axioms.get(id)
             if (!axiom) {
-                throw new Error(`ClaimAxiom "${id}" not found.`)
+                throw new InvariantViolationError([
+                    {
+                        code: AXIOM_NOT_FOUND,
+                        message: `${AXIOM_NOT_FOUND}: axiom with id "${id}" not found`,
+                        entityType: "axiom",
+                        entityId: id,
+                    },
+                ])
             }
 
             this.axioms.delete(id)
