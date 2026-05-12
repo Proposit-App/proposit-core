@@ -87,31 +87,64 @@ that used to be smuggled through the prefix.
 After parsing premises and constructing variables, the parser walks each
 premise whose root expression is `implies` or `iff`:
 
-1. The **consequent claim** is the bound claim of the variable referenced at
-   the position-1 child of the root. This mirrors the convention enforced by
-   `ManagedDerivationPremiseEngine` (Q is always the right-hand child for
-   both `implies` and `iff`).
-2. The **antecedent variables** are every variable reference reachable from
-   the position-0 (and any other non-1) child, regardless of polarity. A
+1. The **consequent claim** is the bound claim of the variable referenced as
+   the **right-hand operand** of the root expression. The parser establishes
+   this binding directly: `buildExpressions` in `argument-parser.ts` (current
+   lines 201–222) writes `ast.right` at expression-tree position 1 for both
+   `implies` and `iff`. There is no runtime invariant enforcing "right is
+   consequent" for plain (non-derivation) premises — it's a parser convention
+   that the LLM prompt must mirror (see prompt rewrite below). `iff` is
+   logically symmetric, so this convention is the parser's choice, not a
+   logical truth; the prompt instructs the LLM to place the supported claim
+   on the right-hand side of `iff` as well as `implies`.
+2. The **antecedent variables** are every variable reference reachable by
+   walking the left-hand operand's subtree, regardless of polarity. A
    variable wrapped in `not`, nested inside `and`/`or`, or appearing under a
    `formula` buffer all count equally — the edge graph cares about *which*
    claims participate, not how they are combined propositionally.
 3. For each antecedent variable, look at its bound claim's `type`:
    - `'citation'` → accumulate citation edge `(consequentClaim,
-     antecedentClaim)`.
+     antecedentClaim)`. Routed to `ClaimCitationLibrary`.
    - `'axiomatic'` → accumulate axiom edge `(consequentClaim,
-     antecedentClaim)`.
+     antecedentClaim)`. Routed to `ClaimAxiomLibrary`.
    - `'normal'` → no edge; the antecedent is part of the argument's
      reasoning, not an external support.
 
-Edges are deduped by `(claimId, supportingClaimId)` per library before any
-`add()` call — if multiple premises express the same support relationship,
-only one library record is created.
+Premises whose root is not `implies` or `iff` (constraint premises,
+including naked-variable root forms) contribute **no support edges**, even
+if their formulas mention citation- or axiomatic-typed variables. Constraint
+premises represent asserted facts in the argument; they are not claims
+about which evidence backs which proposition.
 
-Library invariants are not duplicated at the parser layer. The parser calls
-`claimCitationLibrary.add(...)` and `claimAxiomLibrary.add(...)`; any throws
-(cycle, axiom-dependent-not-normal, supporting-side type mismatch) propagate
-in strict mode and are wrapped as warnings in non-strict mode.
+Edges are deduped per library by `(claimId, supportingClaimId)` using a
+`Set<string>` populated during the walk. All parsed claims are created at
+version 0 in a single parse, so the dedup key omits `claimVersion` /
+`supportingClaimVersion` safely — implementations that later introduce
+parsed-claim versioning must revisit this. The connection `id` for each
+deduped edge comes from a fresh `genId()` at `add()` time; dedup happens
+strictly *before* the library call so `ClaimCitationLibrary` /
+`ClaimAxiomLibrary` never see a duplicate-id situation from this parser.
+
+**Cross-library rejection combos.** The parser routes each candidate edge to
+a single library based on the antecedent variable's claim type, then lets
+the library enforce remaining invariants:
+
+- `IMPLIES(citation_var, citation_var)` — chained citation. Routed to
+  `ClaimCitationLibrary`. Allowed unless it would form a cycle in the
+  citation graph; cycle throw wraps to `CITATION_EDGE_REJECTED` in
+  non-strict mode.
+- `IMPLIES(axiom_var, citation_var)` — axiom-backing a citation. Routed to
+  `ClaimAxiomLibrary`, which rejects with `AXIOM_CLAIM_NOT_NORMAL_TYPE`
+  (dependent must be normal). Wrapped as `AXIOM_EDGE_REJECTED` in
+  non-strict mode.
+- `IMPLIES(axiom_var, axiom_var)` — axiom-backing an axiom. Routed to
+  `ClaimAxiomLibrary`, which rejects with `AXIOM_CLAIM_NOT_NORMAL_TYPE` for
+  the same reason. Wrapped as `AXIOM_EDGE_REJECTED` in non-strict mode.
+- `IMPLIES(citation_var OR axiom_var, normal_var)` — mixed antecedent. Two
+  edges are generated, one per library; each is independently validated.
+
+The parser does not duplicate library validation. In strict mode, any
+library throw propagates unchanged.
 
 ### Result type changes
 
@@ -174,21 +207,34 @@ citation mapper.
 
 Section-by-section changes in `src/lib/parsing/prompt-builder.ts`:
 
-- **Claim Types** — keep the three-type taxonomy. Remove the sentence about
-  axiomatic claims not having a separate cross-reference field; with the new
-  model, axiomatic-typed claims are referenced through the same mechanism as
-  any other claim: via the formulas that mention their variables. Add a brief
-  note that consumers will typically constrain axiom-specific extension
-  fields (e.g., `reasonCode`, `axiom`) to a closed enum via their schema
-  extension.
+- **Claim Types** — keep the three-type taxonomy. Rewrite the closing
+  paragraph (current `prompt-builder.ts:99`) to remove **both** the
+  `citationMiniIds`-link sentence ("citation evidence is expressed through
+  the `citationMiniIds` link described below") and the axiomatic-claim
+  cross-reference sentence ("Axiomatic claims, by contrast, do not carry a
+  separate cross-reference field in the core parse…"). Reframe both citation
+  and axiomatic claims uniformly: both kinds are referenced via the
+  formulas that mention their variables; the parser derives the
+  support graph. Add a brief note that consumers will typically constrain
+  axiom-specific extension fields (e.g., `reasonCode`, `axiom`) to a closed
+  enum via their schema extension.
 - **Citation Links** — delete this whole section. Replaced by:
 - **Support via Formulas** (new section, replacing Citation Links) —
   explicitly tell the LLM: "To express that a citation- or axiomatic-typed
-  claim supports a normal claim, include the supporting claim's variable in
-  the antecedent of an `implies` or `iff` premise whose consequent (position-1
-  child) is the supported claim's variable. The parser infers the citation
-  and axiom graphs from these formulas; you do not list supports as a
-  separate field."
+  claim supports another claim, include the supporting claim's variable in
+  the antecedent (left-hand side) of an `implies` or `iff` premise whose
+  consequent (right-hand side) is the supported claim's variable. For
+  `iff` premises, the right-hand operand is treated as the supported claim
+  by parser convention even though biconditionals are logically symmetric —
+  place the supported claim on the right. Constraint premises (no `implies`
+  or `iff` at the root) do not register support edges. The parser infers the
+  citation and axiom graphs from these formulas; you do not list supports as
+  a separate field."
+- **Citation Claim Metadata** — verify the section's wording does not
+  reference `citationMiniIds`. The section as written (current
+  `prompt-builder.ts:109-117`) describes how to populate extension fields on
+  citation claims (URLs, footnote text) — that guidance is still valid. Pass
+  for completeness.
 - **MiniId Conventions** — collapse `c`/`s`/`a` to one prefix. The
   cross-type-reference notes about `citationMiniIds` become irrelevant and
   are removed; the `claimMiniId` and `conclusionPremiseMiniId` notes stay
@@ -208,9 +254,16 @@ In `src/lib/parsing/types.ts`:
 
 - Remove `UNRESOLVED_CITATION_MINIID` from `TParserWarningCode`. Without the
   `citationMiniIds` field there is no unresolved-citation-id path.
+  Type-level note: any downstream consumer that exhaustively switches on
+  `TParserWarningCode` will need to remove that case. This is the only
+  TypeScript-level breaking change of this work and is mentioned again under
+  Versioning.
 - Add `CITATION_EDGE_REJECTED` and `AXIOM_EDGE_REJECTED` for non-strict mode
   wrapping of library throws (`add()` errors such as cycles or dependent-type
-  mismatches).
+  mismatches). The warning's `context` field carries the underlying library
+  error code (e.g., `AXIOM_CLAIM_NOT_NORMAL_TYPE`,
+  `CITATION_CYCLE_DETECTED`) so callers can distinguish causes without a
+  warning-code explosion.
 
 In `src/lib/parsing/argument-parser.ts`:
 
@@ -243,6 +296,19 @@ In `src/lib/parsing/argument-parser.ts`:
     single library edge (dedup).
   - Negated antecedent variable still produces an edge (polarity does not
     matter for edge extraction).
+  - `iff` premise with the supported claim on the right-hand side produces
+    the same edge shape as the equivalent `implies` (locks in the
+    right-as-consequent convention).
+  - Citation- or axiomatic-typed claim appearing **only** in the consequent
+    slot (e.g., `IMPLIES(normal_var, citation_var)`) produces no edges
+    (asserts no spurious entries are emitted).
+  - Constraint premise mentioning a citation variable (e.g.,
+    `AND(citation_var, normal_var)` as a root non-implies/iff premise)
+    produces no edges.
+  - Cross-library combo: `IMPLIES(axiom_var, citation_var)` routes to the
+    axiom library, which rejects with `AXIOM_CLAIM_NOT_NORMAL_TYPE`; in
+    non-strict mode this surfaces as an `AXIOM_EDGE_REJECTED` warning whose
+    `context` carries the underlying error code.
   - Non-strict mode: library throw (cycle in citation library) becomes a
     `CITATION_EDGE_REJECTED` warning rather than an exception.
   - Strict mode: same scenario throws.
@@ -261,9 +327,13 @@ In `src/lib/parsing/argument-parser.ts`:
 ## Versioning
 
 Patch bump. Although the parser API surface changes (schema field removal,
-new type parameter, hook signature update), there is no persisted-data
-migration; the affected surface is internal to a single library release and
-extensions do not depend on the changed shapes.
+new type parameter, hook signature update, one warning code removed from the
+`TParserWarningCode` union), there is no persisted-data migration; the
+affected surface is internal to a single library release and extensions do
+not depend on the changed shapes. The 7th type parameter `TAxiom` defaults
+to `TCoreClaimConnection`, so existing 6-parameter instantiations like
+`BasicsArgumentParser extends ArgumentParser<TBasicsArgument, ...,
+TBasicsClaim>` continue to compile without modification.
 
 ## Documentation sync triggers expected to fire
 
@@ -276,6 +346,10 @@ Per the `Documentation Sync` section of this repo's `CLAUDE.md`:
   shape, type-parameter list, hook signatures.
 - `CLAUDE.md` [Public-API] — design rules section if any rule references the
   old field name or prefix convention.
+- `src/lib/core/interfaces/library.interfaces.ts` [Public-Engine-API] —
+  verify during implementation that no JSDoc on library interfaces references
+  the parser's citation pass; if such a reference exists it must be updated.
+  No expected change otherwise.
 - `docs/release-notes/upcoming.md` [Public-API] — user-facing summary of the
   parser change.
 - `docs/changelogs/upcoming.md` [Any-Code-Change] — developer changelog.
