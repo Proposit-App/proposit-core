@@ -34,13 +34,11 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -74,19 +72,16 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c3",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -115,13 +110,11 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -148,13 +141,11 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -186,25 +177,21 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "premise",
                     type: "axiomatic",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c3",
                     role: "premise",
                     type: "normal",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c4",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -252,19 +239,16 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "premise",
                     type: "normal",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c3",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -296,13 +280,11 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "normal",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "conclusion",
                     type: "citation",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -325,13 +307,11 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "citation",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -356,7 +336,6 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "conclusion",
                     type: "normal",
-                    citationMiniIds: [],
                 },
             ],
             variables: [{ miniId: "v1", symbol: "X", claimMiniId: "c1" }],
@@ -376,13 +355,11 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "axiomatic",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "conclusion",
                     type: "citation",
-                    citationMiniIds: [],
                 },
             ],
             variables: [
@@ -411,13 +388,11 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                     miniId: "c1",
                     role: "premise",
                     type: "axiomatic",
-                    citationMiniIds: [],
                 },
                 {
                     miniId: "c2",
                     role: "conclusion",
                     type: "citation",
-                    citationMiniIds: [],
                 },
             ],
             variables: [

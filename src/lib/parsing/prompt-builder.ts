@@ -5,7 +5,7 @@ import type { TPromptOptions } from "./types.js"
  * Core property keys for each sub-schema in the parsed argument response.
  * Used to distinguish extension fields from built-in fields.
  */
-const CORE_CLAIM_KEYS = new Set(["miniId", "role", "type", "citationMiniIds"])
+const CORE_CLAIM_KEYS = new Set(["miniId", "role", "type"])
 const CORE_VARIABLE_KEYS = new Set(["miniId", "symbol", "claimMiniId"])
 const CORE_PREMISE_KEYS = new Set(["miniId", "formula"])
 const CORE_ARGUMENT_KEYS = new Set([

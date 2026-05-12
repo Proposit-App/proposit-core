@@ -16,10 +16,6 @@ export const ParsedClaimSchema = Type.Object(
         miniId: Type.String(),
         role: ParsedClaimRoleType,
         type: ParsedClaimTypeType,
-        citationMiniIds: Type.Array(Type.String(), {
-            description:
-                'MiniIds of other parsed claims (within the same `claims` array) that have `type: "citation"` and serve as cited evidence for this claim. Must NOT contain miniIds of normal claims — logical dependencies between normal claims are expressed through premises and formulas, not here.',
-        }),
     },
     { additionalProperties: true }
 )
