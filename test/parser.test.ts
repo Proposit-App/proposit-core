@@ -219,9 +219,8 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
         expect(axiomClaim.type).toBe("axiomatic")
         expect(conclClaim.type).toBe("normal")
 
-        const citationEdges = result.claimCitationLibrary.getConnectionsForClaim(
-            conclClaim.id
-        )
+        const citationEdges =
+            result.claimCitationLibrary.getConnectionsForClaim(conclClaim.id)
         expect(citationEdges).toHaveLength(1)
         expect(citationEdges[0].supportingClaimId).toBe(citationClaim.id)
 

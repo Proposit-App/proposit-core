@@ -37,6 +37,7 @@
 ### Task 1: Add new warning codes (keep old one intact)
 
 **Files:**
+
 - Modify: `src/lib/parsing/types.ts`
 
 - [ ] **Step 1: Update the warning-code union**
@@ -76,6 +77,7 @@ git commit -m "feat(parsing): add CITATION_EDGE_REJECTED and AXIOM_EDGE_REJECTED
 This task adds the new type parameter, returns an empty `ClaimAxiomLibrary` from `build()`, and adds the new hook — all without changing parsing behaviour. Existing tests must keep passing.
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts`
 
 - [ ] **Step 1: Import `ClaimAxiomLibrary`**
@@ -138,9 +140,7 @@ public build(
 Currently, around line 365, the parser constructs `claimCitationLibrary`. Add a `claimAxiomLibrary` construction immediately after it:
 
 ```ts
-const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(
-    claimLibrary
-)
+const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(claimLibrary)
 const claimAxiomLibrary = new ClaimAxiomLibrary<TAxiom>(claimLibrary)
 ```
 
@@ -190,17 +190,11 @@ Then update its **single call site** in the citation-walking pass (currently aro
 
 ```ts
 // Before:
-const extras = this.mapClaimCitation(
-    parsedClaim,
-    citingRef.id,
-    sourceRef.id
-)
+const extras = this.mapClaimCitation(parsedClaim, citingRef.id, sourceRef.id)
 // After (look up the supporting parsed claim by miniId — the citation-walking
 // pass iterates parsedClaim.citationMiniIds, so the supporting parsed claim is
 // the entry in arg.claims whose miniId equals citationMiniId):
-const supportingParsed = arg.claims.find(
-    (c) => c.miniId === citationMiniId
-)!
+const supportingParsed = arg.claims.find((c) => c.miniId === citationMiniId)!
 const extras = this.mapClaimCitation(
     parsedClaim,
     supportingParsed,
@@ -230,6 +224,7 @@ git commit -m "feat(parsing): scaffold TAxiom param, claimAxiomLibrary result fi
 This task introduces a dedicated unit-test file for the parser and writes the first formula-inference test, which **must fail** until Task 5 implements the new pass.
 
 **Files:**
+
 - Create: `test/parser.test.ts`
 
 - [ ] **Step 1: Create the test file with shared imports and a fixture helper**
@@ -286,9 +281,7 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
                 { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
                 { miniId: "v2", symbol: "Concl", claimMiniId: "c2" },
             ],
-            premises: [
-                { miniId: "p1", formula: "Cite implies Concl" },
-            ],
+            premises: [{ miniId: "p1", formula: "Cite implies Concl" }],
             conclusionPremiseMiniId: "p1",
         })
 
@@ -326,6 +319,7 @@ This failing state is the TDD red baseline for Task 5. Do not commit yet.
 Write the remaining failing tests upfront so Task 5's implementation has the full suite to satisfy in one pass. All tests will fail or pass-by-accident until Task 5 lands.
 
 **Files:**
+
 - Modify: `test/parser.test.ts`
 
 - [ ] **Step 1: Append the remaining tests inside the `describe` block**
@@ -336,9 +330,24 @@ Append the following `it` blocks inside the existing `describe("ArgumentParser �
 it("emits two citation edges for OR antecedent with two citation vars", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "citation", citationMiniIds: [] },
-            { miniId: "c2", role: "premise", type: "citation", citationMiniIds: [] },
-            { miniId: "c3", role: "conclusion", type: "normal", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "citation",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "premise",
+                type: "citation",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c3",
+                role: "conclusion",
+                type: "normal",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "A", claimMiniId: "c1" },
@@ -350,16 +359,30 @@ it("emits two citation edges for OR antecedent with two citation vars", () => {
     })
 
     const result = new ArgumentParser().build(response)
-    const normalClaim = result.claimLibrary.getAll().find((c) => c.type === "normal")!
-    const edges = result.claimCitationLibrary.getConnectionsForClaim(normalClaim.id)
+    const normalClaim = result.claimLibrary
+        .getAll()
+        .find((c) => c.type === "normal")!
+    const edges = result.claimCitationLibrary.getConnectionsForClaim(
+        normalClaim.id
+    )
     expect(edges).toHaveLength(2)
 })
 
 it("emits a citation edge even for negated antecedent variables", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "citation", citationMiniIds: [] },
-            { miniId: "c2", role: "conclusion", type: "normal", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "citation",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "conclusion",
+                type: "normal",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
@@ -370,16 +393,29 @@ it("emits a citation edge even for negated antecedent variables", () => {
     })
 
     const result = new ArgumentParser().build(response)
-    const normalClaim = result.claimLibrary.getAll().find((c) => c.type === "normal")!
-    expect(result.claimCitationLibrary.getConnectionsForClaim(normalClaim.id))
-        .toHaveLength(1)
+    const normalClaim = result.claimLibrary
+        .getAll()
+        .find((c) => c.type === "normal")!
+    expect(
+        result.claimCitationLibrary.getConnectionsForClaim(normalClaim.id)
+    ).toHaveLength(1)
 })
 
 it("treats the right-hand operand of iff as the consequent", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "citation", citationMiniIds: [] },
-            { miniId: "c2", role: "conclusion", type: "normal", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "citation",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "conclusion",
+                type: "normal",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
@@ -390,9 +426,15 @@ it("treats the right-hand operand of iff as the consequent", () => {
     })
 
     const result = new ArgumentParser().build(response)
-    const normalClaim = result.claimLibrary.getAll().find((c) => c.type === "normal")!
-    const citationClaim = result.claimLibrary.getAll().find((c) => c.type === "citation")!
-    const edges = result.claimCitationLibrary.getConnectionsForClaim(normalClaim.id)
+    const normalClaim = result.claimLibrary
+        .getAll()
+        .find((c) => c.type === "normal")!
+    const citationClaim = result.claimLibrary
+        .getAll()
+        .find((c) => c.type === "citation")!
+    const edges = result.claimCitationLibrary.getConnectionsForClaim(
+        normalClaim.id
+    )
     expect(edges).toHaveLength(1)
     expect(edges[0].supportingClaimId).toBe(citationClaim.id)
 })
@@ -400,10 +442,30 @@ it("treats the right-hand operand of iff as the consequent", () => {
 it("emits one citation edge, one axiom edge, and no edge for normal antecedent", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "citation", citationMiniIds: [] },
-            { miniId: "c2", role: "premise", type: "axiomatic", citationMiniIds: [] },
-            { miniId: "c3", role: "premise", type: "normal", citationMiniIds: [] },
-            { miniId: "c4", role: "conclusion", type: "normal", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "citation",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "premise",
+                type: "axiomatic",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c3",
+                role: "premise",
+                type: "normal",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c4",
+                role: "conclusion",
+                type: "normal",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
@@ -421,16 +483,21 @@ it("emits one citation edge, one axiom edge, and no edge for normal antecedent",
     // claimLibrary.getAll() preserves insertion order (Map iteration), so
     // claims appear in the same order as arg.claims in the fixture:
     // [citation, axiomatic, normal-supporting, normal-conclusion].
-    const [citationClaim, axiomClaim, , conclClaim] = result.claimLibrary.getAll()
+    const [citationClaim, axiomClaim, , conclClaim] =
+        result.claimLibrary.getAll()
     expect(citationClaim.type).toBe("citation")
     expect(axiomClaim.type).toBe("axiomatic")
     expect(conclClaim.type).toBe("normal")
 
-    const citationEdges = result.claimCitationLibrary.getConnectionsForClaim(conclClaim.id)
+    const citationEdges = result.claimCitationLibrary.getConnectionsForClaim(
+        conclClaim.id
+    )
     expect(citationEdges).toHaveLength(1)
     expect(citationEdges[0].supportingClaimId).toBe(citationClaim.id)
 
-    const axiomEdges = result.claimAxiomLibrary.getConnectionsForClaim(conclClaim.id)
+    const axiomEdges = result.claimAxiomLibrary.getConnectionsForClaim(
+        conclClaim.id
+    )
     expect(axiomEdges).toHaveLength(1)
     expect(axiomEdges[0].supportingClaimId).toBe(axiomClaim.id)
 })
@@ -438,9 +505,24 @@ it("emits one citation edge, one axiom edge, and no edge for normal antecedent",
 it("dedupes identical (claim, supporting) pairs across premises", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "citation", citationMiniIds: [] },
-            { miniId: "c2", role: "premise", type: "normal", citationMiniIds: [] },
-            { miniId: "c3", role: "conclusion", type: "normal", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "citation",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "premise",
+                type: "normal",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c3",
+                role: "conclusion",
+                type: "normal",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
@@ -456,15 +538,26 @@ it("dedupes identical (claim, supporting) pairs across premises", () => {
 
     const result = new ArgumentParser().build(response)
     const conclClaim = result.claimLibrary.getAll()[2]
-    expect(result.claimCitationLibrary.getConnectionsForClaim(conclClaim.id))
-        .toHaveLength(1)
+    expect(
+        result.claimCitationLibrary.getConnectionsForClaim(conclClaim.id)
+    ).toHaveLength(1)
 })
 
 it("emits no edge when a citation appears only in the consequent slot", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "normal", citationMiniIds: [] },
-            { miniId: "c2", role: "conclusion", type: "citation", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "normal",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "conclusion",
+                type: "citation",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Norm", claimMiniId: "c1" },
@@ -482,8 +575,18 @@ it("emits no edge when a citation appears only in the consequent slot", () => {
 it("emits no edge from constraint premises (AND-rooted root)", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "citation", citationMiniIds: [] },
-            { miniId: "c2", role: "conclusion", type: "normal", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "citation",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "conclusion",
+                type: "normal",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
@@ -503,7 +606,12 @@ it("emits no edge from constraint premises (AND-rooted root)", () => {
 it("returns empty libraries when no implies/iff premise exists", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "conclusion", type: "normal", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "conclusion",
+                type: "normal",
+                citationMiniIds: [],
+            },
         ],
         variables: [{ miniId: "v1", symbol: "X", claimMiniId: "c1" }],
         premises: [{ miniId: "p1", formula: "X" }],
@@ -518,8 +626,18 @@ it("returns empty libraries when no implies/iff premise exists", () => {
 it("emits AXIOM_EDGE_REJECTED in non-strict mode for IMPLIES(axiom, citation)", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "axiomatic", citationMiniIds: [] },
-            { miniId: "c2", role: "conclusion", type: "citation", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "axiomatic",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "conclusion",
+                type: "citation",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Ax", claimMiniId: "c1" },
@@ -543,8 +661,18 @@ it("emits AXIOM_EDGE_REJECTED in non-strict mode for IMPLIES(axiom, citation)", 
 it("throws on the same scenario in strict mode", () => {
     const response = buildResponse({
         claims: [
-            { miniId: "c1", role: "premise", type: "axiomatic", citationMiniIds: [] },
-            { miniId: "c2", role: "conclusion", type: "citation", citationMiniIds: [] },
+            {
+                miniId: "c1",
+                role: "premise",
+                type: "axiomatic",
+                citationMiniIds: [],
+            },
+            {
+                miniId: "c2",
+                role: "conclusion",
+                type: "citation",
+                citationMiniIds: [],
+            },
         ],
         variables: [
             { miniId: "v1", symbol: "Ax", claimMiniId: "c1" },
@@ -572,6 +700,7 @@ Expected: multiple FAILures (the new pass doesn't exist yet) and a couple of tes
 The core change. Replace the old citation-walking block (currently `argument-parser.ts:363-403`) with the new formula-driven pass that runs after premise creation.
 
 **Files:**
+
 - Modify: `src/lib/parsing/argument-parser.ts`
 
 - [ ] **Step 1: Remove the old citation-walking pass**
@@ -579,9 +708,7 @@ The core change. Replace the old citation-walking block (currently `argument-par
 In `argument-parser.ts`, delete the block starting with the comment "4. Wire claim citations" through the end of the `for (const parsedClaim of arg.claims)` loop (currently lines 363–403). Keep the two library constructions at the top of that block:
 
 ```ts
-const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(
-    claimLibrary
-)
+const claimCitationLibrary = new ClaimCitationLibrary<TCitation>(claimLibrary)
 const claimAxiomLibrary = new ClaimAxiomLibrary<TAxiom>(claimLibrary)
 ```
 
@@ -708,7 +835,8 @@ for (const premise of engine.listPremises()) {
                 if (strict) throw error
                 const code =
                     error instanceof Error && "violations" in error
-                        ? (error as { violations: { code: string }[] }).violations[0]?.code
+                        ? (error as { violations: { code: string }[] })
+                              .violations[0]?.code
                         : "unknown"
                 warnings.push({
                     code: "CITATION_EDGE_REJECTED",
@@ -742,7 +870,8 @@ for (const premise of engine.listPremises()) {
                 if (strict) throw error
                 const code =
                     error instanceof Error && "violations" in error
-                        ? (error as { violations: { code: string }[] }).violations[0]?.code
+                        ? (error as { violations: { code: string }[] })
+                              .violations[0]?.code
                         : "unknown"
                 warnings.push({
                     code: "AXIOM_EDGE_REJECTED",
@@ -784,6 +913,7 @@ git commit -m "feat(parsing): derive citation and axiom edges from premise formu
 ### Task 6: Drop `citationMiniIds` from `ParsedClaimSchema`
 
 **Files:**
+
 - Modify: `src/lib/parsing/schemata.ts`
 - Modify: `src/lib/parsing/prompt-builder.ts`
 
@@ -843,6 +973,7 @@ git commit -m "feat(parsing): drop citationMiniIds from ParsedClaimSchema"
 The old citation-walking pass was removed in Task 5; this code is now unused.
 
 **Files:**
+
 - Modify: `src/lib/parsing/types.ts`
 
 - [ ] **Step 1: Update the union**
@@ -877,6 +1008,7 @@ git commit -m "feat(parsing): drop UNRESOLVED_CITATION_MINIID warning code"
 ### Task 8: Update existing fixtures in integration and extension tests
 
 **Files:**
+
 - Modify: `test/integration/parse-api.test.ts`
 - Modify: `test/extensions/basics.test.ts`
 
@@ -910,6 +1042,7 @@ git commit -m "test(parsing): drop citationMiniIds from existing fixtures"
 ### Task 9: Rewrite the system prompt in `prompt-builder.ts`
 
 **Files:**
+
 - Modify: `src/lib/parsing/prompt-builder.ts`
 
 - [ ] **Step 1: Rewrite the "Claim Types" section**
@@ -1009,6 +1142,7 @@ If anything fails, fix it in a follow-up commit before continuing to documentati
 ### Task 11: Update changelog and release notes
 
 **Files:**
+
 - Modify: `docs/changelogs/upcoming.md`
 - Modify: `docs/release-notes/upcoming.md`
 
@@ -1056,6 +1190,7 @@ git commit -m "docs: changelog and release notes for parser claim-type changes"
 ### Task 12: Update API reference and verify other Documentation Sync entries
 
 **Files:**
+
 - Modify: `docs/api-reference.md`
 - Possibly modify: `CLAUDE.md`, `README.md` (verify only)
 

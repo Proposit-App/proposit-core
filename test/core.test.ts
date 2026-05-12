@@ -12498,9 +12498,7 @@ describe("Parsing — response schemas", () => {
             expect(prompt).toMatch(
                 /antecedent.*implies.*consequent|implies.*supported claim/i
             )
-            expect(prompt).toContain(
-                "do not list supports as a separate field"
-            )
+            expect(prompt).toContain("do not list supports as a separate field")
         })
     })
 

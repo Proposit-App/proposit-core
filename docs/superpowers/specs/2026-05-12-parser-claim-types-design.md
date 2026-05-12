@@ -100,15 +100,12 @@ premise whose root expression is `implies` or `iff`:
 2. The **antecedent variables** are every variable reference reachable by
    walking the left-hand operand's subtree, regardless of polarity. A
    variable wrapped in `not`, nested inside `and`/`or`, or appearing under a
-   `formula` buffer all count equally — the edge graph cares about *which*
+   `formula` buffer all count equally — the edge graph cares about _which_
    claims participate, not how they are combined propositionally.
-3. For each antecedent variable, look at its bound claim's `type`:
-   - `'citation'` → accumulate citation edge `(consequentClaim,
-     antecedentClaim)`. Routed to `ClaimCitationLibrary`.
-   - `'axiomatic'` → accumulate axiom edge `(consequentClaim,
-     antecedentClaim)`. Routed to `ClaimAxiomLibrary`.
-   - `'normal'` → no edge; the antecedent is part of the argument's
-     reasoning, not an external support.
+3. For each antecedent variable, look at its bound claim's `type`: - `'citation'` → accumulate citation edge `(consequentClaim,
+antecedentClaim)`. Routed to `ClaimCitationLibrary`. - `'axiomatic'` → accumulate axiom edge `(consequentClaim,
+antecedentClaim)`. Routed to `ClaimAxiomLibrary`. - `'normal'` → no edge; the antecedent is part of the argument's
+   reasoning, not an external support.
 
 Premises whose root is not `implies` or `iff` (constraint premises,
 including naked-variable root forms) contribute **no support edges**, even
@@ -122,7 +119,7 @@ version 0 in a single parse, so the dedup key omits `claimVersion` /
 `supportingClaimVersion` safely — implementations that later introduce
 parsed-claim versioning must revisit this. The connection `id` for each
 deduped edge comes from a fresh `genId()` at `add()` time; dedup happens
-strictly *before* the library call so `ClaimCitationLibrary` /
+strictly _before_ the library call so `ClaimCitationLibrary` /
 `ClaimAxiomLibrary` never see a duplicate-id situation from this parser.
 
 **Cross-library rejection combos.** The parser routes each candidate edge to
@@ -241,12 +238,12 @@ Section-by-section changes in `src/lib/parsing/prompt-builder.ts`:
   (they're still valid).
 - **Self-Check** — remove item #5 (`citationMiniIds` invariant) and item #6
   is reworded slightly. The renumbered checklist has five items:
-  1. Every formula symbol is declared in `variables`.
-  2. Every `variable.claimMiniId` resolves.
-  3. `conclusionPremiseMiniId` resolves.
-  4. No `implies`/`iff` nested inside another operator.
-  5. Every claim has a `type` of `"normal"`, `"citation"`, or
-     `"axiomatic"`.
+    1. Every formula symbol is declared in `variables`.
+    2. Every `variable.claimMiniId` resolves.
+    3. `conclusionPremiseMiniId` resolves.
+    4. No `implies`/`iff` nested inside another operator.
+    5. Every claim has a `type` of `"normal"`, `"citation"`, or
+       `"axiomatic"`.
 
 ### Warning-code updates
 
@@ -286,34 +283,34 @@ In `src/lib/parsing/argument-parser.ts`:
 - `test/extensions/basics.test.ts` — drop `citationMiniIds: []` from
   fixtures.
 - New unit tests (`test/core.test.ts` or a sibling `test/parser.test.ts`):
-  - Citation edge extracted from antecedent (single citation in antecedent).
-  - Multiple citations in `OR` antecedent produce multiple edges.
-  - Axiomatic claim in antecedent produces an axiom edge in
-    `claimAxiomLibrary`, not in `claimCitationLibrary`.
-  - Mixed antecedent (citation + axiom + normal) produces one citation edge,
-    one axiom edge, no entry for the normal claim.
-  - Duplicate `(claimId, supportingClaimId)` across premises produces a
-    single library edge (dedup).
-  - Negated antecedent variable still produces an edge (polarity does not
-    matter for edge extraction).
-  - `iff` premise with the supported claim on the right-hand side produces
-    the same edge shape as the equivalent `implies` (locks in the
-    right-as-consequent convention).
-  - Citation- or axiomatic-typed claim appearing **only** in the consequent
-    slot (e.g., `IMPLIES(normal_var, citation_var)`) produces no edges
-    (asserts no spurious entries are emitted).
-  - Constraint premise mentioning a citation variable (e.g.,
-    `AND(citation_var, normal_var)` as a root non-implies/iff premise)
-    produces no edges.
-  - Cross-library combo: `IMPLIES(axiom_var, citation_var)` routes to the
-    axiom library, which rejects with `AXIOM_CLAIM_NOT_NORMAL_TYPE`; in
-    non-strict mode this surfaces as an `AXIOM_EDGE_REJECTED` warning whose
-    `context` carries the underlying error code.
-  - Non-strict mode: library throw (cycle in citation library) becomes a
-    `CITATION_EDGE_REJECTED` warning rather than an exception.
-  - Strict mode: same scenario throws.
-  - Empty result: a parse with no `implies`/`iff` premise produces empty
-    citation and axiom libraries, both returned in the result.
+    - Citation edge extracted from antecedent (single citation in antecedent).
+    - Multiple citations in `OR` antecedent produce multiple edges.
+    - Axiomatic claim in antecedent produces an axiom edge in
+      `claimAxiomLibrary`, not in `claimCitationLibrary`.
+    - Mixed antecedent (citation + axiom + normal) produces one citation edge,
+      one axiom edge, no entry for the normal claim.
+    - Duplicate `(claimId, supportingClaimId)` across premises produces a
+      single library edge (dedup).
+    - Negated antecedent variable still produces an edge (polarity does not
+      matter for edge extraction).
+    - `iff` premise with the supported claim on the right-hand side produces
+      the same edge shape as the equivalent `implies` (locks in the
+      right-as-consequent convention).
+    - Citation- or axiomatic-typed claim appearing **only** in the consequent
+      slot (e.g., `IMPLIES(normal_var, citation_var)`) produces no edges
+      (asserts no spurious entries are emitted).
+    - Constraint premise mentioning a citation variable (e.g.,
+      `AND(citation_var, normal_var)` as a root non-implies/iff premise)
+      produces no edges.
+    - Cross-library combo: `IMPLIES(axiom_var, citation_var)` routes to the
+      axiom library, which rejects with `AXIOM_CLAIM_NOT_NORMAL_TYPE`; in
+      non-strict mode this surfaces as an `AXIOM_EDGE_REJECTED` warning whose
+      `context` carries the underlying error code.
+    - Non-strict mode: library throw (cycle in citation library) becomes a
+      `CITATION_EDGE_REJECTED` warning rather than an exception.
+    - Strict mode: same scenario throws.
+    - Empty result: a parse with no `implies`/`iff` premise produces empty
+      citation and axiom libraries, both returned in the result.
 
 ### Extensions impact
 
