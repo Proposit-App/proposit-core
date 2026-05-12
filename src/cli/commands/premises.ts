@@ -392,9 +392,9 @@ export function registerPremiseCommands(
         })
 
     premises
-        .command("populate-citations <premiseId>")
+        .command("populate-supports <premiseId>")
         .description(
-            "Populate a derivation premise's antecedent from current citations of its derived claim"
+            "Populate the antecedent of a derivation premise from its citations and axiom invocations"
         )
         .action(async (premiseId: string) => {
             await assertNotPublished(argumentId, version)

@@ -378,7 +378,7 @@ Axiomatic claim-bound variables are forced to `true` at evaluation time. Passing
 
 A **derivation premise** is structurally committed to deriving a specific named claim. It carries a `derivedClaimId` that never changes, and its expression tree is locked to either naked-Q form (no antecedent yet) or `IMPLIES(antecedent, Q)` / `IFF(antecedent, Q)` form.
 
-The `populate-citations` command is the recommended way to build the antecedent automatically. As of v0.12.0 it wraps `ManagedDerivationPremiseEngine.populateFromSupports` and pulls supporting connections from both `core.citations` and `core.axioms` — the CLI command keeps its v0.11 name for backward compatibility, but its behavior now covers axioms too.
+The `populate-supports` command is the recommended way to build the antecedent automatically. As of v0.12.0 it wraps `ManagedDerivationPremiseEngine.populateFromSupports` and pulls supporting connections from both `core.citations` and `core.axioms`. Renamed from v0.11's `populate-citations` to reflect the broader behavior.
 
 ### Step 1: Create a citation claim (the external support)
 
@@ -423,10 +423,10 @@ proposit-core <argument-id> latest premises render <derivation-premise-id>
 
 ### Step 5: Populate supports
 
-`populate-citations` reads the current citations and axiom connections for the derived claim and builds the antecedent:
+`populate-supports` reads the current citations and axiom connections for the derived claim and builds the antecedent:
 
 ```bash
-proposit-core <argument-id> latest premises populate-citations <derivation-premise-id>
+proposit-core <argument-id> latest premises populate-supports <derivation-premise-id>
 ```
 
 Render again to see the result:
@@ -438,7 +438,7 @@ proposit-core <argument-id> latest premises render <derivation-premise-id>
 
 With two supports it would produce `[derivation] ((S0 ∨ S1) → Q)`.
 
-### populate-citations rules
+### populate-supports rules
 
 - **0 supports** — no change; premise stays in naked-Q form.
 - **1 support** — builds `IMPLIES(VariableS, Q)`.

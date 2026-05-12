@@ -57,6 +57,7 @@ Axiomatic claim type, parallel `ClaimAxiomLibrary`, and a coordinated rename of 
 - `e787d0c` refactor(cli/storage): rename citation storage helpers (`claimCitationsPath` → `citationsPath`, etc.); add parallel axiom storage helpers (`axiomsPath`, `readAxiomLibrary`, `writeAxiomLibrary`).
 - `dc87480` feat(cli/storage): v0.12 migration script (rename `claim-citations.json` → `citations.json`, rewrite wrapper field and per-entity edge fields, recompute checksums, init `axioms.json`). Idempotent — each step probes its own completion state. Marker file `.proposit-v0.12`.
 - `d1151c5` fix(cli/import): pass `reasonCode` through to claim creation for axiomatic claims.
+- refactor(cli): rename `premises populate-citations` subcommand to `premises populate-supports` for v0.12 API consistency with `populateFromSupports`. Description updated to mention both citations and axioms; smoke test, CLI walkthrough, and release notes updated to match.
 
 ## Tests + examples
 
@@ -68,7 +69,7 @@ Axiomatic claim type, parallel `ClaimAxiomLibrary`, and a coordinated rename of 
 - `9a904e5` docs(readme): cover axiomatic claim type, `axioms` commands, citations CLI rewrite, evaluation semantics by claim type. Invalid Constructions table extended.
 - `27cf2e7` docs(api-reference): full surface for `ClaimAxiomLibrary`, generic connection interfaces (`TClaimConnectionLookup`, `TClaimConnectionLibraryManagement`, `TClaimConnectionLibrarySnapshot`), `populateFromSupports`, and claim-type-aware evaluation. Error code table updated.
 - `a02da65` docs(claude): update design-rule bullets for v0.12 axiomatic claim type — claim type discriminator, claim library, citation acyclicity, axiom library, `populateFromSupports`, argument forking, ForkLibrary, evaluation defaults by claim type, PropositCore field names.
-- `26c865c` docs(cli-examples): refresh citations walkthrough to flag-style + `remove`; add axioms walkthrough; rewrite Derivation Premises walkthrough to use the new citation flag form and call out the combined-support behavior of `populate-citations`.
+- `26c865c` docs(cli-examples): refresh citations walkthrough to flag-style + `remove`; add axioms walkthrough; rewrite Derivation Premises walkthrough to use the new citation flag form and call out the combined-support behavior of `populate-supports` (renamed from `populate-citations`).
 
 ## Engine signature cleanup
 

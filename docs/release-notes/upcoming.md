@@ -73,7 +73,7 @@ The `getCitationsForCitingClaim` lookup method is now `getConnectionsForClaim`. 
 
 ### `populateFromCitations` → `populateFromSupports`
 
-`ManagedDerivationPremiseEngine.populateFromCitations(citationLib, argumentEngine)` is gone. The replacement, `populateFromSupports(citationLib, axiomLib, argumentEngine)`, takes both connection libraries and builds the antecedent from the combined support set — citations first, axioms second. The CLI command `premises populate-citations` keeps its name for backward compatibility, but its behavior now covers axioms too.
+`ManagedDerivationPremiseEngine.populateFromCitations(citationLib, argumentEngine)` is gone. The replacement, `populateFromSupports(citationLib, axiomLib, argumentEngine)`, takes both connection libraries and builds the antecedent from the combined support set — citations first, axioms second. The CLI command was renamed to match: `premises populate-citations` is now `premises populate-supports`.
 
 ### `core.claimCitations` → `core.citations`
 

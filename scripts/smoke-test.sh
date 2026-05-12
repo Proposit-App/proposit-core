@@ -624,16 +624,17 @@ echo "--- got expected error: ---"
 cat /tmp/proposit-deriv-err2
 rm -f /tmp/proposit-deriv-err2
 
-section "9p3. derivation premises — populate-citations"
+section "9p3. derivation premises — populate-supports"
 
 # Re-add the citation that was removed in section 9n2 so that
-# populate-citations has a source to pull from (CLAIM1 → CITE_CLAIM).
+# populate-supports has a source to pull from (CLAIM1 → CITE_CLAIM).
 CITATION2=$($CLI citations add --claim-id "$CLAIM1" --supporting-claim-id "$CITE_CLAIM")
-echo "CITATION2=$CITATION2 (temporary, will be removed after populate-citations)"
+echo "CITATION2=$CITATION2 (temporary, will be removed after populate-supports)"
 
-# Populate the derivation premise's antecedent from CLAIM1's current citations.
-$CLI "$ARG" latest premises populate-citations "$DERIV_P" \
-    || { echo "FAIL: populate-citations"; exit 1; }
+# Populate the derivation premise's antecedent from CLAIM1's current supports
+# (citations + axiom invocations).
+$CLI "$ARG" latest premises populate-supports "$DERIV_P" \
+    || { echo "FAIL: populate-supports"; exit 1; }
 
 # Render should now show an implication (S → Q shape).
 $CLI "$ARG" latest premises render "$DERIV_P"
