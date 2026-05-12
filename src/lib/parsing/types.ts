@@ -13,7 +13,6 @@ export type TParsingSchemaOptions = {
 }
 
 export type TParserWarningCode =
-    | "UNRESOLVED_CITATION_MINIID"
     | "UNRESOLVED_CLAIM_MINIID"
     | "UNRESOLVED_CONCLUSION_MINIID"
     | "UNDECLARED_VARIABLE_SYMBOL"
