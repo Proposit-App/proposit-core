@@ -1382,6 +1382,113 @@ Constants, types, and a helper for midpoint-based position computation, exported
 
 ---
 
+## `ArgumentParser`
+
+```typescript
+class ArgumentParser<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+    TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
+>
+```
+
+Validates a structured LLM response (`TParsedArgumentResponse`) and builds an `ArgumentEngine` populated with claims, variables, premises, expression trees, and citation/axiom support edges. Exported from `@proposit/proposit-core` alongside the parsing schemas; lives in `src/lib/parsing/argument-parser.ts`.
+
+The seven generic parameters mirror the entity types carried through `ArgumentEngine` (`TArg`, `TPremise`, `TExpr`, `TVar`, `TClaim`) plus the two connection-edge types (`TCitation`, `TAxiom`). All seven default to the corresponding core schemata; extension authors widen them by subclassing and passing a custom response schema built via `buildParsingResponseSchema()`.
+
+The protected `mapArgument` / `mapClaim` / `mapVariable` / `mapPremise` / `mapClaimCitation` / `mapClaimAxiom` hooks let subclasses inject extension fields onto the entities created during `build()`. Each hook receives the parsed slice (and, for connection hooks, both endpoints plus their resolved UUIDs) and returns a `Record<string, unknown>` spread onto the entity before insertion.
+
+### `new ArgumentParser(responseSchema?)`
+
+Constructs a parser. The optional `responseSchema: TSchema` defaults to `ParsedArgumentResponseSchema`. Subclasses that extend any of the parsed-entity shapes should pass the schema produced by `buildParsingResponseSchema({ claimSchema?, variableSchema?, premiseSchema?, parsedArgumentSchema?, responseSchema? })` so that `validate()` accepts the extended payload.
+
+---
+
+### `validate(raw)` → `TParsedArgumentResponse`
+
+Validates raw LLM output against the response schema. Runs `clampMaxLengths(responseSchema, raw)` first (truncates string fields that exceed their declared `maxLength` rather than rejecting) and then `Value.Parse(responseSchema, raw)`. Throws if the payload still fails schema validation after clamping.
+
+---
+
+### `build(response, options?)` → `TArgumentParserResult<...>`
+
+Main entry point. Constructs an `ArgumentEngine`, a `ClaimLibrary`, a `ClaimCitationLibrary`, and a `ClaimAxiomLibrary` from a validated `TParsedArgumentResponse`.
+
+- **response**: `TParsedArgumentResponse` — must have a non-null `argument`; throws otherwise.
+- **options**: `TParserBuildOptions` — `{ strict?: boolean (default true), generateId?: () => string }`. Defaults: `strict: true`, `generateId: defaultGenerateId` (the same `globalThis.crypto.randomUUID()` shim used by `ArgumentEngine`).
+
+Returns `{ engine, claimLibrary, claimCitationLibrary, claimAxiomLibrary, warnings }`. The four libraries are independent instances owned by the result — none are registered into a `PropositCore`; callers wire them up as they see fit.
+
+**Build phases:**
+
+1. **Formula parse + structural validation.** Each premise's `formula` string is parsed via `parseFormula`; the AST is then walked to enforce the root-only constraint for `implies`/`iff`. Failures emit `FORMULA_PARSE_ERROR` or `FORMULA_STRUCTURE_ERROR`.
+2. **Argument creation.** A fresh `TArg` is built from `genId()` plus the result of `mapArgument(parsed)`.
+3. **Claim library population.** Every parsed claim is inserted into a new `ClaimLibrary` with its `type` discriminator (`'normal' | 'citation' | 'axiomatic'`); the `miniId` → `{ id, version }` map is retained for downstream resolution. The two connection libraries are constructed against the populated claim library.
+4. **Engine construction.** `ArgumentEngine` is built with `grammarConfig: { enforceFormulaBetweenOperators: true, autoNormalize: true }` and the caller-supplied `generateId`.
+5. **Variables.** Each parsed variable is resolved against `claimMiniId`. Unresolved miniIds emit `UNRESOLVED_CLAIM_MINIID`; in non-strict mode the variable is dropped and its symbol removed from the declared-symbol set so downstream formula checks fire as `UNDECLARED_VARIABLE_SYMBOL`.
+6. **Premises and expression trees.** Each surviving parsed premise becomes a `PremiseEngine` via `engine.createPremise(mapPremise(parsed))`; the formula AST is then walked into expression objects (operator/variable/formula nodes) under `parentId: null` at `POSITION_INITIAL`.
+7. **Conclusion designation.** `setConclusionPremise` is invoked for the premise whose `miniId` matches `arg.conclusionPremiseMiniId`. An unresolvable miniId emits `UNRESOLVED_CONCLUSION_MINIID`.
+8. **Formula-inferred support edges.** See below.
+
+**Formula-inferred support edges.** For each premise whose root is `implies` or `iff` (the only legal root forms once root-only validation passes), the right-hand operand of the root is treated as the consequent and must itself be a claim-bound variable expression — premises whose consequent is not a variable are skipped. Every claim-bound variable referenced anywhere in the left-hand (antecedent) subtree contributes a candidate support edge `(consequentClaimId → supportingClaimId)`. The supporting claim's `type` decides where the edge lands:
+
+- `type: 'citation'` → `ClaimCitationLibrary.add(...)` via `mapClaimCitation`.
+- `type: 'axiomatic'` → `ClaimAxiomLibrary.add(...)` via `mapClaimAxiom`.
+- `type: 'normal'` → no edge (normal claims contribute reasoning but are not stored as connection records).
+
+Edges are deduped within `build()` by `(claimId, supportingClaimId)` — one library `add` per unique pair, even when the same antecedent variable appears multiple times across premises. The libraries themselves enforce their own invariants on `add()` (claim-ref resolution, type discriminator, cycle detection for citations, duplicate-id). In strict mode any library error rethrows; in non-strict mode it is captured as `CITATION_EDGE_REJECTED` or `AXIOM_EDGE_REJECTED`, with `context.libraryErrorCode` carrying the underlying violation code.
+
+**Strict vs non-strict mode.** With `strict: true` (the default) the first error of any kind throws and `build()` aborts. With `strict: false`, every recoverable failure pushes a `TParserWarning` onto `result.warnings` and processing continues — useful when caller wants the best-effort tree the LLM intended even if a few entities were malformed. Conditions that participate in this distinction:
+
+- Formula parse failure (`FORMULA_PARSE_ERROR`)
+- Nested `implies`/`iff` or other root-only violations (`FORMULA_STRUCTURE_ERROR`)
+- Variable referencing an undeclared claim miniId (`UNRESOLVED_CLAIM_MINIID`)
+- Formula referencing a symbol that was not declared (or was dropped earlier in this pass) (`UNDECLARED_VARIABLE_SYMBOL`)
+- Conclusion premise miniId that does not resolve (`UNRESOLVED_CONCLUSION_MINIID`)
+- Citation/axiom library rejecting an edge on `add()` (`CITATION_EDGE_REJECTED`, `AXIOM_EDGE_REJECTED`)
+
+---
+
+### `mapArgument(parsed)` → `Record<string, unknown>` _(protected)_
+
+Returns extension fields to spread onto the argument entity. Default returns `{}`. Override in subclasses to surface app-layer metadata from the parsed envelope (e.g., titles, descriptions).
+
+---
+
+### `mapClaim(parsed)` → `Record<string, unknown>` _(protected)_
+
+Returns extension fields to spread onto every claim inserted into the claim library. Default returns `{}`.
+
+---
+
+### `mapVariable(parsed)` → `Record<string, unknown>` _(protected)_
+
+Returns extension fields to spread onto every variable inserted into the engine. Default returns `{}`.
+
+---
+
+### `mapPremise(parsed)` → `Record<string, unknown>` _(protected)_
+
+Returns extension fields forwarded to `engine.createPremise({ ...extras })`. Default returns `{}`.
+
+---
+
+### `mapClaimCitation(dep, sup, depId, supId)` → `Record<string, unknown>` _(protected)_
+
+Returns extension fields to spread onto every citation connection added to `ClaimCitationLibrary`. Called once per `(consequentClaim, antecedentCitationClaim)` pair surfaced during formula-inferred edge construction. `dep` and `sup` are the parsed-claim forms (so `additionalProperties: true` extension data is available); `depId` and `supId` are the resolved UUIDs. Default returns `{}`.
+
+---
+
+### `mapClaimAxiom(dep, sup, depId, supId)` → `Record<string, unknown>` _(protected)_
+
+Returns extension fields to spread onto every axiom connection added to `ClaimAxiomLibrary`. Called once per `(consequentClaim, antecedentAxiomaticClaim)` pair surfaced during formula-inferred edge construction. Same parameter conventions as `mapClaimCitation`. Default returns `{}`.
+
+---
+
 ## Types
 
 ### `TExpressionInput`
@@ -1393,6 +1500,141 @@ A version of `TPropositionalExpression` with the `checksum` field omitted. Uses 
 ### `TExpressionWithoutPosition`
 
 A version of `TPropositionalExpression` with both the `position` and `checksum` fields omitted. Uses a distributive conditional type to preserve discriminated-union narrowing across the `variable`/`operator`/`formula` variants. Used as the input type for `appendExpression` and `addExpressionRelative`.
+
+---
+
+### Parser Types
+
+Types exported from `@proposit/proposit-core` alongside `ArgumentParser`. Source: `src/lib/parsing/`.
+
+#### `TArgumentParserResult`
+
+```typescript
+type TArgumentParserResult<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+    TCitation extends TCoreClaimConnection = TCoreClaimConnection,
+    TAxiom extends TCoreClaimConnection = TCoreClaimConnection,
+> = {
+    engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>
+    claimLibrary: ClaimLibrary<TClaim>
+    claimCitationLibrary: ClaimCitationLibrary<TCitation>
+    claimAxiomLibrary: ClaimAxiomLibrary<TAxiom>
+    warnings: TParserWarning[]
+}
+```
+
+Return value of `ArgumentParser.build()`. The four libraries are independent instances; the caller decides how to register them (e.g., into a `PropositCore`). `warnings` is always defined — empty in strict mode (errors throw instead), populated in non-strict mode with one entry per recoverable failure.
+
+#### `TParserBuildOptions`
+
+```typescript
+type TParserBuildOptions = {
+    strict?: boolean // default: true
+    generateId?: () => string // default: globalThis.crypto.randomUUID()
+}
+```
+
+Per-call options to `ArgumentParser.build()`. `strict: true` throws on the first error; `strict: false` collects warnings and continues. `generateId` supplies UUIDs for every new entity created during the build.
+
+#### `TParserWarning`
+
+```typescript
+type TParserWarning = {
+    code: TParserWarningCode
+    message: string
+    context: Record<string, string>
+}
+```
+
+A single recoverable issue surfaced by a non-strict `build()`. `context` carries the salient identifiers for the failure site (e.g., `premiseMiniId`, `formula`, `variableMiniId`, `claimMiniId`, `symbol`, `conclusionPremiseMiniId`, `claimId`, `supportingClaimId`, `libraryErrorCode`).
+
+#### `TParserWarningCode`
+
+```typescript
+type TParserWarningCode =
+    | "UNRESOLVED_CLAIM_MINIID"
+    | "UNRESOLVED_CONCLUSION_MINIID"
+    | "UNDECLARED_VARIABLE_SYMBOL"
+    | "FORMULA_PARSE_ERROR"
+    | "FORMULA_STRUCTURE_ERROR"
+    | "CITATION_EDGE_REJECTED"
+    | "AXIOM_EDGE_REJECTED"
+```
+
+| Code                           | Source                                      | Meaning                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UNRESOLVED_CLAIM_MINIID`      | Variable processing                         | A `TParsedVariable.claimMiniId` does not match any `TParsedClaim.miniId`. The variable is dropped; its symbol falls out of the declared-symbol set.     |
+| `UNRESOLVED_CONCLUSION_MINIID` | Conclusion assignment                       | `arg.conclusionPremiseMiniId` did not resolve to any premise. The engine is left without a conclusion premise (use `setConclusionPremise` after-build). |
+| `UNDECLARED_VARIABLE_SYMBOL`   | Formula symbol resolution                   | A formula references a symbol that was never declared, or was declared but dropped earlier in this pass (see `UNRESOLVED_CLAIM_MINIID`).                |
+| `FORMULA_PARSE_ERROR`          | `parseFormula` failure                      | The premise's `formula` string is not a valid logical formula. The premise is skipped.                                                                  |
+| `FORMULA_STRUCTURE_ERROR`      | Root-only check (`implies`/`iff` placement) | The AST has `implies` or `iff` nested below the root. The premise is skipped.                                                                           |
+| `CITATION_EDGE_REJECTED`       | `ClaimCitationLibrary.add()` threw          | A formula-inferred citation edge was rejected — `context.libraryErrorCode` carries the violation code (`CITATION_CYCLE_DETECTED`, etc.).                |
+| `AXIOM_EDGE_REJECTED`          | `ClaimAxiomLibrary.add()` threw             | A formula-inferred axiom edge was rejected — `context.libraryErrorCode` carries the violation code (`AXIOM_CLAIM_NOT_NORMAL_TYPE`, etc.).               |
+
+#### `TParsedArgumentResponse`
+
+```typescript
+type TParsedArgumentResponse = {
+    argument: TParsedArgument | null
+    uncategorizedText: string | null
+    selectionRationale: string | null
+    failureText: string | null
+}
+```
+
+Top-level envelope returned by an LLM after structured-output parsing. `argument: null` is legal at the schema level but causes `build()` to throw with `"Cannot build: argument is null."`. The other three fields carry meta-commentary from the LLM and are not consumed by `build()`. The underlying TypeBox schema has `additionalProperties: true`, so extension fields survive `validate()`.
+
+#### `TParsedArgument`
+
+```typescript
+type TParsedArgument = {
+    claims: TParsedClaim[] // minItems: 1
+    variables: TParsedVariable[] // minItems: 1
+    premises: TParsedPremise[] // minItems: 1
+    conclusionPremiseMiniId: string
+}
+```
+
+The inner argument payload. `additionalProperties: true` on the schema preserves any extension fields the LLM emits.
+
+#### `TParsedClaim`
+
+```typescript
+type TParsedClaim = {
+    miniId: string
+    role: "premise" | "conclusion" | "intermediate"
+    type: "normal" | "citation" | "axiomatic"
+}
+```
+
+A claim as emitted by the LLM. `miniId` is a short identifier scoped to the response; the parser resolves it to a real UUID via `claimLibrary.create()`. `additionalProperties: true` preserves extension fields, which `mapClaim` can pluck out. Note: the pre-v0.12.2 `citationMiniIds` field was removed — support edges are now formula-derived (see `ArgumentParser.build`).
+
+#### `TParsedVariable`
+
+```typescript
+type TParsedVariable = {
+    miniId: string
+    symbol: string
+    claimMiniId: string
+}
+```
+
+A propositional variable. `claimMiniId` references a `TParsedClaim.miniId` in the same envelope; unresolved references emit `UNRESOLVED_CLAIM_MINIID`. `additionalProperties: true`.
+
+#### `TParsedPremise`
+
+```typescript
+type TParsedPremise = {
+    miniId: string
+    formula: string
+}
+```
+
+A premise. `formula` is a string in `parseFormula` notation (`not`/`¬`, `and`/`∧`, `or`/`∨`, `implies`/`→`, `iff`/`↔`, parentheses). `implies` and `iff` must appear at the root. `additionalProperties: true`.
 
 ---
 
