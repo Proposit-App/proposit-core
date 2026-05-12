@@ -12482,17 +12482,24 @@ describe("Parsing — response schemas", () => {
             const prompt = buildParsingPrompt(ParsedArgumentResponseSchema)
             expect(prompt).toContain("MiniId Conventions")
             expect(prompt).toContain("c1")
-            expect(prompt).toContain("s1")
             expect(prompt).toContain("v1")
             expect(prompt).toContain("p1")
-            expect(prompt).toContain("citationMiniIds")
+            // Unified claim prefix — no separate s/a prefixes.
+            expect(prompt).not.toContain("s1")
+            expect(prompt).not.toContain("a1")
         })
 
-        it("clarifies that citationMiniIds must not contain normal claim miniIds", () => {
+        it("explains support via formulas instead of a separate citation field", () => {
             const prompt = buildParsingPrompt(ParsedArgumentResponseSchema)
-            expect(prompt).toContain("citationMiniIds")
+            // The old citationMiniIds field has been removed entirely.
+            expect(prompt).not.toContain("citationMiniIds")
+            // The replacement guidance is the Support via Formulas section.
+            expect(prompt).toContain("Support via Formulas")
+            expect(prompt).toMatch(
+                /antecedent.*implies.*consequent|implies.*supported claim/i
+            )
             expect(prompt).toContain(
-                "Never put miniIds of normal-typed claims in `citationMiniIds`"
+                "do not list supports as a separate field"
             )
         })
     })

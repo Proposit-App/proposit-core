@@ -96,15 +96,19 @@ Every claim has a \`type\` field, which is one of:
 - **\`"citation"\`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** \`claims\` array as normal claims; they are NOT a separate array.
 - **\`"axiomatic"\`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: "true by definition," "logically required," "historically established." Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied. Apps using this library may extend axiomatic claims with a \`reasonCode\` field describing the category of self-evidence; the core parser does not require it.
 
-A citation claim is just a claim whose propositional content is "the cited material says/shows X". Logical relationships between *normal* claims are expressed through variables, formulas, and premises; citation evidence is expressed through the \`citationMiniIds\` link described below. Axiomatic claims, by contrast, do not carry a separate cross-reference field in the core parse — emit them as standalone claims with \`type: "axiomatic"\` and the consuming application will wire them into the argument's logical structure.
+A citation claim is just a claim whose propositional content is "the cited material says/shows X". Logical relationships between all claim kinds — normal, citation, axiomatic — are expressed through variables, formulas, and premises. The parser derives the citation and axiom support graphs from those formulas; you do not list supports as a separate field.
 
-## Citation Links
+Apps using this library may extend axiomatic claims with a \`reasonCode\` field describing the category of self-evidence, and may constrain that field to a closed enum of allowed values via their schema extension. The core parser does not require any such field.
 
-A claim's \`citationMiniIds\` array links that claim to other claims (within the same \`claims\` array) that have \`type: "citation"\` and serve as cited evidence supporting it. It must contain only miniIds of claims with \`type: "citation"\` (e.g., \`["s1", "s2"]\`).
+## Support via Formulas
 
-**Never put miniIds of normal-typed claims in \`citationMiniIds\`** — that is a common mistake. If claim A logically depends on claim B (where B is itself a normal claim being argued), express that dependency through a premise formula, not through \`citationMiniIds\`.
+To express that a citation-typed or axiomatic-typed claim supports another claim, include the supporting claim's variable in the antecedent (left-hand side) of an \`implies\` or \`iff\` premise whose consequent (right-hand side) is the supported claim's variable. For example, to express that citation C1 supports the normal claim X, write a premise with formula \`C1_var implies X_var\`.
 
-If the input text has no citations, leave every claim's \`citationMiniIds\` as an empty array \`[]\`. You only emit citation-typed claims when the input text actually references external evidence.
+For \`iff\` premises, the right-hand operand is treated as the supported claim by parser convention even though biconditionals are logically symmetric — place the supported claim on the right.
+
+Constraint premises (premises whose root operator is not \`implies\` or \`iff\`) do not register any support edges, even if their formulas mention citation- or axiomatic-typed variables.
+
+The parser infers the citation and axiom support graphs from these formulas; do not list supports as a separate field.
 
 ## Citation Claim Metadata
 
@@ -120,15 +124,12 @@ Only populate fields that actually appear in your assigned output schema. Do not
 
 Each entity type uses a distinct prefix for its miniId to avoid cross-reference confusion:
 
-- Normal claims: \`c1\`, \`c2\`, \`c3\`, ...
-- Citation claims: \`s1\`, \`s2\`, \`s3\`, ... (the \`s\` prefix is a UX convention to mark the cited-evidence role; semantically these are claims in the same \`claims\` array, distinguished only by their \`type: "citation"\` field)
-- Axiomatic claims: \`a1\`, \`a2\`, \`a3\`, ... (the \`a\` prefix is a UX convention to mark the self-evident role; semantically these are claims in the same \`claims\` array, distinguished only by their \`type: "axiomatic"\` field)
+- Claims (all kinds): \`c1\`, \`c2\`, \`c3\`, ... — the \`type\` field distinguishes \`"normal"\`, \`"citation"\`, and \`"axiomatic"\`.
 - Variables: \`v1\`, \`v2\`, \`v3\`, ...
 - Premises: \`p1\`, \`p2\`, \`p3\`, ...
 
-Always use the correct prefix when referencing entities. Cross-type references are strict:
-- \`citationMiniIds\` on a claim → only miniIds of claims with \`type: "citation"\` (typically \`s\`-prefixed by convention). It must NOT contain miniIds of \`"axiomatic"\` claims — axiom linkage is not expressed in the parsed output.
-- \`claimMiniId\` on a variable → any claim in the \`claims\` array (typically \`c\`-prefixed; \`s\`-prefixed citation claims and \`a\`-prefixed axiomatic claims may also be referenced when their propositional content is part of the reasoning)
+Always use the correct prefix when referencing entities. Cross-type references:
+- \`claimMiniId\` on a variable → any claim in the \`claims\` array
 - \`conclusionPremiseMiniId\` → only \`p\`-prefixed miniIds (premises)
 
 ## Self-Check
@@ -138,8 +139,7 @@ Before finalizing your response, verify:
 2. Every variable's \`claimMiniId\` references an existing claim in the \`claims\` array
 3. The \`conclusionPremiseMiniId\` references an existing premise in the \`premises\` array
 4. No \`implies\` or \`iff\` operator is nested inside another operator in any formula
-5. \`citationMiniIds\` on each claim contains only miniIds of claims whose \`type\` is \`"citation"\`, never miniIds of \`"normal"\`-typed or \`"axiomatic"\`-typed claims
-6. Every claim has a \`type\` field set to one of \`"normal"\`, \`"citation"\`, or \`"axiomatic"\``
+5. Every claim has a \`type\` field set to one of \`"normal"\`, \`"citation"\`, or \`"axiomatic"\``
 
 type TSchemaLike = {
     properties?: Record<string, TSchemaLike>
