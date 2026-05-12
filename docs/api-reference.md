@@ -4,7 +4,7 @@
 
 ### `new ArgumentEngine(argument, claimLibrary, claimCitationLibrary, options?)`
 
-Creates an engine scoped to `argument` (`{ id, version, title, description }`, without `checksum` — it is computed lazily). Requires a `claimLibrary` implementing `TClaimLookup` (used to validate claim references on variables) and a `claimCitationLibrary` implementing `TClaimCitationLookup` (the global claim-citation graph). As of v0.10.0 the previously separate `sourceLibrary` and `claimSourceLibrary` are gone — sources are now claims with `type: 'citation'` and live in the unified `ClaimLibrary`. Accepts an optional `config?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums) and `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
+Creates an engine scoped to `argument` (`{ id, version, title, description }`, without `checksum` — it is computed lazily). Requires a `claimLibrary` implementing `TClaimLookup` (used to validate claim references on variables) and a `claimCitationLibrary` implementing `TClaimConnectionLookup<TCitation>` (the global claim-citation graph; the parameter type narrowed to the generic connection lookup in v0.12.0). As of v0.10.0 the previously separate `sourceLibrary` and `claimSourceLibrary` are gone — sources are now claims with `type: 'citation'` and live in the unified `ClaimLibrary`. Accepts an optional `config?: TLogicEngineOptions` parameter with `checksumConfig?: TCoreChecksumConfig` (configures which fields are included in entity checksums) and `positionConfig?: TCorePositionConfig` (configures the position range for expression ordering — defaults to signed int32: `[-2147483647, 2147483647]` with initial `0`). `TLogicEngineOptions` is the universal config type accepted by all engine/manager classes.
 
 ---
 
@@ -267,11 +267,15 @@ Returns a cross-premise summary of every variable referenced by expressions, key
 
 Checks whether the argument is structurally ready to evaluate. Returns `{ ok, issues }`. As of v0.11.0, the sweep includes a derivation premise pre-flight: every `type: "derivation"` premise is validated via `validateDerivationStructure`. Broken derivation premises produce issues with code `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` and prevent `evaluate()` and `checkValidity()` from proceeding. Use `validateDerivationStructures()` to isolate derivation checks without running the full evaluability sweep.
 
+As of v0.12.0, `evaluate()` and `checkValidity()` additionally run a claim-type pre-pass on their assignment input. If the assignment contains an entry for a claim-bound variable whose bound claim has `type === "axiomatic"`, the call is rejected with `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` before any evaluation work runs. This is enforced inside `ArgumentEngine` (not in the standalone evaluator), so the structural `TArgumentEvaluationContext` interface is unchanged.
+
 ---
 
 ### `evaluate(assignment, options?)` → `TArgumentEvaluationResult`
 
 Evaluates all relevant premises under the given expression assignment (`TCoreExpressionAssignment`). The assignment contains `variables` (a `Record<string, boolean | null>`) and `operatorAssignments` (a `Record<string, "accepted" | "rejected">` mapping operator expression IDs to their override state — `"accepted"` propagates constraints to unknown variables, `"rejected"` forces `false` with children skipped, absent means normal evaluation). Returns per-premise truth values, counterexample status, and an admissibility flag.
+
+Claim-type-aware pre-pass (v0.12.0): before delegating to the standalone evaluator, `ArgumentEngine.evaluate` walks all claim-bound variables. If the caller's assignment includes an entry for any axiomatic-bound variable, evaluation aborts with `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. Otherwise the engine builds an effective assignments map: caller entries unchanged, plus a forced `true` for every axiomatic-bound variable. Citation- and normal-bound variables continue to behave exactly as today (caller assigns; unassigned → `null`).
 
 Options:
 
@@ -285,6 +289,8 @@ Options:
 ### `checkValidity(options?)` → `TValidityCheckResult`
 
 Runs a truth-table search over all 2ⁿ assignments (n = distinct referenced variable count). Returns `isValid` (`true`, `false`, or `undefined` if truncated), counterexamples, and statistics.
+
+Claim-type-aware enumeration (v0.12.0): the variable enumeration set excludes claim-bound variables whose bound claim has `type === "axiomatic"`. Their value is fixed at `true` and they are not a free choice. Citation-bound variables remain in the enumeration set (they are free choices for validity-check purposes, same as normal variables). Counts (`numAdmissibleAssignments`, counterexample search space) are computed against the reduced enumeration set, so an argument with `k` claim-bound variables of which `a` are axiomatic enumerates `2^(k - a)` assignments rather than `2^k`. Each generated assignment also implicitly fixes axiomatic-bound variables to `true` via the same pre-pass that `evaluate()` runs.
 
 Options:
 
@@ -334,7 +340,7 @@ Returns a serialisable snapshot of the full engine state (`{ argument, variables
 
 ### `static fromSnapshot(snapshot, claimLibrary, claimCitationLibrary, grammarConfig?, checksumVerification?, generateId?)` → `ArgumentEngine`
 
-Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `claimLibrary` (implementing `TClaimLookup`) and `claimCitationLibrary` (implementing `TClaimCitationLookup`) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`. The optional `grammarConfig` parameter overrides expression-tree grammar enforcement during restoration — defaults to `PERMISSIVE_GRAMMAR_CONFIG` so that previously saved trees load without validation errors. The optional `checksumVerification` (`"ignore" | "strict"`) controls whether stored checksums are verified or ignored on load; the optional `generateId` overrides the snapshot's persisted ID generator.
+Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `claimLibrary` (implementing `TClaimLookup`) and `claimCitationLibrary` (implementing `TClaimConnectionLookup<TCitation>` as of v0.12.0) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`. The optional `grammarConfig` parameter overrides expression-tree grammar enforcement during restoration — defaults to `PERMISSIVE_GRAMMAR_CONFIG` so that previously saved trees load without validation errors. The optional `checksumVerification` (`"ignore" | "strict"`) controls whether stored checksums are verified or ignored on load; the optional `generateId` overrides the snapshot's persisted ID generator.
 
 ---
 
@@ -364,20 +370,21 @@ Returns whether this argument may be forked. Default implementation returns `tru
 
 ## `PropositCore`
 
-Top-level orchestrator that owns all four libraries and provides unified snapshot/restore, validation, and cross-library operations. Recommended entry point for new applications.
+Top-level orchestrator that owns all five libraries and provides unified snapshot/restore, validation, and cross-library operations. Recommended entry point for new applications.
 
 ### `new PropositCore(options?)`
 
-Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → claimCitations → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `grammarConfig`).
+Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → citations → axioms → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `grammarConfig`).
 
-Public library fields:
+Public library fields (v0.12.0 — all single-word nouns):
 
 - `core.claims` — `ClaimLibrary`
-- `core.claimCitations` — `ClaimCitationLibrary`
+- `core.citations` — `ClaimCitationLibrary` (renamed from `claimCitations` in v0.12.0)
+- `core.axioms` — `ClaimAxiomLibrary` (new in v0.12.0)
 - `core.forks` — `ForkLibrary`
 - `core.arguments` — `ArgumentLibrary`
 
-As of v0.10.0 the previously separate `sources` and `claimSources` libraries are gone — sources are now claims with `type: 'citation'` and the citation graph lives in `claimCitations`.
+As of v0.10.0 the previously separate `sources` and `claimSources` libraries are gone — sources are now claims with `type: 'citation'` and the citation graph lives in `core.citations`. As of v0.12.0 `core.axioms` holds an analogous graph for axiomatic claims (see `ClaimAxiomLibrary` below).
 
 ---
 
@@ -386,13 +393,14 @@ As of v0.10.0 the previously separate `sources` and `claimSources` libraries are
 Full fork orchestration:
 
 1. Retrieves the source engine from `ArgumentLibrary`; calls `engine.canFork()`.
-2. Walks the citation graph from the source engine's claim-bound variables to compute the closure of claims that must be cloned (both `'normal'` and `'citation'` claims).
+2. Walks the combined citation + axiom connection graph from the source engine's claim-bound variables — a single BFS that consults `core.citations.getConnectionsForClaim` and `core.axioms.getConnectionsForClaim` at each frontier pop. Computes the closure of claims that must be cloned (`'normal'`, `'citation'`, and `'axiomatic'`). The unified BFS guarantees that axioms reachable via multi-hop citation paths (and vice versa) end up in the closure — important for cases like "normal claim B is cited by normal claim C, and B is also axiom-backed; forking C clones B and the backing axiom."
 3. Clones every claim in the closure into the unified `ClaimLibrary`.
-4. Clones every citation edge between the cloned claims into `ClaimCitationLibrary`.
-5. Forks the engine via `forkArgumentEngine()` with new UUIDs.
-6. Remaps variable claim references to point at the cloned claims.
-7. Registers the forked engine in `ArgumentLibrary`.
-8. Creates fork records in all five `ForkLibrary` namespaces.
+4. Clones every citation connection whose dependent endpoint is in the closure into `ClaimCitationLibrary`, remapping both endpoints. Cloned connections pin `claimVersion: 0` / `supportingClaimVersion: 0`.
+5. Clones every axiom connection whose dependent endpoint is in the closure into `ClaimAxiomLibrary`, with the same remapping and version-pin behavior.
+6. Forks the engine via `forkArgumentEngine()` with new UUIDs.
+7. Remaps variable claim references to point at the cloned claims.
+8. Registers the forked engine in `ArgumentLibrary`.
+9. Creates fork records in all five `ForkLibrary` namespaces.
 
 Options extend `TForkArgumentOptions` with per-namespace extras (`argumentForkExtras`, `premiseForkExtras`, `expressionForkExtras`, `variableForkExtras`, `claimForkExtras`) and an optional `forkId`.
 
@@ -400,10 +408,10 @@ Returns:
 
 - `engine` — the new `ArgumentEngine`
 - `remapTable` — `TForkRemapTable` mapping original entity IDs to new IDs
-- `claimRemap` — `Map<string, string>` mapping original claim IDs to cloned claim IDs (covers both `'normal'` and `'citation'` claims)
+- `claimRemap` — `Map<string, string>` mapping original claim IDs to cloned claim IDs (covers `'normal'`, `'citation'`, and `'axiomatic'` claims)
 - `argumentFork` — the created `TArgFork` record
 
-> The legacy `sourceRemap` field is gone — citation-typed claims are remapped through `claimRemap` alongside normal claims, since sources are no longer a separate entity type.
+> The legacy `sourceRemap` field is gone — citation-typed claims are remapped through `claimRemap` alongside normal claims, since sources are no longer a separate entity type. Axiomatic claims also ride in `claimRemap` — there is no separate `axiomRemap`.
 
 ---
 
@@ -415,19 +423,19 @@ Computes a structural diff between two managed arguments. Automatically injects 
 
 ### `snapshot()` → `TPropositCoreSnapshot`
 
-Returns a serializable snapshot of the entire system state (all four libraries: `claims`, `claimCitations`, `forks`, `arguments`).
+Returns a serializable snapshot of the entire system state (all five libraries: `claims`, `citations`, `axioms`, `forks`, `arguments`). The snapshot slot for citations renamed from `claimCitations` to `citations` in v0.12.0; the new `axioms` slot was added in the same version.
 
 ---
 
 ### `static fromSnapshot(snapshot, config?)` → `PropositCore`
 
-Restores a `PropositCore` from a snapshot. Libraries are restored in dependency order.
+Restores a `PropositCore` from a snapshot. Libraries are restored in dependency order. Performs unknown-typed pre-checks before any typed coercion: throws `LEGACY_MISSING_AXIOM_SLOT` when the `axioms` slot is absent, and throws `LEGACY_CLAIM_CITATION_SHAPE` when the snapshot still uses the legacy `claimCitations` wrapper key. Both signal that the v0.12 CLI migration must run before non-CLI consumers can load the snapshot.
 
 ---
 
 ### `validate()` → `TInvariantValidationResult`
 
-Runs invariant validation across all four libraries and merges the results.
+Runs invariant validation across all five libraries and merges the results.
 
 ---
 
@@ -611,9 +619,11 @@ Renders the full argument as a multi-line string. Each premise is prefixed with 
 
 ## `ClaimCitationLibrary<TCitation>`
 
-Global standalone repository for citations between claims (renamed from `ClaimSourceLibrary` in v0.10.0). Implements `TClaimCitationLibraryManagement<TCitation>` (which extends `TClaimCitationLookup<TCitation>`). A citation is a directed edge `(citingClaimId@citingClaimVersion → sourceClaimId@sourceClaimVersion)` in the global claim-citation graph. Create-or-delete only — no update path.
+Global standalone repository for citation connections between claims (renamed from `ClaimSourceLibrary` in v0.10.0; renamed terminology and field set in v0.12.0). Implements the generic `TClaimConnectionLibraryManagement<TCitation>` interface (which extends `TClaimConnectionLookup<TCitation>`). A citation is a directed support edge `(claimId@claimVersion → supportingClaimId@supportingClaimVersion)` in the global claim-citation graph. Create-or-delete only — no update path.
 
-Pass an instance to `ArgumentEngine` constructor (and `fromSnapshot`) as the third parameter.
+Pass an instance to `ArgumentEngine` constructor (and `fromSnapshot`) as the third parameter; on `PropositCore` it lives at `core.citations`.
+
+> **Renamed in v0.12.0.** The previous edge-endpoint vocabulary (`citingClaimId`/`citingClaimVersion`/`sourceClaimId`/`sourceClaimVersion`) was renamed to the generic connection vocabulary (`claimId`/`claimVersion`/`supportingClaimId`/`supportingClaimVersion`). The reverse-lookup method `getCitationsForSourceClaim` was removed (no production callers); `getCitationsForCitingClaim` was renamed to `getConnectionsForClaim`. The snapshot wrapper field renamed from `claimCitations` to `connections`.
 
 ### `new ClaimCitationLibrary(claimLookup, options?)`
 
@@ -623,10 +633,10 @@ Creates an empty library. Takes a single `claimLookup` (implementing `TClaimLook
 
 ### `add(citation)` → `TCitation`
 
-Adds a new citation edge (without `checksum` — it is computed automatically). The `citation` parameter is `Omit<TCitation, "checksum">`. Validates:
+Adds a new citation connection (without `checksum` — it is computed automatically). The `citation` parameter is `Omit<TCitation, "checksum">`. Validates:
 
-- Both `citingClaimId@citingClaimVersion` and `sourceClaimId@sourceClaimVersion` resolve in the claim lookup (`CITATION_CITING_REF_NOT_FOUND`, `CITATION_SOURCE_REF_NOT_FOUND`).
-- The source-side claim has `type: 'citation'` (`CITATION_SOURCE_NOT_CITATION_TYPE`).
+- Both `claimId@claimVersion` and `supportingClaimId@supportingClaimVersion` resolve in the claim lookup (`CITATION_CLAIM_REF_NOT_FOUND`, `CITATION_SUPPORTING_REF_NOT_FOUND`).
+- The supporting-side claim has `type: 'citation'` (`CITATION_SUPPORTING_NOT_CITATION_TYPE`).
 - The citation does not introduce a cycle in the global claim-citation graph (`CITATION_CYCLE_DETECTED`). Cycle detection is ID-only — versions don't disambiguate.
 - No citation with the given `id` already exists (`CITATION_DUPLICATE_ID`).
 
@@ -644,15 +654,9 @@ Returns a citation by ID, or `undefined` if not found.
 
 ---
 
-### `getCitationsForCitingClaim(citingClaimId)` → `TCitation[]`
+### `getConnectionsForClaim(claimId)` → `TCitation[]`
 
-Returns all citations where the given claim is the citing-side endpoint.
-
----
-
-### `getCitationsForSourceClaim(sourceClaimId)` → `TCitation[]`
-
-Returns all citations where the given claim is the source-side endpoint.
+Returns all citation connections where the given claim is the supported (dependent) endpoint. Renamed from `getCitationsForCitingClaim` in v0.12.0.
 
 ---
 
@@ -670,19 +674,112 @@ Returns citations matching the given predicate.
 
 ### `validate()` → `TInvariantValidationResult`
 
-Validates all citations: schema conformance, both endpoints resolve in the claim lookup, source-side endpoints have `type: 'citation'`. Called automatically after every mutation.
+Validates all citations: schema conformance, both endpoints resolve in the claim lookup, supporting-side endpoints have `type: 'citation'`. Called automatically after every mutation.
 
 ---
 
-### `snapshot()` → `TClaimCitationLibrarySnapshot<TCitation>`
+### `snapshot()` → `TClaimConnectionLibrarySnapshot<TCitation>`
 
-Returns a serialisable snapshot `{ claimCitations: TCitation[] }`.
+Returns a serialisable snapshot `{ connections: TCitation[] }`. The wrapper field renamed from `claimCitations` to `connections` in v0.12.0.
 
 ---
 
 ### `static fromSnapshot(snapshot, claimLookup, options?)` → `ClaimCitationLibrary<TCitation>`
 
-Reconstructs a `ClaimCitationLibrary` from a previously captured snapshot. Does not re-validate citations against the lookup.
+Reconstructs a `ClaimCitationLibrary` from a previously captured snapshot. Performs an unknown-typed pre-check on the raw input: throws `LEGACY_CLAIM_CITATION_SHAPE` when the snapshot still uses the legacy `claimCitations` wrapper key or contains entities with the legacy `citingClaimId`/`sourceClaimId` field names — both signals that the v0.12 CLI migration has not yet been run. Does not re-validate citations against the lookup once the shape check passes.
+
+---
+
+## `ClaimAxiomLibrary<TAxiom>`
+
+_Since v0.12.0._
+
+Global standalone repository for axiom-invocation connections between claims. Implements the generic `TClaimConnectionLibraryManagement<TAxiom>` interface. An axiom connection is a directed support edge `(claimId@claimVersion → supportingClaimId@supportingClaimVersion)` where the dependent (`claimId`) endpoint must be a `'normal'` claim and the supporting (`supportingClaimId`) endpoint must be an `'axiomatic'` claim. Create-or-delete only — no update path.
+
+Lives on `PropositCore` at `core.axioms`. Constructor signature is identical to `ClaimCitationLibrary`.
+
+> **No cycle detection.** Unlike `ClaimCitationLibrary`, this library does not run cycle detection. Axiomatic claims cannot appear on the dependent side (`AXIOM_CLAIM_NOT_NORMAL_TYPE` blocks that), so cycles are structurally impossible. This is an intentional asymmetry between the two connection libraries.
+
+### `new ClaimAxiomLibrary(claimLookup, options?)`
+
+Creates an empty library. Takes a single `claimLookup` (implementing `TClaimLookup`) — both endpoints of every axiom connection reference the unified claim library. Accepts an optional `{ checksumConfig? }` parameter (uses `claimAxiomFields` from the config when present, otherwise falls back to `claimCitationFields`).
+
+---
+
+### `add(axiom)` → `TAxiom`
+
+Adds a new axiom connection (without `checksum` — it is computed automatically). The `axiom` parameter is `Omit<TAxiom, "checksum">`. Validates:
+
+- No axiom with the given `id` already exists (`AXIOM_DUPLICATE_ID`).
+- Both `claimId@claimVersion` and `supportingClaimId@supportingClaimVersion` resolve in the claim lookup (`AXIOM_CLAIM_REF_NOT_FOUND`, `AXIOM_SUPPORTING_REF_NOT_FOUND`).
+- The dependent-side claim has `type: 'normal'` (`AXIOM_CLAIM_NOT_NORMAL_TYPE`). Citation claims and axiomatic claims cannot themselves be backed by axioms.
+- The supporting-side claim has `type: 'axiomatic'` (`AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE`).
+
+No cycle check (see note above).
+
+---
+
+### `remove(id)` → `TAxiom`
+
+Removes an axiom connection by ID and returns the removed entity. Throws if the connection does not exist.
+
+---
+
+### `get(id)` → `TAxiom | undefined`
+
+Returns an axiom connection by ID, or `undefined` if not found.
+
+---
+
+### `getConnectionsForClaim(claimId)` → `TAxiom[]`
+
+Returns all axiom connections where the given claim is the dependent (supported) endpoint.
+
+---
+
+### `getAll()` → `TAxiom[]`
+
+Returns all axiom connections.
+
+---
+
+### `filter(predicate)` → `TAxiom[]`
+
+Returns axiom connections matching the given predicate.
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Validates all axiom connections: schema conformance, both endpoints resolve in the claim lookup, supporting-side endpoints have `type: 'axiomatic'`, dependent-side endpoints have `type: 'normal'`. Called automatically after every mutation.
+
+---
+
+### `snapshot()` → `TClaimConnectionLibrarySnapshot<TAxiom>`
+
+Returns a serialisable snapshot `{ connections: TAxiom[] }` — same wrapper shape as `ClaimCitationLibrary.snapshot()`.
+
+---
+
+### `static fromSnapshot(snapshot, claimLookup, options?)` → `ClaimAxiomLibrary<TAxiom>`
+
+Reconstructs a `ClaimAxiomLibrary` from a previously captured snapshot. Does not re-validate axioms against the lookup. Use `validate()` afterwards if you need to detect snapshots that were tampered with.
+
+---
+
+## Generic claim-connection interfaces
+
+_Since v0.12.0._
+
+Both `ClaimCitationLibrary` and `ClaimAxiomLibrary` implement the same generic interfaces, so consumer code can be written polymorphically.
+
+| Interface                                  | Description                                                                                                                                                                                                                         |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TClaimConnectionLookup<TConn>`            | Narrow read-only interface — `getConnectionsForClaim(claimId): TConn[]`, `get(id): TConn \| undefined`. Implemented by both citation and axiom libraries.                                                                           |
+| `TClaimConnectionLibraryManagement<TConn>` | Full management interface extending `TClaimConnectionLookup`. Adds `add`, `remove`, `getAll`, `filter`, `snapshot`, `validate`. Both libraries satisfy this contract identically — no per-library extras leak through this surface. |
+| `TClaimConnectionLibrarySnapshot<TConn>`   | Snapshot wrapper type `{ connections: TConn[] }` shared by both library snapshot shapes.                                                                                                                                            |
+
+The `TConn` parameter defaults to the base `TCoreClaimConnection`; pass `TCoreClaimCitation` or `TCoreClaimAxiom` (or an extended app-layer type) to narrow it. The `emptyClaimConnectionLookup<TConn>()` factory returns an empty lookup that type-checks at either narrowing.
 
 ---
 
@@ -984,23 +1081,29 @@ Reconstructs a `ManagedDerivationPremiseEngine` from a snapshot. Delegates to `P
 2. Restores all expressions via the parent's restoration logic.
 3. Validates the full tree against derivation structural rules — throws `DERIVATION_STRUCTURE_INVALID` if the tree is malformed.
 
-The `generateId` parameter is stored on the instance for use by `populateFromCitations`.
+The `generateId` parameter is stored on the instance for use by `populateFromSupports`.
 
 ---
 
-### `populateFromCitations(citationLib, argumentEngine)` → `void`
+### `populateFromSupports(citationLib, axiomLib, argumentEngine)` → `void`
 
-One-shot helper that builds the antecedent of this derivation premise from the current global citations of the derived claim. Behavior by citation count:
+_Renamed from `populateFromCitations` in v0.12.0; signature gains the `axiomLib` parameter._
+
+One-shot helper that builds the antecedent of this derivation premise from the combined support set drawn from the global citation library and the global axiom library for the derived claim.
+
+The supporting connections are concatenated in a stable order — citations first (in their `getConnectionsForClaim` order), then axioms (also in their `getConnectionsForClaim` order). Behavior by total count `n`:
 
 - **`n = 0`** — no change; the premise stays in its current form (typically naked-Q).
 - **`n = 1`** — produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
 - **`n ≥ 2`** — produces `IMPLIES(formula(OR(VariableExpression(S1), …, VariableExpression(Sn))), VariableExpression(Q))`. The `formula` buffer between `IMPLIES` and `OR` is auto-inserted by the engine's standard grammar (`wrapInsertFormula`).
 
-For each cited source, calls `argumentEngine.ensureClaimBoundVariable(citation.sourceClaimId)` to materialize a claim-bound variable. The antecedent construction uses `super.*` calls internally to bypass per-mutation overrides, then validates the final tree with `assertWellFormed()`.
+For each supporting connection, calls `argumentEngine.ensureClaimBoundVariable(connection.supportingClaimId)` to materialize a claim-bound variable, and registers the result in the engine's local `VariableManager`. The antecedent construction uses `super.*` calls internally to bypass per-mutation overrides, then validates the final tree with `assertWellFormed()`.
 
 Throws `InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY)` when the derivation premise already has a non-empty antecedent (i.e., root is `implies`/`iff` with a position-0 child). Delete and re-create the premise to repopulate.
 
-> **Changed in v0.11.2:** the n ≥ 2 branch now uses standard grammar throughout, so the produced shape matches what every other engine path (auto-normalize on load, manual rebuild) would emit. Pre-v0.11.2 produced `IMPLIES(OR(...), Q)` without the formula buffer by temporarily switching to `PERMISSIVE_GRAMMAR_CONFIG`. Stored pre-v0.11.2 data remains valid — `validateDerivationStructure` accepts both shapes — but consumer-side `combinedChecksum` checks may now report drift on pre-v0.11.2 trees and converge after a one-time normalization pass.
+> **Append-mode is deferred.** v0.12 keeps the naked-Q precondition. A user who wants to revise the support set (e.g., add an axiom after a citation-only populate) must delete and re-create the derivation premise.
+
+> **Changed in v0.11.2:** the n ≥ 2 branch uses standard grammar throughout, so the produced shape matches what every other engine path (auto-normalize on load, manual rebuild) would emit. Pre-v0.11.2 produced `IMPLIES(OR(...), Q)` without the formula buffer by temporarily switching to `PERMISSIVE_GRAMMAR_CONFIG`. Stored pre-v0.11.2 data remains valid — `validateDerivationStructure` accepts both shapes — but consumer-side `combinedChecksum` checks may now report drift on pre-v0.11.2 trees and converge after a one-time normalization pass.
 
 ---
 
@@ -1050,7 +1153,7 @@ _Since v0.11.0._
 | `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`  | A derivation premise tree is broken at `validateEvaluability()` / `validateDerivationStructures()` call time.                                                       |
 | `DERIVATION_CONSEQUENT_LOCKED`                | Mutation targets the locked consequent expression — removal, negation, variable change, operator change, or insertion into consequent slot.                         |
 | `DERIVATION_ROOT_OPERATOR_INVALID`            | `changeOperator` attempted to swap root `implies`/`iff` to a non-implication operator.                                                                              |
-| `DERIVATION_ANTECEDENT_NON_EMPTY`             | `populateFromCitations` called on a premise that already has a non-empty antecedent.                                                                                |
+| `DERIVATION_ANTECEDENT_NON_EMPTY`             | `populateFromSupports` called on a premise that already has a non-empty antecedent.                                                                                 |
 | `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` | `createPremise({ type: "derivation" })` called without `derivedClaimId`.                                                                                            |
 | `CREATE_DERIVATION_CLAIM_NOT_FOUND`           | `createPremise({ type: "derivation", derivedClaimId })` but claim is not in the library.                                                                            |
 | `CLAIM_NOT_FOUND`                             | `ensureClaimBoundVariable(claimId)` but claim is not in the library.                                                                                                |
@@ -1297,19 +1400,19 @@ A version of `TPropositionalExpression` with both the `position` and `checksum` 
 
 Hierarchical snapshot types for capturing and restoring engine state:
 
-| Type                            | Contains                                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------- |
-| `TExpressionManagerSnapshot`    | `expressions` (with checksums), `config`                                                    |
-| `TVariableManagerSnapshot`      | `variables`, `config`                                                                       |
-| `TPremiseEngineSnapshot`        | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                    |
-| `TArgumentEngineSnapshot`       | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config`     |
-| `TReactiveSnapshot`             | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles` |
-| `TReactivePremiseSnapshot`      | `premise`, `expressions` (Record by ID), `rootExpressionId`                                 |
-| `TClaimLibrarySnapshot`         | `claims` (all versions of all claims, both `'normal'` and `'citation'`)                     |
-| `TClaimCitationLibrarySnapshot` | `claimCitations` (all citation edges)                                                       |
-| `TArgumentLibrarySnapshot`      | `arguments` (array of `TArgumentEngineSnapshot`)                                            |
-| `TForkLibrarySnapshot`          | Five arrays (`arguments`, `premises`, `expressions`, `variables`, `claims`)                 |
-| `TPropositCoreSnapshot`         | All four library snapshots in one object                                                    |
+| Type                                     | Contains                                                                                                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TExpressionManagerSnapshot`             | `expressions` (with checksums), `config`                                                                                                                           |
+| `TVariableManagerSnapshot`               | `variables`, `config`                                                                                                                                              |
+| `TPremiseEngineSnapshot`                 | `premise` metadata, `rootExpressionId`, `expressions` snapshot, `config`                                                                                           |
+| `TArgumentEngineSnapshot`                | `argument`, `variables` snapshot, `premises` snapshots, `conclusionPremiseId`, `config`                                                                            |
+| `TReactiveSnapshot`                      | `argument`, `variables` (Record by ID), `premises` (Record by ID with expressions), `roles`                                                                        |
+| `TReactivePremiseSnapshot`               | `premise`, `expressions` (Record by ID), `rootExpressionId`                                                                                                        |
+| `TClaimLibrarySnapshot`                  | `claims` (all versions of all claims; `'normal'`, `'citation'`, and `'axiomatic'`)                                                                                 |
+| `TClaimConnectionLibrarySnapshot<TConn>` | `connections` (all connection records); shared shape for both citation and axiom libraries — wrapper key renamed from `claimCitations` to `connections` in v0.12.0 |
+| `TArgumentLibrarySnapshot`               | `arguments` (array of `TArgumentEngineSnapshot`)                                                                                                                   |
+| `TForkLibrarySnapshot`                   | Five arrays (`arguments`, `premises`, `expressions`, `variables`, `claims`)                                                                                        |
+| `TPropositCoreSnapshot`                  | All five library snapshots in one object: `claims`, `citations`, `axioms` (new in v0.12.0), `forks`, `arguments`                                                   |
 
 `TReactiveSnapshot` is the type returned by `getSnapshot()` — optimized for React with Record-based lookups and structural sharing. The other snapshot types are for serialization and restoration.
 
@@ -1357,37 +1460,48 @@ Fork provenance lives entirely in `ForkLibrary` — entity schemas (argument, pr
 
 ---
 
-### Claim and Claim-Citation Types
+### Claim, Citation, and Axiom Types
 
-As of v0.10.0 the previously separate `Source` / `ClaimSourceAssociation` types are gone. Sources are now claims with `type: 'citation'`, and `ClaimSourceAssociation` is replaced by `TCoreClaimCitation` — a directed edge between two claim versions in the unified claim library.
+As of v0.10.0 the previously separate `Source` / `ClaimSourceAssociation` types are gone — sources are claims with `type: 'citation'`. As of v0.12.0 the citation-specific edge interfaces collapsed into a generic `TCoreClaimConnection` shape with neutral field names, and `TCoreClaimAxiom` was added for axiom-invocation connections.
 
-| Type                              | Description                                                                                                                                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TCoreClaim`                      | Base claim entity (`{ id, version, frozen, checksum, type: 'normal' \| 'citation' }`); `type` is immutable post-creation                                                                    |
-| `TCoreClaimCitation`              | Citation edge in the global claim citation graph (`{ id, citingClaimId, citingClaimVersion, sourceClaimId, sourceClaimVersion, checksum }`); source-side claim must have `type: 'citation'` |
-| `TClaimLookup`                    | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                                                           |
-| `TClaimLibraryManagement`         | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)                                 |
-| `TClaimCitationLookup`            | Narrow read-only interface for citation lookups (`getCitationsForCitingClaim`, `getCitationsForSourceClaim`, `get`)                                                                         |
-| `TClaimCitationLibraryManagement` | Full management interface for `ClaimCitationLibrary` (extends `TClaimCitationLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`)                                                 |
-| `TClaimLibrarySnapshot`           | Snapshot type for `ClaimLibrary` state (`{ claims: TClaim[] }`)                                                                                                                             |
-| `TClaimCitationLibrarySnapshot`   | Snapshot type for `ClaimCitationLibrary` state (`{ claimCitations: TCitation[] }`)                                                                                                          |
+| Type                                       | Description                                                                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TCoreClaim`                               | Base claim entity (`{ id, version, frozen, checksum, type: 'normal' \| 'citation' \| 'axiomatic' }`); `type` is immutable post-creation                             |
+| `TCoreClaimConnection`                     | Generic support edge `{ id, claimId, claimVersion, supportingClaimId, supportingClaimVersion, checksum }`; specialised by which library holds it                    |
+| `TCoreClaimCitation`                       | Citation connection (alias of `TCoreClaimConnection`); supporting-side claim must have `type: 'citation'`                                                           |
+| `TCoreClaimAxiom`                          | Axiom-invocation connection (alias of `TCoreClaimConnection`); supporting-side claim must have `type: 'axiomatic'`, dependent-side claim must have `type: 'normal'` |
+| `TClaimLookup`                             | Narrow read-only interface for claim lookups (`get(id, version)`)                                                                                                   |
+| `TClaimLibraryManagement`                  | Full management interface for `ClaimLibrary` (extends `TClaimLookup`; adds `create`, `update`, `freeze`, `getCurrent`, `getAll`, `getVersions`, `snapshot`)         |
+| `TClaimConnectionLookup<TConn>`            | Narrow read-only interface for connection lookups (`getConnectionsForClaim`, `get`); implemented by both citation and axiom libraries                               |
+| `TClaimConnectionLibraryManagement<TConn>` | Full management interface for a connection library (extends `TClaimConnectionLookup`; adds `add`, `remove`, `getAll`, `filter`, `snapshot`, `validate`)             |
+| `TClaimLibrarySnapshot`                    | Snapshot type for `ClaimLibrary` state (`{ claims: TClaim[] }`)                                                                                                     |
+| `TClaimConnectionLibrarySnapshot<TConn>`   | Snapshot type for both connection libraries (`{ connections: TConn[] }`); the wrapper key renamed from `claimCitations` to `connections` in v0.12.0                 |
 
 ## Errors
 
-### Claim and citation error codes (v0.10.0)
+### Claim, citation, and axiom error codes
 
-These codes are emitted as `TInvariantViolation.code` values by `ClaimLibrary` and `ClaimCitationLibrary`:
+These codes are emitted as `TInvariantViolation.code` values by `ClaimLibrary`, `ClaimCitationLibrary`, and `ClaimAxiomLibrary`. Unless noted otherwise, the citation codes are the v0.12.0 renames; the previous code names (`CITATION_CITING_REF_NOT_FOUND`, `CITATION_SOURCE_REF_NOT_FOUND`, `CITATION_SOURCE_NOT_CITATION_TYPE`) were dropped without a deprecation alias.
 
-| Code                                | Source                                | Meaning                                                                                                       |
-| ----------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `CLAIM_TYPE_IMMUTABLE`              | `ClaimLibrary.update()`               | An update tried to change a claim's `type` discriminator after creation.                                      |
-| `LEGACY_CLAIM_MISSING_TYPE`         | `ClaimLibrary.fromSnapshot()`         | A claim entry in the snapshot lacks the `type` field (pre-v0.10 data); migration required.                    |
-| `CITATION_SCHEMA_INVALID`           | `ClaimCitationLibrary.validate()`     | A citation does not match `CoreClaimCitationSchema`.                                                          |
-| `CITATION_DUPLICATE_ID`             | `ClaimCitationLibrary.add()`          | A citation with the given `id` already exists.                                                                |
-| `CITATION_CITING_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()` | The citation's `citingClaimId@citingClaimVersion` does not resolve in the claim lookup.                       |
-| `CITATION_SOURCE_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()` | The citation's `sourceClaimId@sourceClaimVersion` does not resolve in the claim lookup.                       |
-| `CITATION_SOURCE_NOT_CITATION_TYPE` | `ClaimCitationLibrary.add/validate()` | The source-side claim has `type !== 'citation'`. Only citation-typed claims are valid as the source endpoint. |
-| `CITATION_CYCLE_DETECTED`           | `ClaimCitationLibrary.add()`          | Adding the citation would introduce a cycle in the global claim-citation graph (ID-only — versions ignored).  |
+| Code                                    | Source                                                            | Meaning                                                                                                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLAIM_TYPE_IMMUTABLE`                  | `ClaimLibrary.update()`                                           | An update tried to change a claim's `type` discriminator after creation.                                                                                             |
+| `LEGACY_CLAIM_MISSING_TYPE`             | `ClaimLibrary.fromSnapshot()`                                     | A claim entry in the snapshot lacks the `type` field (pre-v0.10 data); migration required.                                                                           |
+| `CITATION_SCHEMA_INVALID`               | `ClaimCitationLibrary.validate()`                                 | A citation does not match `CoreClaimCitationSchema`.                                                                                                                 |
+| `CITATION_DUPLICATE_ID`                 | `ClaimCitationLibrary.add()`                                      | A citation with the given `id` already exists.                                                                                                                       |
+| `CITATION_CLAIM_REF_NOT_FOUND`          | `ClaimCitationLibrary.add/validate()`                             | The citation's `claimId@claimVersion` does not resolve in the claim lookup.                                                                                          |
+| `CITATION_SUPPORTING_REF_NOT_FOUND`     | `ClaimCitationLibrary.add/validate()`                             | The citation's `supportingClaimId@supportingClaimVersion` does not resolve in the claim lookup.                                                                      |
+| `CITATION_SUPPORTING_NOT_CITATION_TYPE` | `ClaimCitationLibrary.add/validate()`                             | The supporting-side claim has `type !== 'citation'`. Only citation-typed claims are valid as the supporting endpoint.                                                |
+| `CITATION_CYCLE_DETECTED`               | `ClaimCitationLibrary.add()`                                      | Adding the citation would introduce a cycle in the global claim-citation graph (ID-only — versions ignored).                                                         |
+| `AXIOM_SCHEMA_INVALID`                  | `ClaimAxiomLibrary.validate()`                                    | An axiom connection does not match `CoreClaimAxiomSchema`.                                                                                                           |
+| `AXIOM_DUPLICATE_ID`                    | `ClaimAxiomLibrary.add()`                                         | An axiom connection with the given `id` already exists.                                                                                                              |
+| `AXIOM_CLAIM_REF_NOT_FOUND`             | `ClaimAxiomLibrary.add/validate()`                                | The axiom's `claimId@claimVersion` does not resolve in the claim lookup.                                                                                             |
+| `AXIOM_SUPPORTING_REF_NOT_FOUND`        | `ClaimAxiomLibrary.add/validate()`                                | The axiom's `supportingClaimId@supportingClaimVersion` does not resolve in the claim lookup.                                                                         |
+| `AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE`   | `ClaimAxiomLibrary.add/validate()`                                | The supporting-side claim has `type !== 'axiomatic'`. Only axiomatic-typed claims are valid as the supporting endpoint.                                              |
+| `AXIOM_CLAIM_NOT_NORMAL_TYPE`           | `ClaimAxiomLibrary.add/validate()`                                | The dependent-side claim has `type !== 'normal'`. Citation and axiomatic claims cannot themselves be backed by axioms.                                               |
+| `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`   | `ArgumentEngine.evaluate/checkValidity`                           | Caller passed an explicit assignment for a claim-bound variable whose claim has `type='axiomatic'`. Reject the axiom in the antecedent via `toggleNegation` instead. |
+| `LEGACY_CLAIM_CITATION_SHAPE`           | `ClaimCitationLibrary.fromSnapshot` / `PropositCore.fromSnapshot` | Snapshot uses pre-v0.12 wrapper key (`claimCitations`) or per-entity legacy field names (`citingClaimId`/`sourceClaimId`). Run the v0.12 CLI migration.              |
+| `LEGACY_MISSING_AXIOM_SLOT`             | `PropositCore.fromSnapshot`                                       | Snapshot lacks an `axioms` slot (pre-v0.12 data). Run the v0.12 CLI migration.                                                                                       |
 
 ### `InvalidArgumentStructureError`
 
