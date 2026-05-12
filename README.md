@@ -873,12 +873,14 @@ The engine enforces structural invariants at two levels: **construction-time** (
 | Adding a citation whose `supportingClaimId@supportingClaimVersion` is not in the lookup      | Throws — `CITATION_SUPPORTING_REF_NOT_FOUND`                                                                        |
 | Supporting-side claim of a citation has `type !== 'citation'`                                | Throws — `CITATION_SUPPORTING_NOT_CITATION_TYPE`                                                                    |
 | Citation that would create a cycle in the global claim-citation graph                        | Throws — `CITATION_CYCLE_DETECTED` (ID-only — versions don't disambiguate)                                          |
+| Calling `ClaimCitationLibrary.remove(id)` with an unknown id                                 | Throws — `CITATION_NOT_FOUND`                                                                                       |
 | Adding an axiom connection whose `id` already exists                                         | Throws — `AXIOM_DUPLICATE_ID`                                                                                       |
 | Adding an axiom connection whose `claimId@claimVersion` is not in the lookup                 | Throws — `AXIOM_CLAIM_REF_NOT_FOUND`                                                                                |
 | Adding an axiom connection whose `supportingClaimId@supportingClaimVersion` is not in lookup | Throws — `AXIOM_SUPPORTING_REF_NOT_FOUND`                                                                           |
 | Supporting-side claim of an axiom connection has `type !== 'axiomatic'`                      | Throws — `AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE`                                                                      |
 | Dependent-side claim of an axiom connection has `type !== 'normal'`                          | Throws — `AXIOM_CLAIM_NOT_NORMAL_TYPE`                                                                              |
 | Caller passes an assignment for an axiomatic-bound variable to `evaluate` or `checkValidity` | Throws — `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` (use `toggleNegation` to reject the axiom in the antecedent instead) |
+| Calling `ClaimAxiomLibrary.remove(id)` with an unknown id                                    | Throws — `AXIOM_NOT_FOUND`                                                                                          |
 | Restoring a pre-v0.12 snapshot whose citation-library wrapper or entities use legacy fields  | Throws — `LEGACY_CLAIM_CITATION_SHAPE` (run the v0.12 CLI migration)                                                |
 | Restoring a pre-v0.12 `PropositCore` snapshot that lacks an `axioms` slot                    | Throws — `LEGACY_MISSING_AXIOM_SLOT` (run the v0.12 CLI migration)                                                  |
 
