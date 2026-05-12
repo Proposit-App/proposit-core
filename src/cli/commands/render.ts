@@ -102,9 +102,9 @@ export function registerRenderCommand(
                 .map((v) => core.claims.get(v.claimId, v.claimVersion))
                 .filter((c) => c !== undefined)
 
-            // Walk the citation graph from the directly referenced claims,
-            // collecting every reachable claim (and the citation edges
-            // between them) so the render output covers the full closure.
+            // Walk the support graph (citations + axioms) from the directly
+            // referenced claims, collecting every reachable claim and every
+            // support edge so the render output covers the full closure.
             const claimByKey = new Map<
                 string,
                 (typeof directlyReferencedClaims)[number]
@@ -113,31 +113,48 @@ export function registerRenderCommand(
                 claimByKey.set(`${claim.id}@${claim.version}`, claim)
             }
             const referencedCitations: ReturnType<
-                typeof core.claimCitations.getAll
+                typeof core.citations.getAll
             > = []
-            const seenCitationIds = new Set<string>()
+            const referencedAxioms: ReturnType<typeof core.axioms.getAll> = []
+            const seenConnectionIds = new Set<string>()
             const frontier: string[] = directlyReferencedClaims.map((c) => c.id)
             const visitedClaimIds = new Set(frontier)
             while (frontier.length > 0) {
                 const claimId = frontier.pop()!
-                const outgoing =
-                    core.claimCitations.getCitationsForCitingClaim(claimId)
-                for (const citation of outgoing) {
-                    if (seenCitationIds.has(citation.id)) continue
-                    seenCitationIds.add(citation.id)
-                    referencedCitations.push(citation)
-                    const sourceClaim = core.claims.get(
-                        citation.sourceClaimId,
-                        citation.sourceClaimVersion
+                const outgoingCitations =
+                    core.citations.getConnectionsForClaim(claimId)
+                const outgoingAxioms =
+                    core.axioms.getConnectionsForClaim(claimId)
+                const outgoing = [
+                    ...outgoingCitations.map((c) => ({
+                        kind: "citation" as const,
+                        conn: c,
+                    })),
+                    ...outgoingAxioms.map((a) => ({
+                        kind: "axiom" as const,
+                        conn: a,
+                    })),
+                ]
+                for (const { kind, conn } of outgoing) {
+                    if (seenConnectionIds.has(conn.id)) continue
+                    seenConnectionIds.add(conn.id)
+                    if (kind === "citation") {
+                        referencedCitations.push(conn)
+                    } else {
+                        referencedAxioms.push(conn)
+                    }
+                    const supportingClaim = core.claims.get(
+                        conn.supportingClaimId,
+                        conn.supportingClaimVersion
                     )
-                    if (sourceClaim) {
-                        const key = `${sourceClaim.id}@${sourceClaim.version}`
+                    if (supportingClaim) {
+                        const key = `${supportingClaim.id}@${supportingClaim.version}`
                         if (!claimByKey.has(key)) {
-                            claimByKey.set(key, sourceClaim)
+                            claimByKey.set(key, supportingClaim)
                         }
-                        if (!visitedClaimIds.has(sourceClaim.id)) {
-                            visitedClaimIds.add(sourceClaim.id)
-                            frontier.push(sourceClaim.id)
+                        if (!visitedClaimIds.has(supportingClaim.id)) {
+                            visitedClaimIds.add(supportingClaim.id)
+                            frontier.push(supportingClaim.id)
                         }
                     }
                 }
@@ -159,13 +176,24 @@ export function registerRenderCommand(
                 }
             }
 
-            // Citations — edges between claims (citing -> source).
+            // Citations — edges between claims (claim -> supporting claim).
             if (referencedCitations.length > 0) {
                 printLine("")
                 printLine("Citations:")
                 for (const citation of referencedCitations) {
                     printLine(
-                        `  ${citation.id} | ${citation.citingClaimId}@${citation.citingClaimVersion} -> ${citation.sourceClaimId}@${citation.sourceClaimVersion}`
+                        `  ${citation.id} | ${citation.claimId}@${citation.claimVersion} -> ${citation.supportingClaimId}@${citation.supportingClaimVersion}`
+                    )
+                }
+            }
+
+            // Axioms — edges between claims (claim -> supporting axiomatic claim).
+            if (referencedAxioms.length > 0) {
+                printLine("")
+                printLine("Axioms:")
+                for (const axiom of referencedAxioms) {
+                    printLine(
+                        `  ${axiom.id} | ${axiom.claimId}@${axiom.claimVersion} -> ${axiom.supportingClaimId}@${axiom.supportingClaimVersion}`
                     )
                 }
             }

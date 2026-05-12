@@ -449,7 +449,7 @@ export function registerPremiseCommands(
             // to the live engine.
             try {
                 managed.populateFromSupports(
-                    propositCore.claimCitations,
+                    propositCore.citations,
                     propositCore.axioms,
                     engine
                 )

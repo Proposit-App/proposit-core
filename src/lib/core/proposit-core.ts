@@ -489,8 +489,7 @@ export class PropositCore<
                 }
             }
 
-            const outgoingAxioms =
-                this.axioms.getConnectionsForClaim(currentId)
+            const outgoingAxioms = this.axioms.getConnectionsForClaim(currentId)
             for (const axiom of outgoingAxioms) {
                 axiomsToClone.push(axiom)
                 if (!uniqueClaimIds.has(axiom.supportingClaimId)) {
@@ -544,9 +543,7 @@ export class PropositCore<
         // Step 5b: Clone axiom edges between the cloned claims
         for (const axiom of axiomsToClone) {
             const remappedClaimId = claimRemap.get(axiom.claimId)
-            const remappedSupportingId = claimRemap.get(
-                axiom.supportingClaimId
-            )
+            const remappedSupportingId = claimRemap.get(axiom.supportingClaimId)
             if (!remappedClaimId || !remappedSupportingId) continue
             this.axioms.add({
                 ...axiom,

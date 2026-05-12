@@ -440,10 +440,8 @@ export class ManagedDerivationPremiseEngine<
         //    first, axioms second; source order preserved within each).
         const citationConnections =
             citationLib.getConnectionsForClaim(derivedClaimId)
-        const axiomConnections =
-            axiomLib.getConnectionsForClaim(derivedClaimId)
-        const totalCount =
-            citationConnections.length + axiomConnections.length
+        const axiomConnections = axiomLib.getConnectionsForClaim(derivedClaimId)
+        const totalCount = citationConnections.length + axiomConnections.length
         if (totalCount === 0) return
 
         // 3. Materialize claim-bound variables for each support.

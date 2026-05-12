@@ -14,13 +14,13 @@ export function registerCitationCommands(program: Command): void {
         .option("--json", "Output as JSON")
         .action(async (opts: { json?: boolean }) => {
             const core = await hydratePropositCore()
-            const all = core.claimCitations.getAll()
+            const all = core.citations.getAll()
             if (opts.json) {
                 printJson(all)
             } else {
                 for (const citation of all) {
                     printLine(
-                        `${citation.id} | ${citation.citingClaimId}@${citation.citingClaimVersion} -> ${citation.sourceClaimId}@${citation.sourceClaimVersion}`
+                        `${citation.id} | ${citation.claimId}@${citation.claimVersion} -> ${citation.supportingClaimId}@${citation.supportingClaimVersion}`
                     )
                 }
             }
@@ -32,44 +32,48 @@ export function registerCitationCommands(program: Command): void {
         .option("--json", "Output as JSON")
         .action(async (citationId: string, opts: { json?: boolean }) => {
             const core = await hydratePropositCore()
-            const citation = core.claimCitations.get(citationId)
+            const citation = core.citations.get(citationId)
             if (!citation) {
                 errorExit(`Citation "${citationId}" not found.`)
             }
             if (opts.json) {
                 printJson(citation)
             } else {
-                printLine(`id:                  ${citation.id}`)
-                printLine(`citingClaimId:       ${citation.citingClaimId}`)
-                printLine(`citingClaimVersion:  ${citation.citingClaimVersion}`)
-                printLine(`sourceClaimId:       ${citation.sourceClaimId}`)
-                printLine(`sourceClaimVersion:  ${citation.sourceClaimVersion}`)
+                printLine(`id:                     ${citation.id}`)
+                printLine(`claimId:                ${citation.claimId}`)
+                printLine(`claimVersion:           ${citation.claimVersion}`)
+                printLine(
+                    `supportingClaimId:      ${citation.supportingClaimId}`
+                )
+                printLine(
+                    `supportingClaimVersion: ${citation.supportingClaimVersion}`
+                )
             }
         })
 
     citations
-        .command("add <citing_claim_id> <source_claim_id>")
+        .command("add <claim_id> <supporting_claim_id>")
         .description(
-            "Add a citation edge between two claims (source must be a citation-typed claim)"
+            "Add a citation edge between two claims (supporting claim must be a citation-typed claim)"
         )
-        .action(async (citingClaimId: string, sourceClaimId: string) => {
+        .action(async (claimId: string, supportingClaimId: string) => {
             const core = await hydratePropositCore()
-            const citingClaim = core.claims.getCurrent(citingClaimId)
-            if (!citingClaim) {
-                errorExit(`Claim "${citingClaimId}" not found.`)
+            const claim = core.claims.getCurrent(claimId)
+            if (!claim) {
+                errorExit(`Claim "${claimId}" not found.`)
             }
-            const sourceClaim = core.claims.getCurrent(sourceClaimId)
-            if (!sourceClaim) {
-                errorExit(`Claim "${sourceClaimId}" not found.`)
+            const supportingClaim = core.claims.getCurrent(supportingClaimId)
+            if (!supportingClaim) {
+                errorExit(`Claim "${supportingClaimId}" not found.`)
             }
             let citation
             try {
-                citation = core.claimCitations.add({
+                citation = core.citations.add({
                     id: randomUUID(),
-                    citingClaimId: citingClaim.id,
-                    citingClaimVersion: citingClaim.version,
-                    sourceClaimId: sourceClaim.id,
-                    sourceClaimVersion: sourceClaim.version,
+                    claimId: claim.id,
+                    claimVersion: claim.version,
+                    supportingClaimId: supportingClaim.id,
+                    supportingClaimVersion: supportingClaim.version,
                 })
             } catch (error) {
                 errorExit(
@@ -85,11 +89,11 @@ export function registerCitationCommands(program: Command): void {
         .description("Remove a citation edge")
         .action(async (citationId: string) => {
             const core = await hydratePropositCore()
-            const citation = core.claimCitations.get(citationId)
+            const citation = core.citations.get(citationId)
             if (!citation) {
                 errorExit(`Citation "${citationId}" not found.`)
             }
-            core.claimCitations.remove(citationId)
+            core.citations.remove(citationId)
             await persistCore(core)
             printLine("success")
         })

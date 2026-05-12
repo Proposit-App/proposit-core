@@ -50,7 +50,7 @@ export type { TOrderedOperation } from "./utils/changeset.js"
 export {
     createLookup,
     EMPTY_CLAIM_LOOKUP,
-    EMPTY_CLAIM_CITATION_LOOKUP,
+    emptyClaimConnectionLookup,
 } from "./utils/lookup.js"
 export * from "./types/checksum.js"
 export {

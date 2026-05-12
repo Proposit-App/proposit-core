@@ -226,8 +226,10 @@ export class ClaimCitationLibrary<
                 },
             ])
         }
-        const list = Array.isArray((raw as { connections?: unknown }).connections)
-            ? ((raw as { connections: unknown[] }).connections)
+        const list = Array.isArray(
+            (raw as { connections?: unknown }).connections
+        )
+            ? (raw as { connections: unknown[] }).connections
             : []
         for (const entity of list) {
             if (
@@ -277,10 +279,7 @@ export class ClaimCitationLibrary<
                 })
             }
             if (
-                !this.claimLookup.get(
-                    citation.claimId,
-                    citation.claimVersion
-                )
+                !this.claimLookup.get(citation.claimId, citation.claimVersion)
             ) {
                 violations.push({
                     code: CITATION_CLAIM_REF_NOT_FOUND,

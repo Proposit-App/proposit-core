@@ -10,7 +10,7 @@ import type { TCoreClaim } from "../schemata/claim.js"
 import type { TCoreClaimCitation } from "../schemata/claim-citation.js"
 import type {
     TClaimLookup,
-    TClaimCitationLookup,
+    TClaimConnectionLookup,
 } from "./interfaces/library.interfaces.js"
 import type { TForkArgumentOptions, TForkRemapTable } from "../types/fork.js"
 import type { TOptionalChecksum } from "../schemata/shared.js"
@@ -46,7 +46,7 @@ export function forkArgumentEngine<
     newArgumentId: string,
     libraries: {
         claimLibrary: TClaimLookup<TClaim>
-        claimCitationLibrary: TClaimCitationLookup<TCitation>
+        claimCitationLibrary: TClaimConnectionLookup<TCitation>
     },
     options?: TForkArgumentOptions
 ): {

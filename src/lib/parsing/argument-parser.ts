@@ -394,10 +394,10 @@ export class ArgumentParser<
                 claimCitationLibrary.add({
                     ...extras,
                     id: genId(),
-                    citingClaimId: citingRef.id,
-                    citingClaimVersion: citingRef.version,
-                    sourceClaimId: sourceRef.id,
-                    sourceClaimVersion: sourceRef.version,
+                    claimId: citingRef.id,
+                    claimVersion: citingRef.version,
+                    supportingClaimId: sourceRef.id,
+                    supportingClaimVersion: sourceRef.version,
                 } as Omit<TCitation, "checksum">)
             }
         }
@@ -556,8 +556,8 @@ export class ArgumentParser<
 
     protected mapClaimCitation(
         _parsed: TParsedClaim,
-        _citingClaimId: string,
-        _sourceClaimId: string
+        _claimId: string,
+        _supportingClaimId: string
     ): Record<string, unknown> {
         return {}
     }

@@ -87,10 +87,9 @@ export function registerArgumentCommands(program: Command): void {
             })
             const _mergedCitations = ClaimCitationLibrary.fromSnapshot(
                 {
-                    claimCitations: [
-                        ...existing.claimCitations.snapshot().claimCitations,
-                        ...result.claimCitationLibrary.snapshot()
-                            .claimCitations,
+                    connections: [
+                        ...existing.citations.snapshot().connections,
+                        ...result.claimCitationLibrary.snapshot().connections,
                     ],
                 },
                 _mergedClaims

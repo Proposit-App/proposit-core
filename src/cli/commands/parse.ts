@@ -188,11 +188,10 @@ export function registerParseCommand(args: Command): void {
                 })
                 const mergedCitations = ClaimCitationLibrary.fromSnapshot(
                     {
-                        claimCitations: [
-                            ...existing.claimCitations.snapshot()
-                                .claimCitations,
+                        connections: [
+                            ...existing.citations.snapshot().connections,
                             ...built.claimCitationLibrary.snapshot()
-                                .claimCitations,
+                                .connections,
                         ],
                     },
                     mergedClaims

@@ -10378,7 +10378,6 @@ describe("ClaimCitationLibrary", () => {
             lib.remove("cit-1")
             expect(lib.getConnectionsForClaim(claim1.id)).toEqual([])
         })
-
     })
 
     describe("getConnectionsForClaim", () => {
@@ -10537,9 +10536,7 @@ describe("ClaimCitationLibrary", () => {
             })
             const snap = lib.snapshot()
             const restored = ClaimCitationLibrary.fromSnapshot(snap, claimLib)
-            expect(restored.getConnectionsForClaim(claim1.id)).toHaveLength(
-                1
-            )
+            expect(restored.getConnectionsForClaim(claim1.id)).toHaveLength(1)
             expect(
                 restored
                     .getAll()
@@ -22260,9 +22257,7 @@ describe("PropositCore", () => {
         const restored = PropositCore.fromSnapshot(snap)
 
         expect(restored.citations.get(cit.id)).toBeDefined()
-        expect(restored.citations.get(cit.id)!.claimId).toBe(
-            claim.id
-        )
+        expect(restored.citations.get(cit.id)!.claimId).toBe(claim.id)
     })
 
     it("should round-trip via snapshot/fromSnapshot with fork records", () => {
@@ -30078,8 +30073,13 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
     })
 
     it("creates new claim-bound variables for cited claims that lack them", () => {
-        const { engine, argumentEngine, citationLib, axiomLib, supportingClaimIds } =
-            setupDerivationWithCitations(2)
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            axiomLib,
+            supportingClaimIds,
+        } = setupDerivationWithCitations(2)
         const varsBefore = argumentEngine.getVariables().length
         // Source claims have no variables yet in argumentEngine.
         engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
@@ -30103,8 +30103,13 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
     })
 
     it("does not create duplicate variables when a variable already exists for a cited claim", () => {
-        const { engine, argumentEngine, citationLib, axiomLib, supportingClaimIds } =
-            setupDerivationWithCitations(1)
+        const {
+            engine,
+            argumentEngine,
+            citationLib,
+            axiomLib,
+            supportingClaimIds,
+        } = setupDerivationWithCitations(1)
         // Pre-create the variable for the source claim.
         const existingVar = argumentEngine.ensureClaimBoundVariable(
             supportingClaimIds[0]
@@ -30172,7 +30177,8 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
             claimId: derivedClaim.id,
             claimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
             supportingClaimId: sourceClaim.id,
-            supportingClaimVersion: claimLib.getCurrent(sourceClaim.id)!.version,
+            supportingClaimVersion: claimLib.getCurrent(sourceClaim.id)!
+                .version,
         })
         citationLib.add({
             id: "cit-source",
@@ -30660,12 +30666,12 @@ describe("ClaimLibrary axiomatic claim type (v0.12)", () => {
         const lib = new ClaimLibrary()
         const normal = lib.create({ type: "normal" })
         const axiomatic = lib.create({ type: "axiomatic" })
-        expect(() => lib.update(normal.id, { type: "axiomatic" } as never)).toThrow(
-            /type is immutable/
-        )
-        expect(() => lib.update(axiomatic.id, { type: "normal" } as never)).toThrow(
-            /type is immutable/
-        )
+        expect(() =>
+            lib.update(normal.id, { type: "axiomatic" } as never)
+        ).toThrow(/type is immutable/)
+        expect(() =>
+            lib.update(axiomatic.id, { type: "normal" } as never)
+        ).toThrow(/type is immutable/)
     })
 })
 
@@ -30820,9 +30826,9 @@ describe("PropositCore axioms field (v0.12)", () => {
                 claims: [],
             },
         } as unknown
-        expect(() =>
-            PropositCore.fromSnapshot(legacy as never)
-        ).toThrow(/LEGACY_MISSING_AXIOM_SLOT/)
+        expect(() => PropositCore.fromSnapshot(legacy as never)).toThrow(
+            /LEGACY_MISSING_AXIOM_SLOT/
+        )
     })
 
     it("fromSnapshot throws LEGACY_CLAIM_CITATION_SHAPE when 'claimCitations' slot present", () => {
@@ -30839,9 +30845,9 @@ describe("PropositCore axioms field (v0.12)", () => {
                 claims: [],
             },
         } as unknown
-        expect(() =>
-            PropositCore.fromSnapshot(legacy as never)
-        ).toThrow(/LEGACY_CLAIM_CITATION_SHAPE/)
+        expect(() => PropositCore.fromSnapshot(legacy as never)).toThrow(
+            /LEGACY_CLAIM_CITATION_SHAPE/
+        )
     })
 })
 
@@ -30887,9 +30893,8 @@ describe("PropositCore.forkArgument transitive closure across axioms (v0.12)", (
             1
         )
         expect(core.axioms.getConnectionsForClaim(newNormalId)).toHaveLength(1)
-        const citationConn = core.citations.getConnectionsForClaim(
-            newNormalId
-        )[0]
+        const citationConn =
+            core.citations.getConnectionsForClaim(newNormalId)[0]
         const axiomConn = core.axioms.getConnectionsForClaim(newNormalId)[0]
         expect(citationConn.claimVersion).toBe(0)
         expect(citationConn.supportingClaimVersion).toBe(0)
@@ -31049,9 +31054,7 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
             .getVariables()
             .find(
                 (v) =>
-                    isClaimBound(
-                        v as unknown as TCorePropositionalVariable
-                    ) &&
+                    isClaimBound(v as unknown as TCorePropositionalVariable) &&
                     (v as unknown as TClaimBoundVariable).claimId ===
                         derivedClaim.id
             )

@@ -62,7 +62,7 @@ export async function hydratePropositCore(): Promise<PropositCore> {
 export async function persistCore(core: PropositCore): Promise<void> {
     await Promise.all([
         writeClaimLibrary(core.claims),
-        writeClaimCitationLibrary(core.claimCitations),
+        writeClaimCitationLibrary(core.citations),
         writeForkLibrary(core.forks),
     ])
 }
@@ -196,7 +196,7 @@ export async function hydrateEngine(
     const engine = ArgumentEngine.fromSnapshot(
         engineSnapshot,
         claimLibrary,
-        resolvedCore.claimCitations,
+        resolvedCore.citations,
         cliGrammarConfig,
         "ignore"
     )
