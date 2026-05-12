@@ -332,13 +332,21 @@ export function importArgumentFromYaml(yamlString: string): {
     // These must be registered before any derivation premise is created so that
     // the engine can resolve derivedClaimId via the claim library.
     for (const yamlClaim of input.claims ?? []) {
-        claimLibrary.create({
+        const claimInput: Parameters<typeof claimLibrary.create>[0] = {
             id: yamlClaim.id,
             type: yamlClaim.type,
             ...(yamlClaim.title !== undefined
                 ? { title: yamlClaim.title }
                 : {}),
-        } as Parameters<typeof claimLibrary.create>[0])
+        }
+        if (yamlClaim.type === "axiomatic") {
+            const yamlExtras = yamlClaim as Record<string, unknown>
+            if (typeof yamlExtras.reasonCode === "string") {
+                ;(claimInput as Record<string, unknown>).reasonCode =
+                    yamlExtras.reasonCode
+            }
+        }
+        claimLibrary.create(claimInput)
     }
 
     const claimCitationLibrary = new ClaimCitationLibrary(claimLibrary)
