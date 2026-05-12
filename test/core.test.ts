@@ -29811,6 +29811,113 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (citations only)",
         expect(engine2.getExpressions()).toHaveLength(1)
         expect(engine2.getExpressions()[0].type).toBe("variable")
     })
+
+    it("deduplicates a supporting claim cited twice from the same derived claim", () => {
+        // Hand-build: one derived claim (normal), two supporting claims (citation).
+        // Then add THREE citations: two pointing at supportingA, one at supportingB.
+        // Expected antecedent shape: IMPLIES(formula(OR(supportingA, supportingB)), Q)
+        // — the duplicate citation collapses at first occurrence, and source-order
+        // is preserved (supportingA appears before supportingB).
+        const argId = "00000000-0000-0000-0000-999000000010"
+        const argVersion = 1
+        const ARG_OBJ = { id: argId, version: argVersion } as TCoreArgument
+
+        const claimLib = new ClaimLibrary()
+        const derivedClaim = claimLib.create({ type: "normal" })
+        const supportingA = claimLib.create({ type: "citation" })
+        const supportingB = claimLib.create({ type: "citation" })
+
+        const citationLib = new ClaimCitationLibrary(claimLib)
+        citationLib.add({
+            id: "cit-A1",
+            claimId: derivedClaim.id,
+            claimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
+            supportingClaimId: supportingA.id,
+            supportingClaimVersion: supportingA.version,
+        })
+        citationLib.add({
+            id: "cit-A2",
+            claimId: derivedClaim.id,
+            claimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
+            supportingClaimId: supportingA.id,
+            supportingClaimVersion: supportingA.version,
+        })
+        citationLib.add({
+            id: "cit-B1",
+            claimId: derivedClaim.id,
+            claimVersion: claimLib.getCurrent(derivedClaim.id)!.version,
+            supportingClaimId: supportingB.id,
+            supportingClaimVersion: supportingB.version,
+        })
+
+        const axiomLib = new ClaimAxiomLibrary(claimLib)
+        const argumentEngine = new ArgumentEngine(ARG_OBJ, claimLib)
+        const consequentVariable = argumentEngine.ensureClaimBoundVariable(
+            derivedClaim.id
+        )
+        const premiseId = "00000000-0000-0000-0000-999000000p10"
+        const consequentExprId = "00000000-0000-0000-0000-999000000x10"
+        const vm = (argumentEngine as unknown as Record<string, unknown>)
+            .variables as VariableManager
+
+        const snap = {
+            premise: {
+                id: premiseId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                type: "derivation" as const,
+                derivedClaimId: derivedClaim.id,
+            } as TCorePremise,
+            rootExpressionId: consequentExprId,
+            expressions: {
+                expressions: [
+                    {
+                        id: consequentExprId,
+                        argumentId: argId,
+                        argumentVersion: argVersion,
+                        premiseId,
+                        parentId: null,
+                        position: POSITION_INITIAL,
+                        type: "variable" as const,
+                        variableId: consequentVariable.id,
+                        checksum: "dummy",
+                        descendantChecksum: null,
+                        combinedChecksum: "dummy",
+                    },
+                ],
+            },
+        }
+        const engine = ManagedDerivationPremiseEngine.fromSnapshot<
+            TCoreArgument,
+            TCorePremise,
+            TCorePropositionalExpression,
+            TCorePropositionalVariable
+        >(snap, ARG_OBJ, vm)
+
+        engine.populateFromSupports(citationLib, axiomLib, argumentEngine)
+
+        const exprs = engine.getExpressions()
+        // Expected shape: IMPLIES → [formula → OR → [varA, varB], Q]
+        // i.e. NOT [varA, varA, varB] under the OR.
+        const orExpr = exprs.find(
+            (e) => e.type === "operator" && e.operator === "or"
+        )
+        expect(orExpr).toBeDefined()
+        const orChildren = exprs.filter((e) => e.parentId === orExpr!.id)
+        expect(orChildren).toHaveLength(2)
+        // Both children must be variable expressions; the variableIds correspond
+        // to supportingA and supportingB (in source order, A first).
+        const childVarIds = orChildren
+            .sort((a, b) => a.position - b.position)
+            .map((e) =>
+                e.type === "variable"
+                    ? (e as { variableId: string }).variableId
+                    : null
+            )
+        const varA = argumentEngine.ensureClaimBoundVariable(supportingA.id).id
+        const varB = argumentEngine.ensureClaimBoundVariable(supportingB.id).id
+        expect(childVarIds).toEqual([varA, varB])
+    })
 })
 
 // ---------------------------------------------------------------------------
