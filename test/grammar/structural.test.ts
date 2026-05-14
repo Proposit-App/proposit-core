@@ -7,6 +7,14 @@ import {
     validateS5,
     validateS6,
     validateS7,
+    validateS8,
+    validateS9,
+    validateS10,
+    validateS11,
+    validateS12,
+    validateS13,
+    validateS14,
+    validateStructural,
 } from "../../src/lib/grammar/validators/structural.js"
 import {
     buildContext,
@@ -465,73 +473,451 @@ describe("grammar/structural", () => {
     })
 
     describe("S-8 binary operator arity + positions", () => {
-        it.todo("returns a violation when implies has != 2 children")
-        it.todo("returns a violation when iff has != 2 children")
-        it.todo(
-            "returns a violation when implies children are not at positions 0 and 1"
-        )
-        it.todo(
-            "returns a violation when iff children are not at positions 0 and 1"
-        )
-        it.todo("returns an empty array for IMPLIES(a@0, b@1)")
+        it("returns a violation when implies has != 2 children", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "e-only-child",
+                        premiseId: "p-1",
+                        parentId: "e-impl",
+                        position: 0,
+                    }),
+                ],
+            })
+            const violations = validateS8(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-8",
+                expressionId: "e-impl",
+            })
+        })
+
+        it("returns a violation when iff has 3 children", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("iff", {
+                        id: "e-iff",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        premiseId: "p-1",
+                        parentId: "e-iff",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "c-1",
+                        premiseId: "p-1",
+                        parentId: "e-iff",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "c-2",
+                        premiseId: "p-1",
+                        parentId: "e-iff",
+                        position: 2,
+                    }),
+                ],
+            })
+            const violations = validateS8(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-8")
+        })
+
+        it("returns a violation when implies children are not at positions 0 and 1", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        premiseId: "p-1",
+                        parentId: "e-impl",
+                        position: 5,
+                    }),
+                    makeVariableExpression({
+                        id: "c-1",
+                        premiseId: "p-1",
+                        parentId: "e-impl",
+                        position: 10,
+                    }),
+                ],
+            })
+            const violations = validateS8(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-8")
+        })
+
+        it("returns an empty array for IMPLIES(a@0, b@1)", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        premiseId: "p-1",
+                        parentId: "e-impl",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "c-1",
+                        premiseId: "p-1",
+                        parentId: "e-impl",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateS8(ctx)).toEqual([])
+        })
     })
 
     describe("S-9 sibling position uniqueness", () => {
-        it.todo(
-            "returns a violation when two siblings under the same parent share a position value"
-        )
-        it.todo(
-            "returns an empty array when every sibling group has unique positions"
-        )
+        it("returns a violation when two siblings under the same parent share a position", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("and", {
+                        id: "e-root",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "e-a",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 1000,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 1000,
+                    }),
+                ],
+            })
+            const violations = validateS9(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-9")
+        })
+
+        it("returns an empty array when every sibling group has unique positions", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("and", { id: "e-root" }),
+                    makeVariableExpression({
+                        id: "e-a",
+                        parentId: "e-root",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        parentId: "e-root",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateS9(ctx)).toEqual([])
+        })
     })
 
     describe("S-10 entity ID uniqueness", () => {
-        it.todo(
-            "returns a violation when two premises in the same argument share an ID"
-        )
-        it.todo(
-            "returns a violation when two expressions in the same argument share an ID"
-        )
-        it.todo(
-            "returns a violation when two variables in the same argument share an ID"
-        )
-        it.todo("returns an empty array when all entity IDs are unique")
+        it("returns a violation when two premises share an ID", () => {
+            const ctx = buildContext({
+                premises: [
+                    makeFreeformPremise({ id: "p-1" }),
+                    makeFreeformPremise({ id: "p-1" }),
+                ],
+            })
+            const violations = validateS10(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-10")
+        })
+
+        it("returns a violation when two expressions share an ID", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeVariableExpression({ id: "e-1" }),
+                    makeVariableExpression({ id: "e-1" }),
+                ],
+            })
+            const violations = validateS10(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-10")
+        })
+
+        it("returns a violation when two variables share an ID", () => {
+            const ctx = buildContext({
+                variables: [
+                    makeClaimBoundVariable({ id: "v-1", symbol: "P" }),
+                    makeClaimBoundVariable({ id: "v-1", symbol: "Q" }),
+                ],
+            })
+            const violations = validateS10(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-10")
+        })
+
+        it("returns an empty array when all entity IDs are unique", () => {
+            const ctx = buildContext({
+                premises: [
+                    makeFreeformPremise({ id: "p-1" }),
+                    makeFreeformPremise({ id: "p-2" }),
+                ],
+                expressions: [
+                    makeVariableExpression({ id: "e-1", premiseId: "p-1" }),
+                    makeVariableExpression({ id: "e-2", premiseId: "p-2" }),
+                ],
+                variables: [
+                    makeClaimBoundVariable({ id: "v-1", symbol: "P" }),
+                    makeClaimBoundVariable({ id: "v-2", symbol: "Q" }),
+                ],
+            })
+            expect(validateS10(ctx)).toEqual([])
+        })
     })
 
     describe("S-11 variable symbol uniqueness", () => {
-        it.todo(
-            "returns a violation when two variables share a symbol within an argument"
-        )
-        it.todo("returns an empty array when every variable symbol is unique")
+        it("returns a violation when two variables share a symbol", () => {
+            const ctx = buildContext({
+                variables: [
+                    makeClaimBoundVariable({ id: "v-1", symbol: "P" }),
+                    makeClaimBoundVariable({ id: "v-2", symbol: "P" }),
+                ],
+            })
+            const violations = validateS11(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-11")
+        })
+
+        it("returns an empty array when every variable symbol is unique", () => {
+            const ctx = buildContext({
+                variables: [
+                    makeClaimBoundVariable({ id: "v-1", symbol: "P" }),
+                    makeClaimBoundVariable({ id: "v-2", symbol: "Q" }),
+                ],
+            })
+            expect(validateS11(ctx)).toEqual([])
+        })
     })
 
     describe("S-12 NOT unary arity", () => {
-        it.todo("returns a violation when a not expression has 0 children")
-        it.todo("returns a violation when a not expression has 2 children")
-        it.todo("returns an empty array when every not has exactly one child")
+        it("returns a violation when not has 0 children", () => {
+            const ctx = buildContext({
+                expressions: [makeOperatorExpression("not", { id: "e-not" })],
+            })
+            const violations = validateS12(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0].code).toBe("S-12")
+        })
+
+        it("returns a violation when not has 2 children", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("not", { id: "e-not" }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        parentId: "e-not",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "c-1",
+                        parentId: "e-not",
+                        position: 1,
+                    }),
+                ],
+            })
+            const violations = validateS12(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0].code).toBe("S-12")
+        })
+
+        it("returns an empty array when every not has exactly one child", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("not", { id: "e-not" }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        parentId: "e-not",
+                        position: 0,
+                    }),
+                ],
+            })
+            expect(validateS12(ctx)).toEqual([])
+        })
     })
 
     describe("S-13 formula unary arity", () => {
-        it.todo("returns a violation when a formula expression has 0 children")
-        it.todo("returns a violation when a formula expression has 2+ children")
-        it.todo(
-            "returns an empty array when every formula has exactly one child"
-        )
+        it("returns a violation when formula has 0 children", () => {
+            const ctx = buildContext({
+                expressions: [makeFormulaExpression({ id: "e-formula" })],
+            })
+            const violations = validateS13(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0].code).toBe("S-13")
+        })
+
+        it("returns a violation when formula has 2+ children", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeFormulaExpression({ id: "e-formula" }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        parentId: "e-formula",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "c-1",
+                        parentId: "e-formula",
+                        position: 1,
+                    }),
+                ],
+            })
+            const violations = validateS13(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0].code).toBe("S-13")
+        })
+
+        it("returns an empty array when every formula has exactly one child", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeFormulaExpression({ id: "e-formula" }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        parentId: "e-formula",
+                        position: 0,
+                    }),
+                ],
+            })
+            expect(validateS13(ctx)).toEqual([])
+        })
     })
 
     describe("S-14 derivation premise root operator", () => {
-        it.todo("returns a violation when a derivation premise root is 'and'")
-        it.todo("returns a violation when a derivation premise root is 'or'")
-        it.todo("returns a violation when a derivation premise root is 'not'")
-        it.todo(
-            "returns a violation when a derivation premise root is 'formula'"
+        it.each(["and", "or", "not", "formula"] as const)(
+            "returns a violation when a derivation premise root is %s",
+            (op) => {
+                const ctx = buildContext({
+                    premises: [
+                        makeDerivationPremise({
+                            id: "p-1",
+                            derivedClaimId: "claim-1",
+                        }),
+                    ],
+                    expressions:
+                        op === "formula"
+                            ? [
+                                  makeFormulaExpression({
+                                      id: "e-root",
+                                      premiseId: "p-1",
+                                      parentId: null,
+                                  }),
+                              ]
+                            : [
+                                  makeOperatorExpression(op, {
+                                      id: "e-root",
+                                      premiseId: "p-1",
+                                      parentId: null,
+                                  }),
+                              ],
+                })
+                const violations = validateS14(ctx)
+                expect(violations.length).toBeGreaterThanOrEqual(1)
+                expect(violations[0].code).toBe("S-14")
+                expect(violations[0].premiseId).toBe("p-1")
+            }
         )
-        it.todo(
-            "returns an empty array when the root is 'variable', 'implies', or 'iff'"
-        )
+
+        it("returns an empty array when the derivation premise root is variable, implies, or iff", () => {
+            // Three separate premises, one of each valid root.
+            const ctx = buildContext({
+                premises: [
+                    makeDerivationPremise({
+                        id: "p-naked",
+                        derivedClaimId: "claim-1",
+                    }),
+                    makeDerivationPremise({
+                        id: "p-impl",
+                        derivedClaimId: "claim-2",
+                    }),
+                    makeDerivationPremise({
+                        id: "p-iff",
+                        derivedClaimId: "claim-3",
+                    }),
+                ],
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-naked",
+                        premiseId: "p-naked",
+                        parentId: null,
+                    }),
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-impl",
+                        parentId: null,
+                    }),
+                    makeOperatorExpression("iff", {
+                        id: "e-iff",
+                        premiseId: "p-iff",
+                        parentId: null,
+                    }),
+                ],
+            })
+            expect(validateS14(ctx)).toEqual([])
+        })
     })
 
     describe("aggregator validateStructural", () => {
-        it.todo("concatenates every per-rule validator's output")
+        it("concatenates every per-rule validator's output", () => {
+            // Context that fails S-1 (missing parent), S-9 (duplicate
+            // sibling positions), and S-12 (not with 0 children).
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("and", {
+                        id: "e-root",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "e-bad-parent",
+                        premiseId: "p-1",
+                        parentId: "missing",
+                    }),
+                    makeVariableExpression({
+                        id: "e-pos-a",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 7,
+                    }),
+                    makeVariableExpression({
+                        id: "e-pos-b",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 7,
+                    }),
+                    makeOperatorExpression("not", {
+                        id: "e-not",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 8,
+                    }),
+                ],
+            })
+            const codes = validateStructural(ctx).map((v) => v.code)
+            expect(codes).toContain("S-1")
+            expect(codes).toContain("S-9")
+            expect(codes).toContain("S-12")
+        })
     })
 })

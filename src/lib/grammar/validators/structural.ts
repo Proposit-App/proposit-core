@@ -333,26 +333,269 @@ export function validateS6(ctx: TValidatorContext): readonly TViolation[] {
 export function validateS7(_ctx: TValidatorContext): readonly TViolation[] {
     return []
 }
-export function validateS8(_ctx: TValidatorContext): readonly TViolation[] {
-    return []
+/**
+ * Build a Map<parentId, children-sorted-by-position> view of the
+ * expression tree. Internal helper for the arity/position validators.
+ */
+function childrenByParent(
+    expressions: readonly TValidatorContext["expressions"][number][]
+): Map<string, TValidatorContext["expressions"][number][]> {
+    const out = new Map<string, TValidatorContext["expressions"][number][]>()
+    for (const e of expressions) {
+        if (e.parentId === null) continue
+        const list = out.get(e.parentId) ?? []
+        list.push(e)
+        out.set(e.parentId, list)
+    }
+    for (const list of out.values()) {
+        list.sort((a, b) => a.position - b.position)
+    }
+    return out
 }
-export function validateS9(_ctx: TValidatorContext): readonly TViolation[] {
-    return []
+
+/**
+ * S-8 — Binary operator arity + positions. `implies` and `iff` have
+ * exactly 2 children, at positions `0` and `1`.
+ */
+export function validateS8(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const children = childrenByParent(ctx.expressions)
+    for (const e of ctx.expressions) {
+        if (e.type !== "operator") continue
+        if (e.operator !== "implies" && e.operator !== "iff") continue
+        const kids = children.get(e.id) ?? []
+        if (kids.length !== 2) {
+            violations.push({
+                tier: "structural",
+                code: "S-8",
+                message: `${e.operator} expression ${e.id} has ${kids.length} children (expected 2)`,
+                argumentId: ctx.argument.id,
+                premiseId: e.premiseId,
+                expressionId: e.id,
+            })
+            continue
+        }
+        if (kids[0].position !== 0 || kids[1].position !== 1) {
+            violations.push({
+                tier: "structural",
+                code: "S-8",
+                message: `${e.operator} expression ${e.id} children are at positions ${kids[0].position},${kids[1].position} (expected 0,1)`,
+                argumentId: ctx.argument.id,
+                premiseId: e.premiseId,
+                expressionId: e.id,
+            })
+        }
+    }
+    return violations
 }
-export function validateS10(_ctx: TValidatorContext): readonly TViolation[] {
-    return []
+
+/**
+ * S-9 — Sibling position uniqueness. Within a single parent's children,
+ * no two siblings share the same `position`.
+ */
+export function validateS9(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    // Group by parentId (including null root group, scoped per premise).
+    const groups = new Map<string, (typeof ctx.expressions)[number][]>()
+    for (const e of ctx.expressions) {
+        // Root-level siblings: scope by premise (each premise's roots are
+        // their own sibling set). We key root groups by `__root__::premiseId`.
+        const key =
+            e.parentId === null
+                ? `__root__::${e.premiseId}`
+                : `parent::${e.parentId}`
+        const list = groups.get(key) ?? []
+        list.push(e)
+        groups.set(key, list)
+    }
+    for (const list of groups.values()) {
+        const seenAt = new Map<number, string>()
+        for (const e of list) {
+            const existing = seenAt.get(e.position)
+            if (existing !== undefined) {
+                violations.push({
+                    tier: "structural",
+                    code: "S-9",
+                    message: `siblings ${existing} and ${e.id} share position ${e.position}`,
+                    argumentId: ctx.argument.id,
+                    premiseId: e.premiseId,
+                    expressionId: e.id,
+                })
+            } else {
+                seenAt.set(e.position, e.id)
+            }
+        }
+    }
+    return violations
 }
-export function validateS11(_ctx: TValidatorContext): readonly TViolation[] {
-    return []
+
+/**
+ * Collect duplicate-ID violations from a collection.
+ */
+function duplicateIdsIn<T extends { id: string }>(
+    items: readonly T[]
+): string[] {
+    const seen = new Set<string>()
+    const dups: string[] = []
+    for (const item of items) {
+        if (seen.has(item.id)) dups.push(item.id)
+        seen.add(item.id)
+    }
+    return dups
 }
-export function validateS12(_ctx: TValidatorContext): readonly TViolation[] {
-    return []
+
+/**
+ * S-10 — Entity ID uniqueness. Within an argument, premises, expressions,
+ * and variables each have unique IDs in their respective collection.
+ */
+export function validateS10(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    for (const dup of duplicateIdsIn(ctx.premises)) {
+        violations.push({
+            tier: "structural",
+            code: "S-10",
+            message: `duplicate premise id ${dup}`,
+            argumentId: ctx.argument.id,
+            premiseId: dup,
+        })
+    }
+    for (const dup of duplicateIdsIn(ctx.expressions)) {
+        violations.push({
+            tier: "structural",
+            code: "S-10",
+            message: `duplicate expression id ${dup}`,
+            argumentId: ctx.argument.id,
+            expressionId: dup,
+        })
+    }
+    for (const dup of duplicateIdsIn(ctx.variables)) {
+        violations.push({
+            tier: "structural",
+            code: "S-10",
+            message: `duplicate variable id ${dup}`,
+            argumentId: ctx.argument.id,
+            variableId: dup,
+        })
+    }
+    return violations
 }
-export function validateS13(_ctx: TValidatorContext): readonly TViolation[] {
-    return []
+
+/**
+ * S-11 — Variable symbol uniqueness. Within a single argument, no two
+ * variables share the same `symbol`.
+ */
+export function validateS11(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const seenAt = new Map<string, string>()
+    for (const v of ctx.variables) {
+        const existing = seenAt.get(v.symbol)
+        if (existing !== undefined) {
+            violations.push({
+                tier: "structural",
+                code: "S-11",
+                message: `variables ${existing} and ${v.id} share symbol '${v.symbol}'`,
+                argumentId: ctx.argument.id,
+                variableId: v.id,
+            })
+        } else {
+            seenAt.set(v.symbol, v.id)
+        }
+    }
+    return violations
 }
-export function validateS14(_ctx: TValidatorContext): readonly TViolation[] {
-    return []
+
+/**
+ * S-12 — NOT unary arity. Every `not` expression has exactly one child.
+ */
+export function validateS12(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const children = childrenByParent(ctx.expressions)
+    for (const e of ctx.expressions) {
+        if (e.type !== "operator" || e.operator !== "not") continue
+        const count = (children.get(e.id) ?? []).length
+        if (count !== 1) {
+            violations.push({
+                tier: "structural",
+                code: "S-12",
+                message: `not expression ${e.id} has ${count} children (expected 1)`,
+                argumentId: ctx.argument.id,
+                premiseId: e.premiseId,
+                expressionId: e.id,
+            })
+        }
+    }
+    return violations
+}
+
+/**
+ * S-13 — Formula unary arity. Every `formula` expression has exactly one
+ * child.
+ */
+export function validateS13(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const children = childrenByParent(ctx.expressions)
+    for (const e of ctx.expressions) {
+        if (e.type !== "formula") continue
+        const count = (children.get(e.id) ?? []).length
+        if (count !== 1) {
+            violations.push({
+                tier: "structural",
+                code: "S-13",
+                message: `formula expression ${e.id} has ${count} children (expected 1)`,
+                argumentId: ctx.argument.id,
+                premiseId: e.premiseId,
+                expressionId: e.id,
+            })
+        }
+    }
+    return violations
+}
+
+/**
+ * S-14 — Derivation premise root operator. Every `type='derivation'`
+ * premise's root expression is one of `variable`, `implies`, or `iff`.
+ * (`iff` is Structurally allowed; D-1 narrows the populated form to
+ * `implies` only — Derivable concern.)
+ */
+export function validateS14(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const expressionsByPremise = new Map<
+        string,
+        (typeof ctx.expressions)[number][]
+    >()
+    for (const e of ctx.expressions) {
+        const list = expressionsByPremise.get(e.premiseId) ?? []
+        list.push(e)
+        expressionsByPremise.set(e.premiseId, list)
+    }
+    for (const p of ctx.premises) {
+        if (p.type !== "derivation") continue
+        const inThisPremise = expressionsByPremise.get(p.id) ?? []
+        const roots = inThisPremise.filter((e) => e.parentId === null)
+        // Zero or multiple roots is a different invariant (S-1 / S-10 may
+        // catch shape issues); S-14 specifically guards the root operator
+        // *kind* when a root exists.
+        if (roots.length === 0) continue
+        for (const root of roots) {
+            const isAllowed =
+                root.type === "variable" ||
+                (root.type === "operator" &&
+                    (root.operator === "implies" || root.operator === "iff"))
+            if (!isAllowed) {
+                const rootDesc =
+                    root.type === "operator" ? root.operator : root.type
+                violations.push({
+                    tier: "structural",
+                    code: "S-14",
+                    message: `derivation premise ${p.id} root operator is '${rootDesc}' (must be variable, implies, or iff)`,
+                    argumentId: ctx.argument.id,
+                    premiseId: p.id,
+                    expressionId: root.id,
+                })
+            }
+        }
+    }
+    return violations
 }
 
 export function validateStructural(
