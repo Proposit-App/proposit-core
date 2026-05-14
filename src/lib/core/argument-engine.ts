@@ -530,10 +530,33 @@ export class ArgumentEngine<
      * UI is expected to prompt the user before invoking `normalize()`
      * explicitly.
      *
+     * Propagates the effective grammar config to every owned premise
+     * engine: in `'permissive'` mode they see `PERMISSIVE_GRAMMAR_CONFIG`
+     * (no AN cleanup inside mutations); in `'assistive'` mode they see
+     * the engine's configured `grammarConfig` (or `DEFAULT_GRAMMAR_CONFIG`
+     * when none was supplied).
+     *
      * @since 1.0.0
      */
     public setBehavior(b: "assistive" | "permissive"): void {
         this.engineBehavior = b
+        const effective = this.computeEffectiveGrammarConfig()
+        for (const pe of this.premises.values()) {
+            pe.setGrammarConfig(effective)
+        }
+    }
+
+    /**
+     * Resolve the grammar config that the engine's owned premise engines
+     * should see, given the current `behavior` setting. Behavior bridges
+     * to the legacy per-flag config in v1.0; Phase D removes the legacy
+     * config entirely and the AN post-hook becomes the single source.
+     */
+    private computeEffectiveGrammarConfig(): TGrammarConfig {
+        if (this.engineBehavior === "permissive") {
+            return PERMISSIVE_GRAMMAR_CONFIG
+        }
+        return this.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
     }
 
     public getArgument(): TArg {
@@ -839,7 +862,7 @@ export class ArgumentEngine<
                 {
                     checksumConfig: this.checksumConfig,
                     positionConfig: this.positionConfig,
-                    grammarConfig: this.grammarConfig,
+                    grammarConfig: this.computeEffectiveGrammarConfig(),
                     generateId: this.generateId,
                 }
             )
@@ -1592,14 +1615,28 @@ export class ArgumentEngine<
         engine.restoringFromSnapshot = true
         // Restore premises first (premise-bound variables reference them)
         for (const premiseSnap of snapshot.premises) {
+            // Per-premise grammar config is gated by `engine.behavior` via
+            // computeEffectiveGrammarConfig (C2 bridge). The `grammarConfig`
+            // parameter, if supplied, sets the engine's configured config;
+            // `behavior === 'permissive'` overrides to PERMISSIVE regardless.
+            const effectiveGrammarConfig =
+                engine.computeEffectiveGrammarConfig()
             const pe = PremiseEngine.fromSnapshot<TArg, TPremise, TExpr, TVar>(
                 premiseSnap,
                 snapshot.argument,
                 engine.variables,
                 engine.expressionIndex,
-                grammarConfig,
+                effectiveGrammarConfig,
                 generateId
             )
+            // If a caller-supplied grammarConfig was passed and behavior is
+            // assistive, prefer the caller's config over the engine default.
+            if (
+                grammarConfig !== undefined &&
+                engine.engineBehavior === "assistive"
+            ) {
+                pe.setGrammarConfig(grammarConfig)
+            }
             engine.premises.set(pe.getId(), pe)
             engine.wireCircularityCheck(pe)
             engine.wireEmptyBoundPremiseCheck(pe)
