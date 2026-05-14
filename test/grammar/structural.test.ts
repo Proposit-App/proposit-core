@@ -1,14 +1,25 @@
 import { describe, it, expect } from "vitest"
-import { validateS1 } from "../../src/lib/grammar/validators/structural.js"
+import {
+    validateS1,
+    validateS2,
+    validateS3,
+    validateS4,
+    validateS5,
+    validateS6,
+    validateS7,
+} from "../../src/lib/grammar/validators/structural.js"
 import {
     buildContext,
     makeFreeformPremise,
+    makeDerivationPremise,
     makeVariableExpression,
     makeOperatorExpression,
+    makeFormulaExpression,
     makeClaimBoundVariable,
     makePremiseBoundVariable,
     makeNormalClaim,
 } from "./fixtures.js"
+import type { TCorePropositionalExpression } from "../../src/lib/schemata/index.js"
 
 describe("grammar/structural", () => {
     describe("S-1 FK soundness", () => {
@@ -131,63 +142,326 @@ describe("grammar/structural", () => {
     })
 
     describe("S-2 operator types", () => {
-        it.todo(
-            "returns a violation when expression.type is not one of the allowed discriminators"
-        )
-        it.todo("returns an empty array for every legal operator type")
+        it("returns a violation when expression.type is unknown", () => {
+            const malformed = {
+                ...makeVariableExpression({ id: "e-1" }),
+                type: "junk" as unknown as "variable",
+            } as TCorePropositionalExpression
+            const ctx = buildContext({ expressions: [malformed] })
+            const violations = validateS2(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-2",
+                expressionId: "e-1",
+            })
+        })
+
+        it("returns a violation when operator expression has an unknown operator", () => {
+            const malformed = {
+                ...makeOperatorExpression("and", { id: "e-1" }),
+                operator: "xor" as unknown as "and",
+            } as TCorePropositionalExpression
+            const ctx = buildContext({ expressions: [malformed] })
+            const violations = validateS2(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-2",
+                expressionId: "e-1",
+            })
+        })
+
+        it("returns an empty array for every legal expression type and operator", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeVariableExpression({ id: "e-var" }),
+                    makeOperatorExpression("not", { id: "e-not" }),
+                    makeOperatorExpression("and", { id: "e-and" }),
+                    makeOperatorExpression("or", { id: "e-or" }),
+                    makeOperatorExpression("implies", { id: "e-impl" }),
+                    makeOperatorExpression("iff", { id: "e-iff" }),
+                    makeFormulaExpression({ id: "e-formula" }),
+                ],
+            })
+            expect(validateS2(ctx)).toEqual([])
+        })
     })
 
     describe("S-3 variable required reference", () => {
-        it.todo(
-            "returns a violation when a variable has neither claim ref nor premise ref"
-        )
-        it.todo(
-            "returns a violation when a variable has both claim ref and premise ref"
-        )
-        it.todo(
-            "returns an empty array when exactly one of the two refs is present"
-        )
+        it("returns a violation when a variable has neither claim ref nor premise ref", () => {
+            const malformed = {
+                id: "v-1",
+                argumentId: "arg-1",
+                argumentVersion: 1,
+                symbol: "P",
+                checksum: "v-checksum",
+            }
+            const ctx = buildContext({
+                // Cast: deliberately malformed (missing both ref kinds).
+                variables: [
+                    malformed as unknown as Parameters<
+                        typeof validateS3
+                    >[0]["variables"][number],
+                ],
+            })
+            const violations = validateS3(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-3",
+                variableId: "v-1",
+            })
+        })
+
+        it("returns a violation when a variable has both claim ref and premise ref", () => {
+            const malformed = {
+                ...makeClaimBoundVariable({ id: "v-1" }),
+                boundPremiseId: "p-1",
+                boundArgumentId: "arg-1",
+                boundArgumentVersion: 1,
+            } as unknown as Parameters<
+                typeof validateS3
+            >[0]["variables"][number]
+            const ctx = buildContext({ variables: [malformed] })
+            const violations = validateS3(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-3",
+                variableId: "v-1",
+            })
+        })
+
+        it("returns an empty array for valid claim-bound and premise-bound variables", () => {
+            const ctx = buildContext({
+                variables: [
+                    makeClaimBoundVariable({ id: "v-1" }),
+                    makePremiseBoundVariable({ id: "v-2" }),
+                ],
+            })
+            expect(validateS3(ctx)).toEqual([])
+        })
     })
 
     describe("S-4 no cycles", () => {
-        it.todo(
-            "returns a violation when the expression tree of a premise has a cycle"
-        )
-        it.todo(
-            "returns a violation when the argument's claim/citation/axiom graph has a cycle"
-        )
-        it.todo("returns an empty array for acyclic graphs")
+        it("returns a violation when the expression tree contains a parent-pointer cycle", () => {
+            // Two expressions forming a cycle: e-1 → e-2 → e-1.
+            const ctx = buildContext({
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-1",
+                        parentId: "e-2",
+                    }),
+                    makeVariableExpression({
+                        id: "e-2",
+                        parentId: "e-1",
+                    }),
+                ],
+            })
+            const violations = validateS4(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-4",
+            })
+        })
+
+        it("returns a violation for a self-referential parent", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-1",
+                        parentId: "e-1",
+                    }),
+                ],
+            })
+            const violations = validateS4(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-4",
+                expressionId: "e-1",
+            })
+        })
+
+        it("returns an empty array for an acyclic tree", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("and", { id: "e-root" }),
+                    makeVariableExpression({
+                        id: "e-1",
+                        parentId: "e-root",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-2",
+                        parentId: "e-root",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateS4(ctx)).toEqual([])
+        })
     })
 
     describe("S-5 root-only IMPLIES/IFF", () => {
-        it.todo("returns a violation when implies appears as a non-root child")
-        it.todo("returns a violation when iff appears as a non-root child")
-        it.todo(
-            "returns a violation when a premise has more than one implies/iff at root"
-        )
-        it.todo(
-            "returns an empty array when implies/iff is exactly at root and there is at most one per premise"
-        )
+        it("returns a violation when implies appears as a non-root child", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("and", {
+                        id: "e-root",
+                        premiseId: "p-1",
+                    }),
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 0,
+                    }),
+                ],
+            })
+            const violations = validateS5(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-5",
+                expressionId: "e-impl",
+                premiseId: "p-1",
+            })
+        })
+
+        it("returns a violation when iff appears as a non-root child", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("or", {
+                        id: "e-root",
+                        premiseId: "p-1",
+                    }),
+                    makeOperatorExpression("iff", {
+                        id: "e-iff",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 0,
+                    }),
+                ],
+            })
+            const violations = validateS5(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-5",
+                expressionId: "e-iff",
+            })
+        })
+
+        it("returns a violation when a premise has more than one implies/iff at root", () => {
+            // Two root-level implies in the same premise.
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-1",
+                        premiseId: "p-1",
+                        parentId: null,
+                    }),
+                    makeOperatorExpression("implies", {
+                        id: "e-2",
+                        premiseId: "p-1",
+                        parentId: null,
+                        position: 1,
+                    }),
+                ],
+            })
+            const violations = validateS5(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations.every((v) => v.code === "S-5")).toBe(true)
+        })
+
+        it("returns an empty array for a single implies at the root", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-root",
+                        premiseId: "p-1",
+                        parentId: null,
+                    }),
+                    makeVariableExpression({
+                        id: "e-ant",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-cons",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateS5(ctx)).toEqual([])
+        })
     })
 
     describe("S-6 premise type discriminator consistency", () => {
-        it.todo(
-            "returns a violation when type='derivation' premise has null derivedClaimId"
-        )
-        it.todo(
-            "returns a violation when type='freeform' premise has non-null derivedClaimId"
-        )
-        it.todo(
-            "returns an empty array for consistent type+derivedClaimId pairs"
-        )
+        it("returns a violation when type='derivation' premise has null derivedClaimId", () => {
+            const malformed = {
+                ...makeDerivationPremise({ id: "p-1" }),
+                derivedClaimId: null,
+            } as unknown as Parameters<typeof validateS6>[0]["premises"][number]
+            const ctx = buildContext({ premises: [malformed] })
+            const violations = validateS6(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-6",
+                premiseId: "p-1",
+            })
+        })
+
+        it("returns a violation when type='freeform' premise has non-null derivedClaimId", () => {
+            const malformed = {
+                ...makeFreeformPremise({ id: "p-1" }),
+                derivedClaimId: "claim-1",
+            } as unknown as Parameters<typeof validateS6>[0]["premises"][number]
+            const ctx = buildContext({ premises: [malformed] })
+            const violations = validateS6(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-6",
+                premiseId: "p-1",
+            })
+        })
+
+        it("returns an empty array for consistent type+derivedClaimId pairs", () => {
+            const ctx = buildContext({
+                premises: [
+                    makeFreeformPremise({ id: "p-1" }),
+                    makeDerivationPremise({
+                        id: "p-2",
+                        derivedClaimId: "claim-1",
+                    }),
+                ],
+            })
+            expect(validateS6(ctx)).toEqual([])
+        })
     })
 
-    describe("S-7 claim type immutability", () => {
-        // S-7 is a creation-time invariant enforced by ClaimLibrary; the
-        // validator is a no-op at the AST level. The test confirms it.
-        it.todo(
-            "validateS7 returns an empty array for any context (rule is creation-time only)"
-        )
+    describe("S-7 claim type immutability (AST-level no-op)", () => {
+        it("returns an empty array for any context (creation-time invariant only)", () => {
+            const ctx = buildContext({
+                claims: [
+                    makeNormalClaim({ id: "claim-1" }),
+                    makeNormalClaim({ id: "claim-2" }),
+                ],
+            })
+            expect(validateS7(ctx)).toEqual([])
+        })
     })
 
     describe("S-8 binary operator arity + positions", () => {
