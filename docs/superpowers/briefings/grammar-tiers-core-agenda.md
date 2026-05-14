@@ -6,7 +6,7 @@
 
 ## Capability changes
 
-Core exposes no user-facing capabilities directly. Its part of this initiative is engine surface area — `validate(tier)`, `normalize(tier?)`, the `behavior` setting, the new rule-code namespace, and the mutation contract — that *enables* the per-app capability changes in spec §1. No `capabilities.md` files are authored in this repo; the spec's per-repo capability authoring tasks land in `proposit-server` and `proposit-mobile` instead.
+Core exposes no user-facing capabilities directly. Its part of this initiative is engine surface area — `validate(tier)`, `normalize(tier?)`, the `behavior` setting, the new rule-code namespace, and the mutation contract — that _enables_ the per-app capability changes in spec §1. No `capabilities.md` files are authored in this repo; the spec's per-repo capability authoring tasks land in `proposit-server` and `proposit-mobile` instead.
 
 ## Where core fits
 
@@ -20,7 +20,7 @@ The spec §10.1 lists the work at sketch level. This briefing fleshes it out.
 
 ### 1. Wire format imports
 
-Bump `@proposit/shared` to `^0.3.0` (the version that ships `/schemas/grammar`). Import `TGrammarTier`, `TGrammarRuleCode`, and `TViolation` from `@proposit/shared/schemas/grammar`. Core does **not** define these types locally — shared is the single source of truth for the wire format. Core owns the *definitions* (what each rule means and what triggers it) but not the string identifiers.
+Bump `@proposit/shared` to `^0.3.0` (the version that ships `/schemas/grammar`). Import `TGrammarTier`, `TGrammarRuleCode`, and `TViolation` from `@proposit/shared/schemas/grammar`. Core does **not** define these types locally — shared is the single source of truth for the wire format. Core owns the _definitions_ (what each rule means and what triggers it) but not the string identifiers.
 
 ### 2. Implement the validators
 
@@ -82,13 +82,13 @@ Per §7.2 — `fromSnapshot()` and `fromData()` accept any **Structural** state.
 
 - **`README.md`** — full rewrite covering the library at large. The new README is the public face of `@proposit/proposit-core@1.0.0`. It should describe the four-tier grammar model, the `ArgumentEngine` API surface, the rule inventory, the auto-normalization contract, the `validate(tier)` / `normalize(tier?)` / behavior modes, the repair primitives, and a clear migration note for pre-1.0 users.
 - **`docs/Proposit_Grammar.md`** (new file at the same path as the deleted one) — the durable grammar reference. Per spec §11, it covers:
-  1. Formula-string parser grammar (preserved from the deleted doc).
-  2. The four-tier model — definitions, the subset chain, gates.
-  3. Rule inventory — every rule from spec §4, with its tier, code, examples of valid and invalid states, and the validator that checks it.
-  4. Engine behavior and AN — the contract from §5, with worked examples of how AN preserves Presentable across each kind of mutation.
-  5. `normalize()` contract — what it does and does not do, with worked examples.
-  6. Validation output reference — the `TViolation` shape, the rule-code namespace, examples of validation responses.
-  7. Migration notes — for readers of pre-1.0 versions, what changed and why.
+    1. Formula-string parser grammar (preserved from the deleted doc).
+    2. The four-tier model — definitions, the subset chain, gates.
+    3. Rule inventory — every rule from spec §4, with its tier, code, examples of valid and invalid states, and the validator that checks it.
+    4. Engine behavior and AN — the contract from §5, with worked examples of how AN preserves Presentable across each kind of mutation.
+    5. `normalize()` contract — what it does and does not do, with worked examples.
+    6. Validation output reference — the `TViolation` shape, the rule-code namespace, examples of validation responses.
+    7. Migration notes — for readers of pre-1.0 versions, what changed and why.
 - **`docs/api-reference.md`** — full pass to reflect the new API. Engine interfaces in `src/lib/core/interfaces/*.interfaces.ts` need their JSDoc updated in lockstep.
 - **`CLAUDE.md`** — update the "Key design rules" section to reflect the new model. Many entries become wrong (`autoNormalize`, `grammarConfig`, `ManagedDerivationPremiseEngine`, the LOAD/STRICT split, naked-Q-depends-on-`collapseEmptyFormula`); rewrite them. Add new entries describing the four-tier model, `validate(tier)`, `behavior` settings, and the repair primitives.
 - **`CLI_EXAMPLES.md`** — review for accuracy; CLI commands that referenced the old `autoNormalize` flags need updating.

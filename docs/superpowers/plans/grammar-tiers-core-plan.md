@@ -4,11 +4,11 @@
 
 **Goal:** Replace the existing `grammarConfig` / `autoNormalize` / `ManagedDerivationPremiseEngine` / `LOAD_GRAMMAR-STRICT_GRAMMAR` machinery in `@proposit/proposit-core` with a four-tier (`structural` ⊇ `evaluable` ⊇ `derivable` ⊇ `presentable`) grammar model, a `validate(tier)` API returning `readonly TViolation[]`, a `normalize(tier?)` global pass, an engine-level `behavior: 'assistive' | 'permissive'` setting with a uniform AN post-mutation hook, targeted repair primitives, and a split `populateFromCitations` / `populateFromAxioms` pair — then ship a 1.0.0 major release.
 
-**Architecture:** Wire-format types (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) live in `@proposit/shared@^0.9.0` and are imported by core; core owns the *rule definitions*. Validators are grouped into one file per tier under `src/lib/grammar/validators/` and aggregated by a `src/lib/grammar/validate.ts` dispatcher that short-circuits per the §7.1 four-case enumeration. Auto-normalization (AN) is implemented as a single post-hook on `ArgumentEngine` that runs the §5.1 rule set in order whenever the engine's `behavior === 'assistive'` and a structural mutation succeeds. Snapshot loading accepts any Structural state; lower-tier violations are queryable post-load. The old `ManagedDerivationPremiseEngine` subclass is deleted; its enforcement folds into the new `validate('derivable')` plus the new Evaluable rule E-6 (claim-derivation pairing). Two methods replace `populateFromSupports`: `populateFromCitations` and `populateFromAxioms`, each operating on one grounding kind — no silent dropping.
+**Architecture:** Wire-format types (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) live in `@proposit/shared@^0.9.0` and are imported by core; core owns the _rule definitions_. Validators are grouped into one file per tier under `src/lib/grammar/validators/` and aggregated by a `src/lib/grammar/validate.ts` dispatcher that short-circuits per the §7.1 four-case enumeration. Auto-normalization (AN) is implemented as a single post-hook on `ArgumentEngine` that runs the §5.1 rule set in order whenever the engine's `behavior === 'assistive'` and a structural mutation succeeds. Snapshot loading accepts any Structural state; lower-tier violations are queryable post-load. The old `ManagedDerivationPremiseEngine` subclass is deleted; its enforcement folds into the new `validate('derivable')` plus the new Evaluable rule E-6 (claim-derivation pairing). Two methods replace `populateFromSupports`: `populateFromCitations` and `populateFromAxioms`, each operating on one grounding kind — no silent dropping.
 
 **Tech Stack:** TypeScript (strict, ESM, `.js` import suffixes), pnpm, Vitest, ESLint + Prettier, TypeBox (consumed via `@proposit/shared`), `@typescript-eslint/naming-convention` (per the `brain-style` skill). Node `>=22.3.0`.
 
-**Cross-repo dependency:** `@proposit/shared@^0.9.0` must publish before any code that *uses* the new shared types can land in core. Work that *doesn't* depend on shared (documentation rewrite, scaffolding with local type stubs, test scaffolding) proceeds in parallel. The publish order is: shared → core → server + mobile in parallel.
+**Cross-repo dependency:** `@proposit/shared@^0.9.0` must publish before any code that _uses_ the new shared types can land in core. Work that _doesn't_ depend on shared (documentation rewrite, scaffolding with local type stubs, test scaffolding) proceeds in parallel. The publish order is: shared → core → server + mobile in parallel.
 
 **Version target:** `1.0.0` (major bump). Recommendation rationale at end-of-plan.
 
@@ -67,6 +67,7 @@ Phase F — Publish
 ```
 
 Dependencies:
+
 - A0 → A1 → (A2, A3, A4 in parallel)
 - (A2, A4) → B0 (which requires shared READY)
 - B0 → B1 → B2 → B3 → B4 → B5 (validators must compile in tier order so dispatcher can compose them; but tests inside each tier may be authored before later tiers exist)
@@ -81,61 +82,61 @@ Dependencies:
 
 ### New files
 
-| Path | Responsibility |
-|---|---|
-| `src/lib/grammar/types.ts` | (Phase A only) Local stubs of `TGrammarTier`, `TGrammarRuleCode`, `TViolation`. Deleted in B0 — replaced with `import type { ... } from "@proposit/shared/schemas/grammar"`. |
-| `src/lib/grammar/validators/structural.ts` | S-1..S-14 validators. One exported function per rule plus a `validateStructural(args, ctx): readonly TViolation[]` aggregator. |
-| `src/lib/grammar/validators/evaluable.ts` | E-1, E-3, E-4, E-5, E-6, E-7. `'E-2'` reserved (comment). |
-| `src/lib/grammar/validators/derivable.ts` | D-1..D-6. `'D-7'` reserved (comment). |
-| `src/lib/grammar/validators/presentable.ts` | P-1..P-5. |
-| `src/lib/grammar/validators/context.ts` | Shared `TValidatorContext` view (premises, expressions, variables, claims, role state) consumed by all four validator modules. Pure data — no engine reference. |
-| `src/lib/grammar/validate.ts` | Top-level dispatcher `validate(tier: TGrammarTier, ctx: TValidatorContext): readonly TViolation[]`. Implements §7.1's four-case union. |
-| `src/lib/grammar/normalize.ts` | Global `normalize(tier, ctx, mutator): void` pass that re-applies AN rules everywhere they can fire. |
-| `src/lib/grammar/auto-normalize.ts` | Post-mutation `runAssistiveNormalization(engine, changeset): TCoreMutationResult` hook running AN-1..AN-4 in order. |
-| `src/lib/grammar/repair.ts` | Targeted repair primitives — `removeUnresolvableVariables`, `removeOrphanOperators`, etc. Each returns the violations it resolved. |
-| `test/grammar/structural.test.ts` | Per-rule validator tests for S-1..S-14. |
-| `test/grammar/evaluable.test.ts` | Per-rule validator tests for E-1, E-3..E-7. |
-| `test/grammar/derivable.test.ts` | Per-rule validator tests for D-1..D-6. |
-| `test/grammar/presentable.test.ts` | Per-rule validator tests for P-1..P-5. |
-| `test/grammar/validate-dispatcher.test.ts` | Coverage of `validate(tier)`'s four-case short-circuit semantics. |
-| `test/grammar/auto-normalize.test.ts` | Coverage of AN post-hook in `assistive` mode + bypass in `permissive`. |
-| `test/grammar/normalize.test.ts` | Coverage of the global `normalize()` pass and tier parameter forward-compat behavior. |
-| `test/grammar/repair.test.ts` | Per-primitive tests + AN-respects-behavior tests. |
-| `test/grammar/populate-from-citations.test.ts` | Tests for the new `populateFromCitations` method. |
-| `test/grammar/populate-from-axioms.test.ts` | Tests for the new `populateFromAxioms` method. |
-| `test/grammar/snapshot-loading.test.ts` | Tests that `fromSnapshot`/`fromData` accept any Structural state. |
-| `docs/Proposit_Grammar.md` | **New file at same path as the deleted one.** Per spec §11 ToC. |
+| Path                                           | Responsibility                                                                                                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/grammar/types.ts`                     | (Phase A only) Local stubs of `TGrammarTier`, `TGrammarRuleCode`, `TViolation`. Deleted in B0 — replaced with `import type { ... } from "@proposit/shared/schemas/grammar"`. |
+| `src/lib/grammar/validators/structural.ts`     | S-1..S-14 validators. One exported function per rule plus a `validateStructural(args, ctx): readonly TViolation[]` aggregator.                                               |
+| `src/lib/grammar/validators/evaluable.ts`      | E-1, E-3, E-4, E-5, E-6, E-7. `'E-2'` reserved (comment).                                                                                                                    |
+| `src/lib/grammar/validators/derivable.ts`      | D-1..D-6. `'D-7'` reserved (comment).                                                                                                                                        |
+| `src/lib/grammar/validators/presentable.ts`    | P-1..P-5.                                                                                                                                                                    |
+| `src/lib/grammar/validators/context.ts`        | Shared `TValidatorContext` view (premises, expressions, variables, claims, role state) consumed by all four validator modules. Pure data — no engine reference.              |
+| `src/lib/grammar/validate.ts`                  | Top-level dispatcher `validate(tier: TGrammarTier, ctx: TValidatorContext): readonly TViolation[]`. Implements §7.1's four-case union.                                       |
+| `src/lib/grammar/normalize.ts`                 | Global `normalize(tier, ctx, mutator): void` pass that re-applies AN rules everywhere they can fire.                                                                         |
+| `src/lib/grammar/auto-normalize.ts`            | Post-mutation `runAssistiveNormalization(engine, changeset): TCoreMutationResult` hook running AN-1..AN-4 in order.                                                          |
+| `src/lib/grammar/repair.ts`                    | Targeted repair primitives — `removeUnresolvableVariables`, `removeOrphanOperators`, etc. Each returns the violations it resolved.                                           |
+| `test/grammar/structural.test.ts`              | Per-rule validator tests for S-1..S-14.                                                                                                                                      |
+| `test/grammar/evaluable.test.ts`               | Per-rule validator tests for E-1, E-3..E-7.                                                                                                                                  |
+| `test/grammar/derivable.test.ts`               | Per-rule validator tests for D-1..D-6.                                                                                                                                       |
+| `test/grammar/presentable.test.ts`             | Per-rule validator tests for P-1..P-5.                                                                                                                                       |
+| `test/grammar/validate-dispatcher.test.ts`     | Coverage of `validate(tier)`'s four-case short-circuit semantics.                                                                                                            |
+| `test/grammar/auto-normalize.test.ts`          | Coverage of AN post-hook in `assistive` mode + bypass in `permissive`.                                                                                                       |
+| `test/grammar/normalize.test.ts`               | Coverage of the global `normalize()` pass and tier parameter forward-compat behavior.                                                                                        |
+| `test/grammar/repair.test.ts`                  | Per-primitive tests + AN-respects-behavior tests.                                                                                                                            |
+| `test/grammar/populate-from-citations.test.ts` | Tests for the new `populateFromCitations` method.                                                                                                                            |
+| `test/grammar/populate-from-axioms.test.ts`    | Tests for the new `populateFromAxioms` method.                                                                                                                               |
+| `test/grammar/snapshot-loading.test.ts`        | Tests that `fromSnapshot`/`fromData` accept any Structural state.                                                                                                            |
+| `docs/Proposit_Grammar.md`                     | **New file at same path as the deleted one.** Per spec §11 ToC.                                                                                                              |
 
 ### Modified files
 
-| Path | Change |
-|---|---|
-| `package.json` | Bump `@proposit/shared` to `^0.9.0`. Bump version to `1.0.0` at publish time. |
-| `src/lib/index.ts` | Remove exports of `ManagedDerivationPremiseEngine`, `TVariableMaterializer`, `TGrammarConfig`/`TGrammarOptions`/`TAutoNormalizeConfig`/`DEFAULT_GRAMMAR_CONFIG`/`PERMISSIVE_GRAMMAR_CONFIG`/`resolveAutoNormalize`. Add new exports for the grammar module. |
-| `src/lib/core/argument-engine.ts` | Add `validate(tier)`, `normalize(tier?)`, `behavior`, `setBehavior(...)`, and repair primitives. Wire AN post-hook. Drop `validateDerivationStructures` (folds into D-1). |
-| `src/lib/core/premise-engine.ts` | Remove `grammarConfig` option threading + per-flag `resolveAutoNormalize` calls. Mutations now enforce *only* Structural rules and throw on violation; they don't auto-fix. Add S-8/S-9 enforcement (position invariants previously enforced indirectly). |
-| `src/lib/core/expression-manager.ts` | Same shape changes as `premise-engine.ts` — strip per-flag config reads. |
-| `src/lib/core/argument-engine.ts` (`fromSnapshot`/`fromData`) | Drop `grammarConfig` parameter; accept any Structural state; surface load failures only for Structural breakage. |
-| `src/lib/core/proposit-core.ts` | Drop `grammarConfig` wiring; add `behavior` option to `TPropositCoreOptions`. |
-| `src/lib/core/argument-engine.ts` (`evaluate`/`checkValidity`/`validateEvaluability`) | Skip naked-Q derivation premises rather than throwing. |
-| `src/lib/core/interfaces/argument-engine.interfaces.ts` | New JSDoc for `validate`, `normalize`, `behavior`, `setBehavior`, repair primitives. Remove JSDoc for removed APIs. |
-| `src/lib/core/interfaces/premise-engine.interfaces.ts` | Remove references to old auto-normalize flags. |
-| `src/lib/types/grammar.ts` | **Deleted** (Phase D2). |
-| `src/lib/types/fork.ts` | Remove `grammarConfig?: TGrammarConfig` field. |
-| `src/lib/types/validation.ts` | Remove `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`. Most existing codes remain — they continue to identify *engine errors* (throws), distinct from the new `TGrammarRuleCode` *violation codes*. Add a comment clarifying the two namespaces. |
-| `src/lib/core/managed-derivation-premise-engine.ts` | **Deleted** (Phase D1). |
-| `src/cli/commands/repair.ts` | Update to use new repair-primitive APIs. |
-| `src/cli/commands/premises.ts` | Update to drop autoNormalize flags. |
-| `src/cli/engine.ts` | Update to drop grammarConfig option. |
-| `src/lib/parsing/argument-parser.ts` | Drop grammarConfig option threading. |
-| `README.md` | Full rewrite. |
-| `CLAUDE.md` | Rewrite "Key design rules" section. |
-| `CLI_EXAMPLES.md` | Update flags + remove old autoNormalize examples. |
-| `scripts/smoke-test.sh` | Update flags. |
-| `examples/arguments/*.yaml` | Confirm still load under new model (likely no change needed). |
-| `docs/api-reference.md` | Full pass for new API. |
-| `docs/release-notes/upcoming.md` | User-facing release notes for 1.0.0. |
-| `docs/changelogs/upcoming.md` | Developer changelog with commit hash ranges. |
+| Path                                                                                  | Change                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                                                                        | Bump `@proposit/shared` to `^0.9.0`. Bump version to `1.0.0` at publish time.                                                                                                                                                                               |
+| `src/lib/index.ts`                                                                    | Remove exports of `ManagedDerivationPremiseEngine`, `TVariableMaterializer`, `TGrammarConfig`/`TGrammarOptions`/`TAutoNormalizeConfig`/`DEFAULT_GRAMMAR_CONFIG`/`PERMISSIVE_GRAMMAR_CONFIG`/`resolveAutoNormalize`. Add new exports for the grammar module. |
+| `src/lib/core/argument-engine.ts`                                                     | Add `validate(tier)`, `normalize(tier?)`, `behavior`, `setBehavior(...)`, and repair primitives. Wire AN post-hook. Drop `validateDerivationStructures` (folds into D-1).                                                                                   |
+| `src/lib/core/premise-engine.ts`                                                      | Remove `grammarConfig` option threading + per-flag `resolveAutoNormalize` calls. Mutations now enforce _only_ Structural rules and throw on violation; they don't auto-fix. Add S-8/S-9 enforcement (position invariants previously enforced indirectly).   |
+| `src/lib/core/expression-manager.ts`                                                  | Same shape changes as `premise-engine.ts` — strip per-flag config reads.                                                                                                                                                                                    |
+| `src/lib/core/argument-engine.ts` (`fromSnapshot`/`fromData`)                         | Drop `grammarConfig` parameter; accept any Structural state; surface load failures only for Structural breakage.                                                                                                                                            |
+| `src/lib/core/proposit-core.ts`                                                       | Drop `grammarConfig` wiring; add `behavior` option to `TPropositCoreOptions`.                                                                                                                                                                               |
+| `src/lib/core/argument-engine.ts` (`evaluate`/`checkValidity`/`validateEvaluability`) | Skip naked-Q derivation premises rather than throwing.                                                                                                                                                                                                      |
+| `src/lib/core/interfaces/argument-engine.interfaces.ts`                               | New JSDoc for `validate`, `normalize`, `behavior`, `setBehavior`, repair primitives. Remove JSDoc for removed APIs.                                                                                                                                         |
+| `src/lib/core/interfaces/premise-engine.interfaces.ts`                                | Remove references to old auto-normalize flags.                                                                                                                                                                                                              |
+| `src/lib/types/grammar.ts`                                                            | **Deleted** (Phase D2).                                                                                                                                                                                                                                     |
+| `src/lib/types/fork.ts`                                                               | Remove `grammarConfig?: TGrammarConfig` field.                                                                                                                                                                                                              |
+| `src/lib/types/validation.ts`                                                         | Remove `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`. Most existing codes remain — they continue to identify _engine errors_ (throws), distinct from the new `TGrammarRuleCode` _violation codes_. Add a comment clarifying the two namespaces.              |
+| `src/lib/core/managed-derivation-premise-engine.ts`                                   | **Deleted** (Phase D1).                                                                                                                                                                                                                                     |
+| `src/cli/commands/repair.ts`                                                          | Update to use new repair-primitive APIs.                                                                                                                                                                                                                    |
+| `src/cli/commands/premises.ts`                                                        | Update to drop autoNormalize flags.                                                                                                                                                                                                                         |
+| `src/cli/engine.ts`                                                                   | Update to drop grammarConfig option.                                                                                                                                                                                                                        |
+| `src/lib/parsing/argument-parser.ts`                                                  | Drop grammarConfig option threading.                                                                                                                                                                                                                        |
+| `README.md`                                                                           | Full rewrite.                                                                                                                                                                                                                                               |
+| `CLAUDE.md`                                                                           | Rewrite "Key design rules" section.                                                                                                                                                                                                                         |
+| `CLI_EXAMPLES.md`                                                                     | Update flags + remove old autoNormalize examples.                                                                                                                                                                                                           |
+| `scripts/smoke-test.sh`                                                               | Update flags.                                                                                                                                                                                                                                               |
+| `examples/arguments/*.yaml`                                                           | Confirm still load under new model (likely no change needed).                                                                                                                                                                                               |
+| `docs/api-reference.md`                                                               | Full pass for new API.                                                                                                                                                                                                                                      |
+| `docs/release-notes/upcoming.md`                                                      | User-facing release notes for 1.0.0.                                                                                                                                                                                                                        |
+| `docs/changelogs/upcoming.md`                                                         | Developer changelog with commit hash ranges.                                                                                                                                                                                                                |
 
 ### Deleted files
 
@@ -152,11 +153,13 @@ Phase A is independent of `@proposit/shared@^0.9.0` shipping. It produces a feat
 ## Task A0: Branch setup + baseline check
 
 **Files:**
+
 - None (git only).
 
 - [ ] **Step 1: Create and check out the feature branch**
 
 Run:
+
 ```bash
 git checkout -b grammar-tiers/core
 ```
@@ -164,6 +167,7 @@ git checkout -b grammar-tiers/core
 - [ ] **Step 2: Confirm baseline is green**
 
 Run:
+
 ```bash
 pnpm run check
 ```
@@ -173,6 +177,7 @@ Expected: all of typecheck, lint, build, test pass. (Verified already: 2026-05-1
 - [ ] **Step 3: Confirm smoke test is green (requires build first)**
 
 Run:
+
 ```bash
 bash scripts/smoke-test.sh
 ```
@@ -187,9 +192,10 @@ No commit yet — wait until A1 lands the first concrete file.
 
 ## Task A1: Local type stubs for shared wire format
 
-**Goal:** Define `TGrammarTier`, `TGrammarRuleCode`, `TViolation` locally with the same shape `@proposit/shared@^0.9.0` will export. In Phase B0 we replace the stub file's contents with a single `export type { ... } from "@proposit/shared/schemas/grammar"` re-export and delete the local definitions — leaving the stub *path* unchanged so downstream files don't need to rewrite imports.
+**Goal:** Define `TGrammarTier`, `TGrammarRuleCode`, `TViolation` locally with the same shape `@proposit/shared@^0.9.0` will export. In Phase B0 we replace the stub file's contents with a single `export type { ... } from "@proposit/shared/schemas/grammar"` re-export and delete the local definitions — leaving the stub _path_ unchanged so downstream files don't need to rewrite imports.
 
 **Files:**
+
 - Create: `src/lib/grammar/types.ts`
 - Test: none (pure type aliases; type errors at build time are the test)
 
@@ -265,7 +271,11 @@ export type TViolation = {
 Edit `src/lib/index.ts`:
 
 ```ts
-export type { TGrammarTier, TGrammarRuleCode, TViolation } from "./grammar/types.js"
+export type {
+    TGrammarTier,
+    TGrammarRuleCode,
+    TViolation,
+} from "./grammar/types.js"
 ```
 
 (Add this near the other `./types/*` exports.)
@@ -273,6 +283,7 @@ export type { TGrammarTier, TGrammarRuleCode, TViolation } from "./grammar/types
 - [ ] **Step 3: Build to confirm**
 
 Run:
+
 ```bash
 pnpm run typecheck
 ```
@@ -293,6 +304,7 @@ git commit -m "feat(grammar): add local stubs for shared wire-format types (TGra
 **Goal:** Create the validator-module skeleton with empty exported functions so that the dispatcher and tests can reference them by name from day one. Every validator returns `[]` for now; tests written in A4 will fail.
 
 **Files:**
+
 - Create: `src/lib/grammar/validators/context.ts`
 - Create: `src/lib/grammar/validators/structural.ts`
 - Create: `src/lib/grammar/validators/evaluable.ts`
@@ -620,6 +632,7 @@ Use the `validateGrammar` re-export name only at the library boundary to avoid c
 - [ ] **Step 8: Typecheck**
 
 Run:
+
 ```bash
 pnpm run typecheck
 ```
@@ -640,6 +653,7 @@ git commit -m "feat(grammar): scaffold src/lib/grammar tree (validator modules r
 **Goal:** Begin the durable grammar reference now while the code work is blocked on shared. The old file stays in place for now (deleted in E1); the new content goes into a temporary scratch file that becomes the new doc in E1.
 
 **Files:**
+
 - Create: `docs/Proposit_Grammar.draft.md` (scratch file; renamed in E1)
 
 - [ ] **Step 1: Stub the new doc with the §11 ToC**
@@ -659,14 +673,17 @@ git commit -m "feat(grammar): scaffold src/lib/grammar tree (validator modules r
 > and is the source of truth for §2–§6 here.
 
 ## 1. Formula-string parser grammar
-*(preserved verbatim from the pre-1.0 doc)*
+
+_(preserved verbatim from the pre-1.0 doc)_
 
 ## 2. The four-tier model
+
 - 2.1 Definitions
 - 2.2 The subset chain
 - 2.3 Enforcement gates
 
 ## 3. Rule inventory
+
 - 3.1 Structural rules (S-1..S-14)
 - 3.2 Evaluable rules (E-1, E-3..E-7; E-2 reserved)
 - 3.3 Derivable rules (D-1..D-6; D-7 reserved)
@@ -676,22 +693,26 @@ For each rule: tier, code, statement, examples of valid + invalid states,
 which validator function checks it.
 
 ## 4. Engine behavior and auto-normalization
+
 - 4.1 `behavior: 'assistive' | 'permissive'`
 - 4.2 AN rule set (AN-1..AN-4)
 - 4.3 Worked examples — AN preserves Presentable across each mutation kind
 
 ## 5. `normalize(tier?)` contract
+
 - 5.1 What `normalize` does
-- 5.2 What `normalize` does *not* do
+- 5.2 What `normalize` does _not_ do
 - 5.3 Worked examples
 - 5.4 Forward-compat `tier` parameter
 
 ## 6. Validation output reference
+
 - 6.1 `TViolation` shape
 - 6.2 `TGrammarRuleCode` namespace
 - 6.3 Example validation responses
 
 ## 7. Migration notes (pre-1.0 → 1.0)
+
 - 7.1 Removed: `grammarConfig`, `autoNormalize`, `enforceFormulaBetweenOperators`
 - 7.2 Removed: `LOAD_GRAMMAR` / `STRICT_GRAMMAR` split
 - 7.3 Removed: `ManagedDerivationPremiseEngine`
@@ -715,9 +736,10 @@ git commit -m "docs(grammar): scaffold new Proposit_Grammar.md with spec §11 To
 
 ## Task A4: Failing-test scaffolds for every tier
 
-**Goal:** Use Vitest `.todo` markers to lock in test naming + locations for every rule. After B1..B4 each `.todo` becomes a real assertion. Tests that *can* be written now without shared imports (since the stub types are local) are written as failing assertions where possible.
+**Goal:** Use Vitest `.todo` markers to lock in test naming + locations for every rule. After B1..B4 each `.todo` becomes a real assertion. Tests that _can_ be written now without shared imports (since the stub types are local) are written as failing assertions where possible.
 
 **Files:**
+
 - Create: `test/grammar/structural.test.ts`
 - Create: `test/grammar/evaluable.test.ts`
 - Create: `test/grammar/derivable.test.ts`
@@ -731,70 +753,116 @@ import { describe, it } from "vitest"
 
 describe("grammar/structural", () => {
     describe("S-1 FK soundness", () => {
-        it.todo("returns a violation when expression.parentId points at a missing expression")
-        it.todo("returns a violation when variable.boundPremiseId points at a missing premise")
-        it.todo("returns a violation when claim-bound variable.claimId points at a missing claim")
+        it.todo(
+            "returns a violation when expression.parentId points at a missing expression"
+        )
+        it.todo(
+            "returns a violation when variable.boundPremiseId points at a missing premise"
+        )
+        it.todo(
+            "returns a violation when claim-bound variable.claimId points at a missing claim"
+        )
         it.todo("returns an empty array when every FK resolves")
     })
 
     describe("S-2 operator types", () => {
-        it.todo("returns a violation when expression.type is not one of the allowed discriminators")
+        it.todo(
+            "returns a violation when expression.type is not one of the allowed discriminators"
+        )
         it.todo("returns an empty array for every legal operator type")
     })
 
     describe("S-3 variable required reference", () => {
-        it.todo("returns a violation when a variable has neither claim ref nor premise ref")
-        it.todo("returns a violation when a variable has both claim ref and premise ref")
-        it.todo("returns an empty array when exactly one of the two refs is present")
+        it.todo(
+            "returns a violation when a variable has neither claim ref nor premise ref"
+        )
+        it.todo(
+            "returns a violation when a variable has both claim ref and premise ref"
+        )
+        it.todo(
+            "returns an empty array when exactly one of the two refs is present"
+        )
     })
 
     describe("S-4 no cycles", () => {
-        it.todo("returns a violation when the expression tree of a premise has a cycle")
-        it.todo("returns a violation when the argument's claim/citation/axiom graph has a cycle")
+        it.todo(
+            "returns a violation when the expression tree of a premise has a cycle"
+        )
+        it.todo(
+            "returns a violation when the argument's claim/citation/axiom graph has a cycle"
+        )
         it.todo("returns an empty array for acyclic graphs")
     })
 
     describe("S-5 root-only IMPLIES/IFF", () => {
         it.todo("returns a violation when implies appears as a non-root child")
         it.todo("returns a violation when iff appears as a non-root child")
-        it.todo("returns a violation when a premise has more than one implies/iff at root")
-        it.todo("returns an empty array when implies/iff is exactly at root and there's at most one per premise")
+        it.todo(
+            "returns a violation when a premise has more than one implies/iff at root"
+        )
+        it.todo(
+            "returns an empty array when implies/iff is exactly at root and there's at most one per premise"
+        )
     })
 
     describe("S-6 premise type discriminator consistency", () => {
-        it.todo("returns a violation when type='derivation' premise has null derivedClaimId")
-        it.todo("returns a violation when type='freeform' premise has non-null derivedClaimId")
-        it.todo("returns an empty array for consistent type+derivedClaimId pairs")
+        it.todo(
+            "returns a violation when type='derivation' premise has null derivedClaimId"
+        )
+        it.todo(
+            "returns a violation when type='freeform' premise has non-null derivedClaimId"
+        )
+        it.todo(
+            "returns an empty array for consistent type+derivedClaimId pairs"
+        )
     })
 
     describe("S-7 claim type immutability", () => {
         // S-7 is a creation-time invariant enforced by ClaimLibrary; the
         // validator is a no-op at the AST level. The test confirms it.
-        it.todo("validateS7 returns an empty array for any context (rule is creation-time only)")
+        it.todo(
+            "validateS7 returns an empty array for any context (rule is creation-time only)"
+        )
     })
 
     describe("S-8 binary operator arity + positions", () => {
         it.todo("returns a violation when implies has != 2 children")
         it.todo("returns a violation when iff has != 2 children")
-        it.todo("returns a violation when implies' children are not at positions 0 and 1")
-        it.todo("returns a violation when iff's children are not at positions 0 and 1")
+        it.todo(
+            "returns a violation when implies' children are not at positions 0 and 1"
+        )
+        it.todo(
+            "returns a violation when iff's children are not at positions 0 and 1"
+        )
         it.todo("returns an empty array for IMPLIES(a@0, b@1)")
     })
 
     describe("S-9 sibling position uniqueness", () => {
-        it.todo("returns a violation when two siblings under the same parent share a position value")
-        it.todo("returns an empty array when every sibling group has unique positions")
+        it.todo(
+            "returns a violation when two siblings under the same parent share a position value"
+        )
+        it.todo(
+            "returns an empty array when every sibling group has unique positions"
+        )
     })
 
     describe("S-10 entity ID uniqueness", () => {
-        it.todo("returns a violation when two premises in the same argument share an ID")
-        it.todo("returns a violation when two expressions in the same argument share an ID")
-        it.todo("returns a violation when two variables in the same argument share an ID")
+        it.todo(
+            "returns a violation when two premises in the same argument share an ID"
+        )
+        it.todo(
+            "returns a violation when two expressions in the same argument share an ID"
+        )
+        it.todo(
+            "returns a violation when two variables in the same argument share an ID"
+        )
         it.todo("returns an empty array when all entity IDs are unique")
     })
 
     describe("S-11 variable symbol uniqueness", () => {
-        it.todo("returns a violation when two variables share a symbol within an argument")
+        it.todo(
+            "returns a violation when two variables share a symbol within an argument"
+        )
         it.todo("returns an empty array when every variable's symbol is unique")
     })
 
@@ -807,15 +875,21 @@ describe("grammar/structural", () => {
     describe("S-13 formula unary arity", () => {
         it.todo("returns a violation when a formula expression has 0 children")
         it.todo("returns a violation when a formula expression has 2+ children")
-        it.todo("returns an empty array when every formula has exactly one child")
+        it.todo(
+            "returns an empty array when every formula has exactly one child"
+        )
     })
 
     describe("S-14 derivation premise root operator", () => {
         it.todo("returns a violation when a derivation premise root is 'and'")
         it.todo("returns a violation when a derivation premise root is 'or'")
         it.todo("returns a violation when a derivation premise root is 'not'")
-        it.todo("returns a violation when a derivation premise root is 'formula'")
-        it.todo("returns an empty array when the root is 'variable', 'implies', or 'iff'")
+        it.todo(
+            "returns a violation when a derivation premise root is 'formula'"
+        )
+        it.todo(
+            "returns an empty array when the root is 'variable', 'implies', or 'iff'"
+        )
     })
 
     describe("aggregator validateStructural", () => {
@@ -841,8 +915,12 @@ describe("grammar/evaluable", () => {
     // E-2 is reserved — see spec §4.2. No test block.
 
     describe("E-3 variable binding resolves", () => {
-        it.todo("returns a violation when a claim-bound variable references a non-existent claim")
-        it.todo("returns a violation when a premise-bound variable references a non-existent premise")
+        it.todo(
+            "returns a violation when a claim-bound variable references a non-existent claim"
+        )
+        it.todo(
+            "returns a violation when a premise-bound variable references a non-existent premise"
+        )
         it.todo("returns an empty array when every binding resolves")
     })
 
@@ -850,25 +928,45 @@ describe("grammar/evaluable", () => {
         // E-4 is a runtime guard on caller-supplied evaluation input. The
         // validator cannot detect it from the argument tree alone. Documented
         // in JSDoc; the test confirms ctx-only checker is a no-op.
-        it.todo("validateE4 returns an empty array regardless of argument shape (runtime-only guard)")
+        it.todo(
+            "validateE4 returns an empty array regardless of argument shape (runtime-only guard)"
+        )
     })
 
     describe("E-5 derivation premise consequent present", () => {
-        it.todo("returns a violation when a derivation premise's tree contains no variable bound to derivedClaimId")
-        it.todo("returns an empty array for naked-Q (lone variable at root is the consequent)")
-        it.todo("returns an empty array for populated form (consequent at position 1)")
+        it.todo(
+            "returns a violation when a derivation premise's tree contains no variable bound to derivedClaimId"
+        )
+        it.todo(
+            "returns an empty array for naked-Q (lone variable at root is the consequent)"
+        )
+        it.todo(
+            "returns an empty array for populated form (consequent at position 1)"
+        )
     })
 
     describe("E-6 claim-derivation pairing", () => {
-        it.todo("returns a violation when a normal claim has 2+ derivation premises with matching derivedClaimId")
-        it.todo("returns an empty array when a normal claim has 0 derivation premises (post-pruning state)")
-        it.todo("returns an empty array when a normal claim has exactly 1 derivation premise (mid-edit state)")
+        it.todo(
+            "returns a violation when a normal claim has 2+ derivation premises with matching derivedClaimId"
+        )
+        it.todo(
+            "returns an empty array when a normal claim has 0 derivation premises (post-pruning state)"
+        )
+        it.todo(
+            "returns an empty array when a normal claim has exactly 1 derivation premise (mid-edit state)"
+        )
     })
 
     describe("E-7 argument has conclusion premise", () => {
-        it.todo("returns a violation when an argument with premises has no conclusion designated")
-        it.todo("returns an empty array for an argument with zero premises (brand-new)")
-        it.todo("returns an empty array for an argument with one conclusion premise designated")
+        it.todo(
+            "returns a violation when an argument with premises has no conclusion designated"
+        )
+        it.todo(
+            "returns an empty array for an argument with zero premises (brand-new)"
+        )
+        it.todo(
+            "returns an empty array for an argument with one conclusion premise designated"
+        )
     })
 
     describe("aggregator validateEvaluable", () => {
@@ -884,17 +982,31 @@ import { describe, it } from "vitest"
 
 describe("grammar/derivable", () => {
     describe("D-1 derivation premise canonical shape", () => {
-        it.todo("accepts naked-Q form (single variable at root bound to derivedClaimId)")
-        it.todo("accepts populated form IMPLIES(citation-var, Q) (single citation)")
-        it.todo("accepts populated form IMPLIES(OR(citation-vars...), Q) (multi-citation)")
-        it.todo("accepts populated form with intervening formula buffer IMPLIES(formula(OR(...)), Q)")
+        it.todo(
+            "accepts naked-Q form (single variable at root bound to derivedClaimId)"
+        )
+        it.todo(
+            "accepts populated form IMPLIES(citation-var, Q) (single citation)"
+        )
+        it.todo(
+            "accepts populated form IMPLIES(OR(citation-vars...), Q) (multi-citation)"
+        )
+        it.todo(
+            "accepts populated form with intervening formula buffer IMPLIES(formula(OR(...)), Q)"
+        )
         it.todo("rejects populated form with IFF at root")
-        it.todo("rejects populated form where antecedent mixes axioms and citations")
-        it.todo("rejects populated form where antecedent is a non-claim variable")
+        it.todo(
+            "rejects populated form where antecedent mixes axioms and citations"
+        )
+        it.todo(
+            "rejects populated form where antecedent is a non-claim variable"
+        )
     })
 
     describe("D-2 single-citation derivation form", () => {
-        it.todo("rejects IMPLIES(OR(single-citation-var), Q) — should be IMPLIES(citation-var, Q)")
+        it.todo(
+            "rejects IMPLIES(OR(single-citation-var), Q) — should be IMPLIES(citation-var, Q)"
+        )
         it.todo("accepts IMPLIES(citation-var, Q)")
     })
 
@@ -906,15 +1018,25 @@ describe("grammar/derivable", () => {
     })
 
     describe("D-4 axiomatic claim placement", () => {
-        it.todo("rejects axiomatic-bound variable appearing in a freeform premise")
-        it.todo("rejects axiomatic-bound variable at the consequent slot of a derivation premise")
-        it.todo("accepts axiomatic-bound variable in the antecedent of a derivation premise")
+        it.todo(
+            "rejects axiomatic-bound variable appearing in a freeform premise"
+        )
+        it.todo(
+            "rejects axiomatic-bound variable at the consequent slot of a derivation premise"
+        )
+        it.todo(
+            "accepts axiomatic-bound variable in the antecedent of a derivation premise"
+        )
     })
 
     describe("D-5 citation claim placement", () => {
         it.todo("rejects citation-bound variable in a freeform premise")
-        it.todo("rejects citation-bound variable at the consequent slot of a derivation premise")
-        it.todo("accepts citation-bound variable in the antecedent of a derivation premise")
+        it.todo(
+            "rejects citation-bound variable at the consequent slot of a derivation premise"
+        )
+        it.todo(
+            "accepts citation-bound variable in the antecedent of a derivation premise"
+        )
     })
 
     describe("D-6 derivation premise role", () => {
@@ -940,8 +1062,12 @@ describe("grammar/presentable", () => {
         it.todo("rejects AND(OR(...), ...) — OR is a direct child of AND")
         it.todo("rejects OR(AND(...), ...) — AND is a direct child of OR")
         it.todo("accepts AND(formula(OR(...)), ...) — buffer between operators")
-        it.todo("accepts NOT(AND(...)) — not is exempt as a child of an operator")
-        it.todo("accepts AND(NOT(...), ...) — not as a child of an operator is allowed")
+        it.todo(
+            "accepts NOT(AND(...)) — not is exempt as a child of an operator"
+        )
+        it.todo(
+            "accepts AND(NOT(...), ...) — not as a child of an operator is allowed"
+        )
     })
 
     describe("P-2 no double negation", () => {
@@ -951,7 +1077,9 @@ describe("grammar/presentable", () => {
 
     describe("P-3 formula has operator descendant", () => {
         it.todo("rejects formula(variable) — leaf wrapper")
-        it.todo("rejects formula(NOT(variable)) — single not, no binary operator")
+        it.todo(
+            "rejects formula(NOT(variable)) — single not, no binary operator"
+        )
         it.todo("accepts formula(AND(...))")
         it.todo("accepts formula(OR(...))")
     })
@@ -981,10 +1109,18 @@ import { describe, it } from "vitest"
 
 describe("grammar/validate dispatcher (spec §7.1)", () => {
     it.todo("validate('structural') returns Structural violations only")
-    it.todo("validate('evaluable') returns Structural + Evaluable violations in that order")
-    it.todo("validate('derivable') returns Structural + Evaluable + Derivable in that order")
-    it.todo("validate('presentable') returns Structural + Evaluable + Derivable + Presentable in that order")
-    it.todo("returns an empty array when the context is at the requested tier or stricter")
+    it.todo(
+        "validate('evaluable') returns Structural + Evaluable violations in that order"
+    )
+    it.todo(
+        "validate('derivable') returns Structural + Evaluable + Derivable in that order"
+    )
+    it.todo(
+        "validate('presentable') returns Structural + Evaluable + Derivable + Presentable in that order"
+    )
+    it.todo(
+        "returns an empty array when the context is at the requested tier or stricter"
+    )
     it.todo("never throws on grammar issues")
 })
 ```
@@ -992,6 +1128,7 @@ describe("grammar/validate dispatcher (spec §7.1)", () => {
 - [ ] **Step 6: Run the test suite to confirm the todos register**
 
 Run:
+
 ```bash
 pnpm run test -- grammar
 ```
@@ -1012,6 +1149,7 @@ git commit -m "test(grammar): scaffold per-rule test files with it.todo entries 
 - [ ] **Step 1: Final Phase A baseline**
 
 Run:
+
 ```bash
 pnpm run check
 ```
@@ -1039,12 +1177,14 @@ See Phase E tasks below. E1.1–E1.4 (the new Proposit_Grammar.md sections 2–6
 ## Task B0: Swap stubs for shared imports + bump shared dep
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `src/lib/grammar/types.ts`
 
 - [ ] **Step 1: Bump `@proposit/shared` to `^0.9.0` in `package.json`**
 
 Locate the `dependencies` block and update:
+
 ```json
 "@proposit/shared": "^0.9.0"
 ```
@@ -1054,6 +1194,7 @@ Locate the `dependencies` block and update:
 - [ ] **Step 2: Install**
 
 Run:
+
 ```bash
 pnpm install
 ```
@@ -1079,6 +1220,7 @@ export type {
 - [ ] **Step 4: Typecheck**
 
 Run:
+
 ```bash
 pnpm run typecheck
 ```
@@ -1088,6 +1230,7 @@ Expected: no errors. If `@proposit/shared/schemas/grammar` doesn't export one of
 - [ ] **Step 5: Test**
 
 Run:
+
 ```bash
 pnpm run test -- grammar
 ```
@@ -1108,6 +1251,7 @@ git commit -m "feat(grammar): swap local stubs for @proposit/shared@^0.9.0 wire-
 **Approach:** TDD per rule. For each rule, write the failing test first (replacing the `it.todo` with a real `it(...)`), run it, then implement until green. Commit at the per-rule boundary so the history is bisectable.
 
 **Files:**
+
 - Modify: `src/lib/grammar/validators/structural.ts`
 - Modify: `test/grammar/structural.test.ts`
 
@@ -1182,9 +1326,9 @@ git add test/grammar/fixtures.ts
 git commit -m "test(grammar): add fixtures builder for validator tests"
 ```
 
-### S-1 (FK soundness) — example flow for *every* rule in B1
+### S-1 (FK soundness) — example flow for _every_ rule in B1
 
-The S-1 flow below is the **canonical pattern**; the same flow repeats for S-2..S-14 with rule-specific tests and implementations. Do *not* skip the "run failing test" step — that's the TDD checkpoint that protects against accidental passing tests.
+The S-1 flow below is the **canonical pattern**; the same flow repeats for S-2..S-14 with rule-specific tests and implementations. Do _not_ skip the "run failing test" step — that's the TDD checkpoint that protects against accidental passing tests.
 
 - [ ] **Step 1.1: Write the first failing test for S-1**
 
@@ -1217,9 +1361,12 @@ it("returns a violation when expression.parentId points at a missing expression"
 ```
 
 Add the necessary imports at the top of the file:
+
 ```ts
 import { describe, it, expect } from "vitest"
-import { validateS1 /*, validateS2, ... */ } from "../../src/lib/grammar/validators/structural.js"
+import {
+    validateS1 /*, validateS2, ... */,
+} from "../../src/lib/grammar/validators/structural.js"
 import { buildContext } from "./fixtures.js"
 import type { TCorePropositionalExpression } from "../../src/lib/schemata/index.js"
 ```
@@ -1227,6 +1374,7 @@ import type { TCorePropositionalExpression } from "../../src/lib/schemata/index.
 - [ ] **Step 1.2: Run failing test**
 
 Run:
+
 ```bash
 pnpm run test -- grammar/structural
 ```
@@ -1303,6 +1451,7 @@ export function validateS1(ctx: TValidatorContext): readonly TViolation[] {
 - [ ] **Step 1.4: Run test to verify pass**
 
 Run:
+
 ```bash
 pnpm run test -- grammar/structural
 ```
@@ -1316,6 +1465,7 @@ Replace the three remaining `it.todo` lines under "S-1 FK soundness" with real a
 - [ ] **Step 1.6: Run all S-1 cases**
 
 Run:
+
 ```bash
 pnpm run test -- grammar/structural
 ```
@@ -1337,7 +1487,7 @@ For each remaining Structural rule, repeat the same six-step cycle from S-1: wri
 
 - [ ] **S-3 (variable required reference):** discriminate `TClaimBoundVariable` vs `TPremiseBoundVariable` (use existing helpers in `src/lib/schemata/propositional.ts`). A variable that satisfies neither, or satisfies both, emits `S-3`. Test cases: missing both, has both, has only claimId, has only boundPremiseId.
 
-- [ ] **S-4 (no cycles):** two checks. (a) Expression tree of every premise — walk parents, detect a revisit. (b) Argument's claim/citation/axiom graph — the existing `CITATION_CYCLE_DETECTED` machinery in `claim-citation-library.ts` covers the connection-level acyclic invariant; S-4 here re-asserts the *argument-AST* cycle invariant. Test cases: an expression whose parentId chain loops; an acyclic baseline.
+- [ ] **S-4 (no cycles):** two checks. (a) Expression tree of every premise — walk parents, detect a revisit. (b) Argument's claim/citation/axiom graph — the existing `CITATION_CYCLE_DETECTED` machinery in `claim-citation-library.ts` covers the connection-level acyclic invariant; S-4 here re-asserts the _argument-AST_ cycle invariant. Test cases: an expression whose parentId chain loops; an acyclic baseline.
 
 - [ ] **S-5 (root-only IMPLIES/IFF):** for each premise, count root-level `implies`/`iff` and any non-root `implies`/`iff`. Multiple root-level or any non-root → violation. Test cases per the todo list (per-rule, four cases).
 
@@ -1372,6 +1522,7 @@ Expected: green. If lint flags the validator file, run `pnpm eslint . --fix` and
 - [ ] **Final B1 commit (if any leftover changes):**
 
 The per-rule commits above cover the source changes. Any aggregator-test commit:
+
 ```bash
 git commit -m "test(grammar): cover validateStructural aggregator"
 ```
@@ -1384,25 +1535,27 @@ Same per-rule TDD cycle as B1 (Step 1.1–1.7). Per-rule implementation notes:
 
 - [ ] **E-1 (variadic arity floor):** for each `and`/`or`, count children; `< 2` emits E-1. Test cases per the todo list.
 
-- [ ] **E-3 (variable binding resolves):** for each variable, check that its target exists *and* is non-deleted. Test cases per the todo list. Reuse logic from S-1 where possible (extract a shared `resolveVariableTarget` helper into `validators/context.ts` if it stays small).
+- [ ] **E-3 (variable binding resolves):** for each variable, check that its target exists _and_ is non-deleted. Test cases per the todo list. Reuse logic from S-1 where possible (extract a shared `resolveVariableTarget` helper into `validators/context.ts` if it stays small).
 
 - [ ] **E-4 (axiomatic-binding constraint, no-op at AST level):** the validator returns `[]`. JSDoc on the exported function:
-  ```ts
-  /**
-   * E-4 is a runtime evaluation guard, not an AST invariant. The actual
-   * check (caller-supplied input must not assign axiomatic-bound variables)
-   * runs inside ArgumentEngine.evaluate / .checkValidity. This validator
-   * cannot detect E-4 from the argument tree alone and intentionally
-   * returns an empty array.
-   */
-  ```
-  Test: `validateE4(buildContext({...}))` returns `[]` for any context.
 
-- [ ] **E-5 (derivation premise consequent present):** for each `type='derivation'` premise, check that *some* expression in its tree is a variable bound to `premise.derivedClaimId`. Naked-Q satisfies this (the lone root variable). Test cases per the todo list.
+    ```ts
+    /**
+     * E-4 is a runtime evaluation guard, not an AST invariant. The actual
+     * check (caller-supplied input must not assign axiomatic-bound variables)
+     * runs inside ArgumentEngine.evaluate / .checkValidity. This validator
+     * cannot detect E-4 from the argument tree alone and intentionally
+     * returns an empty array.
+     */
+    ```
+
+    Test: `validateE4(buildContext({...}))` returns `[]` for any context.
+
+- [ ] **E-5 (derivation premise consequent present):** for each `type='derivation'` premise, check that _some_ expression in its tree is a variable bound to `premise.derivedClaimId`. Naked-Q satisfies this (the lone root variable). Test cases per the todo list.
 
 - [ ] **E-6 (claim-derivation pairing):** group derivation premises by `derivedClaimId`, find any group with size ≥ 2. Each duplicate emits E-6 once. Test cases per the todo list.
 
-- [ ] **E-7 (argument has conclusion premise):** check the role state. If `premises.length > 0 && roleState.conclusionPremiseId == null`, emit E-7. If `premises.length === 0`, no violation. If the designated `conclusionPremiseId` doesn't match any premise, that's *also* an E-7 (matches current `ARGUMENT_CONCLUSION_NOT_FOUND`). Test cases per the todo list.
+- [ ] **E-7 (argument has conclusion premise):** check the role state. If `premises.length > 0 && roleState.conclusionPremiseId == null`, emit E-7. If `premises.length === 0`, no violation. If the designated `conclusionPremiseId` doesn't match any premise, that's _also_ an E-7 (matches current `ARGUMENT_CONCLUSION_NOT_FOUND`). Test cases per the todo list.
 
 - [ ] **Evaluable aggregator test:** context with one violation each of E-1, E-6, E-7. Assert aggregator returns all three.
 
@@ -1416,16 +1569,16 @@ Same per-rule TDD cycle. Implementation notes:
     1. Find root expression.
     2. If root is `variable` and references the consequent variable → naked-Q ✓.
     3. If root is `implies` with arity 2 → walk antecedent past any intervening `formula` buffers (use a helper `peelFormulas(expr, expressions): TCorePropositionalExpression`). Result must be one of:
-       - `variable` bound to a `'citation'` or `'axiomatic'` claim (single-grounding form per D-2), OR
-       - `or` whose children (after peeling formulas) are all variables bound to claims of the *same* grounding type (citation or axiomatic) and `or.children.length >= 2`.
+        - `variable` bound to a `'citation'` or `'axiomatic'` claim (single-grounding form per D-2), OR
+        - `or` whose children (after peeling formulas) are all variables bound to claims of the _same_ grounding type (citation or axiomatic) and `or.children.length >= 2`.
     4. Anything else → D-1 violation. IFF at root specifically → D-1 violation (the briefing spells this out for IFF-at-derivation-root).
-    Test cases per the todo list — naked-Q OK, populated single-citation OK, populated multi-citation OK with and without buffer, IFF at root rejected, mixed grounding rejected, non-claim variable rejected.
+       Test cases per the todo list — naked-Q OK, populated single-citation OK, populated multi-citation OK with and without buffer, IFF at root rejected, mixed grounding rejected, non-claim variable rejected.
 
 - [ ] **D-2 (single-citation form):** if a populated derivation has antecedent `OR(single-element)` (peeling formulas), emit D-2 — should be `IMPLIES(citation-var, Q)` directly. Test cases per the todo list.
 
 - [ ] **D-3 (no mixing axioms and citations):** in the antecedent's claim-bound variables, count distinct grounding types (citation vs axiomatic). `> 1` distinct → D-3. Test cases per the todo list.
 
-- [ ] **D-4 (axiomatic claim placement):** scan every expression. Any variable bound to a `'axiomatic'` claim that does not appear in a derivation premise's antecedent → D-4. The consequent-slot check piggybacks on D-1 but D-4 explicitly flags the case where the variable *appears anywhere* outside the antecedent.
+- [ ] **D-4 (axiomatic claim placement):** scan every expression. Any variable bound to a `'axiomatic'` claim that does not appear in a derivation premise's antecedent → D-4. The consequent-slot check piggybacks on D-1 but D-4 explicitly flags the case where the variable _appears anywhere_ outside the antecedent.
 
 - [ ] **D-5 (citation claim placement):** mirror of D-4 for `'citation'` claims.
 
@@ -1439,7 +1592,7 @@ Same per-rule TDD cycle. Implementation notes:
 
 Same per-rule TDD cycle. Implementation notes:
 
-- [ ] **P-1 (formula buffer between operators):** for each expression that is an operator and *not* `not`, walk children. If any child is a non-`not` operator (not separated by a formula), emit P-1.
+- [ ] **P-1 (formula buffer between operators):** for each expression that is an operator and _not_ `not`, walk children. If any child is a non-`not` operator (not separated by a formula), emit P-1.
 
 - [ ] **P-2 (no double negation):** for each `not` expression, check its single child; if the child is also `not`, emit P-2 on the outer.
 
@@ -1456,6 +1609,7 @@ Same per-rule TDD cycle. Implementation notes:
 ## Task B5: validate(tier) dispatcher tests
 
 **Files:**
+
 - Modify: `test/grammar/validate-dispatcher.test.ts`
 
 The dispatcher is already implemented in `src/lib/grammar/validate.ts` (Phase A2). Verify its semantics by writing the six tests:
@@ -1490,6 +1644,7 @@ expect(validateGrammar("presentable", ctx).map((v) => v.tier)).toEqual([
 ```
 
 Empty-context test:
+
 ```ts
 expect(validateGrammar("presentable", emptyContext())).toEqual([])
 ```
@@ -1511,6 +1666,7 @@ git commit -m "test(grammar): cover validate(tier) dispatcher short-circuit sema
 ## Task C1: Add `behavior` field + `setBehavior(...)` on `ArgumentEngine`
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts`
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts`
 - Modify: `src/lib/core/proposit-core.ts` (option threading)
@@ -1638,6 +1794,7 @@ git commit -m "feat(engine): add behavior field and setBehavior() on ArgumentEng
 ## Task C2: Implement AN post-hook (AN-1..AN-4)
 
 **Files:**
+
 - Create: `src/lib/grammar/auto-normalize.ts`
 - Create: `test/grammar/auto-normalize.test.ts`
 - Modify: `src/lib/core/premise-engine.ts` (call the hook after each successful Structural mutation when engine.behavior === 'assistive')
@@ -1714,11 +1871,13 @@ export type TAutoNormalizationInput = {
     // The changeset just produced by the mutation, so we know which nodes
     // to inspect. Doing a global pass would be a normalize() call (§6), not
     // this hook.
-    changeset: TCoreMutationResult<unknown, /* ...generic args... */>
+    changeset: TCoreMutationResult<unknown /* ...generic args... */>
     // … plus the engine handle to mutate
 }
 
-export function runAssistiveNormalization(input: TAutoNormalizationInput): void {
+export function runAssistiveNormalization(
+    input: TAutoNormalizationInput
+): void {
     // 1. AN-1: for each newly inserted operator expression, if its parent
     //    is an operator (and the new node is not `not`), insert a formula
     //    node between them.
@@ -1741,6 +1900,7 @@ export function runAssistiveNormalization(input: TAutoNormalizationInput): void 
 In `src/lib/core/premise-engine.ts`, replace every per-method `resolveAutoNormalize(...)`-gated cleanup with a single call to `runAssistiveNormalization(...)` at the end of each successful Structural mutation, gated on `this.argument.engine.behavior === 'assistive'`.
 
 Specific call sites:
+
 - `addExpression`, `appendExpression`, `addExpressionRelative` — replace `wrapInsertFormula` / `repositionOnCollision` per-method logic with the post-hook.
 - `insertExpression` — replace `wrapInsertFormula` / `repositionOnCollision` / spacing logic.
 - `removeExpression` — replace `collapseEmptyFormula` recursion with the post-hook.
@@ -1749,7 +1909,7 @@ Specific call sites:
 - `updateExpression` — replace `absorbSameOperator` logic.
 - `promoteChild` — replace `repositionOnCollision` logic.
 
-Note: S-9 (sibling position uniqueness) is *promoted to Structural enforcement* per the briefing — so `repositionOnCollision` becomes part of the mutation's bundled op (composite mutations shift colliding siblings; pure structural ops throw on collision). The post-hook does *not* re-do S-9 — it's already guaranteed by the mutation. AN-1..AN-4 are the post-hook's only responsibilities.
+Note: S-9 (sibling position uniqueness) is _promoted to Structural enforcement_ per the briefing — so `repositionOnCollision` becomes part of the mutation's bundled op (composite mutations shift colliding siblings; pure structural ops throw on collision). The post-hook does _not_ re-do S-9 — it's already guaranteed by the mutation. AN-1..AN-4 are the post-hook's only responsibilities.
 
 - [ ] **Step 5: Run tests to verify pass**
 
@@ -1770,6 +1930,7 @@ This will surface every existing test that depended on the old per-flag config (
 - [ ] **Step 7: Commit**
 
 Commit the AN post-hook + premise-engine wiring + test updates together so the history is consistent:
+
 ```bash
 git add src/lib/grammar/auto-normalize.ts src/lib/core/premise-engine.ts test/grammar/auto-normalize.test.ts test/core.test.ts
 git commit -m "feat(engine): wire AN post-hook (AN-1..AN-4) on every successful Structural mutation in assistive mode"
@@ -1780,6 +1941,7 @@ git commit -m "feat(engine): wire AN post-hook (AN-1..AN-4) on every successful 
 ## Task C3: Implement `normalize(tier?)` global pass
 
 **Files:**
+
 - Create: `src/lib/grammar/normalize.ts`
 - Create: `test/grammar/normalize.test.ts`
 - Modify: `src/lib/core/argument-engine.ts` (expose `normalize(tier?)` on the engine)
@@ -1847,7 +2009,7 @@ Create `src/lib/grammar/normalize.ts`:
 import type { TGrammarTier } from "./types.js"
 
 export function normalize(
-    _tier: TGrammarTier = "presentable",
+    _tier: TGrammarTier = "presentable"
     // … engine handle and expression-manager handle
 ): void {
     // Walk the entire argument once and apply AN-1..AN-4 wherever they
@@ -1909,6 +2071,7 @@ git commit -m "feat(engine): implement ArgumentEngine.normalize(tier?) global pa
 ## Task C4: Implement repair primitives
 
 **Files:**
+
 - Create: `src/lib/grammar/repair.ts`
 - Create: `test/grammar/repair.test.ts`
 - Modify: `src/lib/core/argument-engine.ts`
@@ -1918,16 +2081,17 @@ git commit -m "feat(engine): implement ArgumentEngine.normalize(tier?) global pa
 
 Recommended initial set, each tied to a specific Evaluable/Derivable violation:
 
-| Primitive | Resolves | Behavior |
-|---|---|---|
-| `removeUnresolvableVariables()` | E-3 (binding doesn't resolve) | Deletes the variable + cascades expression removal (with operator collapse). |
-| `removeOrphanOperators()` | E-1 (and/or with < 2 children) | Deletes empty operators and promotes single-child operators (already AN-3 territory, but standalone here for the UI's "I accept this delete" flow). |
-| `removeDuplicateDerivationPremises(strategy: 'keep-first' \| 'keep-largest-antecedent')` | E-6 (claim has > 1 derivation premise) | Deletes the extras per strategy. |
-| `dropAxiomsFromMixedAntecedent()` | D-3 (mixing axioms and citations) | Deletes axiom-bound-variable expressions from the antecedent, leaving citations. (Mirrors the migration repair from spec §9.2; useful at runtime if an advanced-mode user ever produces this state.) |
+| Primitive                                                                                | Resolves                               | Behavior                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `removeUnresolvableVariables()`                                                          | E-3 (binding doesn't resolve)          | Deletes the variable + cascades expression removal (with operator collapse).                                                                                                                         |
+| `removeOrphanOperators()`                                                                | E-1 (and/or with < 2 children)         | Deletes empty operators and promotes single-child operators (already AN-3 territory, but standalone here for the UI's "I accept this delete" flow).                                                  |
+| `removeDuplicateDerivationPremises(strategy: 'keep-first' \| 'keep-largest-antecedent')` | E-6 (claim has > 1 derivation premise) | Deletes the extras per strategy.                                                                                                                                                                     |
+| `dropAxiomsFromMixedAntecedent()`                                                        | D-3 (mixing axioms and citations)      | Deletes axiom-bound-variable expressions from the antecedent, leaving citations. (Mirrors the migration repair from spec §9.2; useful at runtime if an advanced-mode user ever produces this state.) |
 
 - [ ] **Step 1: For each primitive, write a failing test in `test/grammar/repair.test.ts`**
 
 Each test follows the pattern:
+
 1. Construct an argument with the targeted violation.
 2. Call the primitive.
 3. Assert it returns the violations it resolved (with correct `code`/`tier`).
@@ -1976,9 +2140,10 @@ git commit -m "feat(engine): targeted repair primitives for E-1/E-3/E-6/D-3 (use
 
 ## Task C5: Promote S-8, S-9, S-12, S-13, S-14 to throw-on-violation in mutations
 
-The new model says mutations throw on Structural violations and never on Evaluable/Derivable/Presentable. The current mutation API enforces some of S-* indirectly via the per-flag config. With the config gone, the mutations must directly throw on Structural-rule violation.
+The new model says mutations throw on Structural violations and never on Evaluable/Derivable/Presentable. The current mutation API enforces some of S-\* indirectly via the per-flag config. With the config gone, the mutations must directly throw on Structural-rule violation.
 
 **Files:**
+
 - Modify: `src/lib/core/premise-engine.ts`
 - Modify: `src/lib/core/expression-manager.ts`
 
@@ -2011,6 +2176,7 @@ git commit -m "feat(engine): mutations throw on Structural violations (S-8, S-9,
 ## Task C6: Split `populateFromSupports` → `populateFromCitations` + `populateFromAxioms`
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts` (or wherever the method lives once `ManagedDerivationPremiseEngine` is deleted; the briefing places it at engine API)
 - Modify: `src/lib/index.ts` (drop the `populateFromSupports` export if any)
 - Create: `test/grammar/populate-from-citations.test.ts`
@@ -2019,6 +2185,7 @@ git commit -m "feat(engine): mutations throw on Structural violations (S-8, S-9,
 - [ ] **Step 1: Write failing tests for `populateFromCitations`**
 
 For each `derivedClaimId`, the method reads citation connections via `core.citations.getConnectionsForClaim(claimId)`, materializes claim-bound variables for each citation claim, and populates the per-claim derivation premise's antecedent. Cases:
+
 - 0 citations → premise stays naked-Q.
 - 1 citation → antecedent is `IMPLIES(citation-var, Q)` (D-2 form).
 - 2+ citations → antecedent is `IMPLIES(OR(c1, c2, ...), Q)`, with the canonical Presentable formula buffer between IMPLIES and OR.
@@ -2048,6 +2215,7 @@ git commit -m "feat(engine): split populateFromSupports into populateFromCitatio
 ## Task C7: Snapshot loading accepts any Structural state
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts` (`fromSnapshot`, `fromData`)
 - Modify: `src/lib/core/proposit-core.ts` (`fromSnapshot`)
 - Modify: `src/lib/types/fork.ts` (drop the `grammarConfig?` field from any fork-related option types)
@@ -2065,7 +2233,7 @@ git commit -m "feat(engine): split populateFromSupports into populateFromCitatio
 
 Strip the `grammarConfig` parameter from `fromSnapshot`/`fromData`. Replace the post-load normalization step with: nothing. The snapshot is loaded as-is. Lower-tier violations queryable via `validate(tier)`.
 
-For Structural validation at load time: run `validate('structural')` on the loaded context; if non-empty, throw `InvariantViolationError` with the violations attached. (The current `LEGACY_*` codes for truly broken snapshots fold into Structural violations with stable codes per the briefing — the existing `LEGACY_CLAIM_MISSING_TYPE`, `LEGACY_PREMISE_MISSING_TYPE`, `LEGACY_CLAIM_CITATION_SHAPE`, `LEGACY_MISSING_AXIOM_SLOT` continue to throw at the *library* level before reaching the engine.)
+For Structural validation at load time: run `validate('structural')` on the loaded context; if non-empty, throw `InvariantViolationError` with the violations attached. (The current `LEGACY_*` codes for truly broken snapshots fold into Structural violations with stable codes per the briefing — the existing `LEGACY_CLAIM_MISSING_TYPE`, `LEGACY_PREMISE_MISSING_TYPE`, `LEGACY_CLAIM_CITATION_SHAPE`, `LEGACY_MISSING_AXIOM_SLOT` continue to throw at the _library_ level before reaching the engine.)
 
 - [ ] **Step 3: Run + commit**
 
@@ -2080,6 +2248,7 @@ git commit -m "feat(engine): fromSnapshot/fromData accept any Structural state; 
 ## Task C8: Evaluation no-op on naked-Q
 
 **Files:**
+
 - Modify: `src/lib/core/argument-engine.ts` (`evaluate`, `checkValidity`, `validateEvaluability`, `validateDerivationStructures`)
 - Modify: `src/lib/core/evaluation/argument-evaluation.ts` (where the standalone evaluator handles derivation premises)
 - Modify: `test/core.test.ts` (any test pinning `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` on naked-Q updates to assert eval returns OK with the naked-Q skipped)
@@ -2119,6 +2288,7 @@ git commit -m "feat(engine): naked-Q derivation premise is an evaluation no-op (
 ## Task D1: Delete `ManagedDerivationPremiseEngine`
 
 **Files:**
+
 - Delete: `src/lib/core/managed-derivation-premise-engine.ts`
 - Modify: `src/lib/index.ts` (drop the exports)
 - Modify: any internal callers (the `core.test.ts` blocks that instantiate it; CLI repair commands; any subclass references)
@@ -2138,6 +2308,7 @@ git rm src/lib/core/managed-derivation-premise-engine.ts
 ```
 
 Edit `src/lib/index.ts` to remove:
+
 ```ts
 export { ManagedDerivationPremiseEngine } from "./core/managed-derivation-premise-engine.js"
 export type { TVariableMaterializer } from "./core/managed-derivation-premise-engine.js"
@@ -2145,7 +2316,7 @@ export type { TVariableMaterializer } from "./core/managed-derivation-premise-en
 
 - [ ] **Step 3: Update remaining callers**
 
-Wherever code used `ManagedDerivationPremiseEngine` to *enforce* derivation invariants, the equivalent is now: do the mutation through the regular `PremiseEngine` (or via `ArgumentEngine`'s structural mutation methods) and call `engine.validate('derivable')` to detect issues. Update CLI commands (`src/cli/commands/repair.ts`, `src/cli/commands/premises.ts`) accordingly.
+Wherever code used `ManagedDerivationPremiseEngine` to _enforce_ derivation invariants, the equivalent is now: do the mutation through the regular `PremiseEngine` (or via `ArgumentEngine`'s structural mutation methods) and call `engine.validate('derivable')` to detect issues. Update CLI commands (`src/cli/commands/repair.ts`, `src/cli/commands/premises.ts`) accordingly.
 
 - [ ] **Step 4: Typecheck + test**
 
@@ -2167,6 +2338,7 @@ git commit -m "refactor(engine): remove ManagedDerivationPremiseEngine (folded i
 ## Task D2: Delete `grammarConfig` machinery
 
 **Files:**
+
 - Delete: `src/lib/types/grammar.ts`
 - Modify: `src/lib/index.ts` (drop the type exports)
 - Modify: `src/lib/types/fork.ts` (drop the `grammarConfig?` field)
@@ -2189,6 +2361,7 @@ git rm src/lib/types/grammar.ts
 ```
 
 Edit `src/lib/index.ts` to drop:
+
 ```ts
 export * from "./types/grammar.js"
 ```
@@ -2230,6 +2403,7 @@ git commit -m "refactor(engine): remove LOAD_GRAMMAR / STRICT_GRAMMAR snapshot c
 ## Task D4: Delete deprecated `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
 
 **Files:**
+
 - Modify: `src/lib/types/validation.ts`
 
 - [ ] **Step 1: Verify no usage**
@@ -2243,6 +2417,7 @@ After C8 every usage should be gone. If any remain, fix them first.
 - [ ] **Step 2: Delete the constant**
 
 Edit `src/lib/types/validation.ts` and remove:
+
 ```ts
 export const DERIVATION_STRUCTURE_INVALID_AT_EVALUATION =
     "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
@@ -2260,6 +2435,7 @@ git commit -m "refactor(engine): drop DERIVATION_STRUCTURE_INVALID_AT_EVALUATION
 ## Task D5: Update interface JSDoc + add Engine-/Wire-namespace clarification
 
 **Files:**
+
 - Modify: `src/lib/core/interfaces/argument-engine.interfaces.ts`
 - Modify: `src/lib/core/interfaces/premise-engine.interfaces.ts`
 - Modify: `src/lib/types/validation.ts` (add namespace comment)
@@ -2305,6 +2481,7 @@ git commit -m "docs(interfaces): clarify engine-error vs grammar-rule code names
 ## Task E1: Replace `docs/Proposit_Grammar.md`
 
 **Files:**
+
 - Delete: `docs/Proposit_Grammar.md` (old file)
 - Move: `docs/Proposit_Grammar.draft.md` → `docs/Proposit_Grammar.md`
 - Modify: the new file with §2–§7 fully written out
@@ -2316,6 +2493,7 @@ Pull definitions, subset-chain diagram, and gate table verbatim from spec §3. W
 - [ ] **Step 2: Author §3 Rule inventory**
 
 For every rule (S-1..S-14, E-1+E-3..E-7, D-1..D-6, P-1..P-5):
+
 - Rule statement (from spec §4)
 - Tier + code
 - Validator function name (from `src/lib/grammar/validators/*`)
@@ -2390,11 +2568,13 @@ git commit -m "docs(readme): rewrite for 1.0.0 — four-tier grammar, new API, m
 ## Task E3: Rewrite the `CLAUDE.md` "Key design rules" section
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Pass over every bullet**
 
 Drop:
+
 - "Operator nesting restriction" (the bullet that references `grammarConfig.enforceFormulaBetweenOperators`)
 - "Granular auto-normalize" (the very long bullet listing six flags)
 - "Operator collapse" (bullet talking about `collapseEmptyFormula`)
@@ -2406,6 +2586,7 @@ Drop:
 - "Evaluation pre-flight for derivation premises" — drop the throw-on-naked-Q description; replace with "naked-Q is a no-op."
 
 Add:
+
 - **Four-tier grammar:** bullet describing `Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable`, the subset chain, and `validate(tier)` semantics.
 - **Engine behavior:** bullet describing `behavior: 'assistive' | 'permissive'`, `setBehavior(...)`, and the AN post-hook.
 - **`normalize(tier?)`:** bullet describing the global pass, the tier forward-compat, the non-destructiveness rule.
@@ -2439,6 +2620,7 @@ Same scan for old flags. Update calls to use the new behavior switch.
 - [ ] **Step 3: `examples/arguments/*.yaml`**
 
 Run the parser over each example and confirm they load under the new model:
+
 ```bash
 pnpm run build
 node dist/cli/index.js parse examples/arguments/<each-file>.yaml
@@ -2460,6 +2642,7 @@ git commit -m "docs(cli): update CLI_EXAMPLES, smoke-test, and example arguments
 - [ ] **Step 1: Pass over every section**
 
 Find every reference to the dropped APIs and replace with the new model. Add fresh sections for:
+
 - `validate(tier)`
 - `normalize(tier?)`
 - `behavior` / `setBehavior(...)`
@@ -2467,6 +2650,7 @@ Find every reference to the dropped APIs and replace with the new model. Add fre
 - `populateFromCitations` / `populateFromAxioms`
 
 Drop:
+
 - `grammarConfig` / `TGrammarConfig` / `TAutoNormalizeConfig` / `DEFAULT_GRAMMAR_CONFIG` / `PERMISSIVE_GRAMMAR_CONFIG`
 - `ManagedDerivationPremiseEngine` / `TVariableMaterializer`
 - `populateFromSupports`
@@ -2485,12 +2669,14 @@ git commit -m "docs(api-reference): full pass for 1.0.0 API"
 ## Task E6: Release notes + changelog
 
 **Files:**
+
 - Modify: `docs/release-notes/upcoming.md`
 - Modify: `docs/changelogs/upcoming.md`
 
 - [ ] **Step 1: Write `docs/release-notes/upcoming.md`**
 
 Plain language, user-facing. Cover:
+
 - The four-tier grammar model and what changed at the API surface.
 - The `behavior` setting and the assistive-vs-permissive distinction.
 - The `validate(tier)` + `normalize(tier?)` API.
@@ -2553,9 +2739,10 @@ SendMessage to `team-lead`:
 
 > Ready to publish `@proposit/proposit-core@1.0.0`.
 >
-> **Version recommendation:** `major` (→ 1.0.0). Rationale: the API change is breaking — `grammarConfig`, `autoNormalize`, `enforceFormulaBetweenOperators`, `LOAD_GRAMMAR`/`STRICT_GRAMMAR`, `ManagedDerivationPremiseEngine`, `populateFromSupports`, and `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` are *removed*, not deprecated. A 1.0.0 marks the first stable wire-format commitment (rule codes now live in `@proposit/shared@^0.9.0`). Pre-1.0 path (0.13.0) is technically defensible but the briefing recommends major as the cleaner signal.
+> **Version recommendation:** `major` (→ 1.0.0). Rationale: the API change is breaking — `grammarConfig`, `autoNormalize`, `enforceFormulaBetweenOperators`, `LOAD_GRAMMAR`/`STRICT_GRAMMAR`, `ManagedDerivationPremiseEngine`, `populateFromSupports`, and `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` are _removed_, not deprecated. A 1.0.0 marks the first stable wire-format commitment (rule codes now live in `@proposit/shared@^0.9.0`). Pre-1.0 path (0.13.0) is technically defensible but the briefing recommends major as the cleaner signal.
 >
 > **Changelog summary:**
+>
 > - New: four-tier grammar (`Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable`); `validate(tier)`, `normalize(tier?)`, `behavior: 'assistive'|'permissive'`, `setBehavior(...)`, four repair primitives.
 > - New: `populateFromCitations` and `populateFromAxioms` (split from `populateFromSupports`; no silent dropping).
 > - Changed: snapshot loading accepts any Structural state; lower-tier violations queryable post-load.
@@ -2581,7 +2768,7 @@ Do not proceed to F3 until the orchestrator approves.
 pnpm version major
 ```
 
-Expected: `package.json` now reads `"version": "1.0.0"`. A commit is created with the bump and a `v1.0.0` tag is *not* yet (we tag in F5 after publish).
+Expected: `package.json` now reads `"version": "1.0.0"`. A commit is created with the bump and a `v1.0.0` tag is _not_ yet (we tag in F5 after publish).
 
 - [ ] **Step 2: Rename release-notes + changelog**
 
@@ -2596,6 +2783,7 @@ Create empty stubs:
 
 ```md
 <!-- docs/release-notes/upcoming.md -->
+
 # Upcoming release notes
 
 _No changes yet._
@@ -2603,6 +2791,7 @@ _No changes yet._
 
 ```md
 <!-- docs/changelogs/upcoming.md -->
+
 # Upcoming changelog
 
 _No changes yet._
@@ -2699,24 +2888,24 @@ Use the broker pattern (see `skill-cefailures:broker`):
 
 Run through the spec one section at a time and confirm each requirement maps to a task.
 
-| Spec section | Plan task(s) |
-|---|---|
-| §1 Capability changes (server + mobile own these) | Out of scope for core; noted in briefing |
-| §2 Goal | Phase B + C overall |
-| §3 The four grammar tiers | B1–B5 validators; E1–E3 documentation |
-| §4 Rule inventory | B1 (S-1..S-14), B2 (E-*), B3 (D-*), B4 (P-*) |
-| §5 Engine behavior | C1 (behavior field), C2 (AN post-hook) |
-| §5.1 AN rule set | C2 (AN-1..AN-4) |
-| §6 normalize() | C3 (normalize global pass) |
-| §7.1 API surface | C1, C3, C4, B5 dispatcher |
-| §7.2 Snapshot loading | C7 |
-| §8 Mutation API categorization | C5 (Structural-only throws); D2 (drop old flag plumbing); E5 docs |
-| §9 Migration strategy — code | F3–F5 publish flow; downstream consumers bump on their own |
-| §9 Migration strategy — data | Out of scope (server) |
-| §10 Per-repo scope sketch — core | All of B/C/D/E |
-| §11 Proposit_Grammar.md rewrite | E1 |
-| §12 Open decisions | All resolved in the briefing; codified in B–E (e.g., populateFromCitations/Axioms in C6; naked-Q no-op in C8; IFF-at-derivation-root flagged D-1 in B3; advanced-mode behavior=permissive in C1) |
-| §13 Acceptance criteria | F1 (pre-publish baseline) + F4 (publish) + F6 (broker READY) |
+| Spec section                                      | Plan task(s)                                                                                                                                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| §1 Capability changes (server + mobile own these) | Out of scope for core; noted in briefing                                                                                                                                                         |
+| §2 Goal                                           | Phase B + C overall                                                                                                                                                                              |
+| §3 The four grammar tiers                         | B1–B5 validators; E1–E3 documentation                                                                                                                                                            |
+| §4 Rule inventory                                 | B1 (S-1..S-14), B2 (E-_), B3 (D-_), B4 (P-\*)                                                                                                                                                    |
+| §5 Engine behavior                                | C1 (behavior field), C2 (AN post-hook)                                                                                                                                                           |
+| §5.1 AN rule set                                  | C2 (AN-1..AN-4)                                                                                                                                                                                  |
+| §6 normalize()                                    | C3 (normalize global pass)                                                                                                                                                                       |
+| §7.1 API surface                                  | C1, C3, C4, B5 dispatcher                                                                                                                                                                        |
+| §7.2 Snapshot loading                             | C7                                                                                                                                                                                               |
+| §8 Mutation API categorization                    | C5 (Structural-only throws); D2 (drop old flag plumbing); E5 docs                                                                                                                                |
+| §9 Migration strategy — code                      | F3–F5 publish flow; downstream consumers bump on their own                                                                                                                                       |
+| §9 Migration strategy — data                      | Out of scope (server)                                                                                                                                                                            |
+| §10 Per-repo scope sketch — core                  | All of B/C/D/E                                                                                                                                                                                   |
+| §11 Proposit_Grammar.md rewrite                   | E1                                                                                                                                                                                               |
+| §12 Open decisions                                | All resolved in the briefing; codified in B–E (e.g., populateFromCitations/Axioms in C6; naked-Q no-op in C8; IFF-at-derivation-root flagged D-1 in B3; advanced-mode behavior=permissive in C1) |
+| §13 Acceptance criteria                           | F1 (pre-publish baseline) + F4 (publish) + F6 (broker READY)                                                                                                                                     |
 
 Briefing-specific items also covered:
 
@@ -2731,6 +2920,7 @@ Briefing-specific items also covered:
 - Briefing #9 (documentation rewrite): E1–E5.
 
 Documentation Sync (per `CLAUDE.md`):
+
 - `README.md` [Public-CLI-API] → E2.
 - `README.md` "Invalid Constructions" [Validation-Rules] → E2 step 1 (section #7).
 - `docs/api-reference.md` [Public-API] → E5.
@@ -2755,7 +2945,7 @@ These choices are intentionally left to the implementer because they depend on d
 1. **`InvariantViolationError` shape extension (Phase C5):** does the existing error class get extended with optional `tier` and `ruleCode` fields, or does a new `StructuralViolationError` subclass get introduced? Recommend extending the existing class; flag if the choice affects external consumers.
 2. **Repair primitive set (Phase C4):** the four primitives listed are a starting point. If implementation surfaces additional repair paths (e.g., `flattenNestedSameOperator()` for unusual P-5 cases), add them — each should resolve a specific Evaluable/Derivable violation and respect `behavior`.
 3. **`engine.validateEvaluability` / `engine.checkValidity` consolidation (briefing item):** these existing methods may merge into `validate('evaluable')` or stay as thin wrappers. Recommend keeping them as wrappers for backward compatibility within the 1.0 surface; they call `validate('evaluable')` internally.
-4. **AN-3 single-child promotion behavior:** the briefing notes the rule but the exact semantics need a quick decision at C2 — does AN-3 promote a single child *always*, or only when the parent is non-meaningful (formula, or operator with one child)? Recommend the latter (matches today's `collapseEmptyFormula` behavior).
+4. **AN-3 single-child promotion behavior:** the briefing notes the rule but the exact semantics need a quick decision at C2 — does AN-3 promote a single child _always_, or only when the parent is non-meaningful (formula, or operator with one child)? Recommend the latter (matches today's `collapseEmptyFormula` behavior).
 
 ---
 
