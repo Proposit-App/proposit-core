@@ -86,7 +86,7 @@ Split `populateFromSupports` into `populateFromCitations` and `populateFromAxiom
 
 **Migration path** (a one-shot lossy drop dropping axioms from mixed antecedents) lives in the server briefing, not here — runtime construction never drops user data.
 
-### 10. Mutation throw contract — Structural-only
+### 8. Mutation throw contract — Structural-only
 
 **Design rule (landed 2026-05-14 post-handoff):** mutation methods on `ArgumentEngine` and `PremiseEngine` throw **only on Structural-rule violations**. Evaluable, Derivable, and Presentable violations never cause a mutation to throw — they surface through `validate(tier)` and may be cleaned up by AN (assistive) or repair primitives (user-initiated).
 
@@ -94,12 +94,14 @@ Split `populateFromSupports` into `populateFromCitations` and `populateFromAxiom
 
 P-1 (formula buffer between operators) enforcement throws — all currently gated on `grammarConfig.enforceFormulaBetweenOperators` and have AN-flag-gated buffer-insertion fallbacks. Under the v1.0 model, the inline branches die and AN-1 (post-hook in assistive mode) inserts the buffer; the throws disappear entirely.
 
-Specific sites to remove (line numbers from the `grammar-tiers/core` branch at `8994aec`):
+Specific sites to remove (line numbers verified against `grammar-tiers/core@ec09aa2`):
 
-- `src/lib/core/expression-manager.ts:401–406` — `addExpression` rejection: "Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node"
-- `src/lib/core/expression-manager.ts:681–688` — `removeExpression` rejection: "Cannot remove expression — would promote a non-not operator as a direct child of another operator"
-- `src/lib/core/expression-manager.ts:1655, 1963, 2235` — `wrapExpression` and related P-1 enforcement sites (each has a `wrapInsertFormula` fallback)
-- `src/lib/core/premise-engine.ts:797` — `toggleNegation` rejection: "Cannot negate operator expression — would place a non-not operator as a direct child of NOT. Enable negationInsertFormula or wrap in a formula node first."
+- `src/lib/core/expression-manager.ts:444` — `addExpression` (one throw): "Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node"
+- `src/lib/core/expression-manager.ts:871, 1220, 1665` — `removeExpression` / promote-on-remove (three sites): "Cannot remove expression — would promote a non-not operator as a direct child of another operator"
+- `src/lib/core/expression-manager.ts:1980, 2001, 2018, 2251, 2271, 2290` — `wrapExpression` and related P-1 enforcement (six sites — each gated on `enforceFormulaBetweenOperators` with a `wrapInsertFormula` fallback): "Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node"
+- `src/lib/core/premise-engine.ts:797` — `toggleNegation` (one throw): "Cannot negate operator expression — would place a non-not operator as a direct child of NOT. Enable negationInsertFormula or wrap in a formula node first."
+
+(Throw count: 1 + 3 + 6 + 1 = 11 total P-1 throw sites. Each has a `wrapInsertFormula` / `negationInsertFormula` AN-flag fallback path. All gating, fallbacks, and throws die together in Phase D.)
 
 MDPE throws (`DERIVATION_TYPE_MISMATCH`, `DERIVATION_STRUCTURE_INVALID`, `DERIVATION_ANTECEDENT_NON_EMPTY`) die wholesale when MDPE is removed in Phase D — no separate action needed for those.
 
@@ -114,11 +116,11 @@ Throws that should **stay** in mutations (legitimate Structural / API-shape):
 - `S-14` derivation premise root operator (now plugged at `premise-engine.ts` — keep)
 - API contract throws: `updateExpression` forbidden fields, "Cannot change 'not' — use toggleNegation", permitted operator swaps — these are API-shape contracts, not grammar rules.
 
-### 8. Snapshot loading
+### 9. Snapshot loading
 
 Per §7.2 — `fromSnapshot()` and `fromData()` accept any **Structural** state. Lower-tier violations are queryable post-load via `validate(tier)`. The `LOAD_GRAMMAR` / `STRICT_GRAMMAR` snapshot config split is removed. Load failures only happen on truly broken (non-Structural) snapshots; today's `LEGACY_*` codes fold into Structural violations with stable codes — enumerate the specific mapping during implementation.
 
-### 9. Documentation rewrite
+### 10. Documentation rewrite
 
 **Delete `proposit-core/docs/Proposit_Grammar.md`.** That file (128 lines, formula-string parser grammar only) is too narrow for the new model.
 
