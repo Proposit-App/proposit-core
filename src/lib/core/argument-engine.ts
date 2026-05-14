@@ -69,7 +69,9 @@ import {
 } from "./argument-validation.js"
 import type { TExpressionInput } from "./expression-manager.js"
 import { normalizeArgument } from "../grammar/normalize.js"
-import type { TGrammarTier } from "../grammar/types.js"
+import { validate as validateGrammar } from "../grammar/validate.js"
+import type { TGrammarTier, TViolation } from "../grammar/types.js"
+import type { TValidatorContext as TGrammarValidatorContext } from "../grammar/validators/context.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 import { PremiseEngine } from "./premise-engine.js"
 import type { TPremiseEngineSnapshot } from "./premise-engine.js"
@@ -2283,8 +2285,68 @@ export class ArgumentEngine<
         )
     }
 
-    public validate(): TInvariantValidationResult {
-        return validateArgumentStandalone(this.asValidationContext())
+    /**
+     * Overload signatures: the legacy no-arg form returns
+     * `TInvariantValidationResult` (the pre-1.0 invariant sweep —
+     * kept for backward compat until Phase D removes it); the new
+     * tier-aware form returns `readonly TViolation[]` from the
+     * four-tier grammar dispatcher.
+     */
+    public validate(): TInvariantValidationResult
+    public validate(tier: TGrammarTier): readonly TViolation[]
+    public validate(
+        tier?: TGrammarTier
+    ): TInvariantValidationResult | readonly TViolation[] {
+        if (tier === undefined) {
+            return validateArgumentStandalone(this.asValidationContext())
+        }
+        return validateGrammar(tier, this.asGrammarValidatorContext())
+    }
+
+    /**
+     * Construct the pure-data `TValidatorContext` consumed by the
+     * grammar-tier validators. Claims are gathered by walking the
+     * engine's claim-bound variables and looking each one up in the
+     * claim library — the `TClaimLookup` contract doesn't expose
+     * iteration, so we materialize the referenced subset only.
+     */
+    private asGrammarValidatorContext(): TGrammarValidatorContext {
+        const argument = this.getArgument() as unknown as TCoreArgument
+        const premises: TCorePremise[] = []
+        const expressions: TCorePropositionalExpression[] = []
+        for (const pe of this.listPremises()) {
+            premises.push(pe.toPremiseData() as unknown as TCorePremise)
+            expressions.push(
+                ...(pe.getExpressions() as unknown as TCorePropositionalExpression[])
+            )
+        }
+        const variables =
+            this.variables.toArray() as unknown as TCorePropositionalVariable[]
+
+        // Gather referenced claims via claim-bound variables. Duplicate
+        // (id, version) pairs are deduped via a Set on the composite key.
+        const seen = new Set<string>()
+        const claims: TCoreClaim[] = []
+        for (const v of variables) {
+            if (!isClaimBound(v)) continue
+            const cb = v as unknown as TClaimBoundVariable
+            const key = `${cb.claimId}:${cb.claimVersion}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            const claim = this.claimLibrary.get(cb.claimId, cb.claimVersion)
+            if (claim !== undefined) {
+                claims.push(claim as unknown as TCoreClaim)
+            }
+        }
+
+        return {
+            argument,
+            premises,
+            expressions,
+            variables,
+            claims,
+            roleState: this.getRoleState(),
+        }
     }
 
     public validateEvaluability(): TCoreValidationResult {
