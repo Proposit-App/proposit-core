@@ -769,19 +769,247 @@ v1.0.
 
 ## 6. Validation output reference
 
-_(To author.)_
+### 6.1 `TViolation` shape
 
-- 6.1 `TViolation` shape
-- 6.2 `TGrammarRuleCode` namespace
-- 6.3 Example validation responses
+A single grammar violation. Defined in `@proposit/shared/schemas/grammar`
+and re-exported from `@proposit/proposit-core`:
+
+```ts
+type TViolation = {
+    tier: TGrammarTier
+    code: TGrammarRuleCode
+    message: string // human-readable; UI may localize/replace
+    argumentId?: string
+    premiseId?: string
+    expressionId?: string
+    variableId?: string
+    claimId?: string
+    // additional rule-specific context fields as needed
+}
+```
+
+The optional entity-ID fields are populated by validators when the
+violation localizes to a specific entity — the UI uses these to render
+the issue inline alongside the offending entity (per spec §1's "See
+what's wrong with my argument" capability).
+
+### 6.2 `TGrammarRuleCode` namespace
+
+The string-literal codes are the wire format shared across core, server,
+and mobile:
+
+```
+S-1  S-2  S-3  S-4  S-5  S-6  S-7  S-8  S-9  S-10  S-11  S-12  S-13  S-14
+E-1            E-3  E-4  E-5  E-6  E-7
+D-1  D-2  D-3  D-4  D-5  D-6
+P-1  P-2  P-3  P-4  P-5
+```
+
+Codes `E-2` and `D-7` are intentionally absent — those rules were
+promoted/restated elsewhere in the spec and their codes are reserved
+(not reused) to keep historical references unambiguous.
+
+`TGrammarRuleCode` lives in `@proposit/shared` so adding or renaming a
+code requires a coordinated shared + core publish: bump shared (extend
+the union), bump core (ship the validator referencing the new code).
+TypeScript catches mismatches at build time once the dep is wired
+through.
+
+### 6.3 Example validation responses
+
+**All-empty (Presentable argument):**
+
+```ts
+engine.validate("presentable")
+// → []
+```
+
+**Single Presentable violation (one missing formula buffer):**
+
+```ts
+engine.validate("presentable")
+// → [
+//   {
+//     tier: "presentable",
+//     code: "P-1",
+//     message: "operator 'or' appears as direct child of operator 'and'",
+//     argumentId: "...",
+//     premiseId: "...",
+//     expressionId: "..."
+//   }
+// ]
+```
+
+**Mixed-tier violations (Structural + Evaluable + Derivable):**
+
+```ts
+engine.validate("derivable")
+// → [
+//   { tier: "structural", code: "S-3", message: "...", variableId: "..." },
+//   { tier: "evaluable", code: "E-1", message: "operator 'and' has 1 child", ... },
+//   { tier: "derivable", code: "D-3", message: "antecedent mixes axiom and citation", ... }
+// ]
+```
+
+The dispatcher always returns Structural violations first, then
+Evaluable, then Derivable, then Presentable. Within a tier, validators
+return in the per-rule order defined by their tier's source file.
+
+**Engine-error codes vs grammar-rule codes.** `TViolation.code` (a
+`TGrammarRuleCode`) is distinct from the engine-error codes in
+`src/lib/types/validation.ts` (`EXPR_PARENT_NOT_FOUND`,
+`AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`, etc.). The two namespaces serve
+different purposes:
+
+- **Engine-error codes** identify _thrown_ errors from engine operations
+  (mutation rejections, snapshot load failures, runtime evaluation
+  guards). They are pre-existing and remain stable wire format.
+- **Grammar-rule codes** identify _returned_ violations from
+  `validate(tier)`. They are new in 1.0.
+
+Both are stable wire format. Do not rename either without a coordinated
+shared + core publish.
 
 ## 7. Migration notes (pre-1.0 → 1.0)
 
-_(To author.)_
+The 1.0 release removes the pre-1.0 `grammarConfig` / `autoNormalize` /
+`ManagedDerivationPremiseEngine` / `LOAD_GRAMMAR-STRICT_GRAMMAR`
+machinery with **no deprecation period**. Migration boils down to a
+small number of pattern swaps; the new API is strictly more orthogonal.
 
-- 7.1 Removed: `grammarConfig`, `autoNormalize`, `enforceFormulaBetweenOperators`
-- 7.2 Removed: `LOAD_GRAMMAR` / `STRICT_GRAMMAR` snapshot split
-- 7.3 Removed: `ManagedDerivationPremiseEngine`
-- 7.4 Replaced: `populateFromSupports` → `populateFromCitations` + `populateFromAxioms`
-- 7.5 Behavioral change: naked-Q is a valid Derivable state, eval no-op
-- 7.6 Behavioral change: snapshot loading accepts any Structural state
+### 7.1 Removed: `grammarConfig`, `autoNormalize`, `enforceFormulaBetweenOperators`
+
+**Before (≤ 0.12):**
+
+```ts
+const engine = new ArgumentEngine(arg, claims, citations, {
+    grammarConfig: {
+        autoNormalize: {
+            wrapInsertFormula: true,
+            collapseEmptyFormula: false,
+            collapseDoubleNegation: true,
+            // ...
+        },
+        enforceFormulaBetweenOperators: true,
+    },
+})
+```
+
+**After (1.0):**
+
+```ts
+const engine = new ArgumentEngine(arg, claims, citations, {
+    behavior: "assistive", // or "permissive"
+})
+```
+
+There is no per-rule opt-in or opt-out. The engine is either in
+`assistive` (all AN runs) or `permissive` (none runs).
+`enforceFormulaBetweenOperators` is folded into the post-hook (AN-1) and
+into the Presentable rule P-1.
+
+### 7.2 Removed: `LOAD_GRAMMAR` / `STRICT_GRAMMAR` snapshot split
+
+**Before:**
+
+```ts
+const engine = ArgumentEngine.fromSnapshot(snapshot, claims, citations, {
+    grammarConfig: STRICT_GRAMMAR_CONFIG, // or LOAD_GRAMMAR_CONFIG
+})
+```
+
+**After:**
+
+```ts
+const engine = ArgumentEngine.fromSnapshot(snapshot, claims, citations)
+// Lower-tier violations are queryable post-load:
+const issues = engine.validate("presentable")
+```
+
+`fromSnapshot` and `fromData` accept any **Structural** state. Lower-tier
+violations are queryable post-load via `validate(tier)`. Load failures
+only happen on truly broken (non-Structural) snapshots; the existing
+`LEGACY_*` codes for truly broken legacy snapshots remain.
+
+### 7.3 Removed: `ManagedDerivationPremiseEngine`
+
+The subclass enforced derivation invariants on every mutation. In 1.0,
+those invariants become Derivable rules (D-1..D-6) plus the Evaluable
+rule E-6 (claim-derivation pairing). Mutations on derivation premises go
+through the regular `PremiseEngine`; correctness is queried via
+`validate('derivable')` rather than thrown at mutation time.
+
+**Before:**
+
+```ts
+const managed = new ManagedDerivationPremiseEngine(premise, ...)
+managed.toggleNegation(consequentId) // throws DERIVATION_CONSEQUENT_LOCKED
+```
+
+**After:**
+
+```ts
+const premise = engine.getPremise(id)
+premise.toggleNegation(consequentId) // succeeds (Structurally valid)
+const issues = engine.validate("derivable") // surfaces D-1 if consequent broken
+```
+
+`TVariableMaterializer` (the input shape `ManagedDerivationPremiseEngine`
+accepted) is removed too.
+
+### 7.4 Replaced: `populateFromSupports` → `populateFromCitations` + `populateFromAxioms`
+
+`populateFromSupports` ingested both kinds of grounding at once and
+produced `IMPLIES(OR(citations, axioms), Q)` — a single premise mixing
+both. That shape violates the new D-3 rule (no mixing). In 1.0 the
+method is split:
+
+**Before:**
+
+```ts
+managed.populateFromSupports(citations, axioms, materializer)
+// → IMPLIES(OR(cit-vars + axiom-vars), Q)   ← now illegal (D-3)
+```
+
+**After:**
+
+```ts
+// Call ONE of these per derivation premise — never both at once.
+engine.populateFromCitations(derivedClaimId)
+// → IMPLIES(formula(OR(cit-vars)), Q) in assistive mode
+//   IMPLIES(OR(cit-vars), Q) in permissive mode
+
+engine.populateFromAxioms(derivedClaimId)
+// → IMPLIES(formula(OR(axiom-vars)), Q) in assistive mode
+```
+
+Switching grounding kinds on the same derivation premise is "empty the
+antecedent (back to naked-Q), then call the other method." The premise
+persists across the switch; no row deletion. The runtime path **never
+silently drops** user-provided grounding — both methods reject a non-empty
+antecedent rather than blending or replacing it without consent.
+
+### 7.5 Behavioral change: naked-Q is a valid Derivable state, eval no-op
+
+Pre-1.0 the engine threw `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
+when `evaluate()` or `checkValidity()` encountered a naked-Q derivation
+premise (a single variable at the root). In 1.0 naked-Q is a valid
+Derivable state (D-1) and a **no-op for evaluation** — the evaluator
+skips it. Naked-Q premises are placeholders for grounding that hasn't
+been added yet; they neither assert their consequent nor support its
+derivation.
+
+The publish-time pruning step (server-side) deletes naked-Q derivation
+premises before storage, so post-publish arguments never carry them. The
+"needs grounding" UX hint warns users of unground claims before they
+publish.
+
+### 7.6 Behavioral change: snapshot loading accepts any Structural state
+
+Pre-1.0 the loader was configurable between strict (reject any
+non-Presentable state) and permissive (load anything) via the
+`LOAD_GRAMMAR` / `STRICT_GRAMMAR` constants. In 1.0 the loader is always
+permissive at the Structural floor: any Structural-valid snapshot loads,
+and lower-tier issues surface via `validate(tier)` post-load. The only
+load failures are truly broken snapshots (Structural violations) or
+legacy-format snapshots that need a library-level migration first.
