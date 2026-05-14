@@ -93,6 +93,11 @@ export {
 export type { TCorePositionConfig } from "./utils/position.js"
 export * from "./types/reactive.js"
 export * from "./types/grammar.js"
+export {
+    GrammarTierSchema,
+    GrammarRuleCodeSchema,
+    ViolationSchema,
+} from "./grammar/types.js"
 export type {
     TGrammarTier,
     TGrammarRuleCode,
