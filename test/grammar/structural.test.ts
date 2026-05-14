@@ -1,21 +1,133 @@
-import { describe, it } from "vitest"
-
-// Per-rule scaffolds for Structural-tier validators (S-1..S-14).
-// Real assertions land in Phase B1 — one test at a time via the canonical
-// TDD pattern in docs/superpowers/plans/grammar-tiers-core-plan.md.
+import { describe, it, expect } from "vitest"
+import { validateS1 } from "../../src/lib/grammar/validators/structural.js"
+import {
+    buildContext,
+    makeFreeformPremise,
+    makeVariableExpression,
+    makeOperatorExpression,
+    makeClaimBoundVariable,
+    makePremiseBoundVariable,
+    makeNormalClaim,
+} from "./fixtures.js"
 
 describe("grammar/structural", () => {
     describe("S-1 FK soundness", () => {
-        it.todo(
-            "returns a violation when expression.parentId points at a missing expression"
-        )
-        it.todo(
-            "returns a violation when variable.boundPremiseId points at a missing premise"
-        )
-        it.todo(
-            "returns a violation when claim-bound variable.claimId points at a missing claim"
-        )
-        it.todo("returns an empty array when every FK resolves")
+        it("returns a violation when expression.parentId points at a missing expression", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-1",
+                        premiseId: "p-1",
+                        parentId: "missing-parent",
+                    }),
+                ],
+                variables: [makeClaimBoundVariable({ id: "v-1" })],
+                claims: [makeNormalClaim({ id: "claim-1" })],
+            })
+            const violations = validateS1(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-1",
+                expressionId: "e-1",
+                premiseId: "p-1",
+            })
+        })
+
+        it("returns a violation when an internally-bound premise-bound variable references a missing premise", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                variables: [
+                    makePremiseBoundVariable({
+                        id: "v-1",
+                        boundPremiseId: "missing-premise",
+                        boundArgumentId: "arg-1",
+                    }),
+                ],
+            })
+            const violations = validateS1(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-1",
+                variableId: "v-1",
+                premiseId: "missing-premise",
+            })
+        })
+
+        it("returns a violation when a claim-bound variable references a missing claim", () => {
+            const ctx = buildContext({
+                variables: [
+                    makeClaimBoundVariable({
+                        id: "v-1",
+                        claimId: "missing-claim",
+                    }),
+                ],
+                claims: [makeNormalClaim({ id: "claim-1" })],
+            })
+            const violations = validateS1(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "structural",
+                code: "S-1",
+                variableId: "v-1",
+                claimId: "missing-claim",
+            })
+        })
+
+        it("returns an empty array when every FK resolves", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("and", {
+                        id: "e-root",
+                        premiseId: "p-1",
+                        parentId: null,
+                    }),
+                    makeVariableExpression({
+                        id: "e-child-1",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 0,
+                        variableId: "v-1",
+                    }),
+                    makeVariableExpression({
+                        id: "e-child-2",
+                        premiseId: "p-1",
+                        parentId: "e-root",
+                        position: 1,
+                        variableId: "v-2",
+                    }),
+                ],
+                variables: [
+                    makeClaimBoundVariable({ id: "v-1", claimId: "claim-1" }),
+                    makeClaimBoundVariable({ id: "v-2", claimId: "claim-2" }),
+                ],
+                claims: [
+                    makeNormalClaim({ id: "claim-1" }),
+                    makeNormalClaim({ id: "claim-2" }),
+                ],
+            })
+            const violations = validateS1(ctx)
+            expect(violations).toEqual([])
+        })
+
+        it("does not flag externally-bound premise-bound variables (boundArgumentId !== argument.id)", () => {
+            // External binding resolves in a different argument; S-1 is scoped
+            // to the current argument's tree.
+            const ctx = buildContext({
+                variables: [
+                    makePremiseBoundVariable({
+                        id: "v-1",
+                        boundPremiseId: "external-premise",
+                        boundArgumentId: "other-arg",
+                    }),
+                ],
+            })
+            const violations = validateS1(ctx)
+            expect(violations).toEqual([])
+        })
     })
 
     describe("S-2 operator types", () => {
