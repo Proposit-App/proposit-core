@@ -2,7 +2,7 @@
 
 **Cross-repo spec:** `/Users/brian/Projects/Proposit-App/docs/superpowers/specs/2026-05-13-grammar-tiers-design.md` — read first. This briefing is core's slice and is the largest of the four per-repo slices.
 
-**Initiative status:** planning → in-flight (core publishes second; depends on `@proposit/shared` shipping its grammar wire format first).
+**Initiative status:** in-flight (core publishes **first** — owns the wire-format definitions; shared re-exports from core afterwards). _(Reflects design restructure 2026-05-14: types moved from shared to core to match existing dep direction. See [orchestrator commit log] and the updated cross-repo spec.)_
 
 ## Capability changes
 
@@ -10,9 +10,9 @@ Core exposes no user-facing capabilities directly. Its part of this initiative i
 
 ## Where core fits
 
-You publish second. Wait for the broker `READY:` from `@proposit/shared@0.3.0` (the wire-format types + 422 response shape). Then bump shared, implement against it, publish a major version of `@proposit/proposit-core`, post `READY:` so server and mobile can bump.
+You publish **first**. The wire-format types (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) live in this repo — defined as TypeBox schemas + derived TS types in core's own source. Shared 0.9.0 publishes _after_ you with re-exports of those types + a 422 response envelope (`GrammarViolationsResponseSchema`) composing your `TViolation`. Server + mobile then bump both deps.
 
-Current baseline: `@proposit/proposit-core@0.9.x` on main + public npm. This work is a **major version bump** — likely `1.0.0`, or a clearly-documented `0.13.0` if you decide to stay pre-1.0. The old `grammarConfig` / `autoNormalize` API is **removed, not deprecated** (no migration period; we are the only known consumer and the CLI updates in lockstep).
+Current baseline: `@proposit/proposit-core@0.12.3` on main + public npm. This work is a **major version bump** — likely `1.0.0`, or a clearly-documented `0.13.0` if you decide to stay pre-1.0. The old `grammarConfig` / `autoNormalize` API is **removed, not deprecated** (no migration period; we are the only known consumer and the CLI updates in lockstep).
 
 ## Work items
 
@@ -20,7 +20,9 @@ The spec §10.1 lists the work at sketch level. This briefing fleshes it out.
 
 ### 1. Wire format imports
 
-Bump `@proposit/shared` to `^0.3.0` (the version that ships `/schemas/grammar`). Import `TGrammarTier`, `TGrammarRuleCode`, and `TViolation` from `@proposit/shared/schemas/grammar`. Core does **not** define these types locally — shared is the single source of truth for the wire format. Core owns the _definitions_ (what each rule means and what triggers it) but not the string identifiers.
+**Core IS the single source of truth for the wire format.** Define `TGrammarTier`, `TGrammarRuleCode`, and `TViolation` as TypeBox schemas + derived TypeScript types in core's own source — likely in `src/lib/grammar/types.ts` (your Phase A stub becomes the real exports, no swap needed). Export them from the public API via the lib barrel. There is no `@proposit/shared` dependency to add — shared depends on core (existing peer-dep direction), not the reverse.
+
+The TypeBox schemas can be pulled directly from `proposit-shared-dev`'s `grammar-tiers/shared` branch — they were authored there before the design restructure. Specifically: `proposit-shared/src/schemas/grammar/{tier,rule-code,violation,index}.ts` + tests under `proposit-shared/src/schemas/__tests__/grammar-*.test.ts`. Translate to core's source/test layout. The 422 response envelope (`proposit-shared/src/schemas/api/grammar-violations.ts`) stays in shared and will be added when shared resumes.
 
 ### 2. Implement the validators
 
@@ -113,13 +115,13 @@ Spec §11 is the source of truth for the rewrite's table of contents; reference 
 ## Coordination
 
 - **Broker thread:** `grammar-tiers`. Watch for shared's `READY:` before starting non-doc work.
-- **Upstream dependency:** `@proposit/shared@^0.3.0` (the new wire format).
+- **Upstream dependency:** none. You publish first.
 - **Downstream consumers waiting on you:** `proposit-server` and `proposit-mobile` (both bump after your publish, in parallel).
 
 ## What good progress looks like
 
 - Day 1: read the spec end-to-end; sketch a plan in `docs/superpowers/plans/grammar-tiers-core-plan.md`; open the broker thread.
-- Days 2–3: wait for shared's `READY:` and confirm the wire-format shape matches expectations.
+- Days 2–3: pull TypeBox schemas from `proposit-shared-dev`'s `grammar-tiers/shared` branch into core's source; promote your Phase A type stubs to real exports.
 - Days 4–10: implementation of validators + AN pass + behavior switch + repair primitives + snapshot loading. Tests written alongside (TDD).
 - Days 10–12: documentation rewrite (README, Proposit_Grammar.md, CLAUDE.md, etc.).
 - Day 13: publish + merge. Post `READY:` on broker.
@@ -131,4 +133,4 @@ Total: ~2 weeks. The documentation rewrite is a real chunk of work; don't undere
 - Server-side migration scripts (server runs them).
 - Mobile UI changes (mobile's job).
 - Authoring `capabilities.md` files (server + mobile own those).
-- Defining new TypeBox schemas for wire format (shared owns those).
+- The 422 response envelope (`GrammarViolationsResponseSchema`) — that stays in shared and composes your exported `TViolation`. Shared owns the envelope; you own the types it references.
