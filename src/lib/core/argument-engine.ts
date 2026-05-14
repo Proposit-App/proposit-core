@@ -2666,20 +2666,51 @@ export class ArgumentEngine<
     }
 
     private asEvaluationContext(): TArgumentEvaluationContext {
+        // C8: naked-Q derivation premises (single variable expression at
+        // root, type='derivation') contribute nothing to evaluation. The
+        // evaluator-context's premise listings filter them out so they
+        // are entirely invisible to evaluate() and checkValidity(). This
+        // replaces the pre-1.0 DERIVATION_STRUCTURE_INVALID_AT_EVALUATION
+        // throw on naked-Q. Filter applies uniformly to conclusion,
+        // supporting, and full premise listings.
+        const isNakedQDerivation = (
+            pe: PremiseEngine<TArg, TPremise, TExpr, TVar>
+        ): boolean => {
+            const data = pe.toPremiseData() as unknown as TCorePremise
+            if (data.type !== "derivation") return false
+            const exprs = pe.getExpressions()
+            if (exprs.length !== 1) return false
+            const root = pe.getRootExpression()
+            if (root === undefined) return false
+            return root.type === "variable"
+        }
         return {
             argumentId: this.argument.id,
             conclusionPremiseId: this.conclusionPremiseId,
-            getConclusionPremise: () =>
-                this.getConclusionPremise() as TEvaluablePremise | undefined,
+            getConclusionPremise: () => {
+                const c = this.getConclusionPremise()
+                if (c === undefined) return undefined
+                if (isNakedQDerivation(c)) return undefined
+                return c as TEvaluablePremise
+            },
             listSupportingPremises: () =>
-                this.listSupportingPremises() as TEvaluablePremise[],
-            listPremises: () => this.listPremises() as TEvaluablePremise[],
+                this.listSupportingPremises().filter(
+                    (pm) => !isNakedQDerivation(pm)
+                ) as TEvaluablePremise[],
+            listPremises: () =>
+                this.listPremises().filter(
+                    (pm) => !isNakedQDerivation(pm)
+                ) as TEvaluablePremise[],
             getVariable: (id) =>
                 this.variables.getVariable(id) as
                     | TCorePropositionalVariable
                     | undefined,
-            getPremise: (id) =>
-                this.premises.get(id) as TEvaluablePremise | undefined,
+            getPremise: (id) => {
+                const pe = this.premises.get(id)
+                if (pe === undefined) return undefined
+                if (isNakedQDerivation(pe)) return undefined
+                return pe as TEvaluablePremise
+            },
             validateEvaluability: () => this.validateEvaluability(),
         }
     }
