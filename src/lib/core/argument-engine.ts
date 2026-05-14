@@ -68,6 +68,8 @@ import {
     type TValidatablePremise,
 } from "./argument-validation.js"
 import type { TExpressionInput } from "./expression-manager.js"
+import { normalizeArgument } from "../grammar/normalize.js"
+import type { TGrammarTier } from "../grammar/types.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 import { PremiseEngine } from "./premise-engine.js"
 import type { TPremiseEngineSnapshot } from "./premise-engine.js"
@@ -1456,9 +1458,41 @@ export class ArgumentEngine<
     }
 
     /**
+     * Global normalize pass per spec §6. Runs the AN rule set
+     * (AN-1..AN-4) everywhere it can fire, converging the argument
+     * toward `tier` (defaults to `'presentable'`).
+     *
+     * `normalize` is non-destructive in the logical-meaning sense — it
+     * does not delete variables, change claim references, or modify
+     * operator semantics. Recovery from Evaluable or Derivable violations
+     * requires user intent and is exposed via the repair primitives
+     * (Phase C4).
+     *
+     * In v1.0 every AN rule targets a Presentable invariant, so calls
+     * with `tier` ∈ {'structural', 'evaluable', 'derivable'} are
+     * effectively no-ops. The parameter exists as forward-compatible
+     * API surface for a future submit/finalize gate.
+     *
+     * **Bypasses `behavior`.** `normalize()` is user-initiated (the UI
+     * invokes it after the user confirms a Tidy / Normalize action), so
+     * cleanup runs regardless of whether the engine is in `'assistive'`
+     * or `'permissive'` mode. The engine's `behavior` setting is not
+     * mutated by this call.
+     *
+     * @since 1.0.0
+     */
+    public normalize(tier: TGrammarTier = "presentable"): void {
+        normalizeArgument(this, tier)
+    }
+
+    /**
      * Normalizes expression trees across all premises. Collapses unjustified
      * formulas, operators with 0/1 children, and inserts formula buffers where
      * needed. Works regardless of `autoNormalize` setting.
+     *
+     * @deprecated v1.0 — pre-1.0 API kept for backward compatibility
+     * during the Phase C transition. Use {@link normalize} instead.
+     * Phase D removes this method.
      */
     public normalizeAllExpressions(): TCoreMutationResult<
         void,

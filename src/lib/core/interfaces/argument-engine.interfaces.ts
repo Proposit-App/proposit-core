@@ -19,6 +19,7 @@ import type {
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type { TReactiveSnapshot } from "../../types/reactive.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
+import type { TGrammarTier } from "../../grammar/types.js"
 import type { PremiseEngine } from "../premise-engine.js"
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
 
@@ -597,6 +598,28 @@ export interface TArgumentLifecycle<
      * reference integrity, and checksum consistency.
      */
     validate(): TInvariantValidationResult
+    /**
+     * Global normalize pass per spec §6. Runs the AN rule set
+     * (AN-1..AN-4) everywhere it can fire, converging the argument
+     * toward `tier` (defaults to `'presentable'`).
+     *
+     * `normalize` is non-destructive in the logical-meaning sense — it
+     * does not delete variables, change claim references, or modify
+     * operator semantics. Recovery from Evaluable or Derivable
+     * violations requires user intent and is exposed via the repair
+     * primitives.
+     *
+     * In v1.0 every AN rule targets a Presentable invariant, so calls
+     * with `tier` ∈ {'structural', 'evaluable', 'derivable'} are
+     * effectively no-ops. The parameter exists as forward-compatible
+     * API surface.
+     *
+     * Bypasses `behavior`: cleanup runs regardless of whether the
+     * engine is in `'assistive'` or `'permissive'` mode.
+     *
+     * @since 1.0.0
+     */
+    normalize(tier?: TGrammarTier): void
 }
 
 /**

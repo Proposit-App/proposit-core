@@ -167,6 +167,18 @@ export class PremiseEngine<
         this.expressions.setGrammarConfig(grammarConfig)
     }
 
+    /**
+     * Returns the grammar config currently in effect for this premise
+     * engine. Used by the v1.0 transitional `normalizeArgument` pass to
+     * snapshot the prior config before temporarily flipping to
+     * `DEFAULT_GRAMMAR_CONFIG` for the duration of a user-initiated
+     * normalize, then restoring it afterward. Phase D removes this
+     * method along with the rest of the legacy grammar-config plumbing.
+     */
+    public getGrammarConfig(): TGrammarConfig {
+        return this.grammarConfig
+    }
+
     public setOnMutate(callback: (() => void) | undefined): void {
         this.onMutate = callback
     }
