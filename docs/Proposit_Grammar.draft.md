@@ -583,20 +583,189 @@ unabsorbed state.
 
 ## 4. Engine behavior and auto-normalization
 
-_(To author — pulls from spec §5.)_
+### 4.1 `behavior: 'assistive' | 'permissive'`
 
-- 4.1 `behavior: 'assistive' | 'permissive'`
-- 4.2 AN rule set (AN-1..AN-4)
-- 4.3 Worked examples — AN preserves Presentable across each kind of mutation
+The engine has a single `behavior` setting that controls whether
+**auto-normalization** (AN) runs after every successful Structural
+mutation.
+
+- **`assistive`** (default for normal-mode users): after each successful
+  Structural mutation, the engine runs the AN rule set (§4.2). AN's
+  contract is **preservation**, not convergence: _if the pre-mutation
+  state was Presentable, the post-mutation state is Presentable_ (modulo
+  the logical effect of the mutation itself — e.g., `removeExpression`
+  removes a node; AN keeps the residue Presentable). On non-Presentable
+  starting states AN still runs its rule set; it just cannot promise to
+  converge to Presentable.
+- **`permissive`** (advanced mode): mutations execute exactly as
+  described; AN does not run. The engine guarantees only Structural
+  integrity. Lower-tier violations (Evaluable, Derivable, Presentable)
+  are queryable via `validate(tier)`.
+
+The behavior is a property of the engine instance, set at construction or
+via `setBehavior(...)`. The UI's "advanced mode" user setting controls
+which behavior the loaded engine is in. Switching from `permissive` →
+`assistive` does **not** auto-run a global `normalize()` pass; the UI
+prompts the user explicitly before invoking `normalize()`.
+
+### 4.2 AN rule set (AN-1..AN-4)
+
+AN runs a small, ordered set of local cleanup rules after each mutation.
+Each rule corresponds to a Presentable invariant from §3.4 and is
+designed to fire _only when the mutation introduces a violation that can
+be locally repaired without changing user-meaningful structure_.
+
+- **AN-1 (insert formula buffer):** if the mutation places a non-`not`
+  operator as a direct child of another operator, insert a `formula`
+  between them. Preserves P-1.
+- **AN-2 (collapse double negation):** if the mutation produces
+  `not(not(x))`, replace with `x`. Preserves P-2.
+- **AN-3 (collapse empty/single-child operator/formula):** if the
+  mutation leaves an operator or formula with 0 children, delete it
+  (recurse to grandparent). With 1 child where the parent is
+  non-meaningful, promote the child. Preserves P-3 and P-4 (and
+  incidentally E-1).
+- **AN-4 (absorb same-operator adjacency):** if a mutation produces a
+  same-operator parent/grandchild pair separated only by a formula,
+  absorb. Preserves P-5.
+
+There is no per-rule opt-in or opt-out — the engine is either in
+`assistive` (all AN runs) or `permissive` (none runs). The pre-1.0 rule
+"reposition on collision" (AN-5 in earlier drafts) was promoted to
+Structural enforcement at mutation time (S-9), so it is no longer part
+of the post-mutation AN pass.
+
+### 4.3 Worked examples
+
+**AN-1 — formula buffer insertion**
+
+Starting state (Presentable): `AND(formula(OR(a, b)), c)`. The user
+inserts a new OR as a direct child of the outer AND:
+
+```
+Pre-mutation     AND(formula(OR(a, b)), c)
+Mutation         insertExpression: new OR after the formula
+Post-mutation    AND(formula(OR(a, b)), OR(d, e), c)   ← non-Presentable mid-step
+AN-1 fires       AND(formula(OR(a, b)), formula(OR(d, e)), c)   ← Presentable
+```
+
+**AN-2 — double-negation collapse**
+
+```
+Pre-mutation     AND(NOT(a), b)
+Mutation         toggleNegation on NOT(a)
+Post-mutation    AND(NOT(NOT(a)), b)   ← non-Presentable
+AN-2 fires       AND(a, b)   ← Presentable
+```
+
+**AN-3 — operator collapse on removal**
+
+```
+Pre-mutation     AND(a, b)
+Mutation         removeExpression(b)
+Post-mutation    AND(a)   ← single-child binary operator
+AN-3 fires       a   ← child promoted; AND removed
+```
+
+If the AND was itself the sole child of a parent operator, AN-3 recurses
+to the grandparent. If the AND was the root of a premise, the child
+becomes the new root (parentId → null).
+
+**AN-4 — same-operator absorption**
+
+```
+Pre-mutation     OR(formula(AND(b, c)), d)   (Presentable; different operator types)
+Mutation         updateExpression: swap outer OR to AND
+Post-mutation    AND(formula(AND(b, c)), d)   ← same-operator adjacency through formula
+AN-4 fires       AND(b, c, d)   ← children absorbed; formula + inner AND removed
+```
 
 ## 5. `normalize(tier?)` contract
 
-_(To author — pulls from spec §6.)_
+`engine.normalize(tier?: TGrammarTier)` is a separate, explicit operation.
+It runs a global pass over the argument and applies the AN rule set
+everywhere it can fire, converging the argument toward the requested
+tier.
 
-- 5.1 What `normalize` does
-- 5.2 What `normalize` does _not_ do
-- 5.3 Worked examples
-- 5.4 Forward-compat `tier` parameter
+### 5.1 What `normalize` does
+
+- Runs AN-1..AN-4 globally, not just on a single mutation's affected
+  nodes.
+- Iterates to a fixed point — local rules can cascade, so a single
+  invocation may run the rule set multiple times (typically ≤ 3
+  iterations because the rules are local and idempotent in combination).
+- Defaults `tier` to `'presentable'`. In v1.0 every AN rule targets a
+  Presentable invariant, so `normalize('derivable')`,
+  `normalize('evaluable')`, and `normalize('structural')` are effectively
+  no-ops in the v1.0 ruleset. The parameter exists as forward-compatible
+  API surface (§5.4).
+- Respects the engine's `behavior` setting only insofar as it does not
+  re-run as a post-hook — `normalize()` is always explicit. The engine
+  in `permissive` mode still executes `normalize()` when the caller asks.
+
+### 5.2 What `normalize` does _not_ do
+
+`normalize` is **non-destructive in the logical-meaning sense** — its
+rules never change the logical meaning of the argument. They only add
+buffers, collapse redundant nodes, and absorb same-operator children.
+Specifically, `normalize`:
+
+- **Never deletes a variable.** Variables that fail E-3 (binding doesn't
+  resolve) stay in place; the corresponding violation is reported by
+  `validate('evaluable')` and the UI offers the user the
+  `removeUnresolvableVariables()` repair primitive.
+- **Never changes a claim reference.** A variable bound to claim X stays
+  bound to X.
+- **Never modifies an operator's semantics.** `AND` does not become `OR`,
+  `IMPLIES` does not become `IFF`. (These swaps exist as user-initiated
+  mutations on `PremiseEngine`; AN never invokes them.)
+
+`normalize` therefore **cannot recover from Evaluable or Derivable
+violations** regardless of the `tier` parameter. Recovering from those
+requires user intent — "delete this orphan operator?", "switch this
+claim's grounding from axiom to citation?" — and is exposed via the
+repair primitives in `src/lib/grammar/repair.ts`.
+
+### 5.3 Worked examples
+
+**Pre-publish tidy on an argument that drifted from Presentable**
+
+```
+Pre-normalize    AND(OR(a, b), NOT(NOT(c)))
+                 ↑ no formula buffer (P-1 violation)
+                       ↑ double negation (P-2 violation)
+normalize()      AND(formula(OR(a, b)), c)   ← Presentable
+```
+
+**Advanced-mode → normal-mode toggle, user accepts auto-clean**
+
+```
+Pre-normalize    OR(formula(AND(a, b)), AND(c, d))
+                       ↑ no buffer for AND(c, d) (P-1 violation)
+normalize()      OR(formula(AND(a, b)), formula(AND(c, d)))   ← Presentable
+```
+
+**Evaluable violation that `normalize` cannot fix**
+
+```
+Pre-normalize    AND(a)   ← single-child binary operator (E-1 violation)
+normalize()      AND(a)   ← single-child operator collapses via AN-3 only when
+                            the parent context allows promotion. At the root of
+                            a freeform premise this DOES fire and yields `a` —
+                            but AN-3 cannot help if the engine's structural
+                            mutation rules require the user to pick a fix
+                            explicitly. validate('evaluable') still reports E-1.
+```
+
+### 5.4 Forward-compat `tier` parameter
+
+The parameter exists so that a future submit/finalize gate (a
+less-strict-than-publish tier) can introduce lower-tier AN rules without
+an API break. When that happens, `normalize('derivable')` becomes
+meaningful — it runs whatever AN rules target Derivable invariants
+while leaving Presentable-only rules un-applied. Calls with stricter
+tiers run the same pass; calls with more-permissive tiers are no-ops in
+v1.0.
 
 ## 6. Validation output reference
 
