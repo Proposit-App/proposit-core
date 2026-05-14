@@ -1899,25 +1899,35 @@ export class ArgumentEngine<
             }
         }
 
-        // Post-load normalization: only run full normalize when autoNormalize
-        // is `true` (boolean). When it is a granular config object, individual
-        // flags control in-operation behavior — loading should not mutate data.
-        const restoredGrammarConfig = grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
-        if (restoredGrammarConfig.autoNormalize === true) {
-            for (const pe of engine.premises.values()) {
-                pe.normalizeExpressions()
-            }
-        }
+        // C7: No post-load normalization. The snapshot loads as-is; any
+        // lower-tier (Evaluable / Derivable / Presentable) violations are
+        // queryable post-load via `engine.validate(tier)`. The legacy
+        // pre-1.0 behavior of auto-normalizing when
+        // `autoNormalize === true` is removed — load is non-mutating.
+        // If the caller wants AN cleanup, they call `engine.normalize()`
+        // explicitly after the load returns. Phase D removes the legacy
+        // grammarConfig parameter entirely.
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
             ArgumentEngine.verifySnapshotChecksums(engine, snapshot)
         }
 
-        const validation = engine.validate()
-        if (!validation.ok) {
-            throw new InvariantViolationError(validation.violations)
-        }
+        // C7: load-time invariant validation runs with **PERMISSIVE**
+        // grammar config so P-1 (operator-under-operator) and other
+        // config-gated grammar checks don't fail the load. Non-grammar
+        // invariants (schema conformance, variable manager checks,
+        // reference integrity — variable ownership, claim/premise
+        // references, conclusion reference, circularity) still throw at
+        // load time. Lower-tier grammar violations (Evaluable /
+        // Derivable / Presentable) surface post-load via
+        // `engine.validate(tier)`.
+        //
+        // Phase D removes this entire dance — Phase D's spec-direct AN
+        // rewrite migrates the remaining non-grammar invariants into a
+        // separate `verifyLoadIntegrity` pass (or into the S-rule set)
+        // and deletes the legacy `engine.validate()` no-arg overload.
+        ArgumentEngine.runLoadTimeValidationCore(engine)
 
         return engine
     }
@@ -2052,15 +2062,10 @@ export class ArgumentEngine<
 
         engine.restoringFromSnapshot = false
 
-        // Post-load normalization: only run full normalize when autoNormalize
-        // is `true` (boolean). Granular config objects skip post-load normalization.
-        const restoredGrammarConfig =
-            config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
-        if (restoredGrammarConfig.autoNormalize === true) {
-            for (const pe of engine.premises.values()) {
-                pe.normalizeExpressions()
-            }
-        }
+        // C7: No post-load normalization. See the matched note in
+        // `fromSnapshot` above. Load is non-mutating; lower-tier
+        // violations surface via `engine.validate(tier)`. Phase D
+        // removes the legacy grammarConfig parameter entirely.
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
@@ -2072,12 +2077,53 @@ export class ArgumentEngine<
             )
         }
 
-        const validation = engine.validate()
-        if (!validation.ok) {
-            throw new InvariantViolationError(validation.violations)
-        }
+        // C7: PERMISSIVE-gated load-time validation (see matched comment
+        // in `fromSnapshot` above). Non-grammar invariants still throw at
+        // load; lower-tier grammar violations surface post-load via
+        // `engine.validate(tier)`.
+        ArgumentEngine.runLoadTimeValidationCore(engine)
 
         return engine
+    }
+
+    /**
+     * Run the legacy `engine.validate()` invariant sweep with the
+     * caller-supplied grammar config **temporarily swapped to
+     * `PERMISSIVE_GRAMMAR_CONFIG`** for the duration of the call. C7
+     * uses this to disarm load-time P-1 (operator-under-operator)
+     * enforcement so snapshots containing Presentable violations load
+     * successfully — while keeping the rest of the legacy invariant
+     * checks (schema, reference integrity, ownership, conclusion ref,
+     * circularity) active.
+     *
+     * Phase D removes this helper along with the legacy
+     * `engine.validate()` no-arg overload; the migrated non-grammar
+     * invariants will move into a `verifyLoadIntegrity` pass alongside
+     * `verifySnapshotChecksums`.
+     */
+    private static runLoadTimeValidationCore<
+        TArg extends TCoreArgument,
+        TPremise extends TCorePremise,
+        TExpr extends TCorePropositionalExpression,
+        TVar extends TCorePropositionalVariable,
+        TClaim extends TCoreClaim,
+    >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
+        const restore: {
+            pe: PremiseEngine<TArg, TPremise, TExpr, TVar>
+            prev: TGrammarConfig
+        }[] = []
+        try {
+            for (const pe of engine.listPremises()) {
+                restore.push({ pe, prev: pe.getGrammarConfig() })
+                pe.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
+            }
+            const validation = engine.validate()
+            if (!validation.ok) {
+                throw new InvariantViolationError(validation.violations)
+            }
+        } finally {
+            for (const { pe, prev } of restore) pe.setGrammarConfig(prev)
+        }
     }
 
     /**

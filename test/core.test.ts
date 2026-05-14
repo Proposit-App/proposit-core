@@ -15388,7 +15388,12 @@ describe("grammar enforcement config", () => {
             expect(formulaExpr.parentId).toBe("op-and")
         })
 
-        it("fromData with no grammar config defaults to auto-normalization", () => {
+        // C7: load no longer auto-normalizes. The legacy autoNormalize-at-
+        // load behavior is removed; lower-tier violations surface via
+        // engine.validate(tier) post-load. Phase D removes this test
+        // entirely along with the grammarConfig parameter on
+        // fromData/fromSnapshot.
+        it.skip("fromData with no grammar config defaults to auto-normalization", () => {
             const arg = { id: "arg-1", version: 1 }
             const variables = [
                 {
@@ -19999,7 +20004,12 @@ describe("Library — withValidation brackets", () => {
 })
 
 describe("ArgumentEngine — bulk path validation", () => {
-    it("fromSnapshot validates loaded state", () => {
+    // C7: load no longer enforces caller-supplied grammarConfig at load
+    // time — the load runs Structural-only validation via PERMISSIVE
+    // grammar config internally. Lower-tier violations surface post-load
+    // via engine.validate(tier). Phase D removes these tests along with
+    // the grammarConfig parameter on fromData/fromSnapshot.
+    it.skip("fromSnapshot validates loaded state", () => {
         const eng = new ArgumentEngine(ARG, aLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
@@ -20023,7 +20033,7 @@ describe("ArgumentEngine — bulk path validation", () => {
         ).toThrow()
     })
 
-    it("fromData validates loaded state", () => {
+    it.skip("fromData validates loaded state", () => {
         const eng = new ArgumentEngine(ARG, aLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
@@ -24846,7 +24856,8 @@ describe("ArgumentEngine.normalizeAllExpressions", () => {
 })
 
 describe("post-load normalization", () => {
-    it("fromData normalizes unjustified formulas when autoNormalize is true", () => {
+    // C7: load no longer auto-normalizes (see matched skip-block above).
+    it.skip("fromData normalizes unjustified formulas when autoNormalize is true", () => {
         const arg = { id: "arg-1", version: 1 }
         const variables = [
             {
@@ -25015,7 +25026,8 @@ describe("post-load normalization", () => {
         expect(pe.getExpression("e-v1")!.parentId).toBe("e-formula")
     })
 
-    it("fromSnapshot normalizes unjustified formulas when autoNormalize is true", () => {
+    // C7: load no longer auto-normalizes (see matched skip-block above).
+    it.skip("fromSnapshot normalizes unjustified formulas when autoNormalize is true", () => {
         const eng = new ArgumentEngine(ARG, aLib(), {
             grammarConfig: PERMISSIVE_GRAMMAR_CONFIG,
         })
@@ -25811,7 +25823,9 @@ describe("fromData checksum idempotency", () => {
         )
     })
 
-    it("fromData rejects operator-under-operator when enforceFormulaBetweenOperators is true", () => {
+    // C7: load no longer enforces grammarConfig at load time (see
+    // matched skip-blocks above).
+    it.skip("fromData rejects operator-under-operator when enforceFormulaBetweenOperators is true", () => {
         const arg = { id: "arg-1", version: 1 }
         const variables = [makeVar("v1", "P"), makeVar("v2", "Q")]
         const premises: TOptionalChecksum<TCorePremise>[] = [
@@ -25862,7 +25876,9 @@ describe("fromData checksum idempotency", () => {
         ).toThrow("direct child of operator")
     })
 
-    it("fromSnapshot rejects operator-under-operator when grammarConfig enforces it", () => {
+    // C7: load no longer enforces grammarConfig at load time (see
+    // matched skip-blocks above).
+    it.skip("fromSnapshot rejects operator-under-operator when grammarConfig enforces it", () => {
         // Build a valid engine with permissive config, then restore with strict config
         const claimLibrary = aLib()
         const engine = new ArgumentEngine(
