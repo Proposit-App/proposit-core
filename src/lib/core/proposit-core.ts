@@ -177,6 +177,7 @@ export class PropositCore<
                     checksumConfig: options?.checksumConfig,
                     positionConfig: options?.positionConfig,
                     grammarConfig: options?.grammarConfig,
+                    behavior: options?.behavior,
                     generateId: this.generateId,
                 }
             )
@@ -329,6 +330,7 @@ export class PropositCore<
                 checksumConfig: config?.checksumConfig,
                 positionConfig: config?.positionConfig,
                 grammarConfig: config?.grammarConfig,
+                behavior: config?.behavior,
                 generateId: config?.generateId,
             }
         )

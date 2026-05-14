@@ -340,6 +340,14 @@ export type TPropositCoreConfig = {
     positionConfig?: TCorePositionConfig
     /** Grammar config for argument engines. */
     grammarConfig?: TGrammarConfig
+    /**
+     * Default behavior for engines constructed via this core's
+     * `arguments.create(...)`. Passed through to `TLogicEngineOptions.behavior`.
+     * Defaults to `'assistive'` at engine level if omitted.
+     *
+     * @since 1.0.0
+     */
+    behavior?: "assistive" | "permissive"
     /** UUID generator for new entity IDs. Defaults to `globalThis.crypto.randomUUID()`. */
     generateId?: () => string
 }

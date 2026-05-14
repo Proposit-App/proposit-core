@@ -93,6 +93,24 @@ export type TLogicEngineOptions = {
     checksumConfig?: TCoreChecksumConfig
     positionConfig?: TCorePositionConfig
     grammarConfig?: TGrammarConfig
+    /**
+     * Engine behavior. Controls whether the auto-normalization (AN) rule
+     * set runs as a post-hook after every successful Structural mutation.
+     *
+     * - `'assistive'` (default): AN runs after every successful Structural
+     *   mutation. AN preserves Presentable — if the pre-mutation state was
+     *   Presentable, the post-mutation state is Presentable.
+     * - `'permissive'`: AN does not run. The engine accepts mutations that
+     *   leave the argument outside the Presentable/Derivable/Evaluable
+     *   tiers (down to but not including Structural, which is always
+     *   guaranteed).
+     *
+     * Switchable at runtime via `engine.setBehavior(...)`. See
+     * `docs/Proposit_Grammar.md` §4 for the full contract.
+     *
+     * @since 1.0.0
+     */
+    behavior?: "assistive" | "permissive"
     /** UUID generator for new entity IDs. Defaults to `globalThis.crypto.randomUUID()`. */
     generateId?: () => string
 }
@@ -143,6 +161,7 @@ export class ArgumentEngine<
     private checksumConfig?: TCoreChecksumConfig
     private positionConfig?: TCorePositionConfig
     private grammarConfig?: TGrammarConfig
+    private engineBehavior: "assistive" | "permissive"
     private generateId: () => string
     private restoringFromSnapshot = false
     private checksumDirty = true
@@ -175,6 +194,7 @@ export class ArgumentEngine<
         this.checksumConfig = options?.checksumConfig
         this.positionConfig = options?.positionConfig
         this.grammarConfig = options?.grammarConfig
+        this.engineBehavior = options?.behavior ?? "assistive"
         this.generateId = options?.generateId ?? defaultGenerateId
         this.variables = new VariableManager<TVar>({
             checksumConfig: this.checksumConfig,
@@ -490,6 +510,30 @@ export class ArgumentEngine<
                 this.reactiveDirty.premiseIds.add(p.id)
             }
         }
+    }
+
+    /**
+     * Current engine behavior setting. Controls whether the
+     * auto-normalization (AN) rule set runs as a post-hook after every
+     * successful Structural mutation. See the JSDoc on
+     * `TLogicEngineOptions.behavior` for the full contract.
+     *
+     * @since 1.0.0
+     */
+    public get behavior(): "assistive" | "permissive" {
+        return this.engineBehavior
+    }
+
+    /**
+     * Switches the engine's behavior at runtime. Going `permissive →
+     * assistive` does **not** auto-run a global `normalize()` pass; the
+     * UI is expected to prompt the user before invoking `normalize()`
+     * explicitly.
+     *
+     * @since 1.0.0
+     */
+    public setBehavior(b: "assistive" | "permissive"): void {
+        this.engineBehavior = b
     }
 
     public getArgument(): TArg {
