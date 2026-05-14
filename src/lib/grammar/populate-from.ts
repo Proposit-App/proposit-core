@@ -17,6 +17,18 @@
 //   - If no derivation premise exists for derivedClaimId: throws (entity-
 //     not-found is a legitimate Structural integrity check).
 //
+// **Atomicity contract.** The factory is observed-atomic: callers
+// never see a half-populated tree. The expression-tree replacement
+// proceeds as `removeExpression(nakedRoot)` followed by sequential
+// `addExpression` calls for the populated IMPLIES/OR/var skeleton. All
+// mutations are bundled inside a single synchronous call frame; no
+// reactive listener fires between them on the post-mutation state, and
+// no other engine method runs concurrently (JS is single-threaded).
+// External observers only ever see the pre-call naked-Q state or the
+// fully populated post-call state. The intermediate "tree empty" /
+// "tree partially built" states exist transiently in memory but are
+// never observable from outside `populateFromGrounding`'s call frame.
+//
 // Return shape:
 //   { kind: 'populated' | 'no-op',
 //     state: TCoreDerivationPremise,
@@ -27,10 +39,7 @@
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type { PremiseEngine } from "../core/premise-engine.js"
-import type {
-    TClaimConnectionLookup,
-    TClaimLookup,
-} from "../core/interfaces/library.interfaces.js"
+import type { TClaimConnectionLookup } from "../core/interfaces/library.interfaces.js"
 import type { TCoreClaimConnection } from "../schemata/claim-connection.js"
 import type {
     TCoreArgument,
@@ -41,6 +50,7 @@ import type {
     TCoreClaim,
     TClaimBoundVariable,
 } from "../schemata/index.js"
+import { isNakedQTree } from "./naked-q.js"
 import type { TViolation } from "./types.js"
 
 /**
@@ -86,8 +96,10 @@ export function populateFromGrounding<
     // Naked-Q precondition: the premise's expression tree must be a
     // single variable expression at the root. Any other shape (already
     // populated, or some other malformed state) → no-op + return the
-    // existing premise data.
-    if (!isNakedQ(pe)) {
+    // existing premise data. The premise's `type === 'derivation'` is
+    // already guaranteed by `findDerivationPremiseForClaim`, so the
+    // tree-shape-only `isNakedQTree` is the correct predicate here.
+    if (!isNakedQTree(pe)) {
         return {
             kind: "no-op",
             state: pe.toPremiseData() as unknown as TCoreDerivationPremise,
@@ -125,12 +137,16 @@ export function populateFromGrounding<
 
     // Capture the current Q-root expression id so we can replace it
     // atomically. After this point, mutations on `pe` rebuild the tree.
+    // From this point onward up to the final addExpression call, the
+    // tree passes through transient empty / partial states; per the
+    // atomicity comment at the top of this file those states are not
+    // externally observable.
     const nakedRoot = pe.getRootExpression()!
     const qVariableId = (nakedRoot as { variableId: string }).variableId
     const argId = engine.getArgument().id
     const argVersion = engine.getArgument().version
     const premiseId = pe.getId()
-    const gen = (engine as unknown as { generateId: () => string }).generateId
+    const gen = engine.idGenerator
 
     // Step 1: remove the naked-Q root (cascades nothing — it's a leaf).
     pe.removeExpression(nakedRoot.id, true)
@@ -152,6 +168,9 @@ export function populateFromGrounding<
     // (n=1) or an OR with one child per supporting variable (n≥2).
     // AN-1 inserts a formula buffer between IMPLIES and OR in assistive
     // mode at the moment we add the OR; permissive mode skips the buffer.
+    // The OR's variable children attach to the OR by its `orId`
+    // regardless of whether AN-1 reparented the OR under a formula buffer
+    // (the OR's own id is stable across the post-hook).
     if (supportingVars.length === 1) {
         const sv = supportingVars[0]
         const varExprId = gen()
@@ -178,15 +197,6 @@ export function populateFromGrounding<
             position: 0,
         } as unknown as Parameters<typeof pe.addExpression>[0])
 
-        // Find the parent the OR actually landed under. In assistive
-        // mode AN-1 will have inserted a formula buffer between IMPLIES
-        // and the OR; in permissive mode the OR is a direct child of
-        // IMPLIES. Read the post-mutation parentId off the OR.
-        const placedOr = pe.getExpression(orId)
-        const orParentId = placedOr?.parentId ?? impliesId
-        // Re-resolve: the variables go under the OR regardless of where
-        // the OR landed.
-        void orParentId
         for (let i = 0; i < supportingVars.length; i++) {
             const sv = supportingVars[i]
             const varExprId = gen()
@@ -251,24 +261,3 @@ function findDerivationPremiseForClaim<
     }
     return undefined
 }
-
-/**
- * Return `true` iff the premise's expression tree is the naked-Q form:
- * exactly one expression at the root, of type `variable`. This is the
- * factory-acceptable starting state.
- */
-function isNakedQ<
-    TArg extends TCoreArgument,
-    TPremise extends TCorePremise,
-    TExpr extends TCorePropositionalExpression,
-    TVar extends TCorePropositionalVariable,
->(pe: PremiseEngine<TArg, TPremise, TExpr, TVar>): boolean {
-    const exprs = pe.getExpressions()
-    if (exprs.length !== 1) return false
-    const root = pe.getRootExpression()
-    if (root === undefined) return false
-    return root.type === "variable"
-}
-
-// `TClaimLookup` import kept for downstream extension; not used at runtime here.
-void undefined as unknown as TClaimLookup

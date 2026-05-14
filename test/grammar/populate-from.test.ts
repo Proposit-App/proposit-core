@@ -268,6 +268,60 @@ describe("ArgumentEngine.populateFromCitations (C6)", () => {
             eng.populateFromCitations(derivedClaimId, citLib)
         ).toThrow()
     })
+
+    it("deduplicates connections referencing the same supportingClaimId (one OR child per unique support)", () => {
+        // Source-order de-duplication: the factory iterates connections,
+        // collapses duplicate supportingClaimId entries into a single
+        // antecedent variable, and preserves first-seen order. This
+        // covers the seen-set branch in populate-from.ts.
+        const { eng, citLib, derivedClaimId, s1Id, s2Id } =
+            setupCitationFixture()
+        citLib.add({
+            id: "cit-1",
+            claimId: derivedClaimId,
+            claimVersion: 0,
+            supportingClaimId: s1Id,
+            supportingClaimVersion: 0,
+        })
+        citLib.add({
+            id: "cit-2",
+            claimId: derivedClaimId,
+            claimVersion: 0,
+            supportingClaimId: s2Id,
+            supportingClaimVersion: 0,
+        })
+        // A third connection referencing s1 again — the factory must
+        // collapse this with the first cit-1 connection rather than
+        // adding a redundant OR child.
+        citLib.add({
+            id: "cit-3",
+            claimId: derivedClaimId,
+            claimVersion: 0,
+            supportingClaimId: s1Id,
+            supportingClaimVersion: 0,
+        })
+        const { result: pe } = eng.createPremise({
+            type: "derivation",
+            derivedClaimId,
+        })
+
+        const result = eng.populateFromCitations(derivedClaimId, citLib)
+        expect(result.kind).toBe("populated")
+
+        // The antecedent is `formula(OR(s1, s2))` — two children of OR,
+        // not three. Walk past the formula buffer that AN-1 inserts in
+        // assistive mode.
+        const exprs = pe.getExpressions()
+        const root = pe.getRootExpression()
+        const antecedent = exprs.find(
+            (e) => e.parentId === root!.id && e.position === 0
+        )
+        expect(antecedent?.type).toBe("formula")
+        const or = exprs.find((e) => e.parentId === antecedent!.id)
+        expect((or as { operator: string }).operator).toBe("or")
+        const orChildren = exprs.filter((e) => e.parentId === or!.id)
+        expect(orChildren).toHaveLength(2)
+    })
 })
 
 describe("ArgumentEngine.populateFromAxioms (C6)", () => {

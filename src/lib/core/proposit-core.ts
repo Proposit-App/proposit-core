@@ -424,14 +424,17 @@ export class PropositCore<
             )
         }
 
-        // TODO(Phase D): thread `behavior` through the fork path. The
+        // FOLLOWUP(D5): thread `behavior` through the fork path. The
         // engine snapshot intentionally omits `behavior` (see the comment
         // in `ArgumentEngine.snapshot()`), so a permissive-mode source
-        // engine currently restores as `'assistive'` in the fork. When
-        // `behavior` is added to the snapshot in Phase D — or when fork
-        // call sites are reviewed — pass the source engine's behavior
-        // through `forkArgumentEngine`'s options and into the new
-        // engine's constructor / setBehavior() before snapshot replay.
+        // engine currently restores as `'assistive'` in the fork. D5
+        // either (a) adds `behavior` to the snapshot, or (b) keeps
+        // behavior out of the snapshot and reviews every fork call site
+        // to pass the source engine's behavior through
+        // `forkArgumentEngine`'s options and into the new engine's
+        // constructor / setBehavior() before snapshot replay. Plan ref:
+        // `docs/superpowers/plans/grammar-tiers-core-plan.md` Phase D
+        // → D5.
 
         // Step 2: canFork guard
         if (!engine.canFork()) {

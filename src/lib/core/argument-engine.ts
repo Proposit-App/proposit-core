@@ -69,6 +69,7 @@ import {
 } from "./argument-validation.js"
 import type { TExpressionInput } from "./expression-manager.js"
 import { normalizeArgument } from "../grammar/normalize.js"
+import { isNakedQDerivationPremise } from "../grammar/naked-q.js"
 import {
     populateFromGrounding as populateFromGroundingImpl,
     type TPopulateResult,
@@ -538,6 +539,29 @@ export class ArgumentEngine<
      */
     public get behavior(): "assistive" | "permissive" {
         return this.engineBehavior
+    }
+
+    /**
+     * Access to the engine's ID generator function. Used by in-package
+     * helpers that build new entity trees and need fresh IDs (e.g. the
+     * `populateFromGrounding` factory in
+     * `src/lib/grammar/populate-from.ts`). The generator is captured
+     * once at construction (default `crypto.randomUUID`) and stays
+     * immutable for the engine's lifetime; this accessor returns the
+     * same function reference on every call.
+     *
+     * Replaces the prior `(engine as unknown as { generateId: () =>
+     * string }).generateId` cast in `populate-from.ts`. External
+     * consumers can call this directly to mint IDs that line up with
+     * the engine's own (typically for fixtures or programmatic
+     * argument construction); the engine itself does not consume input
+     * IDs differently based on origin, so exposing the function is
+     * safe.
+     *
+     * @since 1.0.0
+     */
+    public get idGenerator(): () => string {
+        return this.generateId
     }
 
     /**
@@ -1782,7 +1806,7 @@ export class ArgumentEngine<
                 // snapshot and would restore a permissive engine as
                 // assistive if the field were added without threading
                 // it through every downstream restore path. See the
-                // matched TODO at `PropositCore.forkArgument`.
+                // matched FOLLOWUP(D5) at `PropositCore.forkArgument`.
             } as TLogicEngineOptions,
         }
     }
@@ -2672,34 +2696,25 @@ export class ArgumentEngine<
         // are entirely invisible to evaluate() and checkValidity(). This
         // replaces the pre-1.0 DERIVATION_STRUCTURE_INVALID_AT_EVALUATION
         // throw on naked-Q. Filter applies uniformly to conclusion,
-        // supporting, and full premise listings.
-        const isNakedQDerivation = (
-            pe: PremiseEngine<TArg, TPremise, TExpr, TVar>
-        ): boolean => {
-            const data = pe.toPremiseData() as unknown as TCorePremise
-            if (data.type !== "derivation") return false
-            const exprs = pe.getExpressions()
-            if (exprs.length !== 1) return false
-            const root = pe.getRootExpression()
-            if (root === undefined) return false
-            return root.type === "variable"
-        }
+        // supporting, and full premise listings. The predicate lives in
+        // `src/lib/grammar/naked-q.ts` so the C6 factory and this filter
+        // share one definition.
         return {
             argumentId: this.argument.id,
             conclusionPremiseId: this.conclusionPremiseId,
             getConclusionPremise: () => {
                 const c = this.getConclusionPremise()
                 if (c === undefined) return undefined
-                if (isNakedQDerivation(c)) return undefined
+                if (isNakedQDerivationPremise(c)) return undefined
                 return c as TEvaluablePremise
             },
             listSupportingPremises: () =>
                 this.listSupportingPremises().filter(
-                    (pm) => !isNakedQDerivation(pm)
+                    (pm) => !isNakedQDerivationPremise(pm)
                 ) as TEvaluablePremise[],
             listPremises: () =>
                 this.listPremises().filter(
-                    (pm) => !isNakedQDerivation(pm)
+                    (pm) => !isNakedQDerivationPremise(pm)
                 ) as TEvaluablePremise[],
             getVariable: (id) =>
                 this.variables.getVariable(id) as
@@ -2708,7 +2723,7 @@ export class ArgumentEngine<
             getPremise: (id) => {
                 const pe = this.premises.get(id)
                 if (pe === undefined) return undefined
-                if (isNakedQDerivation(pe)) return undefined
+                if (isNakedQDerivationPremise(pe)) return undefined
                 return pe as TEvaluablePremise
             },
             validateEvaluability: () => this.validateEvaluability(),

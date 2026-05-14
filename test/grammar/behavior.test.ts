@@ -32,3 +32,32 @@ describe("ArgumentEngine.behavior + setBehavior()", () => {
         expect(engine.behavior).toBe("assistive")
     })
 })
+
+describe("ArgumentEngine.idGenerator", () => {
+    it("returns the same function reference across calls", () => {
+        // The accessor is the typed replacement for the prior
+        // `(engine as unknown as { generateId }).generateId` cast in
+        // populate-from.ts. It must hand back the same function the
+        // engine itself uses internally — i.e., the same reference on
+        // every call (no fresh closure per access).
+        const engine = new ArgumentEngine(makeArgument(), EMPTY_CLAIM_LOOKUP)
+        const a = engine.idGenerator
+        const b = engine.idGenerator
+        expect(a).toBe(b)
+        expect(typeof a).toBe("function")
+    })
+
+    it("uses the constructor's generateId option when supplied", () => {
+        // Custom generator must be observable through the accessor; this
+        // is what the C6 factory relies on to mint deterministic IDs in
+        // tests / programmatic construction.
+        let counter = 0
+        const customGen = () => `id-${++counter}`
+        const engine = new ArgumentEngine(makeArgument(), EMPTY_CLAIM_LOOKUP, {
+            generateId: customGen,
+        })
+        expect(engine.idGenerator).toBe(customGen)
+        expect(engine.idGenerator()).toBe("id-1")
+        expect(engine.idGenerator()).toBe("id-2")
+    })
+})

@@ -130,4 +130,84 @@ describe("Evaluation no-op on naked-Q derivation premises (C8)", () => {
 
         expect(() => eng.checkValidity()).not.toThrow()
     })
+
+    it("evaluate() produces the same result with and without a naked-Q derivation premise (proves skip, not just no-throw)", () => {
+        // Stronger contract than "doesn't throw": adding a naked-Q
+        // derivation premise alongside a freeform conclusion must
+        // produce a result indistinguishable from the argument that
+        // never had the derivation premise at all. The evaluator-context
+        // filter in `asEvaluationContext` is what guarantees this; the
+        // test is the regression guard against accidentally surfacing
+        // the naked-Q to the evaluator (which would either throw or
+        // change the result shape).
+        const claimLib = new ClaimLibrary()
+        const derivedClaim = claimLib.create({
+            id: "claim-derived",
+            type: "normal",
+        })
+        const concClaim = claimLib.create({ id: "claim-c", type: "normal" })
+
+        // Baseline: engine with only the conclusion premise.
+        const baselineEng = new ArgumentEngine(ARG, claimLib)
+        const { result: baselineConcPe } = baselineEng.createPremise()
+        const baselineVarC = baselineEng.ensureClaimBoundVariable(concClaim.id)
+        baselineConcPe.addExpression({
+            id: "v-c-expr-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: baselineConcPe.getId(),
+            type: "variable",
+            variableId: baselineVarC.id,
+            parentId: null,
+            position: 0,
+        })
+        const baselineResult = baselineEng.evaluate({
+            variables: { [baselineVarC.id]: true },
+            operatorAssignments: {},
+        })
+
+        // Compare: engine with the same conclusion premise plus an
+        // extra naked-Q derivation premise.
+        const compareEng = new ArgumentEngine(ARG, claimLib)
+        const { result: compareConcPe } = compareEng.createPremise()
+        const compareVarC = compareEng.ensureClaimBoundVariable(concClaim.id)
+        compareConcPe.addExpression({
+            id: "v-c-expr-b",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: compareConcPe.getId(),
+            type: "variable",
+            variableId: compareVarC.id,
+            parentId: null,
+            position: 0,
+        })
+        compareEng.createPremise({
+            type: "derivation",
+            derivedClaimId: derivedClaim.id,
+        })
+        const compareResult = compareEng.evaluate({
+            variables: { [compareVarC.id]: true },
+            operatorAssignments: {},
+        })
+
+        // The argument-level summary truth fields must match — the
+        // naked-Q derivation contributed nothing because it was skipped.
+        expect(compareResult.conclusionTrue).toBe(baselineResult.conclusionTrue)
+        expect(compareResult.allSupportingPremisesTrue).toBe(
+            baselineResult.allSupportingPremisesTrue
+        )
+        expect(compareResult.isAdmissibleAssignment).toBe(
+            baselineResult.isAdmissibleAssignment
+        )
+        // The supporting-premises list in the compare run must be the
+        // same length as the baseline's — the naked-Q derivation premise
+        // is not in the listing because the evaluator never saw it.
+        // (Baseline has 0 supporting premises; compare also has 0
+        // because the naked-Q is filtered out by `asEvaluationContext`.)
+        const baselineSupportCount =
+            baselineResult.supportingPremises?.length ?? 0
+        const compareSupportCount =
+            compareResult.supportingPremises?.length ?? 0
+        expect(compareSupportCount).toBe(baselineSupportCount)
+    })
 })
