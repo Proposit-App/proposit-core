@@ -209,6 +209,7 @@ describe("grammar/validate dispatcher (spec §7.1)", () => {
         const ctx = oneViolationPerTier()
         const violations = validate("derivable", ctx)
         const tiers = violations.map((v) => v.tier)
+        const codes = violations.map((v) => v.code)
         const lastStructural = tiers.lastIndexOf("structural")
         const firstEvaluable = tiers.indexOf("evaluable")
         const lastEvaluable = tiers.lastIndexOf("evaluable")
@@ -221,6 +222,14 @@ describe("grammar/validate dispatcher (spec §7.1)", () => {
                     t === "structural" || t === "evaluable" || t === "derivable"
             )
         ).toBe(true)
+        // The `oneViolationPerTier()` fixture is built carefully so that
+        // its OR(axiom, citation) antecedent triggers D-3 (mixed grounding)
+        // without also firing D-1 (antecedentMatchesPopulatedForm passes
+        // because the antecedent IS an OR of ≥ 2 claim-bound variables —
+        // homogeneity is D-3's concern, not D-1's). Assert that
+        // structural guarantee inline rather than relying on the fixture
+        // comment.
+        expect(codes.filter((c) => c === "D-1")).toHaveLength(0)
     })
 
     it("validate('presentable') returns Structural + Evaluable + Derivable + Presentable in that order", () => {

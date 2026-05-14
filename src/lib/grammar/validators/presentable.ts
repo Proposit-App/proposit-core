@@ -131,6 +131,11 @@ export function validateP3(ctx: TValidatorContext): readonly TViolation[] {
  * any nested `formula` descendant (those start a new bounded scope and
  * are P-3-evaluated independently). Return `true` if any binary
  * operator (`and` / `or`) is in scope.
+ *
+ * Note: `implies` and `iff` are intentionally excluded from the "binary
+ * operator" check. S-5 restricts both to premise roots, so they cannot
+ * appear as formula descendants in a Structural-valid tree. Filtering
+ * them out here would be redundant; not checking them is correct.
  */
 function hasBinaryOperatorInBoundedSubtree(
     formula: TCorePropositionalExpression,
