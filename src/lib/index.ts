@@ -98,6 +98,8 @@ export type {
     TGrammarRuleCode,
     TViolation,
 } from "./grammar/types.js"
+export { validate as validateGrammar } from "./grammar/validate.js"
+export type { TValidatorContext } from "./grammar/validators/context.js"
 export * from "./types/fork.js"
 export { forkArgumentEngine } from "./core/fork.js"
 export * from "./parsing/index.js"
