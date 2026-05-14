@@ -70,6 +70,10 @@ import {
 import type { TExpressionInput } from "./expression-manager.js"
 import { normalizeArgument } from "../grammar/normalize.js"
 import {
+    populateFromGrounding as populateFromGroundingImpl,
+    type TPopulateResult,
+} from "../grammar/populate-from.js"
+import {
     removeUnresolvableVariables as removeUnresolvableVariablesImpl,
     removeOrphanOperators as removeOrphanOperatorsImpl,
     removeDuplicateDerivationPremises as removeDuplicateDerivationPremisesImpl,
@@ -78,6 +82,8 @@ import {
 import { validate as validateGrammar } from "../grammar/validate.js"
 import type { TGrammarTier, TViolation } from "../grammar/types.js"
 import type { TValidatorContext as TGrammarValidatorContext } from "../grammar/validators/context.js"
+import type { TCoreClaimConnection } from "../schemata/claim-connection.js"
+import type { TClaimConnectionLookup } from "./interfaces/library.interfaces.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 import { PremiseEngine } from "./premise-engine.js"
 import type { TPremiseEngineSnapshot } from "./premise-engine.js"
@@ -1485,6 +1491,55 @@ export class ArgumentEngine<
             if (root) roots.push(root)
         }
         return roots
+    }
+
+    /**
+     * Construct (or no-op on) the per-claim derivation premise's
+     * antecedent from a citation lookup. Factory + naked-Q-only:
+     *
+     *  - 0 connections → no-op (naked-Q stays).
+     *  - 1 connection → `IMPLIES(citation-var, Q)`.
+     *  - ≥ 2 connections → `IMPLIES(OR(c1, …, cn), Q)`. In
+     *    `'assistive'` mode the per-mutation AN-1 post-hook inserts a
+     *    formula buffer between IMPLIES and OR; in `'permissive'` the
+     *    OR sits directly under IMPLIES (a P-1 violation surfaces via
+     *    `validate('presentable')`).
+     *
+     * **No throw on already-populated.** Per the Structural-only
+     * mutation throw rule, if the target derivation premise is not in
+     * the naked-Q form the factory returns `{ kind: 'no-op', state:
+     * <existing> }` without mutating. UI/caller is responsible for
+     * explicit user consent + clearing the antecedent via a repair
+     * primitive before re-calling. Preserves the no-changes-without-
+     * consent principle.
+     *
+     * Throws only when no derivation premise exists for the given
+     * `derivedClaimId` (legitimate entity-not-found Structural check).
+     *
+     * @since 1.0.0
+     */
+    public populateFromCitations<
+        TConn extends TCoreClaimConnection = TCoreClaimConnection,
+    >(
+        derivedClaimId: string,
+        citationLookup: TClaimConnectionLookup<TConn>
+    ): TPopulateResult {
+        return populateFromGroundingImpl(this, derivedClaimId, citationLookup)
+    }
+
+    /**
+     * Mirror of `populateFromCitations` for axiom connections. Same
+     * factory contract: naked-Q-only, no throw on already-populated.
+     *
+     * @since 1.0.0
+     */
+    public populateFromAxioms<
+        TConn extends TCoreClaimConnection = TCoreClaimConnection,
+    >(
+        derivedClaimId: string,
+        axiomLookup: TClaimConnectionLookup<TConn>
+    ): TPopulateResult {
+        return populateFromGroundingImpl(this, derivedClaimId, axiomLookup)
     }
 
     /**

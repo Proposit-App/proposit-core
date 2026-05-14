@@ -76,7 +76,8 @@ Split `populateFromSupports` into `populateFromCitations` and `populateFromAxiom
 
 **Factory pattern, atomic replacement.** The two methods do NOT mutate an existing antecedent in place. Instead, each is a factory that constructs the per-claim derivation premise's expression tree in its **fully populated** form from the start — `IMPLIES(c, Q)` for single grounding, `IMPLIES(OR(c1, …, cn), Q)` for multiple (with the `formula` buffer between IMPLIES and OR when the engine is in `assistive` behavior per AN-1). The factory replaces the existing premise's expression tree atomically. There is no half-populated intermediate state ever observable.
 
-**No throw on D-3 conditions.** Per the design rule "mutations throw only on Structural violations" (see Work Item §10 below), the factory does **not** throw when called on a premise that already has grounding of the *other* kind. Instead the factory either:
+**No throw on D-3 conditions.** Per the design rule "mutations throw only on Structural violations" (see Work Item §10 below), the factory does **not** throw when called on a premise that already has grounding of the _other_ kind. Instead the factory either:
+
 - (a) **Replaces** the existing antecedent with the new homogeneous one, OR
 - (b) **No-ops + returns** the existing populated state if the premise isn't naked-Q (caller must first call a clearing repair primitive to opt into the lossy operation, satisfying the no-changes-without-consent principle).
 
@@ -108,6 +109,7 @@ MDPE throws (`DERIVATION_TYPE_MISMATCH`, `DERIVATION_STRUCTURE_INVALID`, `DERIVA
 **Phase D scope confirmation:** the removal of these throws is part of "spec-direct AN-1..AN-4 rewrite + legacy removal" — AN-1 must own the buffer-insertion behavior as a true post-hook before the throws can be deleted. The two changes are coupled and land together.
 
 Throws that should **stay** in mutations (legitimate Structural / API-shape):
+
 - Entity-not-found checks (Structural integrity — premise ID, expression ID, variable ID)
 - `S-8` binary arity (already throws — keep)
 - `S-9` sibling position collisions (already throws — keep)
