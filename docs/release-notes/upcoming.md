@@ -21,10 +21,7 @@ Structural  ⊇  Evaluable  ⊇  Derivable  ⊇  Presentable
 (most permissive)                           (most restrictive)
 ```
 
-- **Structural** is the floor: data integrity, FK soundness, unique IDs
-    - variable symbols, fixed-arity invariants for `not`/`formula`/`implies`/`iff`,
-      sibling-position uniqueness, derivation-premise root-operator
-      restrictions. Mutations throw on Structural violations.
+- **Structural** is the floor: data integrity, FK soundness, unique IDs and variable symbols, fixed-arity invariants for `not`/`formula`/`implies`/`iff`, sibling-position uniqueness, derivation-premise root-operator restrictions. Mutations throw on Structural violations.
 - **Evaluable** is what `evaluate()` and `checkValidity()` need —
   variadic-arity floor for `and`/`or`, resolvable variable bindings,
   consequent presence in derivation premises, claim-derivation pairing
