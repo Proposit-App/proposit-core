@@ -311,6 +311,28 @@ describe("grammar/structural", () => {
             })
             expect(validateS4(ctx)).toEqual([])
         })
+
+        it("returns a violation for a 3-node cycle (e-1 → e-2 → e-3 → e-1)", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-1",
+                        parentId: "e-3",
+                    }),
+                    makeVariableExpression({
+                        id: "e-2",
+                        parentId: "e-1",
+                    }),
+                    makeVariableExpression({
+                        id: "e-3",
+                        parentId: "e-2",
+                    }),
+                ],
+            })
+            const violations = validateS4(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations.every((v) => v.code === "S-4")).toBe(true)
+        })
     })
 
     describe("S-5 root-only IMPLIES/IFF", () => {
@@ -630,6 +652,33 @@ describe("grammar/structural", () => {
             })
             expect(validateS9(ctx)).toEqual([])
         })
+
+        it("does not flag two different premises whose roots are both at position 0 (root-sibling scope is per premise)", () => {
+            // Cross-premise isolation: each premise's roots are their own
+            // sibling set, so two premises with roots at position 0 don't
+            // collide.
+            const ctx = buildContext({
+                premises: [
+                    makeFreeformPremise({ id: "p-1" }),
+                    makeFreeformPremise({ id: "p-2" }),
+                ],
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-r1",
+                        premiseId: "p-1",
+                        parentId: null,
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-r2",
+                        premiseId: "p-2",
+                        parentId: null,
+                        position: 0,
+                    }),
+                ],
+            })
+            expect(validateS9(ctx)).toEqual([])
+        })
     })
 
     describe("S-10 entity ID uniqueness", () => {
@@ -685,6 +734,26 @@ describe("grammar/structural", () => {
                 ],
             })
             expect(validateS10(ctx)).toEqual([])
+        })
+
+        it("flags duplicate expression IDs that span different premises within the same argument (argument-wide scope)", () => {
+            // S-10 / S-11 scope is the whole argument, not per-premise; two
+            // expressions in different premises with the same id is still
+            // a duplicate. Matches the originating EXPR_DUPLICATE_ID error
+            // code's semantics from src/lib/types/validation.ts.
+            const ctx = buildContext({
+                premises: [
+                    makeFreeformPremise({ id: "p-1" }),
+                    makeFreeformPremise({ id: "p-2" }),
+                ],
+                expressions: [
+                    makeVariableExpression({ id: "e-dup", premiseId: "p-1" }),
+                    makeVariableExpression({ id: "e-dup", premiseId: "p-2" }),
+                ],
+            })
+            const violations = validateS10(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("S-10")
         })
     })
 

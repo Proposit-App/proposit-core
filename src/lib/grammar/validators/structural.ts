@@ -108,19 +108,12 @@ export function validateS1(ctx: TValidatorContext): readonly TViolation[] {
 
     return violations
 }
-const VALID_EXPRESSION_TYPES = new Set([
-    "variable",
-    "operator",
-    "formula",
-] as const)
-
-const VALID_OPERATOR_TYPES = new Set([
-    "not",
-    "and",
-    "or",
-    "implies",
-    "iff",
-] as const)
+// Static-string allow-lists used by S-2 below. Kept as `string[]` (not the
+// narrow literal union) so `.includes(...)` accepts a widened input from
+// runtime data — the whole point of S-2 is to detect deserialized data
+// whose discriminant value doesn't match the legal union at compile time.
+const validExpressionTypes: string[] = ["variable", "operator", "formula"]
+const validOperatorTypes: string[] = ["not", "and", "or", "implies", "iff"]
 
 /**
  * S-2 — Operator types. Every expression's `type` is one of `variable`,
@@ -130,8 +123,11 @@ const VALID_OPERATOR_TYPES = new Set([
 export function validateS2(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     for (const e of ctx.expressions) {
-        const eType = (e as { type: string }).type
-        if (!VALID_EXPRESSION_TYPES.has(eType as never)) {
+        // Widen `type` to `string` so .includes() accepts it without a cast.
+        // TS thinks the field can only be the legal union; the widening is
+        // a defensive read against malformed runtime data.
+        const eType: string = e.type
+        if (!validExpressionTypes.includes(eType)) {
             violations.push({
                 tier: "structural",
                 code: "S-2",
@@ -142,9 +138,9 @@ export function validateS2(ctx: TValidatorContext): readonly TViolation[] {
             })
             continue
         }
-        if (eType === "operator") {
-            const op = (e as { operator: string }).operator
-            if (!VALID_OPERATOR_TYPES.has(op as never)) {
+        if (e.type === "operator") {
+            const op: string = e.operator
+            if (!validOperatorTypes.includes(op)) {
                 violations.push({
                     tier: "structural",
                     code: "S-2",
@@ -263,15 +259,18 @@ export function validateS5(ctx: TValidatorContext): readonly TViolation[] {
 
     for (const [premiseId, ids] of rootImplIffByPremise) {
         if (ids.length > 1) {
-            // Flag all but the first as duplicates.
-            for (const dupId of ids.slice(1)) {
+            // Every root-level implies/iff in a premise with >1 is in
+            // violation — there's no canonical "first" that's correct and
+            // the rest wrong, so flag each. Consumers that prefer
+            // first-wins can dedupe by `premiseId` at the UI layer.
+            for (const offendingId of ids) {
                 violations.push({
                     tier: "structural",
                     code: "S-5",
-                    message: `premise ${premiseId} has more than one root-level implies/iff (duplicate: ${dupId})`,
+                    message: `premise ${premiseId} has more than one root-level implies/iff (${ids.length} total; offender: ${offendingId})`,
                     argumentId: ctx.argument.id,
                     premiseId,
-                    expressionId: dupId,
+                    expressionId: offendingId,
                 })
             }
         }
@@ -284,18 +283,22 @@ export function validateS5(ctx: TValidatorContext): readonly TViolation[] {
  * S-6 — Premise type discriminator consistency. `type='derivation'`
  * premises have a non-null `derivedClaimId`; `type='freeform'` premises
  * have no `derivedClaimId` (or it is null/undefined).
+ *
+ * `TCoreFreeformPremise` and `TCoreDerivationPremise` are both
+ * `additionalProperties: true` in their TypeBox schemas, so a freeform
+ * premise CAN carry a stray `derivedClaimId` field at runtime even
+ * though the TS shape doesn't surface it. We use the `in` operator and
+ * a narrow shape cast to read the field as `unknown` rather than the
+ * earlier `as unknown` double-cast.
  */
 export function validateS6(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     for (const p of ctx.premises) {
-        const derivedClaimId = (
-            p as unknown as { derivedClaimId?: string | null }
-        ).derivedClaimId
         if (p.type === "derivation") {
             if (
-                derivedClaimId === null ||
-                derivedClaimId === undefined ||
-                derivedClaimId === ""
+                p.derivedClaimId === null ||
+                p.derivedClaimId === undefined ||
+                p.derivedClaimId === ""
             ) {
                 violations.push({
                     tier: "structural",
@@ -305,20 +308,20 @@ export function validateS6(ctx: TValidatorContext): readonly TViolation[] {
                     premiseId: p.id,
                 })
             }
-        } else if (p.type === "freeform") {
-            if (
-                derivedClaimId !== null &&
-                derivedClaimId !== undefined &&
-                derivedClaimId !== ""
-            ) {
-                violations.push({
-                    tier: "structural",
-                    code: "S-6",
-                    message: `freeform premise ${p.id} has non-null derivedClaimId ${derivedClaimId}`,
-                    argumentId: ctx.argument.id,
-                    premiseId: p.id,
-                })
-            }
+            continue
+        }
+        // Freeform branch. Check for a stray derivedClaimId via the
+        // additionalProperties extension slot.
+        if (!("derivedClaimId" in p)) continue
+        const stray = (p as { derivedClaimId?: unknown }).derivedClaimId
+        if (stray !== null && stray !== undefined && stray !== "") {
+            violations.push({
+                tier: "structural",
+                code: "S-6",
+                message: `freeform premise ${p.id} has non-null derivedClaimId (${typeof stray === "string" ? stray : typeof stray})`,
+                argumentId: ctx.argument.id,
+                premiseId: p.id,
+            })
         }
     }
     return violations
@@ -356,6 +359,11 @@ function childrenByParent(
 /**
  * S-8 — Binary operator arity + positions. `implies` and `iff` have
  * exactly 2 children, at positions `0` and `1`.
+ *
+ * One violation per binary expression. When arity is wrong the position
+ * check is skipped — position invariants are only meaningful for an
+ * exactly-2-child shape; reporting both would noise the violation list
+ * with the same structural problem.
  */
 export function validateS8(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
@@ -373,6 +381,7 @@ export function validateS8(ctx: TValidatorContext): readonly TViolation[] {
                 premiseId: e.premiseId,
                 expressionId: e.id,
             })
+            // Position check only meaningful with exactly 2 children.
             continue
         }
         if (kids[0].position !== 0 || kids[1].position !== 1) {
