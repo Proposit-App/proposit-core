@@ -1,5 +1,92 @@
 # Grammar Tiers — proposit-core Implementation Plan
 
+> **Implementation status — 2026-05-14, branch `grammar-tiers/core` at `7491eee`.**
+>
+> **Phases A, B (all), C1–C5 complete.** Tests at 1578 passed + 2 skipped.
+> `pnpm run check` green. Branch is shippable-as-WIP if needed.
+>
+> Recent commits (newest first):
+>
+> ```
+> 7491eee  C5  — mutations throw on Structural violations regardless of behavior
+> 4f5cac6  C4  — four repair primitives (E-1/E-3/E-6/D-3) + engine.getClaim()
+> 67ca148  —   — fold C1+C2 dual-review polish (P1 test + 4 P2 doc items)
+> c53d33c  —   — engine.validate(tier?) overload (C4 precursor — not in original plan)
+> 6ec65b3  C3  — normalize(tier?) global pass on ArgumentEngine
+> d49e44b  C2  — AN post-hook bridge (behavior gates auto-normalization)
+> 4474665  C1  — behavior + setBehavior() on ArgumentEngine
+> d293f57  —   — B4+B5 review polish (P-3 JSDoc + dispatcher D-1 absence assertion)
+> f5421f3  —   — D-1 source bug fix (orChildren.length < 2)
+> 08a804a  —   — B2+B3 review polish (E-6 flag-all, D-4/D-5 naked-Q, E-5 buffer test)
+> 71ffb12  B5  — validate(tier) dispatcher tests
+> 5886de3  B4  — Presentable validators
+> 313c718  B3  — Derivable validators
+> 202acab  B2  — Evaluable validators
+> 26e963c  B1.8-14 — Structural validators S-8..S-14
+> ee19877  B1.2-7  — Structural validators S-2..S-7
+> ```
+>
+> **Phase C remaining (in order):**
+>
+> - **C6** — split `populateFromSupports` into `populateFromCitations` +
+>   `populateFromAxioms`. **Library-passing contract decision (locked):**
+>   method-arg form (`engine.populateFromCitations(claimId, lookup)`),
+>   matching how `lookupClaim` is supplied to `fromSnapshot` and keeping
+>   ArgumentEngine's constructor stable. Verify against the existing
+>   `populateFromSupports` signature (`ManagedDerivationPremiseEngine.ts:406`)
+>   before committing to confirm no surprise from MDPE's
+>   `TVariableMaterializer` interface. MDPE stays intact through Phase C
+>   and is removed wholesale in Phase D1.
+> - **C7** — moderate scope; mostly removing `grammarConfig` parameter
+>   from `fromSnapshot`/`fromData` + adding a Structural-validation gate
+>   at load time.
+> - **C8** — small/focused.
+>
+> **Phase D scope expansion noted (was pure removal):** the AN module
+> must own AN-1..AN-4 natively _before_ the legacy plumbing can come
+> out. Both `runAssistiveNormalization` (C2) and `normalize(tier?)`'s
+> try/finally PE-config swap (C3) currently bridge through
+> `PremiseEngine.normalizeExpressions()`, which is driven by the legacy
+> per-flag `grammarConfig`. Phase D's first task is spec-direct
+> AN-1..AN-4 implementation; only after that can D1 remove MDPE, D2
+> remove `grammarConfig` / `autoNormalize` / `TGrammarOptions` /
+> `DEFAULT_GRAMMAR_CONFIG` / `PERMISSIVE_GRAMMAR_CONFIG`,
+> `computeEffectiveGrammarConfig`, `PremiseEngine.getGrammarConfig`,
+> the `normalize(tier?)` try/finally dance, the legacy `validate()`
+> no-arg overload, etc.
+>
+> **C4 precursor not in original plan:** `engine.validate(tier?)`
+> overload was added as a separate commit (`c53d33c`) because all four
+> repair primitives need it to discover their target violations. Kept
+> as its own commit so any future rework of the bridge surface stays
+> isolated from the repair logic. `TArgumentLifecycle` interface JSDoc
+> updated; legacy no-arg `validate()` overload preserved until Phase D.
+>
+> **Design decisions locked through C5:**
+>
+> - `normalize(tier?)` bypasses `behavior` — user-initiated; runs even
+>   in permissive mode. Engine.behavior is not mutated.
+> - In v1.0, `tier ∈ {structural, evaluable, derivable}` is a no-op for
+>   `normalize()` (forward-compat surface). All AN rules target
+>   Presentable invariants in v1.0.
+> - Repair primitives respect `behavior` (the per-mutation AN post-hook
+>   still gates as usual); `removeOrphanOperators` bypasses (delegates
+>   to `normalize()`).
+> - Snapshot intentionally omits `behavior` from serialization
+>   (consumer re-supplies at restore; defaults to `assistive`); Phase D
+>   TODO at `PropositCore.forkArgument` tracks the matched threading.
+> - C1+C2 dual-review polish folded: P1 test gap for createPremise() +
+>   4 P2 doc/comment items.
+> - B4+B5 polish folded: P-3 JSDoc note + dispatcher D-1 absence
+>   assertion. P2 (TChildMap dedup) intentionally deferred to Phase D/E.
+>
+> **Restart-from-fresh-session prerequisites:** read this implementation
+> status block, then the briefing at
+> `docs/superpowers/briefings/grammar-tiers-core-agenda.md`, then the
+> spec at `docs/superpowers/specs/2026-05-13-grammar-tiers-design.md`.
+> The plan body below describes Phase A / B / B0 in its pre-restructure
+> framing — see the "Design restructure" sub-note below.
+
 > **Design restructure — 2026-05-14.** Wire-format types
 > (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) **now live in
 > proposit-core**, not in `@proposit/shared`. Original plan had shared
@@ -60,12 +147,14 @@ Phase C — Engine surface
   C7  Snapshot loading: fromSnapshot/fromData accept any Structural state
   C8  Evaluation no-op on naked-Q (delete DERIVATION_STRUCTURE_INVALID_AT_EVALUATION on naked-Q)
 
-Phase D — Removal + cleanup
-  D1  Delete ManagedDerivationPremiseEngine subclass
-  D2  Delete grammarConfig / autoNormalize / TGrammarOptions / DEFAULT_GRAMMAR_CONFIG / PERMISSIVE_GRAMMAR_CONFIG
-  D3  Delete LOAD_GRAMMAR / STRICT_GRAMMAR split
-  D4  Delete deprecated DERIVATION_STRUCTURE_INVALID_AT_EVALUATION call site
-  D5  Update all interface JSDoc
+Phase D — Spec-direct AN rewrite + legacy removal
+  D0  Rewrite src/lib/grammar/auto-normalize.ts and src/lib/grammar/normalize.ts to implement AN-1..AN-4 directly against the engine's expression tree (no delegation to PremiseEngine.normalizeExpressions / legacy grammarConfig). Until this lands, the legacy plumbing below cannot be removed.
+  D1  Delete ManagedDerivationPremiseEngine subclass and its populateFromSupports method (C6 split replaces it).
+  D2  Delete grammarConfig / autoNormalize / TGrammarOptions / DEFAULT_GRAMMAR_CONFIG / PERMISSIVE_GRAMMAR_CONFIG / TAutoNormalizeConfig / resolveAutoNormalize, plus ArgumentEngine.computeEffectiveGrammarConfig, PremiseEngine.getGrammarConfig, the try/finally PE-config swap in normalizeArgument, and the snapshot's grammarConfig field.
+  D3  Delete LOAD_GRAMMAR / STRICT_GRAMMAR split.
+  D4  Delete deprecated DERIVATION_STRUCTURE_INVALID_AT_EVALUATION call site + the legacy validate() no-arg overload + ArgumentEngine.normalizeAllExpressions().
+  D5  Address the PropositCore.forkArgument behavior-threading TODO (added in C1+C2 review polish): thread engine.behavior through forkArgumentEngine + snapshot. Decide whether behavior joins the snapshot or stays a constructor-only setting.
+  D6  Update all interface JSDoc to reflect the removed surface.
 
 Phase E — Documentation
   E1  Delete docs/Proposit_Grammar.md, write new one per spec §11
@@ -2192,6 +2281,26 @@ git commit -m "feat(engine): mutations throw on Structural violations (S-8, S-9,
 ---
 
 ## Task C6: Split `populateFromSupports` → `populateFromCitations` + `populateFromAxioms`
+
+> **Library-passing contract — locked (2026-05-14):** method-arg form
+> `engine.populateFromCitations(derivedClaimId, lookup)` /
+> `engine.populateFromAxioms(derivedClaimId, lookup)`, where `lookup`
+> is a `TClaimConnectionLookup<TCoreClaimConnection>`. Rationale:
+> (a) keeps `ArgumentEngine` constructor stable; (b) matches how
+> `claimLibrary` is already passed to `fromSnapshot`; (c) consumers can
+> supply different lookups for citation vs axiom without re-instantiating.
+> Verify against the existing `ManagedDerivationPremiseEngine.ts:406`
+> signature before committing — that method takes the full
+> `ClaimCitationLibrary` + `ClaimAxiomLibrary` + a
+> `TVariableMaterializer` shim; the new split methods are owned by
+> `ArgumentEngine` which already _is_ the variable materializer, so the
+> third arg goes away. `PropositCore` callers pass `core.citations`
+> and `core.axioms` directly.
+>
+> **MDPE stays intact through C6.** `populateFromSupports` keeps
+> working in the legacy form; the new split methods are additive. Phase
+> D1 removes MDPE wholesale. The plan body's "Step 4: Remove the old
+> `populateFromSupports`" step is therefore deferred to Phase D1.
 
 **Files:**
 
