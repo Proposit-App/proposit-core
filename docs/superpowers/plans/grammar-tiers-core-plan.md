@@ -4,11 +4,11 @@
 
 **Goal:** Replace the existing `grammarConfig` / `autoNormalize` / `ManagedDerivationPremiseEngine` / `LOAD_GRAMMAR-STRICT_GRAMMAR` machinery in `@proposit/proposit-core` with a four-tier (`structural` ⊇ `evaluable` ⊇ `derivable` ⊇ `presentable`) grammar model, a `validate(tier)` API returning `readonly TViolation[]`, a `normalize(tier?)` global pass, an engine-level `behavior: 'assistive' | 'permissive'` setting with a uniform AN post-mutation hook, targeted repair primitives, and a split `populateFromCitations` / `populateFromAxioms` pair — then ship a 1.0.0 major release.
 
-**Architecture:** Wire-format types (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) live in `@proposit/shared@^0.3.0` and are imported by core; core owns the *rule definitions*. Validators are grouped into one file per tier under `src/lib/grammar/validators/` and aggregated by a `src/lib/grammar/validate.ts` dispatcher that short-circuits per the §7.1 four-case enumeration. Auto-normalization (AN) is implemented as a single post-hook on `ArgumentEngine` that runs the §5.1 rule set in order whenever the engine's `behavior === 'assistive'` and a structural mutation succeeds. Snapshot loading accepts any Structural state; lower-tier violations are queryable post-load. The old `ManagedDerivationPremiseEngine` subclass is deleted; its enforcement folds into the new `validate('derivable')` plus the new Evaluable rule E-6 (claim-derivation pairing). Two methods replace `populateFromSupports`: `populateFromCitations` and `populateFromAxioms`, each operating on one grounding kind — no silent dropping.
+**Architecture:** Wire-format types (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) live in `@proposit/shared@^0.9.0` and are imported by core; core owns the *rule definitions*. Validators are grouped into one file per tier under `src/lib/grammar/validators/` and aggregated by a `src/lib/grammar/validate.ts` dispatcher that short-circuits per the §7.1 four-case enumeration. Auto-normalization (AN) is implemented as a single post-hook on `ArgumentEngine` that runs the §5.1 rule set in order whenever the engine's `behavior === 'assistive'` and a structural mutation succeeds. Snapshot loading accepts any Structural state; lower-tier violations are queryable post-load. The old `ManagedDerivationPremiseEngine` subclass is deleted; its enforcement folds into the new `validate('derivable')` plus the new Evaluable rule E-6 (claim-derivation pairing). Two methods replace `populateFromSupports`: `populateFromCitations` and `populateFromAxioms`, each operating on one grounding kind — no silent dropping.
 
 **Tech Stack:** TypeScript (strict, ESM, `.js` import suffixes), pnpm, Vitest, ESLint + Prettier, TypeBox (consumed via `@proposit/shared`), `@typescript-eslint/naming-convention` (per the `brain-style` skill). Node `>=22.3.0`.
 
-**Cross-repo dependency:** `@proposit/shared@^0.3.0` must publish before any code that *uses* the new shared types can land in core. Work that *doesn't* depend on shared (documentation rewrite, scaffolding with local type stubs, test scaffolding) proceeds in parallel. The publish order is: shared → core → server + mobile in parallel.
+**Cross-repo dependency:** `@proposit/shared@^0.9.0` must publish before any code that *uses* the new shared types can land in core. Work that *doesn't* depend on shared (documentation rewrite, scaffolding with local type stubs, test scaffolding) proceeds in parallel. The publish order is: shared → core → server + mobile in parallel.
 
 **Version target:** `1.0.0` (major bump). Recommendation rationale at end-of-plan.
 
@@ -25,7 +25,7 @@ Phase A — No-blocker work (start immediately)
   A4  Failing-test scaffolds for every tier (one describe block per rule, with `it.todo` placeholders)
 
 Phase B — Validators (after shared READY)
-  B0  Swap local stubs for `@proposit/shared/schemas/grammar` imports; bump shared dep to ^0.3.0
+  B0  Swap local stubs for `@proposit/shared/schemas/grammar` imports; bump shared dep to ^0.9.0
   B1  Implement Structural validators (S-1..S-14) + tests
   B2  Implement Evaluable validators (E-1, E-3..E-7) + tests
   B3  Implement Derivable validators (D-1..D-6) + tests
@@ -110,7 +110,7 @@ Dependencies:
 
 | Path | Change |
 |---|---|
-| `package.json` | Bump `@proposit/shared` to `^0.3.0`. Bump version to `1.0.0` at publish time. |
+| `package.json` | Bump `@proposit/shared` to `^0.9.0`. Bump version to `1.0.0` at publish time. |
 | `src/lib/index.ts` | Remove exports of `ManagedDerivationPremiseEngine`, `TVariableMaterializer`, `TGrammarConfig`/`TGrammarOptions`/`TAutoNormalizeConfig`/`DEFAULT_GRAMMAR_CONFIG`/`PERMISSIVE_GRAMMAR_CONFIG`/`resolveAutoNormalize`. Add new exports for the grammar module. |
 | `src/lib/core/argument-engine.ts` | Add `validate(tier)`, `normalize(tier?)`, `behavior`, `setBehavior(...)`, and repair primitives. Wire AN post-hook. Drop `validateDerivationStructures` (folds into D-1). |
 | `src/lib/core/premise-engine.ts` | Remove `grammarConfig` option threading + per-flag `resolveAutoNormalize` calls. Mutations now enforce *only* Structural rules and throw on violation; they don't auto-fix. Add S-8/S-9 enforcement (position invariants previously enforced indirectly). |
@@ -147,7 +147,7 @@ Dependencies:
 
 # Phase A — Pre-shared work (begin immediately)
 
-Phase A is independent of `@proposit/shared@^0.3.0` shipping. It produces a feature branch, type-stub scaffolding, an empty `src/lib/grammar/` tree, failing-test skeletons for every rule, and the beginnings of the documentation rewrite. None of this changes engine behavior; everything is additive or scoped to new files.
+Phase A is independent of `@proposit/shared@^0.9.0` shipping. It produces a feature branch, type-stub scaffolding, an empty `src/lib/grammar/` tree, failing-test skeletons for every rule, and the beginnings of the documentation rewrite. None of this changes engine behavior; everything is additive or scoped to new files.
 
 ## Task A0: Branch setup + baseline check
 
@@ -187,7 +187,7 @@ No commit yet — wait until A1 lands the first concrete file.
 
 ## Task A1: Local type stubs for shared wire format
 
-**Goal:** Define `TGrammarTier`, `TGrammarRuleCode`, `TViolation` locally with the same shape `@proposit/shared@^0.3.0` will export. In Phase B0 we replace the stub file's contents with a single `export type { ... } from "@proposit/shared/schemas/grammar"` re-export and delete the local definitions — leaving the stub *path* unchanged so downstream files don't need to rewrite imports.
+**Goal:** Define `TGrammarTier`, `TGrammarRuleCode`, `TViolation` locally with the same shape `@proposit/shared@^0.9.0` will export. In Phase B0 we replace the stub file's contents with a single `export type { ... } from "@proposit/shared/schemas/grammar"` re-export and delete the local definitions — leaving the stub *path* unchanged so downstream files don't need to rewrite imports.
 
 **Files:**
 - Create: `src/lib/grammar/types.ts`
@@ -1022,7 +1022,7 @@ Expected: green.
 
 SendMessage to `team-lead`:
 
-> Phase A complete. Branch `grammar-tiers/core`, four commits. Grammar module scaffold is in place with empty validators, dispatcher wired, type stubs swappable to `@proposit/shared/schemas/grammar` in one file. Test scaffolds for every rule are `it.todo`. New Proposit_Grammar.md draft has the spec §11 ToC and the preserved formula-parser grammar in §1. Holding on Phase B until shared@^0.3.0 publishes (waiting on `proposit-shared-dev`'s READY: on broker thread `grammar-tiers`). While I wait, I will keep advancing the documentation rewrite (Phase E1/E2 content) since that work is independent of shared.
+> Phase A complete. Branch `grammar-tiers/core`, four commits. Grammar module scaffold is in place with empty validators, dispatcher wired, type stubs swappable to `@proposit/shared/schemas/grammar` in one file. Test scaffolds for every rule are `it.todo`. New Proposit_Grammar.md draft has the spec §11 ToC and the preserved formula-parser grammar in §1. Holding on Phase B until shared@^0.9.0 publishes (waiting on `proposit-shared-dev`'s READY: on broker thread `grammar-tiers`). While I wait, I will keep advancing the documentation rewrite (Phase E1/E2 content) since that work is independent of shared.
 
 - [ ] **Step 3: Continue Phase A-bonus (doc work) while waiting on shared**
 
@@ -1032,7 +1032,7 @@ See Phase E tasks below. E1.1–E1.4 (the new Proposit_Grammar.md sections 2–6
 
 # Phase B — Validators (after shared READY)
 
-**Precondition:** `proposit-shared-dev` posts `READY: @proposit/shared@^0.3.0 published with TGrammarTier, TGrammarRuleCode, TViolation` on broker thread `grammar-tiers`. Confirm the published types match the local stub in `src/lib/grammar/types.ts` before proceeding.
+**Precondition:** `proposit-shared-dev` posts `READY: @proposit/shared@^0.9.0 published with TGrammarTier, TGrammarRuleCode, TViolation` on broker thread `grammar-tiers`. Confirm the published types match the local stub in `src/lib/grammar/types.ts` before proceeding.
 
 ---
 
@@ -1042,11 +1042,11 @@ See Phase E tasks below. E1.1–E1.4 (the new Proposit_Grammar.md sections 2–6
 - Modify: `package.json`
 - Modify: `src/lib/grammar/types.ts`
 
-- [ ] **Step 1: Bump `@proposit/shared` to `^0.3.0` in `package.json`**
+- [ ] **Step 1: Bump `@proposit/shared` to `^0.9.0` in `package.json`**
 
 Locate the `dependencies` block and update:
 ```json
-"@proposit/shared": "^0.3.0"
+"@proposit/shared": "^0.9.0"
 ```
 
 (Replace whatever current version pin exists. If the field doesn't exist yet because the dep was never added, add it under `dependencies`.)
@@ -1098,7 +1098,7 @@ Expected: same `todo` count as Phase A4; no regressions.
 
 ```bash
 git add package.json pnpm-lock.yaml src/lib/grammar/types.ts
-git commit -m "feat(grammar): swap local stubs for @proposit/shared@^0.3.0 wire-format types"
+git commit -m "feat(grammar): swap local stubs for @proposit/shared@^0.9.0 wire-format types"
 ```
 
 ---
@@ -2553,7 +2553,7 @@ SendMessage to `team-lead`:
 
 > Ready to publish `@proposit/proposit-core@1.0.0`.
 >
-> **Version recommendation:** `major` (→ 1.0.0). Rationale: the API change is breaking — `grammarConfig`, `autoNormalize`, `enforceFormulaBetweenOperators`, `LOAD_GRAMMAR`/`STRICT_GRAMMAR`, `ManagedDerivationPremiseEngine`, `populateFromSupports`, and `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` are *removed*, not deprecated. A 1.0.0 marks the first stable wire-format commitment (rule codes now live in `@proposit/shared@^0.3.0`). Pre-1.0 path (0.13.0) is technically defensible but the briefing recommends major as the cleaner signal.
+> **Version recommendation:** `major` (→ 1.0.0). Rationale: the API change is breaking — `grammarConfig`, `autoNormalize`, `enforceFormulaBetweenOperators`, `LOAD_GRAMMAR`/`STRICT_GRAMMAR`, `ManagedDerivationPremiseEngine`, `populateFromSupports`, and `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` are *removed*, not deprecated. A 1.0.0 marks the first stable wire-format commitment (rule codes now live in `@proposit/shared@^0.9.0`). Pre-1.0 path (0.13.0) is technically defensible but the briefing recommends major as the cleaner signal.
 >
 > **Changelog summary:**
 > - New: four-tier grammar (`Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable`); `validate(tier)`, `normalize(tier?)`, `behavior: 'assistive'|'permissive'`, `setBehavior(...)`, four repair primitives.
