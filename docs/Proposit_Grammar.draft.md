@@ -621,10 +621,11 @@ be locally repaired without changing user-meaningful structure_.
 - **AN-2 (collapse double negation):** if the mutation produces
   `not(not(x))`, replace with `x`. Preserves P-2.
 - **AN-3 (collapse empty/single-child operator/formula):** if the
-  mutation leaves an operator or formula with 0 children, delete it
-  (recurse to grandparent). With 1 child where the parent is
-  non-meaningful, promote the child. Preserves P-3 and P-4 (and
-  incidentally E-1).
+  mutation leaves an operator or formula with no children, delete it
+  (recurse to grandparent). Single-child operators and formulas are
+  collapsed where the rule can fire without changing logical meaning;
+  see `src/lib/grammar/auto-normalize.ts` for the exact firing
+  conditions. Preserves P-3 and P-4 (and incidentally E-1).
 - **AN-4 (absorb same-operator adjacency):** if a mutation produces a
   same-operator parent/grandchild pair separated only by a formula,
   absorb. Preserves P-5.
@@ -712,8 +713,8 @@ Specifically, `normalize`:
 
 - **Never deletes a variable.** Variables that fail E-3 (binding doesn't
   resolve) stay in place; the corresponding violation is reported by
-  `validate('evaluable')` and the UI offers the user the
-  `removeUnresolvableVariables()` repair primitive.
+  `validate('evaluable')` and the UI offers the user a targeted repair
+  primitive — see the API reference for the current list.
 - **Never changes a claim reference.** A variable bound to claim X stays
   bound to X.
 - **Never modifies an operator's semantics.** `AND` does not become `OR`,
@@ -723,8 +724,9 @@ Specifically, `normalize`:
 `normalize` therefore **cannot recover from Evaluable or Derivable
 violations** regardless of the `tier` parameter. Recovering from those
 requires user intent — "delete this orphan operator?", "switch this
-claim's grounding from axiom to citation?" — and is exposed via the
-repair primitives in `src/lib/grammar/repair.ts`.
+claim's grounding from axiom to citation?" — and is exposed via
+targeted, user-initiated repair primitives. See the API reference for
+the current list.
 
 ### 5.3 Worked examples
 
