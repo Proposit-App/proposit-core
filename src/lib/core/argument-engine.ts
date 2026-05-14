@@ -69,6 +69,12 @@ import {
 } from "./argument-validation.js"
 import type { TExpressionInput } from "./expression-manager.js"
 import { normalizeArgument } from "../grammar/normalize.js"
+import {
+    removeUnresolvableVariables as removeUnresolvableVariablesImpl,
+    removeOrphanOperators as removeOrphanOperatorsImpl,
+    removeDuplicateDerivationPremises as removeDuplicateDerivationPremisesImpl,
+    dropAxiomsFromMixedAntecedent as dropAxiomsFromMixedAntecedentImpl,
+} from "../grammar/repair.js"
 import { validate as validateGrammar } from "../grammar/validate.js"
 import type { TGrammarTier, TViolation } from "../grammar/types.js"
 import type { TValidatorContext as TGrammarValidatorContext } from "../grammar/validators/context.js"
@@ -1389,6 +1395,19 @@ export class ArgumentEngine<
         return this.variables.getVariable(variableId)
     }
 
+    /**
+     * Look up a claim by `(id, version)` in the engine's claim library.
+     * Returns `undefined` if the claim is not present. Exposed for
+     * repair primitives and other tooling that needs to inspect a
+     * claim's `type` discriminator at a particular version pinned by
+     * a claim-bound variable.
+     *
+     * @since 1.0.0
+     */
+    public getClaim(claimId: string, claimVersion: number): TClaim | undefined {
+        return this.claimLibrary.get(claimId, claimVersion)
+    }
+
     public hasVariable(variableId: string): boolean {
         return this.variables.hasVariable(variableId)
     }
@@ -1466,6 +1485,82 @@ export class ArgumentEngine<
             if (root) roots.push(root)
         }
         return roots
+    }
+
+    /**
+     * Repair primitive: resolve E-3 violations by deleting each
+     * unresolvable claim- or premise-bound variable, cascading the
+     * removal across all premises. Returns the violations resolved
+     * (for UX confirmation / undo / "we made N changes" feedback).
+     *
+     * **User-initiated; never auto-runs.** Respects `behavior`: in
+     * `'assistive'` mode, the AN post-hook fires after each cascade
+     * mutation; in `'permissive'` no AN runs.
+     *
+     * @since 1.0.0
+     */
+    public removeUnresolvableVariables(): readonly TViolation[] {
+        return removeUnresolvableVariablesImpl(this)
+    }
+
+    /**
+     * Repair primitive: resolve E-1 violations (operators with < 2
+     * children) by running the AN-3 cleanup pass globally. Returns the
+     * violations resolved. The repair is non-meaning-changing — it
+     * only removes empty operators and promotes single-child operators
+     * — but lives alongside `normalize()` so the UI can present a
+     * focused "Remove N orphan operators" action with a precise return
+     * value.
+     *
+     * **User-initiated; never auto-runs.** Bypasses `behavior` —
+     * cleanup runs even in permissive mode (the user has already
+     * accepted the action by clicking the repair button).
+     *
+     * @since 1.0.0
+     */
+    public removeOrphanOperators(): readonly TViolation[] {
+        return removeOrphanOperatorsImpl(this)
+    }
+
+    /**
+     * Repair primitive: resolve E-6 violations (claim has > 1
+     * derivation premise) by keeping one premise per `derivedClaimId`
+     * and deleting the rest. Strategy controls which premise is kept:
+     *
+     *  - `'keep-first'` (default): keep the premise with the
+     *    lexicographically smallest id; delete the rest. Deterministic
+     *    and snapshot-stable.
+     *  - `'keep-largest-antecedent'`: keep the premise whose antecedent
+     *    subtree has the most claim-bound variable expressions; tie-break
+     *    by id.
+     *
+     * **User-initiated; never auto-runs.** Respects `behavior`.
+     *
+     * @since 1.0.0
+     */
+    public removeDuplicateDerivationPremises(
+        strategy: "keep-first" | "keep-largest-antecedent" = "keep-first"
+    ): readonly TViolation[] {
+        return removeDuplicateDerivationPremisesImpl(this, strategy)
+    }
+
+    /**
+     * Repair primitive: resolve D-3 violations (mixed-grounding
+     * antecedent — axioms + citations in one derivation) by deleting
+     * every axiom-bound variable expression from the offending
+     * antecedent subtree. The remaining citation-bound variables stay,
+     * giving the derivation a homogeneous citation-grounded antecedent.
+     *
+     * **User-initiated; never auto-runs.** Respects `behavior`. In
+     * `'assistive'` mode, AN may collapse a resulting single-child OR
+     * via AN-3; in `'permissive'` the OR may persist with one child
+     * (a downstream D-2 violation — follow up with
+     * `removeOrphanOperators()` if desired).
+     *
+     * @since 1.0.0
+     */
+    public dropAxiomsFromMixedAntecedent(): readonly TViolation[] {
+        return dropAxiomsFromMixedAntecedentImpl(this)
     }
 
     /**
