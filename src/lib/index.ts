@@ -93,6 +93,11 @@ export {
 export type { TCorePositionConfig } from "./utils/position.js"
 export * from "./types/reactive.js"
 export * from "./types/grammar.js"
+export type {
+    TGrammarTier,
+    TGrammarRuleCode,
+    TViolation,
+} from "./grammar/types.js"
 export * from "./types/fork.js"
 export { forkArgumentEngine } from "./core/fork.js"
 export * from "./parsing/index.js"
