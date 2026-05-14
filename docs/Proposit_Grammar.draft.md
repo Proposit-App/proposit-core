@@ -143,11 +143,94 @@ which parses as `((¬P) ∧ Q) ∨ R → S`, i.e., `(((¬P) ∧ Q) ∨ R) → S`
 
 ## 2. The four-tier model
 
-_(To author — pulls from spec §3.)_
+Proposit's AST grammar is split into four tiers. They form a strict subset
+chain: each tier admits a strictly smaller set of argument states than the
+one above it. The tiers separate three orthogonal concerns:
 
-- 2.1 Definitions
-- 2.2 The subset chain (Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable)
-- 2.3 Enforcement gates
+- **What the engine _can_ hold** — answered by Structural.
+- **What the system _accepts_** (saveable, evaluable) — answered by Evaluable + Derivable.
+- **What the system _prefers_** (ideal canonical form) — answered by Presentable.
+
+This separation lets users construct arguments through temporarily-invalid
+intermediate states without engine rejection. The engine never blocks a
+mid-edit state for failing a higher tier; the higher tiers are surfaced as
+queryable violations (`validate(tier)`) rather than thrown errors.
+
+### 2.1 Definitions
+
+- **Structural** — the floor. Engine data integrity: operator types valid,
+  FK references resolve, entity IDs and variable symbols unique within
+  scope, no orphan refs, no cycles, fixed-arity-operator invariants
+  (`not`/`formula` unary, `implies`/`iff` binary at fixed positions),
+  sibling positions unique within a parent, derivation premise roots
+  restricted to `variable`/`implies`/`iff`. **Mutations throw when they
+  would produce a non-Structural state.** The engine guarantees an
+  `ArgumentEngine` instance never holds a non-Structural state.
+
+- **Evaluable** — required for `evaluate()` and `checkValidity()` to run.
+  Every operator has the right number of operands (variadic arity floor),
+  every variable's binding resolves to a non-broken target, every normal
+  claim has at most one derivation premise paired with it, and the
+  argument has a designated conclusion premise (if it has any premises at
+  all). `evaluate()` and `checkValidity()` short-circuit on violation —
+  they do not throw; they return a violation list.
+
+- **Derivable** — required for the argument to be a well-formed Proposit
+  argument. Concerns the canonical shape of derivation premises (naked-Q
+  or populated `IMPLIES(antecedent, Q)`) and where typed claims may appear
+  (axiomatic and citation claims only inside derivation premise
+  antecedents). Surfaced via `validate('derivable')` for UI feedback;
+  enforced indirectly by the publish gate, which requires the stricter
+  Presentable tier.
+
+- **Presentable** — the intended/ideal form. Cosmetic and clarity rules:
+  formula buffers between operators, no double negation, no single-leaf
+  formulas, no single-child operators, no same-operator adjacency through
+  a formula. The publish endpoint rejects with a violation list when an
+  argument is not Presentable. Auto-normalization (§4) preserves this
+  tier across mutations when the engine is in `assistive` behavior.
+
+### 2.2 The subset chain
+
+```
+Structural   ⊇   Evaluable   ⊇   Derivable   ⊇   Presentable
+(most permissive)                              (most restrictive)
+```
+
+Set-membership consequences:
+
+- A Presentable argument is also Derivable, Evaluable, and Structural.
+- An argument that fails Structural validation also fails every other
+  tier.
+- The publish gate (`validate('presentable')`) implies the submit gate
+  (`validate('derivable')`), so a successful publish has already passed
+  every prior gate.
+
+Validation can short-circuit: once a violation is found at tier T, lower
+tiers may still run for completeness (so the UI can show every known issue
+at once) but the gate decision is already made. The dispatcher
+(`src/lib/grammar/validate.ts`) implements the union: `validate('evaluable')`
+returns Structural + Evaluable violations; `validate('derivable')` adds
+Derivable; `validate('presentable')` returns the union across all four
+tiers.
+
+### 2.3 Enforcement gates
+
+| Tier        | Where it's enforced                                                                                                                                                                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Structural  | **Mutation throws.** Every mutation method on `PremiseEngine` rejects inputs that would produce a non-Structural state.                                                                                                                               |
+| Evaluable   | `evaluate()` and `checkValidity()` short-circuit and return a violation list; they do not throw. Server submit endpoints may run `validate('evaluable')` as a pre-store guard.                                                                        |
+| Derivable   | No dedicated engine-level gate. Surfaced via `validate('derivable')` for UI feedback. Server endpoints in `assistive` mode run `validate('derivable')` as a pre-store guard and reject 422 on violations (advanced-mode users defer to publish-time). |
+| Presentable | Publish endpoint runs `validate('presentable')` and rejects with the violation list. Auto-normalization preserves this tier across mutations in `assistive` behavior.                                                                                 |
+
+### 2.4 The name "Derivable"
+
+The tier is named for its central concern — the canonical form of
+derivation premises and where typed claims may appear in derivation
+contexts. The name has a mild overlap with the logic-theoretic sense
+("derivable from axioms"), but the ambiguity is contextually clear in
+Proposit usage. If a better name surfaces during implementation,
+`ProductGrammar` or `Conventional` are reasonable aliases.
 
 ## 3. Rule inventory
 
