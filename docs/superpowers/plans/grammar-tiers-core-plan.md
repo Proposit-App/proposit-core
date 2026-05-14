@@ -29,14 +29,27 @@
 > **Phase C remaining (in order):**
 >
 > - **C6** — split `populateFromSupports` into `populateFromCitations` +
->   `populateFromAxioms`. **Library-passing contract decision (locked):**
->   method-arg form (`engine.populateFromCitations(claimId, lookup)`),
->   matching how `lookupClaim` is supplied to `fromSnapshot` and keeping
->   ArgumentEngine's constructor stable. Verify against the existing
->   `populateFromSupports` signature (`ManagedDerivationPremiseEngine.ts:406`)
->   before committing to confirm no surprise from MDPE's
->   `TVariableMaterializer` interface. MDPE stays intact through Phase C
->   and is removed wholesale in Phase D1.
+>   `populateFromAxioms`. **Design refined post-handoff (2026-05-14):**
+>   method-arg form remains (`engine.populateFromCitations(claimId,
+lookup)`) but the API shape is now **factory + naked-Q-only + no
+>   throw on already-populated**. Each method atomically constructs the
+>   per-claim derivation premise's expression tree in fully-populated
+>   form (`IMPLIES(c, Q)` for n=1, `IMPLIES(OR(c₁,…,cₙ), Q)` for n≥2;
+>   AN-1 inserts the formula buffer in assistive mode). If the target
+>   premise is **not naked-Q** (already populated with citations or
+>   axioms), the factory **no-ops** and returns the existing state — it
+>   does NOT throw, per the Structural-only mutation throw rule (see
+>   §10 of the briefing). UI/caller is responsible for explicit user
+>   consent + clearing the antecedent via a repair primitive before
+>   re-calling. Return shape:
+>   `{ kind: 'populated' | 'no-op', state: TCoreDerivationPremise,
+resolved?: TViolation[] }`. The full refinement (rationale,
+>   `TVariableMaterializer` interaction, MDPE intactness) lives in
+>   **briefing §7** at
+>   `docs/superpowers/briefings/grammar-tiers-core-agenda.md` and in
+>   **spec §12** at
+>   `docs/superpowers/specs/2026-05-13-grammar-tiers-design.md`.
+>   Fresh-session-you reads those before touching C6 code.
 > - **C7** — moderate scope; mostly removing `grammarConfig` parameter
 >   from `fromSnapshot`/`fromData` + adding a Structural-validation gate
 >   at load time.
@@ -54,6 +67,31 @@
 > `computeEffectiveGrammarConfig`, `PremiseEngine.getGrammarConfig`,
 > the `normalize(tier?)` try/finally dance, the legacy `validate()`
 > no-arg overload, etc.
+>
+> **Phase D — P-1 throw audit findings (2026-05-14 post-handoff):**
+> CLAUDE.md's rule "Mutations enforce only Structural; never throw on
+> higher tiers" is currently violated by several inline P-1 enforcement
+> throws gated on `grammarConfig.enforceFormulaBetweenOperators`. All
+> die wholesale when the AN-1 rewrite lands (their job moves to a true
+> post-mutation pass; permissive leaves the unbufferred state and
+> `validate('presentable')` flags it). **Do NOT remove these in
+> C6/C7/C8** — the AN-1 rewrite must land first so buffer insertion
+> has a new home. Sites:
+>
+> - `src/lib/core/expression-manager.ts:401–406` — `addExpression`
+> - `src/lib/core/expression-manager.ts:681–688` — `removeExpression`
+> - `src/lib/core/expression-manager.ts:1655, 1963, 2235` —
+>   `wrapExpression` + related P-1 sites
+> - `src/lib/core/premise-engine.ts:797` — `toggleNegation`
+>
+> MDPE D-tier throws (`DERIVATION_STRUCTURE_INVALID`,
+> `DERIVATION_ANTECEDENT_NON_EMPTY`, `DERIVATION_TYPE_MISMATCH`) die
+> wholesale when MDPE itself is removed in D1 — no separate action.
+> Throws that stay: entity-not-found checks, all S-rule throws (S-8 /
+> S-9 / S-12 / S-13 / S-14), API-shape contracts (forbidden field
+> updates, "use toggleNegation" message, permitted operator swaps).
+> Full audit in **briefing §10** at
+> `docs/superpowers/briefings/grammar-tiers-core-agenda.md`.
 >
 > **C4 precursor not in original plan:** `engine.validate(tier?)`
 > overload was added as a separate commit (`c53d33c`) because all four
@@ -149,8 +187,9 @@ Phase C — Engine surface
 
 Phase D — Spec-direct AN rewrite + legacy removal
   D0  Rewrite src/lib/grammar/auto-normalize.ts and src/lib/grammar/normalize.ts to implement AN-1..AN-4 directly against the engine's expression tree (no delegation to PremiseEngine.normalizeExpressions / legacy grammarConfig). Until this lands, the legacy plumbing below cannot be removed.
-  D1  Delete ManagedDerivationPremiseEngine subclass and its populateFromSupports method (C6 split replaces it).
+  D1  Delete ManagedDerivationPremiseEngine subclass and its populateFromSupports method (C6 factory split replaces it).
   D2  Delete grammarConfig / autoNormalize / TGrammarOptions / DEFAULT_GRAMMAR_CONFIG / PERMISSIVE_GRAMMAR_CONFIG / TAutoNormalizeConfig / resolveAutoNormalize, plus ArgumentEngine.computeEffectiveGrammarConfig, PremiseEngine.getGrammarConfig, the try/finally PE-config swap in normalizeArgument, and the snapshot's grammarConfig field.
+  D2b Remove the P-1 inline enforcement throws that currently violate "Mutations enforce only Structural; never throw on higher tiers" — buffer insertion moves to the AN-1 pass from D0; permissive engines leave the unbufferred state for `validate('presentable')` to flag. Audit list (locked 2026-05-14, see Implementation Status block + briefing §10): `expression-manager.ts:401–406` (addExpression), `:681–688` (removeExpression), `:1655, 1963, 2235` (wrapExpression + related); `premise-engine.ts:797` (toggleNegation).
   D3  Delete LOAD_GRAMMAR / STRICT_GRAMMAR split.
   D4  Delete deprecated DERIVATION_STRUCTURE_INVALID_AT_EVALUATION call site + the legacy validate() no-arg overload + ArgumentEngine.normalizeAllExpressions().
   D5  Address the PropositCore.forkArgument behavior-threading TODO (added in C1+C2 review polish): thread engine.behavior through forkArgumentEngine + snapshot. Decide whether behavior joins the snapshot or stays a constructor-only setting.
@@ -2282,25 +2321,53 @@ git commit -m "feat(engine): mutations throw on Structural violations (S-8, S-9,
 
 ## Task C6: Split `populateFromSupports` → `populateFromCitations` + `populateFromAxioms`
 
-> **Library-passing contract — locked (2026-05-14):** method-arg form
-> `engine.populateFromCitations(derivedClaimId, lookup)` /
-> `engine.populateFromAxioms(derivedClaimId, lookup)`, where `lookup`
-> is a `TClaimConnectionLookup<TCoreClaimConnection>`. Rationale:
-> (a) keeps `ArgumentEngine` constructor stable; (b) matches how
-> `claimLibrary` is already passed to `fromSnapshot`; (c) consumers can
-> supply different lookups for citation vs axiom without re-instantiating.
-> Verify against the existing `ManagedDerivationPremiseEngine.ts:406`
-> signature before committing — that method takes the full
-> `ClaimCitationLibrary` + `ClaimAxiomLibrary` + a
-> `TVariableMaterializer` shim; the new split methods are owned by
-> `ArgumentEngine` which already _is_ the variable materializer, so the
-> third arg goes away. `PropositCore` callers pass `core.citations`
-> and `core.axioms` directly.
+> **API shape — refined (2026-05-14 post-handoff):** factory +
+> naked-Q-only + no throw on already-populated. Signatures:
 >
-> **MDPE stays intact through C6.** `populateFromSupports` keeps
-> working in the legacy form; the new split methods are additive. Phase
-> D1 removes MDPE wholesale. The plan body's "Step 4: Remove the old
-> `populateFromSupports`" step is therefore deferred to Phase D1.
+> ```ts
+> engine.populateFromCitations(
+>     derivedClaimId: string,
+>     citationLookup: TClaimConnectionLookup<TCoreClaimConnection>
+> ): {
+>     kind: "populated" | "no-op"
+>     state: TCoreDerivationPremise
+>     resolved?: readonly TViolation[]
+> }
+> // Mirror signature for populateFromAxioms with axiomLookup.
+> ```
+>
+> Each is a **factory**: atomically constructs the per-claim derivation
+> premise's expression tree in fully-populated form
+> (`IMPLIES(c, Q)` for n=1, `IMPLIES(OR(c₁,…,cₙ), Q)` for n≥2; AN-1
+> inserts the formula buffer in assistive mode for n≥2). No
+> mutate-in-place half-populated state is ever observable.
+>
+> **No throw on already-populated.** Per the Structural-only mutation
+> throw rule (CLAUDE.md "Key design rules" + briefing §10), the factory
+> does NOT throw on D-3 conditions or when the antecedent already
+> carries grounding. If the target premise is **not naked-Q**, the
+> factory **no-ops** and returns
+> `{ kind: 'no-op', state: <existing> }`. UI/caller is responsible for
+> explicit user consent (Proposit principle: no changes without
+> explicit consent) + clearing the antecedent via a repair primitive
+> before re-calling.
+>
+> **Library-passing remains method-arg** for the same reasons logged
+> in the implementation status block: keeps `ArgumentEngine`
+> constructor stable, matches how `claimLibrary` is passed to
+> `fromSnapshot`, lets consumers swap lookups without re-instantiating.
+> `PropositCore` callers pass `core.citations` and `core.axioms`
+> directly.
+>
+> **MDPE stays intact through C6.** The new factory methods on
+> `ArgumentEngine` route around MDPE entirely. Phase D1 removes MDPE
+> wholesale. The plan body's "Step 4: Remove the old
+> `populateFromSupports`" step is deferred to Phase D1.
+>
+> Full refinement rationale (factory atomicity, no-throw justification,
+> consent flow) lives in **briefing §7** at
+> `docs/superpowers/briefings/grammar-tiers-core-agenda.md` and **spec
+> §12** at `docs/superpowers/specs/2026-05-13-grammar-tiers-design.md`.
 
 **Files:**
 
