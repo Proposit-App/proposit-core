@@ -343,6 +343,22 @@ export class PremiseEngine<
                         `Premise "${this.premise.id}" already has a root expression.`
                     )
                 }
+                // S-14: derivation premise root must be one of variable,
+                // implies, or iff. Enforced at mutation time regardless
+                // of engine `behavior` — Structural rules throw in both
+                // modes (spec §4). Pre-1.0 this lived in
+                // ManagedDerivationPremiseEngine; in 1.0 the regular
+                // PremiseEngine carries the check.
+                if (
+                    (this.premise as TCorePremise).type === "derivation" &&
+                    expression.type === "operator" &&
+                    expression.operator !== "implies" &&
+                    expression.operator !== "iff"
+                ) {
+                    throw new Error(
+                        `S-14: derivation premise "${this.premise.id}" root must be variable, implies, or iff (got operator "${expression.operator}").`
+                    )
+                }
             } else {
                 if (!this.expressions.getExpression(expression.parentId)) {
                     throw new Error(
