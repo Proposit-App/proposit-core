@@ -289,7 +289,13 @@ function antecedentMatchesPopulatedForm(
         return false
     }
     const orChildren = children.get(antecedent.id) ?? []
-    if (orChildren.length < 1) return false
+    // Multi-citation populated form requires ≥ 2 children. A 1-child OR
+    // is not valid populated form — the single-grounding case is
+    // `IMPLIES(claim-var, Q)` without an OR wrapper (D-2). Without this
+    // ≥-2 floor, `IMPLIES(OR(single-citation), Q)` would pass D-1
+    // silently and only D-2 would fire; consumers gating on a clean D-1
+    // would accept invalid shape.
+    if (orChildren.length < 2) return false
     for (const child of orChildren) {
         const peeled = peelFormulas(child, children)
         if (peeled === undefined) return false
@@ -350,9 +356,14 @@ export function validateD2(ctx: TValidatorContext): readonly TViolation[] {
 /**
  * D-3 — No mixing axioms and citations in one derivation. For each
  * derivation premise's populated form, collect all claim-bound variables
- * in the antecedent subtree (formula nodes transparent). If they bind to
- * claims of more than one grounding type (citation vs axiomatic), emit
- * D-3.
+ * in the antecedent subtree. If they bind to claims of more than one
+ * grounding type (citation vs axiomatic), emit D-3.
+ *
+ * Formula nodes are traversed transparently by
+ * `collectVariableExpressionsInSubtree`'s plain DFS descent — no
+ * explicit `peelFormulas` call needed for D-3, since the DFS visits
+ * formula descendants like any other node and the variable collector
+ * picks up the claim-bound variables regardless of nesting depth.
  */
 export function validateD3(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []

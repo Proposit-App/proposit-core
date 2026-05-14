@@ -377,6 +377,73 @@ describe("grammar/derivable", () => {
             expect(violations[0].code).toBe("D-1")
         })
 
+        it("rejects populated form with a single-child OR antecedent (must be unwrapped per D-2; D-1 also rejects)", () => {
+            // The single-citation canonical form is IMPLIES(c, Q) without
+            // the OR wrapper. A 1-child OR is neither the single-grounding
+            // form (D-2) nor the multi-grounding form (needs ≥ 2 children).
+            // D-1 must reject so consumers gating on "D-1 clean" don't
+            // accept invalid populated structure; D-2 also fires on the
+            // same shape (Derivable-tier UI hint, "drop the OR wrapper").
+            const ctx = buildContext({
+                premises: [
+                    makeDerivationPremise({
+                        id: "p-d",
+                        derivedClaimId: "claim-q",
+                    }),
+                ],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-d",
+                        parentId: null,
+                    }),
+                    makeOperatorExpression("or", {
+                        id: "e-or",
+                        premiseId: "p-d",
+                        parentId: "e-impl",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-c1",
+                        premiseId: "p-d",
+                        parentId: "e-or",
+                        position: 0,
+                        variableId: "v-c1",
+                    }),
+                    makeVariableExpression({
+                        id: "e-q",
+                        premiseId: "p-d",
+                        parentId: "e-impl",
+                        position: 1,
+                        variableId: "v-q",
+                    }),
+                ],
+                variables: [
+                    makeClaimBoundVariable({
+                        id: "v-c1",
+                        claimId: "claim-c1",
+                        symbol: "C1",
+                    }),
+                    makeClaimBoundVariable({
+                        id: "v-q",
+                        claimId: "claim-q",
+                        symbol: "Q",
+                    }),
+                ],
+                claims: [
+                    makeCitationClaim({ id: "claim-c1" }),
+                    makeNormalClaim({ id: "claim-q" }),
+                ],
+            })
+            const violations = validateD1(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0]).toMatchObject({
+                tier: "derivable",
+                code: "D-1",
+                premiseId: "p-d",
+            })
+        })
+
         it("rejects populated form where antecedent is a non-claim variable (premise-bound)", () => {
             // Antecedent is a premise-bound variable rather than a citation/axiom claim.
             const ctx = buildContext({
