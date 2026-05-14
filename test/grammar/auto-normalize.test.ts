@@ -148,6 +148,44 @@ describe("ArgumentEngine.behavior bridges to AN cleanup (C2)", () => {
             exprs.find((e) => e.type === "formula" && e.parentId === "or-1")
         ).toBeUndefined()
     })
+
+    it("createPremise() after setBehavior('permissive') inherits permissive config (P1 review gap)", () => {
+        // Per the C1+C2 dual-review P1: setBehavior() propagates to PEs
+        // that already exist, but PEs created AFTER the switch must also
+        // inherit the new behavior. This test exercises a brand-new PE
+        // created post-switch and asserts it sees PERMISSIVE_GRAMMAR_CONFIG
+        // (no buffer insertion in its first mutation).
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP)
+        eng.setBehavior("permissive")
+
+        const { result: pe } = eng.createPremise()
+        pe.addExpression(opExpr("or-1", "or", null))
+        pe.addExpression(opExpr("and-1", "and", "or-1"))
+
+        const and = pe.getExpressions().find((e) => e.id === "and-1")!
+        expect(and.parentId).toBe("or-1")
+        expect(
+            pe
+                .getExpressions()
+                .find((e) => e.type === "formula" && e.parentId === "or-1")
+        ).toBeUndefined()
+    })
+
+    it("createPremise() in default (assistive) mode also gets the right config", () => {
+        // Sanity: the assistive path for newly-created PEs is exercised
+        // elsewhere by the first test in this describe block, but make
+        // the corresponding default-construct assertion explicit so the
+        // matched pair is visible.
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP)
+        expect(eng.behavior).toBe("assistive")
+
+        const { result: pe } = eng.createPremise()
+        pe.addExpression(opExpr("or-1", "or", null))
+        pe.addExpression(opExpr("and-1", "and", "or-1"))
+
+        const and = pe.getExpressions().find((e) => e.id === "and-1")!
+        expect(and.parentId).not.toBe("or-1")
+    })
 })
 
 describe("runAssistiveNormalization(engine)", () => {

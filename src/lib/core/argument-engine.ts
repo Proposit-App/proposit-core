@@ -555,6 +555,15 @@ export class ArgumentEngine<
      * should see, given the current `behavior` setting. Behavior bridges
      * to the legacy per-flag config in v1.0; Phase D removes the legacy
      * config entirely and the AN post-hook becomes the single source.
+     *
+     * **Transitional caveat (Phase C only):** in `'assistive'` mode the
+     * engine returns the caller-supplied `grammarConfig` as-is, so a
+     * caller who passes e.g. `grammarConfig: { autoNormalize: {
+     * absorbSameOperator: false } }` will see AN-4 silently suppressed
+     * even though the engine is nominally assistive. This is an expected
+     * limitation while the legacy per-flag config still exists — Phase D
+     * removes the per-flag granular control entirely, after which
+     * assistive runs the full AN-1..AN-4 rule set with no opt-outs.
      */
     private computeEffectiveGrammarConfig(): TGrammarConfig {
         if (this.engineBehavior === "permissive") {
@@ -1614,6 +1623,16 @@ export class ArgumentEngine<
                 checksumConfig: serializeChecksumConfig(this.checksumConfig),
                 positionConfig: this.positionConfig,
                 grammarConfig: this.grammarConfig,
+                // `behavior` is intentionally omitted from the snapshot.
+                // Consumers re-supply it at restore time via
+                // `new ArgumentEngine(...)` options or `setBehavior()`;
+                // a restored engine defaults to `'assistive'`. Phase D
+                // contributors should think twice before adding it here
+                // — `PropositCore.forkArgument()` rebuilds from the
+                // snapshot and would restore a permissive engine as
+                // assistive if the field were added without threading
+                // it through every downstream restore path. See the
+                // matched TODO at `PropositCore.forkArgument`.
             } as TLogicEngineOptions,
         }
     }
@@ -1665,8 +1684,12 @@ export class ArgumentEngine<
                 effectiveGrammarConfig,
                 generateId
             )
-            // If a caller-supplied grammarConfig was passed and behavior is
-            // assistive, prefer the caller's config over the engine default.
+            // If a caller-supplied grammarConfig was passed and behavior
+            // is assistive, prefer the caller's *runtime* grammarConfig
+            // over the *snapshot's stored* grammarConfig. In permissive
+            // mode the snapshot's stored config (and any caller override)
+            // are both suppressed in favor of PERMISSIVE_GRAMMAR_CONFIG
+            // by the effectiveGrammarConfig() above.
             if (
                 grammarConfig !== undefined &&
                 engine.engineBehavior === "assistive"

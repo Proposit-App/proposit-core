@@ -424,6 +424,15 @@ export class PropositCore<
             )
         }
 
+        // TODO(Phase D): thread `behavior` through the fork path. The
+        // engine snapshot intentionally omits `behavior` (see the comment
+        // in `ArgumentEngine.snapshot()`), so a permissive-mode source
+        // engine currently restores as `'assistive'` in the fork. When
+        // `behavior` is added to the snapshot in Phase D — or when fork
+        // call sites are reviewed — pass the source engine's behavior
+        // through `forkArgumentEngine`'s options and into the new
+        // engine's constructor / setBehavior() before snapshot replay.
+
         // Step 2: canFork guard
         if (!engine.canFork()) {
             throw new Error(`Forking argument "${argumentId}" is not allowed.`)
