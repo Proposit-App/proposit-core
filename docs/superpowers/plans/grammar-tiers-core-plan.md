@@ -1,16 +1,34 @@
 # Grammar Tiers — proposit-core Implementation Plan
 
+> **Design restructure — 2026-05-14.** Wire-format types
+> (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) **now live in
+> proposit-core**, not in `@proposit/shared`. Original plan had shared
+> own the types and core import them; that direction would have created
+> a mutual peer-dep pattern because shared already has
+> `@proposit/proposit-core` as a peer dep. After the flip: core
+> publishes **first** (owns the wire-format definitions); shared
+> publishes second with re-exports + the 422 response envelope. The
+> sections below that describe Phase B0 as a "swap to shared imports"
+> are superseded — B0 is now a **promotion of the Phase A stub to real
+> TypeBox + type exports** with no cross-repo dependency. Phase B1+ /
+> C / D / E / F sequencing is unchanged. The Goal / Architecture /
+> Tech-stack paragraphs below have been updated; the long-form Task A1
+> / B0 sub-step text was not rewritten — read it with the design
+> restructure in mind. The full picture lives in
+> `docs/superpowers/briefings/grammar-tiers-core-agenda.md` and in
+> `docs/release-notes/upcoming.md`. Phases A and B0 are already done
+> as of branch `grammar-tiers/core` HEAD; tracking in
+> `~/.claude/tasks/grammar-tiers/`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. TDD is mandatory: every behavior task starts with a failing test. All TypeScript work must invoke the `brain-style` skill before writing or reviewing code. Commit messages must not include co-author trailers.
 
 **Goal:** Replace the existing `grammarConfig` / `autoNormalize` / `ManagedDerivationPremiseEngine` / `LOAD_GRAMMAR-STRICT_GRAMMAR` machinery in `@proposit/proposit-core` with a four-tier (`structural` ⊇ `evaluable` ⊇ `derivable` ⊇ `presentable`) grammar model, a `validate(tier)` API returning `readonly TViolation[]`, a `normalize(tier?)` global pass, an engine-level `behavior: 'assistive' | 'permissive'` setting with a uniform AN post-mutation hook, targeted repair primitives, and a split `populateFromCitations` / `populateFromAxioms` pair — then ship a 1.0.0 major release.
 
-**Architecture:** Wire-format types (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) live in `@proposit/shared@^0.9.0` and are imported by core; core owns the _rule definitions_. Validators are grouped into one file per tier under `src/lib/grammar/validators/` and aggregated by a `src/lib/grammar/validate.ts` dispatcher that short-circuits per the §7.1 four-case enumeration. Auto-normalization (AN) is implemented as a single post-hook on `ArgumentEngine` that runs the §5.1 rule set in order whenever the engine's `behavior === 'assistive'` and a structural mutation succeeds. Snapshot loading accepts any Structural state; lower-tier violations are queryable post-load. The old `ManagedDerivationPremiseEngine` subclass is deleted; its enforcement folds into the new `validate('derivable')` plus the new Evaluable rule E-6 (claim-derivation pairing). Two methods replace `populateFromSupports`: `populateFromCitations` and `populateFromAxioms`, each operating on one grounding kind — no silent dropping.
+**Architecture:** Wire-format types (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) live in `proposit-core` (`src/lib/grammar/types.ts` — TypeBox schemas + derived TS types). `@proposit/shared@0.9.0` re-exports them for consumer ergonomics; server and mobile may import from either location. Validators are grouped into one file per tier under `src/lib/grammar/validators/` and aggregated by a `src/lib/grammar/validate.ts` dispatcher that short-circuits per the §7.1 four-case enumeration. Auto-normalization (AN) is implemented as a single post-hook on `ArgumentEngine` that runs the §5.1 rule set in order whenever the engine's `behavior === 'assistive'` and a structural mutation succeeds. Snapshot loading accepts any Structural state; lower-tier violations are queryable post-load. The old `ManagedDerivationPremiseEngine` subclass is deleted; its enforcement folds into the new `validate('derivable')` plus the new Evaluable rule E-6 (claim-derivation pairing). Two methods replace `populateFromSupports`: `populateFromCitations` and `populateFromAxioms`, each operating on one grounding kind — no silent dropping.
 
-**Tech Stack:** TypeScript (strict, ESM, `.js` import suffixes), pnpm, Vitest, ESLint + Prettier, TypeBox (consumed via `@proposit/shared`), `@typescript-eslint/naming-convention` (per the `brain-style` skill). Node `>=22.3.0`.
+**Tech Stack:** TypeScript (strict, ESM, `.js` import suffixes), pnpm, Vitest, ESLint + Prettier, TypeBox (`typebox` package, default-import convention), `@typescript-eslint/naming-convention` (per the `brain-style` skill). Node `>=22.3.0`.
 
-**Cross-repo dependency:** `@proposit/shared@^0.9.0` must publish before any code that _uses_ the new shared types can land in core. Work that _doesn't_ depend on shared (documentation rewrite, scaffolding with local type stubs, test scaffolding) proceeds in parallel. The publish order is: shared → core → server + mobile in parallel.
-
-**Version target:** `1.0.0` (major bump). Recommendation rationale at end-of-plan.
+**Cross-repo dependency:** **None.** `proposit-core` publishes first. Adding or renaming a rule code is a single-repo coordinated change — extend the TypeBox union in `src/lib/grammar/types.ts` and ship the validator implementation in the same commit; TypeScript catches drift at build time. `@proposit/shared@0.9.0` publishes _after_ this release with re-exports + the 422 response envelope.
 
 ---
 

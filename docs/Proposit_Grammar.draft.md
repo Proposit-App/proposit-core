@@ -235,11 +235,14 @@ Proposit usage. If a better name surfaces during implementation,
 ## 3. Rule inventory
 
 Every rule is identified by a stable string code. The codes live in
-`@proposit/shared/schemas/grammar` (`TGrammarRuleCode`) so server, mobile,
-and core all speak the same wire format. Core owns the **definitions** of
-what each code means and what triggers it; shared owns the **string
-identifiers**. Adding or renaming a code is a coordinated shared + core
-publish.
+`@proposit/proposit-core/src/lib/grammar/types.ts` (`TGrammarRuleCode`
+
+- the TypeBox `GrammarRuleCodeSchema`) — proposit-core owns the wire
+  format. `@proposit/shared` re-exports the same names from
+  `@proposit/shared/schemas/grammar` for consumer ergonomics; server and
+  mobile may import from either location. Adding or renaming a code
+  extends the TypeBox union and the validator implementation in the
+  same single-repo commit; TypeScript catches drift at build time.
 
 Validator functions referenced below live in
 `src/lib/grammar/validators/{structural,evaluable,derivable,presentable}.ts`
@@ -773,8 +776,10 @@ v1.0.
 
 ### 6.1 `TViolation` shape
 
-A single grammar violation. Defined in `@proposit/shared/schemas/grammar`
-and re-exported from `@proposit/proposit-core`:
+A single grammar violation. Defined in
+`@proposit/proposit-core/src/lib/grammar/types.ts` (the `ViolationSchema`
+TypeBox object plus the derived `TViolation` type), and re-exported from
+`@proposit/shared/schemas/grammar` for downstream consumers:
 
 ```ts
 type TViolation = {
@@ -811,11 +816,13 @@ Codes `E-2` and `D-7` are intentionally absent — those rules were
 promoted/restated elsewhere in the spec and their codes are reserved
 (not reused) to keep historical references unambiguous.
 
-`TGrammarRuleCode` lives in `@proposit/shared` so adding or renaming a
-code requires a coordinated shared + core publish: bump shared (extend
-the union), bump core (ship the validator referencing the new code).
-TypeScript catches mismatches at build time once the dep is wired
-through.
+`TGrammarRuleCode` lives in `@proposit/proposit-core`. Adding or
+renaming a code is a single-repo coordinated change — extend the
+TypeBox union in `src/lib/grammar/types.ts` and ship the validator
+implementation in the same commit. TypeScript catches drift at build
+time. After a core publish, `@proposit/shared` bumps and re-exports
+the updated union from `@proposit/shared/schemas/grammar`; server and
+mobile pick up the change via dep bumps.
 
 ### 6.3 Example validation responses
 

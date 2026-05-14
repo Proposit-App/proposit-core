@@ -47,8 +47,10 @@ const issues = engine.validate("presentable")
 
 Returns violations across all tiers _up to and including_ the requested
 tier. Never throws on grammar issues. `TViolation`, `TGrammarTier`, and
-`TGrammarRuleCode` live in `@proposit/shared/schemas/grammar` (the wire
-format shared with `proposit-server` and `proposit-mobile`).
+`TGrammarRuleCode` are defined here in `proposit-core` (as TypeBox
+schemas in `src/lib/grammar/types.ts`) and re-exported from
+`@proposit/shared/schemas/grammar` for `proposit-server` and
+`proposit-mobile`.
 
 ### `normalize(tier?)`
 
@@ -160,13 +162,20 @@ before bumping to 1.0:
 ## Wire format coordination
 
 The grammar rule-code namespace (`TGrammarRuleCode`) lives in
-`@proposit/shared`. Adding or renaming a code requires a coordinated
-shared + core publish. The two error-code namespaces (engine errors in
-`src/lib/types/validation.ts` vs grammar-rule codes in shared) are both
-stable wire format — server and mobile pick up changes via dep bumps.
+`proposit-core` (`src/lib/grammar/types.ts`). Adding or renaming a code
+is a single-repo coordinated change here — extend the TypeBox union and
+ship the validator implementation in the same commit. The two
+error-code namespaces (engine errors in `src/lib/types/validation.ts`
+vs grammar-rule codes in `src/lib/grammar/types.ts`) are both stable
+wire format — server and mobile pick up changes via dep bumps.
 
-`1.0.0` requires `@proposit/shared@^0.9.0` (introducing
-`/schemas/grammar`).
+`@proposit/shared@0.9.0` re-exports the grammar wire format from
+`@proposit/shared/schemas/grammar` and adds the 422 response envelope
+(`GrammarViolationsResponseSchema`) that composes `TViolation`. Shared
+0.9.0 publishes _after_ this release.
+
+This release has **no new dependencies** — wire-format types live in
+core's own source tree.
 
 ## Legacy snapshot loading
 

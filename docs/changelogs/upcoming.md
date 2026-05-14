@@ -7,12 +7,18 @@
 
 ## Cross-repo dependencies
 
-- Requires `@proposit/shared@^0.9.0` (the version introducing
-  `/schemas/grammar` with `TGrammarTier`, `TGrammarRuleCode`, and
-  `TViolation`).
+- **No new dependencies.** Wire-format types (`TGrammarTier`,
+  `TGrammarRuleCode`, `TViolation`) live in this repo's
+  `src/lib/grammar/types.ts`. Original plan had them in
+  `@proposit/shared`; design restructure on 2026-05-14 moved them here
+  to match the existing dep direction (shared has core as a peer dep;
+  the inverse would have created a mutual peer-dep pattern).
+- `@proposit/shared@0.9.0` re-exports the types from
+  `@proposit/shared/schemas/grammar` and adds a 422 response envelope
+  composing `TViolation`. Shared publishes _after_ this release.
 - Downstream consumers (`proposit-server`, `proposit-mobile`) bump both
-  `@proposit/shared` and `@proposit/proposit-core` deps in lockstep
-  after 1.0.0 publishes.
+  `@proposit/proposit-core` and `@proposit/shared` deps after both
+  publishes land.
 
 ## Cross-repo planning artifacts
 
@@ -29,11 +35,12 @@
   baseline from the workspace-root CLAUDE.md (shared was actually at
   0.8.0, not 0.2.x). Orchestrator corrected the spec/briefing/workspace
   CLAUDE.md in parallel.
-- `2d13032` Add local stubs for the shared wire-format types
-  (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) in
-  `src/lib/grammar/types.ts`. Phase B0 replaces the stub body with a
-  re-export from `@proposit/shared/schemas/grammar`; the path is
-  unchanged so downstream files don't need to rewrite imports.
+- `2d13032` Add local stubs for the wire-format types (`TGrammarTier`,
+  `TGrammarRuleCode`, `TViolation`) in `src/lib/grammar/types.ts`.
+  Phase B0 promoted these to real TypeBox + type exports after the
+  2026-05-14 design restructure relocated wire-format ownership from
+  shared to core; path unchanged so downstream files needed no import
+  rewrite.
 - `5231fcd` Chore: apply prettier formatting to the briefing and plan.
 - `27dda8e` Scaffold the `src/lib/grammar/` tree — `validators/context.ts`
   (pure-data `TValidatorContext` view), per-tier validator modules
@@ -49,9 +56,9 @@
   every Structural/Evaluable/Derivable/Presentable rule and the
   dispatcher — 110 todos register; 1395 baseline tests preserved.
 
-## Phase A — Documentation (commits aba2e2b…3a8c96a)
+## Phase A — Documentation (commits aba2e2b…3a8c96a, plus 492f87b)
 
-While Phase B was blocked on `@proposit/shared@0.9.0` publishing,
+While Phase B was blocked on the `@proposit/shared` design call,
 authored the spec-derived doc content in the new `Proposit_Grammar.md`
 and rewrote the `CLAUDE.md`/`AGENTS.md` "Key design rules" section.
 
@@ -79,7 +86,10 @@ and rewrote the `CLAUDE.md`/`AGENTS.md` "Key design rules" section.
 
 _To be filled in as commits land._
 
-- B0: Swap local stubs for `@proposit/shared@^0.9.0` imports.
+- B0: Promote local stubs in `src/lib/grammar/types.ts` to real
+  TypeBox + type exports (`GrammarTierSchema`, `GrammarRuleCodeSchema`,
+  `ViolationSchema`) after the 2026-05-14 design restructure
+  relocated wire-format ownership from shared to core.
 - B1: Implement Structural validators S-1..S-14 (TDD per rule).
 - B2: Implement Evaluable validators E-1, E-3..E-7 (TDD per rule).
 - B3: Implement Derivable validators D-1..D-6 (TDD per rule).
