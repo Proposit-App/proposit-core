@@ -124,6 +124,106 @@ resolved?: TViolation[] }`. The full refinement (rationale,
 > spec at `docs/superpowers/specs/2026-05-13-grammar-tiers-design.md`.
 > The plan body below describes Phase A / B / B0 in its pre-restructure
 > framing — see the "Design restructure" sub-note below.
+>
+> ---
+>
+> **D0 design — locked, ready for fresh-session implementation:**
+>
+> Goal: implement AN-1..AN-4 directly inside the grammar module, not via
+> delegation to `PremiseEngine.normalizeExpressions()` / the legacy
+> per-flag `grammarConfig`.
+>
+> Reference implementation: the existing
+> `ExpressionManager.normalize()` at
+> `src/lib/core/expression-manager.ts:1390–1610` does AN-1..AN-4 as five
+> passes (collapse 0/1-child operators, collapse unjustified formulas,
+> insert formula buffers, collapse double negation, absorb same-operator
+> through formula). The mechanics are sound; the v1.0 refactor lifts
+> them out of the expression manager and into
+> `src/lib/grammar/auto-normalize.ts` so that the AN module owns the
+> rules natively.
+>
+> Suggested module layout:
+>
+> ```ts
+> // src/lib/grammar/an-rules.ts (new)
+> //
+> // One function per rule. Each returns true if it made any change so
+> // the driver can iterate to fixed point.
+> export function applyAN1(engine): boolean // formula buffer insertion (P-1)
+> export function applyAN2(engine): boolean // double negation collapse (P-2)
+> export function applyAN3(engine): boolean // 0/1-child collapse (P-3, P-4)
+> export function applyAN4(engine): boolean // same-operator absorption through formula (P-5)
+>
+> export function applyANToFixedPoint(engine): void {
+>     // Typical convergence ≤ 3 iterations (spec §5.1).
+>     // Apply AN-2, AN-3, AN-4 before AN-1 so the buffer-insertion pass
+>     // sees the post-collapse tree (avoids inserting a buffer that
+>     // would then need to be collapsed by AN-3).
+>     // Safety cap: 10 iterations + invariant assertion.
+> }
+> ```
+>
+> The implementation operates on each `PremiseEngine` via the public
+> mutation API (`pe.addExpression`, `pe.removeExpression(id, false)` for
+> child promotion, `pe.appendExpression`). For formula-buffer insertion
+> (AN-1), the cleanest path is to use `pe.wrapExpression` if it exists
+> at the right granularity, otherwise add a formula expression then
+> reparent the operator under it.
+>
+> **Critical constraint during D0:** the legacy expression-manager still
+> contains the P-1 inline enforcement throws (briefing §8, audit list of
+> 11 sites). When the AN-1 buffer-insertion pass runs, it MUST be able
+> to add the formula without those throws firing. Pre-D2 (when the
+> throws are still in place), the D0 implementation runs each PE's
+> grammar config swapped to `PERMISSIVE_GRAMMAR_CONFIG` for the duration
+> of the AN pass — the same try/finally dance used by C3's `normalize()`
+> and C7's `runLoadTimeValidationCore`. Post-D2, the swap can be
+> dropped (the throws no longer exist).
+>
+> **Refactoring sequence:**
+>
+> 1. **D0a** — Add `src/lib/grammar/an-rules.ts` with the four `applyANN`
+>    functions + `applyANToFixedPoint`, initially delegating to the
+>    expression-manager's `normalize()` (effectively a re-export so the
+>    new boundary is established without behavior change). Add unit
+>    tests per rule in `test/grammar/an-rules.test.ts`.
+> 2. **D0b** — Rewrite `applyAN2` (double negation) natively. Simplest
+>    rule; uses `pe.removeExpression(id, false)` twice (promotes
+>    grandchild through both NOT layers). Validate that
+>    `ExpressionManager.normalize()`'s pass 4 still passes the existing
+>    tests.
+> 3. **D0c** — Rewrite `applyAN3` natively (empty/single-child
+>    collapse). Be careful with the "single-child formula collapses only
+>    if its bounded subtree has no binary operator" rule — preserve the
+>    `hasBinaryOperatorInBoundedSubtree` helper either by lifting it or
+>    by exposing it from the validator.
+> 4. **D0d** — Rewrite `applyAN4` natively (same-operator absorption
+>    through formula).
+> 5. **D0e** — Rewrite `applyAN1` natively (formula buffer insertion).
+>    Most complex due to the parent-position bookkeeping; use the
+>    PERMISSIVE swap to avoid the legacy throw fallback path.
+> 6. **D0f** — Rewire `auto-normalize.ts`'s
+>    `runAssistiveNormalization` and `normalize.ts`'s
+>    `normalizeArgument` to call `applyANToFixedPoint` directly. Delete
+>    the try/finally PE-config dance for `normalize` (the dance moves
+>    inside `applyANToFixedPoint` until D2 removes it entirely).
+>
+> Each sub-step lands as its own commit. After D0f, all 1589 existing
+> tests should still pass — the only behavior change is _where_ the AN
+> rules live, not what they do.
+>
+> **Then D1** removes
+> `ManagedDerivationPremiseEngine` wholesale (its
+> `populateFromSupports` was replaced by C6's factory methods; no other
+> users remain on the v1.0 surface).
+>
+> **Then D2** removes the legacy `grammarConfig` / `autoNormalize`
+> machinery and the 11 P-1 throw sites listed in briefing §8. The AN-1
+> pass from D0 now handles buffer insertion exclusively.
+>
+> **Then D3–D6** finish the legacy removal + interface JSDoc cleanup
+> per the Phase D summary above.
 
 > **Design restructure — 2026-05-14.** Wire-format types
 > (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) **now live in
