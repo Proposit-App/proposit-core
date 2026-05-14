@@ -22,9 +22,15 @@
 // must do its job even when `behavior === 'permissive'`. In v1.0 this is
 // implemented by temporarily swapping each owned `PremiseEngine`'s
 // grammar config to `DEFAULT_GRAMMAR_CONFIG` for the duration of the
-// pass, then restoring the prior config before returning. Phase D
-// replaces this with a direct AN-1..AN-4 implementation that has no
-// dependency on the legacy per-flag config.
+// pass, then restoring the prior config before returning.
+//
+// **D0a (this commit).** The bridge now routes through
+// `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts` instead of
+// calling `pe.normalizeExpressions()` directly. The config-swap
+// try/finally remains here for D0a because the underlying
+// `applyANToFixedPoint` still delegates to `pe.normalizeExpressions()`
+// internally; D0f moves the swap inside `applyANToFixedPoint` (and D2
+// removes it entirely along with the legacy per-flag config).
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import { DEFAULT_GRAMMAR_CONFIG } from "../types/grammar.js"
@@ -35,6 +41,7 @@ import type {
     TCorePropositionalVariable,
     TCoreClaim,
 } from "../schemata/index.js"
+import { applyANToFixedPoint } from "./an-rules.js"
 import type { TGrammarTier } from "./types.js"
 
 /**
@@ -62,6 +69,12 @@ export function normalizeArgument<
     // regardless of the engine's `behavior` (user-initiated bypass).
     // Capture each PE's current config first so we can restore it even
     // if a premise's normalize call throws.
+    //
+    // The swap is still required in D0a because `applyANToFixedPoint`
+    // currently delegates to `pe.normalizeExpressions()` which consults
+    // the per-flag `grammarConfig`. D0f moves the swap inside
+    // `applyANToFixedPoint`; D2 deletes both the swap and the legacy
+    // per-flag config.
     const restoreEntries: {
         pe: ReturnType<
             ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>["listPremises"]
@@ -71,17 +84,19 @@ export function normalizeArgument<
 
     try {
         for (const pe of engine.listPremises()) {
-            // Capture the PE's current grammar config so we can restore it
-            // after this pass. `getGrammarConfig` is not part of the public
-            // PE API in v1.0; the engine drives the bridge, so the safest
-            // restoration path is to ask the engine to re-emit its
-            // effective config via the same channel used by
-            // setBehavior(). Phase D removes this dance entirely.
             const prev = pe.getGrammarConfig()
             restoreEntries.push({ pe, prevConfig: prev })
             pe.setGrammarConfig(DEFAULT_GRAMMAR_CONFIG)
-            pe.normalizeExpressions()
         }
+        applyANToFixedPoint(
+            engine as unknown as ArgumentEngine<
+                TCoreArgument,
+                TCorePremise,
+                TCorePropositionalExpression,
+                TCorePropositionalVariable,
+                TCoreClaim
+            >
+        )
     } finally {
         for (const { pe, prevConfig } of restoreEntries) {
             pe.setGrammarConfig(prevConfig)

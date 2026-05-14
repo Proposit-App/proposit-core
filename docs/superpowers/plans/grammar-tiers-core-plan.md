@@ -1,6 +1,68 @@
 # Grammar Tiers — proposit-core Implementation Plan
 
-> **Implementation status — 2026-05-14, branch `grammar-tiers/core` at `7491eee`.**
+> **Implementation status — 2026-05-14 (late), branch `grammar-tiers/core` at HEAD.**
+>
+> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) complete.**
+> Tests at 1598 passed + 9 skipped (1593 prior + 5 new `an-rules.test.ts`
+> tests landed with D0a's scaffold). `pnpm run check` green.
+>
+> **Latest commits (newest first):**
+>
+> ```
+> <D0a>     —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
+> 1870592  —   — fold C6+C7+C8 dual-review polish (P1 generator accessor, P2 dedup/tests/atomicity, P3 TODO sweep)
+> 3f9710c  —   — docs(plan): lock D0 design — spec-direct AN-1..AN-4 rewrite blueprint
+> 03fd64f  C8  — evaluation no-op on naked-Q derivation premises
+> ce27619  C7  — snapshot loading accepts any Structural state
+> 507e02c  C6  — populateFromCitations + populateFromAxioms factories
+> ```
+>
+> **D0 remaining (sequenced):**
+>
+> - **D0b** rewrite `applyAN2` natively (double negation collapse). Smallest
+>   rule; uses `pe.removeExpression(id, false)` twice (promotes grandchild
+>   through both NOT layers). Validate against the legacy sweep's pass 4.
+> - **D0c** rewrite `applyAN3` natively (empty / single-child collapse).
+>   Be careful with the "single-child formula collapses only if its
+>   bounded subtree has no binary operator" rule — preserve the
+>   `hasBinaryOperatorInBoundedSubtree` helper (lift it or expose it
+>   from the validator).
+> - **D0d** rewrite `applyAN4` natively (same-operator absorption through
+>   formula).
+> - **D0e** rewrite `applyAN1` natively (formula buffer insertion).
+>   **Open design question:** PE has no public `reparentExpression`
+>   primitive. AN-1 needs to insert a formula between an existing parent
+>   and child without disturbing the rest of the tree. Options: (a) add
+>   `public reparentExpression(exprId, newParentId, newPosition)` to PE,
+>   (b) add a bundled `insertFormulaBuffer(operatorId)` semantic helper,
+>   (c) hand the grammar module a friend-package escape hatch. Pick during
+>   D0e implementation; (a) is the most conservative addition.
+> - **D0f** rewire `auto-normalize.ts`'s `runAssistiveNormalization` and
+>   `normalize.ts`'s `normalizeArgument` to call `applyANToFixedPoint`
+>   without the legacy delegation (D0a's
+>   `runLegacyNormalizeAndReportChange` helper goes). Move the
+>   try/finally PE-config swap from `normalize.ts` into
+>   `applyANToFixedPoint` (until D2 deletes it along with the legacy
+>   per-flag config).
+>
+> After D0f, all 1598 existing tests should still pass — the only behavior
+> change is _where_ the AN rules live, not what they do. The `an-rules.test.ts`
+> regression-guards prove the contract.
+>
+> **Phase D post-D0 work** is unchanged from the prior status block:
+> D1 (MDPE removal), D2 (legacy plumbing + 11 P-1 throw sites), D3
+> (LOAD/STRICT split), D4 (`DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
+>
+> - `validate()` no-arg overload + `ArgumentEngine.normalizeAllExpressions`),
+>   D5 (the FOLLOWUP(D5) at `proposit-core.ts` — behavior threading through
+>   the fork path), D6 (interface JSDoc cleanup).
+>
+> **Older history is preserved verbatim below (do not delete) so that
+> the C1–C8 design decisions and audit findings stay discoverable.**
+>
+> ---
+>
+> **Implementation status — 2026-05-14 (earlier), branch `grammar-tiers/core` at `7491eee`.**
 >
 > **Phases A, B (all), C1–C5 complete.** Tests at 1578 passed + 2 skipped.
 > `pnpm run check` green. Branch is shippable-as-WIP if needed.

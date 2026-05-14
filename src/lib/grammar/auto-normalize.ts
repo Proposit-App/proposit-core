@@ -15,12 +15,17 @@
 // config and do not cleanup; when `'assistive'` (default), mutations
 // see the engine's configured (or default-all-on) `grammarConfig`.
 //
-// This module exports `runAssistiveNormalization(engine)` — the future
-// uniform post-hook. In v1.0 it delegates to `engine.normalize()`, which
-// runs the existing AN rule set as a global pass over the argument. In
-// Phase D (per the plan), the per-flag config is removed and this
-// function gains a direct implementation of AN-1..AN-4 over the engine's
-// expression tree, no longer routed through `engine.normalize()`.
+// **D0a (this commit).** This module exports
+// `runAssistiveNormalization(engine)` — the uniform AN post-hook for
+// `assistive` mode. The implementation now routes through the new
+// `src/lib/grammar/an-rules.ts` module's `applyANToFixedPoint` rather
+// than calling `pe.normalizeExpressions()` directly. In D0a the
+// `applyANToFixedPoint` body still delegates to the legacy
+// `pe.normalizeExpressions()` under the hood — D0b-D0e progressively
+// rewrite each rule natively (AN-2, AN-3, AN-4, AN-1) and D0f drops
+// the legacy delegation entirely. From this module's point of view the
+// boundary is the `applyANToFixedPoint` call: future changes to AN
+// internals do not require edits here.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type {
@@ -30,15 +35,16 @@ import type {
     TCorePropositionalVariable,
     TCoreClaim,
 } from "../schemata/index.js"
+import { applyANToFixedPoint } from "./an-rules.js"
 
 /**
  * Run the AN rule set globally on `engine` if it is in `'assistive'`
  * behavior. No-op when the engine is in `'permissive'`.
  *
  * Convergence: typically ≤ 3 iterations because the rules are local and
- * idempotent in combination. Implementation delegates to
- * `engine.normalize()` in v1.0 (Phase C). Phase D rewrites this to run
- * AN-1..AN-4 directly.
+ * idempotent in combination. Implementation routes through
+ * `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts` (the native
+ * AN module home as of D0a).
  *
  * @since 1.0.0
  */
@@ -50,13 +56,13 @@ export function runAssistiveNormalization<
     TClaim extends TCoreClaim = TCoreClaim,
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
     if (engine.behavior !== "assistive") return
-    // v1.0: delegate to PremiseEngine.normalizeExpressions() per premise.
-    // This runs the existing AN logic via the engine's grammarConfig,
-    // which C2 has bridged to `behavior` (permissive → PERMISSIVE_GRAMMAR_CONFIG;
-    // assistive → configured-or-DEFAULT). Engine.normalize() arrives in
-    // C3 as the public entry point; Phase D replaces this delegation
-    // with a direct implementation of AN-1..AN-4.
-    for (const pe of engine.listPremises()) {
-        pe.normalizeExpressions()
-    }
+    applyANToFixedPoint(
+        engine as unknown as ArgumentEngine<
+            TCoreArgument,
+            TCorePremise,
+            TCorePropositionalExpression,
+            TCorePropositionalVariable,
+            TCoreClaim
+        >
+    )
 }
