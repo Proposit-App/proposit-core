@@ -253,6 +253,72 @@ describe("grammar/evaluable", () => {
             expect(validateE5(ctx)).toEqual([])
         })
 
+        it("returns an empty array when consequent is wrapped in a formula buffer", () => {
+            // E-5 scans every expression in the premise's tree, so the
+            // consequent satisfies E-5 regardless of intervening formula
+            // buffers. This is implicit in the implementation; explicit
+            // test for the spec §4.2 expectation.
+            const ctx = buildContext({
+                premises: [
+                    makeDerivationPremise({
+                        id: "p-d",
+                        derivedClaimId: "claim-q",
+                    }),
+                ],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-d",
+                    }),
+                    makeVariableExpression({
+                        id: "e-ant",
+                        premiseId: "p-d",
+                        parentId: "e-impl",
+                        position: 0,
+                        variableId: "v-ant",
+                    }),
+                    // Position-1 child of root IMPLIES is a formula buffer
+                    // wrapping the consequent variable.
+                    {
+                        id: "e-cons-formula",
+                        argumentId: "arg-1",
+                        argumentVersion: 1,
+                        premiseId: "p-d",
+                        parentId: "e-impl",
+                        position: 1,
+                        type: "formula" as const,
+                        checksum: "x",
+                        descendantChecksum: null,
+                        combinedChecksum: "x",
+                    },
+                    makeVariableExpression({
+                        id: "e-cons-q",
+                        premiseId: "p-d",
+                        parentId: "e-cons-formula",
+                        position: 0,
+                        variableId: "v-q",
+                    }),
+                ],
+                variables: [
+                    makeClaimBoundVariable({
+                        id: "v-ant",
+                        claimId: "claim-ant",
+                        symbol: "A",
+                    }),
+                    makeClaimBoundVariable({
+                        id: "v-q",
+                        claimId: "claim-q",
+                        symbol: "Q",
+                    }),
+                ],
+                claims: [
+                    makeNormalClaim({ id: "claim-q" }),
+                    makeNormalClaim({ id: "claim-ant" }),
+                ],
+            })
+            expect(validateE5(ctx)).toEqual([])
+        })
+
         it("returns an empty array for populated form (consequent at position 1)", () => {
             const ctx = buildContext({
                 premises: [

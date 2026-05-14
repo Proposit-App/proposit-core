@@ -170,14 +170,18 @@ export function validateE6(ctx: TValidatorContext): readonly TViolation[] {
     }
     for (const [claimId, premiseIds] of byDerivedClaim) {
         if (premiseIds.length > 1) {
-            // Flag the duplicates (all but the first).
-            for (const dupId of premiseIds.slice(1)) {
+            // Every premise in a >1-group is in violation — "at most one"
+            // has no canonical "first" that's correct and the rest wrong.
+            // Consumers wanting first-wins can dedupe by claimId at the UI
+            // layer. Matches the parallel decision in S-5 (root-only
+            // IMPLIES/IFF) from the B1 review polish.
+            for (const offendingId of premiseIds) {
                 violations.push({
                     tier: "evaluable",
                     code: "E-6",
-                    message: `claim ${claimId} has ${premiseIds.length} derivation premises (expected ≤ 1; duplicate: ${dupId})`,
+                    message: `claim ${claimId} has ${premiseIds.length} derivation premises (expected ≤ 1; offender: ${offendingId})`,
                     argumentId: ctx.argument.id,
-                    premiseId: dupId,
+                    premiseId: offendingId,
                     claimId,
                 })
             }

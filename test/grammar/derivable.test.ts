@@ -922,6 +922,41 @@ describe("grammar/derivable", () => {
             expect(violations[0].code).toBe("D-4")
         })
 
+        it("rejects axiomatic-bound variable at the naked-Q root of a derivation premise", () => {
+            // Naked-Q form: the single variable at root IS the consequent
+            // (per spec §4.3 D-1). An axiomatic-bound variable there is
+            // misplaced — the consequent must bind to a 'normal' claim.
+            // `isInDerivationAntecedent` has an explicit short-circuit for
+            // this case (root.type === 'variable' → false).
+            const ctx = buildContext({
+                premises: [
+                    makeDerivationPremise({
+                        id: "p-d",
+                        derivedClaimId: "claim-ax",
+                    }),
+                ],
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-naked-ax",
+                        premiseId: "p-d",
+                        parentId: null,
+                        variableId: "v-ax",
+                    }),
+                ],
+                variables: [
+                    makeClaimBoundVariable({
+                        id: "v-ax",
+                        claimId: "claim-ax",
+                        symbol: "A",
+                    }),
+                ],
+                claims: [makeAxiomaticClaim({ id: "claim-ax" })],
+            })
+            const violations = validateD4(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("D-4")
+        })
+
         it("accepts axiomatic-bound variable in the antecedent of a derivation premise", () => {
             const ctx = buildContext({
                 premises: [
@@ -1046,6 +1081,36 @@ describe("grammar/derivable", () => {
                     makeCitationClaim({ id: "claim-other-cit" }),
                     makeCitationClaim({ id: "claim-cit" }),
                 ],
+            })
+            const violations = validateD5(ctx)
+            expect(violations.length).toBeGreaterThanOrEqual(1)
+            expect(violations[0].code).toBe("D-5")
+        })
+
+        it("rejects citation-bound variable at the naked-Q root of a derivation premise", () => {
+            const ctx = buildContext({
+                premises: [
+                    makeDerivationPremise({
+                        id: "p-d",
+                        derivedClaimId: "claim-cit",
+                    }),
+                ],
+                expressions: [
+                    makeVariableExpression({
+                        id: "e-naked-cit",
+                        premiseId: "p-d",
+                        parentId: null,
+                        variableId: "v-cit",
+                    }),
+                ],
+                variables: [
+                    makeClaimBoundVariable({
+                        id: "v-cit",
+                        claimId: "claim-cit",
+                        symbol: "C",
+                    }),
+                ],
+                claims: [makeCitationClaim({ id: "claim-cit" })],
             })
             const violations = validateD5(ctx)
             expect(violations.length).toBeGreaterThanOrEqual(1)
