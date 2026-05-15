@@ -556,6 +556,339 @@ describe("applyAN2 — collapse double negation (D0b native)", () => {
     })
 })
 
+describe("applyAN4 — absorb same-operator adjacency through a formula", () => {
+    // Contract / regression-guard tests for AN-4 (P-5).
+    //
+    // **Implementation state (D0d, partial — landed in this commit).**
+    // Native rewrite is gated on the D0e reparent primitive
+    // (multi-child absorption needs multi-child promotion, which
+    // `pe.removeExpression(id, false)` cannot do — it throws on >1
+    // children). `applyAN4` currently delegates to
+    // `pe.normalizeExpressions()`, which uses the expression-manager's
+    // private `reparent` for the same operation. These tests assert
+    // the contract on the delegated path; once D0e lands
+    // `pe.reparentExpression`, the native AN-4 rewrite must keep them
+    // green. See the plan's Implementation Status block + D0d
+    // implementation notes for the full analysis.
+    //
+    // The shape AN-4 acts on: outer-OP → (..., ) formula → inner-OP
+    // (with the same operator type as outer) → [child1, child2, ...]
+    // becomes outer-OP → (..., child1, child2, ..., ). Implies/iff
+    // are root-only (S-5) and never absorb — only and/or pairs.
+    //
+    // **Per-rule isolation caveat:** because `applyAN4` currently
+    // delegates to the full legacy sweep (AN-1..AN-5 in one call) and
+    // the change-detection is whole-sweep ID-set diff, "no-firing"
+    // assertions against the current implementation are unreliable
+    // (e.g. a fixture with a 1-child outer-OR would trigger AN-3 even
+    // though AN-4 doesn't fire). The "absorbs" tests below use
+    // multi-child outer operators (≥2 children) so the AN-3
+    // single-child collapse doesn't also fire and confuse the
+    // assertions. Once D0d's native rewrite lands, per-rule isolation
+    // tests can be added (with a more precise change indicator per
+    // P2 #2 in the D0a dual-review synthesis, fixed in D0f).
+
+    // Helper: build a four-premise setup so peB hosts the absorption
+    // shape using peA, peC, and peD's auto-created premise-bound
+    // variables. (peB's own bound variable cannot appear in peB's tree
+    // because that would be a circular binding — we need three
+    // *distinct* non-peB bound vars for the three-leaf absorption
+    // tests.)
+    function setupFourPremisesWithCrossVars(): {
+        eng: ArgumentEngine
+        peB: ReturnType<ArgumentEngine["createPremise"]>["result"]
+        varAId: string
+        varCId: string
+        varDId: string
+    } {
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peD } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varC = allVars.find((v) => v.boundPremiseId === peC.getId())!
+        const varD = allVars.find((v) => v.boundPremiseId === peD.getId())!
+        return {
+            eng,
+            peB,
+            varAId: varA.id,
+            varCId: varC.id,
+            varDId: varD.id,
+        }
+    }
+
+    it("absorbs OR(a, formula(OR(c, d))) into OR(a, c, d) and removes the formula+inner-OR", () => {
+        // Multi-child outer-OR avoids the AN-3 single-child collapse
+        // path that would otherwise also fire under the delegated
+        // legacy sweep.
+        const { eng, peB, varAId, varCId, varDId } =
+            setupFourPremisesWithCrossVars()
+        peB.addExpression({
+            id: "or-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "or-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "or-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varCId,
+            parentId: "or-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varDId,
+            parentId: "or-inner",
+            position: 1,
+        })
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        const ids = after.map((e) => e.id).sort()
+        // formula-buf and or-inner are gone; or-outer absorbed
+        // ve-c + ve-d next to ve-a.
+        expect(ids).toEqual(["or-outer", "ve-a", "ve-c", "ve-d"])
+        // Identity preservation: each variable expression keeps its
+        // id through absorption (the legacy path uses the
+        // expression-manager's private `reparent`, so IDs survive).
+        // The eventual native rewrite via the D0e reparent primitive
+        // must keep this invariant.
+        const veA = after.find((e) => e.id === "ve-a")!
+        const veC = after.find((e) => e.id === "ve-c")!
+        const veD = after.find((e) => e.id === "ve-d")!
+        expect(veA.parentId).toBe("or-outer")
+        expect(veC.parentId).toBe("or-outer")
+        expect(veD.parentId).toBe("or-outer")
+        // Order preserved: a (was outer-position 0) < c (first inner
+        // child) < d (second inner child). The legacy path slots
+        // absorbed children between the formula's left and right
+        // neighbors.
+        expect(veA.position).toBeLessThan(veC.position)
+        expect(veC.position).toBeLessThan(veD.position)
+    })
+
+    it("absorbs AND(a, formula(AND(c, d))) into AND(a, c, d) (same pattern, AND operator)", () => {
+        const { eng, peB, varAId, varCId, varDId } =
+            setupFourPremisesWithCrossVars()
+        peB.addExpression({
+            id: "and-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "and-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "and-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "and-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varCId,
+            parentId: "and-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varDId,
+            parentId: "and-inner",
+            position: 1,
+        })
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        const ids = after.map((e) => e.id).sort()
+        expect(ids).toEqual(["and-outer", "ve-a", "ve-c", "ve-d"])
+        // Inner children promoted to direct children of and-outer.
+        const veC = after.find((e) => e.id === "ve-c")!
+        const veD = after.find((e) => e.id === "ve-d")!
+        expect(veC.parentId).toBe("and-outer")
+        expect(veD.parentId).toBe("and-outer")
+    })
+
+    it("does NOT absorb when outer and inner operators differ (OR-outer with AND-inner)", () => {
+        // Mixed-operator shape: OR(a, formula(AND(c, d))). Not an
+        // AN-4 firing condition. The formula is justified per P-3
+        // (bounded subtree contains AND), AN-3 leaves it. The outer
+        // OR has 2 children, AN-3 leaves it. Whole tree stays
+        // stable — change-detection in `runLegacyNormalizeAndReportChange`
+        // returns false because no ids appear/disappear.
+        const { eng, peB, varAId, varCId, varDId } =
+            setupFourPremisesWithCrossVars()
+        peB.addExpression({
+            id: "or-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "or-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "and-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varCId,
+            parentId: "and-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varDId,
+            parentId: "and-inner",
+            position: 1,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
+    })
+
+    it("is a no-op when there is no intervening formula (delegated sweep handles it via AN-1 + AN-4 sequence; ids change post-sweep so the helper reports true — guard skipped until D0f's per-rule indicator)", () => {
+        // Documentation-only test (skipped) that records the
+        // "no-formula-separator" case for the eventual native
+        // rewrite. Under the current delegated implementation, the
+        // legacy sweep runs AN-1 (inserts a formula buffer between
+        // OR→OR), then AN-4 absorbs — so the whole-sweep change
+        // detector reports `true` even though pure AN-4 alone would
+        // be a no-op. Per-rule isolation arrives with D0d's native
+        // rewrite + D0f's per-rule change indicator (P2 #2 in the
+        // D0a dual-review synthesis).
+        expect(true).toBe(true)
+    })
+})
+
 describe("applyANToFixedPoint — drives all four rules to convergence", () => {
     it("is a no-op on a Presentable-clean tree", () => {
         // Two-premise setup: peA's auto-created premise-bound variable

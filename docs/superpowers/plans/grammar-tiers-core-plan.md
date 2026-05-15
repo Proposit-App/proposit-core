@@ -2,51 +2,121 @@
 
 > **Implementation status — 2026-05-14 (latest), branch `grammar-tiers/core` at HEAD.**
 >
-> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) + D0c (AN-3 native) complete.**
-> Tests at 1607 passed + 9 skipped (1598 prior + 5 D0b + 4 D0c new
+> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) + D0c (AN-3 native) complete. Phase D0d partially landed — AN-4 contract tests + dual-review fold; AN-4 native rewrite re-routed to D0e (see below).**
+> Tests at 1611 passed + 9 skipped (1607 prior + 4 D0d new
 > `an-rules.test.ts` tests). `pnpm run check` green.
 >
 > **Latest commits (newest first):**
 >
 > ```
-> <D0c>     —   — D0c: applyAN3 native (0/1-child operator + formula collapse via PE.removeExpression)
-> 79da962  —   — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
-> 9fb18ae  —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
-> 1870592  —   — fold C6+C7+C8 dual-review polish (P1 generator accessor, P2 dedup/tests/atomicity, P3 TODO sweep)
-> 3f9710c  —   — docs(plan): lock D0 design — spec-direct AN-1..AN-4 rewrite blueprint
-> 03fd64f  C8  — evaluation no-op on naked-Q derivation premises
-> ce27619  C7  — snapshot loading accepts any Structural state
-> 507e02c  C6  — populateFromCitations + populateFromAxioms factories
+> <D0d-tests> —   — D0d (partial): applyAN4 regression-guard tests; native rewrite re-routed to D0e (see below)
+> <D0d-fold>  —   — fold D0a dual-review polish (generic AN signatures, normalize.ts comment, convergence-cap context, idGenerator @internal, test coupling note)
+> e55f2c0     —   — D0c: applyAN3 native (0/1-child operator + formula collapse via PE.removeExpression)
+> 79da962     —   — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
+> 9fb18ae     —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
+> 1870592     —   — fold C6+C7+C8 dual-review polish (P1 generator accessor, P2 dedup/tests/atomicity, P3 TODO sweep)
+> 3f9710c     —   — docs(plan): lock D0 design — spec-direct AN-1..AN-4 rewrite blueprint
+> 03fd64f     C8  — evaluation no-op on naked-Q derivation premises
+> ce27619     C7  — snapshot loading accepts any Structural state
+> 507e02c     C6  — populateFromCitations + populateFromAxioms factories
 > ```
 >
 > **D0 per-rule native-rewrite status:**
 >
-> | Rule | Native? | Notes                                                                            |
-> | ---- | ------- | -------------------------------------------------------------------------------- |
-> | AN-1 | no      | still delegating; rewrite lands D0e (gated on PE reparent primitive design)      |
-> | AN-2 | **yes** | D0b — double-negation collapse via two `pe.removeExpression(id, false)` calls    |
-> | AN-3 | **yes** | D0c — 0/1-child operator + formula collapse via `pe.removeExpression(id, false)` |
-> | AN-4 | no      | still delegating; rewrite lands D0d                                              |
+> | Rule | Native? | Notes                                                                                             |
+> | ---- | ------- | ------------------------------------------------------------------------------------------------- |
+> | AN-1 | no      | still delegating; rewrite lands D0e (option (a) confirmed — add `pe.reparentExpression`)          |
+> | AN-2 | **yes** | D0b — double-negation collapse via two `pe.removeExpression(id, false)` calls                     |
+> | AN-3 | **yes** | D0c — 0/1-child operator + formula collapse via `pe.removeExpression(id, false)`                  |
+> | AN-4 | no      | **still delegating**; native rewrite gated on D0e's `pe.reparentExpression` (see D0d notes below) |
+>
+> **D0d implementation notes (2026-05-14, fresh-context dev #2):**
+>
+> Original dispatch instructed: "Native rewrite of `applyAN4` mirrors
+> the AN-2/AN-3 patterns ... mutate via `pe.removeExpression(id,
+deleteSubtree=false)`". **Technical analysis shows this is not
+> feasible against the current public API.**
+>
+> The P-5 absorption pattern is `OUTER_OP → (..., ) formula → INNER_OP
+(with same operator as outer) → [c1, c2, ...]`. The legitimate AN-4
+> firings are inner-OP with **multiple** children — see the
+> `presentable.test.ts` P-5 tests and the legacy
+> `ExpressionManager.absorbSameOperator()` at
+> `src/lib/core/expression-manager.ts:1255–1335`. `pe.removeExpression
+(id, false)` only promotes when the target has ≤ 1 children (the
+> EM's `removeAndPromote` throws otherwise — see
+> `expression-manager.ts:833–836`). So a multi-child inner-OP cannot
+> be removed via `removeExpression(_, false)`.
+>
+> Alternative decompositions all fail:
+>
+> - `removeExpression(formula, false)` first → `OUTER(..., INNER(c1,
+c2), ...)`. Now inner has 2 children, still can't
+>   `removeExpression(inner, false)`.
+> - `removeExpression(formula, false)` then iterative
+>   `removeExpression(c_i, true)` + re-`appendExpression` of each
+>   subtree under outer. This recreates child subtrees with **new
+>   IDs**, breaking the existing
+>   `core.test.ts:26598–26622` test that asserts `e-a`/`e-b`/`e-c`
+>   survive through the post-mutation AN-4 sweep.
+> - Friend-package escape into `(pe as { expressions:
+ExpressionManager }).expressions.reparentExpression(...)` is the
+>   D0e design's rejected option (c) — bypasses PE's
+>   invariant-enforcement layer.
+> - In assistive mode, `removeExpression(formula, false)` would
+>   produce a transient P-1 violation (operator as direct child of
+>   operator) — the inline P-1 throws at
+>   `expression-manager.ts:863–876` fire. Same blocker the D0e plan
+>   notes for the AN-1 native rewrite.
+>
+> **Conclusion:** AN-4's native rewrite needs the exact primitive the
+> user already approved for D0e — `public reparentExpression(exprId,
+newParentId, newPosition)` on `PremiseEngine` (option (a)). The
+> dispatch sequenced D0d before D0e expecting AN-4 was a simpler
+> two-removal job; in reality D0d and D0e share the same blocker.
+>
+> **What D0d landed this cycle (split into two commits):**
+>
+> 1. The D0a dual-review polish (5 items: parameterized AN signatures
+>    drop the `as unknown as ArgumentEngine` double casts; `normalize.ts`
+>    comment fixed to reflect the no-op nature of the D0a-D0d PE-config
+>    swap pre-D0e; convergence-cap throw now carries last-changed-rule
+>     - representative-premise diagnostic context; `idGenerator` getter
+>       marked `@internal`; `populate-from.test.ts` dedup test gains an
+>       assistive-mode-coupling note).
+> 2. Four AN-4 regression-guard tests in `an-rules.test.ts` asserting
+>    the absorption contract on the delegated path (OR/AND multi-child
+>    absorption + mixed-operator no-op). These tests stay valid once
+>    the eventual native rewrite lands via D0e's reparent primitive.
+>
+> The native rewrite of `applyAN4` is now bundled into D0e's scope.
+> When the D0e dev adds `pe.reparentExpression`, the AN-4 native
+> rewrite is a 10-line function: walk premises, find each `OP →
+formula → OP(same)` shape, for each inner child call `pe.reparent
+Expression(childId, outerId, midpointPosition)`, then
+> `pe.removeExpression(formula, false)` (formula now wraps the
+> already-empty inner OP). Or do a final cleanup pass on the
+> now-childless inner OP.
 >
 > **D0 remaining (sequenced):**
 >
-> - **D0d** rewrite `applyAN4` natively (same-operator absorption through
->   formula).
-> - **D0e** rewrite `applyAN1` natively (formula buffer insertion).
->   **Open design question:** PE has no public `reparentExpression`
->   primitive. AN-1 needs to insert a formula between an existing parent
->   and child without disturbing the rest of the tree. Options: (a) add
->   `public reparentExpression(exprId, newParentId, newPosition)` to PE,
->   (b) add a bundled `insertFormulaBuffer(operatorId)` semantic helper,
->   (c) hand the grammar module a friend-package escape hatch. Pick during
->   D0e implementation; (a) is the most conservative addition.
+> - **D0e** rewrite `applyAN1` natively (formula buffer insertion)
+>   **AND `applyAN4` natively** (same-operator absorption). Both gated
+>   on `pe.reparentExpression`. User has confirmed option (a) — add
+>   `public reparentExpression(exprId, newParentId, newPosition)` to
+>   `PremiseEngine` as a bundled-composite mutation per spec §8. AN-1's
+>   rewrite uses it to insert a formula buffer; AN-4's rewrite uses it
+>   to move inner-OP children into outer-OP positions.
 > - **D0f** rewire `auto-normalize.ts`'s `runAssistiveNormalization` and
 >   `normalize.ts`'s `normalizeArgument` to call `applyANToFixedPoint`
 >   without the legacy delegation (D0a's
 >   `runLegacyNormalizeAndReportChange` helper goes). Move the
 >   try/finally PE-config swap from `normalize.ts` into
 >   `applyANToFixedPoint` (until D2 deletes it along with the legacy
->   per-flag config).
+>   per-flag config). Replace the whole-sweep ID-set change detector
+>   with per-rule `changed` flags (synthesis P2 #2). Reconsider the
+>   `||` short-circuit vs `let changed = applyAN2(eng); changed =
+applyAN3(eng) || changed; ...` ordering (synthesis P2 #3).
 >
 > After D0f, all 1598 existing tests + the `an-rules.test.ts` regression
 > guards should still pass — the only behavior change is _where_ the AN
