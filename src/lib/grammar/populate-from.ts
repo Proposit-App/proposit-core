@@ -33,9 +33,6 @@
 //   { kind: 'populated' | 'no-op',
 //     state: TCoreDerivationPremise,
 //     resolved?: readonly TViolation[] }
-//
-// MDPE stays intact through C6; this module routes around it entirely.
-// Phase D1 removes MDPE wholesale.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type { PremiseEngine } from "../core/premise-engine.js"
