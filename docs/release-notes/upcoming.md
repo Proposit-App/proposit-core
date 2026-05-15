@@ -158,6 +158,8 @@ before bumping to 1.0:
 | `validateDerivationStructure(...)` standalone utility       | `validateD1(...)` from the grammar module (or `engine.validate('derivable')` filtered for `D-1`) |
 | `engine.validateDerivationStructures()`                     | `engine.validate('derivable').filter(v => v.code === 'D-1')`                                     |
 | `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` error code     | _(removed; naked-Q is now a valid eval no-op)_                                                   |
+| `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` error code        | _(removed; P-1 surfaces via `engine.validate('presentable')`)_                                   |
+| `engine.validate()` no-arg overload                         | `engine.validateInvariants()` (returns the same `TInvariantValidationResult`)                    |
 
 ## Wire format coordination
 

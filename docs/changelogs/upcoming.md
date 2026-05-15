@@ -122,8 +122,25 @@ _To be filled in as commits land._
   `autoNormalize`, `enforceFormulaBetweenOperators`,
   `TGrammarConfig`, `TAutoNormalizeConfig`, `DEFAULT_GRAMMAR_CONFIG`,
   `PERMISSIVE_GRAMMAR_CONFIG`, `resolveAutoNormalize`).
-- D3: Delete `LOAD_GRAMMAR_CONFIG` / `STRICT_GRAMMAR_CONFIG`.
-- D4: Delete `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` constant.
+- D3: Verify `LOAD_GRAMMAR_CONFIG` / `STRICT_GRAMMAR_CONFIG` removal
+  (deleted alongside the legacy `src/lib/types/grammar.ts` file in
+  D2's `f32516b`; D3 confirmed no remaining references in `src/` or
+  `test/`). Unified the parser + CLI import incremental-builder
+  pattern with `populate-from.ts` — `normalize()` runs only on the
+  success path inside `try`, not from `finally` (fold of D2+D2b
+  review P2). Unified behavior-check across all three builders to
+  `=== "assistive"` (fold of D2+D2b review P3 #1).
+- D4: Delete `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` constant +
+  the override in `validateEvaluability` /
+  `validateDerivationStructures` (the wrappers now pass through
+  `DERIVATION_STRUCTURE_INVALID` from the underlying utility);
+  type-union member dropped from `TCoreValidationCode`. Rename the
+  legacy `engine.validate()` no-arg overload to
+  `engine.validateInvariants()` and update `TArgumentLifecycle`,
+  internal callers (`withValidation`, `rollback`, load-time
+  validation), `ArgumentLibrary.validate()`, and the CLI `validate`
+  command. Inline the `runLoadTimeValidationCore` wrapper at its two
+  call sites (`fromSnapshot`, `fromData`).
 - D5: Update every public interface JSDoc + add engine-error-vs-
   grammar-rule namespace comment.
 
