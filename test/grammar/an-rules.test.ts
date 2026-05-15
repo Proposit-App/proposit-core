@@ -1134,6 +1134,161 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
             "ve-e",
         ])
     })
+
+    it("absorbs when phase-2 inner-child targets collide with the formula's post-redistribute position (D1 P2 #1)", () => {
+        // D1 — P2 #1: after `redistributeChildrenEvenly` fires, the
+        // formula sits at one of the redistributed slots between
+        // `effectiveLeftPos` and `effectiveRightPos`. The phase-2
+        // inner-child reparents compute target positions in that same
+        // range. If any computed target equals the formula's
+        // post-redistribute position, `pe.reparentExpression` trips
+        // S-9 (the formula is still a child of `outerId` at that point).
+        //
+        // Trace example (matches this fixture): outer has 3 children
+        // pre-redistribute at positions {1, 2, 3} (middle child is the
+        // formula at position 2). gap = 3 - 1 = 2 ≤ count = 3 (inner
+        // has 3 children) → redistribute fires. With min=0, max=20,
+        // total=3 the redistribute targets are
+        // `trunc(0 + 20/4*(i+1))` = `[5, 10, 15]`; sorted-by-position
+        // child ordering puts formula at scratch[1] → target[1] = 10.
+        // Then phase-2 in `absorbSameOperatorMatch` computes
+        // effectiveLeftPos=5, effectiveRightPos=15, count=3, targets =
+        // `trunc(5 + 10/4*(i+1))` = `[7, 10, 12]`. Target i=1 = 10
+        // equals the formula's position — S-9 trip pre-fix.
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+            positionConfig: { min: 0, max: 20, initial: 10 },
+        })
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peD } = eng.createPremise()
+        const { result: peE } = eng.createPremise()
+        const { result: peG } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varC = allVars.find((v) => v.boundPremiseId === peC.getId())!
+        const varD = allVars.find((v) => v.boundPremiseId === peD.getId())!
+        const varE = allVars.find((v) => v.boundPremiseId === peE.getId())!
+        const varG = allVars.find((v) => v.boundPremiseId === peG.getId())!
+
+        peB.addExpression({
+            id: "or-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: null,
+            position: 0,
+        })
+        // Outer children sorted by position: ve-a@1, formula@2, ve-e@3.
+        // formulaIdx = 1; leftPos = 1, rightPos = 3 → gap = 2 ≤ count = 3
+        // (inner has 3 children) → redistribute fires. Post-redistribute
+        // positions become [5, 10, 15] (sorted-by-position ordering
+        // preserved → formula lands at 10). Phase-2 targets =
+        // `trunc(5 + 10/4*(i+1))` = [7, 10, 12]; target i=1 = 10 = formula's
+        // position → S-9 trip pre-fix.
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varA.id,
+            parentId: "or-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "or-outer",
+            position: 2,
+        })
+        peB.addExpression({
+            id: "ve-e",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varE.id,
+            parentId: "or-outer",
+            position: 3,
+        })
+        peB.addExpression({
+            id: "or-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varC.id,
+            parentId: "or-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varD.id,
+            parentId: "or-inner",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "ve-g",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varG.id,
+            parentId: "or-inner",
+            position: 2,
+        })
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        const ids = after.map((e) => e.id).sort()
+        expect(ids).toEqual([
+            "or-outer",
+            "ve-a",
+            "ve-c",
+            "ve-d",
+            "ve-e",
+            "ve-g",
+        ])
+        // Order preservation: ve-a leftmost (formula's left neighbor),
+        // then the three inner children (ve-c, ve-d, ve-g) in their
+        // original inner order, then ve-e (right neighbor).
+        const orderedChildren = peB
+            .getChildExpressions("or-outer")
+            .map((c) => c.id)
+        expect(orderedChildren).toEqual([
+            "ve-a",
+            "ve-c",
+            "ve-d",
+            "ve-g",
+            "ve-e",
+        ])
+    })
 })
 
 describe("applyAN1 — insert formula buffer between operators (D0e native)", () => {

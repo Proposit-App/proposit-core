@@ -445,11 +445,46 @@ function absorbSameOperatorMatch<
     // Reparent each inner child into the outer at its computed
     // position. Positions are `leftPos + ((rightPos - leftPos) /
     // (count + 1)) * (i + 1)`, truncated to integer per the legacy.
+    //
+    // D1 — P2 #1: after `redistributeChildrenEvenly` fires the formula
+    // sits at one of the redistributed slots between
+    // `effectiveLeftPos` and `effectiveRightPos`. If a phase-2 target
+    // happens to land on that exact slot, `pe.reparentExpression`
+    // would trip S-9 (the formula is still a child of `outerId` at
+    // this point — we remove it below after the inner reparents). The
+    // same hazard exists on the non-redistribute path when the
+    // formula's pre-mutation position equals a computed target. Look
+    // up the formula's *current* position once and shift any
+    // colliding target to an adjacent free slot. The two phase-2
+    // targets bracketing the formula are spaced apart by
+    // `(effectiveRightPos - effectiveLeftPos)/(count+1)` which is ≥ 2
+    // whenever the redistribute fallback fired (range / (total + 1)
+    // ≥ 2 across the full position keyspace) and ≥ 2 on the
+    // non-redistribute path (gap > count entry guarantees spacing >
+    // 1) — so a ±1 shift cannot collide with another target.
+    const refreshedFormula = pe.getExpression(formulaId)
+    const formulaCurrentPosition = refreshedFormula
+        ? refreshedFormula.position
+        : null
     for (let i = 0; i < count; i++) {
-        const targetPosition = Math.trunc(
+        let targetPosition = Math.trunc(
             effectiveLeftPos +
                 ((effectiveRightPos - effectiveLeftPos) / (count + 1)) * (i + 1)
         )
+        if (
+            formulaCurrentPosition !== null &&
+            targetPosition === formulaCurrentPosition
+        ) {
+            // Shift toward effectiveLeftPos when the colliding target
+            // is to the right of the formula's bracket midpoint;
+            // otherwise shift toward effectiveRightPos. Either +1 or
+            // -1 is guaranteed free relative to the other planned
+            // targets by the spacing argument above.
+            targetPosition =
+                targetPosition < effectiveRightPos
+                    ? targetPosition + 1
+                    : targetPosition - 1
+        }
         pe.reparentExpression(innerChildren[i].id, outerId, targetPosition)
     }
 
