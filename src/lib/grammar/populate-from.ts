@@ -5,10 +5,10 @@
 //   - For 0 connections: no-op (naked-Q stays).
 //   - For 1 connection: IMPLIES(supporting-var, Q).
 //   - For ≥2 connections: IMPLIES(OR(s1, …, sn), Q). In assistive mode
-//     the engine's per-mutation AN-1 post-hook inserts a formula buffer
-//     between IMPLIES and OR; in permissive mode the OR sits directly
-//     under IMPLIES (Structural-valid, but a P-1 violation surfaces via
-//     validate('presentable')).
+//     a formula buffer is inserted between IMPLIES and OR by the
+//     post-build `engine.normalize()` call (AN-1); in permissive mode
+//     the OR sits directly under IMPLIES (Structural-valid, but a
+//     P-1 violation surfaces via validate('presentable')).
 //   - If the target derivation premise is already populated (non-naked-Q),
 //     factory returns kind='no-op' without mutating — preserves Proposit's
 //     no-changes-without-consent principle AND the Structural-only
@@ -16,6 +16,19 @@
 //     antecedent (via a repair primitive) before re-calling.
 //   - If no derivation premise exists for derivedClaimId: throws (entity-
 //     not-found is a legitimate Structural integrity check).
+//
+// **D2b — permissive-build + explicit normalize() pattern.** The
+// expression-tree build is incremental (`removeExpression(nakedRoot)`
+// → `addExpression(IMPLIES)` → antecedent children → consequent Q).
+// Under the post-mutation AN hook (assistive mode), AN-3 would
+// eagerly collapse 0-child operators between addExpression calls —
+// e.g., after `addExpression(IMPLIES, parent=null)` the IMPLIES has
+// zero children and AN-3 deletes it, so the next addExpression
+// trying to add a child of IMPLIES throws "Parent does not exist".
+// To avoid this, the factory switches to `permissive` for the build
+// and runs a single explicit `engine.normalize()` at the end (only
+// when the caller was originally in assistive mode). This is the
+// canonical incremental-builder pattern for the v1.0 grammar model.
 //
 // **Atomicity contract.** The factory is observed-atomic: callers
 // never see a half-populated tree. The expression-tree replacement
@@ -145,57 +158,55 @@ export function populateFromGrounding<
     const premiseId = pe.getId()
     const gen = engine.idGenerator
 
-    // Step 1: remove the naked-Q root (cascades nothing — it's a leaf).
-    pe.removeExpression(nakedRoot.id, true)
+    // D2b — permissive-build + explicit normalize() pattern. The
+    // incremental tree-build below (`removeExpression(nakedRoot)`,
+    // then `addExpression(IMPLIES)`, then antecedent, then Q) passes
+    // through transient states where parents have 0 children. Under
+    // the post-mutation AN hook (assistive mode), AN-3 would
+    // eagerly collapse those 0-child operators between addExpression
+    // calls, breaking the build. We disarm AN for the build by
+    // switching to permissive, then re-arm + run a single explicit
+    // `engine.normalize()` at the end to apply AN-1 (formula buffer
+    // between IMPLIES and OR) on the fully-built tree.
+    //
+    // The saved-behavior capture + try/finally is essential: if a
+    // mutation inside the build throws, the engine's behavior is
+    // restored to its pre-call value rather than left stuck in
+    // permissive mode. The `normalize()` call only runs on the
+    // success path (it's inside the try after all mutations
+    // succeeded) and only when the engine was originally in
+    // assistive mode — permissive callers want the un-normalized
+    // form per the populate-from JSDoc.
+    const savedBehavior = engine.behavior
+    if (savedBehavior !== "permissive") {
+        engine.setBehavior("permissive")
+    }
+    try {
+        // Step 1: remove the naked-Q root (cascades nothing — it's a
+        // leaf).
+        pe.removeExpression(nakedRoot.id, true)
 
-    // Step 2: add IMPLIES at root.
-    const impliesId = gen()
-    pe.addExpression({
-        id: impliesId,
-        argumentId: argId,
-        argumentVersion: argVersion,
-        premiseId,
-        type: "operator",
-        operator: "implies",
-        parentId: null,
-        position: 0,
-    } as unknown as Parameters<typeof pe.addExpression>[0])
-
-    // Step 3: add the antecedent (position 0) — either a single variable
-    // (n=1) or an OR with one child per supporting variable (n≥2).
-    // AN-1 inserts a formula buffer between IMPLIES and OR in assistive
-    // mode at the moment we add the OR; permissive mode skips the buffer.
-    // The OR's variable children attach to the OR by its `orId`
-    // regardless of whether AN-1 reparented the OR under a formula buffer
-    // (the OR's own id is stable across the post-hook).
-    if (supportingVars.length === 1) {
-        const sv = supportingVars[0]
-        const varExprId = gen()
+        // Step 2: add IMPLIES at root.
+        const impliesId = gen()
         pe.addExpression({
-            id: varExprId,
-            argumentId: argId,
-            argumentVersion: argVersion,
-            premiseId,
-            type: "variable",
-            variableId: sv.id,
-            parentId: impliesId,
-            position: 0,
-        } as unknown as Parameters<typeof pe.addExpression>[0])
-    } else {
-        const orId = gen()
-        pe.addExpression({
-            id: orId,
+            id: impliesId,
             argumentId: argId,
             argumentVersion: argVersion,
             premiseId,
             type: "operator",
-            operator: "or",
-            parentId: impliesId,
+            operator: "implies",
+            parentId: null,
             position: 0,
         } as unknown as Parameters<typeof pe.addExpression>[0])
 
-        for (let i = 0; i < supportingVars.length; i++) {
-            const sv = supportingVars[i]
+        // Step 3: add the antecedent (position 0) — either a single
+        // variable (n=1) or an OR with one child per supporting
+        // variable (n≥2). In permissive mode the OR sits directly
+        // under IMPLIES; the post-build `normalize()` runs AN-1 to
+        // insert the formula buffer when the original behavior was
+        // assistive.
+        if (supportingVars.length === 1) {
+            const sv = supportingVars[0]
             const varExprId = gen()
             pe.addExpression({
                 id: varExprId,
@@ -204,24 +215,69 @@ export function populateFromGrounding<
                 premiseId,
                 type: "variable",
                 variableId: sv.id,
-                parentId: orId,
-                position: i,
+                parentId: impliesId,
+                position: 0,
             } as unknown as Parameters<typeof pe.addExpression>[0])
-        }
-    }
+        } else {
+            const orId = gen()
+            pe.addExpression({
+                id: orId,
+                argumentId: argId,
+                argumentVersion: argVersion,
+                premiseId,
+                type: "operator",
+                operator: "or",
+                parentId: impliesId,
+                position: 0,
+            } as unknown as Parameters<typeof pe.addExpression>[0])
 
-    // Step 4: add the Q consequent (position 1 of IMPLIES).
-    const qExprId = gen()
-    pe.addExpression({
-        id: qExprId,
-        argumentId: argId,
-        argumentVersion: argVersion,
-        premiseId,
-        type: "variable",
-        variableId: qVariableId,
-        parentId: impliesId,
-        position: 1,
-    } as unknown as Parameters<typeof pe.addExpression>[0])
+            for (let i = 0; i < supportingVars.length; i++) {
+                const sv = supportingVars[i]
+                const varExprId = gen()
+                pe.addExpression({
+                    id: varExprId,
+                    argumentId: argId,
+                    argumentVersion: argVersion,
+                    premiseId,
+                    type: "variable",
+                    variableId: sv.id,
+                    parentId: orId,
+                    position: i,
+                } as unknown as Parameters<typeof pe.addExpression>[0])
+            }
+        }
+
+        // Step 4: add the Q consequent (position 1 of IMPLIES).
+        const qExprId = gen()
+        pe.addExpression({
+            id: qExprId,
+            argumentId: argId,
+            argumentVersion: argVersion,
+            premiseId,
+            type: "variable",
+            variableId: qVariableId,
+            parentId: impliesId,
+            position: 1,
+        } as unknown as Parameters<typeof pe.addExpression>[0])
+
+        // Step 5: restore the original behavior and (if we switched)
+        // run the single explicit normalize() to apply AN-1 on the
+        // fully-built tree.
+        if (savedBehavior !== "permissive") {
+            engine.setBehavior(savedBehavior)
+            engine.normalize()
+        }
+    } catch (e) {
+        // Restore behavior on failure paths too so the engine is not
+        // left stuck in permissive mode after an unexpected mutation
+        // throw. The build is not transactional — callers expect the
+        // engine state to surface the partial build for diagnosis;
+        // only the behavior flag gets restored.
+        if (savedBehavior !== "permissive") {
+            engine.setBehavior(savedBehavior)
+        }
+        throw e
+    }
 
     return {
         kind: "populated",
