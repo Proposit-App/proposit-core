@@ -20,20 +20,19 @@
 // `ExpressionManager` mutation methods + the 11 P-1 throw sites — see
 // the plan's Phase D summary).
 //
-// **D0b — AN-2 native, AN-1/3/4 still delegated.** `applyAN2`
-// implements double-negation collapse directly via
+// **D0c — AN-2 + AN-3 native, AN-1/4 still delegated.** `applyAN2`
+// and `applyAN3` implement their rules directly via
 // `PremiseEngine.removeExpression(id, false)`. `applyAN1`,
-// `applyAN3`, `applyAN4`, and `applyANToFixedPoint` still
-// delegate to the legacy `pe.normalizeExpressions()` full sweep;
-// D0c-D0e rewrite the remaining three rules natively and D0f
-// flips the `runAssistiveNormalization` + `normalizeArgument`
-// bridges to call `applyANToFixedPoint` directly without going
-// through `pe.normalizeExpressions()`. Until then this module
-// establishes the **module boundary** — callers in
-// `auto-normalize.ts` and `normalize.ts` route AN through this
-// module's exports rather than reaching into PE directly. That
-// boundary lets the remaining rules be replaced in place without
-// touching the bridge.
+// `applyAN4`, and `applyANToFixedPoint` still delegate to the legacy
+// `pe.normalizeExpressions()` full sweep; D0d-D0e rewrite the
+// remaining two rules natively and D0f flips the
+// `runAssistiveNormalization` + `normalizeArgument` bridges to call
+// `applyANToFixedPoint` directly without going through
+// `pe.normalizeExpressions()`. Until then this module establishes
+// the **module boundary** — callers in `auto-normalize.ts` and
+// `normalize.ts` route AN through this module's exports rather than
+// reaching into PE directly. That boundary lets the remaining rules
+// be replaced in place without touching the bridge.
 //
 // The per-rule tests (`test/grammar/an-rules.test.ts`) assert behavior
 // the native implementation must preserve once it lands; today they
@@ -169,13 +168,132 @@ function collapseOneDoubleNegationInPremise(pe: TAnyPremiseEngine): boolean {
  * Run AN-3 (collapse 0/1-child operator/formula) on every premise of
  * `engine`. Returns `true` iff any mutation occurred.
  *
- * **D0a state: delegates to `pe.normalizeExpressions()`.** Native
- * rewrite lands in D0c.
+ * **D0c: native rewrite.** Walks each premise's expression tree and
+ * collapses four sub-cases via `pe.removeExpression(id, false)`:
+ *
+ *   1. Operator with 0 children → removed (leaf removal).
+ *   2. Operator with 1 child (non-`not`) → child promoted into the
+ *      operator's slot. `not` is unary so 1-child `not` is its
+ *      Presentable form and is NOT collapsed by AN-3.
+ *   3. Formula with 0 children → removed.
+ *   4. Formula with 1 child whose bounded subtree contains no binary
+ *      operator (`and`/`or`) → child promoted (the formula is
+ *      unjustified per P-3, so it disappears).
+ *
+ * Bounded-subtree traversal stops at nested formulas (each formula
+ * is a separate P-3 scope). The local
+ * `hasBinaryOperatorInBoundedSubtreeFor` helper mirrors the validator's
+ * `hasBinaryOperatorInBoundedSubtree` in
+ * `validators/presentable.ts` but operates against
+ * `pe.getChildExpressions(id)` so AN-3 doesn't need access to the
+ * validator's internal `TChildMap`.
+ *
+ * Behavior parity with the legacy `ExpressionManager.normalize()`
+ * passes 1 + 2 is asserted by the regression-guard tests in
+ * `test/grammar/an-rules.test.ts` and the broader 1603-test
+ * baseline.
  *
  * @since 1.0.0
  */
 export function applyAN3(engine: TAnyEngine): boolean {
-    return runLegacyNormalizeAndReportChange(engine)
+    let anyChanged = false
+    for (const pe of engine.listPremises() as TAnyPremiseEngine[]) {
+        let premiseChanged = true
+        while (premiseChanged) {
+            premiseChanged = collapseOneAN3InPremise(pe)
+            if (premiseChanged) anyChanged = true
+        }
+    }
+    return anyChanged
+}
+
+/**
+ * Find one AN-3 candidate in `pe`'s tree and collapse it. Returns
+ * `true` iff a collapse occurred.
+ *
+ * Each call collapses exactly one node. The caller loops until the
+ * tree is stable. The single-collapse-per-call shape mirrors AN-2 so
+ * cascading mutations don't trip mid-iteration tree-walk invariants.
+ */
+function collapseOneAN3InPremise(pe: TAnyPremiseEngine): boolean {
+    for (const expr of pe.getExpressions()) {
+        // Sub-case 1 & 2: operator collapse.
+        if (expr.type === "operator") {
+            const children = pe.getChildExpressions(expr.id)
+            if (children.length === 0) {
+                // 0-child operator — remove wholesale.
+                pe.removeExpression(expr.id, false)
+                return true
+            }
+            if (children.length === 1 && expr.operator !== "not") {
+                // 1-child non-not operator — promote single child.
+                pe.removeExpression(expr.id, false)
+                return true
+            }
+            continue
+        }
+
+        // Sub-case 3 & 4: formula collapse.
+        if (expr.type === "formula") {
+            const children = pe.getChildExpressions(expr.id)
+            if (children.length === 0) {
+                // 0-child formula — remove wholesale.
+                pe.removeExpression(expr.id, false)
+                return true
+            }
+            if (
+                children.length === 1 &&
+                !hasBinaryOperatorInBoundedSubtreeFor(pe, children[0].id)
+            ) {
+                // Unjustified formula (no binary operator in bounded
+                // subtree) — promote single child.
+                pe.removeExpression(expr.id, false)
+                return true
+            }
+        }
+    }
+    return false
+}
+
+/**
+ * Returns `true` if the subtree rooted at `expressionId` (within
+ * `pe`) contains a binary operator (`and` or `or`). Traversal stops
+ * at nested formulas — each formula is its own P-3 scope.
+ *
+ * Mirrors `hasBinaryOperatorInBoundedSubtree` in
+ * `src/lib/grammar/validators/presentable.ts`, but operates against
+ * the premise engine's public child-lookup API instead of the
+ * validator's `TChildMap`. The duplication is intentional: AN-3's
+ * collapse decision happens mid-mutation when the validator's
+ * snapshot would be stale.
+ *
+ * Note: `implies` and `iff` are intentionally excluded from the
+ * "binary operator" check — S-5 restricts both to premise roots, so
+ * they cannot appear as formula descendants in a Structural-valid
+ * tree.
+ */
+function hasBinaryOperatorInBoundedSubtreeFor(
+    pe: TAnyPremiseEngine,
+    expressionId: string
+): boolean {
+    const root = pe.getExpression(expressionId)
+    if (!root) return false
+    const stack = [root]
+    while (stack.length > 0) {
+        const cursor = stack.pop()!
+        if (
+            cursor.type === "operator" &&
+            (cursor.operator === "and" || cursor.operator === "or")
+        ) {
+            return true
+        }
+        // Stop at nested formulas — separate scope.
+        if (cursor.id !== expressionId && cursor.type === "formula") continue
+        for (const child of pe.getChildExpressions(cursor.id)) {
+            stack.push(child)
+        }
+    }
+    return false
 }
 
 /**
@@ -210,24 +328,24 @@ export function applyAN1(engine: TAnyEngine): boolean {
 /**
  * Run AN-1..AN-4 to fixed point on every premise of `engine`.
  *
- * **D0b state: AN-2 is native; AN-1/3/4 still delegate to
+ * **D0c state: AN-2 and AN-3 are native; AN-1/4 still delegate to
  * `pe.normalizeExpressions()`.** Each call of the delegating rules
  * runs the full legacy sweep (which itself is fixed-pointed), so
- * within a single iteration of this driver any one of the
- * delegating calls converges the tree. AN-2's native pass is
- * effectively a fast-path before the legacy sweep — it catches the
- * NOT(NOT(x)) case explicitly so the regression-guard tests can
- * spy on the native code path. D0f rewires this function to call
- * the four native passes in order (AN-2, AN-3, AN-4, AN-1 — buffer
+ * within a single iteration of this driver any delegating call
+ * converges the tree. AN-2 and AN-3 native passes are effectively
+ * fast-paths before the legacy sweep — they catch their specific
+ * patterns explicitly so the regression-guard tests can spy on the
+ * native code paths. D0f rewires this function to call the four
+ * native passes in order (AN-2, AN-3, AN-4, AN-1 — buffer
  * insertion sequenced last so earlier passes see the post-collapse
  * tree).
  *
  * Convergence cap: `MAX_AN_ITERATIONS = 10`. Typical convergence is ≤ 3
  * iterations (spec §5.1); the cap protects against pathological inputs
  * (e.g. malformed Structural state that would otherwise oscillate).
- * In D0b, the outer loop typically exits within 1 iteration because
+ * In D0c, the outer loop typically exits within 1 iteration because
  * the legacy sweep already drives the rest of convergence. Once
- * D0c-D0e are native, the outer loop is what drives convergence.
+ * D0d-D0e are native, the outer loop is what drives convergence.
  *
  * @since 1.0.0
  */

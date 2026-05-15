@@ -1,15 +1,16 @@
 # Grammar Tiers — proposit-core Implementation Plan
 
-> **Implementation status — 2026-05-14 (later), branch `grammar-tiers/core` at HEAD.**
+> **Implementation status — 2026-05-14 (latest), branch `grammar-tiers/core` at HEAD.**
 >
-> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) complete.**
-> Tests at 1603 passed + 9 skipped (1598 prior + 5 new `an-rules.test.ts`
-> tests landed with D0b's AN-2 regression guards). `pnpm run check` green.
+> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) + D0c (AN-3 native) complete.**
+> Tests at 1607 passed + 9 skipped (1598 prior + 5 D0b + 4 D0c new
+> `an-rules.test.ts` tests). `pnpm run check` green.
 >
 > **Latest commits (newest first):**
 >
 > ```
-> <D0b>     —   — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
+> <D0c>     —   — D0c: applyAN3 native (0/1-child operator + formula collapse via PE.removeExpression)
+> 79da962  —   — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
 > 9fb18ae  —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
 > 1870592  —   — fold C6+C7+C8 dual-review polish (P1 generator accessor, P2 dedup/tests/atomicity, P3 TODO sweep)
 > 3f9710c  —   — docs(plan): lock D0 design — spec-direct AN-1..AN-4 rewrite blueprint
@@ -20,20 +21,15 @@
 >
 > **D0 per-rule native-rewrite status:**
 >
-> | Rule       | Native? | Notes                                              |
-> | ---------- | ------- | -------------------------------------------------- |
-> | AN-1       | no      | still delegating; rewrite lands D0e (gated on PE reparent primitive design) |
-> | AN-2       | **yes** | D0b — double-negation collapse via two `pe.removeExpression(id, false)` calls |
-> | AN-3       | no      | still delegating; rewrite lands D0c                |
-> | AN-4       | no      | still delegating; rewrite lands D0d                |
+> | Rule | Native? | Notes                                                                            |
+> | ---- | ------- | -------------------------------------------------------------------------------- |
+> | AN-1 | no      | still delegating; rewrite lands D0e (gated on PE reparent primitive design)      |
+> | AN-2 | **yes** | D0b — double-negation collapse via two `pe.removeExpression(id, false)` calls    |
+> | AN-3 | **yes** | D0c — 0/1-child operator + formula collapse via `pe.removeExpression(id, false)` |
+> | AN-4 | no      | still delegating; rewrite lands D0d                                              |
 >
 > **D0 remaining (sequenced):**
 >
-> - **D0c** rewrite `applyAN3` natively (empty / single-child collapse).
->   Be careful with the "single-child formula collapses only if its
->   bounded subtree has no binary operator" rule — preserve the
->   `hasBinaryOperatorInBoundedSubtree` helper (lift it or expose it
->   from the validator).
 > - **D0d** rewrite `applyAN4` natively (same-operator absorption through
 >   formula).
 > - **D0e** rewrite `applyAN1` natively (formula buffer insertion).
@@ -57,12 +53,12 @@
 > rules live, not what they do. The `an-rules.test.ts` regression-guards
 > prove the contract.
 >
-> **D0b implementation notes (read before D0c):**
+> **D0b implementation notes:**
 >
 > - `applyAN2` walks each premise's tree via `pe.getExpressions()` and
 >   issues two `pe.removeExpression(id, false)` calls per match (inner
 >   NOT first, outer NOT second). Both direct (`NOT_outer → NOT_inner →
->   x`) and buffered (`NOT_outer → formula → NOT_inner → x`) forms are
+x`) and buffered (`NOT_outer → formula → NOT_inner → x`) forms are
 >   handled.
 > - The buffered case leaves a `formula(x)` residue which AN-3 collapses
 >   in a subsequent `applyANToFixedPoint` iteration. AN-2 deliberately
@@ -82,6 +78,32 @@
 >   (legacy parity loses), or (b) add a private bypass primitive (D0e
 >   may need this anyway for AN-1). Defer until D0e clarifies the
 >   `reparentExpression` decision.
+>
+> **D0c implementation notes (read before D0d):**
+>
+> - `applyAN3` walks each premise's tree and dispatches by sub-case:
+>   (1) 0-child operator → remove via `pe.removeExpression(id, false)`,
+>   (2) 1-child non-not operator → same call (promotes single child),
+>   (3) 0-child formula → same call, (4) 1-child formula whose bounded
+>   subtree has no binary operator → same call.
+> - 1-child `not` is NOT collapsed (NOT is unary; `NOT(x)` is its
+>   Presentable form). Tested by a dedicated guard.
+> - 1-child formula whose bounded subtree DOES contain a binary
+>   operator is NOT collapsed (formula is justified per P-3). Tested
+>   by a dedicated guard.
+> - Local helper `hasBinaryOperatorInBoundedSubtreeFor(pe, id)` mirrors
+>   the validator's `hasBinaryOperatorInBoundedSubtree` in
+>   `validators/presentable.ts` but operates against
+>   `pe.getChildExpressions(id)` so AN-3 doesn't need access to the
+>   validator's internal `TChildMap`. The duplication is intentional
+>   (validator snapshot would be stale mid-mutation). If a future
+>   refactor wants to deduplicate, lift both to a shared util that
+>   takes a `(id) => children[]` lookup function.
+> - Same P-1 concern as D0b's notes — promoting a non-not operator
+>   into an operator parent's slot could trip the inline P-1 throw.
+>   For Presentable-clean inputs this is prevented by formula buffers;
+>   for pathological inputs the legacy `promoteChild` (private)
+>   bypassed the check. Defer the bypass-primitive design to D0e.
 >
 > **Phase D post-D0 work** is unchanged from the prior status block:
 > D1 (MDPE removal), D2 (legacy plumbing + 11 P-1 throw sites), D3

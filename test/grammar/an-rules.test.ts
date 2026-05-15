@@ -94,6 +94,200 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         // has 0 children — and the residue is an empty premise.
         expect(pe.getExpressions()).toHaveLength(0)
     })
+
+    // D0c — sub-case-specific guards. These exercise the four native
+    // collapse paths (0-child operator, 1-child non-not operator,
+    // 0-child formula, 1-child formula with no bounded-subtree binary)
+    // and the keep case (1-child formula whose subtree DOES contain a
+    // binary operator — must NOT collapse).
+
+    it("collapses a 1-child non-not operator by promoting its single child (D0c)", () => {
+        // Build peB: AND with a single variable child. AN-3 must
+        // promote the variable into AND's slot, then remove AND.
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+
+        peB.addExpression({
+            id: "and-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-x",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varA.id,
+            parentId: "and-1",
+            position: 0,
+        })
+
+        const changed = applyAN3(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        expect(after).toHaveLength(1)
+        expect(after[0].id).toBe("ve-x")
+        expect(after[0].parentId).toBe(null)
+    })
+
+    it("does NOT collapse a 1-child not operator (NOT(x) is Presentable; D0c)", () => {
+        // NOT is unary — 1-child NOT is its canonical Presentable
+        // form. AN-3 must not touch it.
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+
+        peB.addExpression({
+            id: "not-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-x",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varA.id,
+            parentId: "not-1",
+            position: 0,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN3(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
+    })
+
+    it("preserves a 1-child formula whose bounded subtree contains a binary operator (D0c)", () => {
+        // Build peB: formula → AND(a, b). The formula's bounded
+        // subtree contains AND (binary), so the formula is justified
+        // per P-3 and AN-3 must NOT collapse it. (a and b are two
+        // variables — uses two cross-premise vars from peA and peC.)
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varC = allVars.find((v) => v.boundPremiseId === peC.getId())!
+
+        peB.addExpression({
+            id: "formula-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "and-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: "formula-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varA.id,
+            parentId: "and-1",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varC.id,
+            parentId: "and-1",
+            position: 1,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN3(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
+    })
+
+    it("issues PremiseEngine.removeExpression(_, false) calls for AN-3 collapses (native code path; D0c)", () => {
+        // Spy-style guard that locks down the public-API drive. A
+        // 0-child AND collapses via a single removeExpression call;
+        // the same fingerprint will hold for native AN-3 going forward.
+        const eng = makePermissiveEngine()
+        const { result: pe } = eng.createPremise()
+        pe.addExpression({
+            id: "and-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pe.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+
+        const removeSpy = vi.spyOn(pe, "removeExpression")
+
+        applyAN3(eng)
+
+        expect(removeSpy).toHaveBeenCalled()
+        expect(removeSpy).toHaveBeenCalledWith("and-root", false)
+
+        removeSpy.mockRestore()
+    })
 })
 
 describe("applyAN2 — collapse double negation (D0b native)", () => {
