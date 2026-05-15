@@ -485,9 +485,15 @@ export interface TArgumentEvaluation {
      * structures must be well-formed (naked-Q invariant; since 0.11.0).
      *
      * Derivation premises with structurally broken trees are flagged with
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`. Use
+     * `DERIVATION_STRUCTURE_INVALID`. Use
      * `validateDerivationStructures()` to isolate derivation checks without
      * running the full evaluability sweep.
+     *
+     * Naked-Q derivation premises (single-variable root) are **not** flagged
+     * — they are a valid Derivable state per spec §4.2 and are skipped by
+     * evaluation rather than throwing. The pre-1.0
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` code was removed in
+     * Phase D4.
      *
      * @returns A validation result with any issues found.
      *
@@ -504,7 +510,11 @@ export interface TArgumentEvaluation {
      * state.
      *
      * Derivation premises with broken trees produce violations with code
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`.
+     * `DERIVATION_STRUCTURE_INVALID`. Naked-Q (single-variable root) is
+     * a valid Derivable state per spec §4.2 and is **not** flagged here —
+     * it is skipped by evaluation rather than thrown. The pre-1.0
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed
+     * in Phase D4.
      *
      * @returns An `TInvariantValidationResult` — `ok: true` when all
      *   derivation premises are structurally valid, `ok: false` with

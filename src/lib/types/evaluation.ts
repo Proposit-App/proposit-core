@@ -41,7 +41,7 @@ export type TCoreValidationCode =
     | "SOURCE_EXPRESSION_ASSOCIATION_INVALID_EXPRESSION"
     | "SOURCE_ORPHANED"
     | "EXPR_BOUND_PREMISE_EMPTY"
-    | "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+    | "DERIVATION_STRUCTURE_INVALID"
 
 export interface TCoreValidationIssue {
     /** Machine-readable issue code for callers/tests/UI logic. */

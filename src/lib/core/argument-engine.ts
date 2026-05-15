@@ -29,7 +29,6 @@ import {
     CLAIM_NOT_FOUND,
     CREATE_DERIVATION_CLAIM_NOT_FOUND,
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
-    DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
 } from "../types/validation.js"
 import { validateDerivationStructure } from "../utils/derivation-validation.js"
 import {
@@ -2559,15 +2558,19 @@ export class ArgumentEngine<
      * Apps can pre-check derivation premise structures before invoking the full
      * evaluation pipeline.
      *
+     * Violations carry the underlying `DERIVATION_STRUCTURE_INVALID` code
+     * (per the derivation-validation utility). The pre-1.0
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed in
+     * Phase D4 alongside the legacy `validate()` no-arg overload — naked-Q
+     * is a valid Derivable state (per spec §4.2) and is skipped by
+     * evaluation rather than thrown.
+     *
      * @since 0.11.0
      */
     public validateDerivationStructures(): TInvariantValidationResult {
         const violations: TInvariantValidationResult["violations"] = []
         for (const { violation } of this.collectDerivationViolations()) {
-            violations.push({
-                ...violation,
-                code: DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
-            })
+            violations.push(violation)
         }
         return { ok: violations.length === 0, violations }
     }
@@ -2577,7 +2580,7 @@ export class ArgumentEngine<
         for (const { violation } of this.collectDerivationViolations()) {
             issues.push(
                 makeErrorIssue({
-                    code: DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
+                    code: "DERIVATION_STRUCTURE_INVALID",
                     message: violation.message,
                     premiseId: violation.entityId,
                 })

@@ -104,13 +104,18 @@ export const LEGACY_MISSING_AXIOM_SLOT = "LEGACY_MISSING_AXIOM_SLOT"
 // `ManagedDerivationPremiseEngine` was removed in D1. The four
 // behaviors they powered are now surfaced via the Derivable-tier
 // validators (D-1..D-6) reachable through `engine.validate('derivable')`.
+// `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` was deleted in Phase D4
+// alongside the legacy `engine.validate()` no-arg overload — the
+// pre-1.0 evaluation throw on naked-Q is replaced by the
+// asEvaluationContext-level skip in `ArgumentEngine` (per spec §4.2);
+// the wrapper validators (`validateEvaluability` +
+// `validateDerivationStructures`) that overrode the code now pass
+// through `DERIVATION_STRUCTURE_INVALID` unchanged from the underlying
+// derivation-validation utility.
 // `DERIVATION_STRUCTURE_INVALID` stays — actively used by the
-// derivation-validation utility and the legacy validate() sweep.
-// `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` stays through D4 — slated
-// for deletion alongside the evaluation throw it powers.
+// derivation-validation utility and surfaced through
+// `validateEvaluability` / `validateDerivationStructures`.
 export const DERIVATION_STRUCTURE_INVALID = "DERIVATION_STRUCTURE_INVALID"
-export const DERIVATION_STRUCTURE_INVALID_AT_EVALUATION =
-    "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
 export const CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID =
     "CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID"
 export const CREATE_DERIVATION_CLAIM_NOT_FOUND =

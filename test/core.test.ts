@@ -22735,12 +22735,20 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
         return { argumentEngine: engine }
     }
 
-    it("flags a structurally-broken derivation premise with DERIVATION_STRUCTURE_INVALID_AT_EVALUATION", () => {
+    // D4: pre-1.0 these tests asserted on `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
+    // (the wrapper-overridden code). Phase D4 removed the override —
+    // `validateEvaluability` / `validateDerivationStructures` now pass
+    // through the underlying `DERIVATION_STRUCTURE_INVALID` code from
+    // the derivation-validation utility. Naked-Q is a no-throw skip
+    // per spec §4.2; the structurally-broken case (empty tree, no
+    // root) still surfaces as a `DERIVATION_STRUCTURE_INVALID`
+    // violation through these wrapper APIs.
+    it("flags a structurally-broken derivation premise with DERIVATION_STRUCTURE_INVALID", () => {
         const { argumentEngine } = setupArgumentWithBrokenDerivation()
         const result = argumentEngine.validateEvaluability()
         expect(
             result.issues.some(
-                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID"
             )
         ).toBe(true)
     })
@@ -22754,7 +22762,7 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
         expect(result.ok).toBe(false)
         expect(
             result.validation?.issues.some(
-                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID"
             )
         ).toBe(true)
     })
@@ -22764,7 +22772,7 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
         const result = argumentEngine.checkValidity()
         expect(
             result.validation?.issues.some(
-                (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+                (v) => v.code === "DERIVATION_STRUCTURE_INVALID"
             )
         ).toBe(true)
     })
@@ -22773,7 +22781,7 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
         const { argumentEngine } = setupArgumentWithGoodDerivation()
         const result = argumentEngine.validateEvaluability()
         const derivationIssues = result.issues.filter(
-            (v) => v.code === "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
+            (v) => v.code === "DERIVATION_STRUCTURE_INVALID"
         )
         expect(derivationIssues).toEqual([])
     })
@@ -22806,8 +22814,13 @@ describe("ArgumentEngine.validateDerivationStructures", () => {
         const { argumentEngine } = setupArgumentWithBrokenDerivation()
         const result = argumentEngine.validateDerivationStructures()
         expect(result.violations.length).toBeGreaterThan(0)
+        // D4: pre-1.0 the wrapper overrode this to
+        // `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`; D4 removed the
+        // override so the underlying `DERIVATION_STRUCTURE_INVALID`
+        // code (from `validateDerivationStructure`) flows through
+        // unchanged.
         for (const v of result.violations) {
-            expect(v.code).toBe("DERIVATION_STRUCTURE_INVALID_AT_EVALUATION")
+            expect(v.code).toBe("DERIVATION_STRUCTURE_INVALID")
         }
     })
 })
