@@ -341,7 +341,7 @@ describe("addExpression", () => {
         premise.addExpression(makeOpExpr("op-1", "and"))
         const child = makeVarExpr("expr-1", VAR_P.id, { parentId: "op-1" })
         premise.addExpression(child)
-        expect(() => premise.addExpression(child)).toThrowError(
+        expect(() => premise.addExpression(child)).toThrow(
             /Expression with ID "expr-1" already exists/
         )
     })
@@ -361,7 +361,7 @@ describe("addExpression", () => {
         const orphan = makeVarExpr("expr-1", VAR_P.id, {
             parentId: "ghost-parent",
         })
-        expect(() => premise.addExpression(orphan)).toThrowError(
+        expect(() => premise.addExpression(orphan)).toThrow(
             /Parent expression "ghost-parent" does not exist/
         )
     })
@@ -372,7 +372,7 @@ describe("addExpression", () => {
         const child = makeVarExpr("child-1", VAR_Q.id, { parentId: "parent-1" })
 
         premise.addExpression(parent)
-        expect(() => premise.addExpression(child)).toThrowError(
+        expect(() => premise.addExpression(child)).toThrow(
             /Parent expression "parent-1" is not an operator expression/
         )
     })
@@ -391,7 +391,7 @@ describe("addExpression", () => {
 
         premise.addExpression(op)
         premise.addExpression(child1)
-        expect(() => premise.addExpression(child2)).toThrowError(
+        expect(() => premise.addExpression(child2)).toThrow(
             /Position 0 is already used under parent "op-1"/
         )
     })
@@ -404,7 +404,7 @@ describe("addExpression", () => {
             premise.addExpression(
                 makeOpExpr("op-inf", "implies", { parentId: "op-root" })
             )
-        ).toThrowError(/with "implies" must be a root expression/)
+        ).toThrow(/with "implies" must be a root expression/)
     })
 
     it("throws when iff operator is nested inside another expression", () => {
@@ -415,7 +415,7 @@ describe("addExpression", () => {
             premise.addExpression(
                 makeOpExpr("op-inf", "iff", { parentId: "op-root" })
             )
-        ).toThrowError(/with "iff" must be a root expression/)
+        ).toThrow(/with "iff" must be a root expression/)
     })
 
     it("throws when a second root expression is added", () => {
@@ -423,7 +423,7 @@ describe("addExpression", () => {
         premise.addExpression(makeVarExpr("expr-p", VAR_P.id))
         expect(() =>
             premise.addExpression(makeVarExpr("expr-q", VAR_Q.id))
-        ).toThrowError(/already has a root expression/)
+        ).toThrow(/already has a root expression/)
     })
 
     describe("operator child limits", () => {
@@ -439,7 +439,7 @@ describe("addExpression", () => {
                 premise.addExpression(
                     makeVarExpr("expr-2", VAR_Q.id, { parentId: "op-1" })
                 )
-            ).toThrowError(/can only have one child/)
+            ).toThrow(/can only have one child/)
         })
 
         it("allows exactly two children under 'implies'", () => {
@@ -463,7 +463,7 @@ describe("addExpression", () => {
                 premise.addExpression(
                     makeVarExpr("expr-3", VAR_R.id, { parentId: "op-1" })
                 )
-            ).toThrowError(/can only have two children/)
+            ).toThrow(/can only have two children/)
         })
 
         it("allows exactly two children under 'iff'", () => {
@@ -487,7 +487,7 @@ describe("addExpression", () => {
                 premise.addExpression(
                     makeVarExpr("expr-3", VAR_R.id, { parentId: "op-1" })
                 )
-            ).toThrowError(/can only have two children/)
+            ).toThrow(/can only have two children/)
         })
 
         it("allows more than two children under 'and'", () => {
@@ -585,7 +585,7 @@ describe("insertExpression", () => {
                     position: POSITION_INITIAL,
                 })
             )
-        ).toThrowError(/Position 0 is already used/)
+        ).toThrow(/Position 0 is already used/)
         // A different position should be free
         expect(() =>
             premise.addExpression(
@@ -650,7 +650,7 @@ describe("insertExpression", () => {
                 undefined,
                 undefined
             )
-        ).toThrowError(/at least one/)
+        ).toThrow(/at least one/)
     })
 
     it("throws when the expression ID already exists", () => {
@@ -659,7 +659,7 @@ describe("insertExpression", () => {
         premise.insertExpression(makeOpExpr("op-and", "and"), "expr-p")
         expect(() =>
             premise.insertExpression(makeOpExpr("op-and", "and"), "expr-p")
-        ).toThrowError(/Expression with ID "op-and" already exists/)
+        ).toThrow(/Expression with ID "op-and" already exists/)
     })
 
     it("throws when not operator is given both left and right nodes", () => {
@@ -677,7 +677,7 @@ describe("insertExpression", () => {
                 "expr-p",
                 "expr-q"
             )
-        ).toThrowError(/"not" can only have one child/)
+        ).toThrow(/"not" can only have one child/)
     })
 
     it("throws when leftNode is an implies expression", () => {
@@ -685,7 +685,7 @@ describe("insertExpression", () => {
         premise.addExpression(makeOpExpr("op-implies", "implies"))
         expect(() =>
             premise.insertExpression(makeOpExpr("op-and", "and"), "op-implies")
-        ).toThrowError(/"implies"/)
+        ).toThrow(/"implies"/)
     })
 
     it("throws when inserting implies and anchor's parentId is not null", () => {
@@ -700,7 +700,7 @@ describe("insertExpression", () => {
                 makeOpExpr("op-implies", "implies"),
                 "expr-p"
             )
-        ).toThrowError(/must be a root expression/)
+        ).toThrow(/must be a root expression/)
     })
 
     it("throws when leftNodeId and rightNodeId are the same", () => {
@@ -712,7 +712,7 @@ describe("insertExpression", () => {
                 "expr-p",
                 "expr-p"
             )
-        ).toThrowError(/leftNodeId and rightNodeId must be different/)
+        ).toThrow(/leftNodeId and rightNodeId must be different/)
     })
 })
 
@@ -879,7 +879,7 @@ describe("addExpression ordering", () => {
         const premise = premiseWithVars()
         const child = makeVarExpr("expr-1", VAR_P.id, { parentId: "op-1" })
         // op-1 has not been added yet — PM requires parent-first ordering
-        expect(() => premise.addExpression(child)).toThrowError(
+        expect(() => premise.addExpression(child)).toThrow(
             /does not exist in this premise/
         )
     })
@@ -1290,7 +1290,7 @@ describe("formula", () => {
             premise.addExpression(
                 makeVarExpr("expr-q", VAR_Q.id, { parentId: "f-1" })
             )
-        ).toThrowError(/Formula expression "f-1" can only have one child/)
+        ).toThrow(/Formula expression "f-1" can only have one child/)
     })
 
     it("throws when the parent expression is a variable (not formula or operator)", () => {
@@ -1300,7 +1300,7 @@ describe("formula", () => {
             premise.addExpression(
                 makeVarExpr("expr-q", VAR_Q.id, { parentId: "expr-p" })
             )
-        ).toThrowError(/is not an operator expression/)
+        ).toThrow(/is not an operator expression/)
     })
 
     // D2b — deleted two formula-cascade tests ("collapses the formula
@@ -1331,7 +1331,7 @@ describe("formula", () => {
         )
         expect(() =>
             premise.insertExpression(makeFormulaExpr("f-1"), "expr-p", "expr-q")
-        ).toThrowError(/Formula expression "f-1" can only have one child/)
+        ).toThrow(/Formula expression "f-1" can only have one child/)
     })
 
     it("a formula can be nested inside an operator", () => {
@@ -1419,7 +1419,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     it("throws when adding a duplicate variable symbol", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
-        expect(() => eng.addVariable(makeVar("var-p2", "P"))).toThrowError(
+        expect(() => eng.addVariable(makeVar("var-p2", "P"))).toThrow(
             /already exists/
         )
     })
@@ -1450,9 +1450,9 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     it("throws when adding an expression that references an unregistered variable", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
-        expect(() =>
-            pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
-        ).toThrowError(/references non-existent variable/)
+        expect(() => pm.addExpression(makeVarExpr("expr-p", VAR_P.id))).toThrow(
+            /references non-existent variable/
+        )
     })
 
     it("throws when the variable does not belong to this argument", () => {
@@ -1462,7 +1462,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
             argumentId: "other-arg",
             argumentVersion: 99,
         }
-        expect(() => eng.addVariable(foreignVar)).toThrowError(/does not match/)
+        expect(() => eng.addVariable(foreignVar)).toThrow(/does not match/)
     })
 })
 
@@ -1477,9 +1477,9 @@ describe("PremiseEngine — single-root enforcement", () => {
     it("throws when a second root expression is added", () => {
         const pm = premiseWithVars()
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
-        expect(() =>
-            pm.addExpression(makeVarExpr("expr-q", VAR_Q.id))
-        ).toThrowError(/already has a root expression/)
+        expect(() => pm.addExpression(makeVarExpr("expr-q", VAR_Q.id))).toThrow(
+            /already has a root expression/
+        )
     })
 
     it("throws when the parent is not in this premise", () => {
@@ -1488,7 +1488,7 @@ describe("PremiseEngine — single-root enforcement", () => {
             pm.addExpression(
                 makeVarExpr("expr-p", VAR_P.id, { parentId: "ghost" })
             )
-        ).toThrowError(/does not exist in this premise/)
+        ).toThrow(/does not exist in this premise/)
     })
 
     it("allows a new root after the old root is removed (premise emptied)", () => {
@@ -1825,7 +1825,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
 
         eng.addVariable(varA)
         // Shared VariableManager enforces unique symbols
-        expect(() => eng.addVariable(varB)).toThrowError(/already exists/)
+        expect(() => eng.addVariable(varB)).toThrow(/already exists/)
     })
 
     it("evaluates an assignment and identifies inadmissible non-counterexamples", () => {
@@ -5932,7 +5932,7 @@ describe("variable expressions cannot have children", () => {
             premise.addExpression(
                 makeVarExpr("expr-q", VAR_Q.id, { parentId: "expr-p" })
             )
-        ).toThrowError(/is not an operator expression/)
+        ).toThrow(/is not an operator expression/)
     })
 
     it("insertExpression rejects inserting a variable expression (which would gain children)", () => {
@@ -5943,7 +5943,7 @@ describe("variable expressions cannot have children", () => {
                 makeVarExpr("wrap-var", VAR_Q.id),
                 "expr-p"
             )
-        ).toThrowError(/variable.*cannot have children/i)
+        ).toThrow(/variable.*cannot have children/i)
     })
 
     it("insertExpression rejects a variable expression wrapping two nodes", () => {
@@ -5967,7 +5967,7 @@ describe("variable expressions cannot have children", () => {
                 "expr-p",
                 "expr-q"
             )
-        ).toThrowError(/variable.*cannot have children/i)
+        ).toThrow(/variable.*cannot have children/i)
     })
 })
 
@@ -6092,7 +6092,7 @@ describe("PremiseEngine — updateExpression", () => {
             makeVarExpr("e-q", VAR_Q.id, { parentId: "op-and", position: 3 })
         )
 
-        expect(() => pm.updateExpression("e-p", { position: 3 })).toThrowError(
+        expect(() => pm.updateExpression("e-p", { position: 3 })).toThrow(
             /Position/
         )
     })
@@ -6122,7 +6122,7 @@ describe("PremiseEngine — updateExpression", () => {
 
         expect(() =>
             pm.updateExpression("op-and", { variableId: VAR_P.id })
-        ).toThrowError(/not a variable expression/)
+        ).toThrow(/not a variable expression/)
     })
 
     it("rejects variableId referencing non-existent variable", () => {
@@ -6133,7 +6133,7 @@ describe("PremiseEngine — updateExpression", () => {
 
         expect(() =>
             pm.updateExpression("e-p", { variableId: "var-nonexistent" })
-        ).toThrowError(/non-existent variable/)
+        ).toThrow(/non-existent variable/)
     })
 
     it("updates expressionsByVariableId index on variableId change (verify via cascade delete)", () => {
@@ -6254,7 +6254,7 @@ describe("PremiseEngine — updateExpression", () => {
 
         expect(() =>
             pm.updateExpression("op-and", { operator: "implies" })
-        ).toThrowError(/not a permitted operator change/)
+        ).toThrow(/not a permitted operator change/)
     })
 
     it("rejects operator change from not", () => {
@@ -6268,7 +6268,7 @@ describe("PremiseEngine — updateExpression", () => {
 
         expect(() =>
             pm.updateExpression("op-not", { operator: "and" })
-        ).toThrowError(/not a permitted operator change/)
+        ).toThrow(/not a permitted operator change/)
     })
 
     it("rejects operator change to not", () => {
@@ -6285,7 +6285,7 @@ describe("PremiseEngine — updateExpression", () => {
 
         expect(() =>
             pm.updateExpression("op-and", { operator: "not" })
-        ).toThrowError(/not a permitted operator change/)
+        ).toThrow(/not a permitted operator change/)
     })
 
     it("rejects operator update on non-operator expression", () => {
@@ -6294,9 +6294,9 @@ describe("PremiseEngine — updateExpression", () => {
             makeVarExpr("e-p", VAR_P.id, { parentId: null, position: 1 })
         )
 
-        expect(() =>
-            pm.updateExpression("e-p", { operator: "and" })
-        ).toThrowError(/not an operator expression/)
+        expect(() => pm.updateExpression("e-p", { operator: "and" })).toThrow(
+            /not an operator expression/
+        )
     })
 
     it("rejects forbidden field: id", () => {
@@ -6308,7 +6308,7 @@ describe("PremiseEngine — updateExpression", () => {
         expect(() =>
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { id: "new-id" } as any)
-        ).toThrowError(/forbidden/)
+        ).toThrow(/forbidden/)
     })
 
     it("rejects forbidden field: parentId", () => {
@@ -6320,7 +6320,7 @@ describe("PremiseEngine — updateExpression", () => {
         expect(() =>
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { parentId: "op-and" } as any)
-        ).toThrowError(/forbidden/)
+        ).toThrow(/forbidden/)
     })
 
     it("rejects forbidden field: type", () => {
@@ -6332,7 +6332,7 @@ describe("PremiseEngine — updateExpression", () => {
         expect(() =>
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { type: "operator" } as any)
-        ).toThrowError(/forbidden/)
+        ).toThrow(/forbidden/)
     })
 
     it("rejects forbidden field: argumentId", () => {
@@ -6344,7 +6344,7 @@ describe("PremiseEngine — updateExpression", () => {
         expect(() =>
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { argumentId: "arg-2" } as any)
-        ).toThrowError(/forbidden/)
+        ).toThrow(/forbidden/)
     })
 
     it("rejects forbidden field: argumentVersion", () => {
@@ -6356,7 +6356,7 @@ describe("PremiseEngine — updateExpression", () => {
         expect(() =>
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { argumentVersion: 99 } as any)
-        ).toThrowError(/forbidden/)
+        ).toThrow(/forbidden/)
     })
 
     it("rejects forbidden field: checksum", () => {
@@ -6368,7 +6368,7 @@ describe("PremiseEngine — updateExpression", () => {
         expect(() =>
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
             pm.updateExpression("e-p", { checksum: "abcd1234" } as any)
-        ).toThrowError(/forbidden/)
+        ).toThrow(/forbidden/)
     })
 
     it("throws for non-existent expression", () => {
@@ -6376,7 +6376,7 @@ describe("PremiseEngine — updateExpression", () => {
 
         expect(() =>
             pm.updateExpression("nonexistent", { position: 5 })
-        ).toThrowError(/not found/)
+        ).toThrow(/not found/)
     })
 
     it("no-ops when updates object is empty", () => {
@@ -9392,7 +9392,7 @@ describe("wrapExpression", () => {
                 wrapOp("op-and", "and"),
                 wrapVar("expr-q", VAR_Q.id)
             )
-        ).toThrowError(/exactly one/)
+        ).toThrow(/exactly one/)
     })
 
     it("throws when both leftNodeId and rightNodeId are provided", () => {
@@ -9411,7 +9411,7 @@ describe("wrapExpression", () => {
                 "expr-p",
                 "expr-q"
             )
-        ).toThrowError(/exactly one.*not both/)
+        ).toThrow(/exactly one.*not both/)
     })
 
     it("throws when operator expression ID already exists", () => {
@@ -9423,7 +9423,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-q", VAR_Q.id),
                 "expr-p"
             )
-        ).toThrowError(/already exists/)
+        ).toThrow(/already exists/)
     })
 
     it("throws when sibling expression ID already exists", () => {
@@ -9435,7 +9435,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-p", VAR_Q.id), // same ID as existing
                 "expr-p"
             )
-        ).toThrowError(/already exists/)
+        ).toThrow(/already exists/)
     })
 
     it("throws when operator and sibling IDs are the same", () => {
@@ -9447,7 +9447,7 @@ describe("wrapExpression", () => {
                 wrapVar("same-id", VAR_Q.id),
                 "expr-p"
             )
-        ).toThrowError(/must be different/)
+        ).toThrow(/must be different/)
     })
 
     it("throws when existing node does not exist", () => {
@@ -9458,7 +9458,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-q", VAR_Q.id),
                 "nonexistent"
             )
-        ).toThrowError(/does not exist/)
+        ).toThrow(/does not exist/)
     })
 
     it("throws when operator is 'not' (unary)", () => {
@@ -9470,7 +9470,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-q", VAR_Q.id),
                 "expr-p"
             )
-        ).toThrowError(/unary/)
+        ).toThrow(/unary/)
     })
 
     it("throws when operator type is not 'operator' (variable passed as operator)", () => {
@@ -9482,7 +9482,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-q", VAR_R.id),
                 "expr-p"
             )
-        ).toThrowError(/must have type "operator"/)
+        ).toThrow(/must have type "operator"/)
     })
 
     it("throws when operator type is not 'operator' (formula passed as operator)", () => {
@@ -9494,7 +9494,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-q", VAR_Q.id),
                 "expr-p"
             )
-        ).toThrowError(/must have type "operator"/)
+        ).toThrow(/must have type "operator"/)
     })
 
     it("throws when implies operator wraps a non-root node", () => {
@@ -9512,7 +9512,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-r", VAR_R.id),
                 "expr-p" // expr-p is not a root
             )
-        ).toThrowError(/must be a root expression/)
+        ).toThrow(/must be a root expression/)
     })
 
     it("throws when iff operator wraps a non-root node", () => {
@@ -9530,7 +9530,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-r", VAR_R.id),
                 "expr-p"
             )
-        ).toThrowError(/must be a root expression/)
+        ).toThrow(/must be a root expression/)
     })
 
     it("throws when existing node is an implies operator (cannot be subordinated)", () => {
@@ -9554,7 +9554,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-r", VAR_R.id),
                 "op-implies"
             )
-        ).toThrowError(/cannot be subordinated/)
+        ).toThrow(/cannot be subordinated/)
     })
 
     it("throws when existing node is an iff operator (cannot be subordinated)", () => {
@@ -9578,7 +9578,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-r", VAR_R.id),
                 "op-iff"
             )
-        ).toThrowError(/cannot be subordinated/)
+        ).toThrow(/cannot be subordinated/)
     })
 
     it("throws when new sibling is an implies operator (cannot be subordinated)", () => {
@@ -9590,7 +9590,7 @@ describe("wrapExpression", () => {
                 wrapOp("op-implies", "implies"),
                 "expr-p"
             )
-        ).toThrowError(/cannot be subordinated/)
+        ).toThrow(/cannot be subordinated/)
     })
 
     it("throws when new sibling is an iff operator (cannot be subordinated)", () => {
@@ -9602,7 +9602,7 @@ describe("wrapExpression", () => {
                 wrapOp("op-iff", "iff"),
                 "expr-p"
             )
-        ).toThrowError(/cannot be subordinated/)
+        ).toThrow(/cannot be subordinated/)
     })
 
     it("throws when new sibling references a non-existent variable", () => {
@@ -9614,7 +9614,7 @@ describe("wrapExpression", () => {
                 wrapVar("expr-x", "nonexistent-var"),
                 "expr-p"
             )
-        ).toThrowError(/non-existent variable/)
+        ).toThrow(/non-existent variable/)
     })
 
     // --- Integration ---
@@ -23731,7 +23731,7 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
         pe.addExpression(makeOpExpr("and-root", "and"))
         expect(() =>
             pe.reparentExpression("does-not-exist", "and-root", 0)
-        ).toThrowError(/not found in premise/)
+        ).toThrow(/not found in premise/)
     })
 
     it("throws when newParentId does not exist (S-1 FK soundness)", () => {
@@ -23739,7 +23739,7 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
         pe.addExpression(makeVarExpr("expr-p", VAR_P.id))
         expect(() =>
             pe.reparentExpression("expr-p", "ghost-parent", 0)
-        ).toThrowError(/not found in premise/)
+        ).toThrow(/not found in premise/)
     })
 
     it("throws S-4 when newParentId === expressionId (self-parent cycle)", () => {
@@ -23751,9 +23751,9 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 0,
             })
         )
-        expect(() =>
-            pe.reparentExpression("or-root", "or-root", 0)
-        ).toThrowError(/S-4.*under itself/)
+        expect(() => pe.reparentExpression("or-root", "or-root", 0)).toThrow(
+            /S-4.*under itself/
+        )
     })
 
     it("throws S-4 when newParentId is a descendant of expressionId (would create a cycle)", () => {
@@ -23773,9 +23773,9 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 0,
             })
         )
-        expect(() =>
-            pe.reparentExpression("or-outer", "or-inner", 1)
-        ).toThrowError(/S-4.*cycle/)
+        expect(() => pe.reparentExpression("or-outer", "or-inner", 1)).toThrow(
+            /S-4.*cycle/
+        )
     })
 
     it("throws S-9 when newPosition is already occupied by a different sibling", () => {
@@ -23795,9 +23795,9 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 1,
             })
         )
-        expect(() =>
-            pe.reparentExpression("expr-p", "or-root", 1)
-        ).toThrowError(/S-9.*already occupied/)
+        expect(() => pe.reparentExpression("expr-p", "or-root", 1)).toThrow(
+            /S-9.*already occupied/
+        )
     })
 
     it("tolerates same-parent, same-position no-op (does not throw S-9 on its own slot)", () => {
@@ -23847,7 +23847,7 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 1,
             })
         )
-        expect(() => pe.reparentExpression("expr-q", "expr-p", 0)).toThrowError(
+        expect(() => pe.reparentExpression("expr-q", "expr-p", 0)).toThrow(
             /S-1.*non-operator\/formula parent.*type=variable/
         )
     })
@@ -23873,7 +23873,7 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 1,
             })
         )
-        expect(() => pe.reparentExpression("expr-q", "not-1", 1)).toThrowError(
+        expect(() => pe.reparentExpression("expr-q", "not-1", 1)).toThrow(
             /"not" can only have one child/
         )
     })
@@ -23947,7 +23947,7 @@ describe("PremiseEngine.wrapInFormula (D0f)", () => {
                 position: 1,
             })
         )
-        expect(() => pe.wrapInFormula("expr-p", "f-existing")).toThrowError(
+        expect(() => pe.wrapInFormula("expr-p", "f-existing")).toThrow(
             /S-10.*already exists/
         )
     })
