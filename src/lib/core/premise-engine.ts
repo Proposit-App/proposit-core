@@ -726,6 +726,13 @@ export class PremiseEngine<
      *
      * @throws If `expressionId` or `newParentId` does not exist in this
      *         premise.
+     * @throws S-1: if `newParent` is not an `operator` or `formula` (a
+     *         variable cannot be a parent — parity with `addExpression`
+     *         at em.ts:418-422).
+     * @throws S-1: arity — if reparenting would push `newParent`'s
+     *         child count past its operator-specific limit (unary `not`
+     *         max 1; binary `implies`/`iff` max 2). Same-parent moves
+     *         leave count unchanged and bypass this check.
      * @throws S-4: if `newParentId === expressionId` or `newParentId` is
      *         a descendant of `expressionId`.
      * @throws S-9: if another sibling (NOT the expression being moved)
@@ -749,6 +756,20 @@ export class PremiseEngine<
             if (!newParent) {
                 throw new Error(
                     `Parent expression "${newParentId}" not found in premise "${this.premise.id}".`
+                )
+            }
+
+            // S-1 parent-type: only operators and formulas accept
+            // children. Without this guard a caller could reparent under
+            // a variable (or any other non-container) and produce a
+            // malformed AST that no validator catches. Parity with
+            // `addExpression` at em.ts:418-422.
+            if (
+                newParent.type !== "operator" &&
+                newParent.type !== "formula"
+            ) {
+                throw new Error(
+                    `S-1: cannot reparent under non-operator/formula parent "${newParentId}" (type=${newParent.type}).`
                 )
             }
 
@@ -782,6 +803,50 @@ export class PremiseEngine<
                     throw new Error(
                         `S-9: position ${newPosition} is already occupied by sibling "${collision.id}" under parent "${newParentId}".`
                     )
+                }
+            }
+
+            // S-1 arity: when source is moving OUT of one parent and
+            // INTO `newParent`, the new parent's child count increases
+            // by 1. Reuse `addExpression`'s `assertChildLimit` parity
+            // (which only enforces caps for `not`/`implies`/`iff`).
+            // Same-parent moves bypass: count is unchanged. Formula
+            // parents enforce their 1-child cap separately.
+            const isSameParent = expression.parentId === newParentId
+            if (!isSameParent) {
+                if (newParent.type === "operator") {
+                    // assertChildLimit lives in EM — gate via the public
+                    // reparent call's pre-check shape: replicate its
+                    // logic here so we don't widen EM's surface.
+                    const childCount =
+                        this.expressions.getChildExpressions(newParentId)
+                            .length
+                    if (
+                        newParent.operator === "not" &&
+                        childCount >= 1
+                    ) {
+                        throw new Error(
+                            `Operator expression "${newParentId}" with "not" can only have one child.`
+                        )
+                    }
+                    if (
+                        (newParent.operator === "implies" ||
+                            newParent.operator === "iff") &&
+                        childCount >= 2
+                    ) {
+                        throw new Error(
+                            `Operator expression "${newParentId}" with "${newParent.operator}" can only have two children.`
+                        )
+                    }
+                } else if (newParent.type === "formula") {
+                    const childCount =
+                        this.expressions.getChildExpressions(newParentId)
+                            .length
+                    if (childCount >= 1) {
+                        throw new Error(
+                            `Formula expression "${newParentId}" can only have one child.`
+                        )
+                    }
                 }
             }
 

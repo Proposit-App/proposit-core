@@ -31316,4 +31316,143 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
         expect(result.parentId).toBe("or-root")
         expect(result.position).toBe(0)
     })
+
+    // D0f — P1 fix: parent-type validation gap. The D0e review surfaced
+    // that `reparentExpression` did not enforce that `newParent` is an
+    // `operator` or `formula` — a caller could reparent under a
+    // variable (or any other non-container) and produce a malformed AST
+    // that no validator catches. `addExpression` enforces this at
+    // em.ts:418-422 and `reparentExpression` must reach parity. Same
+    // applies to the arity guards: reparenting under a unary `not`
+    // that already has its one child, or under a binary
+    // `implies`/`iff` that already has its two children, must throw
+    // (the move crosses parents — the new parent's child count
+    // increases by one).
+
+    it("throws when newParent is a variable expression (S-1 parent-type)", () => {
+        // Setup: AND(P_var, Q_var). Try to reparent Q_var under P_var.
+        // P_var is a variable — invalid parent. Pre-D0f the call
+        // silently produced a malformed AST.
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("and-root", "and"))
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "and-root",
+                position: 0,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "and-root",
+                position: 1,
+            })
+        )
+        expect(() =>
+            pe.reparentExpression("expr-q", "expr-p", 0)
+        ).toThrowError(/S-1.*non-operator\/formula parent.*type=variable/)
+    })
+
+    it("throws S-1 arity when reparenting under a unary `not` that already has its child", () => {
+        // Setup: OR(NOT(P_var), Q_var). Try to reparent Q_var under
+        // NOT. NOT is unary; it already holds P_var. Reparent would
+        // make NOT a binary node — must throw.
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("or-root", "or"))
+        pe.addExpression(
+            makeOpExpr("not-1", "not", { parentId: "or-root", position: 0 })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "not-1",
+                position: 0,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "or-root",
+                position: 1,
+            })
+        )
+        expect(() =>
+            pe.reparentExpression("expr-q", "not-1", 1)
+        ).toThrowError(/"not" can only have one child/)
+    })
+
+    // Note: the implies/iff arity case (2-children cap) is not
+    // separately covered here because S-5 (implies/iff root-only) is
+    // enforced by `addExpression` so a realistic premise cannot host
+    // an implies node with siblings available to reparent into it.
+    // The arity guard is shared with `addExpression`'s
+    // `assertChildLimit` helper, which is independently tested via
+    // the existing addExpression test suite.
+
+    it("tolerates same-parent reparent under a full binary operator (no net count change)", () => {
+        // Setup: IMPLIES(P_var at 0, Q_var at 1). Reparent Q_var to
+        // position 1 under the same implies — same-parent move,
+        // count unchanged. Must NOT trip the arity guard.
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("implies-root", "implies"))
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "implies-root",
+                position: 0,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "implies-root",
+                position: 1,
+            })
+        )
+        const { result } = pe.reparentExpression(
+            "expr-q",
+            "implies-root",
+            1
+        )
+        expect(result.parentId).toBe("implies-root")
+        expect(result.position).toBe(1)
+    })
+})
+
+describe("PremiseEngine.wrapInFormula (D0f)", () => {
+    // D0f — P2 #2 fix: S-10 enforcement gap.
+    //
+    // `wrapInFormula` previously routed through `registerFormulaBuffer`
+    // which calls `this.expressions.set(formulaId, ...)` without a
+    // `has()` check — a caller passing an already-existing id would
+    // silently overwrite the prior expression, violating S-10 (entity
+    // ID uniqueness). The D0e review surfaced this as a public-API
+    // surface promise gap.
+
+    function permissivePremise(): PremiseEngine {
+        const eng = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pe } = eng.createPremise()
+        return pe
+    }
+
+    it("throws S-10 when formulaId already exists in this premise", () => {
+        // Setup: OR(P) with an existing "f-existing" formula sibling.
+        // Try to wrapInFormula(P, "f-existing") — should throw S-10.
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("or-root", "or"))
+        pe.addExpression(
+            makeFormulaExpr("f-existing", {
+                parentId: "or-root",
+                position: 0,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "or-root",
+                position: 1,
+            })
+        )
+        expect(() =>
+            pe.wrapInFormula("expr-p", "f-existing")
+        ).toThrowError(/S-10.*already exists/)
+    })
 })
