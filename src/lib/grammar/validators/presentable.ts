@@ -10,6 +10,7 @@
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
 import type { TCorePropositionalExpression } from "../../schemata/index.js"
+import { hasBinaryOperatorInBoundedSubtree } from "../bounded-subtree.js"
 
 type TChildMap = Map<string, TCorePropositionalExpression[]>
 
@@ -110,9 +111,16 @@ export function validateP2(ctx: TValidatorContext): readonly TViolation[] {
 export function validateP3(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     const children = buildChildMap(ctx.expressions)
+    const exprById = new Map<string, TCorePropositionalExpression>()
+    for (const e of ctx.expressions) exprById.set(e.id, e)
+    const lookup = (id: string): readonly TCorePropositionalExpression[] =>
+        children.get(id) ?? []
+    const getExpression = (
+        id: string
+    ): TCorePropositionalExpression | undefined => exprById.get(id)
     for (const f of ctx.expressions) {
         if (f.type !== "formula") continue
-        if (!hasBinaryOperatorInBoundedSubtree(f, children)) {
+        if (!hasBinaryOperatorInBoundedSubtree(f.id, lookup, getExpression)) {
             violations.push({
                 tier: "presentable",
                 code: "P-3",
@@ -124,39 +132,6 @@ export function validateP3(ctx: TValidatorContext): readonly TViolation[] {
         }
     }
     return violations
-}
-
-/**
- * Walk the bounded subtree rooted at `formula` — stopping the walk at
- * any nested `formula` descendant (those start a new bounded scope and
- * are P-3-evaluated independently). Return `true` if any binary
- * operator (`and` / `or`) is in scope.
- *
- * Note: `implies` and `iff` are intentionally excluded from the "binary
- * operator" check. S-5 restricts both to premise roots, so they cannot
- * appear as formula descendants in a Structural-valid tree. Filtering
- * them out here would be redundant; not checking them is correct.
- */
-function hasBinaryOperatorInBoundedSubtree(
-    formula: TCorePropositionalExpression,
-    children: TChildMap
-): boolean {
-    const initialKids = children.get(formula.id) ?? []
-    const stack: TCorePropositionalExpression[] = [...initialKids]
-    while (stack.length > 0) {
-        const cursor = stack.pop()!
-        if (
-            cursor.type === "operator" &&
-            (cursor.operator === "and" || cursor.operator === "or")
-        ) {
-            return true
-        }
-        // Stop the walk at nested formulas — they're a separate scope.
-        if (cursor.type === "formula") continue
-        const kids = children.get(cursor.id) ?? []
-        stack.push(...kids)
-    }
-    return false
 }
 
 /**

@@ -56,6 +56,7 @@ import type {
     TCorePropositionalVariable,
     TCoreClaim,
 } from "../schemata/index.js"
+import { hasBinaryOperatorInBoundedSubtree } from "./bounded-subtree.js"
 
 /**
  * Convergence safety cap — typically AN converges in ≤ 3 iterations
@@ -184,12 +185,13 @@ function collapseOneDoubleNegationInPremise<
  *      unjustified per P-3, so it disappears).
  *
  * Bounded-subtree traversal stops at nested formulas (each formula
- * is a separate P-3 scope). The local
- * `hasBinaryOperatorInBoundedSubtreeFor` helper mirrors the validator's
- * `hasBinaryOperatorInBoundedSubtree` in
- * `validators/presentable.ts` but operates against
- * `pe.getChildExpressions(id)` so AN-3 doesn't need access to the
- * validator's internal `TChildMap`.
+ * is a separate P-3 scope). The shared
+ * `hasBinaryOperatorInBoundedSubtree` helper in
+ * `src/lib/grammar/bounded-subtree.ts` is used by both this rule and
+ * the P-3 validator; AN-3 binds its lookup function to
+ * `pe.getChildExpressions(id)` so it sees live mid-mutation reads,
+ * while the validator binds to a snapshot `TChildMap`. The lift
+ * resolves the pre-D0e duplication (D0a P2 #3 / D0d P2 #3).
  *
  * Behavior parity with the legacy `ExpressionManager.normalize()`
  * passes 1 + 2 is asserted by the regression-guard tests in
@@ -257,59 +259,17 @@ function collapseOneAN3InPremise<
             }
             if (
                 children.length === 1 &&
-                !hasBinaryOperatorInBoundedSubtreeFor(pe, children[0].id)
+                !hasBinaryOperatorInBoundedSubtree(
+                    children[0].id,
+                    (id) => pe.getChildExpressions(id),
+                    (id) => pe.getExpression(id)
+                )
             ) {
                 // Unjustified formula (no binary operator in bounded
                 // subtree) — promote single child.
                 pe.removeExpression(expr.id, false)
                 return true
             }
-        }
-    }
-    return false
-}
-
-/**
- * Returns `true` if the subtree rooted at `expressionId` (within
- * `pe`) contains a binary operator (`and` or `or`). Traversal stops
- * at nested formulas — each formula is its own P-3 scope.
- *
- * Mirrors `hasBinaryOperatorInBoundedSubtree` in
- * `src/lib/grammar/validators/presentable.ts`, but operates against
- * the premise engine's public child-lookup API instead of the
- * validator's `TChildMap`. The duplication is intentional: AN-3's
- * collapse decision happens mid-mutation when the validator's
- * snapshot would be stale.
- *
- * Note: `implies` and `iff` are intentionally excluded from the
- * "binary operator" check — S-5 restricts both to premise roots, so
- * they cannot appear as formula descendants in a Structural-valid
- * tree.
- */
-function hasBinaryOperatorInBoundedSubtreeFor<
-    TArg extends TCoreArgument,
-    TPremise extends TCorePremise,
-    TExpr extends TCorePropositionalExpression,
-    TVar extends TCorePropositionalVariable,
->(
-    pe: PremiseEngine<TArg, TPremise, TExpr, TVar>,
-    expressionId: string
-): boolean {
-    const root = pe.getExpression(expressionId)
-    if (!root) return false
-    const stack = [root]
-    while (stack.length > 0) {
-        const cursor = stack.pop()!
-        if (
-            cursor.type === "operator" &&
-            (cursor.operator === "and" || cursor.operator === "or")
-        ) {
-            return true
-        }
-        // Stop at nested formulas — separate scope.
-        if (cursor.id !== expressionId && cursor.type === "formula") continue
-        for (const child of pe.getChildExpressions(cursor.id)) {
-            stack.push(child)
         }
     }
     return false
