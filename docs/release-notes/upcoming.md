@@ -117,6 +117,19 @@ runtime. Switching grounding kinds on the same derivation premise is
 "empty the antecedent, then call the other method"; the premise
 persists across the switch.
 
+### Fork inherits `behavior`
+
+`forkArgumentEngine(source, …)` and `PropositCore.forkArgument(id, …)`
+both inherit the source engine's `behavior` setting (`'assistive'` or
+`'permissive'`) in the forked engine. Pass `options.behavior` to
+override — useful for flows that fork a permissive editing state into
+an assistive "publish-ready" copy.
+
+Pre-1.0 the fork path silently reset the forked engine to the default
+`'assistive'` (`behavior` was deliberately omitted from snapshots, and
+the fork path rebuilds via `fromSnapshot`). 1.0 threads the setting
+through both fork entry points.
+
 ### Snapshot loading accepts any Structural state
 
 `fromSnapshot()` and `fromData()` no longer take a `grammarConfig`

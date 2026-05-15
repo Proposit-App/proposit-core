@@ -141,8 +141,31 @@ _To be filled in as commits land._
   validation), `ArgumentLibrary.validate()`, and the CLI `validate`
   command. Inline the `runLoadTimeValidationCore` wrapper at its two
   call sites (`fromSnapshot`, `fromData`).
-- D5: Update every public interface JSDoc + add engine-error-vs-
-  grammar-rule namespace comment.
+- D5 (`9959107`): Thread `behavior` through the fork path —
+  `forkArgumentEngine` reads `engine.behavior` and sets it on the
+  forked snapshot's config before `fromSnapshot`; new
+  `TForkArgumentOptions.behavior` optional override wins when
+  supplied. `PropositCore.forkArgument` re-snapshots the freshly
+  forked engine for the claim-remap step and also carries
+  `forkedEngine.behavior` into the second `fromSnapshot` rebuild.
+  Both `FOLLOWUP(D5)` markers resolved; eight new tests cover
+  inheritance, override, default, and independence semantics.
+- D6 (`48a3f7d` + `2bd5f1b` + `6fdd128`): Final v1.0 cleanup.
+  Interface JSDoc cleanup — drop pre-v1.0 references
+  (`collapseDoubleNegation`, `negationInsertFormula`,
+  `enforceFormulaBetweenOperators`, P-1 mutation-time `@throws`)
+  from `insertExpression` / `wrapExpression` / `toggleNegation` /
+  `changeOperator` / `removeVariable` /
+  `deleteExpressionsUsingVariable`; replace with v1.0 AN post-hook
+  contract descriptions. Sweep parked P3 nits (the
+  `pe.toPremiseData() as unknown as TCorePremise` double-cast in
+  `naked-q.ts`, the redundant `child as unknown as TExpr` in
+  `expression-manager.ts`'s `wrapInFormula`, the now-noise MDPE
+  history comments at `premise-engine.ts` S-14 enforcement +
+  `mutation-structural.test.ts` S-14 derivation test +
+  `core.test.ts` fork-derivation test). Replace ~80 occurrences of
+  the deprecated `toThrowError` matcher with `toThrow` in
+  `test/core.test.ts`.
 
 ## Phase E — Documentation finalize (pending)
 

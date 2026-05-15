@@ -2,6 +2,41 @@
 
 > **Implementation status — 2026-05-15 (latest), branch `grammar-tiers/core` at HEAD.**
 >
+> **Phase D complete. Ready for v1.0 publish coordination.** All phases — A, B (all), C1–C8, D0 (a–f), D1, D2, D2b, D3, D4, D5, and D6 — have landed. The `grammar-tiers/core` branch carries the full v1.0 design: four-tier grammar model (`Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable`); `validate(tier)` + `validateInvariants()` complementary methods on `ArgumentEngine`; `normalize(tier?)` global pass; `behavior: 'assistive' | 'permissive'` with AN post-mutation hook; targeted repair primitives; `populateFromCitations` + `populateFromAxioms` factories (naked-Q-only, no-throw); fork path threads `behavior` from source to forked engine. The legacy `grammarConfig` / `autoNormalize` / `ManagedDerivationPremiseEngine` / `LOAD_GRAMMAR`-`STRICT_GRAMMAR` machinery, the 11 inline P-1 throws, the `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` code, and the legacy `engine.validate()` no-arg overload are all gone.
+>
+> **Tests: 1453 passing, 1 skipped, 0 failing.** `pnpm run check` fully green (typecheck + lint + test + build + docs).
+>
+> **D5 + D6 implementation notes (2026-05-15, final fresh-context dev):**
+>
+> Five-commit cycle landing D5 (behavior threading through fork path) plus the four parts of D6 (interface JSDoc cleanup, parked P3 nits, `toThrowError` → `toThrow` sweep, this reconciliation).
+>
+> 1. **D5 — Thread `behavior` through fork path (`9959107`).** The fork path previously dropped the source engine's behavior setting: `forkArgumentEngine` (and `PropositCore.forkArgument` by delegation) snapshots the source then rebuilds via `ArgumentEngine.fromSnapshot`, but `snapshot()` deliberately omits `behavior` from the serialized config. The forked engine therefore restored as the default `'assistive'`, silently flipping a permissive source into an assistive copy. **Resolution:** thread `behavior` through the fork pipeline without changing `snapshot()`'s contract. `forkArgumentEngine` reads `engine.behavior` and sets it on `snap.config` before `fromSnapshot`; a new `TForkArgumentOptions.behavior` optional override wins when supplied (so callers can flip permissive ↔ assistive at fork time). `PropositCore.forkArgument` re-snapshots the freshly forked engine for the claim-remap step, so it also explicitly carries `forkedEngine.behavior` into `snap.config` before the second `fromSnapshot` rebuild. The two `FOLLOWUP(D5)` markers (`proposit-core.ts:425-435` and the matched reference in `argument-engine.ts`'s `snapshot()` comment) are resolved. Eight new tests cover inheritance, override, default, and independence semantics for both the standalone `forkArgumentEngine` and the `PropositCore.forkArgument` paths.
+> 2. **D6 part 1 — Interface JSDoc cleanup (`48a3f7d`).** Sweep `src/lib/core/interfaces/*.interfaces.ts` for stale pre-v1.0 references. `insertExpression` / `wrapExpression` / `toggleNegation`: drop the `@throws` for the deleted P-1 enforcement and the `collapseDoubleNegation` / `negationInsertFormula` / `enforceFormulaBetweenOperators` flag references; replace with the v1.0 contract (AN post-hook in assistive, surfaced via `validate('presentable')` in permissive). `changeOperator`: rephrase the "if required by grammar enforcement" buffer-insertion clause — the split path now unconditionally inserts the formula buffer as part of the bundled composite mutation. `removeVariable` / `deleteExpressionsUsingVariable`: replace pre-mutation cascade descriptions with the AN-3 post-hook contract. The two intentional historical-note references to `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` (added by D4 to explain why the code no longer exists) stay — they document the migration.
+> 3. **D6 part 2 — Parked P3 nits sweep (`2bd5f1b`).** `naked-q.ts:71` `pe.toPremiseData() as unknown as TCorePremise` double-cast: drop entirely. `TPremise extends TCorePremise` via the generic constraint, so `.type` is in-scope without any cast. `expression-manager.ts` `child as unknown as TExpr` redundant cast inside `wrapInFormula`: `child` is already typed `TExpr` from `this.expressions.get(childId)` (where `this.expressions: Map<string, TExpr>`); cast dropped. MDPE history comments at `premise-engine.ts:339` (S-14 enforcement) and `mutation-structural.test.ts:225` (S-14 derivation-root throws test) + the matching comment block in the `Fork integration with derivation premises` test in `core.test.ts:22760-22778`: deleted (noise — the spec §4 rationale stays in the first comment; the rest is no longer useful to future readers). The MDPE-history block in `src/lib/types/validation.ts` is kept — it's load-bearing migration documentation explaining where the deleted `DERIVATION_*` engine-error constants' functionality moved to.
+> 4. **D6 part 3 — `toThrowError` deprecation sweep (`6fdd128`).** vitest 4 emits deprecation warnings for the legacy `toThrowError` matcher — `toThrow` is the recommended form (identical semantics). All ~80 occurrences in `test/core.test.ts` replaced; no other test file uses the deprecated form. Purely a deprecation-warning cleanup; no test behavior changes. Prettier-formatted as part of the sweep.
+> 5. **D6 part 4 — Implementation Status reconciliation (this commit).** Phase D marked complete; the "next-up" list emptied. The branch is ready for the orchestrator's v1.0 publish coordination cycle.
+>
+> **Outstanding items for the orchestrator's publish-coordination cycle:**
+>
+> - **Manual smoke-test verification** — `bash scripts/smoke-test.sh` after `pnpm run build`. Asked for in every fresh-context review since D1 (Bash denied in reviewer sandboxes); the human runs it pre-publish.
+> - **Documentation rewrite** — `docs/Proposit_Grammar.md`, `README.md`, `CLAUDE.md` "Key design rules", `docs/api-reference.md`, `CLI_EXAMPLES.md`, `scripts/smoke-test.sh`, `examples/arguments/*.yaml` per spec §11 + briefing §10. These are publish-coordination work, deliberately deferred out of Phase D dev.
+> - **Version bump + publish** — `pnpm version major`, rename `docs/release-notes/upcoming.md` → `v{version}.md`, `pnpm publish --access public`, push branch + tag, PR to main.
+> - **Post `READY:` on broker thread `grammar-tiers`** so server + mobile can bump their deps.
+>
+> **Post-v1.0 tracking (NOT publish-coordination):**
+>
+> - **S-14 enforcement audit at root-reshaping paths** — flagged as post-D0 tracking issue; not blocking publish.
+> - **Skipped `iff`-rooted Task-22 test** at `test/core.test.ts` — separate task.
+> - **Tier-aware library aggregation** (`ArgumentLibrary.validate()` / `PropositCore.validate()` `validateGrammar(tier)` parallels) — deferred to post-v1.0 per user decision 2026-05-15. Today's `ArgumentLibrary.validate()` / `PropositCore.validate()` aggregate per-engine `validateInvariants()` and stay correctly-scoped at v1.0.
+>
+> ---
+>
+> **Older history is preserved verbatim below.** _The "Phases A, B (all), C1–C8, D0 (a–f), D1, D2, D2b, D3, and D4 complete" status block immediately below this one describes the state before D5 + D6 landed (1445 passing); the per-phase implementation notes below it (D2b, D3+D4, D1, D0a–D0f, etc.) document the design decisions and audit findings of those phases and remain authoritative for them._
+>
+> ---
+>
+> **Implementation status — 2026-05-15 (D3+D4 complete), branch `grammar-tiers/core` at `19ca6d3`.**
+>
 > **Phases A, B (all), C1–C8, D0 (a–f), D1, D2, D2b, D3, and D4 complete.** D2 deleted the entire legacy `grammarConfig` / `autoNormalize` / `TGrammarOptions` / `DEFAULT_GRAMMAR_CONFIG` / `PERMISSIVE_GRAMMAR_CONFIG` / `resolveAutoNormalize` machinery; the 11 inline P-1 enforcement throws; the `wrapInsertFormula` / `negationInsertFormula` / `repositionOnCollision` / `absorbSameOperator` / `collapseEmptyFormula` / `collapseDoubleNegation` inline cascades; the legacy `validate()` 3g `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` block + its constant; `pe.normalizeExpressions()` + `engine.normalizeAllExpressions()` + `em.normalize()` (5-pass sweep) + their private helpers (`collapseIfNeeded`, `promoteChild`, `absorbSameOperator`, `simulateCollapseChain`, `simulatePostPromotionCollapse`, `hasBinaryOperatorInBoundedSubtree`); the PERMISSIVE swap inside `applyANToFixedPoint` and inside `runLoadTimeValidationCore`; the four orphan `DERIVATION_*` engine-error constants (P2 #2 carry-over); the AN-4 `absorbSameOperatorMatch` phase-2 ±1 shift heuristic (replaced with forbidden-set walk per P2 #1 carry-over); the stale `populate-from.ts:37-38` MDPE comment (P3 #1 carry-over). D2b then wired the AN post-mutation hook end-to-end (5 commits) — see "D2b implementation notes" below. D3 + D4 (this cycle, 2026-05-15) folded the D2+D2b review's P2/P3 carry-overs (unified parser/import builder pattern with populate-from style; unified behavior-check to `=== "assistive"` across all three builders); verified `LOAD_GRAMMAR` / `STRICT_GRAMMAR` already-zero residual references; deleted `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` (constant + wrapper override + type-union member); renamed the legacy `engine.validate()` no-arg overload to `engine.validateInvariants()` (with all internal + external callers + tests updated + `TArgumentLifecycle` interface refreshed); inlined `runLoadTimeValidationCore` at its two call sites — see "D3 + D4 implementation notes" below.
 >
 > **Tests: 1445 passing, 1 skipped, 0 failing.** `pnpm run check` fully green (typecheck + lint + test + build). 19 legacy-cascade tests in `test/core.test.ts` deleted (per the dispatch's recommendation) — they asserted on the pre-v1.0 inline AN cascade fired from inside `removeExpression` / `changeOperator` / `toggleNegation` / `removeVariable` / `deleteExpressionsUsingVariable`, and their contract is now covered by `test/grammar/an-rules.test.ts` + `test/grammar/auto-normalize.test.ts`. The 6 v1.0-validating tests (3 populate-from + 3 auto-normalize) all green; the auto-normalize tests were rewritten to test the post-hook via the permissive-build + flip-to-assistive + trigger-mutation pattern (the naive "addExpression(or) then addExpression(and, parent=or)" was incompatible with eager AN-3 0-child collapse).
@@ -33,6 +68,11 @@
 > **Latest commits (newest first):**
 >
 > ```
+> 6fdd128     D6   — replace deprecated toThrowError with toThrow in core.test.ts (~80 sites)
+> 2bd5f1b     D6   — sweep parked P3 nits (naked-q.ts cast, em.ts redundant cast, MDPE history comments)
+> 48a3f7d     D6   — interface JSDoc cleanup (remove pre-v1.0 references)
+> 9959107     D5   — thread behavior through fork path (FOLLOWUP(D5) resolved; +8 tests)
+> 19ca6d3     —    — docs(plan): D3+D4 reconcile Implementation Status
 > 478a6e1     D4   — rename legacy validate() no-arg overload to validateInvariants(); inline runLoadTimeValidationCore
 > 5e70c76     D4   — delete DERIVATION_STRUCTURE_INVALID_AT_EVALUATION (constant + wrapper override + type-union member)
 > 3b85538     D3   — unify behavior check to === "assistive" across builders (D2+D2b review P3 #1)
@@ -268,10 +308,10 @@ x`) and buffered (`NOT_outer → formula → NOT_inner → x`) forms are
 >   for pathological inputs the legacy `promoteChild` (private)
 >   bypassed the check. Defer the bypass-primitive design to D0e.
 >
-> **Phase D remaining work after D3 + D4 (complete):**
+> **Phase D remaining work after D3 + D4 — RESOLVED in D5 + D6 (see the latest Implementation Status block above).**
 >
-> - **D5 (next-up)** — Resolve the `FOLLOWUP(D5)` marker at `proposit-core.ts` (behavior threading through the fork path).
-> - **D6** — Interface JSDoc cleanup; sweep the parked P3 carry-overs (`naked-q.ts:71` cast, `em.ts:2506` redundant cast, `toThrowError` deprecation warnings, history-flavored MDPE comments at `premise-engine.ts:368` and `mutation-structural.test.ts:195`). Also `proposit-core.ts:427` `FOLLOWUP(D5)` markers (overlap with D5).
+> - **D5 (complete in `9959107`)** — `FOLLOWUP(D5)` markers at `proposit-core.ts:425` and `argument-engine.ts:1797` both resolved; behavior now threads through both fork entry points.
+> - **D6 (complete in `48a3f7d` + `2bd5f1b` + `6fdd128`)** — Interface JSDoc cleanup done; the parked P3 carry-overs (`naked-q.ts` cast, `em.ts` redundant cast, `toThrowError` deprecation, MDPE history comments) all swept.
 >
 > **Older history is preserved verbatim below (do not delete) so that
 > the C1–C8 design decisions and audit findings stay discoverable.**
