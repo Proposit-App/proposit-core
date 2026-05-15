@@ -443,49 +443,94 @@ function absorbSameOperatorMatch<
     }
 
     // Reparent each inner child into the outer at its computed
-    // position. Positions are `leftPos + ((rightPos - leftPos) /
-    // (count + 1)) * (i + 1)`, truncated to integer per the legacy.
+    // position. Naive position formula (from the legacy AN-4):
+    //   `leftPos + ((rightPos - leftPos) / (count + 1)) * (i + 1)`,
+    // truncated to integer.
     //
-    // D1 — P2 #1: after `redistributeChildrenEvenly` fires the formula
-    // sits at one of the redistributed slots between
-    // `effectiveLeftPos` and `effectiveRightPos`. If a phase-2 target
-    // happens to land on that exact slot, `pe.reparentExpression`
-    // would trip S-9 (the formula is still a child of `outerId` at
-    // this point — we remove it below after the inner reparents). The
-    // same hazard exists on the non-redistribute path when the
-    // formula's pre-mutation position equals a computed target. Look
-    // up the formula's *current* position once and shift any
-    // colliding target to an adjacent free slot. The two phase-2
-    // targets bracketing the formula are spaced apart by
-    // `(effectiveRightPos - effectiveLeftPos)/(count+1)` which is ≥ 2
-    // whenever the redistribute fallback fired (range / (total + 1)
-    // ≥ 2 across the full position keyspace) and ≥ 2 on the
-    // non-redistribute path (gap > count entry guarantees spacing >
-    // 1) — so a ±1 shift cannot collide with another target.
+    // **D2 — D1 P2 #1 carry-over: forbidden-set walk.** A naive
+    // computed target can collide with two kinds of obstacles, both
+    // of which would trip S-9 inside `pe.reparentExpression`:
+    //
+    //   (a) **The formula's current position.** The formula is still
+    //       a child of `outerId` at this point — we only remove it
+    //       *after* the inner reparents. After
+    //       `redistributeChildrenEvenly` fires the formula sits at
+    //       one of the redistributed slots between `effectiveLeftPos`
+    //       and `effectiveRightPos`; on the non-redistribute path
+    //       the formula keeps its pre-mutation position. Either way,
+    //       any naive target equal to the formula's position would
+    //       collide.
+    //
+    //   (b) **Already-placed inner-child target positions.** When
+    //       `gap = count + 1` (integer spacing 1) the D1 ±1 shift
+    //       moved a colliding target to the slot reserved for the
+    //       *next* planned target — the next iteration then tripped
+    //       S-9 against the just-placed inner child.
+    //
+    // The fix tracks both obstacles in a single `forbidden` set: the
+    // formula's current position seeds the set, and each chosen
+    // target gets added as it's planned. For any computed target
+    // already in `forbidden`, scan outward (±1, ±2, ...) for the
+    // first free integer strictly inside `(effectiveLeftPos,
+    // effectiveRightPos)`. The band-exhaustion case (no free integer
+    // anywhere in the band) is structurally reachable only when the
+    // position keyspace is deeply pathological — throw with a
+    // diagnostic that names the forbidden set so the next dev can
+    // triage.
     const refreshedFormula = pe.getExpression(formulaId)
     const formulaCurrentPosition = refreshedFormula
         ? refreshedFormula.position
         : null
+    const forbidden = new Set<number>()
+    if (formulaCurrentPosition !== null) {
+        forbidden.add(formulaCurrentPosition)
+    }
     for (let i = 0; i < count; i++) {
-        let targetPosition = Math.trunc(
+        const naiveTarget = Math.trunc(
             effectiveLeftPos +
                 ((effectiveRightPos - effectiveLeftPos) / (count + 1)) * (i + 1)
         )
-        if (
-            formulaCurrentPosition !== null &&
-            targetPosition === formulaCurrentPosition
-        ) {
-            // Shift toward effectiveLeftPos when the colliding target
-            // is to the right of the formula's bracket midpoint;
-            // otherwise shift toward effectiveRightPos. Either +1 or
-            // -1 is guaranteed free relative to the other planned
-            // targets by the spacing argument above.
-            targetPosition =
-                targetPosition < effectiveRightPos
-                    ? targetPosition + 1
-                    : targetPosition - 1
+        let chosen = naiveTarget
+        if (forbidden.has(chosen)) {
+            // Scan outward in expanding ±k rings for a free integer
+            // strictly inside `(effectiveLeftPos, effectiveRightPos)`.
+            // Down-first then up-first per ring matches the prior ±1
+            // shift's "shift toward effectiveLeftPos when target is
+            // left of midpoint" bias without depending on the
+            // midpoint calculation (the integer-truncation boundary
+            // doesn't change ring search behavior).
+            const bandWidth = effectiveRightPos - effectiveLeftPos
+            let found = false
+            for (let k = 1; k < bandWidth; k++) {
+                const down = naiveTarget - k
+                if (down > effectiveLeftPos && !forbidden.has(down)) {
+                    chosen = down
+                    found = true
+                    break
+                }
+                const up = naiveTarget + k
+                if (up < effectiveRightPos && !forbidden.has(up)) {
+                    chosen = up
+                    found = true
+                    break
+                }
+            }
+            if (!found) {
+                const sortedForbidden = [...forbidden]
+                    .sort((a, b) => a - b)
+                    .join(", ")
+                throw new Error(
+                    `AN-4 absorbSameOperatorMatch: no free position in ` +
+                        `(${effectiveLeftPos}, ${effectiveRightPos}) for ` +
+                        `inner child #${i} of "${innerId}" under "${outerId}" ` +
+                        `(forbidden: [${sortedForbidden}]). ` +
+                        `Position keyspace is over-saturated — argument ` +
+                        `may be in a structurally pathological state.`
+                )
+            }
         }
-        pe.reparentExpression(innerChildren[i].id, outerId, targetPosition)
+        forbidden.add(chosen)
+        pe.reparentExpression(innerChildren[i].id, outerId, chosen)
     }
 
     // Inner is now empty. Remove with deleteSubtree=true (no subtree
