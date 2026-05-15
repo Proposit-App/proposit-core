@@ -151,6 +151,12 @@ export interface TExpressionMutations<
      * expression inherits the tree slot of the anchor node
      * (`leftNodeId ?? rightNodeId`).
      *
+     * As of v1.0 (D2) P-1 (non-not operator under operator) is **not**
+     * enforced at mutation time — the AN-1 post-hook in assistive
+     * behavior inserts the formula buffer; in permissive behavior the
+     * un-buffered state stays and surfaces via
+     * `engine.validate('presentable')`.
+     *
      * @param expression - The expression to insert, including position and
      *   parent assignment.
      * @param leftNodeId - The existing node to become the left child of
@@ -160,8 +166,6 @@ export interface TExpressionMutations<
      * @returns The inserted expression (with checksum) and changeset.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
-     * @throws If a non-not operator would become a direct child of another
-     *   operator expression.
      */
     insertExpression(
         expression: TExpressionInput<TExpr>,
@@ -177,6 +181,12 @@ export interface TExpressionMutations<
      * Exactly one of `leftNodeId` / `rightNodeId` must be provided — it
      * identifies the existing node and which child slot it occupies.
      *
+     * As of v1.0 (D2) P-1 (non-not operator under operator) is **not**
+     * enforced at mutation time — the AN-1 post-hook in assistive
+     * behavior inserts the formula buffer; in permissive behavior the
+     * un-buffered state stays and surfaces via
+     * `engine.validate('presentable')`.
+     *
      * @param operator - The new operator expression to wrap with.
      * @param newSibling - The new sibling expression to add alongside the
      *   existing node.
@@ -185,8 +195,6 @@ export interface TExpressionMutations<
      * @returns The inserted operator (with checksum) and changeset.
      * @throws If the new sibling is a variable reference and the variable
      *   has not been registered.
-     * @throws If a non-not operator would become a direct child of another
-     *   operator expression.
      */
     wrapExpression(
         operator: TExpressionWithoutPosition<TExpr>,
@@ -199,14 +207,13 @@ export interface TExpressionMutations<
      * NOT operator, removes the NOT (promoting the expression). Otherwise,
      * wraps the expression with a new NOT operator.
      *
-     * When the target is already a NOT expression and `collapseDoubleNegation`
-     * is enabled, removes the existing NOT (promoting its child) instead of
-     * wrapping in another NOT — preventing NOT(NOT(x)).
-     *
-     * When the target is a non-not operator and `negationInsertFormula` is
-     * enabled, auto-inserts a formula buffer between the new NOT and the
-     * target to satisfy the operator nesting restriction. Throws if the flag
-     * is disabled and `enforceFormulaBetweenOperators` is `true`.
+     * As of v1.0 (D2) P-1 (non-not operator under operator) and P-2
+     * (NOT(NOT(x)) double-negation) are **not** enforced at mutation
+     * time. The post-mutation AN hook handles them in assistive
+     * behavior: AN-1 inserts the formula buffer between NOT and a
+     * non-not operator child; AN-2 collapses NOT(NOT(x)) → x. In
+     * permissive behavior both states stay and surface via
+     * `engine.validate('presentable')`.
      *
      * @param expressionId - The ID of the expression to toggle negation on.
      * @param extraFields - Optional additional fields to merge into newly
@@ -216,8 +223,6 @@ export interface TExpressionMutations<
      * @returns The new NOT expression when adding negation, or `null` when
      *   removing it, along with the changeset.
      * @throws If the expression does not exist in this premise.
-     * @throws If `negationInsertFormula` is disabled and the target is a
-     *   non-not operator (would create operator-under-operator).
      */
     toggleNegation(
         expressionId: string,
@@ -234,7 +239,10 @@ export interface TExpressionMutations<
      *   reparents its children under the parent.
      * - **Split:** The operator has >2 children. Extracts `sourceChildId` and
      *   `targetChildId` into a new sub-operator of type `newOperator`,
-     *   inserting a formula buffer if required by grammar enforcement.
+     *   inserting a formula buffer between the parent and the new
+     *   sub-operator (the buffer is part of the bundled composite mutation
+     *   so the resulting tree satisfies P-1 regardless of the engine's
+     *   `behavior` setting).
      *
      * @param expressionId  The operator expression to change.
      * @param newOperator   The target operator type.
@@ -348,7 +356,10 @@ export interface TVariableReferences<
     getReferencedVariableIds(): Set<string>
     /**
      * Deletes all expressions that reference the given variable ID,
-     * including their subtrees. Operator collapse runs after each removal.
+     * including their subtrees. As of v1.0 (D2) the pre-mutation operator
+     * collapse cascade is gone — AN-3 (post-mutation hook in assistive
+     * behavior) handles 0/1-child operator/formula collapse on the
+     * surviving parents.
      *
      * @param variableId - The variable ID whose referencing expressions
      *   should be removed.

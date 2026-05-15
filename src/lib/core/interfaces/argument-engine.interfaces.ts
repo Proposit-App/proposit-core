@@ -276,7 +276,11 @@ export interface TVariableManagement<
     ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>
     /**
      * Removes a variable and cascade-deletes all expressions referencing it
-     * across every premise (including subtrees and operator collapse).
+     * across every premise (including their full subtrees). As of v1.0
+     * (D2) operator collapse on the surviving parents is the AN-3
+     * post-mutation hook's responsibility in assistive behavior; in
+     * permissive behavior the un-collapsed shape stays and surfaces via
+     * `engine.validate('presentable')`.
      *
      * @param variableId - The ID of the variable to remove.
      * @returns The removed variable, or `undefined` if not found.
