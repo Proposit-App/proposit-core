@@ -1,13 +1,42 @@
 # Grammar Tiers — proposit-core Implementation Plan
 
-> **Implementation status — 2026-05-14 (latest), branch `grammar-tiers/core` at HEAD.**
+> **Implementation status — 2026-05-15 (latest), branch `grammar-tiers/core` at HEAD.**
 >
-> **Phases A, B (all), C1–C8, D0 (a–f), and D1 complete. `ManagedDerivationPremiseEngine` is deleted; the legacy `pe.normalizeExpressions()` delegation is gone; all four AN rules are native single-rule passes against the public PE mutation API. The two carry-over P2 items from the D0f dual-review (AN-4 phase-2 formula-position collision + `redistributeChildrenEvenly` no-op skip when `position === target`) are folded.**
-> Tests at 1596 passed + 8 skipped (1631 prior + 1 new D1 P2 #1 regression guard; −35 passing + −1 skipped from MDPE block deletion across constructor validation / fromSnapshot / mutation enforcement / populateFromSupports citations-only / populateFromSupports v0.12). `pnpm run check` green.
+> **Phases A, B (all), C1–C8, D0 (a–f), D1, and D2 (partial) complete.** D2 deleted the entire legacy `grammarConfig` / `autoNormalize` / `TGrammarOptions` / `DEFAULT_GRAMMAR_CONFIG` / `PERMISSIVE_GRAMMAR_CONFIG` / `resolveAutoNormalize` machinery; the 11 inline P-1 enforcement throws; the `wrapInsertFormula` / `negationInsertFormula` / `repositionOnCollision` / `absorbSameOperator` / `collapseEmptyFormula` / `collapseDoubleNegation` inline cascades; the legacy `validate()` 3g `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` block + its constant; `pe.normalizeExpressions()` + `engine.normalizeAllExpressions()` + `em.normalize()` (5-pass sweep) + their private helpers (`collapseIfNeeded`, `promoteChild`, `absorbSameOperator`, `simulateCollapseChain`, `simulatePostPromotionCollapse`, `hasBinaryOperatorInBoundedSubtree`); the PERMISSIVE swap inside `applyANToFixedPoint` and inside `runLoadTimeValidationCore`; the four orphan `DERIVATION_*` engine-error constants (P2 #2 carry-over); the AN-4 `absorbSameOperatorMatch` phase-2 ±1 shift heuristic (replaced with forbidden-set walk per P2 #1 carry-over); the stale `populate-from.ts:37-38` MDPE comment (P3 #1 carry-over).
+>
+> **Tests: 1438 passing, 1 skipped, 25 failing.** `pnpm run typecheck` + `pnpm run build` green; `pnpm run test` red. The 25 failures cluster around the **AN post-mutation hook wiring gap** documented below in "D2 carry-over" — `runAssistiveNormalization` is defined but never called from production code, so assistive-mode mutations no longer trigger AN. Pre-D2 the legacy inline cascades made mutations self-normalizing; D2 removed those, expecting the post-hook to take over — but C1/C2's wiring plan never landed the post-hook callback into `setOnMutate`.
+>
+> **D2 carry-over — AN post-hook wiring (next cycle / D2b candidate):**
+>
+> The `runAssistiveNormalization(engine)` function in `src/lib/grammar/auto-normalize.ts` is the documented "AN post-mutation hook for assistive mode" (spec §5: "After every successful Structural mutation, the engine runs the AN rule set (AN-1..AN-4) as a uniform post-hook"). C2's `behavior` bridge documents this hook. But no production code calls it.
+>
+> **Why this matters:** assistive mode is currently a no-op for AN — mutations don't trigger AN-1 (formula buffer insertion), AN-2 (NOT-NOT collapse), AN-3 (0/1-child operator/formula collapse), or AN-4 (same-operator absorption) on their own. The C6 `populateFromCitations` / `populateFromAxioms` factories build `IMPLIES(OR(...), Q)` antecedents that, in pre-D2 code, picked up the formula buffer between `IMPLIES` and `OR` via the legacy inline `wrapInsertFormula` cascade fired from their internal `addExpression` calls. Post-D2 the buffer doesn't get inserted because the post-hook isn't wired and the inline cascade is gone.
+>
+> **Why wiring it is non-trivial:** the obvious wire-point — `pm.setOnMutate(...)` callback firing `runAssistiveNormalization(this)` — works in principle but breaks ~50+ tests + the CLI + the parser. The root cause: AN-3 collapses 0-child operators **eagerly** in assistive mode, which is correct per spec but incompatible with the incremental-tree-build pattern (`addExpression(op)` → AN-3 collapses op → `addExpression(child)` fails because parent is gone). The build pattern is used by:
+> - The CLI's `hydrateEngine` + `import.ts` (per-command incremental mutations on hydrated state).
+> - The parser's `argument-parser.ts` (build trees node-by-node from parsed AST).
+> - ~100+ test cases in `core.test.ts` (incrementally construct expression trees then assert).
+>
+> **Resolution options for D2b:**
+> 1. Wire the post-hook + switch all incremental builders (CLI, parser, affected tests) to `behavior: "permissive"`. Add explicit `engine.normalize()` calls where AN behavior is desired. Cost: ~100+ test edits; CLI/parser opt-in; risk of subtle behavior drift.
+> 2. Wire the post-hook + introduce a "batched mutation" API (e.g., `engine.batch(() => { ... })` that suppresses the post-hook during a multi-mutation transaction). Cost: new API surface; spec gap to specify.
+> 3. Re-think AN post-hook timing — e.g., fire only after a configurable "settling" interval, or only after `engine.flush()` is called. Cost: significant spec/design work.
+>
+> The failing 25 tests are the surface area of this decision:
+>
+> - **~19 in `core.test.ts`** test the pre-v1.0 inline AN cascade (formula collapse after removeExpression, removeVariable triggers operator collapse, changeOperator absorption, etc.). These are arguably legacy and can be deleted (the AN-3/AN-4 contract is already covered by `test/grammar/an-rules.test.ts`), OR rewritten to call `engine.normalize()` explicitly.
+> - **3 in `test/grammar/populate-from.test.ts`** assert that the C6 factories produce `IMPLIES(formula(OR(...)), Q)` with the buffer — this validates the v1.0 contract and **needs the post-hook wired**.
+> - **3 in `test/grammar/auto-normalize.test.ts`** test the behavior bridge directly — same dependency.
+>
+> **Recommendation to the orchestrator/next dev:** treat D2b as a dedicated cycle focused on (a) the post-hook wiring decision and (b) the test rewrite. The 19 legacy-cascade tests in `core.test.ts` should probably be deleted (they test mutation-internal behavior that v1.0 explicitly factored out into AN post-hook responsibility — the per-rule tests cover the contract). The 6 v1.0-validating tests should drive the wiring design.
 >
 > **Latest commits (newest first):**
 >
 > ```
+> f32516b     D2   — delete legacy grammarConfig machinery + 11 P-1 throws + PERMISSIVE swap (per spec §10.1)
+> 3eb2c27     D2   — remove stale MDPE-routing comment in populate-from.ts (D1 review P3 #1)
+> 946ec0c     D2   — delete 4 orphaned DERIVATION_* engine-error constants (D1 review P2 #2)
+> 1327766     D2   — AN-4 absorbSameOperatorMatch phase-2 forbidden-set walk (D1 review P2 #1)
 > 41f6ecc     D1   — delete ManagedDerivationPremiseEngine (subsumed by D-tier validators + populateFromCitations/Axioms factories)
 > 90026d6     D1   — redistributeChildrenEvenly skip no-op when position === target (P2 #2 carry-over)
 > 5355611     D1   — AN-4 absorbSameOperatorMatch phase-2 target collision with formula position S-9 trip (P2 #1 carry-over)
@@ -229,11 +258,11 @@ x`) and buffered (`NOT_outer → formula → NOT_inner → x`) forms are
 >   for pathological inputs the legacy `promoteChild` (private)
 >   bypassed the check. Defer the bypass-primitive design to D0e.
 >
-> **Phase D remaining work after D1:**
+> **Phase D remaining work after D2 (partial):**
 >
-> - **D2 (next-up)** — Delete the legacy `grammarConfig` / `autoNormalize` / `TGrammarOptions` / `DEFAULT_GRAMMAR_CONFIG` / `PERMISSIVE_GRAMMAR_CONFIG` machinery, the 11 inline P-1 enforcement throws at the briefing §10 sites (with the AN-1 native rewrite already landed, the inline throws are no longer needed — assistive mode handles buffer insertion via the post-mutation hook; permissive mode leaves the unbufferred state and `validate('presentable')` flags it), and the legacy `PremiseEngine.normalizeExpressions()` method. The PERMISSIVE-swap inside `applyANToFixedPoint` becomes unnecessary once the 11 throws are gone — D2 removes it in the same cycle.
-> - **D3** — Delete `LOAD_GRAMMAR` / `STRICT_GRAMMAR` snapshot config split (the constants live in `src/lib/types/grammar.ts` which D2 will delete; verify no other references remain).
-> - **D4** — Delete deprecated `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` evaluation throw plus the legacy `validate()` no-arg overload + `ArgumentEngine.normalizeAllExpressions`.
+> - **D2b (next-up)** — Wire the AN post-mutation hook into `setOnMutate` so assistive-mode mutations trigger AN-1..AN-4 per spec §5. The wiring decision (see "D2 carry-over" block at the top of this status) drives the test-rewrite scope (25 failing tests + CLI/parser permissive defaults). The 19 legacy-cascade tests in `core.test.ts` should likely be deleted (their behavior is already covered by `test/grammar/an-rules.test.ts`); the 6 v1.0-validating tests (3 in `populate-from.test.ts`, 3 in `auto-normalize.test.ts`) should drive the wiring design.
+> - **D3** — Verify no `LOAD_GRAMMAR` / `STRICT_GRAMMAR` references remain (the file carrying them was deleted in D2's `f32516b`; verify and document).
+> - **D4** — Delete deprecated `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` evaluation throw plus the legacy `validate()` no-arg overload + `runLoadTimeValidationCore` simplification. (`ArgumentEngine.normalizeAllExpressions` already deleted in D2.)
 > - **D5** — Resolve the `FOLLOWUP(D5)` marker at `proposit-core.ts` (behavior threading through the fork path).
 > - **D6** — Interface JSDoc cleanup; sweep the parked P3 carry-overs (`naked-q.ts:71` cast, `em.ts:2506` redundant cast, `toThrowError` deprecation warnings).
 >
