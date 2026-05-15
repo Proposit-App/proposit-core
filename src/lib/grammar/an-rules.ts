@@ -50,21 +50,6 @@ import type {
     TCoreClaim,
 } from "../schemata/index.js"
 
-type TAnyEngine = ArgumentEngine<
-    TCoreArgument,
-    TCorePremise,
-    TCorePropositionalExpression,
-    TCorePropositionalVariable,
-    TCoreClaim
->
-
-type TAnyPremiseEngine = PremiseEngine<
-    TCoreArgument,
-    TCorePremise,
-    TCorePropositionalExpression,
-    TCorePropositionalVariable
->
-
 /**
  * Convergence safety cap — typically AN converges in ≤ 3 iterations
  * because the rules are local and idempotent in combination. The cap is
@@ -100,9 +85,15 @@ const MAX_AN_ITERATIONS = 10
  *
  * @since 1.0.0
  */
-export function applyAN2(engine: TAnyEngine): boolean {
+export function applyAN2<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): boolean {
     let anyChanged = false
-    for (const pe of engine.listPremises() as TAnyPremiseEngine[]) {
+    for (const pe of engine.listPremises()) {
         // Loop until no AN-2 pattern remains in this premise. Cascading
         // NOT chains (NOT-NOT-NOT-NOT-x) need multiple sweeps to fully
         // collapse; doing them in one call keeps the outer
@@ -123,7 +114,12 @@ export function applyAN2(engine: TAnyEngine): boolean {
  * Each call collapses exactly one pattern. The caller loops until
  * no patterns remain.
  */
-function collapseOneDoubleNegationInPremise(pe: TAnyPremiseEngine): boolean {
+function collapseOneDoubleNegationInPremise<
+    TArg extends TCoreArgument,
+    TPremise extends TCorePremise,
+    TExpr extends TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable,
+>(pe: PremiseEngine<TArg, TPremise, TExpr, TVar>): boolean {
     for (const expr of pe.getExpressions()) {
         if (expr.type !== "operator" || expr.operator !== "not") continue
         const children = pe.getChildExpressions(expr.id)
@@ -195,9 +191,15 @@ function collapseOneDoubleNegationInPremise(pe: TAnyPremiseEngine): boolean {
  *
  * @since 1.0.0
  */
-export function applyAN3(engine: TAnyEngine): boolean {
+export function applyAN3<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): boolean {
     let anyChanged = false
-    for (const pe of engine.listPremises() as TAnyPremiseEngine[]) {
+    for (const pe of engine.listPremises()) {
         let premiseChanged = true
         while (premiseChanged) {
             premiseChanged = collapseOneAN3InPremise(pe)
@@ -215,7 +217,12 @@ export function applyAN3(engine: TAnyEngine): boolean {
  * tree is stable. The single-collapse-per-call shape mirrors AN-2 so
  * cascading mutations don't trip mid-iteration tree-walk invariants.
  */
-function collapseOneAN3InPremise(pe: TAnyPremiseEngine): boolean {
+function collapseOneAN3InPremise<
+    TArg extends TCoreArgument,
+    TPremise extends TCorePremise,
+    TExpr extends TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable,
+>(pe: PremiseEngine<TArg, TPremise, TExpr, TVar>): boolean {
     for (const expr of pe.getExpressions()) {
         // Sub-case 1 & 2: operator collapse.
         if (expr.type === "operator") {
@@ -272,8 +279,13 @@ function collapseOneAN3InPremise(pe: TAnyPremiseEngine): boolean {
  * they cannot appear as formula descendants in a Structural-valid
  * tree.
  */
-function hasBinaryOperatorInBoundedSubtreeFor(
-    pe: TAnyPremiseEngine,
+function hasBinaryOperatorInBoundedSubtreeFor<
+    TArg extends TCoreArgument,
+    TPremise extends TCorePremise,
+    TExpr extends TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable,
+>(
+    pe: PremiseEngine<TArg, TPremise, TExpr, TVar>,
     expressionId: string
 ): boolean {
     const root = pe.getExpression(expressionId)
@@ -305,7 +317,13 @@ function hasBinaryOperatorInBoundedSubtreeFor(
  *
  * @since 1.0.0
  */
-export function applyAN4(engine: TAnyEngine): boolean {
+export function applyAN4<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): boolean {
     return runLegacyNormalizeAndReportChange(engine)
 }
 
@@ -321,7 +339,13 @@ export function applyAN4(engine: TAnyEngine): boolean {
  *
  * @since 1.0.0
  */
-export function applyAN1(engine: TAnyEngine): boolean {
+export function applyAN1<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): boolean {
     return runLegacyNormalizeAndReportChange(engine)
 }
 
@@ -349,27 +373,58 @@ export function applyAN1(engine: TAnyEngine): boolean {
  *
  * @since 1.0.0
  */
-export function applyANToFixedPoint(engine: TAnyEngine): void {
+export function applyANToFixedPoint<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
+    let lastChangedRule: "AN-1" | "AN-2" | "AN-3" | "AN-4" | null = null
     for (let i = 0; i < MAX_AN_ITERATIONS; i++) {
-        const changed =
-            // Order matches the post-D0f intent: AN-2/3/4 before AN-1
-            // so buffer insertion sees the post-collapse tree. In the
-            // current D0a delegation each `applyAN*` runs the full
-            // legacy sweep, so only the first non-no-op call reports
-            // change; subsequent calls in the same iteration are
-            // effective no-ops. The redundancy is acceptable scaffolding;
-            // D0b-D0e replace each function with a single-rule
-            // implementation that fires only when its pattern matches.
-            applyAN2(engine) ||
-            applyAN3(engine) ||
-            applyAN4(engine) ||
-            applyAN1(engine)
+        // Order matches the post-D0f intent: AN-2/3/4 before AN-1
+        // so buffer insertion sees the post-collapse tree. In the
+        // current D0c-D0d delegation, `applyAN4`/`applyAN1` still
+        // run the full legacy sweep, so only the first non-no-op
+        // call reports change; subsequent calls in the same
+        // iteration are effective no-ops. The redundancy is
+        // acceptable scaffolding; D0d-D0e replace each function
+        // with a single-rule implementation that fires only when
+        // its pattern matches. The `||` short-circuit semantics
+        // become meaningful only post-D0f — see the D0f task in the
+        // plan for the convergence-ordering revisit.
+        let changed = false
+        if (applyAN2(engine)) {
+            lastChangedRule = "AN-2"
+            changed = true
+        } else if (applyAN3(engine)) {
+            lastChangedRule = "AN-3"
+            changed = true
+        } else if (applyAN4(engine)) {
+            lastChangedRule = "AN-4"
+            changed = true
+        } else if (applyAN1(engine)) {
+            lastChangedRule = "AN-1"
+            changed = true
+        }
         if (!changed) return
     }
+    // Diagnostic context: include the iteration count and the
+    // last-changed rule + a representative premise id. Helps the
+    // next dev triage where the loop is oscillating when the cap
+    // trips. Unreachable in D0c-D0d on Presentable-clean inputs
+    // (the legacy sweep is internally fixed-pointed and converges
+    // in a single outer iteration); becomes reachable once D0e is
+    // native and the outer loop is the actual convergence driver.
+    const premises = engine.listPremises()
+    const representativePremiseId =
+        premises.length > 0 ? premises[0].getId() : "<no premises>"
     throw new Error(
-        `AN convergence cap reached (${MAX_AN_ITERATIONS} iterations). ` +
-            `Argument may be in a malformed Structural state — investigate ` +
-            `before re-running.`
+        `AN convergence cap reached (${MAX_AN_ITERATIONS} iterations; ` +
+            `last-changed rule: ${lastChangedRule ?? "<none>"}; ` +
+            `representative premise: ${representativePremiseId}). ` +
+            `Argument may be in a malformed Structural state — ` +
+            `investigate before re-running.`
     )
 }
 
@@ -382,9 +437,15 @@ export function applyANToFixedPoint(engine: TAnyEngine): void {
  * Deleted in D0f when each `applyAN*` becomes a single-rule native
  * implementation.
  */
-function runLegacyNormalizeAndReportChange(engine: TAnyEngine): boolean {
+function runLegacyNormalizeAndReportChange<
+    TArg extends TCoreArgument,
+    TPremise extends TCorePremise,
+    TExpr extends TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable,
+    TClaim extends TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): boolean {
     let anyChanged = false
-    for (const pe of engine.listPremises() as TAnyPremiseEngine[]) {
+    for (const pe of engine.listPremises()) {
         const beforeIds = new Set(pe.getExpressions().map((e) => e.id))
         pe.normalizeExpressions()
         const afterIds = new Set(pe.getExpressions().map((e) => e.id))

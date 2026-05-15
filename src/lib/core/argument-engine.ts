@@ -551,13 +551,13 @@ export class ArgumentEngine<
      * same function reference on every call.
      *
      * Replaces the prior `(engine as unknown as { generateId: () =>
-     * string }).generateId` cast in `populate-from.ts`. External
-     * consumers can call this directly to mint IDs that line up with
-     * the engine's own (typically for fixtures or programmatic
-     * argument construction); the engine itself does not consume input
-     * IDs differently based on origin, so exposing the function is
-     * safe.
+     * string }).generateId` cast in `populate-from.ts`. The accessor is
+     * marked `@internal` so it is not surfaced in generated API docs /
+     * type bundles — the in-package factory callers are its intended
+     * consumers; external programmatic-construction use cases should
+     * supply their own generator rather than borrowing the engine's.
      *
+     * @internal
      * @since 1.0.0
      */
     public get idGenerator(): () => string {

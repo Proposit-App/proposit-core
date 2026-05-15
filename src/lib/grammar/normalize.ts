@@ -70,11 +70,21 @@ export function normalizeArgument<
     // Capture each PE's current config first so we can restore it even
     // if a premise's normalize call throws.
     //
-    // The swap is still required in D0a because `applyANToFixedPoint`
-    // currently delegates to `pe.normalizeExpressions()` which consults
-    // the per-flag `grammarConfig`. D0f moves the swap inside
-    // `applyANToFixedPoint`; D2 deletes both the swap and the legacy
-    // per-flag config.
+    // **The swap is a no-op in D0a-D0d** because the legacy sweep
+    // `ExpressionManager.normalize()` (called via
+    // `pe.normalizeExpressions()` from `applyAN1`/`applyAN4`'s delegated
+    // body and from the AN-2/AN-3 native passes' downstream `pe.*`
+    // primitives) runs all 5 passes unconditionally — it does NOT
+    // consult `grammarConfig` flags. The per-flag gating only applies
+    // to *inline P-1 enforcement* in PE/EM mutation methods (the 11
+    // throw sites slated for removal in D2).
+    //
+    // The swap is **pre-positioned for D0e** (when native AN-1 will
+    // call `pe.addExpression` to insert a formula buffer between two
+    // operators — which trips the inline P-1 throw under permissive's
+    // strict-mode peer `enforceFormulaBetweenOperators=true`). D0f
+    // moves the swap inside `applyANToFixedPoint`; D2 deletes the
+    // swap entirely along with the legacy per-flag config.
     const restoreEntries: {
         pe: ReturnType<
             ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>["listPremises"]
@@ -88,15 +98,7 @@ export function normalizeArgument<
             restoreEntries.push({ pe, prevConfig: prev })
             pe.setGrammarConfig(DEFAULT_GRAMMAR_CONFIG)
         }
-        applyANToFixedPoint(
-            engine as unknown as ArgumentEngine<
-                TCoreArgument,
-                TCorePremise,
-                TCorePropositionalExpression,
-                TCorePropositionalVariable,
-                TCoreClaim
-            >
-        )
+        applyANToFixedPoint(engine)
     } finally {
         for (const { pe, prevConfig } of restoreEntries) {
             pe.setGrammarConfig(prevConfig)

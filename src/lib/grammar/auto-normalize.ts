@@ -56,13 +56,5 @@ export function runAssistiveNormalization<
     TClaim extends TCoreClaim = TCoreClaim,
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
     if (engine.behavior !== "assistive") return
-    applyANToFixedPoint(
-        engine as unknown as ArgumentEngine<
-            TCoreArgument,
-            TCorePremise,
-            TCorePropositionalExpression,
-            TCorePropositionalVariable,
-            TCoreClaim
-        >
-    )
+    applyANToFixedPoint(engine)
 }
