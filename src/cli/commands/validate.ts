@@ -13,7 +13,13 @@ export function registerValidateCommand(
         .option("--json", "Output as JSON")
         .action(async (opts: { json?: boolean }) => {
             const engine = await hydrateEngine(argumentId, version)
-            const result = engine.validate()
+            // D4 — the legacy no-arg `engine.validate()` overload was
+            // renamed to `validateInvariants()` for unambiguous
+            // contrast with the tier-aware `engine.validate(tier)`
+            // grammar validator. The CLI surfaces the invariant sweep
+            // (schema conformance, reference integrity, etc.); for
+            // four-tier grammar validation use a separate command.
+            const result = engine.validateInvariants()
 
             if (opts.json) {
                 printJson(result)

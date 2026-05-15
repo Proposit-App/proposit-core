@@ -106,12 +106,15 @@ describe("ArgumentEngine.validate(tier)", () => {
         expect(() => eng.validate("presentable")).not.toThrow()
     })
 
-    it("preserves the legacy no-arg invariant validation overload", () => {
-        // The pre-1.0 `validate()` returns TInvariantValidationResult,
-        // not a violations array. Both signatures must coexist until
-        // Phase D removes the legacy form.
+    it("exposes the legacy invariant sweep via validateInvariants()", () => {
+        // D4: the pre-1.0 no-arg `validate()` overload was renamed to
+        // `validateInvariants()` for unambiguous contrast with the
+        // tier-aware `validate(tier)` grammar validator. The legacy
+        // invariant sweep (schema conformance, reference integrity,
+        // ownership, conclusion ref, circularity, checksums) stays
+        // accessible under the new name.
         const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP)
-        const result = eng.validate()
+        const result = eng.validateInvariants()
         expect(result).toHaveProperty("ok")
         expect(result).toHaveProperty("violations")
     })

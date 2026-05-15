@@ -16759,7 +16759,14 @@ describe("PremiseEngine — validate", () => {
     })
 })
 
-describe("ArgumentEngine — validate", () => {
+describe("ArgumentEngine — validateInvariants", () => {
+    // D4: the legacy no-arg `validate()` overload was renamed to
+    // `validateInvariants()` for unambiguous contrast with the
+    // tier-aware `validate(tier)` grammar validator. This describe
+    // block exercises the invariant sweep (schema conformance,
+    // reference integrity, ownership, conclusion ref, circularity);
+    // the four-tier grammar validator is tested separately under
+    // `test/grammar/engine-validate.test.ts`.
     const ARG = { id: "arg-1", version: 1 }
 
     it("valid argument with premises and variables → ok", () => {
@@ -16767,7 +16774,7 @@ describe("ArgumentEngine — validate", () => {
         eng.createPremise()
         eng.addVariable(makeVar("v-extra", "X"))
 
-        const result = eng.validate()
+        const result = eng.validateInvariants()
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
     })
@@ -16775,7 +16782,7 @@ describe("ArgumentEngine — validate", () => {
     it("empty argument → ok", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         // Clear conclusion (constructor doesn't auto-assign without premises)
-        const result = eng.validate()
+        const result = eng.validateInvariants()
         expect(result.ok).toBe(true)
         expect(result.violations).toHaveLength(0)
     })
@@ -16801,7 +16808,7 @@ describe("ArgumentEngine — validate", () => {
         const vm = VariableManager.fromSnapshot(snap.variables)
         ;(engine2 as unknown as { variables: VariableManager }).variables = vm
 
-        const result = engine2.validate()
+        const result = engine2.validateInvariants()
         expect(result.ok).toBe(false)
         const claimViolations = result.violations.filter(
             (v) => v.code === ARG_CLAIM_REF_NOT_FOUND
@@ -16845,7 +16852,7 @@ describe("ArgumentEngine — validate", () => {
             argumentId: "wrong-arg",
         } as typeof original)
 
-        const result = restored.validate()
+        const result = restored.validateInvariants()
         expect(result.ok).toBe(false)
         const ownershipViolations = result.violations.filter(
             (v) => v.code === ARG_OWNERSHIP_MISMATCH
@@ -17014,7 +17021,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
-        expect(eng.validate().ok).toBe(true)
+        expect(eng.validateInvariants().ok).toBe(true)
     })
 
     it("existing per-operation errors still throw with rollback", () => {
@@ -17030,7 +17037,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
         const { result: pm } = eng.createPremise()
         eng.removePremise(pm.getId())
         expect(eng.hasPremise(pm.getId())).toBe(false)
-        expect(eng.validate().ok).toBe(true)
+        expect(eng.validateInvariants().ok).toBe(true)
     })
 })
 
@@ -17040,7 +17047,7 @@ describe("PremiseEngine — withValidation bracket", () => {
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
-        expect(eng.validate().ok).toBe(true)
+        expect(eng.validateInvariants().ok).toBe(true)
     })
 
     it("rolls back on failed expression mutation (nonexistent variable)", () => {
@@ -17105,7 +17112,7 @@ describe("PremiseEngine — withValidation bracket", () => {
         )
 
         expect(pm.getExpressions()).toHaveLength(3)
-        expect(eng.validate().ok).toBe(true)
+        expect(eng.validateInvariants().ok).toBe(true)
     })
 
     it("removeExpression rolls back on invariant violation", () => {
@@ -17118,7 +17125,7 @@ describe("PremiseEngine — withValidation bracket", () => {
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
         pm.removeExpression("v1", true)
         expect(pm.getExpressions()).toHaveLength(0)
-        expect(eng.validate().ok).toBe(true)
+        expect(eng.validateInvariants().ok).toBe(true)
     })
 
     it("setExtras succeeds under validation", () => {
@@ -17126,7 +17133,7 @@ describe("PremiseEngine — withValidation bracket", () => {
         const { result: pm } = eng.createPremise()
         pm.setExtras({ label: "test" })
         expect(pm.getExtras()).toEqual({ label: "test" })
-        expect(eng.validate().ok).toBe(true)
+        expect(eng.validateInvariants().ok).toBe(true)
     })
 
     it("updateExpression rolls back on nonexistent variable reference", () => {
@@ -17251,7 +17258,7 @@ describe("ArgumentEngine — bulk path validation", () => {
         expect(() => eng.rollback(badSnap)).toThrow()
         // Engine should still hold the good state
         expect(eng.hasPremise(premiseId)).toBe(true)
-        expect(eng.validate().ok).toBe(true)
+        expect(eng.validateInvariants().ok).toBe(true)
     })
 })
 
@@ -22747,9 +22754,7 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
         const { argumentEngine } = setupArgumentWithBrokenDerivation()
         const result = argumentEngine.validateEvaluability()
         expect(
-            result.issues.some(
-                (v) => v.code === "DERIVATION_STRUCTURE_INVALID"
-            )
+            result.issues.some((v) => v.code === "DERIVATION_STRUCTURE_INVALID")
         ).toBe(true)
     })
 

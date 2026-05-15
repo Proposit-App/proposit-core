@@ -141,14 +141,18 @@ export class ArgumentLibrary<
     }
 
     /**
-     * Merges invariant validation results from all managed engines.
+     * Merges invariant validation results from all managed engines via
+     * each engine's `validateInvariants()` (schema conformance,
+     * reference integrity, ownership, conclusion ref, circularity,
+     * checksums). Four-tier grammar validation runs separately per
+     * engine via `engine.validate(tier)` and is not aggregated here.
      *
      * @returns A combined validation result.
      */
     public validate(): TInvariantValidationResult {
         const violations = []
         for (const engine of this.engines.values()) {
-            const result = engine.validate()
+            const result = engine.validateInvariants()
             violations.push(...result.violations)
         }
         return { ok: violations.length === 0, violations }

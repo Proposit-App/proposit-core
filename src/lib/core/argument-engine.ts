@@ -367,7 +367,7 @@ export class ArgumentEngine<
         this.suppressPremiseValidation()
         try {
             const result = fn()
-            const validation = this.validate()
+            const validation = this.validateInvariants()
             if (!validation.ok) {
                 this.rollbackInternal(snap)
                 throw new InvariantViolationError(validation.violations)
@@ -1916,10 +1916,13 @@ export class ArgumentEngine<
         // is now surfaced via `engine.validate('presentable')`
         // post-load. Non-grammar invariants (schema conformance,
         // reference integrity, conclusion ref, circularity, etc.)
-        // still throw at load time. D4 deletes the legacy
-        // `engine.validate()` no-arg overload along with the helper
-        // below.
-        ArgumentEngine.runLoadTimeValidationCore(engine)
+        // still throw at load time. D4 inlined the
+        // `runLoadTimeValidationCore` wrapper and routes through the
+        // public `validateInvariants()` method.
+        const loadValidation = engine.validateInvariants()
+        if (!loadValidation.ok) {
+            throw new InvariantViolationError(loadValidation.violations)
+        }
 
         return engine
     }
@@ -2062,39 +2065,15 @@ export class ArgumentEngine<
         // C7: PERMISSIVE-gated load-time validation (see matched comment
         // in `fromSnapshot` above). Non-grammar invariants still throw at
         // load; lower-tier grammar violations surface post-load via
-        // `engine.validate(tier)`.
-        ArgumentEngine.runLoadTimeValidationCore(engine)
+        // `engine.validate(tier)`. D4 inlined the
+        // `runLoadTimeValidationCore` wrapper and routes through the
+        // public `validateInvariants()` method.
+        const loadValidation = engine.validateInvariants()
+        if (!loadValidation.ok) {
+            throw new InvariantViolationError(loadValidation.violations)
+        }
 
         return engine
-    }
-
-    /**
-     * Run the legacy `engine.validate()` invariant sweep at load time
-     * to catch the remaining non-grammar invariants (schema conformance,
-     * reference integrity, ownership, conclusion ref, circularity).
-     *
-     * D2: the PERMISSIVE swap that previously disarmed load-time P-1
-     * enforcement is gone — the legacy `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-     * check was deleted alongside the rest of `grammarConfig`, so the
-     * legacy invariant sweep no longer touches P-1. P-1 is now surfaced
-     * via `engine.validate('presentable')` post-load.
-     *
-     * D4 removes this helper along with the legacy
-     * `engine.validate()` no-arg overload; the remaining non-grammar
-     * invariants will move into a `verifyLoadIntegrity` pass alongside
-     * `verifySnapshotChecksums`.
-     */
-    private static runLoadTimeValidationCore<
-        TArg extends TCoreArgument,
-        TPremise extends TCorePremise,
-        TExpr extends TCorePropositionalExpression,
-        TVar extends TCorePropositionalVariable,
-        TClaim extends TCoreClaim,
-    >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
-        const validation = engine.validate()
-        if (!validation.ok) {
-            throw new InvariantViolationError(validation.violations)
-        }
     }
 
     /**
@@ -2267,7 +2246,7 @@ export class ArgumentEngine<
     ): void {
         const preRollbackSnap = this.snapshot()
         this.rollbackInternal(snapshot)
-        const validation = this.validate()
+        const validation = this.validateInvariants()
         if (!validation.ok) {
             this.rollbackInternal(preRollbackSnap)
             throw new InvariantViolationError(validation.violations)
@@ -2481,21 +2460,42 @@ export class ArgumentEngine<
     }
 
     /**
-     * Overload signatures: the legacy no-arg form returns
-     * `TInvariantValidationResult` (the pre-1.0 invariant sweep —
-     * kept for backward compat until Phase D removes it); the new
-     * tier-aware form returns `readonly TViolation[]` from the
-     * four-tier grammar dispatcher.
+     * Four-tier grammar validation per spec §4. Returns the union of
+     * violations from Structural up through `tier` — `'structural'`
+     * returns S-rule violations only, `'evaluable'` returns S + E,
+     * `'derivable'` returns S + E + D, `'presentable'` returns the full
+     * union. Empty array means the argument is at the requested tier
+     * or stricter. Never throws on grammar issues.
+     *
+     * For the legacy pre-1.0 invariant sweep (schema conformance,
+     * reference integrity, ownership, conclusion ref, circularity,
+     * checksums) use {@link validateInvariants} instead. The pre-1.0
+     * no-arg overload of `validate()` was removed in Phase D4.
      */
-    public validate(): TInvariantValidationResult
-    public validate(tier: TGrammarTier): readonly TViolation[]
-    public validate(
-        tier?: TGrammarTier
-    ): TInvariantValidationResult | readonly TViolation[] {
-        if (tier === undefined) {
-            return validateArgumentStandalone(this.asValidationContext())
-        }
+    public validate(tier: TGrammarTier): readonly TViolation[] {
         return validateGrammar(tier, this.asGrammarValidatorContext())
+    }
+
+    /**
+     * Legacy invariant sweep — schema conformance, reference integrity,
+     * ownership, conclusion-ref + circularity, checksum stability, and
+     * per-premise validation. Returns a `TInvariantValidationResult`.
+     * Used internally by mutation-rollback and snapshot-load paths and
+     * exposed publicly for library-wide invariant checks (see
+     * `ArgumentLibrary.validate` and `PropositCore.validate`).
+     *
+     * Distinct from {@link validate}, which runs the four-tier grammar
+     * validator (`Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable`)
+     * and returns a `readonly TViolation[]`. The two are
+     * complementary — grammar tiers cover AST-shape rules; this method
+     * covers schema/reference/structural-bookkeeping invariants that
+     * sit outside the tier hierarchy.
+     *
+     * @since 1.0.0 — replaces the legacy `validate()` no-arg overload
+     *   removed in Phase D4 of the `grammar-tiers/core` branch.
+     */
+    public validateInvariants(): TInvariantValidationResult {
+        return validateArgumentStandalone(this.asValidationContext())
     }
 
     /**

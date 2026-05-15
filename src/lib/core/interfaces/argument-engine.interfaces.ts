@@ -19,7 +19,7 @@ import type {
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type { TReactiveSnapshot } from "../../types/reactive.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
-import type { TGrammarTier } from "../../grammar/types.js"
+import type { TGrammarTier, TViolation } from "../../grammar/types.js"
 import type { PremiseEngine } from "../premise-engine.js"
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
 
@@ -603,11 +603,35 @@ export interface TArgumentLifecycle<
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
     ): void
     /**
-     * Run a comprehensive invariant validation sweep on the entire argument.
-     * Checks schema conformance, structural invariants, grammar rules,
-     * reference integrity, and checksum consistency.
+     * Run a comprehensive invariant validation sweep on the entire
+     * argument. Checks schema conformance, reference integrity,
+     * ownership, conclusion-ref + circularity, and per-premise
+     * validation.
+     *
+     * Distinct from {@link TArgumentLifecycle.validate}, which runs
+     * the four-tier grammar validator (`Structural ⊇ Evaluable ⊇
+     * Derivable ⊇ Presentable`). The two are complementary — grammar
+     * tiers cover AST-shape rules; this method covers
+     * schema/reference/structural-bookkeeping invariants that sit
+     * outside the tier hierarchy.
+     *
+     * @since 1.0.0 — replaces the pre-1.0 `validate()` no-arg
+     *   overload removed in Phase D4 of the `grammar-tiers/core`
+     *   branch.
      */
-    validate(): TInvariantValidationResult
+    validateInvariants(): TInvariantValidationResult
+    /**
+     * Four-tier grammar validation per spec §4. Returns the union of
+     * violations from Structural up through `tier` — `'structural'`
+     * returns S-rule violations only, `'evaluable'` returns S + E,
+     * `'derivable'` returns S + E + D, `'presentable'` returns the
+     * full union. Empty array means the argument is at the requested
+     * tier or stricter. Never throws on grammar issues.
+     *
+     * For the invariant sweep (schema/reference/checksums) see
+     * {@link TArgumentLifecycle.validateInvariants}.
+     */
+    validate(tier: TGrammarTier): readonly TViolation[]
     /**
      * Global normalize pass per spec §6. Runs the AN rule set
      * (AN-1..AN-4) everywhere it can fire, converging the argument
