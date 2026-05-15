@@ -9,21 +9,13 @@
 //         parent is non-meaningful. Preserves P-3 and P-4 (incidentally E-1).
 //   AN-4  Absorb same-operator adjacency through a formula. Preserves P-5.
 //
-// In v1.0 the engine ships with the legacy per-flag `grammarConfig`
-// machinery still in place. C1+C2 bridge `engine.behavior` to that
-// config: when behavior is `'permissive'`, mutations see a permissive
-// config and do not cleanup; when `'assistive'` (default), mutations
-// see the engine's configured (or default-all-on) `grammarConfig`.
-//
-// **D0f.** This module exports `runAssistiveNormalization(engine)` —
-// the uniform AN post-hook for `assistive` mode. As of D0e all four AN
+// This module exports `runAssistiveNormalization(engine)` — the
+// uniform AN post-hook for `assistive` mode. As of D2 all four AN
 // rules are native single-rule passes routed through
-// `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`. The
-// PERMISSIVE config swap that disarms the legacy inline P-1
-// enforcement throws now lives inside `applyANToFixedPoint` itself
-// (D0f), so this bridge is unconditional delegation — no swap logic
-// here. D2 deletes the swap entirely along with the legacy per-flag
-// config + the 11 P-1 throw sites.
+// `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`; the legacy
+// per-flag `grammarConfig` machinery + the 11 P-1 throw sites are
+// gone, so this bridge is unconditional delegation gated only on
+// `engine.behavior`.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type {
@@ -41,9 +33,7 @@ import { applyANToFixedPoint } from "./an-rules.js"
  *
  * Convergence: typically ≤ 3 iterations because the rules are local and
  * idempotent in combination. Implementation routes through
- * `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts` (native AN
- * module home as of D0a, all four rules native as of D0e, PERMISSIVE
- * swap embedded inside `applyANToFixedPoint` as of D0f).
+ * `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`.
  *
  * @since 1.0.0
  */

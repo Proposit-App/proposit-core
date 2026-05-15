@@ -172,11 +172,6 @@ export function forkArgumentEngine<
     if (options?.positionConfig) {
         snap.config = { ...snap.config, positionConfig: options.positionConfig }
     }
-    if (options?.grammarConfig) {
-        snap.config = { ...snap.config, grammarConfig: options.grammarConfig }
-    }
-
-    const grammarConfig = options?.grammarConfig ?? snap.config?.grammarConfig
 
     // Construct new engine
     const forkedEngine = ArgumentEngine.fromSnapshot<
@@ -185,7 +180,7 @@ export function forkArgumentEngine<
         TExpr,
         TVar,
         TClaim
-    >(snap, libraries.claimLibrary, grammarConfig, "ignore", generateId)
+    >(snap, libraries.claimLibrary, "ignore", generateId)
 
     return { engine: forkedEngine, remapTable }
 }

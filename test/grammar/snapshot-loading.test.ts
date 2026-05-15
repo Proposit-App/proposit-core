@@ -112,12 +112,7 @@ describe("ArgumentEngine.fromData / fromSnapshot — accepts any Structural stat
             premises,
             expressions,
             {},
-            {
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: false,
-                    autoNormalize: false,
-                },
-            }
+            { behavior: "permissive" }
         )
 
         // Post-load: E-1 surfaces via the new tier-aware validate(). The
@@ -174,12 +169,7 @@ describe("ArgumentEngine.fromData / fromSnapshot — accepts any Structural stat
             premises,
             expressions,
             {},
-            {
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: false,
-                    autoNormalize: false,
-                },
-            }
+            { behavior: "permissive" }
         )
 
         const violations = eng

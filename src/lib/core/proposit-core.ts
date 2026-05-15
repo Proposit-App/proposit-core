@@ -176,7 +176,6 @@ export class PropositCore<
                 {
                     checksumConfig: options?.checksumConfig,
                     positionConfig: options?.positionConfig,
-                    grammarConfig: options?.grammarConfig,
                     behavior: options?.behavior,
                     generateId: this.generateId,
                 }
@@ -329,7 +328,6 @@ export class PropositCore<
             {
                 checksumConfig: config?.checksumConfig,
                 positionConfig: config?.positionConfig,
-                grammarConfig: config?.grammarConfig,
                 behavior: config?.behavior,
                 generateId: config?.generateId,
             }
@@ -616,13 +614,7 @@ export class PropositCore<
             TExpr,
             TVar,
             TClaim
-        >(
-            snap,
-            this.claims,
-            snap.config?.grammarConfig,
-            "ignore",
-            this.generateId
-        )
+        >(snap, this.claims, "ignore", this.generateId)
 
         // Step 8: Register engine
         this.arguments.register(finalEngine)

@@ -186,13 +186,7 @@ export class ArgumentLibrary<
                 TExpr,
                 TVar,
                 TClaim
-            >(
-                engineSnap,
-                libraries.claimLibrary,
-                undefined,
-                "ignore",
-                options?.generateId
-            )
+            >(engineSnap, libraries.claimLibrary, "ignore", options?.generateId)
             lib.engines.set(engine.getArgument().id, engine)
         }
         return lib

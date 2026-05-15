@@ -55,11 +55,6 @@ import {
     type TLogicEngineOptions,
 } from "./argument-engine.js"
 import {
-    DEFAULT_GRAMMAR_CONFIG,
-    resolveAutoNormalize,
-    type TGrammarConfig,
-} from "../types/grammar.js"
-import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
     serializeChecksumConfig,
@@ -124,7 +119,6 @@ export class PremiseEngine<
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TOptionalChecksum<TArg>
     private checksumConfig?: TCoreChecksumConfig
-    protected grammarConfig: TGrammarConfig
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -153,35 +147,12 @@ export class PremiseEngine<
         this.premise = { ...premise }
         this.argument = deps.argument
         this.checksumConfig = config?.checksumConfig
-        this.grammarConfig = config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
         this.rootExpressionId = undefined
         this.variables = deps.variables
         this.expressions = new ExpressionManager<TExpr>(config)
         this.expressionsByVariableId = new DefaultMap(() => new Set())
         this.expressionIndex = deps.expressionIndex
         this.generateId = config?.generateId ?? defaultGenerateId
-    }
-
-    /**
-     * Overrides the grammar config for both this premise engine and its
-     * internal expression manager. Used by restoration paths when the
-     * caller's grammar config should override the snapshot's config.
-     */
-    public setGrammarConfig(grammarConfig: TGrammarConfig): void {
-        this.grammarConfig = grammarConfig
-        this.expressions.setGrammarConfig(grammarConfig)
-    }
-
-    /**
-     * Returns the grammar config currently in effect for this premise
-     * engine. Used by the v1.0 transitional `normalizeArgument` pass to
-     * snapshot the prior config before temporarily flipping to
-     * `DEFAULT_GRAMMAR_CONFIG` for the duration of a user-initiated
-     * normalize, then restoring it afterward. Phase D removes this
-     * method along with the rest of the legacy grammar-config plumbing.
-     */
-    public getGrammarConfig(): TGrammarConfig {
-        return this.grammarConfig
     }
 
     /**
@@ -938,30 +909,12 @@ export class PremiseEngine<
         return false
     }
 
-    /**
-     * Performs a full normalization sweep on this premise's expression tree.
-     * Collapses unjustified formulas, operators with 0/1 children, and inserts
-     * formula buffers where needed. Works regardless of `autoNormalize` setting.
-     */
-    public normalizeExpressions(): TCoreMutationResult<
-        void,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    > {
-        return this.withValidation(() => {
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                this.expressions.normalize()
-                const changes = this.finalizeExpressionMutation(collector)
-                return { result: undefined, changes }
-            } finally {
-                this.expressions.setCollector(null)
-            }
-        })
-    }
+    // D2 — `pe.normalizeExpressions()` was the per-premise wrapper for
+    // the legacy `ExpressionManager.normalize()` 5-pass sweep. Both
+    // methods are deleted in D2. The replacement is
+    // `engine.normalize(tier?)` (Phase C3) which routes through the
+    // native AN-1..AN-4 passes in `src/lib/grammar/an-rules.ts`. The
+    // post-mutation assistive hook covers the per-mutation use case.
 
     public toggleNegation(
         expressionId: string,
@@ -1016,93 +969,45 @@ export class PremiseEngine<
                     return { result: null, changes }
                 } else if (
                     target.type === "operator" &&
-                    target.operator === "not" &&
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "collapseDoubleNegation"
-                    )
+                    target.operator === "not"
                 ) {
-                    // Target is already NOT — wrapping would create NOT(NOT(x)).
-                    // Collapse instead: remove the existing NOT, promoting its child.
+                    // Target is already NOT — toggling adds a second NOT and
+                    // immediately collapses to the inner child. We express
+                    // this directly by removing the existing NOT (promotes
+                    // its child into its slot). D2: the pre-v1.0 gate on
+                    // `collapseDoubleNegation` was deleted — `toggleNegation`
+                    // unconditionally toggles.
                     this.expressions.removeExpression(expressionId, false)
 
                     const changes = this.finalizeExpressionMutation(collector)
                     return { result: null, changes }
                 } else {
-                    // When the target is a non-not operator, a formula buffer
-                    // is needed between the new NOT and the target to satisfy
-                    // the operator nesting restriction.
-                    const needsFormula =
-                        this.grammarConfig.enforceFormulaBetweenOperators &&
-                        target.type === "operator" &&
-                        target.operator !== "not"
+                    // D2: the pre-v1.0 P-1 inline buffer-insertion branch
+                    // (gated on `grammarConfig.enforceFormulaBetweenOperators`
+                    // + `resolveAutoNormalize(_, 'negationInsertFormula')`,
+                    // which built `NOT(formula(target))` inline) is gone.
+                    // Always wrap with just NOT. AN-1 (post-mutation hook in
+                    // assistive mode) inserts the formula buffer if the
+                    // target is a non-not operator; permissive mode leaves
+                    // the un-buffered state and `validate('presentable')`
+                    // flags it.
+                    const notExpr = {
+                        ...extraFields,
+                        id: this.generateId(),
+                        argumentId: target.argumentId,
+                        argumentVersion: target.argumentVersion,
+                        premiseId: target.premiseId,
+                        type: "operator",
+                        operator: "not",
+                        parentId: target.parentId,
+                        position: target.position,
+                    } as TExpressionInput<TExpr>
 
-                    let notExprId: string
-
-                    if (needsFormula) {
-                        if (
-                            !resolveAutoNormalize(
-                                this.grammarConfig,
-                                "negationInsertFormula"
-                            )
-                        ) {
-                            throw new Error(
-                                `Cannot negate operator expression "${expressionId}" — would place a non-not operator as a direct child of NOT. Enable negationInsertFormula or wrap in a formula node first.`
-                            )
-                        }
-                        // Build not → formula → target
-                        const formulaExpr = {
-                            ...extraFields,
-                            id: this.generateId(),
-                            argumentId: target.argumentId,
-                            argumentVersion: target.argumentVersion,
-                            premiseId: target.premiseId,
-                            type: "formula",
-                            parentId: target.parentId,
-                            position: target.position,
-                        } as TExpressionInput<TExpr>
-                        this.expressions.insertExpression(
-                            formulaExpr,
-                            expressionId
-                        )
-
-                        const notExpr = {
-                            ...extraFields,
-                            id: this.generateId(),
-                            argumentId: target.argumentId,
-                            argumentVersion: target.argumentVersion,
-                            premiseId: target.premiseId,
-                            type: "operator",
-                            operator: "not",
-                            parentId: target.parentId,
-                            position: target.position,
-                        } as TExpressionInput<TExpr>
-                        this.expressions.insertExpression(
-                            notExpr,
-                            formulaExpr.id
-                        )
-                        notExprId = notExpr.id
-                    } else {
-                        // Wrap target with a new NOT operator
-                        const notExpr = {
-                            ...extraFields,
-                            id: this.generateId(),
-                            argumentId: target.argumentId,
-                            argumentVersion: target.argumentVersion,
-                            premiseId: target.premiseId,
-                            type: "operator",
-                            operator: "not",
-                            parentId: target.parentId,
-                            position: target.position,
-                        } as TExpressionInput<TExpr>
-
-                        this.expressions.insertExpression(notExpr, expressionId)
-                        notExprId = notExpr.id
-                    }
+                    this.expressions.insertExpression(notExpr, expressionId)
 
                     const changes = this.finalizeExpressionMutation(collector)
                     return {
-                        result: this.expressions.getExpression(notExprId)!,
+                        result: this.expressions.getExpression(notExpr.id)!,
                         changes,
                     }
                 }
@@ -2265,7 +2170,6 @@ export class PremiseEngine<
         argument: TOptionalChecksum<TArg>,
         variables: VariableManager<TVar>,
         expressionIndex?: Map<string, string>,
-        grammarConfig?: TGrammarConfig,
         generateId?: () => string
     ): PremiseEngine<TArg, TPremise, TExpr, TVar> {
         // Normalize checksumConfig in case the snapshot went through a JSON
@@ -2287,14 +2191,9 @@ export class PremiseEngine<
             { argument, variables, expressionIndex },
             normalizedConfig
         )
-        // Override grammar config if the caller specified one.
-        if (grammarConfig) {
-            pe.grammarConfig = grammarConfig
-        }
         // Restore expressions from the snapshot
         pe.expressions = ExpressionManager.fromSnapshot<TExpr>(
             snapshot.expressions,
-            grammarConfig,
             generateId
         )
         // Restore rootExpressionId from snapshot

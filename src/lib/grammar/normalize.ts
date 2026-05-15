@@ -19,11 +19,10 @@
 //
 // Bypasses `engine.behavior`. `normalize()` is user-initiated (the UI
 // calls it after the user confirms a Tidy / Normalize action), so it
-// must do its job even when `behavior === 'permissive'`. The PERMISSIVE
-// grammar-config swap that disarms the legacy inline P-1 enforcement
-// throws now lives inside `applyANToFixedPoint` itself (D0f), so this
-// bridge is a thin tier-gate + delegation. D2 deletes the swap entirely
-// along with the legacy per-flag config + the 11 P-1 throw sites.
+// must do its job even when `behavior === 'permissive'`. D2 deleted
+// the legacy per-flag config + the 11 P-1 throw sites + the PERMISSIVE
+// swap that worked around them, so this bridge is now a tier-gate +
+// unconditional delegation.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type {
@@ -57,10 +56,9 @@ export function normalizeArgument<
     // requests are no-ops.
     if (tier !== "presentable") return
 
-    // The PERMISSIVE swap that disarms the legacy P-1 throws lives
-    // inside `applyANToFixedPoint` itself as of D0f. `normalize()` is
-    // user-initiated and runs regardless of `engine.behavior` —
-    // `applyANToFixedPoint` does not consult `behavior`, so this
-    // delegation is a clean bypass of the permissive-mode gate.
+    // `normalize()` is user-initiated and runs regardless of
+    // `engine.behavior`; `applyANToFixedPoint` does not consult
+    // `behavior`, so this delegation is a clean bypass of the
+    // permissive-mode gate.
     applyANToFixedPoint(engine)
 }

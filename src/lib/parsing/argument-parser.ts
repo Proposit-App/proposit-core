@@ -401,10 +401,6 @@ export class ArgumentParser<
             argument,
             claimLibrary,
             {
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: true,
-                    autoNormalize: true,
-                },
                 generateId: genId,
             }
         )

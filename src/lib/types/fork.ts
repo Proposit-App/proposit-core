@@ -1,6 +1,5 @@
 import type { TCoreChecksumConfig } from "./checksum.js"
 import type { TCorePositionConfig } from "../utils/position.js"
-import type { TGrammarConfig } from "./grammar.js"
 
 /** Options for `forkArgument`. */
 export interface TForkArgumentOptions {
@@ -10,8 +9,6 @@ export interface TForkArgumentOptions {
     checksumConfig?: TCoreChecksumConfig
     /** Position config override. If omitted, copied from source engine. */
     positionConfig?: TCorePositionConfig
-    /** Grammar config override. If omitted, copied from source engine. */
-    grammarConfig?: TGrammarConfig
 }
 
 /** Maps original entity IDs to their forked counterparts. */

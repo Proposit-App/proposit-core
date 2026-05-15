@@ -47,15 +47,15 @@ export interface TExpressionMutations<
      * Adds an expression to this premise's tree.
      *
      * If the expression has `parentId: null` it becomes the root; only one
-     * root is permitted per premise. All structural rules (`implies`/`iff`
-     * root-only, child limits, position uniqueness) are enforced.
+     * root is permitted per premise. All Structural rules (`implies`/`iff`
+     * root-only, child limits, position uniqueness, derivation root
+     * operator) are enforced at mutation time.
      *
-     * When the `wrapInsertFormula` flag is enabled (either directly via
-     * `TAutoNormalizeConfig` or via `autoNormalize: true`), operator nesting
-     * violations are auto-corrected by inserting a `formula` buffer between
-     * the parent operator and the non-`not` operator child, rather than
-     * throwing. The same flag also controls auto-insertion in
-     * `insertExpression` and `wrapExpression`.
+     * As of v1.0 (D2) P-1 (non-not operator under operator) is **not**
+     * enforced at mutation time — the AN-1 post-hook in assistive
+     * behavior inserts the formula buffer; in permissive behavior the
+     * un-buffered state stays and surfaces via
+     * `engine.validate('presentable')`.
      *
      * @param expression - The expression to add, including position and
      *   parent assignment.
@@ -65,8 +65,6 @@ export interface TExpressionMutations<
      * @throws If the expression's parent does not exist in this premise.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
-     * @throws If a non-not operator would become a direct child of another
-     *   operator expression (when `wrapInsertFormula` is disabled).
      */
     addExpression(
         expression: TExpressionInput<TExpr>
@@ -76,8 +74,8 @@ export interface TExpressionMutations<
      * position computed automatically. If `parentId` is `null`, the
      * expression becomes the root.
      *
-     * When the `repositionOnCollision` auto-normalize flag is enabled,
-     * sibling positions are automatically redistributed if the computed
+     * Composite-mutation behavior (spec §8 / S-9): sibling positions
+     * are always shifted as part of the bundled op when the computed
      * position would collide with an existing sibling. Repositioned
      * siblings appear in `changes.expressions.modified`.
      *
@@ -87,8 +85,6 @@ export interface TExpressionMutations<
      * @throws If the premise already has a root and `parentId` is `null`.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
-     * @throws If a non-not operator would become a direct child of another
-     *   operator expression.
      */
     appendExpression(
         parentId: string | null,
@@ -98,11 +94,11 @@ export interface TExpressionMutations<
      * Adds an expression immediately before or after an existing sibling,
      * with position computed automatically.
      *
-     * When the `repositionOnCollision` auto-normalize flag is enabled,
-     * sibling positions are automatically redistributed if the computed
-     * midpoint position would collide with an existing sibling. Only the
-     * minimal set of nodes is repositioned. Repositioned siblings appear
-     * in `changes.expressions.modified`.
+     * Composite-mutation behavior (spec §8 / S-9): sibling positions
+     * are always shifted as part of the bundled op when the computed
+     * midpoint position would collide with an existing sibling. Only
+     * the minimal set of nodes is repositioned. Repositioned siblings
+     * appear in `changes.expressions.modified`.
      *
      * @param siblingId - The ID of the existing sibling expression.
      * @param relativePosition - Whether to insert `"before"` or `"after"`
@@ -112,8 +108,6 @@ export interface TExpressionMutations<
      * @throws If the sibling does not exist in this premise.
      * @throws If the expression is a variable reference and the variable
      *   has not been registered.
-     * @throws If a non-not operator would become a direct child of another
-     *   operator expression.
      */
     addExpressionRelative(
         siblingId: string,
@@ -135,14 +129,18 @@ export interface TExpressionMutations<
         updates: TExpressionUpdate
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg>
     /**
-     * Removes an expression and optionally its entire descendant subtree,
-     * then collapses any ancestor operators with fewer than two children.
+     * Removes an expression and optionally its entire descendant subtree.
+     *
+     * As of v1.0 (D2) the pre-mutation 0/1-child collapse cascade is gone —
+     * AN-3 (post-mutation hook in assistive mode) handles 0/1-child
+     * operator/formula collapse on the surviving parent.
      *
      * @param expressionId - The ID of the expression to remove.
      * @param deleteSubtree - Whether to remove all descendants as well.
      * @returns The removed root expression, or `undefined` if not found.
-     * @throws If removal would promote a non-not operator as a direct
-     *   child of another operator expression.
+     * @throws If `deleteSubtree` is false and the single surviving
+     *   child is a root-only operator (`implies`/`iff`) that would be
+     *   placed in a non-root position (S-5).
      */
     removeExpression(
         expressionId: string,
@@ -261,18 +259,6 @@ export interface TExpressionMutations<
         targetChildId?: string,
         extraFields?: Partial<TExpr>
     ): TCoreMutationResult<TExpr | null, TExpr, TVar, TPremise, TArg>
-    /**
-     * Performs a full normalization sweep on this premise's expression tree.
-     * Collapses unjustified formulas, operators with 0/1 children, and inserts
-     * formula buffers where needed. Works regardless of `autoNormalize` setting.
-     */
-    normalizeExpressions(): TCoreMutationResult<
-        void,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    >
 }
 
 /**

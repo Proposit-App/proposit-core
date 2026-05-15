@@ -61,7 +61,6 @@ import type {
     TCorePropositionalVariable,
     TCoreClaim,
 } from "../schemata/index.js"
-import { PERMISSIVE_GRAMMAR_CONFIG } from "../types/grammar.js"
 import { hasBinaryOperatorInBoundedSubtree } from "./bounded-subtree.js"
 
 /**
@@ -789,58 +788,11 @@ export function applyANToFixedPoint<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
-    // **PERMISSIVE swap (D0f relocation).** Flip each PE to
-    // PERMISSIVE_GRAMMAR_CONFIG for the duration of the AN pass so
-    // the legacy inline P-1 enforcement throws (briefing §10, audit
-    // list of 11 sites slated for D2 removal) cannot trip mid-AN.
-    // AN-2 and AN-3's `pe.removeExpression(_, false)` paths route
-    // through `ExpressionManager.removeAndPromote` (em.ts:830-887);
-    // on the 1-child branch that helper enforces P-1 under DEFAULT
-    // (`enforceFormulaBetweenOperators: true`). AN-4's final
-    // `removeExpression(formula, false)` hits the 0-child
-    // leaf-removal branch so it doesn't trip P-1, and AN-1 routes
-    // through `wrapInFormula` + `reparentExpression` (neither goes
-    // through `removeAndPromote`) — but AN-2/AN-3 cascades on
-    // non-Presentable inputs can trip without the swap.
-    //
-    // Pre-D0f the swap lived in `normalize.ts` only; `auto-normalize.ts`'s
-    // `runAssistiveNormalization` path (post-mutation hook in
-    // assistive mode) did NOT swap, leaving the AN-2/AN-3 cascade
-    // exposed in assistive mode. D0f moves the swap inside this
-    // function so BOTH callers benefit. D2 deletes the swap entirely
-    // along with the legacy per-flag config + the 11 P-1 throws.
-    const restoreEntries: {
-        pe: ReturnType<
-            ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>["listPremises"]
-        >[number]
-        prevConfig: typeof PERMISSIVE_GRAMMAR_CONFIG
-    }[] = []
-    for (const pe of engine.listPremises()) {
-        const prev = pe.getGrammarConfig()
-        restoreEntries.push({ pe, prevConfig: prev })
-        pe.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
-    }
-
-    try {
-        applyANRulesToConvergence(engine)
-    } finally {
-        for (const { pe, prevConfig } of restoreEntries) {
-            pe.setGrammarConfig(prevConfig)
-        }
-    }
-}
-
-/**
- * Inner convergence loop for `applyANToFixedPoint`. Pulled out so the
- * wrapping try/finally for the PERMISSIVE config swap stays compact.
- */
-function applyANRulesToConvergence<
-    TArg extends TCoreArgument,
-    TPremise extends TCorePremise,
-    TExpr extends TCorePropositionalExpression,
-    TVar extends TCorePropositionalVariable,
-    TClaim extends TCoreClaim,
->(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
+    // D2: the PERMISSIVE swap that disarmed the legacy inline P-1
+    // enforcement throws is gone — the 11 P-1 throw sites + the
+    // surrounding `grammarConfig.enforceFormulaBetweenOperators`
+    // machinery were deleted in D2. AN-2 and AN-3 can now run
+    // unconditionally without tripping a P-1 throw mid-pass.
     let lastChangedRule: "AN-1" | "AN-2" | "AN-3" | "AN-4" | null = null
     for (let i = 0; i < MAX_AN_ITERATIONS; i++) {
         // Order: AN-2/3/4 before AN-1 so buffer insertion (AN-1)
@@ -906,7 +858,9 @@ function applyANRulesToConvergence<
 // natively implemented in D0e, no caller remains and the helper was
 // removed in D0e. D0f converted the `||` short-circuit chain in
 // `applyANToFixedPoint` to a reduce-or accumulator (synthesis P2 #2)
-// so all four rules fire per outer iteration, and moved the
-// PERMISSIVE config swap inside `applyANToFixedPoint` so both
-// `runAssistiveNormalization` and `normalizeArgument` benefit
-// automatically.
+// so all four rules fire per outer iteration, and moved the PERMISSIVE
+// config swap inside `applyANToFixedPoint`. D2 then deleted the
+// PERMISSIVE swap entirely along with the legacy per-flag
+// `grammarConfig` machinery + the 11 P-1 throw sites the swap worked
+// around — `applyANToFixedPoint` is now a thin try-free wrapper around
+// the convergence loop.

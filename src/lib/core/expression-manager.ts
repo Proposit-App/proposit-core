@@ -18,11 +18,6 @@ import {
     serializeChecksumConfig,
 } from "../consts.js"
 import { entityChecksum, computeHash, canonicalSerialize } from "./checksum.js"
-import {
-    DEFAULT_GRAMMAR_CONFIG,
-    resolveAutoNormalize,
-    type TGrammarConfig,
-} from "../types/grammar.js"
 import { Value } from "typebox/value"
 import type {
     TInvariantViolation,
@@ -35,11 +30,12 @@ import {
     EXPR_PARENT_NOT_FOUND,
     EXPR_PARENT_NOT_CONTAINER,
     EXPR_ROOT_ONLY_VIOLATED,
-    EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED,
     EXPR_CHILD_LIMIT_EXCEEDED,
     EXPR_POSITION_DUPLICATE,
     EXPR_CHECKSUM_MISMATCH,
 } from "../types/validation.js"
+// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` import deleted in D2 —
+// P-1 is now surfaced via the grammar-tier validators.
 
 // Distribute Omit across the union to preserve discriminated-union narrowing.
 export type TExpressionInput<
@@ -112,16 +108,6 @@ export class ExpressionManager<
         this.collector = collector
     }
 
-    /**
-     * Overrides the grammar config used for validation and mutation-time
-     * checks. Called by restoration paths (e.g. `fromSnapshot`) when the
-     * caller supplies a grammar config that should override whatever was
-     * stored in the snapshot.
-     */
-    setGrammarConfig(grammarConfig: TGrammarConfig): void {
-        this.config = { ...this.config, grammarConfig }
-    }
-
     constructor(config?: TLogicEngineOptions) {
         this.expressions = new Map()
         this.childExpressionIdsByParentId = new Map()
@@ -129,10 +115,6 @@ export class ExpressionManager<
         this.positionConfig = config?.positionConfig ?? DEFAULT_POSITION_CONFIG
         this.config = config
         this.generateId = config?.generateId ?? defaultGenerateId
-    }
-
-    private get grammarConfig(): TGrammarConfig {
-        return this.config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
     }
 
     /**
@@ -196,9 +178,13 @@ export class ExpressionManager<
      * maps (`expressions`, `childExpressionIdsByParentId`,
      * `childPositionsByParentId`) and notifies the change collector.
      *
-     * Used by `addExpression`, `insertExpression`, and `wrapExpression` to
-     * auto-insert formula nodes between operators when
-     * `grammarConfig.autoNormalize` is enabled.
+     * As of v1.0 the legacy per-mutation P-1 buffer-insertion branches
+     * (`addExpression`/`insertExpression`/`wrapExpression`) are gone —
+     * AN-1 (post-mutation hook in assistive mode, see
+     * `src/lib/grammar/an-rules.ts`) is the sole formula-buffer
+     * insertion path. This helper is invoked from `wrapInFormula` (the
+     * public AN-1 primitive on `PremiseEngine`) which calls it once per
+     * buffer insertion to materialize the formula node.
      *
      * @returns The generated formula expression ID.
      */
@@ -421,44 +407,13 @@ export class ExpressionManager<
                 )
             }
 
-            // Non-not operators cannot be direct children of operators.
-            if (
-                this.grammarConfig.enforceFormulaBetweenOperators &&
-                parent.type === "operator" &&
-                expression.type === "operator" &&
-                expression.operator !== "not"
-            ) {
-                if (
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "wrapInsertFormula"
-                    )
-                ) {
-                    // Check original parent can accept the formula as a new child.
-                    this.assertChildLimit(parent.operator, expression.parentId)
-
-                    // Auto-insert a formula buffer between parent and expression.
-                    const formulaId = this.registerFormulaBuffer(
-                        expression as unknown as TExpr,
-                        expression.parentId,
-                        expression.position
-                    )
-
-                    // Rewrite expression to be child of formula.
-                    expression = {
-                        ...expression,
-                        parentId: formulaId,
-                        position: 0,
-                    } as TExpressionInput<TExpr>
-
-                    // Update parent reference for subsequent checks.
-                    parent = this.expressions.get(formulaId)!
-                } else {
-                    throw new Error(
-                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                    )
-                }
-            }
+            // D2: P-1 (non-not operator under operator) is no longer
+            // enforced at mutation time. Assistive mode inserts the
+            // formula buffer via AN-1 post-hook; permissive mode
+            // leaves the un-buffered state and `validate('presentable')`
+            // flags it. The pre-v1.0 inline buffer-insertion fallback +
+            // throw both lived here under `grammarConfig.enforceFormula
+            // BetweenOperators` — deleted in D2.
 
             if (parent.type === "operator") {
                 this.assertChildLimit(parent.operator, expression.parentId!)
@@ -513,21 +468,18 @@ export class ExpressionManager<
         let position = midpoint(lastChild.position, this.positionConfig.max)
 
         if (position === lastChild.position) {
-            if (
-                resolveAutoNormalize(
-                    this.grammarConfig,
-                    "repositionOnCollision"
-                )
-            ) {
-                this.repositionSiblings(
-                    parentId,
-                    lastChild.position,
-                    this.positionConfig.max
-                )
-                const updated = this.getChildExpressions(parentId)
-                const newLast = updated[updated.length - 1]
-                position = midpoint(newLast.position, this.positionConfig.max)
-            }
+            // Composite-mutation behavior (spec §8 / S-9): always shift
+            // colliding siblings as part of the bundled op. The pre-v1.0
+            // `repositionOnCollision` flag gating is gone in D2 — composites
+            // never leave a Structural violation by design.
+            this.repositionSiblings(
+                parentId,
+                lastChild.position,
+                this.positionConfig.max
+            )
+            const updated = this.getChildExpressions(parentId)
+            const newLast = updated[updated.length - 1]
+            position = midpoint(newLast.position, this.positionConfig.max)
         }
 
         this.addExpression({
@@ -564,32 +516,26 @@ export class ExpressionManager<
             position = midpoint(prevPosition, sibling.position)
 
             if (position === prevPosition || position === sibling.position) {
-                if (
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "repositionOnCollision"
-                    )
-                ) {
-                    this.repositionSiblings(
-                        sibling.parentId,
-                        siblingIndex > 0
-                            ? children[siblingIndex - 1].position
-                            : this.positionConfig.min,
-                        sibling.position
-                    )
-                    const updated = this.getChildExpressions(sibling.parentId)
-                    const newSiblingIdx = updated.findIndex(
-                        (c) => c.id === siblingId
-                    )
-                    const newPrevPos =
-                        newSiblingIdx > 0
-                            ? updated[newSiblingIdx - 1].position
-                            : this.positionConfig.min
-                    position = midpoint(
-                        newPrevPos,
-                        updated[newSiblingIdx].position
-                    )
-                }
+                // Composite-mutation behavior (spec §8 / S-9): always shift
+                // colliding siblings as part of the bundled op. The
+                // pre-v1.0 `repositionOnCollision` flag gating is gone in
+                // D2.
+                this.repositionSiblings(
+                    sibling.parentId,
+                    siblingIndex > 0
+                        ? children[siblingIndex - 1].position
+                        : this.positionConfig.min,
+                    sibling.position
+                )
+                const updated = this.getChildExpressions(sibling.parentId)
+                const newSiblingIdx = updated.findIndex(
+                    (c) => c.id === siblingId
+                )
+                const newPrevPos =
+                    newSiblingIdx > 0
+                        ? updated[newSiblingIdx - 1].position
+                        : this.positionConfig.min
+                position = midpoint(newPrevPos, updated[newSiblingIdx].position)
             }
         } else {
             const nextPosition =
@@ -599,32 +545,24 @@ export class ExpressionManager<
             position = midpoint(sibling.position, nextPosition)
 
             if (position === sibling.position || position === nextPosition) {
-                if (
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "repositionOnCollision"
-                    )
-                ) {
-                    this.repositionSiblings(
-                        sibling.parentId,
-                        sibling.position,
-                        siblingIndex < children.length - 1
-                            ? children[siblingIndex + 1].position
-                            : this.positionConfig.max
-                    )
-                    const updated = this.getChildExpressions(sibling.parentId)
-                    const newSiblingIdx = updated.findIndex(
-                        (c) => c.id === siblingId
-                    )
-                    const newNextPos =
-                        newSiblingIdx < updated.length - 1
-                            ? updated[newSiblingIdx + 1].position
-                            : this.positionConfig.max
-                    position = midpoint(
-                        updated[newSiblingIdx].position,
-                        newNextPos
-                    )
-                }
+                // Composite-mutation behavior (spec §8 / S-9): always
+                // shift colliding siblings as part of the bundled op.
+                this.repositionSiblings(
+                    sibling.parentId,
+                    sibling.position,
+                    siblingIndex < children.length - 1
+                        ? children[siblingIndex + 1].position
+                        : this.positionConfig.max
+                )
+                const updated = this.getChildExpressions(sibling.parentId)
+                const newSiblingIdx = updated.findIndex(
+                    (c) => c.id === siblingId
+                )
+                const newNextPos =
+                    newSiblingIdx < updated.length - 1
+                        ? updated[newSiblingIdx + 1].position
+                        : this.positionConfig.max
+                position = midpoint(updated[newSiblingIdx].position, newNextPos)
             }
         }
 
@@ -752,10 +690,10 @@ export class ExpressionManager<
         // Mark the updated expression and its ancestors dirty for hierarchical checksum recomputation.
         this.markExpressionDirty(expressionId)
 
-        // After an operator swap, absorb same-operator children through a formula.
-        if (updates.operator !== undefined) {
-            this.absorbSameOperatorIfNeeded(expressionId)
-        }
+        // D2: the pre-v1.0 same-operator absorption inline cascade
+        // (gated on `absorbSameOperator`) is gone. AN-4 (post-mutation
+        // hook in assistive mode) handles same-operator absorption
+        // through a formula buffer.
 
         return this.expressions.get(expressionId) ?? updated
     }
@@ -764,13 +702,16 @@ export class ExpressionManager<
      * Removes an expression from the tree.
      *
      * When `deleteSubtree` is `true`, the expression and its entire descendant
-     * subtree are removed, then {@link collapseIfNeeded} runs on the parent.
+     * subtree are removed.
      *
      * When `deleteSubtree` is `false`, the expression is removed but its single
-     * child (if any) is promoted into the removed expression's slot.  If the
-     * expression has more than one child, an error is thrown.  Leaf removal
-     * (0 children) still triggers {@link collapseIfNeeded} on the parent.
-     * Promotion does **not** trigger collapse.
+     * child (if any) is promoted into the removed expression's slot. If the
+     * expression has more than one child, an error is thrown.
+     *
+     * As of v1.0 the pre-removal collapse-cascade (the legacy
+     * `collapseIfNeeded` / `simulateCollapseChain`) is gone — AN-3
+     * (post-mutation hook in assistive mode) handles 0/1-child
+     * operator/formula collapse on the surviving parent.
      *
      * @throws If `deleteSubtree` is `false` and the expression has multiple children.
      * @throws If `deleteSubtree` is `false` and the single child is a root-only
@@ -835,7 +776,10 @@ export class ExpressionManager<
             this.markExpressionDirty(parentId)
         }
 
-        this.collapseIfNeeded(parentId)
+        // D2: the pre-v1.0 `collapseIfNeeded(parentId)` inline cascade
+        // (gated on `collapseEmptyFormula`) is gone. AN-3 (post-mutation
+        // hook in assistive mode) handles 0/1-child operator/formula
+        // collapse.
 
         return target
     }
@@ -850,7 +794,7 @@ export class ExpressionManager<
         }
 
         if (children.length === 0) {
-            // Leaf removal — same as removing a single node, then collapse parent.
+            // Leaf removal.
             const parentId = target.parentId
 
             this.collector?.removedExpression({
@@ -864,7 +808,8 @@ export class ExpressionManager<
                 this.markExpressionDirty(parentId)
             }
 
-            this.collapseIfNeeded(parentId)
+            // D2: AN-3 (post-mutation hook in assistive mode) handles
+            // 0/1-child operator/formula collapse on the parent.
 
             return target
         }
@@ -872,21 +817,11 @@ export class ExpressionManager<
         // Exactly 1 child — promote it into the target's slot.
         const child = children[0]
 
-        // Validate: non-not operators cannot be promoted into an operator parent.
-        if (this.grammarConfig.enforceFormulaBetweenOperators) {
-            if (
-                child.type === "operator" &&
-                child.operator !== "not" &&
-                target.parentId !== null
-            ) {
-                const grandparent = this.expressions.get(target.parentId)
-                if (grandparent && grandparent.type === "operator") {
-                    throw new Error(
-                        `Cannot remove expression — would promote a non-not operator as a direct child of another operator`
-                    )
-                }
-            }
-        }
+        // D2: the P-1 promote-on-remove enforcement throw lived here under
+        // `grammarConfig.enforceFormulaBetweenOperators`. AN-1 (post-mutation
+        // hook in assistive mode) now inserts the buffer if the promotion
+        // produced a non-not operator under operator; permissive mode leaves
+        // the un-buffered state and `validate('presentable')` flags it.
 
         // Validate: root-only operators cannot be promoted into a non-root position.
         if (
@@ -940,80 +875,20 @@ export class ExpressionManager<
         this.dirtyExpressionIds.delete(expressionId)
         this.markExpressionDirty(child.id)
 
-        // After promotion, the target's parent may be a formula that now needs collapsing
-        // (e.g., if the promoted child has no binary operator in its bounded subtree).
-        this.collapseIfNeeded(target.parentId)
+        // D2: AN-3 (post-mutation hook in assistive mode) handles
+        // formula collapse on the target's parent if the promoted child
+        // makes the formula unjustified.
 
         return target
     }
 
-    /**
-     * Promotes `child` into the slot occupied by `parent` and removes `parent`.
-     * Used by `collapseIfNeeded` and `normalize()`.
-     */
-    private promoteChild(parentId: string, parent: TExpr, child: TExpr): void {
-        const grandparentId = parent.parentId
-        let promotedPosition = parent.position
-
-        // When repositionOnCollision is enabled and the grandparent has multiple
-        // children, compute the midpoint between the parent's left and right
-        // neighbors for better spacing.
-        if (
-            grandparentId !== null &&
-            resolveAutoNormalize(this.grammarConfig, "repositionOnCollision")
-        ) {
-            const siblings = this.getChildExpressions(grandparentId)
-            if (siblings.length > 1) {
-                const parentIdx = siblings.findIndex((s) => s.id === parentId)
-                const leftPos =
-                    parentIdx > 0
-                        ? siblings[parentIdx - 1].position
-                        : this.positionConfig.min
-                const rightPos =
-                    parentIdx < siblings.length - 1
-                        ? siblings[parentIdx + 1].position
-                        : this.positionConfig.max
-                promotedPosition = midpoint(leftPos, rightPos)
-            }
-        }
-
-        const promoted = this.attachChecksum({
-            ...child,
-            parentId: grandparentId,
-            position: promotedPosition,
-        } as TExpressionInput<TExpr>)
-        this.expressions.set(child.id, promoted)
-        this.collector?.modifiedExpression({
-            ...promoted,
-        } as unknown as TCorePropositionalExpression)
-
-        this.childExpressionIdsByParentId.get(grandparentId)?.delete(parentId)
-        getOrCreate(
-            this.childExpressionIdsByParentId,
-            grandparentId,
-            () => new Set()
-        ).add(child.id)
-
-        // Update position tracking: remove parent's old position, add promoted position.
-        this.childPositionsByParentId
-            .get(grandparentId)
-            ?.delete(parent.position)
-        getOrCreate(
-            this.childPositionsByParentId,
-            grandparentId,
-            () => new Set()
-        ).add(promotedPosition)
-
-        this.childExpressionIdsByParentId.delete(parentId)
-        this.childPositionsByParentId.delete(parentId)
-        this.collector?.removedExpression({
-            ...parent,
-        } as unknown as TCorePropositionalExpression)
-        this.expressions.delete(parentId)
-
-        this.dirtyExpressionIds.delete(parentId)
-        this.markExpressionDirty(child.id)
-    }
+    // D2 — `promoteChild` was the helper for the pre-v1.0 inline
+    // collapse cascade (`collapseIfNeeded`) and the legacy
+    // `ExpressionManager.normalize()` sweep, both of which are gone in
+    // D2 (replaced by AN-3 / AN-4 / AN-2 / AN-1 post-mutation hooks in
+    // `src/lib/grammar/an-rules.ts`). The remaining
+    // `removeAndPromote` 1-child branch in `removeExpression` writes
+    // the promoted child directly (no shared helper is needed).
 
     /**
      * Redistributes the minimal set of sibling positions to create room at
@@ -1144,428 +1019,21 @@ export class ExpressionManager<
         return modified
     }
 
-    private collapseIfNeeded(operatorId: string | null): void {
-        if (!resolveAutoNormalize(this.grammarConfig, "collapseEmptyFormula"))
-            return
-        if (operatorId === null) return
-
-        const operator = this.expressions.get(operatorId)
-        if (!operator) return
-
-        if (operator.type === "formula") {
-            const children = this.getChildExpressions(operatorId)
-            if (children.length === 0) {
-                const grandparentId = operator.parentId
-                this.collector?.removedExpression({
-                    ...operator,
-                } as unknown as TCorePropositionalExpression)
-                this.detachExpression(operatorId, operator)
-
-                this.dirtyExpressionIds.delete(operatorId)
-                if (grandparentId !== null) {
-                    this.markExpressionDirty(grandparentId)
-                }
-
-                this.collapseIfNeeded(grandparentId)
-                return
-            }
-
-            // 1-child formula: collapse if no binary operator in bounded subtree.
-            if (
-                children.length === 1 &&
-                !this.hasBinaryOperatorInBoundedSubtree(children[0].id)
-            ) {
-                const grandparentId = operator.parentId
-                this.promoteChild(operatorId, operator, children[0])
-
-                // Grandparent may also be a formula that now needs collapsing.
-                this.collapseIfNeeded(grandparentId)
-            }
-
-            return
-        }
-
-        if (operator.type !== "operator") return
-
-        const children = this.getChildExpressions(operatorId)
-
-        if (children.length === 0) {
-            const grandparentId = operator.parentId
-
-            this.collector?.removedExpression({
-                ...operator,
-            } as unknown as TCorePropositionalExpression)
-            this.detachExpression(operatorId, operator)
-
-            // Prune collapsed operator from dirty set and propagate to grandparent.
-            this.dirtyExpressionIds.delete(operatorId)
-            if (grandparentId !== null) {
-                this.markExpressionDirty(grandparentId)
-            }
-
-            this.collapseIfNeeded(grandparentId)
-        } else if (children.length === 1 && operator.operator === "not") {
-            // `not` is unary — 1 child is its valid state; skip collapse.
-            // Still recurse to grandparent: a formula wrapping this `not` may
-            // now qualify for collapse after a descendant change.
-            this.collapseIfNeeded(operator.parentId)
-        } else if (children.length === 1) {
-            const child = children[0]
-            const grandparentId = operator.parentId
-
-            // Defense-in-depth: validate promotion doesn't violate nesting or root-only rules.
-            if (child.type === "operator") {
-                // Root-only — always enforced
-                if (
-                    (child.operator === "implies" ||
-                        child.operator === "iff") &&
-                    grandparentId !== null
-                ) {
-                    throw new Error(
-                        `Cannot promote: child "${child.id}" is a root-only operator ("${child.operator}") and would be placed in a non-root position.`
-                    )
-                }
-                // Nesting — grammar-configurable
-                if (this.grammarConfig.enforceFormulaBetweenOperators) {
-                    if (child.operator !== "not" && grandparentId !== null) {
-                        const grandparent = this.expressions.get(grandparentId)
-                        if (grandparent && grandparent.type === "operator") {
-                            throw new Error(
-                                `Cannot remove expression — would promote a non-not operator as a direct child of another operator`
-                            )
-                        }
-                    }
-                }
-            }
-
-            this.promoteChild(operatorId, operator, child)
-
-            // Grandparent may be a formula that now needs collapsing after the
-            // promoted child replaced the operator.
-            this.collapseIfNeeded(grandparentId)
-        }
-    }
-
-    /**
-     * Flag-gated wrapper: absorbs same-operator children through a formula
-     * after an operator swap, if `absorbSameOperator` is enabled.
-     */
-    private absorbSameOperatorIfNeeded(expressionId: string): void {
-        if (!resolveAutoNormalize(this.grammarConfig, "absorbSameOperator"))
-            return
-        this.absorbSameOperator(expressionId)
-    }
-
-    /**
-     * Absorbs the inner operator's children into the outer (grandparent)
-     * operator when both are the same type, separated by a formula.
-     *
-     * Example: `AND → formula → AND(B, C)` becomes `AND → [B, C]` (children
-     * promoted into the outer AND at positions between the formula's neighbors).
-     *
-     * No-op if the pattern does not match.
-     */
-    private absorbSameOperator(expressionId: string): boolean {
-        const inner = this.expressions.get(expressionId)
-        if (!inner || inner.type !== "operator") return false
-
-        // Only and/or are absorbable (implies/iff are root-only).
-        if (inner.operator !== "and" && inner.operator !== "or") return false
-
-        const formulaId = inner.parentId
-        if (formulaId === null) return false
-        const formula = this.expressions.get(formulaId)
-        if (!formula || formula.type !== "formula") return false
-
-        const outerId = formula.parentId
-        if (outerId === null) return false
-        const outer = this.expressions.get(outerId)
-        if (!outer || outer.type !== "operator") return false
-        if (outer.operator !== inner.operator) return false
-
-        // Same operator on both sides of a formula — absorb.
-        const innerChildren = this.getChildExpressions(expressionId)
-
-        // Determine the position gap available for absorbed children.
-        const outerChildren = this.getChildExpressions(outerId)
-        const formulaIdx = outerChildren.findIndex((c) => c.id === formulaId)
-        const leftPos =
-            formulaIdx > 0
-                ? outerChildren[formulaIdx - 1].position
-                : this.positionConfig.min
-        const rightPos =
-            formulaIdx < outerChildren.length - 1
-                ? outerChildren[formulaIdx + 1].position
-                : this.positionConfig.max
-
-        // Check if there is enough integer space between neighbors for N children.
-        const gap = rightPos - leftPos
-        const count = innerChildren.length
-        const needsRedistribution = gap <= count
-
-        // Reparent each inner child to the outer operator. Use evenly spaced
-        // positions within the gap; these may collide if the gap is too tight,
-        // which is fixed by a full redistribution below.
-        for (let i = 0; i < count; i++) {
-            const newPosition = Math.trunc(
-                leftPos + ((rightPos - leftPos) / (count + 1)) * (i + 1)
-            )
-            this.reparent(innerChildren[i].id, outerId, newPosition)
-        }
-
-        // Remove the inner operator and formula (now childless).
-        this.childExpressionIdsByParentId.delete(expressionId)
-        this.childPositionsByParentId.delete(expressionId)
-        this.collector?.removedExpression({
-            ...inner,
-        } as unknown as TCorePropositionalExpression)
-        this.expressions.delete(expressionId)
-        this.dirtyExpressionIds.delete(expressionId)
-
-        this.childExpressionIdsByParentId.get(outerId)?.delete(formulaId)
-        this.childPositionsByParentId.get(outerId)?.delete(formula.position)
-        this.childExpressionIdsByParentId.delete(formulaId)
-        this.childPositionsByParentId.delete(formulaId)
-        this.collector?.removedExpression({
-            ...formula,
-        } as unknown as TCorePropositionalExpression)
-        this.expressions.delete(formulaId)
-        this.dirtyExpressionIds.delete(formulaId)
-
-        // If the gap was too tight, redistribute all children of the outer
-        // operator evenly across the full position range.
-        if (needsRedistribution) {
-            const allChildren = this.getChildExpressions(outerId)
-            const total = allChildren.length
-            const positionSet = this.childPositionsByParentId.get(outerId)
-            for (const child of allChildren) {
-                positionSet?.delete(child.position)
-            }
-            for (let i = 0; i < total; i++) {
-                const newPos = Math.trunc(
-                    this.positionConfig.min +
-                        ((this.positionConfig.max - this.positionConfig.min) /
-                            (total + 1)) *
-                            (i + 1)
-                )
-                const updated = this.attachChecksum({
-                    ...allChildren[i],
-                    position: newPos,
-                } as TExpressionInput<TExpr>)
-                this.expressions.set(allChildren[i].id, updated)
-                this.collector?.modifiedExpression({
-                    ...updated,
-                } as unknown as TCorePropositionalExpression)
-                positionSet?.add(newPos)
-                this.markExpressionDirty(allChildren[i].id)
-            }
-        }
-
-        // Mark the outer operator dirty.
-        this.markExpressionDirty(outerId)
-        return true
-    }
-
-    /**
-     * Checks whether the subtree rooted at `expressionId` contains a binary
-     * operator (`and` or `or`). Traversal stops at formula boundaries — a
-     * nested formula owns its own subtree and is not inspected.
-     */
-    private hasBinaryOperatorInBoundedSubtree(expressionId: string): boolean {
-        const expr = this.expressions.get(expressionId)
-        if (!expr) return false
-        if (expr.type === "formula") return false
-        if (expr.type === "variable") return false
-        if (
-            expr.type === "operator" &&
-            (expr.operator === "and" || expr.operator === "or")
-        ) {
-            return true
-        }
-        const children = this.getChildExpressions(expressionId)
-        return children.some((child) =>
-            this.hasBinaryOperatorInBoundedSubtree(child.id)
-        )
-    }
-
-    /**
-     * Performs a full normalization sweep on the expression tree:
-     * 1. Collapses operators with 0 or 1 children.
-     * 2. Collapses formulas whose bounded subtree has no binary operator.
-     * 3. Inserts formula buffers where `enforceFormulaBetweenOperators` requires them.
-     * 4. Collapses double negation.
-     * 5. Absorbs same-operator nesting through formulas.
-     * 6. Repeats until stable.
-     *
-     * Works regardless of the current `autoNormalize` setting — this is an
-     * explicit on-demand normalization.
-     */
-    public normalize(): void {
-        let changed = true
-        while (changed) {
-            changed = false
-
-            // Pass 1: Collapse operators with 0 or 1 children (bottom-up).
-            for (const expr of this.toArray()) {
-                if (expr.type !== "operator") continue
-                if (!this.expressions.has(expr.id)) continue
-                const children = this.getChildExpressions(expr.id)
-                if (children.length === 0) {
-                    const grandparentId = expr.parentId
-                    this.collector?.removedExpression({
-                        ...expr,
-                    } as unknown as TCorePropositionalExpression)
-                    this.detachExpression(expr.id, expr)
-                    this.dirtyExpressionIds.delete(expr.id)
-                    if (grandparentId !== null) {
-                        this.markExpressionDirty(grandparentId)
-                    }
-                    changed = true
-                } else if (children.length === 1 && expr.operator !== "not") {
-                    this.promoteChild(expr.id, expr, children[0])
-                    changed = true
-                }
-            }
-
-            // Pass 2: Collapse unjustified formulas (bottom-up).
-            for (const expr of this.toArray()) {
-                if (expr.type !== "formula") continue
-                if (!this.expressions.has(expr.id)) continue
-                const children = this.getChildExpressions(expr.id)
-                if (children.length === 0) {
-                    const grandparentId = expr.parentId
-                    this.collector?.removedExpression({
-                        ...expr,
-                    } as unknown as TCorePropositionalExpression)
-                    this.detachExpression(expr.id, expr)
-                    this.dirtyExpressionIds.delete(expr.id)
-                    if (grandparentId !== null) {
-                        this.markExpressionDirty(grandparentId)
-                    }
-                    changed = true
-                } else if (
-                    children.length === 1 &&
-                    !this.hasBinaryOperatorInBoundedSubtree(children[0].id)
-                ) {
-                    this.promoteChild(expr.id, expr, children[0])
-                    changed = true
-                }
-            }
-
-            // Pass 3: Insert formula buffers for operator-under-operator violations.
-            for (const expr of this.toArray()) {
-                if (expr.type !== "operator" || expr.operator === "not")
-                    continue
-                if (!this.expressions.has(expr.id)) continue
-                if (expr.parentId === null) continue
-                const parent = this.expressions.get(expr.parentId)
-                if (!parent || parent.type !== "operator") continue
-
-                // Non-not operator is direct child of operator — insert formula buffer.
-                const formulaPosition = expr.position
-                const formulaParentId = expr.parentId
-                const formulaId = this.registerFormulaBuffer(
-                    expr as unknown as TExpr,
-                    formulaParentId,
-                    formulaPosition
-                )
-                // Reparent the operator under the formula. This removes the
-                // operator's old position from the parent's position set, but
-                // the formula now occupies that slot, so re-add it. Also mark
-                // the formula dirty since it now has a child and its
-                // descendant/combined checksums need recomputation.
-                this.reparent(expr.id, formulaId, 0)
-                getOrCreate(
-                    this.childPositionsByParentId,
-                    formulaParentId,
-                    () => new Set()
-                ).add(formulaPosition)
-                this.markExpressionDirty(formulaId)
-                changed = true
-            }
-
-            // Pass 4: Collapse double negation — NOT(NOT(x)) → x.
-            for (const expr of this.toArray()) {
-                if (expr.type !== "operator" || expr.operator !== "not")
-                    continue
-                if (!this.expressions.has(expr.id)) continue
-                const children = this.getChildExpressions(expr.id)
-                if (children.length !== 1) continue
-                const child = children[0]
-                // Direct: NOT → NOT → x
-                if (child.type === "operator" && child.operator === "not") {
-                    const innerChildren = this.getChildExpressions(child.id)
-                    if (innerChildren.length === 1) {
-                        // Promote inner child into outer NOT's slot, remove both NOTs.
-                        this.promoteChild(child.id, child, innerChildren[0])
-                        this.promoteChild(
-                            expr.id,
-                            // Re-fetch since promoteChild mutated in place.
-                            this.expressions.get(expr.id)!,
-                            innerChildren[0]
-                        )
-                        changed = true
-                    }
-                }
-                // Buffered: NOT → formula → NOT → x
-                if (
-                    child.type === "formula" &&
-                    this.expressions.has(child.id)
-                ) {
-                    const formulaChildren = this.getChildExpressions(child.id)
-                    if (
-                        formulaChildren.length === 1 &&
-                        formulaChildren[0].type === "operator" &&
-                        formulaChildren[0].operator === "not"
-                    ) {
-                        const innerNot = formulaChildren[0]
-                        const innerChildren = this.getChildExpressions(
-                            innerNot.id
-                        )
-                        if (innerChildren.length === 1) {
-                            // Remove inner NOT, promote its child into formula.
-                            this.promoteChild(
-                                innerNot.id,
-                                innerNot,
-                                innerChildren[0]
-                            )
-                            // Remove outer NOT, promote formula into its slot.
-                            this.promoteChild(
-                                expr.id,
-                                this.expressions.get(expr.id)!,
-                                child
-                            )
-                            changed = true
-                        }
-                    }
-                }
-            }
-
-            // Pass 5: Absorb same-operator through formula — OP → formula → OP → [...] becomes OP → [...].
-            for (const expr of this.toArray()) {
-                if (expr.type !== "formula") continue
-                if (!this.expressions.has(expr.id)) continue
-                if (expr.parentId === null) continue
-                const parent = this.expressions.get(expr.parentId)
-                if (!parent || parent.type !== "operator") continue
-                if (parent.operator !== "and" && parent.operator !== "or")
-                    continue
-                const formulaChildren = this.getChildExpressions(expr.id)
-                if (formulaChildren.length !== 1) continue
-                const inner = formulaChildren[0]
-                if (
-                    inner.type !== "operator" ||
-                    inner.operator !== parent.operator
-                )
-                    continue
-
-                // Same operator on both sides — absorb inner's children into parent.
-                if (this.absorbSameOperator(inner.id)) {
-                    changed = true
-                }
-            }
-        }
-    }
+    // D2 — the inline AN cascades (`collapseIfNeeded` /
+    // `absorbSameOperatorIfNeeded` / `absorbSameOperator`), the legacy
+    // `ExpressionManager.normalize()` 5-pass sweep, the
+    // `promoteChild` helper, and the private
+    // `hasBinaryOperatorInBoundedSubtree` were all deleted here. The
+    // first three were gated on the legacy `collapseEmptyFormula` /
+    // `absorbSameOperator` flags and ran inline from
+    // `removeExpression` / `updateExpression`. The `normalize()` sweep
+    // was the underlying engine for `pe.normalizeExpressions()` /
+    // `engine.normalizeAllExpressions()`. All of these are subsumed by
+    // the four native AN passes in `src/lib/grammar/an-rules.ts`
+    // (AN-1..AN-4 — assistive-mode post-mutation hook +
+    // `engine.normalize(tier?)`'s explicit pass). The AN-3 module
+    // uses its own bounded-subtree helper bound to
+    // `pe.getChildExpressions` (see `src/lib/grammar/bounded-subtree.ts`).
 
     /** Returns `true` if any expression in the tree references the given variable ID. */
     public hasVariableReference(variableId: string): boolean {
@@ -1612,47 +1080,36 @@ export class ExpressionManager<
     }
 
     /**
-     * Simulates the collapse chain that would result from removing an expression.
-     * Throws if any promotion would violate nesting or root-only rules.
+     * Pre-flight before {@link removeExpression} mutates state. As of v1.0
+     * the only structural failure mode for `removeAndPromote`'s 1-child
+     * branch is the root-only-operator promotion rule (S-5): an
+     * `implies`/`iff` child cannot be promoted into a non-root slot. The
+     * pre-v1.0 P-1 promote-on-remove check was deleted in D2 along with
+     * the rest of the `grammarConfig.enforceFormulaBetweenOperators`
+     * machinery; the legacy `collapseEmptyFormula` cascade simulation
+     * (`simulateCollapseChain` / `simulatePostPromotionCollapse`) was
+     * deleted in lockstep — AN-3 (post-mutation hook in assistive mode)
+     * handles every collapse case.
      */
     private assertRemovalSafe(
         expressionId: string,
         deleteSubtree: boolean
     ): void {
+        if (deleteSubtree) return
+
         const target = this.expressions.get(expressionId)
         if (!target) return
 
-        if (!deleteSubtree) {
-            const children = this.getChildExpressions(expressionId)
-            // >1 children: removeAndPromote throws before any mutation, no nesting concern.
-            if (children.length === 1) {
-                this.assertPromotionSafe(children[0], target.parentId)
-                // Simulate post-promotion cascade (formula collapse after promotion).
-                if (
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "collapseEmptyFormula"
-                    )
-                ) {
-                    this.simulatePostPromotionCollapse(
-                        target.parentId,
-                        children[0]
-                    )
-                }
-            }
-            if (children.length === 0) {
-                this.simulateCollapseChain(target.parentId, expressionId)
-            }
-            return
+        const children = this.getChildExpressions(expressionId)
+        if (children.length === 1) {
+            this.assertPromotionSafe(children[0], target.parentId)
         }
-
-        // deleteSubtree: entire subtree removed, then collapse runs on parent.
-        this.simulateCollapseChain(target.parentId, expressionId)
     }
 
     /**
      * Checks whether promoting `child` into a slot with the given `newParentId`
-     * would violate the nesting rule or root-only rule.
+     * would violate the root-only rule (S-5). The pre-v1.0 nesting check
+     * (P-1 / `enforceFormulaBetweenOperators`) was deleted in D2.
      */
     private assertPromotionSafe(
         child: TExpr,
@@ -1660,7 +1117,7 @@ export class ExpressionManager<
     ): void {
         if (child.type !== "operator") return
 
-        // Root-only check — always enforced
+        // Root-only check — always enforced (S-5)
         if (
             (child.operator === "implies" || child.operator === "iff") &&
             newParentId !== null
@@ -1669,95 +1126,6 @@ export class ExpressionManager<
                 `Cannot remove expression — would promote a root-only operator ("${child.operator}") to a non-root position`
             )
         }
-
-        // Nesting check — grammar-configurable
-        if (this.grammarConfig.enforceFormulaBetweenOperators) {
-            if (child.operator !== "not" && newParentId !== null) {
-                const newParent = this.expressions.get(newParentId)
-                if (newParent && newParent.type === "operator") {
-                    throw new Error(
-                        `Cannot remove expression — would promote a non-not operator as a direct child of another operator`
-                    )
-                }
-            }
-        }
-    }
-
-    /**
-     * Walks the collapse chain starting from `operatorId` after `removedChildId`
-     * is removed. At each level: if 0 remaining children, operator/formula is deleted
-     * and chain continues up. If 1 remaining child, check promotion safety.
-     */
-    private simulateCollapseChain(
-        operatorId: string | null,
-        removedChildId: string
-    ): void {
-        if (!resolveAutoNormalize(this.grammarConfig, "collapseEmptyFormula"))
-            return
-        if (operatorId === null) return
-
-        const operator = this.expressions.get(operatorId)
-        if (!operator) return
-
-        if (operator.type !== "operator" && operator.type !== "formula") return
-
-        const children = this.getChildExpressions(operatorId)
-        const remainingChildren = children.filter(
-            (c) => c.id !== removedChildId
-        )
-
-        if (operator.type === "formula") {
-            if (remainingChildren.length === 0) {
-                this.simulateCollapseChain(operator.parentId, operatorId)
-            } else if (
-                remainingChildren.length === 1 &&
-                !this.hasBinaryOperatorInBoundedSubtree(remainingChildren[0].id)
-            ) {
-                // Formula would collapse — child promoted.
-                // Formula collapse promotion is always safe (child is variable, not, or formula).
-                this.simulateCollapseChain(operator.parentId, operatorId)
-            }
-            return
-        }
-
-        // operator.type === "operator"
-        if (remainingChildren.length === 0) {
-            this.simulateCollapseChain(operator.parentId, operatorId)
-        } else if (remainingChildren.length === 1) {
-            this.assertPromotionSafe(remainingChildren[0], operator.parentId)
-            // After promotion, simulate further collapse on grandparent.
-            this.simulatePostPromotionCollapse(
-                operator.parentId,
-                remainingChildren[0]
-            )
-        }
-    }
-
-    /**
-     * After an operator promotion places `promotedChild` into `parentId`'s child set,
-     * check whether the parent (if a formula) would itself collapse. Formula collapse
-     * promotion is always safe (the child can't be a binary operator or root-only operator),
-     * but we need to continue the simulation chain.
-     */
-    private simulatePostPromotionCollapse(
-        parentId: string | null,
-        promotedChild: TExpr
-    ): void {
-        if (parentId === null) return
-        const parent = this.expressions.get(parentId)
-        if (!parent) return
-
-        if (parent.type === "formula") {
-            if (!this.hasBinaryOperatorInBoundedSubtree(promotedChild.id)) {
-                // Formula would collapse. The promotedChild takes formula's slot.
-                // This is always safe. Continue simulation from formula's parent.
-                this.simulatePostPromotionCollapse(
-                    parent.parentId,
-                    promotedChild
-                )
-            }
-        }
-        // Operator parents: child count unchanged, no further collapse.
     }
 
     private assertChildLimit(
@@ -1968,73 +1336,16 @@ export class ExpressionManager<
             )
         }
 
-        // 10a. Non-not operators cannot be direct children of operators.
-        // Track which children need formula buffers (Site 2) for post-reparent insertion.
-        let needsParentFormulaBuffer = false
-        const childrenNeedingFormulaBuffer: string[] = []
-
-        if (this.grammarConfig.enforceFormulaBetweenOperators) {
-            // Check 1 (Site 1): new expression as child of anchor's parent.
-            if (
-                anchor.parentId !== null &&
-                expression.type === "operator" &&
-                expression.operator !== "not"
-            ) {
-                const anchorParent = this.expressions.get(anchor.parentId)
-                if (anchorParent && anchorParent.type === "operator") {
-                    if (
-                        resolveAutoNormalize(
-                            this.grammarConfig,
-                            "wrapInsertFormula"
-                        )
-                    ) {
-                        needsParentFormulaBuffer = true
-                    } else {
-                        throw new Error(
-                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                        )
-                    }
-                }
-            }
-
-            // Check 2 (Site 2): left/right nodes as children of the new expression.
-            if (expression.type === "operator") {
-                if (
-                    leftNode?.type === "operator" &&
-                    leftNode.operator !== "not"
-                ) {
-                    if (
-                        resolveAutoNormalize(
-                            this.grammarConfig,
-                            "wrapInsertFormula"
-                        )
-                    ) {
-                        childrenNeedingFormulaBuffer.push(leftNodeId!)
-                    } else {
-                        throw new Error(
-                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                        )
-                    }
-                }
-                if (
-                    rightNode?.type === "operator" &&
-                    rightNode.operator !== "not"
-                ) {
-                    if (
-                        resolveAutoNormalize(
-                            this.grammarConfig,
-                            "wrapInsertFormula"
-                        )
-                    ) {
-                        childrenNeedingFormulaBuffer.push(rightNodeId!)
-                    } else {
-                        throw new Error(
-                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                        )
-                    }
-                }
-            }
-        }
+        // D2: the pre-v1.0 P-1 inline buffer-insertion / throw branches
+        // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
+        // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
+        // sites — (1) new expression as child of anchor's parent;
+        // (2) left node as child of new expression; (3) right node as
+        // child of new expression — were deleted. AN-1 (post-mutation
+        // hook in assistive mode) inserts the buffer when any of these
+        // sites produces a non-not operator under operator;
+        // permissive mode leaves the un-buffered state and
+        // `validate('presentable')` flags it.
 
         const anchorParentId = anchor.parentId
         const anchorPosition = anchor.position
@@ -2065,27 +1376,11 @@ export class ExpressionManager<
             this.reparent(leftNodeId, expression.id, leftPosition)
         }
 
-        // Determine the slot for the new expression. If a parent formula buffer
-        // is needed, the formula takes the anchor slot and the expression goes under it.
-        let finalParentId = anchorParentId
-        let finalPosition = anchorPosition
-
-        if (needsParentFormulaBuffer) {
-            const formulaId = this.registerFormulaBuffer(
-                expression as unknown as TExpr,
-                anchorParentId,
-                anchorPosition
-            )
-
-            finalParentId = formulaId
-            finalPosition = 0
-        }
-
-        // Store the new expression in its slot.
+        // Store the new expression in the anchor's slot.
         const stored = this.attachChecksum({
             ...expression,
-            parentId: finalParentId,
-            position: finalPosition,
+            parentId: anchorParentId,
+            position: anchorPosition,
         } as TExpressionInput<TExpr>)
         this.expressions.set(expression.id, stored)
         this.collector?.addedExpression({
@@ -2093,33 +1388,14 @@ export class ExpressionManager<
         } as unknown as TCorePropositionalExpression)
         getOrCreate(
             this.childExpressionIdsByParentId,
-            finalParentId,
+            anchorParentId,
             () => new Set()
         ).add(expression.id)
         getOrCreate(
             this.childPositionsByParentId,
-            finalParentId,
+            anchorParentId,
             () => new Set()
-        ).add(finalPosition)
-
-        // Site 2: auto-insert formula buffers between the new expression and
-        // any offending operator children.
-        for (const childId of childrenNeedingFormulaBuffer) {
-            const child = this.expressions.get(childId)!
-            const childPosition = child.position
-
-            // Reparent the child under the formula first. This detaches the child
-            // from expression.id's tracking (removing its position from the set).
-            // registerFormulaBuffer then occupies the freed position.
-            const formulaId = this.generateId()
-            this.reparent(childId, formulaId, 0)
-            this.registerFormulaBuffer(
-                expression as unknown as TExpr,
-                expression.id,
-                childPosition,
-                formulaId
-            )
-        }
+        ).add(anchorPosition)
 
         // Mark the new expression and its ancestors dirty for hierarchical checksum recomputation.
         // Note: reparent() already marks children dirty, so this propagates from the new expression up.
@@ -2239,73 +1515,16 @@ export class ExpressionManager<
             )
         }
 
-        // 10a. Non-not operators cannot be direct children of operators.
-        // Track which sites need formula buffers for post-mutation insertion.
-        let needsParentFormulaBuffer = false
-        let existingNodeNeedsFormulaBuffer = false
-        let siblingNeedsFormulaBuffer = false
-
-        if (this.grammarConfig.enforceFormulaBetweenOperators) {
-            // Check 1 (Site 1): new operator as child of existing node's parent.
-            // Note: step 7 already rejects `not`, so operator.operator is always non-not here.
-            if (existingNode.parentId !== null) {
-                const existingParent = this.expressions.get(
-                    existingNode.parentId
-                )
-                if (existingParent && existingParent.type === "operator") {
-                    if (
-                        resolveAutoNormalize(
-                            this.grammarConfig,
-                            "wrapInsertFormula"
-                        )
-                    ) {
-                        needsParentFormulaBuffer = true
-                    } else {
-                        throw new Error(
-                            `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                        )
-                    }
-                }
-            }
-
-            // Check 2 (Site 2): existing node as child of new operator.
-            if (
-                existingNode.type === "operator" &&
-                existingNode.operator !== "not"
-            ) {
-                if (
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "wrapInsertFormula"
-                    )
-                ) {
-                    existingNodeNeedsFormulaBuffer = true
-                } else {
-                    throw new Error(
-                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                    )
-                }
-            }
-
-            // Check 3 (Site 3): new sibling as child of new operator.
-            if (
-                newSibling.type === "operator" &&
-                newSibling.operator !== "not"
-            ) {
-                if (
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "wrapInsertFormula"
-                    )
-                ) {
-                    siblingNeedsFormulaBuffer = true
-                } else {
-                    throw new Error(
-                        `Non-not operator expressions cannot be direct children of operator expressions — wrap in a formula node`
-                    )
-                }
-            }
-        }
+        // D2: the pre-v1.0 P-1 inline buffer-insertion / throw branches
+        // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
+        // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
+        // sites — (1) new operator as child of existing node's parent;
+        // (2) existing node as child of new operator;
+        // (3) new sibling as child of new operator — were deleted.
+        // AN-1 (post-mutation hook in assistive mode) inserts the
+        // buffer when any of these sites produces a non-not operator
+        // under operator; permissive mode leaves the un-buffered state
+        // and `validate('presentable')` flags it.
 
         // Save the existing node's slot (the operator will inherit it).
         const anchorParentId = existingNode.parentId
@@ -2345,27 +1564,11 @@ export class ExpressionManager<
             () => new Set()
         ).add(siblingPosition)
 
-        // Determine the operator's slot. If a parent formula buffer is needed,
-        // the formula takes the anchor slot and the operator goes under it.
-        let operatorParentId = anchorParentId
-        let operatorPosition = anchorPosition
-
-        if (needsParentFormulaBuffer) {
-            const formulaId = this.registerFormulaBuffer(
-                operator as unknown as TExpr,
-                anchorParentId,
-                anchorPosition
-            )
-
-            operatorParentId = formulaId
-            operatorPosition = 0
-        }
-
-        // Store operator in its slot.
+        // Store operator in the anchor slot.
         const storedOperator = this.attachChecksum({
             ...operator,
-            parentId: operatorParentId,
-            position: operatorPosition,
+            parentId: anchorParentId,
+            position: anchorPosition,
         } as TExpressionInput<TExpr>)
         this.expressions.set(operator.id, storedOperator)
         this.collector?.addedExpression({
@@ -2373,48 +1576,14 @@ export class ExpressionManager<
         } as unknown as TCorePropositionalExpression)
         getOrCreate(
             this.childExpressionIdsByParentId,
-            operatorParentId,
+            anchorParentId,
             () => new Set()
         ).add(operator.id)
         getOrCreate(
             this.childPositionsByParentId,
-            operatorParentId,
+            anchorParentId,
             () => new Set()
-        ).add(operatorPosition)
-
-        // Site 2: auto-insert formula buffer between operator and existing node.
-        if (existingNodeNeedsFormulaBuffer) {
-            const existingChild = this.expressions.get(existingNodeId)!
-            const childPosition = existingChild.position
-            const formulaId = this.generateId()
-
-            // Reparent existing node under formula first (frees position in operator's tracking).
-            // registerFormulaBuffer then occupies the freed position.
-            this.reparent(existingNodeId, formulaId, 0)
-            this.registerFormulaBuffer(
-                operator as unknown as TExpr,
-                operator.id,
-                childPosition,
-                formulaId
-            )
-        }
-
-        // Site 3: auto-insert formula buffer between operator and new sibling.
-        if (siblingNeedsFormulaBuffer) {
-            const siblingChild = this.expressions.get(newSibling.id)!
-            const childPosition = siblingChild.position
-            const formulaId = this.generateId()
-
-            // Reparent sibling under formula first (frees position in operator's tracking).
-            // registerFormulaBuffer then occupies the freed position.
-            this.reparent(newSibling.id, formulaId, 0)
-            this.registerFormulaBuffer(
-                operator as unknown as TExpr,
-                operator.id,
-                childPosition,
-                formulaId
-            )
-        }
+        ).add(anchorPosition)
 
         // Mark the new operator (and ancestors), the new sibling, and the reparented existing node dirty.
         // reparent() already marks the existing node dirty; mark the operator and sibling as well.
@@ -2598,8 +1767,9 @@ export class ExpressionManager<
         } as unknown as TCorePropositionalExpression)
         this.markExpressionDirty(expressionId)
 
-        // After the operator change, absorb same-operator children through a formula.
-        this.absorbSameOperatorIfNeeded(expressionId)
+        // D2: AN-4 (post-mutation hook in assistive mode) handles
+        // same-operator absorption through a formula buffer if this
+        // operator change produced one.
 
         return this.expressions.get(expressionId) ?? updated
     }
@@ -2735,23 +1905,13 @@ export class ExpressionManager<
                 })
             }
 
-            // 3g. Formula-between-operators
-            if (
-                this.grammarConfig.enforceFormulaBetweenOperators &&
-                expr.parentId !== null &&
-                expr.type === "operator" &&
-                expr.operator !== "not"
-            ) {
-                const parent = this.expressions.get(expr.parentId)
-                if (parent && parent.type === "operator") {
-                    violations.push({
-                        code: EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED,
-                        message: `Non-not operator "${expr.operator}" expression "${id}" is a direct child of operator "${expr.parentId}".`,
-                        entityType: "expression",
-                        entityId: id,
-                    })
-                }
-            }
+            // D2: the pre-v1.0 3g `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
+            // legacy-validate() check (gated on
+            // `grammarConfig.enforceFormulaBetweenOperators`) is gone.
+            // P-1 is now surfaced via the grammar-tier validators —
+            // call `engine.validate('presentable')` and look for the
+            // `P-1` code. The `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
+            // engine-error constant was deleted in lockstep.
 
             // Collect positions for uniqueness check
             const parentKey = expr.parentId
@@ -2850,7 +2010,6 @@ export class ExpressionManager<
             TCorePropositionalExpression,
     >(
         snapshot: TExpressionManagerSnapshot<TExpr>,
-        grammarConfig?: TGrammarConfig,
         generateId?: () => string
     ): ExpressionManager<TExpr> {
         // Normalize checksumConfig in case the snapshot went through a JSON
@@ -2865,10 +2024,8 @@ export class ExpressionManager<
                       checksumConfig: normalizedChecksumConfig,
                   }
                 : undefined
-        // During loading: use explicit grammarConfig, falling back to snapshot's config
         const loadingConfig: TLogicEngineOptions = {
             ...normalizedConfig,
-            grammarConfig: grammarConfig ?? normalizedConfig?.grammarConfig,
             generateId: generateId ?? normalizedConfig?.generateId,
         }
         const em = new ExpressionManager<TExpr>(loadingConfig)

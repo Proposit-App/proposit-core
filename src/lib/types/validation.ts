@@ -29,8 +29,11 @@ export const EXPR_SELF_REFERENTIAL_PARENT = "EXPR_SELF_REFERENTIAL_PARENT"
 export const EXPR_PARENT_NOT_FOUND = "EXPR_PARENT_NOT_FOUND"
 export const EXPR_PARENT_NOT_CONTAINER = "EXPR_PARENT_NOT_CONTAINER"
 export const EXPR_ROOT_ONLY_VIOLATED = "EXPR_ROOT_ONLY_VIOLATED"
-export const EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED =
-    "EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED"
+// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` was deleted in Phase D2.
+// P-1 enforcement moved out of the legacy validate() invariant sweep
+// and into the grammar-tier validators in
+// `src/lib/grammar/validators/presentable.ts` (queryable via
+// `engine.validate('presentable')`).
 export const EXPR_CHILD_LIMIT_EXCEEDED = "EXPR_CHILD_LIMIT_EXCEEDED"
 export const EXPR_POSITION_DUPLICATE = "EXPR_POSITION_DUPLICATE"
 export const EXPR_CHECKSUM_MISMATCH = "EXPR_CHECKSUM_MISMATCH"
