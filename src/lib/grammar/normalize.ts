@@ -19,21 +19,13 @@
 //
 // Bypasses `engine.behavior`. `normalize()` is user-initiated (the UI
 // calls it after the user confirms a Tidy / Normalize action), so it
-// must do its job even when `behavior === 'permissive'`. In v1.0 this is
-// implemented by temporarily swapping each owned `PremiseEngine`'s
-// grammar config to `DEFAULT_GRAMMAR_CONFIG` for the duration of the
-// pass, then restoring the prior config before returning.
-//
-// **D0a (this commit).** The bridge now routes through
-// `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts` instead of
-// calling `pe.normalizeExpressions()` directly. The config-swap
-// try/finally remains here for D0a because the underlying
-// `applyANToFixedPoint` still delegates to `pe.normalizeExpressions()`
-// internally; D0f moves the swap inside `applyANToFixedPoint` (and D2
-// removes it entirely along with the legacy per-flag config).
+// must do its job even when `behavior === 'permissive'`. The PERMISSIVE
+// grammar-config swap that disarms the legacy inline P-1 enforcement
+// throws now lives inside `applyANToFixedPoint` itself (D0f), so this
+// bridge is a thin tier-gate + delegation. D2 deletes the swap entirely
+// along with the legacy per-flag config + the 11 P-1 throw sites.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
-import { PERMISSIVE_GRAMMAR_CONFIG } from "../types/grammar.js"
 import type {
     TCoreArgument,
     TCorePremise,
@@ -65,53 +57,10 @@ export function normalizeArgument<
     // requests are no-ops.
     if (tier !== "presentable") return
 
-    // Temporarily flip each PE to PERMISSIVE_GRAMMAR_CONFIG for the
-    // duration of the AN pass. Two purposes:
-    //
-    // 1. **Run AN regardless of `engine.behavior`** — `normalize()` is
-    //    a user-initiated bypass that runs even in permissive mode.
-    //    Capture each PE's current config first so we can restore it
-    //    even if a premise's normalize call throws.
-    //
-    // 2. **Disarm the legacy inline P-1 enforcement throws** at PE/EM
-    //    mutation sites (briefing §10, audit list of 11 sites — slated
-    //    for removal in D2). With AN-2/AN-3 native from D0b/D0c and now
-    //    AN-1 + AN-4 native from D0e, the AN pass issues
-    //    `pe.removeExpression(_, false)` calls that route through
-    //    `ExpressionManager.removeAndPromote` (em.ts:830-887). On the
-    //    1-child branch, that helper enforces P-1 ("would promote a
-    //    non-not operator as a direct child of another operator") under
-    //    `enforceFormulaBetweenOperators: true`. AN-4's final
-    //    `removeExpression(formula, false)` is reachable on the
-    //    leaf-removal branch (formula has 0 children at that point) so
-    //    it does NOT trip P-1; however, native AN-2/AN-3 sequences on
-    //    pathological inputs CAN trip it. The PERMISSIVE swap turns the
-    //    throw off so AN can do its job. D0a-D0d previously used
-    //    `DEFAULT_GRAMMAR_CONFIG` here, which has
-    //    `enforceFormulaBetweenOperators: true` — that did NOT disarm
-    //    the throw; it was a no-op because the legacy sweep
-    //    `ExpressionManager.normalize()` runs all 5 passes
-    //    unconditionally. D0e (this swap) actually disarms it.
-    //
-    // D0f moves the swap inside `applyANToFixedPoint`; D2 deletes the
-    // swap entirely along with the legacy per-flag config.
-    const restoreEntries: {
-        pe: ReturnType<
-            ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>["listPremises"]
-        >[number]
-        prevConfig: typeof PERMISSIVE_GRAMMAR_CONFIG
-    }[] = []
-
-    try {
-        for (const pe of engine.listPremises()) {
-            const prev = pe.getGrammarConfig()
-            restoreEntries.push({ pe, prevConfig: prev })
-            pe.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
-        }
-        applyANToFixedPoint(engine)
-    } finally {
-        for (const { pe, prevConfig } of restoreEntries) {
-            pe.setGrammarConfig(prevConfig)
-        }
-    }
+    // The PERMISSIVE swap that disarms the legacy P-1 throws lives
+    // inside `applyANToFixedPoint` itself as of D0f. `normalize()` is
+    // user-initiated and runs regardless of `engine.behavior` —
+    // `applyANToFixedPoint` does not consult `behavior`, so this
+    // delegation is a clean bypass of the permissive-mode gate.
+    applyANToFixedPoint(engine)
 }

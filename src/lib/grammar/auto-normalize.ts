@@ -15,17 +15,15 @@
 // config and do not cleanup; when `'assistive'` (default), mutations
 // see the engine's configured (or default-all-on) `grammarConfig`.
 //
-// **D0a (this commit).** This module exports
-// `runAssistiveNormalization(engine)` — the uniform AN post-hook for
-// `assistive` mode. The implementation now routes through the new
-// `src/lib/grammar/an-rules.ts` module's `applyANToFixedPoint` rather
-// than calling `pe.normalizeExpressions()` directly. In D0a the
-// `applyANToFixedPoint` body still delegates to the legacy
-// `pe.normalizeExpressions()` under the hood — D0b-D0e progressively
-// rewrite each rule natively (AN-2, AN-3, AN-4, AN-1) and D0f drops
-// the legacy delegation entirely. From this module's point of view the
-// boundary is the `applyANToFixedPoint` call: future changes to AN
-// internals do not require edits here.
+// **D0f.** This module exports `runAssistiveNormalization(engine)` —
+// the uniform AN post-hook for `assistive` mode. As of D0e all four AN
+// rules are native single-rule passes routed through
+// `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`. The
+// PERMISSIVE config swap that disarms the legacy inline P-1
+// enforcement throws now lives inside `applyANToFixedPoint` itself
+// (D0f), so this bridge is unconditional delegation — no swap logic
+// here. D2 deletes the swap entirely along with the legacy per-flag
+// config + the 11 P-1 throw sites.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type {
@@ -43,8 +41,9 @@ import { applyANToFixedPoint } from "./an-rules.js"
  *
  * Convergence: typically ≤ 3 iterations because the rules are local and
  * idempotent in combination. Implementation routes through
- * `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts` (the native
- * AN module home as of D0a).
+ * `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts` (native AN
+ * module home as of D0a, all four rules native as of D0e, PERMISSIVE
+ * swap embedded inside `applyANToFixedPoint` as of D0f).
  *
  * @since 1.0.0
  */

@@ -56,6 +56,7 @@ import type {
     TCorePropositionalVariable,
     TCoreClaim,
 } from "../schemata/index.js"
+import { PERMISSIVE_GRAMMAR_CONFIG } from "../types/grammar.js"
 import { hasBinaryOperatorInBoundedSubtree } from "./bounded-subtree.js"
 
 /**
@@ -678,6 +679,58 @@ export function applyANToFixedPoint<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
+    // **PERMISSIVE swap (D0f relocation).** Flip each PE to
+    // PERMISSIVE_GRAMMAR_CONFIG for the duration of the AN pass so
+    // the legacy inline P-1 enforcement throws (briefing §10, audit
+    // list of 11 sites slated for D2 removal) cannot trip mid-AN.
+    // AN-2 and AN-3's `pe.removeExpression(_, false)` paths route
+    // through `ExpressionManager.removeAndPromote` (em.ts:830-887);
+    // on the 1-child branch that helper enforces P-1 under DEFAULT
+    // (`enforceFormulaBetweenOperators: true`). AN-4's final
+    // `removeExpression(formula, false)` hits the 0-child
+    // leaf-removal branch so it doesn't trip P-1, and AN-1 routes
+    // through `wrapInFormula` + `reparentExpression` (neither goes
+    // through `removeAndPromote`) — but AN-2/AN-3 cascades on
+    // non-Presentable inputs can trip without the swap.
+    //
+    // Pre-D0f the swap lived in `normalize.ts` only; `auto-normalize.ts`'s
+    // `runAssistiveNormalization` path (post-mutation hook in
+    // assistive mode) did NOT swap, leaving the AN-2/AN-3 cascade
+    // exposed in assistive mode. D0f moves the swap inside this
+    // function so BOTH callers benefit. D2 deletes the swap entirely
+    // along with the legacy per-flag config + the 11 P-1 throws.
+    const restoreEntries: {
+        pe: ReturnType<
+            ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>["listPremises"]
+        >[number]
+        prevConfig: typeof PERMISSIVE_GRAMMAR_CONFIG
+    }[] = []
+    for (const pe of engine.listPremises()) {
+        const prev = pe.getGrammarConfig()
+        restoreEntries.push({ pe, prevConfig: prev })
+        pe.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
+    }
+
+    try {
+        applyANRulesToConvergence(engine)
+    } finally {
+        for (const { pe, prevConfig } of restoreEntries) {
+            pe.setGrammarConfig(prevConfig)
+        }
+    }
+}
+
+/**
+ * Inner convergence loop for `applyANToFixedPoint`. Pulled out so the
+ * wrapping try/finally for the PERMISSIVE config swap stays compact.
+ */
+function applyANRulesToConvergence<
+    TArg extends TCoreArgument,
+    TPremise extends TCorePremise,
+    TExpr extends TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable,
+    TClaim extends TCoreClaim,
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
     let lastChangedRule: "AN-1" | "AN-2" | "AN-3" | "AN-4" | null = null
     for (let i = 0; i < MAX_AN_ITERATIONS; i++) {
