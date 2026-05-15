@@ -892,6 +892,8 @@ export class PremiseEngine<
      * @throws If `childId` does not exist in this premise.
      * @throws If `childId` is at the root (no parent to insert a
      *         buffer beneath).
+     * @throws S-10: if `formulaId` is already used by an existing
+     *         expression in this premise (entity-ID uniqueness).
      *
      * @since 1.0.0
      */

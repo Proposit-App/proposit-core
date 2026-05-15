@@ -2476,6 +2476,19 @@ export class ExpressionManager<
                 `Cannot wrap root expression "${childId}" in a formula — no parent operator above it.`
             )
         }
+        // S-10 entity-ID uniqueness: refuse to mint a formula at an id
+        // that already exists in this premise. Without this check
+        // `registerFormulaBuffer` would silently overwrite the prior
+        // expression via `this.expressions.set`. Today's AN-1 caller
+        // mints via `engine.idGenerator` (crypto UUID v4) so collision
+        // is astronomically unlikely, but `wrapInFormula` is a public
+        // bundled-composite primitive — the API surface promises S-10
+        // enforcement regardless of immediate caller.
+        if (this.expressions.has(formulaId)) {
+            throw new Error(
+                `S-10: formulaId "${formulaId}" already exists in this premise.`
+            )
+        }
         const childParentId = child.parentId
         const childPosition = child.position
 
