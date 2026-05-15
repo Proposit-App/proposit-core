@@ -575,29 +575,50 @@ function redistributeChildrenEvenly<
         forbidden.add(t)
     }
 
-    // Phase 1: scan downward from `max` selecting `total` distinct
-    // scratch positions not in `forbidden`. The resulting scratches
-    // are pairwise distinct (the scan never revisits) and disjoint
-    // from all current child positions AND from all target positions,
-    // so neither phase-1 nor phase-2 reparents can trip S-9.
+    // D1 — P2 #2: skip children that are already at their target
+    // position. The pre-D1 code unconditionally scratched and back-
+    // moved every child, emitting 2 reparent change records per
+    // already-at-target child. Skipping is correctness-equivalent:
+    // - The skipped child's current position equals its target, so it
+    //   sits inside `forbidden` already (both via the `current` and
+    //   the `targets` contributions) — phase-1 scratches still avoid
+    //   it, and other children's phase-2 targets are pairwise
+    //   distinct from this child's target.
+    // Only count + reserve scratches for children that actually move.
+    const needsMove: boolean[] = []
+    let movingCount = 0
+    for (let i = 0; i < total; i++) {
+        const moves = children[i].position !== targets[i]
+        needsMove.push(moves)
+        if (moves) movingCount++
+    }
+
+    // Phase 1: scan downward from `max` selecting `movingCount`
+    // distinct scratch positions not in `forbidden`. The resulting
+    // scratches are pairwise distinct (the scan never revisits) and
+    // disjoint from all current child positions AND from all target
+    // positions, so neither phase-1 nor phase-2 reparents can trip
+    // S-9.
     const scratches: number[] = []
     let cursor = max
-    while (scratches.length < total && cursor >= min) {
+    while (scratches.length < movingCount && cursor >= min) {
         if (!forbidden.has(cursor)) {
             scratches.push(cursor)
         }
         cursor--
     }
-    if (scratches.length < total) {
+    if (scratches.length < movingCount) {
         throw new Error(
-            `AN-4 redistributeChildrenEvenly: cannot find ${total} ` +
+            `AN-4 redistributeChildrenEvenly: cannot find ${movingCount} ` +
                 `disjoint scratch positions in [${min}, ${max}] for ` +
                 `parent "${parentId}" (current+target occupied: ${forbidden.size}).`
         )
     }
 
+    let scratchIdx = 0
     for (let i = 0; i < total; i++) {
-        pe.reparentExpression(children[i].id, parentId, scratches[i])
+        if (!needsMove[i]) continue
+        pe.reparentExpression(children[i].id, parentId, scratches[scratchIdx++])
     }
 
     // Phase 2: move each child to its final target position. Targets
@@ -605,6 +626,7 @@ function redistributeChildrenEvenly<
     // disjoint from scratches by the `forbidden` exclusion above, so
     // no phase-2 reparent collides.
     for (let i = 0; i < total; i++) {
+        if (!needsMove[i]) continue
         pe.reparentExpression(children[i].id, parentId, targets[i])
     }
 }
