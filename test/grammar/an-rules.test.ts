@@ -559,34 +559,33 @@ describe("applyAN2 — collapse double negation (D0b native)", () => {
 describe("applyAN4 — absorb same-operator adjacency through a formula", () => {
     // Contract / regression-guard tests for AN-4 (P-5).
     //
-    // **Implementation state (D0d, partial — landed in this commit).**
-    // Native rewrite is gated on the D0e reparent primitive
-    // (multi-child absorption needs multi-child promotion, which
-    // `pe.removeExpression(id, false)` cannot do — it throws on >1
-    // children). `applyAN4` currently delegates to
-    // `pe.normalizeExpressions()`, which uses the expression-manager's
-    // private `reparent` for the same operation. These tests assert
-    // the contract on the delegated path; once D0e lands
-    // `pe.reparentExpression`, the native AN-4 rewrite must keep them
-    // green. See the plan's Implementation Status block + D0d
-    // implementation notes for the full analysis.
+    // **Implementation state (D0e — native).** `applyAN4` is a
+    // native single-rule pass: it walks each premise's tree looking
+    // for `OUTER_OP → formula → INNER_OP (same operator) → [c1,…,cN]`
+    // and, for each match, uses `pe.reparentExpression(c_i, outerId,
+    // position_i)` to move every inner child into the outer at
+    // legacy-spacing positions, then removes the empty inner OP and
+    // formula wrapper via `pe.removeExpression`. The legacy
+    // delegation through `pe.normalizeExpressions()` is gone (see
+    // `src/lib/grammar/an-rules.ts` for the implementation + the
+    // ported position-spacing + redistribution-fallback from
+    // `ExpressionManager.absorbSameOperator`). These tests are the
+    // contract regression guards — any future refactor of AN-4 must
+    // keep them green.
     //
     // The shape AN-4 acts on: outer-OP → (..., ) formula → inner-OP
     // (with the same operator type as outer) → [child1, child2, ...]
     // becomes outer-OP → (..., child1, child2, ..., ). Implies/iff
     // are root-only (S-5) and never absorb — only and/or pairs.
     //
-    // **Per-rule isolation caveat:** because `applyAN4` currently
-    // delegates to the full legacy sweep (AN-1..AN-5 in one call) and
-    // the change-detection is whole-sweep ID-set diff, "no-firing"
-    // assertions against the current implementation are unreliable
-    // (e.g. a fixture with a 1-child outer-OR would trigger AN-3 even
-    // though AN-4 doesn't fire). The "absorbs" tests below use
-    // multi-child outer operators (≥2 children) so the AN-3
-    // single-child collapse doesn't also fire and confuse the
-    // assertions. Once D0d's native rewrite lands, per-rule isolation
-    // tests can be added (with a more precise change indicator per
-    // P2 #2 in the D0a dual-review synthesis, fixed in D0f).
+    // **Per-rule isolation caveat (historical, now resolved at the
+    // AN-4 level).** Pre-D0e `applyAN4` delegated to the legacy full
+    // sweep, so a fixture with a 1-child outer-OR would also trigger
+    // AN-3 in the same call and confuse "no-firing" assertions. The
+    // multi-child outer operators (≥2 children) below were chosen to
+    // avoid that confusion under the delegated path. Native AN-4
+    // fires only on its specific pattern, so the same fixtures now
+    // assert genuinely per-rule behavior.
 
     // Helper: build a four-premise setup so peB hosts the absorption
     // shape using peA, peC, and peD's auto-created premise-bound
@@ -875,17 +874,79 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         expect(afterIds).toEqual(beforeIds)
     })
 
-    it("is a no-op when there is no intervening formula (delegated sweep handles it via AN-1 + AN-4 sequence; ids change post-sweep so the helper reports true — guard skipped until D0f's per-rule indicator)", () => {
-        // Documentation-only test (skipped) that records the
-        // "no-formula-separator" case for the eventual native
-        // rewrite. Under the current delegated implementation, the
-        // legacy sweep runs AN-1 (inserts a formula buffer between
-        // OR→OR), then AN-4 absorbs — so the whole-sweep change
-        // detector reports `true` even though pure AN-4 alone would
-        // be a no-op. Per-rule isolation arrives with D0d's native
-        // rewrite + D0f's per-rule change indicator (P2 #2 in the
-        // D0a dual-review synthesis).
-        expect(true).toBe(true)
+    it("is a no-op when there is no intervening formula (native AN-4 fires only on the OP → formula → same-OP shape)", () => {
+        // Native AN-4 matches only when the inner operator's parent
+        // is a formula. Without the intervening formula, the shape
+        // `OUTER_OP → INNER_OP` is a P-1 violation (handled by AN-1,
+        // not AN-4) — so AN-4 alone is a no-op here. The fixture
+        // builds the unbuffered shape, then asserts `applyAN4`
+        // returns false and the tree is unchanged.
+        const { eng, peB, varAId, varCId, varDId } =
+            setupFourPremisesWithCrossVars()
+        peB.addExpression({
+            id: "or-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "or-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "or-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varCId,
+            parentId: "or-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varDId,
+            parentId: "or-inner",
+            position: 1,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
     })
 })
 

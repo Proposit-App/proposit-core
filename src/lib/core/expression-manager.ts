@@ -135,6 +135,19 @@ export class ExpressionManager<
         return this.config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
     }
 
+    /**
+     * Returns the position config in effect for this expression manager.
+     * Used by in-package helpers (e.g. native AN-4 in
+     * `src/lib/grammar/an-rules.ts`) that need the position range
+     * boundaries (`min`/`max`) for spacing-algorithm fallbacks when a
+     * formula sits at the leftmost or rightmost slot under its parent.
+     *
+     * @internal
+     */
+    public getPositionConfig(): TCorePositionConfig {
+        return this.positionConfig
+    }
+
     private attachChecksum(expr: TExpressionInput<TExpr>): TExpr {
         const fields =
             this.config?.checksumConfig?.expressionFields ??

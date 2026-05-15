@@ -11,7 +11,12 @@ import {
     type TOptionalChecksum,
 } from "../schemata/index.js"
 import { DefaultMap } from "../utils/default-map.js"
-import { midpoint, POSITION_INITIAL, POSITION_MAX } from "../utils/position.js"
+import {
+    midpoint,
+    POSITION_INITIAL,
+    POSITION_MAX,
+    type TCorePositionConfig,
+} from "../utils/position.js"
 import { sortedCopyById, sortedUnique } from "../utils/collections.js"
 import type {
     TCoreExpressionAssignment,
@@ -177,6 +182,19 @@ export class PremiseEngine<
      */
     public getGrammarConfig(): TGrammarConfig {
         return this.grammarConfig
+    }
+
+    /**
+     * Returns the position config in effect for this premise engine.
+     * Used by in-package helpers (notably the native AN-4 absorption
+     * pass in `src/lib/grammar/an-rules.ts`) that need the position
+     * range boundaries when computing target positions for absorbed
+     * children.
+     *
+     * @internal
+     */
+    public getPositionConfig(): TCorePositionConfig {
+        return this.expressions.getPositionConfig()
     }
 
     public setOnMutate(callback: (() => void) | undefined): void {
