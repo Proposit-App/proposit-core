@@ -33,13 +33,18 @@
 // `pe.reparentExpression(c_i, outerId, position_i)` + a final
 // `pe.removeExpression(formula, false)` cleanup. The four `applyAN*`
 // exports no longer delegate to the legacy `pe.normalizeExpressions()`
-// full sweep; the `runLegacyNormalizeAndReportChange` helper is
-// removed in this commit. D0f follows up by switching
-// `applyANToFixedPoint`'s `||` short-circuit chain to a reduce-or
-// accumulator (synthesis P2 #2 — deferred per D0e dispatch). D2
-// removes the legacy per-flag `grammarConfig` machinery and the 11
-// P-1 throw sites that the PERMISSIVE swap in `normalize.ts`
-// currently works around.
+// full sweep.
+//
+// **D0f.** `applyANToFixedPoint` switched from a `||` short-circuit
+// chain (one rule per outer iteration) to a reduce-or accumulator (all
+// four rules per outer iteration, OR'd into the changed flag) —
+// synthesis P2 #2 carry-over. The PERMISSIVE config-swap that disarms
+// the 11 legacy inline P-1 enforcement throws moved from `normalize.ts`
+// into `applyANToFixedPoint` itself so both `runAssistiveNormalization`
+// (post-mutation hook in assistive mode) and `normalizeArgument`
+// (`engine.normalize()`) benefit automatically. D2 removes the legacy
+// per-flag `grammarConfig` machinery and the 11 P-1 throw sites the
+// swap currently works around.
 //
 // The per-rule tests (`test/grammar/an-rules.test.ts`) assert behavior
 // the native implementation must preserve once it lands; today they
@@ -660,12 +665,14 @@ function insertOneFormulaBufferInPremise<
  * **D0e state: all four rules are native.** The driver issues
  * single-rule passes in order — AN-2, AN-3, AN-4, AN-1 — so buffer
  * insertion sees the post-collapse tree (avoids inserting a buffer
- * that would then need to be collapsed by AN-3). The outer loop is
- * the actual convergence driver: each iteration fires at most one
- * rule's pattern (via the `||` short-circuit) and loops until no
- * pattern remains. D0f re-evaluates the short-circuit semantics
- * (synthesis P2 #2 — `let changed = applyAN2(eng); changed =
- * applyAN3(eng) || changed; …` reduce-or vs the current chain).
+ * that would then need to be collapsed by AN-3).
+ *
+ * **D0f state: reduce-or accumulator** (replaces the prior `||`
+ * short-circuit chain). Every outer iteration fires all four rules
+ * and records whether ANY produced a mutation. This reduces outer
+ * iterations by ~4x in the worst case versus the short-circuit
+ * pattern, and pulls the iteration count back well within
+ * MAX_AN_ITERATIONS for previously-borderline inputs.
  *
  * Convergence cap: `MAX_AN_ITERATIONS = 10`. Typical convergence is ≤ 3
  * iterations (spec §5.1); the cap protects against pathological inputs
@@ -737,25 +744,37 @@ function applyANRulesToConvergence<
         // Order: AN-2/3/4 before AN-1 so buffer insertion (AN-1)
         // sees the post-collapse tree (avoids inserting a buffer
         // that AN-3 would then collapse). All four rules are now
-        // native single-rule passes (D0e), so the `||` short-circuit
-        // means at most one rule fires per outer iteration — if AN-2
-        // fires, AN-3/4/1 are skipped this iteration and we loop
-        // back. Worst-case the chain takes ~4x as many iterations as
-        // a reduce-or accumulator; spec §5.1 budgets "≤ 3 iterations
-        // typical" so this is comfortably within the MAX_AN_ITERATIONS
-        // cap on the existing test corpus. D0f revisits the
-        // short-circuit semantics (synthesis P2 #2).
+        // native single-rule passes (D0e).
+        //
+        // **D0f: reduce-or accumulator** (was `||` short-circuit
+        // pre-D0f). The short-circuit fired at most one rule per
+        // outer iteration — if AN-2 fired, AN-3/4/1 were skipped
+        // this iteration and the loop went back to the top. The
+        // accumulator runs ALL four rules per iteration and records
+        // whether ANY made a change. This reduces outer iterations
+        // by ~4x in the worst case where multiple rules have
+        // independent firing sites in the same premise tree, and
+        // pulls the outer loop's iteration count back well within
+        // MAX_AN_ITERATIONS for inputs that previously approached
+        // the cap. `lastChangedRule` records the most recently
+        // changed rule (kept stable across the iteration in
+        // priority order AN-2 → AN-3 → AN-4 → AN-1 so the
+        // diagnostic still tells the next dev which rule was
+        // active last when the cap trips).
         let changed = false
         if (applyAN2(engine)) {
             lastChangedRule = "AN-2"
             changed = true
-        } else if (applyAN3(engine)) {
+        }
+        if (applyAN3(engine)) {
             lastChangedRule = "AN-3"
             changed = true
-        } else if (applyAN4(engine)) {
+        }
+        if (applyAN4(engine)) {
             lastChangedRule = "AN-4"
             changed = true
-        } else if (applyAN1(engine)) {
+        }
+        if (applyAN1(engine)) {
             lastChangedRule = "AN-1"
             changed = true
         }
@@ -782,7 +801,10 @@ function applyANRulesToConvergence<
 
 // `runLegacyNormalizeAndReportChange` lived here during D0a-D0d as a
 // shared delegation helper for applyAN1 / applyAN4. With AN-1 and AN-4
-// natively implemented in D0e, no caller remains and the helper is
-// removed. D0f follows up by re-evaluating the `||` short-circuit
-// chain in `applyANToFixedPoint` (synthesis P2 #2 — left intact this
-// cycle per dispatch instructions).
+// natively implemented in D0e, no caller remains and the helper was
+// removed in D0e. D0f converted the `||` short-circuit chain in
+// `applyANToFixedPoint` to a reduce-or accumulator (synthesis P2 #2)
+// so all four rules fire per outer iteration, and moved the
+// PERMISSIVE config swap inside `applyANToFixedPoint` so both
+// `runAssistiveNormalization` and `normalizeArgument` benefit
+// automatically.
