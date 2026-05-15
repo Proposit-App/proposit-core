@@ -7672,6 +7672,36 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
         expect(restoredPm.getExpressions()).toHaveLength(1)
         expect(restoredPm.getExpressions()[0].id).toBe("e1")
     })
+
+    it("defaults restored engine behavior to 'assistive' when snapshot omits config.behavior", () => {
+        // `snapshot()` intentionally omits `behavior` from the serialized
+        // config (see `argument-engine.ts` snapshot()'s inline note: behavior
+        // is re-supplied at restore time and defaults to 'assistive'). This
+        // regression test locks the JSDoc-promised default-to-assistive
+        // contract directly via `fromSnapshot`, independent of the
+        // `forkArgumentEngine` / `PropositCore.forkArgument` paths that
+        // explicitly thread `behavior` through.
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
+        engine.createPremiseWithId("p1")
+
+        const snap = engine.snapshot()
+
+        // Sanity: snapshot() does not serialize `behavior` into config —
+        // this is the precondition the default-to-assistive contract
+        // protects against silent regression of.
+        expect(
+            (snap.config as Record<string, unknown> | undefined)?.behavior
+        ).toBeUndefined()
+
+        const restored = ArgumentEngine.fromSnapshot(snap, aLib())
+
+        // The source engine was 'permissive'; the restored engine defaults
+        // to 'assistive' because behavior is not carried in the snapshot.
+        expect(engine.behavior).toBe("permissive")
+        expect(restored.behavior).toBe("assistive")
+    })
 })
 
 describe("ArgumentEngine — fromData bulk loading", () => {
