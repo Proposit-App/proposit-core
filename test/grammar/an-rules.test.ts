@@ -14,7 +14,7 @@
 // effect); a stricter set of "rule N is no-op when its pattern is
 // absent" tests can be added at that point.
 
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
 import { EMPTY_CLAIM_LOOKUP } from "../../src/lib/utils/lookup.js"
 import {
@@ -93,6 +93,272 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         // binary operator). The NOT itself then collapses because it
         // has 0 children — and the residue is an empty premise.
         expect(pe.getExpressions()).toHaveLength(0)
+    })
+})
+
+describe("applyAN2 — collapse double negation (D0b native)", () => {
+    // Helper: build a two-premise setup where peB hosts the
+    // double-negation shape and references peA's auto-created
+    // premise-bound variable (avoids the circular-binding check that
+    // fires when a premise references its own bound variable).
+    function setupTwoPremisesWithCrossVar(): {
+        eng: ArgumentEngine
+        peA: ReturnType<ArgumentEngine["createPremise"]>["result"]
+        peB: ReturnType<ArgumentEngine["createPremise"]>["result"]
+        varAId: string
+    } {
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        return { eng, peA, peB, varAId: varA.id }
+    }
+
+    it("collapses direct NOT(NOT(variable)) → variable", () => {
+        // Build: NOT_outer → NOT_inner → variable (in peB; variable is
+        // peA's bound variable so there's no self-circularity).
+        // Permissive engine avoids the per-mutation AN cleaning up
+        // before applyAN2 runs.
+        const { eng, peB, varAId } = setupTwoPremisesWithCrossVar()
+        peB.addExpression({
+            id: "not-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "not-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: "not-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-x",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "not-inner",
+            position: 0,
+        })
+
+        const changed = applyAN2(eng)
+
+        expect(changed).toBe(true)
+        // Both NOTs removed; only the variable expression remains.
+        const after = peB.getExpressions()
+        expect(after).toHaveLength(1)
+        expect(after[0].id).toBe("ve-x")
+        expect(after[0].parentId).toBe(null)
+        expect(after[0].position).toBe(0)
+    })
+
+    it("collapses buffered NOT(formula(NOT(variable))) — leaves residual formula for AN-3", () => {
+        // Buffered double negation: NOT_outer → formula → NOT_inner → x.
+        // Native AN-2 removes both NOTs but does NOT collapse the
+        // unjustified `formula(x)` residue — AN-3 owns that cleanup.
+        const { eng, peB, varAId } = setupTwoPremisesWithCrossVar()
+        peB.addExpression({
+            id: "not-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "not-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "not-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-x",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "not-inner",
+            position: 0,
+        })
+
+        const changed = applyAN2(eng)
+
+        expect(changed).toBe(true)
+        // After AN-2 alone: formula(x) at root. AN-3 would remove the
+        // formula; AN-2's contract stops at the NOT-NOT collapse.
+        const after = peB.getExpressions()
+        const ids = after.map((e) => e.id).sort()
+        expect(ids).toEqual(["formula-buf", "ve-x"])
+        const formula = after.find((e) => e.id === "formula-buf")!
+        expect(formula.parentId).toBe(null)
+        const veX = after.find((e) => e.id === "ve-x")!
+        expect(veX.parentId).toBe("formula-buf")
+    })
+
+    it("issues two PremiseEngine.removeExpression(_, false) calls per direct NOT-NOT collapse (native code path)", () => {
+        // Spy-style guard: the D0b native implementation must drive the
+        // collapse via the public `removeExpression(id, false)` API
+        // (per briefing §2 / plan D0b). The legacy delegation routed
+        // through `pe.normalizeExpressions()`, which would register zero
+        // removeExpression calls because it uses the private
+        // `promoteChild` primitive. This test fails loudly if AN-2 ever
+        // regresses to delegation, and locks down the
+        // `removeExpression(_, false)` semantic the plan calls out.
+        const { eng, peB, varAId } = setupTwoPremisesWithCrossVar()
+        peB.addExpression({
+            id: "not-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "not-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: "not-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-x",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "not-inner",
+            position: 0,
+        })
+
+        const removeSpy = vi.spyOn(peB, "removeExpression")
+
+        applyAN2(eng)
+
+        // Exactly two removeExpression calls for the single
+        // double-negation pattern: inner NOT first (promoting x into
+        // its slot), outer NOT second (promoting x into its slot).
+        // Both with deleteSubtree=false.
+        expect(removeSpy).toHaveBeenCalledTimes(2)
+        expect(removeSpy).toHaveBeenNthCalledWith(1, "not-inner", false)
+        expect(removeSpy).toHaveBeenNthCalledWith(2, "not-outer", false)
+
+        removeSpy.mockRestore()
+    })
+
+    it("returns false and is a no-op when no NOT-NOT pattern is present", () => {
+        // Single NOT over a variable is a legitimate Presentable shape
+        // (NOT(x)). AN-2 must not touch it and must report no change.
+        const { eng, peB, varAId } = setupTwoPremisesWithCrossVar()
+        peB.addExpression({
+            id: "not-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-x",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "not-1",
+            position: 0,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN2(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
+    })
+
+    it("collapses a chain NOT(NOT(NOT(NOT(variable)))) to variable within a single applyAN2 call", () => {
+        // Cascading NOT chains converge inside a single applyAN2 call
+        // because the implementation loops on each premise until the
+        // pattern is exhausted. This keeps the outer fixed-point
+        // driver from re-walking the engine four times.
+        const { eng, peB, varAId } = setupTwoPremisesWithCrossVar()
+        // Four NOTs stacked.
+        const notIds = ["not-1", "not-2", "not-3", "not-4"]
+        notIds.forEach((id, idx) => {
+            peB.addExpression({
+                id,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: peB.getId(),
+                type: "operator",
+                operator: "not",
+                parentId: idx === 0 ? null : notIds[idx - 1],
+                position: 0,
+            })
+        })
+        peB.addExpression({
+            id: "ve-x",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "not-4",
+            position: 0,
+        })
+
+        const changed = applyAN2(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        expect(after).toHaveLength(1)
+        expect(after[0].id).toBe("ve-x")
+        expect(after[0].parentId).toBe(null)
     })
 })
 

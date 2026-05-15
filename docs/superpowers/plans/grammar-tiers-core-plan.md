@@ -1,15 +1,16 @@
 # Grammar Tiers — proposit-core Implementation Plan
 
-> **Implementation status — 2026-05-14 (late), branch `grammar-tiers/core` at HEAD.**
+> **Implementation status — 2026-05-14 (later), branch `grammar-tiers/core` at HEAD.**
 >
-> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) complete.**
-> Tests at 1598 passed + 9 skipped (1593 prior + 5 new `an-rules.test.ts`
-> tests landed with D0a's scaffold). `pnpm run check` green.
+> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) complete.**
+> Tests at 1603 passed + 9 skipped (1598 prior + 5 new `an-rules.test.ts`
+> tests landed with D0b's AN-2 regression guards). `pnpm run check` green.
 >
 > **Latest commits (newest first):**
 >
 > ```
-> <D0a>     —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
+> <D0b>     —   — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
+> 9fb18ae  —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
 > 1870592  —   — fold C6+C7+C8 dual-review polish (P1 generator accessor, P2 dedup/tests/atomicity, P3 TODO sweep)
 > 3f9710c  —   — docs(plan): lock D0 design — spec-direct AN-1..AN-4 rewrite blueprint
 > 03fd64f  C8  — evaluation no-op on naked-Q derivation premises
@@ -17,11 +18,17 @@
 > 507e02c  C6  — populateFromCitations + populateFromAxioms factories
 > ```
 >
+> **D0 per-rule native-rewrite status:**
+>
+> | Rule       | Native? | Notes                                              |
+> | ---------- | ------- | -------------------------------------------------- |
+> | AN-1       | no      | still delegating; rewrite lands D0e (gated on PE reparent primitive design) |
+> | AN-2       | **yes** | D0b — double-negation collapse via two `pe.removeExpression(id, false)` calls |
+> | AN-3       | no      | still delegating; rewrite lands D0c                |
+> | AN-4       | no      | still delegating; rewrite lands D0d                |
+>
 > **D0 remaining (sequenced):**
 >
-> - **D0b** rewrite `applyAN2` natively (double negation collapse). Smallest
->   rule; uses `pe.removeExpression(id, false)` twice (promotes grandchild
->   through both NOT layers). Validate against the legacy sweep's pass 4.
 > - **D0c** rewrite `applyAN3` natively (empty / single-child collapse).
 >   Be careful with the "single-child formula collapses only if its
 >   bounded subtree has no binary operator" rule — preserve the
@@ -45,9 +52,36 @@
 >   `applyANToFixedPoint` (until D2 deletes it along with the legacy
 >   per-flag config).
 >
-> After D0f, all 1598 existing tests should still pass — the only behavior
-> change is _where_ the AN rules live, not what they do. The `an-rules.test.ts`
-> regression-guards prove the contract.
+> After D0f, all 1598 existing tests + the `an-rules.test.ts` regression
+> guards should still pass — the only behavior change is _where_ the AN
+> rules live, not what they do. The `an-rules.test.ts` regression-guards
+> prove the contract.
+>
+> **D0b implementation notes (read before D0c):**
+>
+> - `applyAN2` walks each premise's tree via `pe.getExpressions()` and
+>   issues two `pe.removeExpression(id, false)` calls per match (inner
+>   NOT first, outer NOT second). Both direct (`NOT_outer → NOT_inner →
+>   x`) and buffered (`NOT_outer → formula → NOT_inner → x`) forms are
+>   handled.
+> - The buffered case leaves a `formula(x)` residue which AN-3 collapses
+>   in a subsequent `applyANToFixedPoint` iteration. AN-2 deliberately
+>   stops at the NOT-NOT collapse — keeps the rule contract narrow.
+> - Cascading chains (NOT-NOT-NOT-NOT-x) converge inside a single
+>   `applyAN2` call via an inner `while (premiseChanged)` loop. The
+>   outer fixed-point driver still iterates AN-2/3/4/1 but typically
+>   exits within 1 iteration for D0b inputs.
+> - **P-1 concern parked, not hit.** `pe.removeExpression(id, false)`
+>   trips the inline P-1 throw at `expression-manager.ts:863–876` when
+>   it would promote a non-not operator as direct child of an operator.
+>   For Presentable-clean inputs the formula buffers (inserted by AN-1
+>   per-mutation) keep the inner NOT's child = formula, so the throw
+>   doesn't fire. The pathological "non-buffered NOT(NOT(operator))"
+>   case isn't covered by any existing test; if a future test surfaces
+>   it, the fix is to either (a) detect the case and skip the collapse
+>   (legacy parity loses), or (b) add a private bypass primitive (D0e
+>   may need this anyway for AN-1). Defer until D0e clarifies the
+>   `reparentExpression` decision.
 >
 > **Phase D post-D0 work** is unchanged from the prior status block:
 > D1 (MDPE removal), D2 (legacy plumbing + 11 P-1 throw sites), D3

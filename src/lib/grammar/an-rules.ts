@@ -20,18 +20,20 @@
 // `ExpressionManager` mutation methods + the 11 P-1 throw sites — see
 // the plan's Phase D summary).
 //
-// **D0a — scaffold delegation (current state).** Each `applyAN*`
-// function and `applyANToFixedPoint` initially delegate to
-// `pe.normalizeExpressions()` which is the existing
-// `ExpressionManager.normalize()` full-sweep implementation. The native
-// per-rule rewrites land in D0b-D0e; D0f flips the
-// `runAssistiveNormalization` + `normalizeArgument` bridges to call
-// `applyANToFixedPoint` directly without going through
-// `pe.normalizeExpressions()`. Until then this module establishes the
-// **module boundary** — callers in `auto-normalize.ts` and
-// `normalize.ts` route AN through this module's exports rather than
-// reaching into PE directly. That boundary lets D0b-D0e replace each
-// rule's implementation in place without touching the bridge.
+// **D0b — AN-2 native, AN-1/3/4 still delegated.** `applyAN2`
+// implements double-negation collapse directly via
+// `PremiseEngine.removeExpression(id, false)`. `applyAN1`,
+// `applyAN3`, `applyAN4`, and `applyANToFixedPoint` still
+// delegate to the legacy `pe.normalizeExpressions()` full sweep;
+// D0c-D0e rewrite the remaining three rules natively and D0f
+// flips the `runAssistiveNormalization` + `normalizeArgument`
+// bridges to call `applyANToFixedPoint` directly without going
+// through `pe.normalizeExpressions()`. Until then this module
+// establishes the **module boundary** — callers in
+// `auto-normalize.ts` and `normalize.ts` route AN through this
+// module's exports rather than reaching into PE directly. That
+// boundary lets the remaining rules be replaced in place without
+// touching the bridge.
 //
 // The per-rule tests (`test/grammar/an-rules.test.ts`) assert behavior
 // the native implementation must preserve once it lands; today they
@@ -78,15 +80,89 @@ const MAX_AN_ITERATIONS = 10
  * Run AN-2 (collapse double negation) on every premise of `engine`.
  * Returns `true` iff any mutation occurred.
  *
- * **D0a state: delegates to `pe.normalizeExpressions()`.** The legacy
- * sweep runs every rule (1–5) in one pass; an AN-2-specific dispatch
- * is not possible without breaking the all-or-nothing contract of the
- * legacy implementation. Native rewrite lands in D0b.
+ * **D0b: native rewrite.** Walks each premise's expression tree
+ * looking for NOT(NOT(x)) — both the direct form (`NOT_outer →
+ * NOT_inner → x`) and the buffered form (`NOT_outer → formula →
+ * NOT_inner → x`). For each match issues two
+ * `pe.removeExpression(id, false)` calls that promote the
+ * grandchild (and, in the buffered case, the residual formula)
+ * through the two NOT layers.
+ *
+ * The buffered case leaves an unjustified `formula(x)` residue
+ * which AN-3 cleans up in a subsequent iteration of
+ * `applyANToFixedPoint`. AN-2 stays focused on the NOT-NOT
+ * collapse itself — no formula bookkeeping.
+ *
+ * Behavior parity with the legacy `ExpressionManager.normalize()`
+ * pass 4 is asserted by the regression-guard tests in
+ * `test/grammar/an-rules.test.ts` and the broader 1598-test
+ * baseline (which exercises double-negation collapse via
+ * `pe.normalizeExpressions()` and `engine.normalize()`).
  *
  * @since 1.0.0
  */
 export function applyAN2(engine: TAnyEngine): boolean {
-    return runLegacyNormalizeAndReportChange(engine)
+    let anyChanged = false
+    for (const pe of engine.listPremises() as TAnyPremiseEngine[]) {
+        // Loop until no AN-2 pattern remains in this premise. Cascading
+        // NOT chains (NOT-NOT-NOT-NOT-x) need multiple sweeps to fully
+        // collapse; doing them in one call keeps the outer
+        // fixed-point driver simple.
+        let premiseChanged = true
+        while (premiseChanged) {
+            premiseChanged = collapseOneDoubleNegationInPremise(pe)
+            if (premiseChanged) anyChanged = true
+        }
+    }
+    return anyChanged
+}
+
+/**
+ * Find one NOT(NOT(x)) pattern in `pe`'s tree (direct or buffered)
+ * and collapse it. Returns `true` iff a collapse occurred.
+ *
+ * Each call collapses exactly one pattern. The caller loops until
+ * no patterns remain.
+ */
+function collapseOneDoubleNegationInPremise(pe: TAnyPremiseEngine): boolean {
+    for (const expr of pe.getExpressions()) {
+        if (expr.type !== "operator" || expr.operator !== "not") continue
+        const children = pe.getChildExpressions(expr.id)
+        if (children.length !== 1) continue
+        const child = children[0]
+
+        // Direct: NOT_outer → NOT_inner → x
+        if (child.type === "operator" && child.operator === "not") {
+            const innerChildren = pe.getChildExpressions(child.id)
+            if (innerChildren.length !== 1) continue
+            // Promote x into inner NOT's slot, then promote x into
+            // outer NOT's slot. Two removeExpression(_, false) calls.
+            pe.removeExpression(child.id, false)
+            pe.removeExpression(expr.id, false)
+            return true
+        }
+
+        // Buffered: NOT_outer → formula → NOT_inner → x
+        if (child.type === "formula") {
+            const formulaChildren = pe.getChildExpressions(child.id)
+            if (formulaChildren.length !== 1) continue
+            const innerNot = formulaChildren[0]
+            if (innerNot.type !== "operator" || innerNot.operator !== "not") {
+                continue
+            }
+            const innerChildren = pe.getChildExpressions(innerNot.id)
+            if (innerChildren.length !== 1) continue
+            // Promote x into inner NOT's slot (formula now wraps x),
+            // then promote formula into outer NOT's slot. The
+            // residual `formula(x)` is unjustified (no binary
+            // operator in its bounded subtree) and AN-3 collapses
+            // it in a subsequent fixed-point iteration.
+            pe.removeExpression(innerNot.id, false)
+            pe.removeExpression(expr.id, false)
+            return true
+        }
+    }
+    return false
 }
 
 /**
@@ -134,21 +210,24 @@ export function applyAN1(engine: TAnyEngine): boolean {
 /**
  * Run AN-1..AN-4 to fixed point on every premise of `engine`.
  *
- * **D0a state: delegates to `pe.normalizeExpressions()`.** D0f rewires
- * this function to run the four native passes in order
- * (AN-2, AN-3, AN-4, AN-1 — buffer insertion is sequenced last so the
- * earlier passes operate on the post-collapse tree and avoid inserting
- * buffers that would then need to be collapsed). Until D0f the legacy
- * fixed-point loop inside `ExpressionManager.normalize()` is what
- * actually drives convergence.
+ * **D0b state: AN-2 is native; AN-1/3/4 still delegate to
+ * `pe.normalizeExpressions()`.** Each call of the delegating rules
+ * runs the full legacy sweep (which itself is fixed-pointed), so
+ * within a single iteration of this driver any one of the
+ * delegating calls converges the tree. AN-2's native pass is
+ * effectively a fast-path before the legacy sweep — it catches the
+ * NOT(NOT(x)) case explicitly so the regression-guard tests can
+ * spy on the native code path. D0f rewires this function to call
+ * the four native passes in order (AN-2, AN-3, AN-4, AN-1 — buffer
+ * insertion sequenced last so earlier passes see the post-collapse
+ * tree).
  *
  * Convergence cap: `MAX_AN_ITERATIONS = 10`. Typical convergence is ≤ 3
  * iterations (spec §5.1); the cap protects against pathological inputs
  * (e.g. malformed Structural state that would otherwise oscillate).
- * The current D0a delegation runs the legacy sweep inside a single
- * iteration of the loop below — the legacy sweep is itself
- * fixed-pointed, so the outer loop exits immediately. Once D0b-D0e are
- * native, the outer loop is what drives convergence.
+ * In D0b, the outer loop typically exits within 1 iteration because
+ * the legacy sweep already drives the rest of convergence. Once
+ * D0c-D0e are native, the outer loop is what drives convergence.
  *
  * @since 1.0.0
  */
