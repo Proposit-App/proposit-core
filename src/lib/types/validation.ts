@@ -29,8 +29,11 @@ export const EXPR_SELF_REFERENTIAL_PARENT = "EXPR_SELF_REFERENTIAL_PARENT"
 export const EXPR_PARENT_NOT_FOUND = "EXPR_PARENT_NOT_FOUND"
 export const EXPR_PARENT_NOT_CONTAINER = "EXPR_PARENT_NOT_CONTAINER"
 export const EXPR_ROOT_ONLY_VIOLATED = "EXPR_ROOT_ONLY_VIOLATED"
-export const EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED =
-    "EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED"
+// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` was deleted in Phase D2.
+// P-1 enforcement moved out of the legacy validate() invariant sweep
+// and into the grammar-tier validators in
+// `src/lib/grammar/validators/presentable.ts` (queryable via
+// `engine.validate('presentable')`).
 export const EXPR_CHILD_LIMIT_EXCEEDED = "EXPR_CHILD_LIMIT_EXCEEDED"
 export const EXPR_POSITION_DUPLICATE = "EXPR_POSITION_DUPLICATE"
 export const EXPR_CHECKSUM_MISMATCH = "EXPR_CHECKSUM_MISMATCH"
@@ -94,14 +97,25 @@ export const AXIOM_NOT_FOUND = "AXIOM_NOT_FOUND"
 export const LEGACY_MISSING_AXIOM_SLOT = "LEGACY_MISSING_AXIOM_SLOT"
 
 // -- Derivation premise errors --
-export const DERIVATION_TYPE_MISMATCH = "DERIVATION_TYPE_MISMATCH"
+// `DERIVATION_TYPE_MISMATCH`, `DERIVATION_CONSEQUENT_LOCKED`,
+// `DERIVATION_ROOT_OPERATOR_INVALID`, and `DERIVATION_ANTECEDENT_NON_EMPTY`
+// were deleted in Phase D2 as part of the v1.0 cleanup — they were
+// engine-error code constants that became orphaned when
+// `ManagedDerivationPremiseEngine` was removed in D1. The four
+// behaviors they powered are now surfaced via the Derivable-tier
+// validators (D-1..D-6) reachable through `engine.validate('derivable')`.
+// `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` was deleted in Phase D4
+// alongside the legacy `engine.validate()` no-arg overload — the
+// pre-1.0 evaluation throw on naked-Q is replaced by the
+// asEvaluationContext-level skip in `ArgumentEngine` (per spec §4.2);
+// the wrapper validators (`validateEvaluability` +
+// `validateDerivationStructures`) that overrode the code now pass
+// through `DERIVATION_STRUCTURE_INVALID` unchanged from the underlying
+// derivation-validation utility.
+// `DERIVATION_STRUCTURE_INVALID` stays — actively used by the
+// derivation-validation utility and surfaced through
+// `validateEvaluability` / `validateDerivationStructures`.
 export const DERIVATION_STRUCTURE_INVALID = "DERIVATION_STRUCTURE_INVALID"
-export const DERIVATION_STRUCTURE_INVALID_AT_EVALUATION =
-    "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
-export const DERIVATION_CONSEQUENT_LOCKED = "DERIVATION_CONSEQUENT_LOCKED"
-export const DERIVATION_ROOT_OPERATOR_INVALID =
-    "DERIVATION_ROOT_OPERATOR_INVALID"
-export const DERIVATION_ANTECEDENT_NON_EMPTY = "DERIVATION_ANTECEDENT_NON_EMPTY"
 export const CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID =
     "CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID"
 export const CREATE_DERIVATION_CLAIM_NOT_FOUND =

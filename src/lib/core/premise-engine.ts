@@ -11,7 +11,12 @@ import {
     type TOptionalChecksum,
 } from "../schemata/index.js"
 import { DefaultMap } from "../utils/default-map.js"
-import { midpoint, POSITION_INITIAL, POSITION_MAX } from "../utils/position.js"
+import {
+    midpoint,
+    POSITION_INITIAL,
+    POSITION_MAX,
+    type TCorePositionConfig,
+} from "../utils/position.js"
 import { sortedCopyById, sortedUnique } from "../utils/collections.js"
 import type {
     TCoreExpressionAssignment,
@@ -49,11 +54,6 @@ import {
     defaultGenerateId,
     type TLogicEngineOptions,
 } from "./argument-engine.js"
-import {
-    DEFAULT_GRAMMAR_CONFIG,
-    resolveAutoNormalize,
-    type TGrammarConfig,
-} from "../types/grammar.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
@@ -119,7 +119,6 @@ export class PremiseEngine<
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TOptionalChecksum<TArg>
     private checksumConfig?: TCoreChecksumConfig
-    protected grammarConfig: TGrammarConfig
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -148,7 +147,6 @@ export class PremiseEngine<
         this.premise = { ...premise }
         this.argument = deps.argument
         this.checksumConfig = config?.checksumConfig
-        this.grammarConfig = config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
         this.rootExpressionId = undefined
         this.variables = deps.variables
         this.expressions = new ExpressionManager<TExpr>(config)
@@ -158,13 +156,16 @@ export class PremiseEngine<
     }
 
     /**
-     * Overrides the grammar config for both this premise engine and its
-     * internal expression manager. Used by restoration paths when the
-     * caller's grammar config should override the snapshot's config.
+     * Returns the position config in effect for this premise engine.
+     * Used by in-package helpers (notably the native AN-4 absorption
+     * pass in `src/lib/grammar/an-rules.ts`) that need the position
+     * range boundaries when computing target positions for absorbed
+     * children.
+     *
+     * @internal
      */
-    public setGrammarConfig(grammarConfig: TGrammarConfig): void {
-        this.grammarConfig = grammarConfig
-        this.expressions.setGrammarConfig(grammarConfig)
+    public getPositionConfig(): TCorePositionConfig {
+        return this.expressions.getPositionConfig()
     }
 
     public setOnMutate(callback: (() => void) | undefined): void {
@@ -329,6 +330,20 @@ export class PremiseEngine<
                 if (this.rootExpressionId !== undefined) {
                     throw new Error(
                         `Premise "${this.premise.id}" already has a root expression.`
+                    )
+                }
+                // S-14: derivation premise root must be one of variable,
+                // implies, or iff. Enforced at mutation time regardless
+                // of engine `behavior` — Structural rules throw in both
+                // modes (spec §4).
+                if (
+                    (this.premise as TCorePremise).type === "derivation" &&
+                    expression.type === "operator" &&
+                    expression.operator !== "implies" &&
+                    expression.operator !== "iff"
+                ) {
+                    throw new Error(
+                        `S-14: derivation premise "${this.premise.id}" root must be variable, implies, or iff (got operator "${expression.operator}").`
                     )
                 }
             } else {
@@ -659,29 +674,245 @@ export class PremiseEngine<
     }
 
     /**
-     * Performs a full normalization sweep on this premise's expression tree.
-     * Collapses unjustified formulas, operators with 0/1 children, and inserts
-     * formula buffers where needed. Works regardless of `autoNormalize` setting.
+     * Reparent an existing expression onto a new parent at the given
+     * position. Bundled-composite mutation per spec §8 — the parent
+     * reference, position field, and checksum-dirty propagation update
+     * atomically in a single call. No transient orphan state is
+     * externally observable.
+     *
+     * Enforces Structural rules only (S-1 FK soundness, S-4 no-cycles,
+     * entity-not-found, and S-9 logical sibling-position uniqueness at
+     * the bundled-composite level — same-position collisions with the
+     * moved expression's own prior slot are tolerated as transient,
+     * since the move atomically frees that slot). Higher-tier violations
+     * never throw here — Evaluable/Derivable/Presentable issues surface
+     * through `validate(tier)` per spec §7.1.
+     *
+     * Used by the native AN-1 (formula-buffer insertion) and AN-4
+     * (same-operator absorption) passes in `src/lib/grammar/an-rules.ts`,
+     * and available to repair primitives and future composite ops that
+     * need a public reparent surface (e.g. `removeOrphanOperators`).
+     *
+     * @throws If `expressionId` or `newParentId` does not exist in this
+     *         premise.
+     * @throws S-1: if `newParent` is not an `operator` or `formula` (a
+     *         variable cannot be a parent — parity with `addExpression`
+     *         at em.ts:418-422).
+     * @throws S-1: arity — if reparenting would push `newParent`'s
+     *         child count past its operator-specific limit (unary `not`
+     *         max 1; binary `implies`/`iff` max 2). Same-parent moves
+     *         leave count unchanged and bypass this check.
+     * @throws S-4: if `newParentId === expressionId` or `newParentId` is
+     *         a descendant of `expressionId`.
+     * @throws S-9: if another sibling (NOT the expression being moved)
+     *         already occupies `newPosition` under `newParentId`.
+     *
+     * @since 1.0.0
      */
-    public normalizeExpressions(): TCoreMutationResult<
-        void,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    > {
+    public reparentExpression(
+        expressionId: string,
+        newParentId: string,
+        newPosition: number
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
         return this.withValidation(() => {
+            const expression = this.expressions.getExpression(expressionId)
+            if (!expression) {
+                throw new Error(
+                    `Expression "${expressionId}" not found in premise "${this.premise.id}".`
+                )
+            }
+            const newParent = this.expressions.getExpression(newParentId)
+            if (!newParent) {
+                throw new Error(
+                    `Parent expression "${newParentId}" not found in premise "${this.premise.id}".`
+                )
+            }
+
+            // S-1 parent-type: only operators and formulas accept
+            // children. Without this guard a caller could reparent under
+            // a variable (or any other non-container) and produce a
+            // malformed AST that no validator catches. Parity with
+            // `addExpression` at em.ts:418-422.
+            if (newParent.type !== "operator" && newParent.type !== "formula") {
+                throw new Error(
+                    `S-1: cannot reparent under non-operator/formula parent "${newParentId}" (type=${newParent.type}).`
+                )
+            }
+
+            // S-4 no-cycles: newParent cannot be expressionId itself nor
+            // a descendant of expressionId.
+            if (newParentId === expressionId) {
+                throw new Error(
+                    `S-4: cannot reparent expression "${expressionId}" under itself.`
+                )
+            }
+            if (this.isDescendantOf(newParentId, expressionId)) {
+                throw new Error(
+                    `S-4: cannot reparent expression "${expressionId}" under its descendant "${newParentId}" (would create a cycle).`
+                )
+            }
+
+            // S-9 sibling-position uniqueness — only fires if a sibling
+            // OTHER than the moved expression occupies the target slot.
+            // Same-parent move with newPosition === expression.position
+            // is a no-op-position case and tolerated.
+            const isSameParentSamePosition =
+                expression.parentId === newParentId &&
+                expression.position === newPosition
+            if (!isSameParentSamePosition) {
+                const siblings =
+                    this.expressions.getChildExpressions(newParentId)
+                const collision = siblings.find(
+                    (s) => s.id !== expressionId && s.position === newPosition
+                )
+                if (collision) {
+                    throw new Error(
+                        `S-9: position ${newPosition} is already occupied by sibling "${collision.id}" under parent "${newParentId}".`
+                    )
+                }
+            }
+
+            // S-1 arity: when source is moving OUT of one parent and
+            // INTO `newParent`, the new parent's child count increases
+            // by 1. Reuse `addExpression`'s `assertChildLimit` parity
+            // (which only enforces caps for `not`/`implies`/`iff`).
+            // Same-parent moves bypass: count is unchanged. Formula
+            // parents enforce their 1-child cap separately.
+            const isSameParent = expression.parentId === newParentId
+            if (!isSameParent) {
+                if (newParent.type === "operator") {
+                    // assertChildLimit lives in EM — gate via the public
+                    // reparent call's pre-check shape: replicate its
+                    // logic here so we don't widen EM's surface.
+                    const childCount =
+                        this.expressions.getChildExpressions(newParentId).length
+                    if (newParent.operator === "not" && childCount >= 1) {
+                        throw new Error(
+                            `Operator expression "${newParentId}" with "not" can only have one child.`
+                        )
+                    }
+                    if (
+                        (newParent.operator === "implies" ||
+                            newParent.operator === "iff") &&
+                        childCount >= 2
+                    ) {
+                        throw new Error(
+                            `Operator expression "${newParentId}" with "${newParent.operator}" can only have two children.`
+                        )
+                    }
+                } else if (newParent.type === "formula") {
+                    const childCount =
+                        this.expressions.getChildExpressions(newParentId).length
+                    if (childCount >= 1) {
+                        throw new Error(
+                            `Formula expression "${newParentId}" can only have one child.`
+                        )
+                    }
+                }
+            }
+
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             this.expressions.setCollector(collector)
             try {
-                this.expressions.normalize()
+                this.expressions.reparentExpression(
+                    expressionId,
+                    newParentId,
+                    newPosition
+                )
                 const changes = this.finalizeExpressionMutation(collector)
-                return { result: undefined, changes }
+                return {
+                    result: this.expressions.getExpression(expressionId)!,
+                    changes,
+                }
             } finally {
                 this.expressions.setCollector(null)
             }
         })
     }
+
+    /**
+     * Wrap an existing expression in a freshly-minted `formula` node
+     * atomically. The formula takes the child's original parent slot
+     * (parentId + position); the child becomes the formula's sole
+     * child at position 0. Bundled-composite mutation per spec §8.
+     *
+     * Used by the native AN-1 (formula-buffer insertion) pass in
+     * `src/lib/grammar/an-rules.ts`. Composing this from
+     * `addExpression` + `reparentExpression` is not possible: the
+     * intermediate state would either (a) violate S-9 with the child
+     * still occupying the formula's target slot, or (b) trip the
+     * parent's `assertChildLimit` (unary `not`, binary
+     * `implies`/`iff`) even though the *net* child count of the parent
+     * is unchanged after the wrap.
+     *
+     * The new formula's id is minted via the engine's `idGenerator`
+     * accessor and returned in the mutation result. Argument fields
+     * (`argumentId`, `argumentVersion`, `premiseId`) are inherited
+     * from the source child.
+     *
+     * @throws If `childId` does not exist in this premise.
+     * @throws If `childId` is at the root (no parent to insert a
+     *         buffer beneath).
+     * @throws S-10: if `formulaId` is already used by an existing
+     *         expression in this premise (entity-ID uniqueness).
+     *
+     * @since 1.0.0
+     */
+    public wrapInFormula(
+        childId: string,
+        formulaId: string
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        return this.withValidation(() => {
+            const child = this.expressions.getExpression(childId)
+            if (!child) {
+                throw new Error(
+                    `Expression "${childId}" not found in premise "${this.premise.id}".`
+                )
+            }
+            if (child.parentId === null) {
+                throw new Error(
+                    `Cannot wrap root expression "${childId}" in a formula — no parent operator above it.`
+                )
+            }
+
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.wrapInFormula(childId, formulaId)
+                const changes = this.finalizeExpressionMutation(collector)
+                return {
+                    result: this.expressions.getExpression(formulaId)!,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
+            }
+        })
+    }
+
+    /**
+     * Returns true iff `candidateId` is a descendant of `ancestorId` in
+     * this premise's expression tree. Used by `reparentExpression` for
+     * the S-4 no-cycles check.
+     */
+    private isDescendantOf(candidateId: string, ancestorId: string): boolean {
+        const stack: string[] = [ancestorId]
+        while (stack.length > 0) {
+            const cursor = stack.pop()!
+            for (const child of this.expressions.getChildExpressions(cursor)) {
+                if (child.id === candidateId) return true
+                stack.push(child.id)
+            }
+        }
+        return false
+    }
+
+    // D2 — `pe.normalizeExpressions()` was the per-premise wrapper for
+    // the legacy `ExpressionManager.normalize()` 5-pass sweep. Both
+    // methods are deleted in D2. The replacement is
+    // `engine.normalize(tier?)` (Phase C3) which routes through the
+    // native AN-1..AN-4 passes in `src/lib/grammar/an-rules.ts`. The
+    // post-mutation assistive hook covers the per-mutation use case.
 
     public toggleNegation(
         expressionId: string,
@@ -736,93 +967,45 @@ export class PremiseEngine<
                     return { result: null, changes }
                 } else if (
                     target.type === "operator" &&
-                    target.operator === "not" &&
-                    resolveAutoNormalize(
-                        this.grammarConfig,
-                        "collapseDoubleNegation"
-                    )
+                    target.operator === "not"
                 ) {
-                    // Target is already NOT — wrapping would create NOT(NOT(x)).
-                    // Collapse instead: remove the existing NOT, promoting its child.
+                    // Target is already NOT — toggling adds a second NOT and
+                    // immediately collapses to the inner child. We express
+                    // this directly by removing the existing NOT (promotes
+                    // its child into its slot). D2: the pre-v1.0 gate on
+                    // `collapseDoubleNegation` was deleted — `toggleNegation`
+                    // unconditionally toggles.
                     this.expressions.removeExpression(expressionId, false)
 
                     const changes = this.finalizeExpressionMutation(collector)
                     return { result: null, changes }
                 } else {
-                    // When the target is a non-not operator, a formula buffer
-                    // is needed between the new NOT and the target to satisfy
-                    // the operator nesting restriction.
-                    const needsFormula =
-                        this.grammarConfig.enforceFormulaBetweenOperators &&
-                        target.type === "operator" &&
-                        target.operator !== "not"
+                    // D2: the pre-v1.0 P-1 inline buffer-insertion branch
+                    // (gated on `grammarConfig.enforceFormulaBetweenOperators`
+                    // + `resolveAutoNormalize(_, 'negationInsertFormula')`,
+                    // which built `NOT(formula(target))` inline) is gone.
+                    // Always wrap with just NOT. AN-1 (post-mutation hook in
+                    // assistive mode) inserts the formula buffer if the
+                    // target is a non-not operator; permissive mode leaves
+                    // the un-buffered state and `validate('presentable')`
+                    // flags it.
+                    const notExpr = {
+                        ...extraFields,
+                        id: this.generateId(),
+                        argumentId: target.argumentId,
+                        argumentVersion: target.argumentVersion,
+                        premiseId: target.premiseId,
+                        type: "operator",
+                        operator: "not",
+                        parentId: target.parentId,
+                        position: target.position,
+                    } as TExpressionInput<TExpr>
 
-                    let notExprId: string
-
-                    if (needsFormula) {
-                        if (
-                            !resolveAutoNormalize(
-                                this.grammarConfig,
-                                "negationInsertFormula"
-                            )
-                        ) {
-                            throw new Error(
-                                `Cannot negate operator expression "${expressionId}" — would place a non-not operator as a direct child of NOT. Enable negationInsertFormula or wrap in a formula node first.`
-                            )
-                        }
-                        // Build not → formula → target
-                        const formulaExpr = {
-                            ...extraFields,
-                            id: this.generateId(),
-                            argumentId: target.argumentId,
-                            argumentVersion: target.argumentVersion,
-                            premiseId: target.premiseId,
-                            type: "formula",
-                            parentId: target.parentId,
-                            position: target.position,
-                        } as TExpressionInput<TExpr>
-                        this.expressions.insertExpression(
-                            formulaExpr,
-                            expressionId
-                        )
-
-                        const notExpr = {
-                            ...extraFields,
-                            id: this.generateId(),
-                            argumentId: target.argumentId,
-                            argumentVersion: target.argumentVersion,
-                            premiseId: target.premiseId,
-                            type: "operator",
-                            operator: "not",
-                            parentId: target.parentId,
-                            position: target.position,
-                        } as TExpressionInput<TExpr>
-                        this.expressions.insertExpression(
-                            notExpr,
-                            formulaExpr.id
-                        )
-                        notExprId = notExpr.id
-                    } else {
-                        // Wrap target with a new NOT operator
-                        const notExpr = {
-                            ...extraFields,
-                            id: this.generateId(),
-                            argumentId: target.argumentId,
-                            argumentVersion: target.argumentVersion,
-                            premiseId: target.premiseId,
-                            type: "operator",
-                            operator: "not",
-                            parentId: target.parentId,
-                            position: target.position,
-                        } as TExpressionInput<TExpr>
-
-                        this.expressions.insertExpression(notExpr, expressionId)
-                        notExprId = notExpr.id
-                    }
+                    this.expressions.insertExpression(notExpr, expressionId)
 
                     const changes = this.finalizeExpressionMutation(collector)
                     return {
-                        result: this.expressions.getExpression(notExprId)!,
+                        result: this.expressions.getExpression(notExpr.id)!,
                         changes,
                     }
                 }
@@ -1985,7 +2168,6 @@ export class PremiseEngine<
         argument: TOptionalChecksum<TArg>,
         variables: VariableManager<TVar>,
         expressionIndex?: Map<string, string>,
-        grammarConfig?: TGrammarConfig,
         generateId?: () => string
     ): PremiseEngine<TArg, TPremise, TExpr, TVar> {
         // Normalize checksumConfig in case the snapshot went through a JSON
@@ -2007,14 +2189,9 @@ export class PremiseEngine<
             { argument, variables, expressionIndex },
             normalizedConfig
         )
-        // Override grammar config if the caller specified one.
-        if (grammarConfig) {
-            pe.grammarConfig = grammarConfig
-        }
         // Restore expressions from the snapshot
         pe.expressions = ExpressionManager.fromSnapshot<TExpr>(
             snapshot.expressions,
-            grammarConfig,
             generateId
         )
         // Restore rootExpressionId from snapshot

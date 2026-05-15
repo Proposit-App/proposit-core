@@ -22,11 +22,6 @@ import type {
     TCoreVariableAssignment,
 } from "../types/evaluation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
-import {
-    DEFAULT_GRAMMAR_CONFIG,
-    PERMISSIVE_GRAMMAR_CONFIG,
-    type TGrammarConfig,
-} from "../types/grammar.js"
 import type { TCorePositionConfig } from "../utils/position.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 import {
@@ -34,7 +29,6 @@ import {
     CLAIM_NOT_FOUND,
     CREATE_DERIVATION_CLAIM_NOT_FOUND,
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
-    DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
 } from "../types/validation.js"
 import { validateDerivationStructure } from "../utils/derivation-validation.js"
 import {
@@ -68,6 +62,24 @@ import {
     type TValidatablePremise,
 } from "./argument-validation.js"
 import type { TExpressionInput } from "./expression-manager.js"
+import { normalizeArgument } from "../grammar/normalize.js"
+import { runAssistiveNormalization } from "../grammar/auto-normalize.js"
+import { isNakedQDerivationPremise } from "../grammar/naked-q.js"
+import {
+    populateFromGrounding as populateFromGroundingImpl,
+    type TPopulateResult,
+} from "../grammar/populate-from.js"
+import {
+    removeUnresolvableVariables as removeUnresolvableVariablesImpl,
+    removeOrphanOperators as removeOrphanOperatorsImpl,
+    removeDuplicateDerivationPremises as removeDuplicateDerivationPremisesImpl,
+    dropAxiomsFromMixedAntecedent as dropAxiomsFromMixedAntecedentImpl,
+} from "../grammar/repair.js"
+import { validate as validateGrammar } from "../grammar/validate.js"
+import type { TGrammarTier, TViolation } from "../grammar/types.js"
+import type { TValidatorContext as TGrammarValidatorContext } from "../grammar/validators/context.js"
+import type { TCoreClaimConnection } from "../schemata/claim-connection.js"
+import type { TClaimConnectionLookup } from "./interfaces/library.interfaces.js"
 import { InvariantViolationError } from "./invariant-violation-error.js"
 import { PremiseEngine } from "./premise-engine.js"
 import type { TPremiseEngineSnapshot } from "./premise-engine.js"
@@ -92,7 +104,24 @@ export const defaultGenerateId = (): string => globalThis.crypto.randomUUID()
 export type TLogicEngineOptions = {
     checksumConfig?: TCoreChecksumConfig
     positionConfig?: TCorePositionConfig
-    grammarConfig?: TGrammarConfig
+    /**
+     * Engine behavior. Controls whether the auto-normalization (AN) rule
+     * set runs as a post-hook after every successful Structural mutation.
+     *
+     * - `'assistive'` (default): AN runs after every successful Structural
+     *   mutation. AN preserves Presentable — if the pre-mutation state was
+     *   Presentable, the post-mutation state is Presentable.
+     * - `'permissive'`: AN does not run. The engine accepts mutations that
+     *   leave the argument outside the Presentable/Derivable/Evaluable
+     *   tiers (down to but not including Structural, which is always
+     *   guaranteed).
+     *
+     * Switchable at runtime via `engine.setBehavior(...)`. See
+     * `docs/Proposit_Grammar.md` §4 for the full contract.
+     *
+     * @since 1.0.0
+     */
+    behavior?: "assistive" | "permissive"
     /** UUID generator for new entity IDs. Defaults to `globalThis.crypto.randomUUID()`. */
     generateId?: () => string
 }
@@ -142,9 +171,24 @@ export class ArgumentEngine<
     private conclusionPremiseId: string | undefined
     private checksumConfig?: TCoreChecksumConfig
     private positionConfig?: TCorePositionConfig
-    private grammarConfig?: TGrammarConfig
+    private engineBehavior: "assistive" | "permissive"
     private generateId: () => string
     private restoringFromSnapshot = false
+    // D2b — re-entrance guard for the AN post-mutation hook. The
+    // `setOnMutate` callbacks (3 sites: createPremise, fromSnapshot,
+    // restoreFromSnapshot) fire `runAssistiveNormalization(this)` after
+    // every successful mutation when `behavior === 'assistive'`. AN
+    // itself mutates premises (removeExpression / reparentExpression /
+    // wrapInFormula), which re-fires `setOnMutate`. Without a guard the
+    // outer mutation would trigger nested AN sweeps. The guard is
+    // toggled by `_beginApplyAN()` / `_endApplyAN()` (see below); the
+    // chokepoint is `applyANToFixedPoint` in
+    // `src/lib/grammar/an-rules.ts`, so both
+    // `runAssistiveNormalization` (post-hook) and `normalizeArgument`
+    // (`engine.normalize()`) are covered by the same gate. The
+    // accessor pair is `beginApplyAN()` / `endApplyAN()` below
+    // (marked `@internal` — not part of the public API).
+    private applyingAN = false
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -174,7 +218,7 @@ export class ArgumentEngine<
         this.premises = new Map()
         this.checksumConfig = options?.checksumConfig
         this.positionConfig = options?.positionConfig
-        this.grammarConfig = options?.grammarConfig
+        this.engineBehavior = options?.behavior ?? "assistive"
         this.generateId = options?.generateId ?? defaultGenerateId
         this.variables = new VariableManager<TVar>({
             checksumConfig: this.checksumConfig,
@@ -323,7 +367,7 @@ export class ArgumentEngine<
         this.suppressPremiseValidation()
         try {
             const result = fn()
-            const validation = this.validate()
+            const validation = this.validateInvariants()
             if (!validation.ok) {
                 this.rollbackInternal(snap)
                 throw new InvariantViolationError(validation.violations)
@@ -490,6 +534,96 @@ export class ArgumentEngine<
                 this.reactiveDirty.premiseIds.add(p.id)
             }
         }
+    }
+
+    /**
+     * Current engine behavior setting. Controls whether the
+     * auto-normalization (AN) rule set runs as a post-hook after every
+     * successful Structural mutation. See the JSDoc on
+     * `TLogicEngineOptions.behavior` for the full contract.
+     *
+     * @since 1.0.0
+     */
+    public get behavior(): "assistive" | "permissive" {
+        return this.engineBehavior
+    }
+
+    /**
+     * Access to the engine's ID generator function. Used by in-package
+     * helpers that build new entity trees and need fresh IDs (e.g. the
+     * `populateFromGrounding` factory in
+     * `src/lib/grammar/populate-from.ts`). The generator is captured
+     * once at construction (default `crypto.randomUUID`) and stays
+     * immutable for the engine's lifetime; this accessor returns the
+     * same function reference on every call.
+     *
+     * Replaces the prior `(engine as unknown as { generateId: () =>
+     * string }).generateId` cast in `populate-from.ts`. The accessor is
+     * marked `@internal` so it is not surfaced in generated API docs /
+     * type bundles — the in-package factory callers are its intended
+     * consumers; external programmatic-construction use cases should
+     * supply their own generator rather than borrowing the engine's.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    public get idGenerator(): () => string {
+        return this.generateId
+    }
+
+    /**
+     * Switches the engine's behavior at runtime. Going `permissive →
+     * assistive` does **not** auto-run a global `normalize()` pass; the
+     * UI is expected to prompt the user before invoking `normalize()`
+     * explicitly.
+     *
+     * As of v1.0 (Phase D2) behavior is enforced entirely via the AN
+     * post-mutation hook in `runAssistiveNormalization` — the legacy
+     * per-flag `grammarConfig` plumbing that bridged behavior to
+     * premise-level enforcement is gone. Switching `permissive →
+     * assistive` makes the next successful Structural mutation trigger
+     * the AN pass; switching the other direction stops the AN pass
+     * from running until the user opts back in.
+     *
+     * @since 1.0.0
+     */
+    public setBehavior(b: "assistive" | "permissive"): void {
+        this.engineBehavior = b
+    }
+
+    /**
+     * Acquire the AN re-entrance guard. Returns `true` iff the guard
+     * was acquired (i.e. AN is not already running for this engine);
+     * the caller is then obligated to call `endApplyAN()` after the
+     * AN sweep. Returns `false` if AN is already in progress, in
+     * which case the caller short-circuits to avoid nested AN
+     * sweeps.
+     *
+     * Used by `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`
+     * (the single chokepoint for both `runAssistiveNormalization`
+     * and `normalizeArgument`). The post-mutation hook in
+     * `setOnMutate` calls `runAssistiveNormalization(this)` which
+     * delegates to `applyANToFixedPoint`; AN's own mutations re-fire
+     * `setOnMutate`, which would otherwise recurse. This guard
+     * breaks the recursion.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    public beginApplyAN(): boolean {
+        if (this.applyingAN) return false
+        this.applyingAN = true
+        return true
+    }
+
+    /**
+     * Release the AN re-entrance guard. Pairs with `beginApplyAN()`.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    public endApplyAN(): void {
+        this.applyingAN = false
     }
 
     public getArgument(): TArg {
@@ -795,7 +929,6 @@ export class ArgumentEngine<
                 {
                     checksumConfig: this.checksumConfig,
                     positionConfig: this.positionConfig,
-                    grammarConfig: this.grammarConfig,
                     generateId: this.generateId,
                 }
             )
@@ -812,6 +945,16 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(id)
                 this.notifySubscribers()
+                // D2b — AN post-mutation hook per spec §5. Skipped
+                // during snapshot restoration (PE.fromSnapshot bypasses
+                // mutations anyway, but the guard is defensive).
+                // `runAssistiveNormalization` is a no-op in permissive
+                // mode; re-entrance from AN's own mutations is guarded
+                // inside `applyANToFixedPoint` via the engine's
+                // `_beginApplyAN()` flag.
+                if (!this.restoringFromSnapshot) {
+                    runAssistiveNormalization(this)
+                }
             })
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             collector.addedPremise(pm.toPremiseData())
@@ -1309,6 +1452,19 @@ export class ArgumentEngine<
         return this.variables.getVariable(variableId)
     }
 
+    /**
+     * Look up a claim by `(id, version)` in the engine's claim library.
+     * Returns `undefined` if the claim is not present. Exposed for
+     * repair primitives and other tooling that needs to inspect a
+     * claim's `type` discriminator at a particular version pinned by
+     * a claim-bound variable.
+     *
+     * @since 1.0.0
+     */
+    public getClaim(claimId: string, claimVersion: number): TClaim | undefined {
+        return this.claimLibrary.get(claimId, claimVersion)
+    }
+
     public hasVariable(variableId: string): boolean {
         return this.variables.hasVariable(variableId)
     }
@@ -1389,35 +1545,163 @@ export class ArgumentEngine<
     }
 
     /**
-     * Normalizes expression trees across all premises. Collapses unjustified
-     * formulas, operators with 0/1 children, and inserts formula buffers where
-     * needed. Works regardless of `autoNormalize` setting.
+     * Construct (or no-op on) the per-claim derivation premise's
+     * antecedent from a citation lookup. Factory + naked-Q-only:
+     *
+     *  - 0 connections → no-op (naked-Q stays).
+     *  - 1 connection → `IMPLIES(citation-var, Q)`.
+     *  - ≥ 2 connections → `IMPLIES(OR(c1, …, cn), Q)`. In
+     *    `'assistive'` mode the per-mutation AN-1 post-hook inserts a
+     *    formula buffer between IMPLIES and OR; in `'permissive'` the
+     *    OR sits directly under IMPLIES (a P-1 violation surfaces via
+     *    `validate('presentable')`).
+     *
+     * **No throw on already-populated.** Per the Structural-only
+     * mutation throw rule, if the target derivation premise is not in
+     * the naked-Q form the factory returns `{ kind: 'no-op', state:
+     * <existing> }` without mutating. UI/caller is responsible for
+     * explicit user consent + clearing the antecedent via a repair
+     * primitive before re-calling. Preserves the no-changes-without-
+     * consent principle.
+     *
+     * Throws only when no derivation premise exists for the given
+     * `derivedClaimId` (legitimate entity-not-found Structural check).
+     *
+     * @since 1.0.0
      */
-    public normalizeAllExpressions(): TCoreMutationResult<
-        void,
-        TExpr,
-        TVar,
-        TPremise,
-        TArg
-    > {
-        const merged: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
-        for (const pe of this.premises.values()) {
-            const { changes } = pe.normalizeExpressions()
-            if (changes.expressions) {
-                merged.expressions ??= { added: [], modified: [], removed: [] }
-                merged.expressions.added.push(...changes.expressions.added)
-                merged.expressions.modified.push(
-                    ...changes.expressions.modified
-                )
-                merged.expressions.removed.push(...changes.expressions.removed)
-            }
-            if (changes.premises) {
-                merged.premises ??= { added: [], modified: [], removed: [] }
-                merged.premises.modified.push(...changes.premises.modified)
-            }
-        }
-        return { result: undefined, changes: merged }
+    public populateFromCitations<
+        TConn extends TCoreClaimConnection = TCoreClaimConnection,
+    >(
+        derivedClaimId: string,
+        citationLookup: TClaimConnectionLookup<TConn>
+    ): TPopulateResult {
+        return populateFromGroundingImpl(this, derivedClaimId, citationLookup)
     }
+
+    /**
+     * Mirror of `populateFromCitations` for axiom connections. Same
+     * factory contract: naked-Q-only, no throw on already-populated.
+     *
+     * @since 1.0.0
+     */
+    public populateFromAxioms<
+        TConn extends TCoreClaimConnection = TCoreClaimConnection,
+    >(
+        derivedClaimId: string,
+        axiomLookup: TClaimConnectionLookup<TConn>
+    ): TPopulateResult {
+        return populateFromGroundingImpl(this, derivedClaimId, axiomLookup)
+    }
+
+    /**
+     * Repair primitive: resolve E-3 violations by deleting each
+     * unresolvable claim- or premise-bound variable, cascading the
+     * removal across all premises. Returns the violations resolved
+     * (for UX confirmation / undo / "we made N changes" feedback).
+     *
+     * **User-initiated; never auto-runs.** Respects `behavior`: in
+     * `'assistive'` mode, the AN post-hook fires after each cascade
+     * mutation; in `'permissive'` no AN runs.
+     *
+     * @since 1.0.0
+     */
+    public removeUnresolvableVariables(): readonly TViolation[] {
+        return removeUnresolvableVariablesImpl(this)
+    }
+
+    /**
+     * Repair primitive: resolve E-1 violations (operators with < 2
+     * children) by running the AN-3 cleanup pass globally. Returns the
+     * violations resolved. The repair is non-meaning-changing — it
+     * only removes empty operators and promotes single-child operators
+     * — but lives alongside `normalize()` so the UI can present a
+     * focused "Remove N orphan operators" action with a precise return
+     * value.
+     *
+     * **User-initiated; never auto-runs.** Bypasses `behavior` —
+     * cleanup runs even in permissive mode (the user has already
+     * accepted the action by clicking the repair button).
+     *
+     * @since 1.0.0
+     */
+    public removeOrphanOperators(): readonly TViolation[] {
+        return removeOrphanOperatorsImpl(this)
+    }
+
+    /**
+     * Repair primitive: resolve E-6 violations (claim has > 1
+     * derivation premise) by keeping one premise per `derivedClaimId`
+     * and deleting the rest. Strategy controls which premise is kept:
+     *
+     *  - `'keep-first'` (default): keep the premise with the
+     *    lexicographically smallest id; delete the rest. Deterministic
+     *    and snapshot-stable.
+     *  - `'keep-largest-antecedent'`: keep the premise whose antecedent
+     *    subtree has the most claim-bound variable expressions; tie-break
+     *    by id.
+     *
+     * **User-initiated; never auto-runs.** Respects `behavior`.
+     *
+     * @since 1.0.0
+     */
+    public removeDuplicateDerivationPremises(
+        strategy: "keep-first" | "keep-largest-antecedent" = "keep-first"
+    ): readonly TViolation[] {
+        return removeDuplicateDerivationPremisesImpl(this, strategy)
+    }
+
+    /**
+     * Repair primitive: resolve D-3 violations (mixed-grounding
+     * antecedent — axioms + citations in one derivation) by deleting
+     * every axiom-bound variable expression from the offending
+     * antecedent subtree. The remaining citation-bound variables stay,
+     * giving the derivation a homogeneous citation-grounded antecedent.
+     *
+     * **User-initiated; never auto-runs.** Respects `behavior`. In
+     * `'assistive'` mode, AN may collapse a resulting single-child OR
+     * via AN-3; in `'permissive'` the OR may persist with one child
+     * (a downstream D-2 violation — follow up with
+     * `removeOrphanOperators()` if desired).
+     *
+     * @since 1.0.0
+     */
+    public dropAxiomsFromMixedAntecedent(): readonly TViolation[] {
+        return dropAxiomsFromMixedAntecedentImpl(this)
+    }
+
+    /**
+     * Global normalize pass per spec §6. Runs the AN rule set
+     * (AN-1..AN-4) everywhere it can fire, converging the argument
+     * toward `tier` (defaults to `'presentable'`).
+     *
+     * `normalize` is non-destructive in the logical-meaning sense — it
+     * does not delete variables, change claim references, or modify
+     * operator semantics. Recovery from Evaluable or Derivable violations
+     * requires user intent and is exposed via the repair primitives
+     * (Phase C4).
+     *
+     * In v1.0 every AN rule targets a Presentable invariant, so calls
+     * with `tier` ∈ {'structural', 'evaluable', 'derivable'} are
+     * effectively no-ops. The parameter exists as forward-compatible
+     * API surface for a future submit/finalize gate.
+     *
+     * **Bypasses `behavior`.** `normalize()` is user-initiated (the UI
+     * invokes it after the user confirms a Tidy / Normalize action), so
+     * cleanup runs regardless of whether the engine is in `'assistive'`
+     * or `'permissive'` mode. The engine's `behavior` setting is not
+     * mutated by this call.
+     *
+     * @since 1.0.0
+     */
+    public normalize(tier: TGrammarTier = "presentable"): void {
+        normalizeArgument(this, tier)
+    }
+
+    // D2 — `normalizeAllExpressions` was the per-engine wrapper that
+    // delegated to `pe.normalizeExpressions()` on every premise.
+    // Both methods are deleted in D2. Callers migrate to
+    // `engine.normalize(tier?)` (Phase C3), which routes through the
+    // four native AN passes in `src/lib/grammar/an-rules.ts`.
 
     public getRoleState(): TCoreArgumentRoleState {
         return {
@@ -1510,7 +1794,18 @@ export class ArgumentEngine<
             config: {
                 checksumConfig: serializeChecksumConfig(this.checksumConfig),
                 positionConfig: this.positionConfig,
-                grammarConfig: this.grammarConfig,
+                // `behavior` is intentionally omitted from the snapshot.
+                // Consumers re-supply it at restore time via
+                // `new ArgumentEngine(...)` options or `setBehavior()`;
+                // a restored engine defaults to `'assistive'`. The fork
+                // path (`forkArgumentEngine` / `PropositCore.forkArgument`)
+                // explicitly threads the source engine's `behavior` into
+                // the forked engine's config (see D5 — `fork.ts`), so
+                // fork callers don't lose the setting.
+                //
+                // D2: the legacy `grammarConfig` field is gone — all
+                // P-1 / AN behavior is driven by `engine.behavior` +
+                // the AN post-mutation hook.
             } as TLogicEngineOptions,
         }
     }
@@ -1526,7 +1821,6 @@ export class ArgumentEngine<
     >(
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>,
         claimLibrary: TClaimLookup<TClaim>,
-        grammarConfig?: TGrammarConfig,
         checksumVerification?: "ignore" | "strict",
         generateId?: () => string
     ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim> {
@@ -1553,7 +1847,6 @@ export class ArgumentEngine<
                 snapshot.argument,
                 engine.variables,
                 engine.expressionIndex,
-                grammarConfig,
                 generateId
             )
             engine.premises.set(pe.getId(), pe)
@@ -1570,6 +1863,13 @@ export class ArgumentEngine<
                 engine.markDirty()
                 engine.reactiveDirty.premiseIds.add(premiseId)
                 engine.notifySubscribers()
+                // D2b — AN post-mutation hook per spec §5. See the
+                // matching comment in `createPremise`'s setOnMutate
+                // callback for the re-entrance / snapshot-restore
+                // rationale.
+                if (!engine.restoringFromSnapshot) {
+                    runAssistiveNormalization(engine)
+                }
             })
         }
         // Restore claim-bound variables first, then premise-bound variables
@@ -1599,34 +1899,27 @@ export class ArgumentEngine<
 
         engine.restoringFromSnapshot = false
 
-        // Apply the caller's grammarConfig override to the engine and all
-        // premise engines so that validate() and subsequent mutations use the
-        // caller's grammar rules instead of whatever was stored in the snapshot.
-        if (grammarConfig) {
-            engine.grammarConfig = grammarConfig
-            for (const pe of engine.premises.values()) {
-                pe.setGrammarConfig(grammarConfig)
-            }
-        }
-
-        // Post-load normalization: only run full normalize when autoNormalize
-        // is `true` (boolean). When it is a granular config object, individual
-        // flags control in-operation behavior — loading should not mutate data.
-        const restoredGrammarConfig = grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
-        if (restoredGrammarConfig.autoNormalize === true) {
-            for (const pe of engine.premises.values()) {
-                pe.normalizeExpressions()
-            }
-        }
+        // C7: No post-load normalization. The snapshot loads as-is; any
+        // lower-tier (Evaluable / Derivable / Presentable) violations
+        // are queryable post-load via `engine.validate(tier)`.
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
             ArgumentEngine.verifySnapshotChecksums(engine, snapshot)
         }
 
-        const validation = engine.validate()
-        if (!validation.ok) {
-            throw new InvariantViolationError(validation.violations)
+        // D2: load-time invariant validation no longer needs the
+        // PERMISSIVE swap — the legacy `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
+        // check was deleted alongside the rest of `grammarConfig`. P-1
+        // is now surfaced via `engine.validate('presentable')`
+        // post-load. Non-grammar invariants (schema conformance,
+        // reference integrity, conclusion ref, circularity, etc.)
+        // still throw at load time. D4 inlined the
+        // `runLoadTimeValidationCore` wrapper and routes through the
+        // public `validateInvariants()` method.
+        const loadValidation = engine.validateInvariants()
+        if (!loadValidation.ok) {
+            throw new InvariantViolationError(loadValidation.violations)
         }
 
         return engine
@@ -1653,11 +1946,8 @@ export class ArgumentEngine<
         expressions: TExpressionInput<TExpr>[],
         roles: TCoreArgumentRoleState,
         config?: TLogicEngineOptions,
-        grammarConfig?: TGrammarConfig,
         checksumVerification?: "ignore" | "strict"
     ): ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim> {
-        const loadingGrammarConfig =
-            grammarConfig ?? config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
         const normalizedConfig = config
             ? {
                   ...config,
@@ -1666,14 +1956,10 @@ export class ArgumentEngine<
                   ),
               }
             : undefined
-        const loadingConfig: TLogicEngineOptions = {
-            ...normalizedConfig,
-            grammarConfig: loadingGrammarConfig,
-        }
         const engine = new ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>(
             argument,
             claimLibrary,
-            loadingConfig
+            normalizedConfig
         )
         engine.restoringFromSnapshot = true
 
@@ -1757,20 +2043,12 @@ export class ArgumentEngine<
             engine.setConclusionPremise(roles.conclusionPremiseId)
         }
 
-        // After loading: restore the caller's intended grammar config
-        engine.grammarConfig = config?.grammarConfig
-
         engine.restoringFromSnapshot = false
 
-        // Post-load normalization: only run full normalize when autoNormalize
-        // is `true` (boolean). Granular config objects skip post-load normalization.
-        const restoredGrammarConfig =
-            config?.grammarConfig ?? DEFAULT_GRAMMAR_CONFIG
-        if (restoredGrammarConfig.autoNormalize === true) {
-            for (const pe of engine.premises.values()) {
-                pe.normalizeExpressions()
-            }
-        }
+        // C7: No post-load normalization. See the matched note in
+        // `fromSnapshot` above. Load is non-mutating; lower-tier
+        // violations surface via `engine.validate(tier)`. Phase D
+        // removes the legacy grammarConfig parameter entirely.
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
@@ -1782,9 +2060,15 @@ export class ArgumentEngine<
             )
         }
 
-        const validation = engine.validate()
-        if (!validation.ok) {
-            throw new InvariantViolationError(validation.violations)
+        // C7: PERMISSIVE-gated load-time validation (see matched comment
+        // in `fromSnapshot` above). Non-grammar invariants still throw at
+        // load; lower-tier grammar violations surface post-load via
+        // `engine.validate(tier)`. D4 inlined the
+        // `runLoadTimeValidationCore` wrapper and routes through the
+        // public `validateInvariants()` method.
+        const loadValidation = engine.validateInvariants()
+        if (!loadValidation.ok) {
+            throw new InvariantViolationError(loadValidation.violations)
         }
 
         return engine
@@ -1960,7 +2244,7 @@ export class ArgumentEngine<
     ): void {
         const preRollbackSnap = this.snapshot()
         this.rollbackInternal(snapshot)
-        const validation = this.validate()
+        const validation = this.validateInvariants()
         if (!validation.ok) {
             this.rollbackInternal(preRollbackSnap)
             throw new InvariantViolationError(validation.violations)
@@ -1975,7 +2259,6 @@ export class ArgumentEngine<
             snapshot.config?.checksumConfig
         )
         this.positionConfig = snapshot.config?.positionConfig
-        this.grammarConfig = snapshot.config?.grammarConfig
         this.variables = VariableManager.fromSnapshot<TVar>(snapshot.variables)
         this.premises = new Map()
         this.expressionIndex = new Map()
@@ -1984,8 +2267,7 @@ export class ArgumentEngine<
                 premiseSnap,
                 this.argument,
                 this.variables,
-                this.expressionIndex,
-                PERMISSIVE_GRAMMAR_CONFIG
+                this.expressionIndex
             )
             this.premises.set(pe.getId(), pe)
         }
@@ -2004,6 +2286,13 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(premiseId)
                 this.notifySubscribers()
+                // D2b — AN post-mutation hook per spec §5. See the
+                // matching comment in `createPremise`'s setOnMutate
+                // callback for the re-entrance / snapshot-restore
+                // rationale.
+                if (!this.restoringFromSnapshot) {
+                    runAssistiveNormalization(this)
+                }
             })
         }
         this.markDirty()
@@ -2168,8 +2457,89 @@ export class ArgumentEngine<
         )
     }
 
-    public validate(): TInvariantValidationResult {
+    /**
+     * Four-tier grammar validation per spec §4. Returns the union of
+     * violations from Structural up through `tier` — `'structural'`
+     * returns S-rule violations only, `'evaluable'` returns S + E,
+     * `'derivable'` returns S + E + D, `'presentable'` returns the full
+     * union. Empty array means the argument is at the requested tier
+     * or stricter. Never throws on grammar issues.
+     *
+     * For the legacy pre-1.0 invariant sweep (schema conformance,
+     * reference integrity, ownership, conclusion ref, circularity,
+     * checksums) use {@link validateInvariants} instead. The pre-1.0
+     * no-arg overload of `validate()` was removed in Phase D4.
+     */
+    public validate(tier: TGrammarTier): readonly TViolation[] {
+        return validateGrammar(tier, this.asGrammarValidatorContext())
+    }
+
+    /**
+     * Legacy invariant sweep — schema conformance, reference integrity,
+     * ownership, conclusion-ref + circularity, checksum stability, and
+     * per-premise validation. Returns a `TInvariantValidationResult`.
+     * Used internally by mutation-rollback and snapshot-load paths and
+     * exposed publicly for library-wide invariant checks (see
+     * `ArgumentLibrary.validate` and `PropositCore.validate`).
+     *
+     * Distinct from {@link validate}, which runs the four-tier grammar
+     * validator (`Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable`)
+     * and returns a `readonly TViolation[]`. The two are
+     * complementary — grammar tiers cover AST-shape rules; this method
+     * covers schema/reference/structural-bookkeeping invariants that
+     * sit outside the tier hierarchy.
+     *
+     * @since 1.0.0 — replaces the legacy `validate()` no-arg overload
+     *   removed in Phase D4 of the `grammar-tiers/core` branch.
+     */
+    public validateInvariants(): TInvariantValidationResult {
         return validateArgumentStandalone(this.asValidationContext())
+    }
+
+    /**
+     * Construct the pure-data `TValidatorContext` consumed by the
+     * grammar-tier validators. Claims are gathered by walking the
+     * engine's claim-bound variables and looking each one up in the
+     * claim library — the `TClaimLookup` contract doesn't expose
+     * iteration, so we materialize the referenced subset only.
+     */
+    private asGrammarValidatorContext(): TGrammarValidatorContext {
+        const argument = this.getArgument() as unknown as TCoreArgument
+        const premises: TCorePremise[] = []
+        const expressions: TCorePropositionalExpression[] = []
+        for (const pe of this.listPremises()) {
+            premises.push(pe.toPremiseData() as unknown as TCorePremise)
+            expressions.push(
+                ...(pe.getExpressions() as unknown as TCorePropositionalExpression[])
+            )
+        }
+        const variables =
+            this.variables.toArray() as unknown as TCorePropositionalVariable[]
+
+        // Gather referenced claims via claim-bound variables. Duplicate
+        // (id, version) pairs are deduped via a Set on the composite key.
+        const seen = new Set<string>()
+        const claims: TCoreClaim[] = []
+        for (const v of variables) {
+            if (!isClaimBound(v)) continue
+            const cb = v as unknown as TClaimBoundVariable
+            const key = `${cb.claimId}:${cb.claimVersion}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            const claim = this.claimLibrary.get(cb.claimId, cb.claimVersion)
+            if (claim !== undefined) {
+                claims.push(claim as unknown as TCoreClaim)
+            }
+        }
+
+        return {
+            argument,
+            premises,
+            expressions,
+            variables,
+            claims,
+            roleState: this.getRoleState(),
+        }
     }
 
     public validateEvaluability(): TCoreValidationResult {
@@ -2186,15 +2556,19 @@ export class ArgumentEngine<
      * Apps can pre-check derivation premise structures before invoking the full
      * evaluation pipeline.
      *
+     * Violations carry the underlying `DERIVATION_STRUCTURE_INVALID` code
+     * (per the derivation-validation utility). The pre-1.0
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed in
+     * Phase D4 alongside the legacy `validate()` no-arg overload — naked-Q
+     * is a valid Derivable state (per spec §4.2) and is skipped by
+     * evaluation rather than thrown.
+     *
      * @since 0.11.0
      */
     public validateDerivationStructures(): TInvariantValidationResult {
         const violations: TInvariantValidationResult["violations"] = []
         for (const { violation } of this.collectDerivationViolations()) {
-            violations.push({
-                ...violation,
-                code: DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
-            })
+            violations.push(violation)
         }
         return { ok: violations.length === 0, violations }
     }
@@ -2204,7 +2578,7 @@ export class ArgumentEngine<
         for (const { violation } of this.collectDerivationViolations()) {
             issues.push(
                 makeErrorIssue({
-                    code: DERIVATION_STRUCTURE_INVALID_AT_EVALUATION,
+                    code: "DERIVATION_STRUCTURE_INVALID",
                     message: violation.message,
                     premiseId: violation.entityId,
                 })
@@ -2270,20 +2644,42 @@ export class ArgumentEngine<
     }
 
     private asEvaluationContext(): TArgumentEvaluationContext {
+        // C8: naked-Q derivation premises (single variable expression at
+        // root, type='derivation') contribute nothing to evaluation. The
+        // evaluator-context's premise listings filter them out so they
+        // are entirely invisible to evaluate() and checkValidity(). This
+        // replaces the pre-1.0 DERIVATION_STRUCTURE_INVALID_AT_EVALUATION
+        // throw on naked-Q. Filter applies uniformly to conclusion,
+        // supporting, and full premise listings. The predicate lives in
+        // `src/lib/grammar/naked-q.ts` so the C6 factory and this filter
+        // share one definition.
         return {
             argumentId: this.argument.id,
             conclusionPremiseId: this.conclusionPremiseId,
-            getConclusionPremise: () =>
-                this.getConclusionPremise() as TEvaluablePremise | undefined,
+            getConclusionPremise: () => {
+                const c = this.getConclusionPremise()
+                if (c === undefined) return undefined
+                if (isNakedQDerivationPremise(c)) return undefined
+                return c as TEvaluablePremise
+            },
             listSupportingPremises: () =>
-                this.listSupportingPremises() as TEvaluablePremise[],
-            listPremises: () => this.listPremises() as TEvaluablePremise[],
+                this.listSupportingPremises().filter(
+                    (pm) => !isNakedQDerivationPremise(pm)
+                ) as TEvaluablePremise[],
+            listPremises: () =>
+                this.listPremises().filter(
+                    (pm) => !isNakedQDerivationPremise(pm)
+                ) as TEvaluablePremise[],
             getVariable: (id) =>
                 this.variables.getVariable(id) as
                     | TCorePropositionalVariable
                     | undefined,
-            getPremise: (id) =>
-                this.premises.get(id) as TEvaluablePremise | undefined,
+            getPremise: (id) => {
+                const pe = this.premises.get(id)
+                if (pe === undefined) return undefined
+                if (isNakedQDerivationPremise(pe)) return undefined
+                return pe as TEvaluablePremise
+            },
             validateEvaluability: () => this.validateEvaluability(),
         }
     }

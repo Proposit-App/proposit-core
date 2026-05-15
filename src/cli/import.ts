@@ -374,48 +374,86 @@ export function importArgumentFromYaml(yamlString: string): {
         engine.addVariable(variable)
     }
 
-    // Create premises and build expression trees
-    for (let i = 0; i < input.premises.length; i++) {
-        const premiseDef = input.premises[i]
-        const isDerivation = premiseDef.type === "derivation"
+    // D2b — permissive-build + explicit normalize() pattern. The
+    // per-premise tree-build below is incremental (one
+    // `pm.addExpression` per AST node, parents first). Under the
+    // post-mutation AN hook (assistive mode), AN-3 would eagerly
+    // collapse 0-child operators between addExpression calls,
+    // breaking the build. Switch to `permissive` for the duration of
+    // the build, then restore assistive + run a single explicit
+    // `engine.normalize()` at the end so AN-1 / AN-2 / AN-3 / AN-4
+    // fire on the fully-built tree. The returned engine is in
+    // canonical assistive state.
+    // D3 — unify with populate-from's pattern: `normalize()` runs only
+    // on the success path (inside `try` after all builds succeed).
+    // Behavior restoration runs on both success and failure paths via
+    // a `catch` that rethrows. Running `normalize()` from a `finally`
+    // block would mean AN executes on a half-built tree when the
+    // build throws, potentially masking the original error or
+    // collapsing the partial state the caller wants to diagnose.
+    const savedBehavior = engine.behavior
+    engine.setBehavior("permissive")
+    try {
+        // Create premises and build expression trees
+        for (let i = 0; i < input.premises.length; i++) {
+            const premiseDef = input.premises[i]
+            const isDerivation = premiseDef.type === "derivation"
 
-        if (isDerivation) {
-            // Derivation premise — delegate to the engine's derivation init flow,
-            // which auto-creates the naked-Q root expression.
-            const { result: dpm } = engine.createPremise({
-                type: "derivation",
-                derivedClaimId: premiseDef.derivedClaimId!,
-                ...(premiseDef.metadata ?? {}),
-            })
-            const dRole = premiseDef.role ?? "supporting"
-            if (dRole === "conclusion") {
-                engine.setConclusionPremise(dpm.getId())
+            if (isDerivation) {
+                // Derivation premise — delegate to the engine's derivation init flow,
+                // which auto-creates the naked-Q root expression.
+                const { result: dpm } = engine.createPremise({
+                    type: "derivation",
+                    derivedClaimId: premiseDef.derivedClaimId!,
+                    ...(premiseDef.metadata ?? {}),
+                })
+                const dRole = premiseDef.role ?? "supporting"
+                if (dRole === "conclusion") {
+                    engine.setConclusionPremise(dpm.getId())
+                }
+            } else {
+                // Freeform premise — create premise then build expression tree.
+                const { result: pm } = premiseDef.metadata
+                    ? engine.createPremise({ ...premiseDef.metadata })
+                    : engine.createPremise()
+
+                // Build expression tree from parsed AST
+                buildExpressions(
+                    parsedFormulas[i]!,
+                    null,
+                    POSITION_INITIAL,
+                    argumentId,
+                    0,
+                    pm.getId(),
+                    variablesByName,
+                    (expr) => pm.addExpression(expr)
+                )
+
+                // Assign conclusion role; supporting is derived from expression type
+                const role = premiseDef.role ?? "supporting"
+                if (role === "conclusion") {
+                    engine.setConclusionPremise(pm.getId())
+                }
+                // Non-conclusion inference premises are automatically supporting
             }
-        } else {
-            // Freeform premise — create premise then build expression tree.
-            const { result: pm } = premiseDef.metadata
-                ? engine.createPremise({ ...premiseDef.metadata })
-                : engine.createPremise()
-
-            // Build expression tree from parsed AST
-            buildExpressions(
-                parsedFormulas[i]!,
-                null,
-                POSITION_INITIAL,
-                argumentId,
-                0,
-                pm.getId(),
-                variablesByName,
-                (expr) => pm.addExpression(expr)
-            )
-
-            // Assign conclusion role; supporting is derived from expression type
-            const role = premiseDef.role ?? "supporting"
-            if (role === "conclusion") {
-                engine.setConclusionPremise(pm.getId())
-            }
-            // Non-conclusion inference premises are automatically supporting
         }
+
+        // Success path: restore the original behavior, then run a
+        // single explicit `engine.normalize()` so AN-1/AN-2/AN-3/AN-4
+        // fire on the fully-built tree (when the caller wanted
+        // assistive behavior).
+        engine.setBehavior(savedBehavior)
+        if (savedBehavior === "assistive") {
+            engine.normalize()
+        }
+    } catch (e) {
+        // Failure path: restore behavior so the engine is not left
+        // stuck in permissive after a build error. The build is not
+        // transactional — the caller may inspect the partial state
+        // surfaced by the original throw; only the behavior flag
+        // gets restored here.
+        engine.setBehavior(savedBehavior)
+        throw e
     }
 
     return { engine, claimLibrary, claimCitationLibrary }

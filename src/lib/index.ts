@@ -10,8 +10,6 @@ export type {
 } from "./core/argument-engine.js"
 export { PremiseEngine } from "./core/premise-engine.js"
 export type { TPremiseEngineSnapshot } from "./core/premise-engine.js"
-export { ManagedDerivationPremiseEngine } from "./core/managed-derivation-premise-engine.js"
-export type { TVariableMaterializer } from "./core/managed-derivation-premise-engine.js"
 export { validateDerivationStructure } from "./utils/derivation-validation.js"
 export type * from "./core/interfaces/index.js"
 export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
@@ -92,7 +90,18 @@ export {
 } from "./utils/position.js"
 export type { TCorePositionConfig } from "./utils/position.js"
 export * from "./types/reactive.js"
-export * from "./types/grammar.js"
+export {
+    GrammarTierSchema,
+    GrammarRuleCodeSchema,
+    ViolationSchema,
+} from "./grammar/types.js"
+export type {
+    TGrammarTier,
+    TGrammarRuleCode,
+    TViolation,
+} from "./grammar/types.js"
+export { validate as validateGrammar } from "./grammar/validate.js"
+export type { TValidatorContext } from "./grammar/validators/context.js"
 export * from "./types/fork.js"
 export { forkArgumentEngine } from "./core/fork.js"
 export * from "./parsing/index.js"

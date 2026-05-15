@@ -17,8 +17,6 @@ import type {
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
 import type { TCoreChecksumConfig } from "../../types/checksum.js"
 import type { TCorePositionConfig } from "../../utils/position.js"
-import type { TGrammarConfig } from "../../types/grammar.js"
-
 /**
  * Narrow read-only interface for claim lookups. Used by `ArgumentEngine` for
  * variable validation — callers that only need to verify claim existence
@@ -338,8 +336,14 @@ export type TPropositCoreConfig = {
     checksumConfig?: TCoreChecksumConfig
     /** Position config for argument engines. */
     positionConfig?: TCorePositionConfig
-    /** Grammar config for argument engines. */
-    grammarConfig?: TGrammarConfig
+    /**
+     * Default behavior for engines constructed via this core's
+     * `arguments.create(...)`. Passed through to `TLogicEngineOptions.behavior`.
+     * Defaults to `'assistive'` at engine level if omitted.
+     *
+     * @since 1.0.0
+     */
+    behavior?: "assistive" | "permissive"
     /** UUID generator for new entity IDs. Defaults to `globalThis.crypto.randomUUID()`. */
     generateId?: () => string
 }

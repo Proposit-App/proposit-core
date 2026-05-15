@@ -134,21 +134,12 @@ export async function hydrateEngine(
         claimLibrary = ClaimLibrary.fromSnapshot(snapshot)
     }
 
-    // Grammar config used for the CLI: enforce rules and auto-normalize.
-    // Uses granular config (not boolean `true`) so that fromSnapshot skips
-    // post-load normalization — the CLI builds trees incrementally and must
-    // tolerate incomplete subtrees between invocations.
-    const cliGrammarConfig = {
-        enforceFormulaBetweenOperators: true,
-        autoNormalize: {
-            wrapInsertFormula: true,
-            negationInsertFormula: true,
-            collapseDoubleNegation: true,
-            collapseEmptyFormula: true,
-            repositionOnCollision: true,
-            absorbSameOperator: true,
-        },
-    }
+    // D2: the CLI no longer threads a `grammarConfig` through hydration —
+    // engine behavior is controlled exclusively by the engine's
+    // `behavior` setting (default `'assistive'`). The pre-v1.0
+    // `cliGrammarConfig` granular flags + `fromSnapshot` grammar-config
+    // parameter were deleted in D2 along with the rest of the legacy
+    // plumbing.
 
     // Build premise snapshots from disk data
     const premiseSnapshots: TPremiseEngineSnapshot[] = []
@@ -174,12 +165,6 @@ export async function hydrateEngine(
                     premiseId,
                     argumentVersion: version,
                 })) as TCorePropositionalExpression[],
-                config: {
-                    grammarConfig: cliGrammarConfig,
-                },
-            },
-            config: {
-                grammarConfig: cliGrammarConfig,
             },
         })
     }
@@ -195,9 +180,6 @@ export async function hydrateEngine(
         },
         premises: premiseSnapshots,
         conclusionPremiseId: roles.conclusionPremiseId,
-        config: {
-            grammarConfig: cliGrammarConfig,
-        },
     }
 
     // Use fromSnapshot which correctly handles restoringFromSnapshot flag,
@@ -205,7 +187,6 @@ export async function hydrateEngine(
     const engine = ArgumentEngine.fromSnapshot(
         engineSnapshot,
         claimLibrary,
-        cliGrammarConfig,
         "ignore"
     )
 

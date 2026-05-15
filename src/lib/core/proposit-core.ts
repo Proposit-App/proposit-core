@@ -176,7 +176,7 @@ export class PropositCore<
                 {
                     checksumConfig: options?.checksumConfig,
                     positionConfig: options?.positionConfig,
-                    grammarConfig: options?.grammarConfig,
+                    behavior: options?.behavior,
                     generateId: this.generateId,
                 }
             )
@@ -328,7 +328,7 @@ export class PropositCore<
             {
                 checksumConfig: config?.checksumConfig,
                 positionConfig: config?.positionConfig,
-                grammarConfig: config?.grammarConfig,
+                behavior: config?.behavior,
                 generateId: config?.generateId,
             }
         )
@@ -563,6 +563,16 @@ export class PropositCore<
 
         // Step 7: Remap claim references
         const snap = forkedEngine.snapshot()
+        // D5 — `engine.snapshot()` deliberately omits `behavior` from the
+        // serialized config (see the comment in `ArgumentEngine.snapshot()`),
+        // so the upcoming `fromSnapshot` rebuild would otherwise reset the
+        // forked engine to the default `'assistive'`. Carry the behavior
+        // forward explicitly here, mirroring what `forkArgumentEngine`
+        // does internally.
+        snap.config = {
+            ...snap.config,
+            behavior: forkedEngine.behavior,
+        }
         snap.variables.variables = snap.variables.variables.map((v) => {
             if (isClaimBound(v)) {
                 const clonedClaimId = claimRemap.get(v.claimId)
@@ -602,13 +612,7 @@ export class PropositCore<
             TExpr,
             TVar,
             TClaim
-        >(
-            snap,
-            this.claims,
-            snap.config?.grammarConfig,
-            "ignore",
-            this.generateId
-        )
+        >(snap, this.claims, "ignore", this.generateId)
 
         // Step 8: Register engine
         this.arguments.register(finalEngine)

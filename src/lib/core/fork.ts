@@ -20,13 +20,17 @@ import { isPremiseBound } from "../schemata/propositional.js"
  * Every premise, expression, and variable receives a fresh ID. All internal
  * cross-references are remapped.
  *
+ * The forked engine inherits the source engine's `behavior` setting
+ * (`'assistive'` or `'permissive'`) by default. Pass `options.behavior`
+ * to override.
+ *
  * This function does NOT call `engine.canFork()` — callers are responsible
  * for checking fork eligibility.
  *
  * @param engine - The source engine to fork.
  * @param newArgumentId - The ID for the forked argument.
  * @param libraries - Claim library for the new engine.
- * @param options - Optional ID generator, checksum/position/grammar config overrides.
+ * @param options - Optional ID generator, checksum/position config overrides, and behavior override.
  * @returns The forked engine and a remap table mapping original to new entity IDs.
  */
 export function forkArgumentEngine<
@@ -172,11 +176,17 @@ export function forkArgumentEngine<
     if (options?.positionConfig) {
         snap.config = { ...snap.config, positionConfig: options.positionConfig }
     }
-    if (options?.grammarConfig) {
-        snap.config = { ...snap.config, grammarConfig: options.grammarConfig }
-    }
 
-    const grammarConfig = options?.grammarConfig ?? snap.config?.grammarConfig
+    // D5 — thread `behavior` through the fork path. `engine.snapshot()`
+    // intentionally omits `behavior` (snapshot/restore is one path; fork
+    // is another) so the forked engine would otherwise restore as the
+    // default `'assistive'`. Inheritance from the source is the
+    // principle-of-least-surprise behavior; an explicit
+    // `options.behavior` override wins when provided.
+    snap.config = {
+        ...snap.config,
+        behavior: options?.behavior ?? engine.behavior,
+    }
 
     // Construct new engine
     const forkedEngine = ArgumentEngine.fromSnapshot<
@@ -185,7 +195,7 @@ export function forkArgumentEngine<
         TExpr,
         TVar,
         TClaim
-    >(snap, libraries.claimLibrary, grammarConfig, "ignore", generateId)
+    >(snap, libraries.claimLibrary, "ignore", generateId)
 
     return { engine: forkedEngine, remapTable }
 }

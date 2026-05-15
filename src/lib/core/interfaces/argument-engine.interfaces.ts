@@ -19,6 +19,7 @@ import type {
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type { TReactiveSnapshot } from "../../types/reactive.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
+import type { TGrammarTier, TViolation } from "../../grammar/types.js"
 import type { PremiseEngine } from "../premise-engine.js"
 import type { TArgumentEngineSnapshot } from "../argument-engine.js"
 
@@ -275,7 +276,11 @@ export interface TVariableManagement<
     ): TCoreMutationResult<TVar | undefined, TExpr, TVar, TPremise, TArg>
     /**
      * Removes a variable and cascade-deletes all expressions referencing it
-     * across every premise (including subtrees and operator collapse).
+     * across every premise (including their full subtrees). As of v1.0
+     * (D2) operator collapse on the surviving parents is the AN-3
+     * post-mutation hook's responsibility in assistive behavior; in
+     * permissive behavior the un-collapsed shape stays and surfaces via
+     * `engine.validate('presentable')`.
      *
      * @param variableId - The ID of the variable to remove.
      * @returns The removed variable, or `undefined` if not found.
@@ -484,9 +489,15 @@ export interface TArgumentEvaluation {
      * structures must be well-formed (naked-Q invariant; since 0.11.0).
      *
      * Derivation premises with structurally broken trees are flagged with
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`. Use
+     * `DERIVATION_STRUCTURE_INVALID`. Use
      * `validateDerivationStructures()` to isolate derivation checks without
      * running the full evaluability sweep.
+     *
+     * Naked-Q derivation premises (single-variable root) are **not** flagged
+     * — they are a valid Derivable state per spec §4.2 and are skipped by
+     * evaluation rather than throwing. The pre-1.0
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` code was removed in
+     * Phase D4.
      *
      * @returns A validation result with any issues found.
      *
@@ -503,7 +514,11 @@ export interface TArgumentEvaluation {
      * state.
      *
      * Derivation premises with broken trees produce violations with code
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`.
+     * `DERIVATION_STRUCTURE_INVALID`. Naked-Q (single-variable root) is
+     * a valid Derivable state per spec §4.2 and is **not** flagged here —
+     * it is skipped by evaluation rather than thrown. The pre-1.0
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed
+     * in Phase D4.
      *
      * @returns An `TInvariantValidationResult` — `ok: true` when all
      *   derivation premises are structurally valid, `ok: false` with
@@ -592,11 +607,57 @@ export interface TArgumentLifecycle<
         snapshot: TArgumentEngineSnapshot<TArg, TPremise, TExpr, TVar>
     ): void
     /**
-     * Run a comprehensive invariant validation sweep on the entire argument.
-     * Checks schema conformance, structural invariants, grammar rules,
-     * reference integrity, and checksum consistency.
+     * Run a comprehensive invariant validation sweep on the entire
+     * argument. Checks schema conformance, reference integrity,
+     * ownership, conclusion-ref + circularity, and per-premise
+     * validation.
+     *
+     * Distinct from {@link TArgumentLifecycle.validate}, which runs
+     * the four-tier grammar validator (`Structural ⊇ Evaluable ⊇
+     * Derivable ⊇ Presentable`). The two are complementary — grammar
+     * tiers cover AST-shape rules; this method covers
+     * schema/reference/structural-bookkeeping invariants that sit
+     * outside the tier hierarchy.
+     *
+     * @since 1.0.0 — replaces the pre-1.0 `validate()` no-arg
+     *   overload removed in Phase D4 of the `grammar-tiers/core`
+     *   branch.
      */
-    validate(): TInvariantValidationResult
+    validateInvariants(): TInvariantValidationResult
+    /**
+     * Four-tier grammar validation per spec §4. Returns the union of
+     * violations from Structural up through `tier` — `'structural'`
+     * returns S-rule violations only, `'evaluable'` returns S + E,
+     * `'derivable'` returns S + E + D, `'presentable'` returns the
+     * full union. Empty array means the argument is at the requested
+     * tier or stricter. Never throws on grammar issues.
+     *
+     * For the invariant sweep (schema/reference/checksums) see
+     * {@link TArgumentLifecycle.validateInvariants}.
+     */
+    validate(tier: TGrammarTier): readonly TViolation[]
+    /**
+     * Global normalize pass per spec §6. Runs the AN rule set
+     * (AN-1..AN-4) everywhere it can fire, converging the argument
+     * toward `tier` (defaults to `'presentable'`).
+     *
+     * `normalize` is non-destructive in the logical-meaning sense — it
+     * does not delete variables, change claim references, or modify
+     * operator semantics. Recovery from Evaluable or Derivable
+     * violations requires user intent and is exposed via the repair
+     * primitives.
+     *
+     * In v1.0 every AN rule targets a Presentable invariant, so calls
+     * with `tier` ∈ {'structural', 'evaluable', 'derivable'} are
+     * effectively no-ops. The parameter exists as forward-compatible
+     * API surface.
+     *
+     * Bypasses `behavior`: cleanup runs regardless of whether the
+     * engine is in `'assistive'` or `'permissive'` mode.
+     *
+     * @since 1.0.0
+     */
+    normalize(tier?: TGrammarTier): void
 }
 
 /**

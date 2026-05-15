@@ -28,8 +28,10 @@ export function registerRepairCommand(
                 diskExprCount += data.expressions.length
             }
 
-            // Hydrate engine — fromSnapshot with autoNormalize: true
-            // auto-inserts formula buffers between nested operators
+            // Hydrate engine — the assistive AN post-hook (default
+            // behavior) inserts formula buffers between nested operators
+            // as part of any successful mutation. D2: replaces the
+            // pre-v1.0 `autoNormalize: true` grammar-config gating.
             const engine = await hydrateEngine(argumentId, version)
 
             // Count expressions after auto-normalization

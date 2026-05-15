@@ -401,10 +401,6 @@ export class ArgumentParser<
             argument,
             claimLibrary,
             {
-                grammarConfig: {
-                    enforceFormulaBetweenOperators: true,
-                    autoNormalize: true,
-                },
                 generateId: genId,
             }
         )
@@ -477,25 +473,70 @@ export class ArgumentParser<
             if (!hasUndeclared) survivingFormulas.push(entry)
         }
 
-        // 7. Create premises and build expression trees
+        // 7. Create premises and build expression trees.
+        //
+        // D2b — permissive-build + explicit normalize() pattern. The
+        // expression-tree build below is incremental (one
+        // `pm.addExpression` per AST node, parents first). Under the
+        // post-mutation AN hook (assistive mode), AN-3 would eagerly
+        // collapse 0-child operators between addExpression calls,
+        // breaking the build. We disarm AN for the build by
+        // switching the engine to `permissive`, then re-arm + run a
+        // single explicit `engine.normalize()` after all premises
+        // are built. The parser test 'auto-normalizes nested
+        // operators by inserting formula buffers' verifies AN-1
+        // fires on the post-build tree as expected.
+        //
+        // Engines constructed at step 5 use the default behavior
+        // (assistive); we save and restore so the returned engine
+        // surfaces the canonical assistive state.
+        //
+        // D3 — unify with populate-from's pattern: `normalize()`
+        // runs only on the success path (inside `try` after the
+        // build completes). Behavior restoration runs on both
+        // success and failure paths via a `catch` that rethrows.
+        // Running `normalize()` from a `finally` block would mean AN
+        // executes on a half-built tree when the build throws,
+        // potentially masking the original error or collapsing the
+        // partial state the caller wants to diagnose.
         const premiseMiniIdToId = new Map<string, string>()
+        const savedBehavior = engine.behavior
+        engine.setBehavior("permissive")
+        try {
+            for (const { ast, premise: parsedPremise } of survivingFormulas) {
+                const extras = this.mapPremise(parsedPremise)
+                const { result: pm } = engine.createPremise(extras)
+                premiseMiniIdToId.set(parsedPremise.miniId, pm.getId())
 
-        for (const { ast, premise: parsedPremise } of survivingFormulas) {
-            const extras = this.mapPremise(parsedPremise)
-            const { result: pm } = engine.createPremise(extras)
-            premiseMiniIdToId.set(parsedPremise.miniId, pm.getId())
+                buildExpressions(
+                    ast,
+                    null,
+                    POSITION_INITIAL,
+                    argumentId,
+                    argumentVersion,
+                    pm.getId(),
+                    variablesBySymbol,
+                    (expr) => pm.addExpression(expr as TExpressionInput<TExpr>),
+                    genId
+                )
+            }
 
-            buildExpressions(
-                ast,
-                null,
-                POSITION_INITIAL,
-                argumentId,
-                argumentVersion,
-                pm.getId(),
-                variablesBySymbol,
-                (expr) => pm.addExpression(expr as TExpressionInput<TExpr>),
-                genId
-            )
+            // Success path: restore the original behavior, then run a
+            // single explicit `engine.normalize()` so AN fires on the
+            // fully-built tree (when the caller wanted assistive
+            // behavior).
+            engine.setBehavior(savedBehavior)
+            if (savedBehavior === "assistive") {
+                engine.normalize()
+            }
+        } catch (e) {
+            // Failure path: restore behavior so the engine is not
+            // left stuck in permissive after a build error. The build
+            // is not transactional — the caller may inspect the
+            // partial state surfaced by the original throw; only the
+            // behavior flag gets restored here.
+            engine.setBehavior(savedBehavior)
+            throw e
         }
 
         // 8. Set conclusion

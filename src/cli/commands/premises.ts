@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto"
 import { Command } from "commander"
 import { PremiseEngine } from "../../lib/core/premise-engine.js"
 import { VariableManager } from "../../lib/core/variable-manager.js"
-import { ManagedDerivationPremiseEngine } from "../../lib/core/managed-derivation-premise-engine.js"
 import type { TCoreArgument, TCorePremise } from "../../lib/schemata/index.js"
 import type { TOptionalChecksum } from "../../lib/schemata/shared.js"
 import {
@@ -394,7 +393,7 @@ export function registerPremiseCommands(
     premises
         .command("populate-supports <premiseId>")
         .description(
-            "Populate the antecedent of a derivation premise from its citations and axiom invocations"
+            "Populate the antecedent of a derivation premise from its citations or axiom invocations"
         )
         .action(async (premiseId: string) => {
             await assertNotPublished(argumentId, version)
@@ -420,50 +419,56 @@ export function registerPremiseCommands(
                 )
             }
 
-            // Build a VariableManager populated with the live engine's current
-            // variables. The managed engine needs at least the consequent
-            // variable (bound to derivedClaimId) for structural validation.
-            const variableManager = new VariableManager()
-            for (const v of engine.getVariables()) {
-                variableManager.addVariable(v)
+            const derivedClaimId = (premiseData as { derivedClaimId?: string })
+                .derivedClaimId
+            if (!derivedClaimId) {
+                errorExit(
+                    `Premise "${premiseId}" is a derivation premise but has no derivedClaimId.`
+                )
             }
 
-            // Take a snapshot of the live premise and restore it into a
-            // ManagedDerivationPremiseEngine (independent copy).
-            const premiseSnapshot = livePremise.snapshot()
-
-            let managed: ManagedDerivationPremiseEngine
+            // v1.0 model — D-3 prohibits mixing citation-bound and
+            // axiom-bound variables in the same antecedent. Call
+            // populateFromCitations first; if citations populate the
+            // antecedent, populateFromAxioms no-ops (target is no
+            // longer naked-Q). If no citations exist for the derived
+            // claim, populateFromAxioms takes effect. If neither
+            // grouping is present, both calls return `no-op` and the
+            // premise stays naked-Q.
+            let citationsResult: ReturnType<typeof engine.populateFromCitations>
             try {
-                managed = ManagedDerivationPremiseEngine.fromSnapshot(
-                    premiseSnapshot,
-                    engine.getArgument(),
-                    variableManager
+                citationsResult = engine.populateFromCitations(
+                    derivedClaimId,
+                    propositCore.citations
                 )
             } catch (err) {
                 errorExit(err instanceof Error ? err.message : String(err))
             }
-
-            // populateFromSupports mutates the managed engine's expression tree
-            // and calls engine.ensureClaimBoundVariable for each supporting
-            // claim (citations + axioms), which adds new claim-bound variables
-            // to the live engine.
+            let axiomsResult: ReturnType<typeof engine.populateFromAxioms>
             try {
-                managed.populateFromSupports(
-                    propositCore.citations,
-                    propositCore.axioms,
-                    engine
+                axiomsResult = engine.populateFromAxioms(
+                    derivedClaimId,
+                    propositCore.axioms
                 )
             } catch (err) {
                 errorExit(err instanceof Error ? err.message : String(err))
             }
-
-            // Reflow: push the managed engine's updated expression tree into the
-            // live premise engine. The live premise (a plain PremiseEngine) uses
-            // loadExpressions without derivation validation — that already ran
-            // inside populateFromSupports via assertWellFormed().
-            livePremise.loadExpressions(managed.getExpressions())
 
             await persistEngine(engine)
-            printLine(`Populated derivation premise "${premiseId}".`)
+            const populatedFrom =
+                citationsResult.kind === "populated"
+                    ? "citations"
+                    : axiomsResult.kind === "populated"
+                      ? "axioms"
+                      : "none"
+            if (populatedFrom === "none") {
+                printLine(
+                    `Derivation premise "${premiseId}" left naked-Q (no citations or axioms for claim "${derivedClaimId}", or antecedent already populated).`
+                )
+            } else {
+                printLine(
+                    `Populated derivation premise "${premiseId}" from ${populatedFrom}.`
+                )
+            }
         })
 }
