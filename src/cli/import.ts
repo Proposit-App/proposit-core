@@ -384,6 +384,13 @@ export function importArgumentFromYaml(yamlString: string): {
     // `engine.normalize()` at the end so AN-1 / AN-2 / AN-3 / AN-4
     // fire on the fully-built tree. The returned engine is in
     // canonical assistive state.
+    // D3 — unify with populate-from's pattern: `normalize()` runs only
+    // on the success path (inside `try` after all builds succeed).
+    // Behavior restoration runs on both success and failure paths via
+    // a `catch` that rethrows. Running `normalize()` from a `finally`
+    // block would mean AN executes on a half-built tree when the
+    // build throws, potentially masking the original error or
+    // collapsing the partial state the caller wants to diagnose.
     const savedBehavior = engine.behavior
     engine.setBehavior("permissive")
     try {
@@ -430,11 +437,23 @@ export function importArgumentFromYaml(yamlString: string): {
                 // Non-conclusion inference premises are automatically supporting
             }
         }
-    } finally {
+
+        // Success path: restore the original behavior, then run a
+        // single explicit `engine.normalize()` so AN-1/AN-2/AN-3/AN-4
+        // fire on the fully-built tree (when the caller wanted
+        // assistive behavior).
         engine.setBehavior(savedBehavior)
         if (savedBehavior === "assistive") {
             engine.normalize()
         }
+    } catch (e) {
+        // Failure path: restore behavior so the engine is not left
+        // stuck in permissive after a build error. The build is not
+        // transactional — the caller may inspect the partial state
+        // surfaced by the original throw; only the behavior flag
+        // gets restored here.
+        engine.setBehavior(savedBehavior)
+        throw e
     }
 
     return { engine, claimLibrary, claimCitationLibrary }

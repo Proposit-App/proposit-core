@@ -490,6 +490,15 @@ export class ArgumentParser<
         // Engines constructed at step 5 use the default behavior
         // (assistive); we save and restore so the returned engine
         // surfaces the canonical assistive state.
+        //
+        // D3 — unify with populate-from's pattern: `normalize()`
+        // runs only on the success path (inside `try` after the
+        // build completes). Behavior restoration runs on both
+        // success and failure paths via a `catch` that rethrows.
+        // Running `normalize()` from a `finally` block would mean AN
+        // executes on a half-built tree when the build throws,
+        // potentially masking the original error or collapsing the
+        // partial state the caller wants to diagnose.
         const premiseMiniIdToId = new Map<string, string>()
         const savedBehavior = engine.behavior
         engine.setBehavior("permissive")
@@ -511,11 +520,23 @@ export class ArgumentParser<
                     genId
                 )
             }
-        } finally {
+
+            // Success path: restore the original behavior, then run a
+            // single explicit `engine.normalize()` so AN fires on the
+            // fully-built tree (when the caller wanted assistive
+            // behavior).
             engine.setBehavior(savedBehavior)
             if (savedBehavior === "assistive") {
                 engine.normalize()
             }
+        } catch (e) {
+            // Failure path: restore behavior so the engine is not
+            // left stuck in permissive after a build error. The build
+            // is not transactional — the caller may inspect the
+            // partial state surfaced by the original throw; only the
+            // behavior flag gets restored here.
+            engine.setBehavior(savedBehavior)
+            throw e
         }
 
         // 8. Set conclusion
