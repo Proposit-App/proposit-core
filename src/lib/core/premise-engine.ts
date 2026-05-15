@@ -335,9 +335,7 @@ export class PremiseEngine<
                 // S-14: derivation premise root must be one of variable,
                 // implies, or iff. Enforced at mutation time regardless
                 // of engine `behavior` — Structural rules throw in both
-                // modes (spec §4). Pre-1.0 this lived in
-                // ManagedDerivationPremiseEngine; in 1.0 the regular
-                // PremiseEngine carries the check.
+                // modes (spec §4).
                 if (
                     (this.premise as TCorePremise).type === "derivation" &&
                     expression.type === "operator" &&

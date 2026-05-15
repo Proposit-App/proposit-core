@@ -220,12 +220,6 @@ describe("Mutations throw on Structural violations (C5)", () => {
                 eng.setBehavior(behavior)
                 // Adding an AND root to a derivation premise must throw — S-14
                 // restricts derivation roots to variable / implies / iff.
-                //
-                // NOTE: The pre-1.0 enforcement of this lived in
-                // ManagedDerivationPremiseEngine. The C-phase code path is the
-                // regular PremiseEngine, which does not (yet) check S-14 at
-                // mutation time — that's exactly the gap this test asserts
-                // against. C5 plugs it.
                 expect(() =>
                     pe.addExpression(opExpr("and-root", "and", null, id))
                 ).toThrow()

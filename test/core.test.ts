@@ -22759,11 +22759,7 @@ describe("Fork integration with derivation premises", () => {
 
         // Verifies the forked derivation premise's tree is well-formed
         // by checking it parses as a valid naked-Q (D-1) or fully
-        // populated state via the v1.0 validate('derivable') API.
-        // Pre-v1.0 this test reloaded the snapshot via
-        // ManagedDerivationPremiseEngine.fromSnapshot, which threw on
-        // structural derivation violations; v1.0 routes the equivalent
-        // checks through the Derivable validators.
+        // populated state via validate('derivable').
         const violations = forkedEngine.validate("derivable")
         const d1ForThisPremise = violations.filter(
             (v) =>
@@ -22773,8 +22769,7 @@ describe("Fork integration with derivation premises", () => {
         )
         expect(d1ForThisPremise).toEqual([])
 
-        // The snapshot is still produceable (the snapshot API is part
-        // of the public surface independent of MDPE).
+        // The snapshot is still produceable.
         const snap = derivationPremise.snapshot()
         expect(snap.expressions.expressions.length).toBeGreaterThan(0)
     })

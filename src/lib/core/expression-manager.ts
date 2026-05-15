@@ -1671,8 +1671,10 @@ export class ExpressionManager<
         // very next reparent call moves the child to (formulaId, 0),
         // freeing childPosition from the child's tracking and leaving
         // it owned by the formula alone.
+        // `child` is already typed `TExpr` from `this.expressions.get`,
+        // so no cast is needed at this call site.
         this.registerFormulaBuffer(
-            child as unknown as TExpr,
+            child,
             childParentId,
             childPosition,
             formulaId

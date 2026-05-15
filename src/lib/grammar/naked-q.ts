@@ -68,7 +68,7 @@ export function isNakedQDerivationPremise<
     TExpr extends TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable,
 >(pe: PremiseEngine<TArg, TPremise, TExpr, TVar>): boolean {
-    const data = pe.toPremiseData() as unknown as TCorePremise
-    if (data.type !== "derivation") return false
+    // `TPremise extends TCorePremise`, so `.type` is in-scope without a cast.
+    if (pe.toPremiseData().type !== "derivation") return false
     return isNakedQTree(pe)
 }
