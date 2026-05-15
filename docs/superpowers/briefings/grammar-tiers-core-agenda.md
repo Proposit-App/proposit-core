@@ -2,7 +2,7 @@
 
 **Cross-repo spec:** `/Users/brian/Projects/Proposit-App/docs/superpowers/specs/2026-05-13-grammar-tiers-design.md` — read first. This briefing is core's slice and is the largest of the four per-repo slices.
 
-**Initiative status:** in-flight (core publishes **first** — owns the wire-format definitions; shared re-exports from core afterwards). _(Reflects design restructure 2026-05-14: types moved from shared to core to match existing dep direction. See [orchestrator commit log] and the updated cross-repo spec.)_
+**Initiative status:** publish-ready (2026-05-15). All Phases A–D and the publish-prep cycle are complete on branch `grammar-tiers/core` at HEAD `6e1192a`. `package.json` is at `1.0.0` with the local `v1.0.0` tag created by `pnpm version major`. The branch awaits **`pnpm publish --access public`** (human OTP, orchestrator-coordinated). After publish: push branch + tag, PR to main, post `READY:` on broker thread `grammar-tiers` so shared/server/mobile can resume. _(Original status note, retained for context: core publishes **first** — owns the wire-format definitions; shared re-exports from core afterwards. Design restructure 2026-05-14 moved types from shared to core to match existing dep direction.)_
 
 ## Capability changes
 

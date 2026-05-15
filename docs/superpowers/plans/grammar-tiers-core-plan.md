@@ -1,6 +1,42 @@
 # Grammar Tiers — proposit-core Implementation Plan
 
-> **Implementation status — 2026-05-15 (latest), branch `grammar-tiers/core` at HEAD.**
+> **Implementation status — 2026-05-15 (latest), branch `grammar-tiers/core` at HEAD `6e1192a`.**
+>
+> **v1.0.0 ready for publish.** The publish-prep cycle is complete: the D5+D6 review's P2 fold-items have landed, `docs/Proposit_Grammar.md` is the v1.0 reference per spec §11, the hand-written docs (`README.md`, `AGENTS.md`/`CLAUDE.md`, `docs/api-reference.md`, `CLI_EXAMPLES.md`) have been swept for stale pre-1.0 API references, `package.json` is at `1.0.0`, and the release-notes + changelog are renamed to `v1.0.0.md`. The local `v1.0.0` git tag was created by `pnpm version major` (commit `1fb4175`). Next step is **`pnpm publish --access public` with human OTP** — explicitly out of dev scope; the orchestrator coordinates with the human.
+>
+> **Publish-prep commit sequence (newest first):**
+>
+> ```
+> 6e1192a     chore: publish-prep — rename release-notes + changelog to v1.0.0; fresh upcoming.md
+> 1fb4175     1.0.0 (pnpm version major; package.json bumped; local v1.0.0 tag created)
+> 2b83b2e     docs: publish-prep — sweep README + CLAUDE.md + api-reference + CLI_EXAMPLES + examples for v1.0
+> 2e8ac63     docs(grammar): publish-prep — rewrite Proposit_Grammar.md for v1.0 (spec §11)
+> 4fa54e8     test(grammar): publish-prep — fromSnapshot defaults behavior to "assistive" (D5+D6 review P2 #1)
+> ```
+>
+> **Tests: 1454 passing, 1 skipped, 0 failing** (the +1 from the new `fromSnapshot` no-behavior regression test). `pnpm run check` fully green at v1.0.0 (typecheck + lint + test + build + docs).
+>
+> **Outstanding for the orchestrator + human (NOT in dev scope):**
+>
+> - **Manual smoke-test verification** — `bash scripts/smoke-test.sh` after `pnpm run build`. Asked for in every fresh-context review since D1; the human runs it pre-publish.
+> - **`pnpm publish --access public`** with OTP — human-only step.
+> - **Push branch + tag `v1.0.0`** — orchestrator.
+> - **PR `grammar-tiers/core` → `main`** — orchestrator; merge after downstream agents acknowledge.
+> - **Post `READY: @proposit/proposit-core@1.0.0 published. Server and mobile can bump.`** on broker thread `grammar-tiers` — orchestrator.
+>
+> **Post-v1.0 tracking (unchanged from prior block, NOT publish-blocking):**
+>
+> - **S-14 enforcement audit at root-reshaping paths** — flagged as post-D0 tracking issue.
+> - **Skipped `iff`-rooted Task-22 test** at `test/core.test.ts` — separate task.
+> - **Tier-aware library aggregation** (`ArgumentLibrary.validateGrammar(tier)` / `PropositCore.validateGrammar(tier)` parallels) — deferred to post-v1.0 per user decision 2026-05-15.
+>
+> ---
+>
+> **Older history is preserved verbatim below. The Phase D5+D6 "complete" Implementation Status block immediately below this one describes the state pre-publish-prep (1453 + 1 skipped at HEAD `8c1b639`). The pre-D5+D6 status blocks document earlier phases and remain authoritative for them.**
+>
+> ---
+>
+> **Implementation status — 2026-05-15 (D5+D6 complete), branch `grammar-tiers/core` at `8c1b639`.**
 >
 > **Phase D complete. Ready for v1.0 publish coordination.** All phases — A, B (all), C1–C8, D0 (a–f), D1, D2, D2b, D3, D4, D5, and D6 — have landed. The `grammar-tiers/core` branch carries the full v1.0 design: four-tier grammar model (`Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable`); `validate(tier)` + `validateInvariants()` complementary methods on `ArgumentEngine`; `normalize(tier?)` global pass; `behavior: 'assistive' | 'permissive'` with AN post-mutation hook; targeted repair primitives; `populateFromCitations` + `populateFromAxioms` factories (naked-Q-only, no-throw); fork path threads `behavior` from source to forked engine. The legacy `grammarConfig` / `autoNormalize` / `ManagedDerivationPremiseEngine` / `LOAD_GRAMMAR`-`STRICT_GRAMMAR` machinery, the 11 inline P-1 throws, the `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` code, and the legacy `engine.validate()` no-arg overload are all gone.
 >
