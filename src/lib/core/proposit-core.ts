@@ -422,18 +422,6 @@ export class PropositCore<
             )
         }
 
-        // FOLLOWUP(D5): thread `behavior` through the fork path. The
-        // engine snapshot intentionally omits `behavior` (see the comment
-        // in `ArgumentEngine.snapshot()`), so a permissive-mode source
-        // engine currently restores as `'assistive'` in the fork. D5
-        // either (a) adds `behavior` to the snapshot, or (b) keeps
-        // behavior out of the snapshot and reviews every fork call site
-        // to pass the source engine's behavior through
-        // `forkArgumentEngine`'s options and into the new engine's
-        // constructor / setBehavior() before snapshot replay. Plan ref:
-        // `docs/superpowers/plans/grammar-tiers-core-plan.md` Phase D
-        // → D5.
-
         // Step 2: canFork guard
         if (!engine.canFork()) {
             throw new Error(`Forking argument "${argumentId}" is not allowed.`)
@@ -575,6 +563,16 @@ export class PropositCore<
 
         // Step 7: Remap claim references
         const snap = forkedEngine.snapshot()
+        // D5 — `engine.snapshot()` deliberately omits `behavior` from the
+        // serialized config (see the comment in `ArgumentEngine.snapshot()`),
+        // so the upcoming `fromSnapshot` rebuild would otherwise reset the
+        // forked engine to the default `'assistive'`. Carry the behavior
+        // forward explicitly here, mirroring what `forkArgumentEngine`
+        // does internally.
+        snap.config = {
+            ...snap.config,
+            behavior: forkedEngine.behavior,
+        }
         snap.variables.variables = snap.variables.variables.map((v) => {
             if (isClaimBound(v)) {
                 const clonedClaimId = claimRemap.get(v.claimId)

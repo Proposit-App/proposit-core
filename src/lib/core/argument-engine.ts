@@ -1797,13 +1797,11 @@ export class ArgumentEngine<
                 // `behavior` is intentionally omitted from the snapshot.
                 // Consumers re-supply it at restore time via
                 // `new ArgumentEngine(...)` options or `setBehavior()`;
-                // a restored engine defaults to `'assistive'`. Phase D
-                // contributors should think twice before adding it here
-                // — `PropositCore.forkArgument()` rebuilds from the
-                // snapshot and would restore a permissive engine as
-                // assistive if the field were added without threading
-                // it through every downstream restore path. See the
-                // matched FOLLOWUP(D5) at `PropositCore.forkArgument`.
+                // a restored engine defaults to `'assistive'`. The fork
+                // path (`forkArgumentEngine` / `PropositCore.forkArgument`)
+                // explicitly threads the source engine's `behavior` into
+                // the forked engine's config (see D5 — `fork.ts`), so
+                // fork callers don't lose the setting.
                 //
                 // D2: the legacy `grammarConfig` field is gone — all
                 // P-1 / AN behavior is driven by `engine.behavior` +

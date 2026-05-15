@@ -18647,6 +18647,75 @@ describe("forkArgumentEngine", () => {
             })
         ).not.toThrow()
     })
+
+    // D5 — behavior threading through the fork path
+    it("inherits permissive behavior from the source engine", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        expect(eng.behavior).toBe("permissive")
+
+        const { engine: forked } = forkArgumentEngine(eng, "forked-arg", {
+            claimLibrary: aLib(),
+        })
+        expect(forked.behavior).toBe("permissive")
+    })
+
+    it("inherits assistive behavior from the source engine", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "assistive" })
+        expect(eng.behavior).toBe("assistive")
+
+        const { engine: forked } = forkArgumentEngine(eng, "forked-arg", {
+            claimLibrary: aLib(),
+        })
+        expect(forked.behavior).toBe("assistive")
+    })
+
+    it("inherits the default assistive behavior when source omits it", () => {
+        // Source constructed without explicit `behavior` — defaults to
+        // 'assistive'. The fork inherits that default.
+        const eng = new ArgumentEngine(ARG, aLib())
+        expect(eng.behavior).toBe("assistive")
+
+        const { engine: forked } = forkArgumentEngine(eng, "forked-arg", {
+            claimLibrary: aLib(),
+        })
+        expect(forked.behavior).toBe("assistive")
+    })
+
+    it("respects an explicit options.behavior override (permissive → assistive)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        const { engine: forked } = forkArgumentEngine(
+            eng,
+            "forked-arg",
+            { claimLibrary: aLib() },
+            { behavior: "assistive" }
+        )
+        expect(eng.behavior).toBe("permissive")
+        expect(forked.behavior).toBe("assistive")
+    })
+
+    it("respects an explicit options.behavior override (assistive → permissive)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "assistive" })
+        const { engine: forked } = forkArgumentEngine(
+            eng,
+            "forked-arg",
+            { claimLibrary: aLib() },
+            { behavior: "permissive" }
+        )
+        expect(eng.behavior).toBe("assistive")
+        expect(forked.behavior).toBe("permissive")
+    })
+
+    it("forked engine's behavior is independent — setBehavior on source does not affect fork", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        const { engine: forked } = forkArgumentEngine(eng, "forked-arg", {
+            claimLibrary: aLib(),
+        })
+        expect(forked.behavior).toBe("permissive")
+
+        // Mutating the source's behavior must NOT affect the fork.
+        eng.setBehavior("assistive")
+        expect(forked.behavior).toBe("permissive")
+    })
 })
 
 describe("ForkRecordSchemas", () => {
@@ -19428,6 +19497,26 @@ describe("PropositCore", () => {
                     .getAll()
                     .every((r) => r.forkId === customForkId)
             ).toBe(true)
+        })
+
+        // D5 — behavior threads through PropositCore.forkArgument too,
+        // via the shared `TForkArgumentOptions` shape passed down to
+        // `forkArgumentEngine`.
+        it("inherits behavior from the source engine through PropositCore.forkArgument", () => {
+            const { core, arg, engine } = setupForFork()
+            engine.setBehavior("permissive")
+            const result = core.forkArgument(arg.id, crypto.randomUUID())
+            expect(result.engine.behavior).toBe("permissive")
+        })
+
+        it("honors options.behavior override through PropositCore.forkArgument", () => {
+            const { core, arg, engine } = setupForFork()
+            engine.setBehavior("assistive")
+            const result = core.forkArgument(arg.id, crypto.randomUUID(), {
+                behavior: "permissive",
+            })
+            expect(engine.behavior).toBe("assistive")
+            expect(result.engine.behavior).toBe("permissive")
         })
     })
 
