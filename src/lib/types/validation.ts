@@ -94,14 +94,20 @@ export const AXIOM_NOT_FOUND = "AXIOM_NOT_FOUND"
 export const LEGACY_MISSING_AXIOM_SLOT = "LEGACY_MISSING_AXIOM_SLOT"
 
 // -- Derivation premise errors --
-export const DERIVATION_TYPE_MISMATCH = "DERIVATION_TYPE_MISMATCH"
+// `DERIVATION_TYPE_MISMATCH`, `DERIVATION_CONSEQUENT_LOCKED`,
+// `DERIVATION_ROOT_OPERATOR_INVALID`, and `DERIVATION_ANTECEDENT_NON_EMPTY`
+// were deleted in Phase D2 as part of the v1.0 cleanup — they were
+// engine-error code constants that became orphaned when
+// `ManagedDerivationPremiseEngine` was removed in D1. The four
+// behaviors they powered are now surfaced via the Derivable-tier
+// validators (D-1..D-6) reachable through `engine.validate('derivable')`.
+// `DERIVATION_STRUCTURE_INVALID` stays — actively used by the
+// derivation-validation utility and the legacy validate() sweep.
+// `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` stays through D4 — slated
+// for deletion alongside the evaluation throw it powers.
 export const DERIVATION_STRUCTURE_INVALID = "DERIVATION_STRUCTURE_INVALID"
 export const DERIVATION_STRUCTURE_INVALID_AT_EVALUATION =
     "DERIVATION_STRUCTURE_INVALID_AT_EVALUATION"
-export const DERIVATION_CONSEQUENT_LOCKED = "DERIVATION_CONSEQUENT_LOCKED"
-export const DERIVATION_ROOT_OPERATOR_INVALID =
-    "DERIVATION_ROOT_OPERATOR_INVALID"
-export const DERIVATION_ANTECEDENT_NON_EMPTY = "DERIVATION_ANTECEDENT_NON_EMPTY"
 export const CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID =
     "CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID"
 export const CREATE_DERIVATION_CLAIM_NOT_FOUND =
