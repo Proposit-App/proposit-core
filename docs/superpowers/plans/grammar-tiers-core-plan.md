@@ -2,32 +2,54 @@
 
 > **Implementation status — 2026-05-14 (latest), branch `grammar-tiers/core` at HEAD.**
 >
-> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) + D0c (AN-3 native) + D0d (AN-4 contract tests + fold) + D0e (AN-1 + AN-4 native, plus the two new bundled-composite PE primitives `reparentExpression` and `wrapInFormula`) + D0f (fold D0e review findings; reduce-or accumulator; PERMISSIVE-swap relocation; plan-doc reconcile) complete. All four AN rules are now native single-rule passes against the public PE mutation API; the legacy delegation through `pe.normalizeExpressions()` is gone.**
-> Tests at 1630 passed + 9 skipped (1625 prior + 5 new — 3 reparentExpression validation tests for D0f's parent-type + arity guards + 1 wrapInFormula S-10 uniqueness test + 1 AN-4 redistribute-fallback regression test). `pnpm run check` green.
+> **Phases A, B (all), C1–C8, D0 (a–f), and D1 complete. `ManagedDerivationPremiseEngine` is deleted; the legacy `pe.normalizeExpressions()` delegation is gone; all four AN rules are native single-rule passes against the public PE mutation API. The two carry-over P2 items from the D0f dual-review (AN-4 phase-2 formula-position collision + `redistributeChildrenEvenly` no-op skip when `position === target`) are folded.**
+> Tests at 1596 passed + 8 skipped (1631 prior + 1 new D1 P2 #1 regression guard; −35 passing + −1 skipped from MDPE block deletion across constructor validation / fromSnapshot / mutation enforcement / populateFromSupports citations-only / populateFromSupports v0.12). `pnpm run check` green.
 >
 > **Latest commits (newest first):**
 >
 > ```
-> bafaa04     —   — D0f: applyANToFixedPoint rule chain to reduce-or accumulator (all rules run per iteration)
-> 6eb3eb8     —   — D0f: move PERMISSIVE swap into applyANToFixedPoint (both AN entry points benefit)
-> 6fcd6d7     —   — D0f: AN-4 redistributeChildrenEvenly scratch-range collision near POSITION_MAX (P2 #1)
-> fdb7fb6     —   — D0f: em.wrapInFormula formulaId uniqueness check (S-10 enforcement gap — P2 #2)
-> c03e7b8     —   — D0f: pe.reparentExpression parent-type + arity validation (S-1 enforcement gap — P1)
-> 5308ad7     —   — D0e fold: lift hasBinaryOperatorInBoundedSubtree to shared bounded-subtree.ts helper
-> c8dfd0b     —   — D0e: applyAN1 native (formula buffer insertion via pe.wrapInFormula) + delete legacy delegation helper
-> 4323113     —   — D0e: applyAN4 native (multi-child same-operator absorption via pe.reparentExpression)
-> 10d8fef     —   — D0e: public reparentExpression + normalize.ts swap target fix (PERMISSIVE)
-> 80bea1c     —   — D0d (partial): applyAN4 regression-guard tests; native rewrite re-routed to D0e (see below)
-> 6ba7882     —   — fold D0a dual-review polish (generic AN signatures, normalize.ts comment, convergence-cap context, idGenerator @internal, test coupling note)
-> e55f2c0     —   — D0c: applyAN3 native (0/1-child operator + formula collapse via PE.removeExpression)
-> 79da962     —   — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
-> 9fb18ae     —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
-> 1870592     —   — fold C6+C7+C8 dual-review polish (P1 generator accessor, P2 dedup/tests/atomicity, P3 TODO sweep)
-> 3f9710c     —   — docs(plan): lock D0 design — spec-direct AN-1..AN-4 rewrite blueprint
-> 03fd64f     C8  — evaluation no-op on naked-Q derivation premises
-> ce27619     C7  — snapshot loading accepts any Structural state
-> 507e02c     C6  — populateFromCitations + populateFromAxioms factories
+> 41f6ecc     D1   — delete ManagedDerivationPremiseEngine (subsumed by D-tier validators + populateFromCitations/Axioms factories)
+> 90026d6     D1   — redistributeChildrenEvenly skip no-op when position === target (P2 #2 carry-over)
+> 5355611     D1   — AN-4 absorbSameOperatorMatch phase-2 target collision with formula position S-9 trip (P2 #1 carry-over)
+> 26fb004     —    — docs(plan): D0f reconcile Implementation Status
+> bafaa04     —    — D0f: applyANToFixedPoint rule chain to reduce-or accumulator (all rules run per iteration)
+> 6eb3eb8     —    — D0f: move PERMISSIVE swap into applyANToFixedPoint (both AN entry points benefit)
+> 6fcd6d7     —    — D0f: AN-4 redistributeChildrenEvenly scratch-range collision near POSITION_MAX (P2 #1)
+> fdb7fb6     —    — D0f: em.wrapInFormula formulaId uniqueness check (S-10 enforcement gap — P2 #2)
+> c03e7b8     —    — D0f: pe.reparentExpression parent-type + arity validation (S-1 enforcement gap — P1)
+> 5308ad7     —    — D0e fold: lift hasBinaryOperatorInBoundedSubtree to shared bounded-subtree.ts helper
+> c8dfd0b     —    — D0e: applyAN1 native (formula buffer insertion via pe.wrapInFormula) + delete legacy delegation helper
+> 4323113     —    — D0e: applyAN4 native (multi-child same-operator absorption via pe.reparentExpression)
+> 10d8fef     —    — D0e: public reparentExpression + normalize.ts swap target fix (PERMISSIVE)
+> 80bea1c     —    — D0d (partial): applyAN4 regression-guard tests; native rewrite re-routed to D0e (see below)
+> 6ba7882     —    — fold D0a dual-review polish (generic AN signatures, normalize.ts comment, convergence-cap context, idGenerator @internal, test coupling note)
+> e55f2c0     —    — D0c: applyAN3 native (0/1-child operator + formula collapse via PE.removeExpression)
+> 79da962     —    — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
+> 9fb18ae     —    — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
+> 1870592     —    — fold C6+C7+C8 dual-review polish (P1 generator accessor, P2 dedup/tests/atomicity, P3 TODO sweep)
+> 3f9710c     —    — docs(plan): lock D0 design — spec-direct AN-1..AN-4 rewrite blueprint
+> 03fd64f     C8   — evaluation no-op on naked-Q derivation premises
+> ce27619     C7   — snapshot loading accepts any Structural state
+> 507e02c     C6   — populateFromCitations + populateFromAxioms factories
 > ```
+>
+> **D1 implementation notes (2026-05-14, fresh-context dev #5):**
+>
+> Three-commit cycle combining D0f review carry-overs with the MDPE
+> deletion:
+>
+> 1. **P2 #1 carry-over — AN-4 `absorbSameOperatorMatch` phase-2 target-collides-with-formula (`5355611`).** After `redistributeChildrenEvenly` fires, the formula sits at one of the redistributed slots between `effectiveLeftPos` and `effectiveRightPos`. The phase-2 inner-child reparents compute target positions in that same range. If any computed target equals the formula's current position, `pe.reparentExpression` trips S-9 — the formula is still a child of `outerId` at that point (it's removed at the end of absorption). Same hazard exists on the non-redistribute path when the formula's pre-mutation position equals one of the computed targets. Fix layer is `absorbSameOperatorMatch`, NOT `redistributeChildrenEvenly` — the formula is already in `redistribute`'s `forbidden` set (current ∪ targets) since it IS one of `outerId`'s children; the collision is a separate code block at the next call-stack level up. Fix looks up the formula's current position once, shifts any colliding target by ±1 (safe because spacing between targets is ≥ 2 on both paths). Failing-test-first regression guard in `test/grammar/an-rules.test.ts` with the trace example from the dual-review (positionConfig min=0/max=20, outer with 3 children at {1, 2, 3} where middle is the formula; redistribute lands formula at 10; phase-2 targets [7, 10, 12] hit formula at index i=1).
+> 2. **P2 #2 carry-over — `redistributeChildrenEvenly` no-op skip when position === target (`90026d6`).** Pre-D1 the helper unconditionally scratched and back-moved every child, emitting 2 reparent change records per child. When a child is already at its target position, the scratch+back-move is wasted work. Added a `needsMove[i] = children[i].position !== targets[i]` per-child filter; only `movingCount` scratches are reserved (down from `total`), and both phases skip already-at-target children. The `forbidden` set still includes the skipped children's positions (via both `current` and `targets` contributions, since `position === target` for them), so other children's phase-1 scratches and phase-2 targets remain S-9-safe.
+> 3. **MDPE deletion (`41f6ecc`).** Per spec §10.1 — `ManagedDerivationPremiseEngine` is removed wholesale. Its enforcement responsibilities split: D-tier mutation throws (`DERIVATION_STRUCTURE_INVALID`, `DERIVATION_TYPE_MISMATCH`, `DERIVATION_ANTECEDENT_NON_EMPTY`, `DERIVATION_CONSEQUENT_LOCKED`, `DERIVATION_ROOT_OPERATOR_INVALID`) → D-1..D-6 Derivable validators + E-6 evaluation guard, all already landed in Phase B and queryable via `engine.validate('derivable')`/`engine.validate('evaluable')`. S-14 (derivation root operator constraint) was promoted to `PremiseEngine.addExpression` in C5 — still enforced, just no longer routed through the subclass. `populateFromSupports` (citation + axiom mixed into a single OR antecedent) → `engine.populateFromCitations` + `engine.populateFromAxioms` (C6, factory + naked-Q-only + no-throw-on-already-populated). D-3 forbids mixing in v1.0, so the legacy mixed-grounding behavior is intentionally not preserved. CLI `populate-supports` command rewritten to call the two new factories sequentially (citations first, axioms second — see the commit body for migration semantics). The `DERIVATION_*` engine-error constants stay exported from `src/lib/types/validation.ts` — harmless and may still be referenced by future engine-internal throws. Test impact: −35 passing tests, −1 skipped (all MDPE-class behavior assertions). The "Fork integration with derivation premises" test that previously reloaded a forked premise's snapshot via `MDPE.fromSnapshot` was rewritten to verify via `forkedEngine.validate('derivable')`.
+>
+> **D1 addresses every D0f review carry-over.** P2 #1 + P2 #2 fixed
+> per above. P3 #1 (check-order in `reparentExpression`) noted as
+> defensible — no code change. P3 #2 (`lastChangedRule` could become
+> `Set<"AN-N">`) tracked for a future cap-trip-debug enhancement. P3 #3
+> (test coverage for the new P2 #1 fix) covered by the new regression
+> test. P3 #4 carry-overs (`naked-q.ts:71` cast, `em.ts:2506` cast,
+> `toThrowError` deprecation, 11 inline P-1 throws, S-14 audit) all
+> remain parked at their original target cycles (D2 / D6).
 >
 > **D0 per-rule native-rewrite status:**
 >
@@ -207,13 +229,13 @@ x`) and buffered (`NOT_outer → formula → NOT_inner → x`) forms are
 >   for pathological inputs the legacy `promoteChild` (private)
 >   bypassed the check. Defer the bypass-primitive design to D0e.
 >
-> **Phase D post-D0 work** is unchanged from the prior status block:
-> D1 (MDPE removal), D2 (legacy plumbing + 11 P-1 throw sites), D3
-> (LOAD/STRICT split), D4 (`DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
+> **Phase D remaining work after D1:**
 >
-> - `validate()` no-arg overload + `ArgumentEngine.normalizeAllExpressions`),
->   D5 (the FOLLOWUP(D5) at `proposit-core.ts` — behavior threading through
->   the fork path), D6 (interface JSDoc cleanup).
+> - **D2 (next-up)** — Delete the legacy `grammarConfig` / `autoNormalize` / `TGrammarOptions` / `DEFAULT_GRAMMAR_CONFIG` / `PERMISSIVE_GRAMMAR_CONFIG` machinery, the 11 inline P-1 enforcement throws at the briefing §10 sites (with the AN-1 native rewrite already landed, the inline throws are no longer needed — assistive mode handles buffer insertion via the post-mutation hook; permissive mode leaves the unbufferred state and `validate('presentable')` flags it), and the legacy `PremiseEngine.normalizeExpressions()` method. The PERMISSIVE-swap inside `applyANToFixedPoint` becomes unnecessary once the 11 throws are gone — D2 removes it in the same cycle.
+> - **D3** — Delete `LOAD_GRAMMAR` / `STRICT_GRAMMAR` snapshot config split (the constants live in `src/lib/types/grammar.ts` which D2 will delete; verify no other references remain).
+> - **D4** — Delete deprecated `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` evaluation throw plus the legacy `validate()` no-arg overload + `ArgumentEngine.normalizeAllExpressions`.
+> - **D5** — Resolve the `FOLLOWUP(D5)` marker at `proposit-core.ts` (behavior threading through the fork path).
+> - **D6** — Interface JSDoc cleanup; sweep the parked P3 carry-overs (`naked-q.ts:71` cast, `em.ts:2506` redundant cast, `toThrowError` deprecation warnings).
 >
 > **Older history is preserved verbatim below (do not delete) so that
 > the C1–C8 design decisions and audit findings stay discoverable.**
