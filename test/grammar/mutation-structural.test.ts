@@ -22,7 +22,7 @@ function opExpr(
     operator: "not" | "and" | "or" | "implies" | "iff",
     parentId: string | null,
     premiseId: string,
-    position: number = 0
+    position = 0
 ): TExpressionInput {
     return {
         id,
@@ -41,7 +41,7 @@ function varExpr(
     variableId: string,
     parentId: string | null,
     premiseId: string,
-    position: number = 0
+    position = 0
 ): TExpressionInput {
     return {
         id,
@@ -56,11 +56,22 @@ function varExpr(
 }
 
 describe("Mutations throw on Structural violations (C5)", () => {
+    // D2b — Test setup uses the permissive-build + setBehavior(assistive)
+    // pattern. The Structural-rule contract is "mutations throw on
+    // Structural violations regardless of `behavior`" (spec §8). With
+    // the new AN post-mutation hook (assistive mode), the eager AN-3
+    // collapse of 0-child operators would tear down the partial tree
+    // the test is constructing before the violating mutation can fire.
+    // To exercise the Structural enforcement in both modes, we build
+    // the valid tree in permissive (no AN), flip to the desired
+    // behavior, then attempt the violating mutation. The throw must
+    // fire regardless of mode.
+
     describe("S-8 — Binary operator arity (implies/iff have exactly 2 children)", () => {
         for (const behavior of ["assistive", "permissive"] as const) {
             it(`throws in ${behavior} mode when adding a 3rd child under IMPLIES`, () => {
                 const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
-                    behavior,
+                    behavior: "permissive",
                 })
                 const { result: pe } = eng.createPremise()
                 const id = pe.getId()
@@ -68,6 +79,11 @@ describe("Mutations throw on Structural violations (C5)", () => {
                 // First two children OK.
                 pe.addExpression(opExpr("c-0", "and", "imp-1", id, 0))
                 pe.addExpression(opExpr("c-1", "or", "imp-1", id, 1))
+                // Flip to the test's target behavior before the
+                // violating mutation. The Structural check is
+                // mode-independent — must throw whether we're
+                // assistive or permissive.
+                eng.setBehavior(behavior)
                 // Third child rejected.
                 expect(() =>
                     pe.addExpression(opExpr("c-2", "and", "imp-1", id, 2))
@@ -80,7 +96,7 @@ describe("Mutations throw on Structural violations (C5)", () => {
         for (const behavior of ["assistive", "permissive"] as const) {
             it(`throws in ${behavior} mode when two children share a position`, () => {
                 const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
-                    behavior,
+                    behavior: "permissive",
                 })
                 const { result: pe } = eng.createPremise()
                 const id = pe.getId()
@@ -88,6 +104,7 @@ describe("Mutations throw on Structural violations (C5)", () => {
                 // Use NOT children to bypass the operator-under-operator check
                 // entirely (NOT is allowed as direct child of an operator).
                 pe.addExpression(opExpr("not-0", "not", "and-1", id, 0))
+                eng.setBehavior(behavior)
                 expect(() =>
                     pe.addExpression(opExpr("not-x", "not", "and-1", id, 0))
                 ).toThrow(/already used/)
@@ -101,7 +118,9 @@ describe("Mutations throw on Structural violations (C5)", () => {
                 const claimLib = new ClaimLibrary()
                 claimLib.create({ id: "claim-p", type: "normal" })
                 claimLib.create({ id: "claim-q", type: "normal" })
-                const eng = new ArgumentEngine(ARG, claimLib, { behavior })
+                const eng = new ArgumentEngine(ARG, claimLib, {
+                    behavior: "permissive",
+                })
                 eng.addVariable({
                     id: "v-p",
                     argumentId: ARG.id,
@@ -122,6 +141,7 @@ describe("Mutations throw on Structural violations (C5)", () => {
                 const id = pe.getId()
                 pe.addExpression(opExpr("not-1", "not", null, id))
                 pe.addExpression(varExpr("v-1", "v-p", "not-1", id, 0))
+                eng.setBehavior(behavior)
                 expect(() =>
                     pe.addExpression(varExpr("v-2", "v-q", "not-1", id, 1))
                 ).toThrow(/one child/)
@@ -135,7 +155,9 @@ describe("Mutations throw on Structural violations (C5)", () => {
                 const claimLib = new ClaimLibrary()
                 claimLib.create({ id: "claim-p", type: "normal" })
                 claimLib.create({ id: "claim-q", type: "normal" })
-                const eng = new ArgumentEngine(ARG, claimLib, { behavior })
+                const eng = new ArgumentEngine(ARG, claimLib, {
+                    behavior: "permissive",
+                })
                 eng.addVariable({
                     id: "v-p",
                     argumentId: ARG.id,
@@ -164,6 +186,7 @@ describe("Mutations throw on Structural violations (C5)", () => {
                     position: 0,
                 })
                 pe.addExpression(varExpr("v-1", "v-p", "f-1", id, 0))
+                eng.setBehavior(behavior)
                 expect(() =>
                     pe.addExpression(varExpr("v-2", "v-q", "f-1", id, 1))
                 ).toThrow(/one child/)
@@ -176,7 +199,13 @@ describe("Mutations throw on Structural violations (C5)", () => {
             it(`throws in ${behavior} mode when adding an AND root to a derivation premise`, () => {
                 const claimLib = new ClaimLibrary()
                 claimLib.create({ id: "claim-Q", type: "normal" })
-                const eng = new ArgumentEngine(ARG, claimLib, { behavior })
+                // Build the empty derivation premise in permissive
+                // (avoids AN-3 colliding with the removeExpression of
+                // the auto-created naked-Q root); flip to the target
+                // behavior before the violating mutation.
+                const eng = new ArgumentEngine(ARG, claimLib, {
+                    behavior: "permissive",
+                })
                 const { result: pe } = eng.createPremise({
                     type: "derivation",
                     derivedClaimId: "claim-Q",
@@ -188,6 +217,7 @@ describe("Mutations throw on Structural violations (C5)", () => {
                 if (autoQ !== undefined) {
                     pe.removeExpression(autoQ.id, true)
                 }
+                eng.setBehavior(behavior)
                 // Adding an AND root to a derivation premise must throw — S-14
                 // restricts derivation roots to variable / implies / iff.
                 //

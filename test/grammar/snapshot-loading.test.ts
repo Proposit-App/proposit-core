@@ -40,7 +40,7 @@ function opExpr(
     operator: "not" | "and" | "or" | "implies" | "iff",
     parentId: string | null,
     premiseId: string,
-    position: number = 0
+    position = 0
 ): TExpressionInput {
     return {
         id,
@@ -59,7 +59,7 @@ function varExpr(
     variableId: string,
     parentId: string | null,
     premiseId: string,
-    position: number = 0
+    position = 0
 ): TExpressionInput {
     return {
         id,

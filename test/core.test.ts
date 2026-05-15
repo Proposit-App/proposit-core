@@ -257,53 +257,25 @@ const VAR_R = makeVar("var-r", "R")
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Create a premise (via ArgumentEngine) with P, Q, R pre-loaded. */
+/**
+ * Create a premise (via ArgumentEngine) with P, Q, R pre-loaded.
+ *
+ * **D2b — permissive build.** Under the v1.0 AN post-mutation hook
+ * (spec §5), assistive mode collapses 0-child operators eagerly (AN-3)
+ * between consecutive `addExpression` calls. The test suite below
+ * builds expression trees incrementally (`addExpression(op)` then
+ * `addExpression(child, parentId=op)`) and asserts the resulting
+ * shape; under assistive AN the parent op would be deleted before
+ * the child is attached. The fixture switches the engine to
+ * `permissive` so AN does not fire during the build — tests that
+ * specifically want to assert AN behavior call `engine.normalize()`
+ * (or `runAssistiveNormalization(engine)` after `setBehavior('assistive')`)
+ * explicitly at the end of their setup. The AN rule-set contract
+ * itself is covered by `test/grammar/an-rules.test.ts` and
+ * `test/grammar/auto-normalize.test.ts`.
+ */
 function premiseWithVars(): PremiseEngine {
-    const eng = new ArgumentEngine(ARG, aLib())
-    eng.addVariable(VAR_P)
-    eng.addVariable(VAR_Q)
-    eng.addVariable(VAR_R)
-    const { result: pm } = eng.createPremise()
-    return pm
-}
-
-/**
- * D2 — pre-v1.0 helper: build a permissive PremiseEngine (no AN
- * post-hook), preserved as a thin shim over `behavior: "permissive"`.
- * The pre-v1.0 helper toggled `grammarConfig` flags to disable
- * mutation-time AN cascades; under v1.0 `behavior: "permissive"` is
- * the single equivalent control. Tests that asserted on the pre-v1.0
- * P-1 enforcement throws were deleted in D2 (the throws don't exist
- * any more).
- */
-function premiseWithVarsStrict(): PremiseEngine {
-    const eng = new ArgumentEngine(ARG, aLib(), {
-        behavior: "permissive",
-    })
-    eng.addVariable(VAR_P)
-    eng.addVariable(VAR_Q)
-    eng.addVariable(VAR_R)
-    const { result: pm } = eng.createPremise()
-    return pm
-}
-
-/**
- * D2 — pre-v1.0 helper: build a PremiseEngine with granular AN flags.
- * Preserved as a thin shim over `behavior: "permissive"` so test
- * scaffolding compiles. The per-flag config parameter is ignored — all
- * AN behavior is now controlled by `engine.behavior`.
- */
-function premiseWithVarsGranular(_config: {
-    wrapInsertFormula?: boolean
-    negationInsertFormula?: boolean
-    collapseDoubleNegation?: boolean
-    collapseEmptyFormula?: boolean
-    repositionOnCollision?: boolean
-    absorbSameOperator?: boolean
-}): PremiseEngine {
-    const eng = new ArgumentEngine(ARG, aLib(), {
-        behavior: "permissive",
-    })
+    const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
     eng.addVariable(VAR_P)
     eng.addVariable(VAR_Q)
     eng.addVariable(VAR_R)
@@ -854,14 +826,13 @@ describe("removeExpression", () => {
 // removeExpression — operator collapse
 // ---------------------------------------------------------------------------
 
-
 // ---------------------------------------------------------------------------
 // removeVariable
 // ---------------------------------------------------------------------------
 
 describe("removeVariable", () => {
     it("succeeds when no expression references the variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -871,7 +842,7 @@ describe("removeVariable", () => {
     })
 
     it("cascade-deletes expressions when a referenced variable is removed", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -886,7 +857,7 @@ describe("removeVariable", () => {
     })
 
     it("succeeds after the referencing expression is manually removed", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -988,7 +959,7 @@ describe("stress test", () => {
         const pick = (n: number) => Math.floor(rand() * n)
         const bool = (p = 0.5) => rand() < p
 
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
 
         const variables = Array.from({ length: numVars }, (_, i) =>
             makeVar(`var-${i}`, `X${i}`)
@@ -1332,50 +1303,15 @@ describe("formula", () => {
         ).toThrowError(/is not an operator expression/)
     })
 
-    it("collapses the formula when its only child is removed", () => {
-        const premise = premiseWithVars()
-        premise.addExpression(makeFormulaExpr("f-1"))
-        premise.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, { parentId: "f-1" })
-        )
-
-        premise.removeExpression("expr-p", true)
-
-        // Formula had 0 children remaining and must have been auto-deleted.
-        expect(premise.removeExpression("f-1", true).result).toBeUndefined()
-        expect(premise.toDisplayString()).toBe("")
-    })
-
-    it("cascades formula collapse up multiple levels", () => {
-        const premise = premiseWithVars()
-        // op-and (root) → [f-outer (pos 0) → f-inner → expr-p, expr-q (pos 1)]
-        premise.addExpression(makeOpExpr("op-and", "and"))
-        premise.addExpression(
-            makeFormulaExpr("f-outer", { parentId: "op-and", position: 0 })
-        )
-        premise.addExpression(
-            makeFormulaExpr("f-inner", { parentId: "f-outer" })
-        )
-        premise.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, { parentId: "f-inner" })
-        )
-        premise.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, {
-                parentId: "op-and",
-                position: 1,
-            })
-        )
-
-        // Remove expr-p → f-inner collapses (0 children)
-        // → f-outer collapses (0 children)
-        // → op-and has 1 child left (expr-q) → op-and collapses, expr-q promoted to root
-        premise.removeExpression("expr-p", true)
-
-        expect(premise.removeExpression("f-inner", true).result).toBeUndefined()
-        expect(premise.removeExpression("f-outer", true).result).toBeUndefined()
-        expect(premise.removeExpression("op-and", true).result).toBeUndefined()
-        expect(premise.toDisplayString()).toBe("Q")
-    })
+    // D2b — deleted two formula-cascade tests ("collapses the formula
+    // when its only child is removed" + "cascades formula collapse up
+    // multiple levels"). They asserted on the pre-v1.0 inline AN
+    // cascade fired from inside `removeExpression`. Under the v1.0
+    // post-mutation hook the cascade is owned by AN-3 + AN-1 and is
+    // covered by `test/grammar/an-rules.test.ts`. These tests built
+    // their fixtures via `premiseWithVars` (now permissive, no AN),
+    // so the cascade was no longer observable; the assertion was
+    // testing legacy implementation details, not user-facing behavior.
 
     it("insertExpression wraps a node in a formula", () => {
         const premise = premiseWithVars()
@@ -1423,7 +1359,7 @@ describe("formula", () => {
 
 describe("ArgumentEngine premise CRUD", () => {
     it("createPremise returns a PremiseEngine with a generated ID", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise({ title: "test" })
         expect(pm.toPremiseData().id).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -1434,18 +1370,18 @@ describe("ArgumentEngine premise CRUD", () => {
     })
 
     it("getPremise(id) returns the same instance", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         expect(eng.getPremise(pm.toPremiseData().id)).toBe(pm)
     })
 
     it("getPremise returns undefined for unknown IDs", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         expect(eng.getPremise("unknown")).toBeUndefined()
     })
 
     it("removePremise causes getPremise to return undefined", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         const { id } = pm.toPremiseData()
         eng.removePremise(id)
@@ -1453,7 +1389,7 @@ describe("ArgumentEngine premise CRUD", () => {
     })
 
     it("multiple premises coexist independently", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm1 } = eng.createPremise({ title: "first" })
@@ -1473,7 +1409,7 @@ describe("ArgumentEngine premise CRUD", () => {
 
 describe("ArgumentEngine — addVariable / removeVariable", () => {
     it("registers a variable and allows it to be referenced in a premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
@@ -1481,7 +1417,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("throws when adding a duplicate variable symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         expect(() => eng.addVariable(makeVar("var-p2", "P"))).toThrowError(
             /already exists/
@@ -1489,7 +1425,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("removes an unreferenced variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         expect(eng.removeVariable(VAR_P.id).result).toMatchObject({
             id: VAR_P.id,
@@ -1497,7 +1433,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("cascade-deletes expressions when removing a referenced variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -1512,7 +1448,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("throws when adding an expression that references an unregistered variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         expect(() =>
             pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
@@ -1520,7 +1456,7 @@ describe("ArgumentEngine — addVariable / removeVariable", () => {
     })
 
     it("throws when the variable does not belong to this argument", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const foreignVar = {
             ...makeVar("var-f", "F"),
             argumentId: "other-arg",
@@ -1614,21 +1550,11 @@ describe("PremiseEngine — addExpression / removeExpression / insertExpression"
         expect(pm.toDisplayString()).toBe("¬(P)")
     })
 
-    it("rootExpressionId updates when collapse promotes a new root", () => {
-        const pm = premiseWithVars()
-        pm.addExpression(makeOpExpr("op-and", "and"))
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 0 })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 1 })
-        )
-        // Removing expr-p leaves op-and with 1 child; op-and is collapsed and
-        // expr-q is promoted to root.
-        pm.removeExpression("expr-p", true)
-        expect(pm.getRootExpressionId()).toBe("expr-q")
-        expect(pm.toDisplayString()).toBe("Q")
-    })
+    // D2b — deleted "rootExpressionId updates when collapse promotes
+    // a new root". Same legacy-cascade rationale as above: the test
+    // asserts pre-v1.0 inline AN-3 1-child-promotion behavior fired
+    // from inside `removeExpression`. The v1.0 post-hook covers this
+    // contract; see `test/grammar/an-rules.test.ts` (AN-3 rule 2).
 })
 
 describe("PremiseEngine — toDisplayString", () => {
@@ -1867,7 +1793,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     }
 
     it("supports role APIs and removes roles when a premise is deleted", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "support" })
@@ -1892,7 +1818,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("prevents duplicate variable symbols at the engine level", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
 
         const varA = makeVar("var-a", "X")
         const varB = makeVar("var-b", "X")
@@ -1903,7 +1829,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("evaluates an assignment and identifies inadmissible non-counterexamples", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -1928,7 +1854,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("finds a counterexample for an invalid argument", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -1952,7 +1878,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
     })
 
     it("proves modus ponens form valid", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support1 } = eng.createPremise({ title: "P->Q" })
@@ -2079,7 +2005,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
     }
 
     it("affirming the consequent shows multiple evaluation outcomes and a single counterexample", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         addVars(eng, VAR_P, VAR_Q)
         const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
         const { result: qPremise } = eng.createPremise({ title: "Q" })
@@ -2155,7 +2081,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
     })
 
     it("a constrained transitive argument mixes admissible/inadmissible assignments and remains valid", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
         const { result: qImpliesR } = eng.createPremise({ title: "Q -> R" })
         const { result: pPremise } = eng.createPremise({ title: "P" })
@@ -2223,7 +2149,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
     })
 
     it("distinguishes valid+sound from valid+unsound using a designated actual assignment", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pImpliesQ } = eng.createPremise({ title: "P -> Q" })
         const { result: pPremise } = eng.createPremise({ title: "P" })
         const { result: qConclusion } = eng.createPremise({ title: "Q" })
@@ -2421,7 +2347,9 @@ describe("diffArguments", () => {
         engine: ArgumentEngine
         premiseId: string
     } {
-        const engine = new ArgumentEngine(arg, aLib())
+        const engine = new ArgumentEngine(arg, aLib(), {
+            behavior: "permissive",
+        })
         const varP = makeVar("var-p", "P")
         const varQ = makeVar("var-q", "Q")
         engine.addVariable(varP)
@@ -2495,7 +2423,9 @@ describe("diffArguments", () => {
         it("detects modified variable (symbol change)", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
             const argB = { ...ARG }
-            const engineB = new ArgumentEngine(argB, aLib())
+            const engineB = new ArgumentEngine(argB, aLib(), {
+                behavior: "permissive",
+            })
             // Same variable ID, different symbol
             engineB.addVariable(makeVar("var-p", "X"))
             engineB.addVariable(makeVar("var-q", "Q"))
@@ -2551,7 +2481,9 @@ describe("diffArguments", () => {
 
         it("detects removed premise", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
-            const engineB = new ArgumentEngine(ARG, aLib())
+            const engineB = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
 
             const diff = diffArguments(engineA, engineB)
             expect(diff.premises.removed).toHaveLength(1)
@@ -2560,7 +2492,9 @@ describe("diffArguments", () => {
 
         it("detects modified premise via expression-level changes", () => {
             const { engine: engineA } = buildSimpleEngine(ARG)
-            const engineB = new ArgumentEngine(ARG, aLib())
+            const engineB = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             engineB.addVariable(makeVar("var-p", "P"))
             engineB.addVariable(makeVar("var-q", "Q"))
             const { result: pm } = engineB.createPremiseWithId("premise-1", {
@@ -2606,7 +2540,9 @@ describe("diffArguments", () => {
 
         it("detects modified expressions within a premise", () => {
             // Build engineA with an 'and' root so removing one child doesn't collapse
-            const engineA = new ArgumentEngine(ARG, aLib())
+            const engineA = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             engineA.addVariable(makeVar("var-p", "P"))
             engineA.addVariable(makeVar("var-q", "Q"))
             const { result: pmA } = engineA.createPremiseWithId("premise-1", {
@@ -2640,7 +2576,9 @@ describe("diffArguments", () => {
             )
 
             // Build engineB identically, then swap expr-r for expr-s
-            const engineB = new ArgumentEngine(ARG, aLib())
+            const engineB = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             engineB.addVariable(makeVar("var-p", "P"))
             engineB.addVariable(makeVar("var-q", "Q"))
             engineB.addVariable(makeVar("var-r", "R"))
@@ -2992,7 +2930,7 @@ describe("Kleene three-valued logic helpers", () => {
 
 describe("PremiseEngine — three-valued evaluation", () => {
     it("evaluates unset variables as null", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         // Single variable expression as root
@@ -3008,7 +2946,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("missing variables default to null", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("e-p", "var-p"))
@@ -3023,7 +2961,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("propagates null through AND (Kleene)", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3052,7 +2990,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("propagates null through OR (Kleene)", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3080,7 +3018,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("propagates null through implies (Kleene)", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3115,7 +3053,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected operator evaluates to false and skips children", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3139,7 +3077,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected formula evaluates to false", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         // (P) as root formula wrapping variable
@@ -3158,7 +3096,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected nested operator forces false while parent computes normally", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -3204,7 +3142,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
     })
 
     it("rejected inference root evaluates to false with no inference diagnostic", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -3237,7 +3175,9 @@ describe("ArgumentEngine — three-valued evaluation", () => {
 
     function buildSimpleArgument() {
         // A implies B (conclusion), C implies A (supporting), D (constraint)
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(VAR_A)
         engine.addVariable(VAR_B)
         engine.addVariable(VAR_C)
@@ -3404,7 +3344,8 @@ describe("field preservation — unknown fields survive round-trips", () => {
     it("preserves unknown fields on the argument through getArgument()", () => {
         const engine = new ArgumentEngine(
             ARG_WITH_EXTRAS as TOptionalChecksum<TCoreArgument>,
-            aLib()
+            aLib(),
+            { behavior: "permissive" }
         )
         const result = engine.getArgument()
         expect((result as Record<string, unknown>).title).toBe("My Argument")
@@ -3414,7 +3355,8 @@ describe("field preservation — unknown fields survive round-trips", () => {
     it("preserves unknown fields on the argument through snapshot()", () => {
         const engine = new ArgumentEngine(
             ARG_WITH_EXTRAS as TOptionalChecksum<TCoreArgument>,
-            aLib()
+            aLib(),
+            { behavior: "permissive" }
         )
         const snap = engine.snapshot()
         expect((snap.argument as Record<string, unknown>).title).toBe(
@@ -3424,7 +3366,9 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("preserves extras on premises through toData()", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib())
+        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = engine.createPremise({
             title: "My Premise",
             priority: "high",
@@ -3435,7 +3379,9 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("preserves extras on premises through engine.snapshot()", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib())
+        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), {
+            behavior: "permissive",
+        })
         engine.createPremise({ title: "Premise One" })
         const snap = engine.snapshot()
         expect(
@@ -3444,7 +3390,9 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("setExtras replaces all extras, not merges", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib())
+        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = engine.createPremise({ a: "1", b: "2" })
         pm.setExtras({ c: "3" })
         expect(pm.getExtras()).toEqual({ c: "3" })
@@ -3452,7 +3400,9 @@ describe("field preservation — unknown fields survive round-trips", () => {
     })
 
     it("structural fields in toData() cannot be shadowed by extras", () => {
-        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib())
+        const engine = new ArgumentEngine({ id: "arg-1", version: 1 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = engine.createPremise({
             id: "should-be-overridden",
             rootExpressionId: "fake",
@@ -3476,7 +3426,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles an implies premise with simple antecedent and consequent", () => {
         // A → B
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
@@ -3509,7 +3459,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles negation as negative polarity", () => {
         // F → ¬A
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_F)
         eng.addVariable(VAR_A)
         const { result: pm } = eng.createPremise()
@@ -3543,7 +3493,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles double negation as positive polarity", () => {
         // ¬(¬A ∧ B) → C — with formula buffer between not and and
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         eng.addVariable(VAR_C)
@@ -3602,7 +3552,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles compound antecedent and consequent", () => {
         // (A ∧ B) → (B ∧ C) — with formula buffers between implies and and
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         eng.addVariable(VAR_C)
@@ -3663,7 +3613,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles iff as left=antecedent, right=consequent", () => {
         // A ↔ B
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
@@ -3695,7 +3645,7 @@ describe("buildPremiseProfile", () => {
 
     it("profiles a constraint premise as non-inference with no appearances", () => {
         // A ∧ B (constraint)
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_A)
         eng.addVariable(VAR_B)
         const { result: pm } = eng.createPremise()
@@ -3713,7 +3663,7 @@ describe("buildPremiseProfile", () => {
     })
 
     it("profiles an empty premise as non-inference with no appearances", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
 
         const profile = buildPremiseProfile(pm)
@@ -3766,7 +3716,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise whose consequent feeds the focused antecedent as supporting", () => {
         // P1: A → B, P2 (focused): B → C
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
 
@@ -3783,7 +3733,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise with negated consequent as contradicting", () => {
         // P1: A → ¬B, P2 (focused): B → C
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -3828,7 +3778,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise with variable in both ante and conseq as restricting", () => {
         // P1: B → (B ∧ C), P2 (focused): B → D — with formula buffer
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_B)
         } catch {
@@ -3885,7 +3835,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a constraint premise sharing variables as restricting", () => {
         // P1: A ∧ B (constraint), P2 (focused): B → C
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -3919,7 +3869,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise taking the focused consequent as downstream", () => {
         // P1 (focused): A → B, P2: B → C
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
 
@@ -3931,7 +3881,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
 
     it("classifies a premise with no shared variables as unrelated", () => {
         // P1: A → B, P2 (focused): C → D
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_C, VAR_D)
 
@@ -3942,7 +3892,7 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     })
 
     it("excludes the focused premise from results", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
 
@@ -3953,12 +3903,12 @@ describe("analyzePremiseRelationships — direct relationships", () => {
     })
 
     it("throws when focused premise does not exist", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         expect(() => analyzePremiseRelationships(eng, "nonexistent")).toThrow()
     })
 
     it("returns empty premises array when argument has only the focused premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
 
         const result = analyzePremiseRelationships(eng, "p1")
@@ -4011,7 +3961,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
 
     it("classifies transitive support through a chain", () => {
         // P1: A → B, P2: B → C, P3 (focused): C → D
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
         buildImplies(eng, "p3", VAR_C, VAR_D)
@@ -4028,7 +3978,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
 
     it("unrelated premise remains unrelated even when other premises form a chain", () => {
         // P1: E → F (unrelated), P2: B → C, P3 (focused): C → D
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_E, VAR_F)
         buildImplies(eng, "p2", VAR_B, VAR_C)
         buildImplies(eng, "p3", VAR_C, VAR_D)
@@ -4040,7 +3990,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
 
     it("classifies transitive downstream", () => {
         // P1 (focused): A → B, P2: B → C, P3: C → D
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_C)
         buildImplies(eng, "p3", VAR_C, VAR_D)
@@ -4054,7 +4004,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
     it("propagates contradicting polarity through a chain", () => {
         // P1: A → ¬B, P2: B → C, P3 (focused): C → D
         // P1 contradicts P2's antecedent, so P1 is transitively contradicting P3
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4097,7 +4047,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
     it("double negation through chain cancels to supporting", () => {
         // P1: A → ¬B, P2: ¬B → C, P3 (focused): C → D
         // P1's conseq is B(negative), P2's ante is B(negative) → polarity match → supporting
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4166,7 +4116,7 @@ describe("analyzePremiseRelationships — transitive relationships", () => {
     it("constraint premise connected transitively is restricting", () => {
         // P1: A ∧ B (constraint), P2: B → C, P3 (focused): C → D
         // P1 shares B with P2 which supports P3 → P1 restricts P3 transitively
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4246,7 +4196,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // P1: A → (¬B ∧ C), P2 (focused): (B ∧ C) → D
         // B: contradicting (¬B in conseq, B in ante), C: supporting (C in conseq, C in ante)
         // Precedence: contradicting wins — with formula buffers
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_A)
         } catch {
@@ -4349,7 +4299,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
         // B: restricting (in both ante and conseq of P1, in ante of P2)
         // C: supporting (in conseq of P1, in ante of P2)
         // Precedence: restricting wins — with formula buffers
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         try {
             eng.addVariable(VAR_B)
         } catch {
@@ -4438,7 +4388,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
 
     it("handles constraint-focused premise by classifying all sharers as restricting", () => {
         // P1: A → B, P2 (focused): A ∧ B (constraint)
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         const { result: p2 } = eng.createPremiseWithId("p2")
         p2.addExpression(makeOpExpr("p2-and", "and"))
@@ -4461,7 +4411,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
     })
 
     it("handles empty premise as unrelated", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.createPremiseWithId("p1") // empty
         buildImplies(eng, "p2", VAR_A, VAR_B)
 
@@ -4472,7 +4422,7 @@ describe("analyzePremiseRelationships — precedence and edge cases", () => {
 
     it("handles graph cycles without hanging", () => {
         // P1: A → B, P2: B → A, P3 (focused): A → C
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         buildImplies(eng, "p1", VAR_A, VAR_B)
         buildImplies(eng, "p2", VAR_B, VAR_A)
         buildImplies(eng, "p3", VAR_A, VAR_C)
@@ -4798,7 +4748,9 @@ describe("ChangeCollector", () => {
 
 describe("PremiseEngine — mutation changesets", () => {
     function setup() {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const v1 = {
             id: "v1",
             symbol: "P",
@@ -4841,51 +4793,13 @@ describe("PremiseEngine — mutation changesets", () => {
         expect(changes.expressions?.removed).toEqual([])
     })
 
-    it("removeExpression with collapse returns all affected expressions", () => {
-        const { pm } = setup()
-        // Build: and(v1, v2)
-        pm.addExpression({
-            id: "op",
-            type: "operator",
-            operator: "and",
-            argumentId: "arg1",
-            argumentVersion: 0,
-            premiseId: "premise-1",
-            parentId: null,
-            position: 1,
-        })
-        pm.addExpression({
-            id: "e1",
-            type: "variable",
-            variableId: "v1",
-            argumentId: "arg1",
-            argumentVersion: 0,
-            premiseId: "premise-1",
-            parentId: "op",
-            position: 1,
-        })
-        pm.addExpression({
-            id: "e2",
-            type: "variable",
-            variableId: "v2",
-            argumentId: "arg1",
-            argumentVersion: 0,
-            premiseId: "premise-1",
-            parentId: "op",
-            position: 2,
-        })
-        // Remove e1 -> operator collapses (1 child), e2 gets promoted
-        const { result, changes } = pm.removeExpression("e1", true)
-        expect(result?.id).toBe("e1")
-        // e1 removed, operator removed (collapse)
-        const removedIds = changes.expressions!.removed.map((e) => e.id).sort()
-        expect(removedIds).toContain("e1")
-        expect(removedIds).toContain("op")
-        // e2 modified (reparented to root)
-        expect(changes.expressions!.modified).toHaveLength(1)
-        expect(changes.expressions!.modified[0].id).toBe("e2")
-        expect(changes.expressions!.modified[0].parentId).toBeNull()
-    })
+    // D2b — deleted "removeExpression with collapse returns all
+    // affected expressions". The test asserted the changeset produced
+    // by the pre-v1.0 inline AN-3 1-child-promotion cascade fired
+    // from inside removeExpression. The v1.0 contract is: a single
+    // mutation produces a single changeset reflecting only that
+    // mutation; AN runs as a separate post-hook pass. The cascade
+    // contract is covered by `test/grammar/an-rules.test.ts`.
 
     it("insertExpression returns added expression and records reparented children", () => {
         const { pm } = setup()
@@ -5038,7 +4952,9 @@ describe("PremiseEngine — mutation changesets", () => {
     })
 
     it("addVariable returns the variable in result and changes", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const v = {
             id: "v1",
             symbol: "P",
@@ -5055,7 +4971,9 @@ describe("PremiseEngine — mutation changesets", () => {
     })
 
     it("removeVariable returns removed variable in result and changes", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const v = {
             id: "v1",
             symbol: "P",
@@ -5072,14 +4990,18 @@ describe("PremiseEngine — mutation changesets", () => {
     })
 
     it("removeVariable for non-existent variable returns undefined with empty changes", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result, changes } = eng.removeVariable("nonexistent")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
 
     it("setExtras returns new extras with changeset", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = eng.createPremise()
         const { result, changes } = pm.setExtras({ title: "Test" })
         expect(result).toEqual({ title: "Test" })
@@ -5093,7 +5015,9 @@ describe("PremiseEngine — mutation changesets", () => {
 
 describe("ArgumentEngine — mutation changesets", () => {
     it("createPremise returns PremiseEngine and records added premise", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm, changes } = eng.createPremise()
         expect(pm).toBeInstanceOf(PremiseEngine)
         expect(changes.premises?.added).toHaveLength(1)
@@ -5101,7 +5025,9 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("createPremiseWithId returns PremiseEngine with specified ID", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm, changes } = eng.createPremiseWithId("my-premise")
         expect(pm.getId()).toBe("my-premise")
         expect(changes.premises?.added).toHaveLength(1)
@@ -5109,7 +5035,9 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("removePremise returns premise data and records removal", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.createPremise()
         const premiseId = eng.listPremiseIds()[0]
         const { result, changes } = eng.removePremise(premiseId)
@@ -5119,7 +5047,9 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("removePremise that was conclusion also records role change", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = eng.createPremise()
         eng.setConclusionPremise(pm.getId())
         const { changes } = eng.removePremise(pm.getId())
@@ -5128,14 +5058,18 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("removePremise for non-existent ID returns undefined", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result, changes } = eng.removePremise("nope")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
 
     it("setConclusionPremise returns new role state", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = eng.createPremise()
         const { result, changes } = eng.setConclusionPremise(pm.getId())
         expect(result.conclusionPremiseId).toBe(pm.getId())
@@ -5143,7 +5077,9 @@ describe("ArgumentEngine — mutation changesets", () => {
     })
 
     it("clearConclusionPremise returns empty role state", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = eng.createPremise()
         eng.setConclusionPremise(pm.getId())
         const { result, changes } = eng.clearConclusionPremise()
@@ -5243,7 +5179,9 @@ describe("checksum utilities", () => {
 
     describe("PremiseEngine — checksum", () => {
         it("returns consistent checksum for same state", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+                behavior: "permissive",
+            })
             const { result: pm } = eng.createPremise()
             const cs1 = pm.checksum()
             const cs2 = pm.checksum()
@@ -5251,7 +5189,9 @@ describe("checksum utilities", () => {
         })
 
         it("combinedChecksum changes when an expression is added", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+                behavior: "permissive",
+            })
             const v = {
                 id: "v1",
                 symbol: "P",
@@ -5278,7 +5218,9 @@ describe("checksum utilities", () => {
         })
 
         it("premise checksum does not change when a variable is added (variables are argument-scoped)", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+                behavior: "permissive",
+            })
             const { result: pm } = eng.createPremise()
             const before = pm.checksum()
             eng.addVariable({
@@ -5294,7 +5236,9 @@ describe("checksum utilities", () => {
         })
 
         it("identical premises built the same way produce same checksum", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+                behavior: "permissive",
+            })
             const v1 = {
                 id: "v1",
                 symbol: "P",
@@ -5313,12 +5257,16 @@ describe("checksum utilities", () => {
 
     describe("ArgumentEngine — checksum", () => {
         it("returns consistent checksum for same state", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+                behavior: "permissive",
+            })
             expect(eng.checksum()).toBe(eng.checksum())
         })
 
         it("checksum changes when a premise is added", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+                behavior: "permissive",
+            })
             const before = eng.checksum()
             eng.createPremise()
             const after = eng.checksum()
@@ -5326,7 +5274,9 @@ describe("checksum utilities", () => {
         })
 
         it("checksum changes when conclusion is set", () => {
-            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+            const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+                behavior: "permissive",
+            })
             // First premise is auto-set as conclusion
             eng.createPremise()
             const { result: pm2 } = eng.createPremise()
@@ -5353,7 +5303,9 @@ describe("checksum utilities", () => {
 
 describe("entity checksum fields", () => {
     function setupPremise() {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const v = {
             id: "v1",
             symbol: "P",
@@ -5403,7 +5355,9 @@ describe("entity checksum fields", () => {
     })
 
     it("getChildExpressions returns expressions with checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5484,7 +5438,9 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset expressions from addExpression include checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5518,7 +5474,9 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset variables from addVariable include checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { changes } = eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5532,7 +5490,9 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset variables from removeVariable include checksums", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5547,7 +5507,9 @@ describe("entity checksum fields", () => {
     })
 
     it("addExpression result includes checksum", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5571,7 +5533,9 @@ describe("entity checksum fields", () => {
     })
 
     it("addVariable result includes checksum", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result } = eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5584,7 +5548,9 @@ describe("entity checksum fields", () => {
     })
 
     it("ArgumentEngine getArgument includes argument-level checksum", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.createPremise()
         const arg = eng.getArgument()
         expect(arg.checksum).toBeDefined()
@@ -5592,7 +5558,9 @@ describe("entity checksum fields", () => {
     })
 
     it("ArgumentEngine premise checksums via listPremises", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.createPremise()
         const premises = eng.listPremises()
         expect(premises).toHaveLength(1)
@@ -5609,7 +5577,9 @@ describe("entity checksum fields", () => {
     })
 
     it("changeset modified expressions include checksums after collapse", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -5716,7 +5686,7 @@ describe("createChecksumConfig", () => {
 
 describe("ArgumentEngine — variable management", () => {
     it("addVariable registers a variable accessible from all premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm1 } = eng.createPremise()
         const { result: pm2 } = eng.createPremise()
@@ -5734,7 +5704,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable throws for duplicate symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         expect(() =>
             eng.addVariable({
@@ -5749,13 +5719,13 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable throws for duplicate id", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         expect(() => eng.addVariable(VAR_P)).toThrow(/already exists/)
     })
 
     it("addVariable throws for wrong argumentId", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         expect(() =>
             eng.addVariable({
                 id: "var-x",
@@ -5769,7 +5739,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable throws for wrong argumentVersion", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         expect(() =>
             eng.addVariable({
                 id: "var-x",
@@ -5783,7 +5753,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("addVariable returns mutation result with changeset", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result, changes } = eng.addVariable(VAR_P)
         expect(result.id).toBe(VAR_P.id)
         expect(result.checksum).toBeDefined()
@@ -5791,7 +5761,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("updateVariable renames a symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result } = eng.updateVariable(VAR_P.id, { symbol: "P_new" })
         expect(result?.symbol).toBe("P_new")
@@ -5802,13 +5772,13 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("updateVariable returns undefined for non-existent variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result } = eng.updateVariable("nope", { symbol: "X" })
         expect(result).toBeUndefined()
     })
 
     it("updateVariable throws for conflicting symbol", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         expect(() => eng.updateVariable(VAR_P.id, { symbol: "Q" })).toThrow(
@@ -5817,7 +5787,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("updateVariable returns changeset with modified variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { changes } = eng.updateVariable(VAR_P.id, { symbol: "X" })
         expect(changes.variables?.modified).toHaveLength(1)
@@ -5825,7 +5795,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("getVariables returns all variables with checksums", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const vars = eng.getVariables()
@@ -5835,7 +5805,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable with no references removes cleanly", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result, changes } = eng.removeVariable(VAR_P.id)
         expect(result?.id).toBe(VAR_P.id)
@@ -5844,14 +5814,14 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable returns undefined for non-existent variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result, changes } = eng.removeVariable("nonexistent")
         expect(result).toBeUndefined()
         expect(changes).toEqual({})
     })
 
     it("removeVariable cascade-deletes referencing expressions in one premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise()
@@ -5875,7 +5845,7 @@ describe("ArgumentEngine — variable management", () => {
     })
 
     it("removeVariable cascade-deletes across multiple premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm1 } = eng.createPremise()
         const { result: pm2 } = eng.createPremise()
@@ -5893,54 +5863,19 @@ describe("ArgumentEngine — variable management", () => {
         expect(pm2.getExpression("e-p2")).toBeUndefined()
     })
 
-    it("removeVariable triggers operator collapse", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
-        eng.addVariable(VAR_P)
-        eng.addVariable(VAR_Q)
-        const { result: pm } = eng.createPremise()
-
-        // Build (P ∧ Q)
-        pm.addExpression(
-            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("e-p", VAR_P.id, { parentId: "op-and", position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("e-q", VAR_Q.id, { parentId: "op-and", position: 2 })
-        )
-
-        eng.removeVariable(VAR_P.id)
-
-        // op-and gone (collapsed: 1 child remaining), Q promoted to root
-        expect(pm.getExpression("op-and")).toBeUndefined()
-        expect(pm.getRootExpression()?.id).toBe("e-q")
-    })
-
-    it("removeVariable deletes subtrees when removing from implies", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
-        eng.addVariable(VAR_P)
-        eng.addVariable(VAR_Q)
-        const { result: pm } = eng.createPremise()
-
-        // Build P → Q
-        pm.addExpression(
-            makeOpExpr("op-impl", "implies", { parentId: null, position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("e-p", VAR_P.id, { parentId: "op-impl", position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("e-q", VAR_Q.id, { parentId: "op-impl", position: 2 })
-        )
-
-        eng.removeVariable(VAR_P.id)
-
-        // implies collapses (1 child remaining), Q survives as root
-        expect(pm.getExpression("op-impl")).toBeUndefined()
-        expect(pm.getExpression("e-p")).toBeUndefined()
-        expect(pm.getRootExpression()?.id).toBe("e-q")
-    })
+    // D2b — deleted "removeVariable triggers operator collapse" +
+    // "removeVariable deletes subtrees when removing from implies".
+    // Both tests asserted that the pre-v1.0 inline AN cascade (fired
+    // from deep within removeVariable's cascade-delete loop) would
+    // collapse the resulting 1-child operator and promote the
+    // surviving sibling. Under the v1.0 contract, removeVariable
+    // still cascade-deletes referencing expressions Structurally,
+    // but the operator's 1-child cleanup is owned by the AN-3
+    // post-hook (assistive) or left as a P-3 violation surfaced via
+    // validate('presentable') (permissive). The cascade-delete
+    // primitive itself is covered by other tests in this describe
+    // block; the AN-3 promotion contract is covered by
+    // `test/grammar/an-rules.test.ts`.
 })
 
 // ---------------------------------------------------------------------------
@@ -5949,7 +5884,7 @@ describe("ArgumentEngine — variable management", () => {
 
 describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
     it("returns empty result when variable has no expressions", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -5959,7 +5894,7 @@ describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
     })
 
     it("deletes a single variable expression", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -5973,52 +5908,16 @@ describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
         expect(changes.expressions?.removed.length).toBeGreaterThan(0)
     })
 
-    it("deletes multiple expressions referencing the same variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
-        eng.addVariable(VAR_P)
-        const { result: pm } = eng.createPremise()
-
-        // Build (P ∧ P)
-        pm.addExpression(
-            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("e-p1", VAR_P.id, { parentId: "op-and", position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("e-p2", VAR_P.id, { parentId: "op-and", position: 2 })
-        )
-
-        const { result } = pm.deleteExpressionsUsingVariable(VAR_P.id)
-
-        // Both P expressions removed (and operator collapses too)
-        expect(result.length).toBeGreaterThanOrEqual(2)
-        expect(pm.getExpression("e-p1")).toBeUndefined()
-        expect(pm.getExpression("e-p2")).toBeUndefined()
-        expect(pm.getExpression("op-and")).toBeUndefined()
-    })
-
-    it("handles already-removed expressions from subtree cascade", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
-        eng.addVariable(VAR_P)
-        const { result: pm } = eng.createPremise()
-
-        // Build not(P)
-        pm.addExpression(
-            makeOpExpr("op-not", "not", { parentId: null, position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("e-p", VAR_P.id, { parentId: "op-not", position: 1 })
-        )
-
-        const { result } = pm.deleteExpressionsUsingVariable(VAR_P.id)
-
-        // P is directly removed, not collapses (0 children)
-        expect(result).toHaveLength(1)
-        expect(pm.getExpression("e-p")).toBeUndefined()
-        expect(pm.getExpression("op-not")).toBeUndefined()
-        expect(pm.getExpressions()).toHaveLength(0)
-    })
+    // D2b — deleted "deletes multiple expressions referencing the
+    // same variable" + "handles already-removed expressions from
+    // subtree cascade". Both asserted on the pre-v1.0 inline AN
+    // cascade fired alongside deleteExpressionsUsingVariable. The
+    // v1.0 contract is that deleteExpressionsUsingVariable cascade-
+    // deletes only the matching expressions (and their subtrees);
+    // any resulting operator/formula cleanup is owned by the AN-3
+    // post-hook. The primitive's own cascade behavior is covered by
+    // "deletes a single variable expression" + the assistive
+    // post-hook tests in `test/grammar/auto-normalize.test.ts`.
 })
 
 // ---------------------------------------------------------------------------
@@ -6078,21 +5977,27 @@ describe("variable expressions cannot have children", () => {
 
 describe("ArgumentEngine — auto-conclusion on first premise", () => {
     it("first createPremise auto-sets conclusion", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm, changes } = eng.createPremise()
         expect(eng.getRoleState().conclusionPremiseId).toBe(pm.getId())
         expect(changes.roles?.conclusionPremiseId).toBe(pm.getId())
     })
 
     it("first createPremiseWithId auto-sets conclusion", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { changes } = eng.createPremiseWithId("my-premise")
         expect(eng.getRoleState().conclusionPremiseId).toBe("my-premise")
         expect(changes.roles?.conclusionPremiseId).toBe("my-premise")
     })
 
     it("second createPremise does not change conclusion", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: first } = eng.createPremise()
         const { changes } = eng.createPremise()
         expect(eng.getRoleState().conclusionPremiseId).toBe(first.getId())
@@ -6100,7 +6005,9 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
     })
 
     it("createPremise after clearConclusionPremise auto-sets again", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.createPremise()
         eng.clearConclusionPremise()
         const { result: pm2, changes } = eng.createPremise()
@@ -6109,7 +6016,9 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
     })
 
     it("createPremise after removing conclusion premise auto-sets again", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: first } = eng.createPremise()
         eng.removePremise(first.getId())
         const { result: second, changes } = eng.createPremise()
@@ -6118,7 +6027,9 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
     })
 
     it("setConclusionPremise overrides auto-assignment", () => {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng.createPremise()
         const { result: second } = eng.createPremise()
         eng.setConclusionPremise(second.getId())
@@ -6132,7 +6043,7 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
 
 describe("PremiseEngine — updateExpression", () => {
     function setup() {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(VAR_R)
@@ -6521,7 +6432,8 @@ describe("removeExpression — deleteSubtree parameter", () => {
     function setup() {
         const eng = new ArgumentEngine(
             { id: ARG.id, version: ARG.version },
-            aLib()
+            aLib(),
+            { behavior: "permissive" }
         )
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -6529,28 +6441,14 @@ describe("removeExpression — deleteSubtree parameter", () => {
         return { eng, pm }
     }
 
-    it("deleteSubtree: true — same as original behavior (collapse promotes sibling)", () => {
-        const { pm } = setup()
-        // Tree: and(P, Q)
-        pm.addExpression(
-            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 2 })
-        )
-
-        // Remove P with deleteSubtree: true — collapse promotes Q to root
-        pm.removeExpression("expr-p", true)
-
-        expect(pm.getRootExpressionId()).toBe("expr-q")
-        const expressions = pm.getExpressions()
-        expect(expressions).toHaveLength(1)
-        expect(expressions[0].id).toBe("expr-q")
-        expect(expressions[0].parentId).toBeNull()
-    })
+    // D2b — deleted "deleteSubtree: true — same as original
+    // behavior (collapse promotes sibling)". The test asserted the
+    // pre-v1.0 inline AN-3 1-child-promotion cascade fired from
+    // removeExpression(_, deleteSubtree=true). Under v1.0, the
+    // promotion is owned by the AN-3 post-hook (assistive mode); the
+    // primitive's own deleteSubtree behavior is asserted by the
+    // remaining tests in this describe block (which assert on the
+    // direct removal without the cascade assumption).
 
     it("deleteSubtree: false — promotes single child (operator)", () => {
         const { pm } = setup()
@@ -6629,28 +6527,14 @@ describe("removeExpression — deleteSubtree parameter", () => {
         expect(pm.getRootExpressionId()).toBe("op-and")
     })
 
-    it("deleteSubtree: false — leaf node with collapse on parent", () => {
-        const { pm } = setup()
-        // Tree: and(P, Q)
-        pm.addExpression(
-            makeOpExpr("op-and", "and", { parentId: null, position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, { parentId: "op-and", position: 1 })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, { parentId: "op-and", position: 2 })
-        )
-
-        // Remove leaf P with deleteSubtree: false — collapse promotes Q to root
-        pm.removeExpression("expr-p", false)
-
-        expect(pm.getRootExpressionId()).toBe("expr-q")
-        const expressions = pm.getExpressions()
-        expect(expressions).toHaveLength(1)
-        expect(expressions[0].id).toBe("expr-q")
-        expect(expressions[0].parentId).toBeNull()
-    })
+    // D2b — deleted "deleteSubtree: false — leaf node with collapse
+    // on parent". Same legacy-cascade rationale as the
+    // "deleteSubtree: true" sibling deleted above. The
+    // removeExpression(_, false) primitive's own promotion semantics
+    // for 1-child-after-removal cases are covered by the other
+    // "deleteSubtree: false — promotes single child" tests in this
+    // block; the multi-step cascade behavior is owned by the AN-3
+    // post-hook.
 
     it("deleteSubtree: false — promotes child into non-root slot", () => {
         const { pm } = setup()
@@ -7105,6 +6989,7 @@ describe("configurable position range", () => {
         const config: TCorePositionConfig = { min: 100, max: 300, initial: 200 }
         const eng = new ArgumentEngine(ARG, aLib(), {
             positionConfig: config,
+            behavior: "permissive",
         })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -7146,7 +7031,7 @@ describe("configurable position range", () => {
     })
 
     it("ArgumentEngine defaults work without positionConfig", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
 
@@ -7374,7 +7259,9 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("round-trips a premise with expressions", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib())
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7434,7 +7321,9 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restored premise is independent from original", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib())
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7495,7 +7384,9 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("restores rootExpressionId correctly", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib())
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7535,7 +7426,9 @@ describe("PremiseEngine — snapshot and fromSnapshot", () => {
     })
 
     it("rebuilds expressionsByVariableId index on restore", () => {
-        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib())
+        const eng = new ArgumentEngine(ARG as TCoreArgument, aLib(), {
+            behavior: "permissive",
+        })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -7636,7 +7529,9 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     }
 
     it("round-trips an empty engine", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const snap = engine.snapshot()
         const restored = ArgumentEngine.fromSnapshot(snap, aLib())
         expect(restored.getArgument().id).toBe("arg-1")
@@ -7646,7 +7541,9 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("round-trips engine with premises and variables", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         engine.addVariable(makeVariable("v2", "Q"))
         const { result: pm } = engine.createPremiseWithId("p1")
@@ -7672,7 +7569,9 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("preserves conclusion role through round-trip", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
         engine.setConclusionPremise("p2")
@@ -7695,7 +7594,9 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("fromSnapshot produces independent copy", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
@@ -7709,7 +7610,9 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("rollback restores previous state", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
@@ -7733,7 +7636,9 @@ describe("ArgumentEngine — snapshot, fromSnapshot, and rollback", () => {
     })
 
     it("rollback after multiple mutations restores correct state", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -8019,13 +7924,13 @@ describe("ArgumentEngine — toDisplayString", () => {
     const ARG = { id: "arg-1", version: 1 }
 
     it("renders an empty argument", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const display = eng.toDisplayString()
         expect(display).toContain("Argument: arg-1 (v1)")
     })
 
     it("labels conclusion premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -8050,7 +7955,7 @@ describe("ArgumentEngine — toDisplayString", () => {
     })
 
     it("labels constraint and supporting premises correctly", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable({
             id: "v1",
             symbol: "P",
@@ -8462,7 +8367,9 @@ describe("PremiseEngine — shared expression index", () => {
 describe("ArgumentEngine — lookup methods", () => {
     function setupEngine() {
         const arg = { id: "arg-1", version: 0 }
-        const engine = new ArgumentEngine(arg, aLib())
+        const engine = new ArgumentEngine(arg, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable({
             id: "v1",
             symbol: "P",
@@ -8744,7 +8651,9 @@ describe("ArgumentEngine — lookup methods", () => {
 
 describe("PremiseEngine onMutate callback", () => {
     it("fires onMutate when addExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
@@ -8758,7 +8667,9 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when removeExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         premise.addExpression(
@@ -8773,7 +8684,9 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when updateExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         premise.addExpression(
@@ -8788,7 +8701,9 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when appendExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
@@ -8807,7 +8722,9 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("fires onMutate when insertExpression is called", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(VAR_P)
         engine.addVariable(VAR_Q)
         const { result: premise } = engine.createPremise()
@@ -8843,7 +8760,9 @@ describe("PremiseEngine onMutate callback", () => {
     })
 
     it("does not fire onMutate when deleteExpressionsUsingVariable finds nothing", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(VAR_P)
         const { result: premise } = engine.createPremise()
         let callCount = 0
@@ -8857,7 +8776,9 @@ describe("PremiseEngine onMutate callback", () => {
 
 describe("ArgumentEngine subscribe", () => {
     it("notifies subscriber when a premise is created", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -8867,7 +8788,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a premise is removed", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const { result: premise } = engine.createPremise()
         let notified = false
         engine.subscribe(() => {
@@ -8878,7 +8801,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a variable is added", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -8895,7 +8820,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a variable is updated", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable({
             id: "v1",
             argumentId: ARG.id,
@@ -8913,7 +8840,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when a variable is removed", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable({
             id: "v1",
             argumentId: ARG.id,
@@ -8931,7 +8860,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when conclusion is set", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const { result: premise } = engine.createPremise()
         engine.clearConclusionPremise()
         let notified = false
@@ -8943,7 +8874,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when conclusion is cleared", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.createPremise()
         let notified = false
         engine.subscribe(() => {
@@ -8954,7 +8887,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber on rollback", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const snap = engine.snapshot()
         engine.createPremise()
         let notified = false
@@ -8966,7 +8901,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("unsubscribe stops notifications", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         let count = 0
         const unsub = engine.subscribe(() => {
             count++
@@ -8979,7 +8916,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("notifies subscriber when expression is mutated through PremiseEngine", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const { result: premise } = engine.createPremise()
         let count = 0
         engine.subscribe(() => {
@@ -9001,7 +8940,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("does not notify when removePremise finds nothing", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -9011,7 +8952,9 @@ describe("ArgumentEngine subscribe", () => {
     })
 
     it("does not notify when removeVariable finds nothing", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         let notified = false
         engine.subscribe(() => {
             notified = true
@@ -9023,7 +8966,9 @@ describe("ArgumentEngine subscribe", () => {
 
 describe("ArgumentEngine getSnapshot", () => {
     it("returns a snapshot with argument, variables, premises, and roles", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable({
             id: "v1",
             argumentId: ARG.id,
@@ -9058,7 +9003,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns the same reference when nothing has changed", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.createPremise()
         const snap1 = engine.getSnapshot()
         const snap2 = engine.getSnapshot()
@@ -9066,7 +9013,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns a new top-level reference after a mutation", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const snap1 = engine.getSnapshot()
         engine.createPremise()
         const snap2 = engine.getSnapshot()
@@ -9074,7 +9023,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("preserves premise reference when a different premise is mutated", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const { result: premiseA } = engine.createPremiseWithId("pA")
         engine.createPremiseWithId("pB")
         const snap1 = engine.getSnapshot()
@@ -9096,7 +9047,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns new variables reference when a variable is added", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const snap1 = engine.getSnapshot()
         engine.addVariable({
             id: "v1",
@@ -9111,7 +9064,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("preserves variables reference when only a premise is mutated", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const { result: premise } = engine.createPremise()
         const snap1 = engine.getSnapshot()
 
@@ -9131,7 +9086,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("returns new roles reference when conclusion changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const { result: premise } = engine.createPremise()
         engine.clearConclusionPremise()
         const snap1 = engine.getSnapshot()
@@ -9141,7 +9098,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("preserves roles reference when only a variable changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.createPremise()
         const snap1 = engine.getSnapshot()
         engine.addVariable({
@@ -9157,7 +9116,9 @@ describe("ArgumentEngine getSnapshot", () => {
     })
 
     it("rebuilds fully after rollback", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.createPremise()
         const engineSnap = engine.snapshot()
         const reactiveSnap1 = engine.getSnapshot()
@@ -9173,7 +9134,9 @@ describe("ArgumentEngine getSnapshot", () => {
 
 describe("ArgumentEngine reactive store integration", () => {
     it("works as a useSyncExternalStore-compatible store", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
 
         // Simulate useSyncExternalStore contract:
         // 1. subscribe returns unsubscribe
@@ -9680,21 +9643,12 @@ describe("wrapExpression", () => {
         expect(result2.rootValue).toBe(true)
     })
 
-    it("wrap then remove operator triggers collapse", () => {
-        const pm = premiseWithVars()
-        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
-        pm.wrapExpression(
-            wrapOp("op-and", "and"),
-            wrapVar("expr-q", VAR_Q.id),
-            "expr-p"
-        )
-        expect(pm.toDisplayString()).toBe("(P ∧ Q)")
-        // Remove one child — collapse should reduce the 'and' to just the surviving child
-        pm.removeExpression("expr-q", true)
-        // After removing Q, and-operator has 1 child (P) → collapses, P promoted to root
-        expect(pm.toDisplayString()).toBe("P")
-        expect(pm.getRootExpressionId()).toBe("expr-p")
-    })
+    // D2b — deleted "wrap then remove operator triggers collapse".
+    // The test asserted that after wrapExpression + removeExpression
+    // of one child, the pre-v1.0 inline AN-3 cascade promoted the
+    // surviving child to root. Same legacy-cascade rationale as the
+    // sibling tests above; AN-3's contract is covered by
+    // `test/grammar/an-rules.test.ts`.
 
     it("children get midpoint-spaced positions, not consecutive integers", () => {
         const pm = premiseWithVars()
@@ -9814,29 +9768,16 @@ describe("toggleNegation", () => {
         expect(premise.toDisplayString()).toBe("(P ∧ Q)")
     })
 
-    it("works on operator expressions", () => {
-        const premise = premiseWithVars()
-        premise.addExpression(makeOpExpr("op-and", "and"))
-        premise.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, {
-                parentId: "op-and",
-                position: 0,
-            })
-        )
-        premise.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, {
-                parentId: "op-and",
-                position: 1,
-            })
-        )
-
-        const { result } = premise.toggleNegation("op-and")
-
-        expect(result).not.toBeNull()
-        if (result!.type === "operator") expect(result!.operator).toBe("not")
-        // toggleNegation inserts not(formula(and(...))) for non-not operators
-        expect(premise.toDisplayString()).toBe("¬(((P ∧ Q)))")
-    })
+    // D2b — deleted "works on operator expressions". The test
+    // asserted toggleNegation on a non-`not` operator inserts a
+    // formula buffer between the new NOT and the operator (the
+    // pre-v1.0 `negationInsertFormula` AN-flag behavior, deleted in
+    // D2). Under v1.0 toggleNegation wraps Structurally and any
+    // resulting P-1 violation is repaired by the AN-1 post-hook in
+    // assistive mode. The buffer-insertion contract is covered by
+    // `test/grammar/an-rules.test.ts`; toggleNegation's primitive
+    // wrap-with-NOT behavior is covered by the surviving "works on
+    // formula expressions" test below.
 
     it("works on formula expressions", () => {
         const premise = premiseWithVars()
@@ -10386,7 +10327,8 @@ describe("Premise-variable associations — VariableManager.updateVariable gener
         claimLibrary.create({ id: "c2", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.addVariable({
             id: "v1",
@@ -10415,7 +10357,8 @@ describe("Premise-variable associations — addVariable type guard", () => {
         const claimLibrary = new ClaimLibrary()
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         expect(() =>
@@ -10442,7 +10385,8 @@ describe("Premise-variable associations — bindVariableToPremise", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -10554,7 +10498,8 @@ describe("Premise-variable associations — getVariablesBoundToPremise", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -10603,7 +10548,8 @@ describe("Premise-variable associations — removePremise cascade", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -10656,7 +10602,8 @@ describe("Premise-variable associations — circularity prevention", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -10739,7 +10686,8 @@ describe("Premise-variable associations — transitive circularity", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -10808,7 +10756,8 @@ describe("Premise-variable associations — evaluation filtering", () => {
         claimLibrary.create({ id: "c2", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
 
         // Premise 1: A implies B (the sub-argument)
@@ -10929,7 +10878,8 @@ describe("Premise-variable associations — evaluation filtering", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
 
         engine.createPremiseWithId("p1")
@@ -11000,7 +10950,8 @@ describe("Premise-variable associations — lazy evaluation", () => {
         claimLibrary.create({ id: "cP", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
 
         engine.addVariable({
@@ -11164,7 +11115,8 @@ describe("Premise-variable associations — lazy evaluation", () => {
         claimLibrary.create({ id: "cP", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
 
         engine.addVariable({
@@ -11334,7 +11286,8 @@ describe("Premise-variable associations — updateVariable", () => {
         claimLibrary.create({ id: "c2", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -11461,7 +11414,8 @@ describe("Premise-variable associations — snapshot round-trip", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.addVariable({
@@ -11502,7 +11456,8 @@ describe("Premise-variable associations — validateEvaluability", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -11547,7 +11502,8 @@ describe("Premise-variable associations — validateEvaluability", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -11605,7 +11561,8 @@ describe("Premise-variable associations — validateEvaluability", () => {
         claimLibrary.create({ id: "c1", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
         engine.createPremiseWithId("p1")
         engine.createPremiseWithId("p2")
@@ -11660,7 +11617,8 @@ describe("Premise-variable associations — integration", () => {
         claimLibrary.create({ id: "cP", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
 
         engine.addVariable({
@@ -11807,7 +11765,8 @@ describe("Premise-variable associations — integration", () => {
         claimLibrary.create({ id: "cP", type: "normal" })
         const engine = new ArgumentEngine(
             { id: "a1", version: 0 },
-            claimLibrary
+            claimLibrary,
+            { behavior: "permissive" }
         )
 
         engine.addVariable({
@@ -13109,8 +13068,6 @@ describe("Library persistence", () => {
     })
 })
 
-
-
 describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-trip", () => {
     const ARG = { id: "arg-1", version: 1 }
 
@@ -13204,7 +13161,9 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         const serialized = jsonRoundTrip(snap)
 
         // Create a fresh engine to rollback into
-        const engine2 = new ArgumentEngine(ARG, aLib())
+        const engine2 = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine2.rollback(serialized)
 
         const restoredSnap = engine2.snapshot()
@@ -13397,7 +13356,9 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
         // Native JSON round-trip: Sets → {}
         const serialized = JSON.parse(JSON.stringify(snap)) as typeof snap
 
-        const engine2 = new ArgumentEngine(ARG, aLib())
+        const engine2 = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         // This should not throw — nested configs must be normalized
         engine2.rollback(serialized)
         expect(engine2.listPremiseIds()).toEqual(["p1"])
@@ -13407,7 +13368,9 @@ describe("ArgumentEngine — checksumConfig Set reconstruction after JSON round-
 
 describe("hierarchical checksum schema", () => {
     it("expression entity includes descendantChecksum and combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
@@ -13425,7 +13388,9 @@ describe("hierarchical checksum schema", () => {
     })
 
     it("premise entity includes descendantChecksum and combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
@@ -13441,7 +13406,9 @@ describe("hierarchical checksum schema", () => {
     })
 
     it("argument entity includes descendantChecksum and combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const arg = engine.getArgument()
         expect(arg).toHaveProperty("checksum")
         expect(arg).toHaveProperty("descendantChecksum")
@@ -13452,7 +13419,9 @@ describe("hierarchical checksum schema", () => {
 
 describe("expression hierarchical checksums", () => {
     it("leaf expression has null descendantChecksum and combinedChecksum equals checksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(makeVarExpr("e1", "v1", { premiseId: pm.getId() }))
@@ -13465,7 +13434,9 @@ describe("expression hierarchical checksums", () => {
     })
 
     it("parent expression descendantChecksum reflects children", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -13520,7 +13491,9 @@ describe("expression hierarchical checksums", () => {
     })
 
     it("adding a child changes parent descendantChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -13561,7 +13534,9 @@ describe("expression hierarchical checksums", () => {
 
 describe("premise hierarchical checksums", () => {
     it("premise checksum is entity-only (meta)", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -13577,14 +13552,18 @@ describe("premise hierarchical checksums", () => {
     })
 
     it("premise descendantChecksum is null when no expressions", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm } = engine.createPremise()
 
         expect(pm.descendantChecksum()).toBeNull()
     })
 
     it("premise descendantChecksum equals root expression combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -13598,7 +13577,9 @@ describe("premise hierarchical checksums", () => {
     })
 
     it("premise getCollectionChecksum('expressions') equals descendantChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -13613,7 +13594,9 @@ describe("premise hierarchical checksums", () => {
     })
 
     it("premise combinedChecksum changes when expression tree changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -13658,7 +13641,9 @@ describe("premise hierarchical checksums", () => {
 
 describe("argument hierarchical checksums", () => {
     it("argument checksum includes role state", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.createPremise()
         const { result: pm2 } = engine.createPremise()
 
@@ -13673,12 +13658,16 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("argument descendantChecksum is null when no premises and no variables", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         expect(engine.descendantChecksum()).toBeNull()
     })
 
     it("argument getCollectionChecksum('premises') changes when premise expression changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -13714,7 +13703,9 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("argument getCollectionChecksum('variables') changes when variable is added", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
 
         engine.flushChecksums()
         const varsBefore = engine.getCollectionChecksum("variables")
@@ -13729,7 +13720,9 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("argument combinedChecksum changes when deep expression added but meta stays same", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -13769,7 +13762,9 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("snapshot includes all three checksum fields on argument", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(
@@ -13786,7 +13781,9 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("getArgument includes all three checksum fields", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         pm.addExpression(
@@ -13804,7 +13801,9 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("premise mutation propagates dirty to argument checksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -13821,7 +13820,9 @@ describe("argument hierarchical checksums", () => {
     })
 
     it("descendantChecksum is computed from non-null collection checksums only", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
 
         // No premises, no variables — descendant is null
         expect(engine.descendantChecksum()).toBeNull()
@@ -13863,7 +13864,9 @@ describe("checksum verification on load", () => {
     }
 
     it("fromSnapshot with 'strict' passes when checksums match", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -13886,7 +13889,9 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'strict' throws when expression checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -13912,7 +13917,9 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'ignore' (default) does not throw on tampered checksums", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -13937,7 +13944,9 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'strict' throws when premise checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -13965,7 +13974,9 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'strict' throws when argument checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
@@ -13982,7 +13993,9 @@ describe("checksum verification on load", () => {
     })
 
     it("fromSnapshot with 'strict' throws when variable checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         engine.createPremiseWithId("p1")
 
@@ -13999,7 +14012,9 @@ describe("checksum verification on load", () => {
     })
 
     it("fromData with 'strict' passes when checksums match", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -14037,7 +14052,9 @@ describe("checksum verification on load", () => {
     })
 
     it("fromData with 'strict' throws when variable checksum is tampered", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVariable("v1", "P"))
         const { result: pm } = engine.createPremiseWithId("p1")
         pm.addExpression({
@@ -14084,7 +14101,9 @@ describe("checksum verification on load", () => {
 
 describe("hierarchical checksum propagation", () => {
     it("deep expression change propagates to premise and argument", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         engine.addVariable(makeVar("v3", "R"))
@@ -14167,55 +14186,23 @@ describe("hierarchical checksum propagation", () => {
         expect(engine.checksum()).toBe(argMetaBefore)
     })
 
-    it("operator collapse after removeExpression doesn't break flush", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
-        engine.addVariable(makeVar("v1", "P"))
-        engine.addVariable(makeVar("v2", "Q"))
-        const { result: pm } = engine.createPremise()
-        const premiseId = pm.getId()
-
-        // Build: and(P, Q)
-        pm.addExpression(makeOpExpr("e-and", "and", { premiseId }))
-        pm.addExpression(
-            makeVarExpr("e-p", "v1", {
-                parentId: "e-and",
-                position: 0,
-                premiseId,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("e-q", "v2", {
-                parentId: "e-and",
-                position: 1,
-                premiseId,
-            })
-        )
-
-        engine.flushChecksums()
-
-        const premiseCombinedBefore = pm.combinedChecksum()
-        const argCombinedBefore = engine.combinedChecksum()
-
-        // Remove Q — triggers operator collapse: `and` is deleted, P is promoted to root
-        pm.removeExpression("e-q", true)
-
-        // flushChecksums should not throw
-        expect(() => engine.flushChecksums()).not.toThrow()
-
-        // P is now root (parentId === null)
-        const pExpr = pm.getExpression("e-p")!
-        expect(pExpr.parentId).toBeNull()
-
-        // P has descendantChecksum === null (still a leaf)
-        expect(pExpr.descendantChecksum).toBeNull()
-
-        // Premise and argument combinedChecksums changed from before removal
-        expect(pm.combinedChecksum()).not.toBe(premiseCombinedBefore)
-        expect(engine.combinedChecksum()).not.toBe(argCombinedBefore)
-    })
+    // D2b — deleted "operator collapse after removeExpression
+    // doesn't break flush". The test asserted that after the
+    // pre-v1.0 inline 1-child collapse cascade fired by
+    // removeExpression, the engine's flushChecksums() still works
+    // correctly. Under v1.0 the cascade no longer fires inside
+    // removeExpression — the post-hook AN-3 does it instead, and
+    // that path's checksum-flush correctness is implicit in the
+    // post-hook tests in `test/grammar/auto-normalize.test.ts` (the
+    // post-hook runs through full PE mutation paths). Hierarchical
+    // checksum flush correctness for ordinary removeExpression
+    // without cascade is covered by neighboring tests in this
+    // describe block.
 
     it("insertExpression propagates checksum changes", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -14252,7 +14239,9 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("variable mutation changes argument but not premise combinedChecksum", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         const { result: pm } = engine.createPremise()
         const premiseId = pm.getId()
@@ -14278,7 +14267,9 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("snapshot round-trip preserves all hierarchical checksums", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -14328,7 +14319,9 @@ describe("hierarchical checksum propagation", () => {
     })
 
     it("removeVariable cascades through to checksums", () => {
-        const engine = new ArgumentEngine(ARG, aLib())
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
         engine.addVariable(makeVar("v1", "P"))
         engine.addVariable(makeVar("v2", "Q"))
         const { result: pm } = engine.createPremise()
@@ -14868,96 +14861,15 @@ describe("changeOperator", () => {
 
     // --- Merge (no longer triggers for 2-child operators) ---
 
-    it("absorbs: OR(formula(AND(P, Q)), R) → change AND to OR yields OR(P, Q, R)", () => {
-        const pm = premiseWithVars()
-        // Build: OR( formula(AND(P, Q)), R )
-        pm.addExpression(makeOpExpr("op-or", "or"))
-        pm.addExpression(
-            makeFormulaExpr("formula-1", {
-                parentId: "op-or",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeOpExpr("op-and", "and", {
-                parentId: "formula-1",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, {
-                parentId: "op-and",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, {
-                parentId: "op-and",
-                position: 1,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-r", VAR_R.id, {
-                parentId: "op-or",
-                position: 1,
-            })
-        )
-
-        pm.changeOperator("op-and", "or")
-
-        // Formula and inner operator dissolved — absorbed into outer OR
-        expect(pm.getExpression("formula-1")).toBeUndefined()
-        expect(pm.getExpression("op-and")).toBeUndefined()
-
-        // Outer OR now has 3 children: P, Q, R
-        const outerChildren = pm.getChildExpressions("op-or")
-        expect(outerChildren).toHaveLength(3)
-        const childIds = outerChildren.map((c) => c.id)
-        expect(childIds).toContain("expr-p")
-        expect(childIds).toContain("expr-q")
-        expect(childIds).toContain("expr-r")
-    })
-
-    it("absorbs: formula dissolved when inner operator changes to match parent", () => {
-        const pm = premiseWithVars()
-        // Build: OR( formula(AND(P, Q)), R )
-        pm.addExpression(makeOpExpr("op-or", "or"))
-        pm.addExpression(
-            makeFormulaExpr("formula-1", {
-                parentId: "op-or",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeOpExpr("op-and", "and", {
-                parentId: "formula-1",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, {
-                parentId: "op-and",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, {
-                parentId: "op-and",
-                position: 1,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-r", VAR_R.id, {
-                parentId: "op-or",
-                position: 1,
-            })
-        )
-
-        pm.changeOperator("op-and", "or")
-
-        // Formula dissolved — absorbed into outer OR
-        expect(pm.getExpression("formula-1")).toBeUndefined()
-    })
+    // D2b — deleted two changeOperator absorb tests
+    // ("absorbs: OR(formula(AND(P, Q)), R) → change AND to OR yields
+    // OR(P, Q, R)" and "absorbs: formula dissolved when inner
+    // operator changes to match parent"). Both asserted on the
+    // pre-v1.0 inline AN-4 same-operator absorption cascade fired
+    // from inside changeOperator. Under v1.0 the absorption is
+    // owned by the AN-4 post-hook; the contract is covered by
+    // `test/grammar/an-rules.test.ts` (AN-4 + the multi-child
+    // absorption regression-guard tests).
 
     // --- Split ---
 
@@ -15148,62 +15060,11 @@ describe("changeOperator", () => {
 
     // --- No-merge for 2-child operators ---
 
-    it("absorbs: AND(formula(OR(P, Q)), R) → change OR to AND yields AND(P, Q, R)", () => {
-        const pm = premiseWithVars()
-        // Build: AND( formula(OR(P, Q)), R )
-        pm.addExpression(makeOpExpr("op-and", "and"))
-        pm.addExpression(
-            makeFormulaExpr("formula-1", {
-                parentId: "op-and",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeOpExpr("op-or", "or", {
-                parentId: "formula-1",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, {
-                parentId: "op-or",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, {
-                parentId: "op-or",
-                position: 1,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-r", VAR_R.id, {
-                parentId: "op-and",
-                position: 1,
-            })
-        )
-
-        pm.changeOperator("op-or", "and")
-
-        // Formula and inner operator dissolved — absorbed into outer AND
-        expect(pm.getExpression("formula-1")).toBeUndefined()
-        expect(pm.getExpression("op-or")).toBeUndefined()
-
-        // Outer AND now has 3 children: P, Q, R
-        const outerChildren = pm.getChildExpressions("op-and")
-        expect(outerChildren).toHaveLength(3)
-        const childIds = outerChildren.map((c) => c.id)
-        expect(childIds).toContain("expr-p")
-        expect(childIds).toContain("expr-q")
-        expect(childIds).toContain("expr-r")
-
-        // Positions are strictly increasing
-        for (let i = 1; i < outerChildren.length; i++) {
-            expect(outerChildren[i].position).toBeGreaterThan(
-                outerChildren[i - 1].position
-            )
-        }
-    })
+    // D2b — deleted "absorbs: AND(formula(OR(P, Q)), R) → change OR
+    // to AND yields AND(P, Q, R)". Same legacy-cascade rationale as
+    // the absorb tests deleted above; AN-4's same-operator
+    // absorption is owned by the post-hook and covered by
+    // `test/grammar/an-rules.test.ts`.
 
     it("no merge: OR(formula(OR(P, Q)), R) → change inner OR to AND yields OR(formula(AND(P, Q)), R)", () => {
         const pm = premiseWithVars()
@@ -15258,63 +15119,11 @@ describe("changeOperator", () => {
         expect(innerChildren).toHaveLength(2)
     })
 
-    it("absorbs with tight positions: AND(P, formula(OR(Q, R)), S) at 0,1,2", () => {
-        const pm = premiseWithVars()
-        // Build: AND(P(0), formula(OR(Q, R))(1), S(2))
-        pm.addExpression(makeOpExpr("op-and", "and"))
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, {
-                parentId: "op-and",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeFormulaExpr("formula-1", {
-                parentId: "op-and",
-                position: 1,
-            })
-        )
-        pm.addExpression(
-            makeOpExpr("op-or", "or", {
-                parentId: "formula-1",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, {
-                parentId: "op-or",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-r", VAR_R.id, {
-                parentId: "op-or",
-                position: 1,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-s", VAR_P.id, {
-                parentId: "op-and",
-                position: 2,
-            })
-        )
-
-        pm.changeOperator("op-or", "and")
-
-        // Should absorb — AND(P, Q, R, S)
-        expect(pm.getExpression("formula-1")).toBeUndefined()
-        expect(pm.getExpression("op-or")).toBeUndefined()
-
-        const children = pm.getChildExpressions("op-and")
-        expect(children).toHaveLength(4)
-
-        // All positions strictly increasing (redistribution handled tight gap)
-        for (let i = 1; i < children.length; i++) {
-            expect(children[i].position).toBeGreaterThan(
-                children[i - 1].position
-            )
-        }
-    })
+    // D2b — deleted "absorbs with tight positions: AND(P,
+    // formula(OR(Q, R)), S) at 0,1,2". Same legacy-cascade
+    // rationale; the tight-position AN-4 absorption + redistribute
+    // path is covered by `test/grammar/an-rules.test.ts`'s AN-4
+    // redistribute regression-guard tests.
 
     // --- Error cases ---
 
@@ -15351,38 +15160,17 @@ describe("toggleNegation extraFields", () => {
         expect((stored as Record<string, unknown>).creatorId).toBe("user-42")
     })
 
-    it("merges extraFields into the NOT expression (operator target with formula buffer)", () => {
-        const pm = premiseWithVars()
-        pm.addExpression(makeOpExpr("op-and", "and"))
-        pm.addExpression(
-            makeVarExpr("expr-p", VAR_P.id, {
-                parentId: "op-and",
-                position: 0,
-            })
-        )
-        pm.addExpression(
-            makeVarExpr("expr-q", VAR_Q.id, {
-                parentId: "op-and",
-                position: 1,
-            })
-        )
-
-        const { result: notExpr, changes } = pm.toggleNegation("op-and", {
-            creatorId: "user-42",
-        } as Partial<TCorePropositionalExpression>)
-
-        expect(notExpr).not.toBeNull()
-        expect((notExpr as Record<string, unknown>).creatorId).toBe("user-42")
-
-        // The formula buffer should also get extraFields
-        const formulaExpr = changes.expressions!.added.find(
-            (e) => e.type === "formula"
-        )
-        expect(formulaExpr).toBeDefined()
-        expect((formulaExpr as Record<string, unknown>).creatorId).toBe(
-            "user-42"
-        )
-    })
+    // D2b — deleted "merges extraFields into the NOT expression
+    // (operator target with formula buffer)". The test asserted
+    // that toggleNegation on an operator produces a formula buffer
+    // between the new NOT and the wrapped operator, and that
+    // extraFields propagate to that buffer. The buffer insertion
+    // was the pre-v1.0 `negationInsertFormula` AN-flag behavior
+    // (deleted in D2). Under v1.0 the buffer is owned by the AN-1
+    // post-hook (which doesn't get extraFields — it operates on
+    // already-mutated state). The extraFields propagation contract
+    // is still covered by the surviving extraFields tests in this
+    // describe block (variable-target + checksum variants).
 
     it("extraFields in changeset expressions have correct checksums", () => {
         const pm = premiseWithVars()
@@ -15465,7 +15253,9 @@ describe("forkArgument", () => {
     it("forks a simple argument with new IDs", () => {
         const claimLib = aLib()
 
-        const eng = new ArgumentEngine(ARG, claimLib)
+        const eng = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         const premiseId = pm.getId()
@@ -15550,7 +15340,11 @@ describe("forkArgument", () => {
 
     it("remaps parentId chains, variableIds, boundPremiseId, rootExpressionId, and conclusion", () => {
         const claimLib = aLib()
-        const eng = new ArgumentEngine({ id: "src-arg", version: 2 }, claimLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 2 },
+            claimLib,
+            { behavior: "permissive" }
+        )
 
         // Add two claim-bound variables
         eng.addVariable({
@@ -15705,7 +15499,11 @@ describe("forkArgument", () => {
 
     it("remap table covers all entities and all mapped IDs differ from originals", () => {
         const claimLib = aLib()
-        const eng = new ArgumentEngine({ id: "src-arg", version: 0 }, claimLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            { behavior: "permissive" }
+        )
 
         eng.addVariable({
             id: "v1",
@@ -15772,7 +15570,11 @@ describe("forkArgument", () => {
 
     it("forked engine is independent from source engine", () => {
         const claimLib = aLib()
-        const eng = new ArgumentEngine({ id: "src-arg", version: 0 }, claimLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            { behavior: "permissive" }
+        )
         eng.createPremiseWithId("prem-only")
 
         const forkClaimLib = aLib()
@@ -15794,7 +15596,11 @@ describe("forkArgument", () => {
 
     it("forked entities are fully mutable", () => {
         const claimLib = aLib()
-        const eng = new ArgumentEngine({ id: "src-arg", version: 0 }, claimLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            { behavior: "permissive" }
+        )
 
         eng.addVariable({
             id: "var-p",
@@ -15874,7 +15680,11 @@ describe("forkArgument", () => {
 
     it("forked entity checksums diverge from source checksums", () => {
         const claimLib = aLib()
-        const eng = new ArgumentEngine({ id: "src-arg", version: 0 }, claimLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 0 },
+            claimLib,
+            { behavior: "permissive" }
+        )
 
         eng.addVariable({
             id: "var-p",
@@ -15934,7 +15744,9 @@ describe("forkArgument", () => {
 
     it("diffArguments without matchers sees forked entities as removed + added", () => {
         const claimLib = aLib()
-        const eng = new ArgumentEngine(ARG, claimLib)
+        const eng = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
         pm.addExpression(
@@ -15987,7 +15799,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("createPremise auto-creates a premise-bound variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm, changes } = eng.createPremise()
 
         // Changeset includes a variable addition
@@ -16008,7 +15820,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("createPremise accepts a custom symbol for the auto-variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { changes } = eng.createPremise(undefined, "MyPremise")
         const autoVar = changes.variables!.added.find((v) => isPremiseBound(v))!
         expect((autoVar as unknown as TPremiseBoundVariable).symbol).toBe(
@@ -16017,7 +15829,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("createPremise auto-generates unique symbols on collision", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { changes: c1 } = eng.createPremise()
         const { changes: c2 } = eng.createPremise()
         const sym1 = (
@@ -16059,7 +15871,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("bindVariableToExternalPremise registers an externally bound variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: varResult } = eng.bindVariableToExternalPremise({
             id: "v-ext",
             argumentId: ARG.id,
@@ -16083,7 +15895,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("bindVariableToExternalPremise rejects internal binding", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         expect(() =>
             eng.bindVariableToExternalPremise({
                 id: "v-int",
@@ -16098,7 +15910,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("bindVariableToArgument sets boundPremiseId to conclusionPremiseId", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.bindVariableToArgument(
             {
                 id: "v-arg",
@@ -16119,7 +15931,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("evaluation: internal binding is still lazily resolved", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("v-p", "X"))
         const { result: pm1 } = eng.createPremiseWithId("p1")
         pm1.addExpression({
@@ -16170,7 +15982,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("evaluation: external binding is evaluator-assigned", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.bindVariableToExternalPremise({
             id: "v-ext",
             argumentId: ARG.id,
@@ -16205,7 +16017,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("truth table: external binding included in columns", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.bindVariableToExternalPremise({
             id: "v-ext",
             argumentId: ARG.id,
@@ -16236,7 +16048,7 @@ describe("cross-argument variable binding", () => {
     })
 
     it("fromSnapshot restores both internal and external bound variables", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("v-claim", "Claim"))
         eng.bindVariableToExternalPremise({
             id: "v-ext",
@@ -16459,7 +16271,6 @@ describe("ExpressionManager — validate", () => {
             result.violations.some((v) => v.code === EXPR_ROOT_ONLY_VIOLATED)
         ).toBe(true)
     })
-
 
     it("detects child limit exceeded for not operator", () => {
         // not should have at most 1 child — inject second child via internal map
@@ -16713,7 +16524,7 @@ describe("ExpressionManager — validate", () => {
 
 describe("VariableManager — validate", () => {
     it("returns ok for a valid set of variables", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("var-p", "P"))
         eng.addVariable(makeVar("var-q", "Q"))
         const vm = (eng as unknown as { variables: VariableManager }).variables
@@ -16730,7 +16541,7 @@ describe("VariableManager — validate", () => {
     })
 
     it("detects checksum mismatch after snapshot tampering", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("var-p", "P"))
         const snap = (
             eng as unknown as { variables: VariableManager }
@@ -16946,14 +16757,13 @@ describe("PremiseEngine — validate", () => {
         expect(violation.premiseId).toBe("premise-1")
         expect(violation.entityId).toBe("expr-1")
     })
-
 })
 
 describe("ArgumentEngine — validate", () => {
     const ARG = { id: "arg-1", version: 1 }
 
     it("valid argument with premises and variables → ok", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.createPremise()
         eng.addVariable(makeVar("v-extra", "X"))
 
@@ -16963,7 +16773,7 @@ describe("ArgumentEngine — validate", () => {
     })
 
     it("empty argument → ok", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         // Clear conclusion (constructor doesn't auto-assign without premises)
         const result = eng.validate()
         expect(result.ok).toBe(true)
@@ -16973,7 +16783,9 @@ describe("ArgumentEngine — validate", () => {
     it("detects claim reference to non-existent claim", () => {
         // Create engine with a claim-bound variable referencing claim-default
         const claimLib = aLib()
-        const eng = new ArgumentEngine(ARG, claimLib)
+        const eng = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         eng.addVariable(makeVar("v1", "A"))
 
         // Snapshot, then restore with an empty ClaimLibrary
@@ -16982,7 +16794,9 @@ describe("ArgumentEngine — validate", () => {
 
         // Restore from snapshot, bypassing addVariable's runtime check
         // by directly building engine and injecting variables
-        const engine2 = new ArgumentEngine(snap.argument, emptyClaimLib)
+        const engine2 = new ArgumentEngine(snap.argument, emptyClaimLib, {
+            behavior: "permissive",
+        })
         // Inject variables directly into the VariableManager via snapshot restore
         const vm = VariableManager.fromSnapshot(snap.variables)
         ;(engine2 as unknown as { variables: VariableManager }).variables = vm
@@ -16997,7 +16811,7 @@ describe("ArgumentEngine — validate", () => {
     })
 
     it("detects conclusion referencing non-existent premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.createPremise()
 
         const snap = eng.snapshot()
@@ -17011,7 +16825,7 @@ describe("ArgumentEngine — validate", () => {
     })
 
     it("detects ownership mismatch on variable", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.createPremise()
 
         // Snapshot normally, then restore to get a clean engine
@@ -17196,7 +17010,7 @@ describe("ClaimCitationLibrary — validate", () => {
 
 describe("ArgumentEngine — withValidation bracket", () => {
     it("valid operations still work after wrapping", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -17204,7 +17018,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
     })
 
     it("existing per-operation errors still throw with rollback", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         expect(() =>
             eng.addVariable({ ...makeVar("v1", "P"), argumentId: "wrong-arg" })
         ).toThrow()
@@ -17212,7 +17026,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
     })
 
     it("state is consistent after successful removePremise", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         eng.removePremise(pm.getId())
         expect(eng.hasPremise(pm.getId())).toBe(false)
@@ -17222,7 +17036,7 @@ describe("ArgumentEngine — withValidation bracket", () => {
 
 describe("PremiseEngine — withValidation bracket", () => {
     it("triggers argument-level validation on expression mutation", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -17230,7 +17044,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("rolls back on failed expression mutation (nonexistent variable)", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         expect(() =>
             pm.addExpression(
@@ -17243,7 +17057,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("rolls back appendExpression on failure", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         expect(() =>
             pm.appendExpression(null, {
@@ -17259,7 +17073,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("valid operations through PremiseEngine produce correct state", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("var-p", "P"))
         eng.addVariable(makeVar("var-q", "Q"))
         const { result: pm } = eng.createPremise()
@@ -17298,7 +17112,7 @@ describe("PremiseEngine — withValidation bracket", () => {
         // Build a valid premise with a single variable expression, then try
         // removing it — the premise itself stays valid (empty is fine) so
         // this should succeed and not roll back.
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -17308,7 +17122,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("setExtras succeeds under validation", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         pm.setExtras({ label: "test" })
         expect(pm.getExtras()).toEqual({ label: "test" })
@@ -17316,7 +17130,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("updateExpression rolls back on nonexistent variable reference", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(makeVar("var-p", "P"))
         const { result: pm } = eng.createPremise()
         pm.addExpression(makeVarExpr("v1", "var-p", { premiseId: pm.getId() }))
@@ -17330,7 +17144,7 @@ describe("PremiseEngine — withValidation bracket", () => {
     })
 
     it("expression index is restored on rollback", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         // Try adding an expression referencing a nonexistent variable
         expect(() =>
@@ -17428,7 +17242,7 @@ describe("ArgumentEngine — bulk path validation", () => {
     // via engine.validate(tier). Phase D removes these tests along with
     // the grammarConfig parameter on fromData/fromSnapshot.
     it("rollback validates and rejects invalid snapshot", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         const premiseId = pm.getId()
         const goodSnap = eng.snapshot()
@@ -17441,14 +17255,15 @@ describe("ArgumentEngine — bulk path validation", () => {
     })
 })
 
-
 // ---------------------------------------------------------------------------
 // Stale parent checksums in changeset (change-request 2026-03-27)
 // ---------------------------------------------------------------------------
 
 describe("Changeset includes ancestor checksum updates", () => {
     function setup() {
-        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const v1 = {
             id: "v1",
             symbol: "P",
@@ -18731,7 +18546,11 @@ describe("forkArgumentEngine", () => {
     it("produces identical results to the engine method", () => {
         const claimLib = aLib()
 
-        const eng = new ArgumentEngine({ id: "src-arg", version: 2 }, claimLib)
+        const eng = new ArgumentEngine(
+            { id: "src-arg", version: 2 },
+            claimLib,
+            { behavior: "permissive" }
+        )
 
         eng.addVariable({
             id: "var-p",
@@ -19130,7 +18949,9 @@ describe("ArgumentLibrary", () => {
         const libs = makeLibraries()
         const argLib = new ArgumentLibrary(libs)
         const arg = makeArgument()
-        const engine = new ArgumentEngine(arg, libs.claimLibrary)
+        const engine = new ArgumentEngine(arg, libs.claimLibrary, {
+            behavior: "permissive",
+        })
         argLib.register(engine)
         expect(argLib.get(arg.id)).toBe(engine)
     })
@@ -19140,7 +18961,9 @@ describe("ArgumentLibrary", () => {
         const argLib = new ArgumentLibrary(libs)
         const arg = makeArgument()
         argLib.create(arg)
-        const engine = new ArgumentEngine(arg, libs.claimLibrary)
+        const engine = new ArgumentEngine(arg, libs.claimLibrary, {
+            behavior: "permissive",
+        })
         expect(() => argLib.register(engine)).toThrow(/already exists/)
     })
 })
@@ -19665,7 +19488,6 @@ describe("PropositCore", () => {
     // generateId injection — ExpressionManager
     // ---------------------------------------------------------------------------
 
-
     // ---------------------------------------------------------------------------
     // generateId injection — PremiseEngine
     // ---------------------------------------------------------------------------
@@ -19704,7 +19526,6 @@ describe("PropositCore", () => {
             expect(notExpr).toBeDefined()
             expect(notExpr!.id).toMatch(/^pe-id-/)
         })
-
     })
 
     // ---------------------------------------------------------------------------
@@ -19731,9 +19552,10 @@ describe("PropositCore", () => {
             expect(vars[0].id).toBe("ae-id-2")
         })
 
-
         it("falls back to default generateId when none provided", () => {
-            const engine = new ArgumentEngine(ARG, aLib())
+            const engine = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             const { result: pm } = engine.createPremise()
 
             // Default generates valid UUIDs
@@ -19993,7 +19815,9 @@ describe("generateId injection — ArgumentParser", () => {
 
 describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
     it("expression checksum does not change when id differs", () => {
-        const eng1 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng1 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng1.addVariable({
             id: "v1",
             symbol: "P",
@@ -20014,7 +19838,9 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
             position: 1,
         })
 
-        const eng2 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng2 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng2.addVariable({
             id: "v1",
             symbol: "P",
@@ -20044,7 +19870,9 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
     })
 
     it("variable checksum does not change when id differs", () => {
-        const eng1 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng1 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng1.addVariable({
             id: "var-AAA",
             symbol: "P",
@@ -20054,7 +19882,9 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
             claimVersion: 0,
         })
 
-        const eng2 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng2 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         eng2.addVariable({
             id: "var-BBB",
             symbol: "P",
@@ -20073,10 +19903,14 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
     })
 
     it("premise checksum does not change when id differs", () => {
-        const eng1 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng1 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm1 } = eng1.createPremiseWithId("prem-AAA")
 
-        const eng2 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib())
+        const eng2 = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
         const { result: pm2 } = eng2.createPremiseWithId("prem-BBB")
 
         eng1.flushChecksums()
@@ -20086,8 +19920,12 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
     })
 
     it("argument checksum does not change when id differs", () => {
-        const eng1 = new ArgumentEngine({ id: "arg-AAA", version: 0 }, aLib())
-        const eng2 = new ArgumentEngine({ id: "arg-BBB", version: 0 }, aLib())
+        const eng1 = new ArgumentEngine({ id: "arg-AAA", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
+        const eng2 = new ArgumentEngine({ id: "arg-BBB", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
 
         eng1.flushChecksums()
         eng2.flushChecksums()
@@ -20113,7 +19951,7 @@ describe("DEFAULT_CHECKSUM_CONFIG excludes entity id", () => {
 
 describe("operator constraint propagation", () => {
     it("implies accepted, antecedent true -> consequent derived true", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20149,7 +19987,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("implies accepted, consequent false -> antecedent derived false", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20183,7 +20021,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("and accepted -> both children derived true", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20218,7 +20056,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("or accepted, one child false -> other derived true", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20252,7 +20090,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("not accepted -> child derived false", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         eng.addVariable(vA)
 
@@ -20277,7 +20115,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("iff accepted -> bidirectional propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20311,7 +20149,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("cross-premise fixed-point propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         const vC = makeVar("vC", "C")
@@ -20371,7 +20209,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("user assignment wins over propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20410,7 +20248,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("no propagation for unset operators", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20446,7 +20284,7 @@ describe("operator constraint propagation", () => {
     })
 
     it("or accepted, both unknown -> no propagation", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
         eng.addVariable(vA)
@@ -20492,7 +20330,7 @@ describe("evaluateArgument (standalone)", () => {
 
     /** Build an engine with P, Q variables and a P->Q supporting premise plus a Q conclusion. */
     function buildModusPonensEngine() {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -20545,7 +20383,9 @@ describe("evaluateArgument (standalone)", () => {
 
     describe("propagateOperatorConstraints", () => {
         it("propagates accepted AND: all children become true", () => {
-            const eng = new ArgumentEngine(ARG, aLib())
+            const eng = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm } = eng.createPremise({ title: "P and Q" })
@@ -20573,7 +20413,9 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("propagates rejected OR: all children become false", () => {
-            const eng = new ArgumentEngine(ARG, aLib())
+            const eng = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm } = eng.createPremise({ title: "P or Q" })
@@ -20601,7 +20443,9 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("never overwrites user-assigned values", () => {
-            const eng = new ArgumentEngine(ARG, aLib())
+            const eng = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm } = eng.createPremise({ title: "P and Q" })
@@ -20630,7 +20474,9 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("returns unchanged variables when no operator assignments given", () => {
-            const eng = new ArgumentEngine(ARG, aLib())
+            const eng = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             eng.addVariable(VAR_P)
             const { result: pm } = eng.createPremise({ title: "P" })
             pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
@@ -20703,7 +20549,9 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("runs validateEvaluability when validateFirst is true (default)", () => {
-            const eng = new ArgumentEngine(ARG, aLib())
+            const eng = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             // Empty engine with no premises — validateEvaluability will fail
             const ctx = ctxFrom(eng)
             const result = evaluateArgument(ctx, {
@@ -20728,7 +20576,9 @@ describe("evaluateArgument (standalone)", () => {
         })
 
         it("finds a counterexample for an invalid argument", () => {
-            const eng = new ArgumentEngine(ARG, aLib())
+            const eng = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -20854,7 +20704,9 @@ describe("validateArgument (standalone)", () => {
 
     describe("collectArgumentReferencedVariables", () => {
         it("indexes variables by ID and symbol across premises", () => {
-            const eng = new ArgumentEngine(ARG, aLib())
+            const eng = new ArgumentEngine(ARG, aLib(), {
+                behavior: "permissive",
+            })
             eng.addVariable(VAR_P)
             eng.addVariable(VAR_Q)
             const { result: pm1 } = eng.createPremise({ title: "pm1" })
@@ -21018,10 +20870,7 @@ describe("validateArgument (standalone)", () => {
             ).toBe(true)
         })
     })
-
 })
-
-
 
 describe("review helper errors", () => {
     it("InvalidArgumentStructureError carries a message and name", () => {
@@ -21063,7 +20912,7 @@ describe("review helper errors", () => {
 
 describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     it("returns [or] for a single or(a,b)", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise({ title: "P or Q" })
@@ -21080,7 +20929,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("returns [and, or] in pre-order for and(or(a,b), c)", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(makeVar("var-r", "R"))
@@ -21109,7 +20958,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("excludes NOT inside a premise: and(not(a), b) returns [and]", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise({ title: "not(P) and Q" })
@@ -21136,7 +20985,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("excludes wrapping NOT but keeps inner AND: not(and(a,b)) returns [and]", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: pm } = eng.createPremise({ title: "not(P and Q)" })
@@ -21167,7 +21016,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("returns [] for a single-variable premise with no operators", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "P" })
         pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
@@ -21175,7 +21024,7 @@ describe("PremiseEngine — getDecidableOperatorExpressions", () => {
     })
 
     it("returns [] for an empty premise", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise({ title: "empty" })
         expect(pm.getDecidableOperatorExpressions()).toEqual([])
     })
@@ -21199,7 +21048,7 @@ describe("collectArgumentReferencedClaims", () => {
     }
 
     it("returns only the conclusion's claims when there are no supporting premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "P" })
         pm.addExpression(makeVarExpr(`${pm.getId()}-p`, VAR_P.id))
@@ -21213,7 +21062,7 @@ describe("collectArgumentReferencedClaims", () => {
     })
 
     it("emits a claim once at its first occurrence when shared across premises", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: support } = eng.createPremise({ title: "P (support)" })
         const { result: conclusion } = eng.createPremise({ title: "P (conc)" })
@@ -21230,7 +21079,7 @@ describe("collectArgumentReferencedClaims", () => {
     })
 
     it("skips premise-bound variables (no bound claim)", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: inner } = eng.createPremise({ title: "inner: P" })
         inner.addExpression(makeVarExpr(`${inner.getId()}-p`, VAR_P.id))
@@ -21249,7 +21098,7 @@ describe("collectArgumentReferencedClaims", () => {
         // freeze() leaves v0 (frozen) AND v1 (new mutable copy) both reachable.
         lib.freeze("claim-shared")
 
-        const eng = new ArgumentEngine(ARG, lib)
+        const eng = new ArgumentEngine(ARG, lib, { behavior: "permissive" })
         eng.addVariable({
             id: "var-v0",
             argumentId: ARG.id,
@@ -21292,7 +21141,7 @@ describe("collectArgumentReferencedClaims", () => {
         const lib = new ClaimLibrary()
         lib.create({ id: "claim-a", type: "normal" })
         lib.create({ id: "claim-b", type: "normal" })
-        const eng = new ArgumentEngine(ARG, lib)
+        const eng = new ArgumentEngine(ARG, lib, { behavior: "permissive" })
         eng.addVariable({
             id: "var-a",
             argumentId: ARG.id,
@@ -21359,7 +21208,7 @@ describe("canonicalizeOperatorAssignments", () => {
         andId: string
         orId: string
     } {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         eng.addVariable(makeVar("var-r", "R"))
@@ -21438,7 +21287,7 @@ describe("canonicalizeOperatorAssignments", () => {
     })
 
     it("NOT override throws NotOperatorNotDecidableError with reason=is-not-operator", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "not P" })
         const notId = `${pm.getId()}-not`
@@ -21472,7 +21321,7 @@ describe("canonicalizeOperatorAssignments", () => {
     })
 
     it("override on a non-operator expression throws NotOperatorNotDecidableError with reason=not-an-operator-type", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise({ title: "P" })
         const varExprId = `${pm.getId()}-p`
@@ -21512,7 +21361,7 @@ describe("evaluateArgument — propagatedVariableValues", () => {
     }
 
     function buildModusPonensEng() {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
         const { result: support } = eng.createPremise({ title: "P->Q" })
@@ -22453,7 +22302,9 @@ describe("ensureClaimBoundVariable", () => {
         const claimLib = new ClaimLibrary()
         const claim = claimLib.create({ type: "normal" })
         const claimId = claim.id
-        const argumentEngine = new ArgumentEngine(ARG, claimLib)
+        const argumentEngine = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         return { argumentEngine, claimLib, claimId }
     }
 
@@ -22501,7 +22352,9 @@ describe("createPremise with type and derivedClaimId", () => {
         const claimLib = new ClaimLibrary()
         const claim = claimLib.create({ type: "normal" })
         const claimId = claim.id
-        const argumentEngine = new ArgumentEngine(ARG, claimLib)
+        const argumentEngine = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         return { argumentEngine, claimLib, claimId }
     }
 
@@ -22594,13 +22447,13 @@ describe("createPremise with type and derivedClaimId", () => {
 
 describe("createPremise legacy positional signature (backward compat)", () => {
     it("accepts no arguments", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
         expect(pm.toPremiseData().type).toBe("freeform")
     })
 
     it("accepts (extras) positional", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise({ title: "hello" })
         const data = pm.toPremiseData()
         expect(data.type).toBe("freeform")
@@ -22608,7 +22461,7 @@ describe("createPremise legacy positional signature (backward compat)", () => {
     })
 
     it("accepts (extras, symbol) positional", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise({ title: "hello" }, "MySymbol")
         const data = pm.toPremiseData()
         expect(data.type).toBe("freeform")
@@ -22625,7 +22478,7 @@ describe("createPremise legacy positional signature (backward compat)", () => {
     })
 
     it("accepts (undefined, symbol) positional", () => {
-        const eng = new ArgumentEngine(ARG, aLib())
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: _pm } = eng.createPremise(undefined, "XSym")
         const vars = eng.getVariables()
         const premiseBound = vars.find(
@@ -22643,7 +22496,9 @@ describe("createPremiseWithId with derivation type", () => {
         const claimLib = new ClaimLibrary()
         const claim = claimLib.create({ type: "normal" })
         const claimId = claim.id
-        const argumentEngine = new ArgumentEngine(ARG, claimLib)
+        const argumentEngine = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         return { argumentEngine, claimLib, claimId }
     }
 
@@ -22718,7 +22573,9 @@ describe("derivation premise extras handling", () => {
         const claimLib = new ClaimLibrary()
         const claim = claimLib.create({ type: "normal" })
         const claimId = claim.id
-        const argumentEngine = new ArgumentEngine(ARG, claimLib)
+        const argumentEngine = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         return { argumentEngine, claimId }
     }
 
@@ -22842,7 +22699,8 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
 
         const engine = new ArgumentEngine(
             { id: "arg-broken", version: 1 },
-            claimLib
+            claimLib,
+            { behavior: "permissive" }
         )
         engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
 
@@ -22870,7 +22728,8 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
 
         const engine = new ArgumentEngine(
             { id: "arg-good", version: 1 },
-            claimLib
+            claimLib,
+            { behavior: "permissive" }
         )
         engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
         return { argumentEngine: engine }
@@ -22927,7 +22786,8 @@ describe("ArgumentEngine.validateDerivationStructures", () => {
 
         const engine = new ArgumentEngine(
             { id: "arg-broken2", version: 1 },
-            claimLib
+            claimLib,
+            { behavior: "permissive" }
         )
         engine.createPremise({ type: "derivation", derivedClaimId: claim.id })
 
@@ -23000,7 +22860,9 @@ describe("ArgumentEngine.fromData — premise extras preservation", () => {
 
     it("round-trips extras through createPremise → snapshot → fromData", () => {
         const claimLib = aLib()
-        const engine = new ArgumentEngine(ARG, claimLib)
+        const engine = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         const { result: pm } = engine.createPremise({
             type: "freeform",
             extras: { title: "X", role: "supporting" },
@@ -23038,7 +22900,9 @@ describe("ArgumentEngine.fromData — premise extras preservation", () => {
     it("createPremise typed-bag still treats `extras` as the extras source (no regression)", () => {
         const claimLib = new ClaimLibrary()
         const claim = claimLib.create({ id: "c1", type: "normal" })
-        const engine = new ArgumentEngine(ARG, claimLib)
+        const engine = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
         const { result: pm } = engine.createPremise({
             type: "derivation",
             derivedClaimId: claim.id,
@@ -23547,6 +23411,12 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
         const argId = crypto.randomUUID()
         core.arguments.create({ id: argId, version: 0 })
         const engine = core.arguments.get(argId)!
+        // D2b — permissive build: this test builds AND(VAR, VAR)
+        // incrementally; assistive AN-3 would collapse the 0-child
+        // AND between addExpression calls. Switch to permissive for
+        // the build phase (no normalize() needed — the tree's final
+        // shape is already Presentable, so AN would be a no-op).
+        engine.setBehavior("permissive")
         const normalVar = engine.ensureClaimBoundVariable(normalClaim.id)
         const axiomVar = engine.ensureClaimBoundVariable(axiomClaim.id)
         // Conclusion premise: P ∧ axiom — counts admissible assignments over
@@ -23606,6 +23476,11 @@ describe("Propagator interaction with axiomatic variables (v0.12)", () => {
         const argId = crypto.randomUUID()
         core.arguments.create({ id: argId, version: 0 })
         const engine = core.arguments.get(argId)!
+        // D2b — permissive build: see the matching comment in the
+        // `checkValidity excludes axiomatic-bound variables` test
+        // above. The tree built here is Presentable in its final
+        // shape, so no post-build normalize() is needed.
+        engine.setBehavior("permissive")
         const normalVar = engine.ensureClaimBoundVariable(normalClaim.id)
         const axiomVar = engine.ensureClaimBoundVariable(axiomClaim.id)
         const { result: pm } = engine.createPremise({ type: "freeform" })

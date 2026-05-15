@@ -1,31 +1,72 @@
 // C2: AN post-hook bridge tests.
 //
-// In v1.0, the engine ships with the legacy per-flag `grammarConfig`
-// machinery still in place. The C2 bridge in `ArgumentEngine`
-// (`computeEffectiveGrammarConfig`) routes the new `behavior` setting
-// to that legacy config so owned `PremiseEngine`s do the right thing
-// inside their mutations:
+// Per spec §5, the engine in `assistive` mode runs the AN rule set
+// (AN-1..AN-4) as a uniform post-hook after every successful
+// Structural mutation; in `permissive` mode AN does not run and the
+// engine guarantees only Structural integrity. D2b wired the
+// `runAssistiveNormalization(engine)` call into `setOnMutate` at the
+// 3 PE-callback sites in ArgumentEngine.
 //
-//   - `behavior === 'assistive'` → PremiseEngine sees the engine's
-//     configured `grammarConfig` (or DEFAULT_GRAMMAR_CONFIG when none
-//     was supplied), which has `enforceFormulaBetweenOperators: true`
-//     and `autoNormalize: true`. AN-1 fires inside `addExpression`
-//     and inserts a formula buffer between OR and AND.
+// **Test setup pattern.** The spec's preservation contract is "if
+// the pre-mutation state was Presentable, the post-mutation state is
+// Presentable" — AN-3 collapses 0-child operators eagerly in
+// assistive mode, which makes the obvious "addExpression(or, null)
+// then addExpression(and, or)" pattern incompatible with assistive
+// mode (the first call's post-hook AN-3 deletes the OR before the
+// second call can attach). To exercise the assistive post-hook
+// without tripping AN-3 mid-build:
 //
-//   - `behavior === 'permissive'` → PremiseEngine sees
-//     PERMISSIVE_GRAMMAR_CONFIG. No AN cleanup runs; AND is permitted
-//     as a direct child of OR (no throw, no buffer).
+//   1. Build the prerequisite tree (including the P-1 violation) in
+//      `permissive` so AN doesn't fire during the build.
+//   2. Flip to `assistive` (the flip itself does NOT auto-normalize
+//      per setBehavior JSDoc).
+//   3. Trigger ANY mutation on the engine — typically a variable
+//      addExpression on a separate premise (variables aren't subject
+//      to AN-3 so no 0-child collapse). The post-hook fires globally
+//      and the AN sweep finds the pre-existing P-1 violation and
+//      repairs it via AN-1.
 //
-// The tests below exercise the bridge by performing a mutation that
-// would trigger AN-1 (`OR(...)` then `addExpression(AND, parentId: OR)`)
-// and asserting the post-mutation tree shape.
+// This setup directly validates the contract "after each mutation in
+// assistive mode, AN runs globally."
 
 import { describe, it, expect } from "vitest"
 import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
+import { ClaimLibrary } from "../../src/lib/core/claim-library.js"
 import { EMPTY_CLAIM_LOOKUP } from "../../src/lib/utils/lookup.js"
 import type { TExpressionInput } from "../../src/lib/core/expression-manager.js"
 import { POSITION_INITIAL } from "../../src/lib/utils/position.js"
 import { makeArgument } from "./fixtures.js"
+
+/**
+ * Build a fresh claim library + ArgumentEngine pair seeded with two
+ * claim-bound variables `v-p` and `v-q`. Returns the engine and the
+ * variable IDs. Claim-bound variables (vs premise-bound) can be
+ * referenced from any premise's expression tree without circular-
+ * binding errors.
+ */
+function makeEngineWithVars(behavior: "assistive" | "permissive") {
+    const claimLib = new ClaimLibrary()
+    claimLib.create({ id: "claim-p", type: "normal" })
+    claimLib.create({ id: "claim-q", type: "normal" })
+    const eng = new ArgumentEngine(ARG, claimLib, { behavior })
+    eng.addVariable({
+        id: "v-p",
+        argumentId: ARG.id,
+        argumentVersion: ARG.version,
+        symbol: "P",
+        claimId: "claim-p",
+        claimVersion: 0,
+    })
+    eng.addVariable({
+        id: "v-q",
+        argumentId: ARG.id,
+        argumentVersion: ARG.version,
+        symbol: "Q",
+        claimId: "claim-q",
+        claimVersion: 0,
+    })
+    return { eng, vP: "v-p", vQ: "v-q" }
+}
 
 const ARG = makeArgument()
 
@@ -48,23 +89,83 @@ function opExpr(
 }
 
 describe("ArgumentEngine.behavior bridges to AN cleanup (C2)", () => {
-    it("assistive mode: AND under OR triggers AN-1 formula buffer insertion", () => {
-        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
-            behavior: "assistive",
+    it("assistive mode: post-hook AN-1 repairs an existing P-1 violation after the next mutation", () => {
+        // Build OR(AND(VAR_P, VAR_Q), VAR_P) in permissive. AND
+        // directly under OR is a P-1 violation. AND has 2 children
+        // (VAR_P and VAR_Q) so AN-3 does NOT collapse it (AN-3
+        // collapses 0-child operators and promotes 1-child non-not
+        // operators; multi-child operators are stable). OR also has
+        // 2 children so it stays put.
+        const { eng, vP, vQ } = makeEngineWithVars("permissive")
+        const { result: pe1 } = eng.createPremise()
+        const premiseId = pe1.getId()
+        pe1.addExpression(opExpr("or-1", "or", null))
+        pe1.addExpression(opExpr("and-1", "and", "or-1", 100))
+        pe1.addExpression({
+            id: "var-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "and-1",
+            position: 0,
         })
-        const { result: pe } = eng.createPremise()
+        pe1.addExpression({
+            id: "var-2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vQ,
+            parentId: "and-1",
+            position: 1,
+        })
+        pe1.addExpression({
+            id: "var-3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "or-1",
+            position: 200,
+        })
 
-        // Build OR root, then add AND as child of OR.
-        pe.addExpression(opExpr("or-1", "or", null))
-        pe.addExpression(opExpr("and-1", "and", "or-1"))
+        // Sanity: pre-flip P-1 violation present.
+        const preAnd = pe1.getExpressions().find((e) => e.id === "and-1")!
+        expect(preAnd.parentId).toBe("or-1")
 
-        const exprs = pe.getExpressions()
+        // Flip to assistive. setBehavior does NOT auto-normalize per
+        // its JSDoc, so the P-1 violation persists until the next
+        // mutation triggers the post-hook.
+        eng.setBehavior("assistive")
+        expect(
+            pe1.getExpressions().find((e) => e.id === "and-1")!.parentId
+        ).toBe("or-1")
+
+        // Trigger the post-hook via an unrelated mutation on a
+        // fresh premise. A variable expression doesn't engage AN-3
+        // (variables aren't operators), so the trigger itself is
+        // AN-inert; the post-hook's global sweep then catches the
+        // P-1 violation in pe1 and AN-1 inserts the buffer.
+        const { result: pe2 } = eng.createPremise()
+        pe2.addExpression({
+            id: "trigger-var",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pe2.getId(),
+            type: "variable",
+            variableId: vP,
+            parentId: null,
+            position: 0,
+        })
+
+        // Post-hook fired in pe1: AN-1 inserted a formula buffer
+        // between OR and AND.
+        const exprs = pe1.getExpressions()
         const and = exprs.find((e) => e.id === "and-1")!
-        // AN-1 fired: AND is no longer a direct child of OR.
         expect(and.parentId).not.toBe("or-1")
-
-        // A formula buffer was inserted; the OR has it as its child, and
-        // the formula has AND as its child.
         const formulaBetween = exprs.find(
             (e) => e.type === "formula" && e.parentId === "or-1"
         )
@@ -79,8 +180,9 @@ describe("ArgumentEngine.behavior bridges to AN cleanup (C2)", () => {
         const { result: pe } = eng.createPremise()
 
         pe.addExpression(opExpr("or-1", "or", null))
-        // In permissive mode the operator-under-operator check is bypassed:
-        // no throw, no buffer inserted.
+        // In permissive mode no AN post-hook runs: the OR retains
+        // its 0-child shape, the AND-under-OR mutation is accepted
+        // unchanged, and no formula buffer is inserted.
         expect(() =>
             pe.addExpression(opExpr("and-1", "and", "or-1"))
         ).not.toThrow()
@@ -97,56 +199,186 @@ describe("ArgumentEngine.behavior bridges to AN cleanup (C2)", () => {
     })
 
     it("setBehavior(permissive → assistive) re-arms AN on subsequent mutations", () => {
-        // Start permissive: first AND lands directly under OR (no buffer).
-        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
-            behavior: "permissive",
+        // Build OR(AND(VAR_P, VAR_Q), VAR_P) in permissive — AND
+        // directly under OR is a P-1 violation; the AND has 2
+        // variable children so AN-3 won't collapse it.
+        const { eng, vP, vQ } = makeEngineWithVars("permissive")
+        const { result: pe1 } = eng.createPremise()
+        const premiseId = pe1.getId()
+        pe1.addExpression(opExpr("or-1", "or", null))
+        pe1.addExpression(opExpr("and-1", "and", "or-1", 100))
+        pe1.addExpression({
+            id: "var-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "and-1",
+            position: 0,
         })
-        const { result: pe } = eng.createPremise()
+        pe1.addExpression({
+            id: "var-2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vQ,
+            parentId: "and-1",
+            position: 1,
+        })
+        pe1.addExpression({
+            id: "var-3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "or-1",
+            position: 200,
+        })
 
-        pe.addExpression(opExpr("or-1", "or", null))
-        pe.addExpression(opExpr("and-1", "and", "or-1", POSITION_INITIAL))
+        // Pre-flip state: AND directly under OR (P-1 violation
+        // persists; permissive does not normalize).
+        expect(
+            pe1.getExpressions().find((e) => e.id === "and-1")!.parentId
+        ).toBe("or-1")
 
-        let exprs = pe.getExpressions()
-        const andPermissive = exprs.find((e) => e.id === "and-1")!
-        expect(andPermissive.parentId).toBe("or-1")
-
-        // Switch to assistive — the next mutation must see the bridge
-        // re-route grammarConfig back to the default.
+        // Switch to assistive. The flip itself does not auto-run
+        // normalize() (per setBehavior JSDoc) — the existing P-1
+        // violation stays put until the next mutation triggers the
+        // post-hook.
         eng.setBehavior("assistive")
+        expect(
+            pe1.getExpressions().find((e) => e.id === "and-1")!.parentId
+        ).toBe("or-1")
 
-        // Add a second operator child of OR at a fresh position; this
-        // mutation should now trigger AN-1.
-        pe.addExpression(opExpr("and-2", "and", "or-1", POSITION_INITIAL * 2))
+        // Trigger the post-hook via an AN-inert mutation (variable
+        // expression on a fresh premise). The global AN sweep finds
+        // the pre-existing P-1 violation and AN-1 inserts the
+        // formula buffer.
+        const { result: pe2 } = eng.createPremise()
+        pe2.addExpression({
+            id: "trigger-var",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pe2.getId(),
+            type: "variable",
+            variableId: vP,
+            parentId: null,
+            position: 0,
+        })
 
-        exprs = pe.getExpressions()
-        const and2 = exprs.find((e) => e.id === "and-2")!
-        expect(and2.parentId).not.toBe("or-1")
+        const exprs = pe1.getExpressions()
+        const and = exprs.find((e) => e.id === "and-1")!
+        expect(and.parentId).not.toBe("or-1")
         const buffer = exprs.find(
-            (e) => e.type === "formula" && e.id === and2.parentId
+            (e) => e.type === "formula" && e.id === and.parentId
         )
         expect(buffer).toBeDefined()
         expect(buffer!.parentId).toBe("or-1")
     })
 
     it("setBehavior(assistive → permissive) disarms AN on subsequent mutations", () => {
-        // Start assistive (default): an early OR-under-OR mutation would
-        // require a buffer, but we set up the tree with a single OR root
-        // and then flip to permissive before adding the AND.
-        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP)
-        expect(eng.behavior).toBe("assistive")
-        const { result: pe } = eng.createPremise()
-        pe.addExpression(opExpr("or-1", "or", null))
+        // Build OR(AND(VAR_P, VAR_Q), VAR_P) in permissive — P-1
+        // violation present. Flip to assistive, observe AN runs on
+        // the next mutation. Then flip back to permissive, introduce
+        // a second P-1 violation, observe AN does NOT run.
+        const { eng, vP, vQ } = makeEngineWithVars("permissive")
+        const { result: pe1 } = eng.createPremise()
+        const premiseId = pe1.getId()
+        pe1.addExpression(opExpr("or-1", "or", null))
+        pe1.addExpression(opExpr("and-1", "and", "or-1", 100))
+        pe1.addExpression({
+            id: "var-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "and-1",
+            position: 0,
+        })
+        pe1.addExpression({
+            id: "var-2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vQ,
+            parentId: "and-1",
+            position: 1,
+        })
+        pe1.addExpression({
+            id: "var-3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "or-1",
+            position: 200,
+        })
 
-        eng.setBehavior("permissive")
-
-        // After the switch, AND-under-OR is permitted without a buffer.
-        pe.addExpression(opExpr("and-1", "and", "or-1"))
-        const exprs = pe.getExpressions()
-        const and = exprs.find((e) => e.id === "and-1")!
-        expect(and.parentId).toBe("or-1")
+        // Flip to assistive + trigger AN. The first P-1 violation
+        // is repaired by AN-1.
+        eng.setBehavior("assistive")
+        const { result: pe2 } = eng.createPremise()
+        pe2.addExpression({
+            id: "trigger-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pe2.getId(),
+            type: "variable",
+            variableId: vP,
+            parentId: null,
+            position: 0,
+        })
+        // Sanity: AN-1 fired.
         expect(
-            exprs.find((e) => e.type === "formula" && e.parentId === "or-1")
-        ).toBeUndefined()
+            pe1.getExpressions().find((e) => e.id === "and-1")!.parentId
+        ).not.toBe("or-1")
+        const buffer1Id = pe1
+            .getExpressions()
+            .find((e) => e.id === "and-1")!.parentId
+
+        // Flip to permissive. Introduce a SECOND P-1 violation by
+        // adding another AND-with-children directly under OR. The
+        // post-hook does NOT run in permissive, so this second
+        // violation stays put.
+        eng.setBehavior("permissive")
+        pe1.addExpression(opExpr("and-2", "and", "or-1", 400))
+        pe1.addExpression({
+            id: "var-4",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "and-2",
+            position: 0,
+        })
+        pe1.addExpression({
+            id: "var-5",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vQ,
+            parentId: "and-2",
+            position: 1,
+        })
+
+        // and-2 still sits directly under OR; AN-1 has not fired on
+        // it. (The previous buffer from the first P-1 repair is
+        // unrelated and unchanged.)
+        const exprs = pe1.getExpressions()
+        const and2 = exprs.find((e) => e.id === "and-2")!
+        expect(and2.parentId).toBe("or-1")
+        // The existing buffer1 from the assistive-mode repair is
+        // still present (it doesn't disappear just because we
+        // flipped to permissive).
+        expect(exprs.find((e) => e.id === buffer1Id)).toBeDefined()
     })
 
     it("createPremise() after setBehavior('permissive') inherits permissive config (P1 review gap)", () => {
@@ -172,18 +404,89 @@ describe("ArgumentEngine.behavior bridges to AN cleanup (C2)", () => {
     })
 
     it("createPremise() in default (assistive) mode also gets the right config", () => {
-        // Sanity: the assistive path for newly-created PEs is exercised
-        // elsewhere by the first test in this describe block, but make
-        // the corresponding default-construct assertion explicit so the
-        // matched pair is visible.
-        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP)
+        // Sanity: the assistive path for newly-created PEs is
+        // exercised by the first test in this describe block; make
+        // the matched-pair assertion explicit. Same permissive-build
+        // + flip-to-assistive + trigger-mutation pattern as the
+        // first test, but the engine starts in DEFAULT (assistive)
+        // mode and we have to flip to permissive for the build then
+        // back to assistive.
+        const claimLib = new ClaimLibrary()
+        claimLib.create({ id: "claim-p", type: "normal" })
+        claimLib.create({ id: "claim-q", type: "normal" })
+        const eng = new ArgumentEngine(ARG, claimLib)
         expect(eng.behavior).toBe("assistive")
+        eng.addVariable({
+            id: "v-p",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "P",
+            claimId: "claim-p",
+            claimVersion: 0,
+        })
+        eng.addVariable({
+            id: "v-q",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "Q",
+            claimId: "claim-q",
+            claimVersion: 0,
+        })
 
-        const { result: pe } = eng.createPremise()
-        pe.addExpression(opExpr("or-1", "or", null))
-        pe.addExpression(opExpr("and-1", "and", "or-1"))
+        eng.setBehavior("permissive")
+        const { result: pe1 } = eng.createPremise()
+        const premiseId = pe1.getId()
+        pe1.addExpression(opExpr("or-1", "or", null))
+        pe1.addExpression(opExpr("and-1", "and", "or-1", 100))
+        pe1.addExpression({
+            id: "var-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: "v-p",
+            parentId: "and-1",
+            position: 0,
+        })
+        pe1.addExpression({
+            id: "var-2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: "v-q",
+            parentId: "and-1",
+            position: 1,
+        })
+        pe1.addExpression({
+            id: "var-3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: "v-p",
+            parentId: "or-1",
+            position: 200,
+        })
 
-        const and = pe.getExpressions().find((e) => e.id === "and-1")!
+        eng.setBehavior("assistive")
+        // Trigger the post-hook in a fresh premise (newly created
+        // PEs after setBehavior must inherit assistive). The AN
+        // sweep on the trigger mutation finds pe1's P-1 violation
+        // and inserts the buffer.
+        const { result: pe2 } = eng.createPremise()
+        pe2.addExpression({
+            id: "trigger-var",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pe2.getId(),
+            type: "variable",
+            variableId: "v-p",
+            parentId: null,
+            position: 0,
+        })
+
+        const and = pe1.getExpressions().find((e) => e.id === "and-1")!
         expect(and.parentId).not.toBe("or-1")
     })
 })
