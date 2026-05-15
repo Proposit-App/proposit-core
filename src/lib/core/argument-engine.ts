@@ -64,6 +64,7 @@ import {
 } from "./argument-validation.js"
 import type { TExpressionInput } from "./expression-manager.js"
 import { normalizeArgument } from "../grammar/normalize.js"
+import { runAssistiveNormalization } from "../grammar/auto-normalize.js"
 import { isNakedQDerivationPremise } from "../grammar/naked-q.js"
 import {
     populateFromGrounding as populateFromGroundingImpl,
@@ -174,6 +175,19 @@ export class ArgumentEngine<
     private engineBehavior: "assistive" | "permissive"
     private generateId: () => string
     private restoringFromSnapshot = false
+    // D2b — re-entrance guard for the AN post-mutation hook. The
+    // `setOnMutate` callbacks (3 sites: createPremise, fromSnapshot,
+    // restoreFromSnapshot) fire `runAssistiveNormalization(this)` after
+    // every successful mutation when `behavior === 'assistive'`. AN
+    // itself mutates premises (removeExpression / reparentExpression /
+    // wrapInFormula), which re-fires `setOnMutate`. Without a guard the
+    // outer mutation would trigger nested AN sweeps. The guard is
+    // toggled by `_beginApplyAN()` / `_endApplyAN()` (see below); the
+    // chokepoint is `applyANToFixedPoint` in
+    // `src/lib/grammar/an-rules.ts`, so both
+    // `runAssistiveNormalization` (post-hook) and `normalizeArgument`
+    // (`engine.normalize()`) are covered by the same gate.
+    private applyingAN = false
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
     private cachedDescendantChecksum: string | null | undefined
@@ -576,6 +590,39 @@ export class ArgumentEngine<
         this.engineBehavior = b
     }
 
+    /**
+     * Acquire the AN re-entrance guard. Returns `true` iff the guard
+     * was acquired (i.e. AN is not already running for this engine);
+     * the caller is then obligated to call `_endApplyAN()` after the
+     * AN sweep. Returns `false` if AN is already in progress, in which
+     * case the caller short-circuits to avoid nested AN sweeps.
+     *
+     * Used by `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`
+     * (the single chokepoint for both `runAssistiveNormalization` and
+     * `normalizeArgument`). The post-mutation hook in `setOnMutate`
+     * calls `runAssistiveNormalization(this)` which delegates to
+     * `applyANToFixedPoint`; AN's own mutations re-fire `setOnMutate`,
+     * which would otherwise recurse. This guard breaks the recursion.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    public _beginApplyAN(): boolean {
+        if (this.applyingAN) return false
+        this.applyingAN = true
+        return true
+    }
+
+    /**
+     * Release the AN re-entrance guard. Pairs with `_beginApplyAN()`.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    public _endApplyAN(): void {
+        this.applyingAN = false
+    }
+
     public getArgument(): TArg {
         this.flushChecksums()
         return {
@@ -895,6 +942,16 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(id)
                 this.notifySubscribers()
+                // D2b — AN post-mutation hook per spec §5. Skipped
+                // during snapshot restoration (PE.fromSnapshot bypasses
+                // mutations anyway, but the guard is defensive).
+                // `runAssistiveNormalization` is a no-op in permissive
+                // mode; re-entrance from AN's own mutations is guarded
+                // inside `applyANToFixedPoint` via the engine's
+                // `_beginApplyAN()` flag.
+                if (!this.restoringFromSnapshot) {
+                    runAssistiveNormalization(this)
+                }
             })
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             collector.addedPremise(pm.toPremiseData())
@@ -1805,6 +1862,13 @@ export class ArgumentEngine<
                 engine.markDirty()
                 engine.reactiveDirty.premiseIds.add(premiseId)
                 engine.notifySubscribers()
+                // D2b — AN post-mutation hook per spec §5. See the
+                // matching comment in `createPremise`'s setOnMutate
+                // callback for the re-entrance / snapshot-restore
+                // rationale.
+                if (!engine.restoringFromSnapshot) {
+                    runAssistiveNormalization(engine)
+                }
             })
         }
         // Restore claim-bound variables first, then premise-bound variables
@@ -2242,6 +2306,13 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(premiseId)
                 this.notifySubscribers()
+                // D2b — AN post-mutation hook per spec §5. See the
+                // matching comment in `createPremise`'s setOnMutate
+                // callback for the re-entrance / snapshot-restore
+                // rationale.
+                if (!this.restoringFromSnapshot) {
+                    runAssistiveNormalization(this)
+                }
             })
         }
         this.markDirty()

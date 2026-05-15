@@ -793,6 +793,29 @@ export function applyANToFixedPoint<
     // surrounding `grammarConfig.enforceFormulaBetweenOperators`
     // machinery were deleted in D2. AN-2 and AN-3 can now run
     // unconditionally without tripping a P-1 throw mid-pass.
+    //
+    // D2b: re-entrance guard. AN's own mutations
+    // (`pe.removeExpression` / `pe.reparentExpression` /
+    // `pe.wrapInFormula`) re-fire `setOnMutate` on the engine, which
+    // calls `runAssistiveNormalization(this)` → `applyANToFixedPoint`
+    // again. The guard short-circuits nested entries so the outer
+    // sweep runs uninterrupted. `_beginApplyAN` returns `false` when
+    // AN is already in progress; we no-op in that case.
+    if (!engine._beginApplyAN()) return
+    try {
+        applyANRulesToConvergence(engine)
+    } finally {
+        engine._endApplyAN()
+    }
+}
+
+function applyANRulesToConvergence<
+    TArg extends TCoreArgument = TCoreArgument,
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TClaim extends TCoreClaim = TCoreClaim,
+>(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
     let lastChangedRule: "AN-1" | "AN-2" | "AN-3" | "AN-4" | null = null
     for (let i = 0; i < MAX_AN_ITERATIONS; i++) {
         // Order: AN-2/3/4 before AN-1 so buffer insertion (AN-1)
