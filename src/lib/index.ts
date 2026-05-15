@@ -10,8 +10,6 @@ export type {
 } from "./core/argument-engine.js"
 export { PremiseEngine } from "./core/premise-engine.js"
 export type { TPremiseEngineSnapshot } from "./core/premise-engine.js"
-export { ManagedDerivationPremiseEngine } from "./core/managed-derivation-premise-engine.js"
-export type { TVariableMaterializer } from "./core/managed-derivation-premise-engine.js"
 export { validateDerivationStructure } from "./utils/derivation-validation.js"
 export type * from "./core/interfaces/index.js"
 export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
