@@ -33,7 +33,7 @@
 // removes it entirely along with the legacy per-flag config).
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
-import { DEFAULT_GRAMMAR_CONFIG } from "../types/grammar.js"
+import { PERMISSIVE_GRAMMAR_CONFIG } from "../types/grammar.js"
 import type {
     TCoreArgument,
     TCorePremise,
@@ -65,38 +65,48 @@ export function normalizeArgument<
     // requests are no-ops.
     if (tier !== "presentable") return
 
-    // Temporarily flip each PE to DEFAULT_GRAMMAR_CONFIG so AN runs
-    // regardless of the engine's `behavior` (user-initiated bypass).
-    // Capture each PE's current config first so we can restore it even
-    // if a premise's normalize call throws.
+    // Temporarily flip each PE to PERMISSIVE_GRAMMAR_CONFIG for the
+    // duration of the AN pass. Two purposes:
     //
-    // **The swap is a no-op in D0a-D0d** because the legacy sweep
-    // `ExpressionManager.normalize()` (called via
-    // `pe.normalizeExpressions()` from `applyAN1`/`applyAN4`'s delegated
-    // body and from the AN-2/AN-3 native passes' downstream `pe.*`
-    // primitives) runs all 5 passes unconditionally — it does NOT
-    // consult `grammarConfig` flags. The per-flag gating only applies
-    // to *inline P-1 enforcement* in PE/EM mutation methods (the 11
-    // throw sites slated for removal in D2).
+    // 1. **Run AN regardless of `engine.behavior`** — `normalize()` is
+    //    a user-initiated bypass that runs even in permissive mode.
+    //    Capture each PE's current config first so we can restore it
+    //    even if a premise's normalize call throws.
     //
-    // The swap is **pre-positioned for D0e** (when native AN-1 will
-    // call `pe.addExpression` to insert a formula buffer between two
-    // operators — which trips the inline P-1 throw under permissive's
-    // strict-mode peer `enforceFormulaBetweenOperators=true`). D0f
-    // moves the swap inside `applyANToFixedPoint`; D2 deletes the
+    // 2. **Disarm the legacy inline P-1 enforcement throws** at PE/EM
+    //    mutation sites (briefing §10, audit list of 11 sites — slated
+    //    for removal in D2). With AN-2/AN-3 native from D0b/D0c and now
+    //    AN-1 + AN-4 native from D0e, the AN pass issues
+    //    `pe.removeExpression(_, false)` calls that route through
+    //    `ExpressionManager.removeAndPromote` (em.ts:830-887). On the
+    //    1-child branch, that helper enforces P-1 ("would promote a
+    //    non-not operator as a direct child of another operator") under
+    //    `enforceFormulaBetweenOperators: true`. AN-4's final
+    //    `removeExpression(formula, false)` is reachable on the
+    //    leaf-removal branch (formula has 0 children at that point) so
+    //    it does NOT trip P-1; however, native AN-2/AN-3 sequences on
+    //    pathological inputs CAN trip it. The PERMISSIVE swap turns the
+    //    throw off so AN can do its job. D0a-D0d previously used
+    //    `DEFAULT_GRAMMAR_CONFIG` here, which has
+    //    `enforceFormulaBetweenOperators: true` — that did NOT disarm
+    //    the throw; it was a no-op because the legacy sweep
+    //    `ExpressionManager.normalize()` runs all 5 passes
+    //    unconditionally. D0e (this swap) actually disarms it.
+    //
+    // D0f moves the swap inside `applyANToFixedPoint`; D2 deletes the
     // swap entirely along with the legacy per-flag config.
     const restoreEntries: {
         pe: ReturnType<
             ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>["listPremises"]
         >[number]
-        prevConfig: typeof DEFAULT_GRAMMAR_CONFIG
+        prevConfig: typeof PERMISSIVE_GRAMMAR_CONFIG
     }[] = []
 
     try {
         for (const pe of engine.listPremises()) {
             const prev = pe.getGrammarConfig()
             restoreEntries.push({ pe, prevConfig: prev })
-            pe.setGrammarConfig(DEFAULT_GRAMMAR_CONFIG)
+            pe.setGrammarConfig(PERMISSIVE_GRAMMAR_CONFIG)
         }
         applyANToFixedPoint(engine)
     } finally {

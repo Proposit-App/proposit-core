@@ -31142,3 +31142,178 @@ describe("ManagedDerivationPremiseEngine.populateFromSupports (v0.12)", () => {
         ).toThrow(/DERIVATION_ANTECEDENT_NON_EMPTY/)
     })
 })
+
+describe("PremiseEngine.reparentExpression (D0e)", () => {
+    // Public bundled-composite mutation per spec §8. Atomically moves an
+    // existing expression onto a new parent at a given position with no
+    // externally observable transient orphan state. Used by native AN-1
+    // (formula-buffer insertion) and native AN-4 (multi-child
+    // same-operator absorption) in `src/lib/grammar/an-rules.ts`.
+    //
+    // Throws only on Structural rules + entity-not-found per the
+    // briefing §10 "throws stay" list: S-1 (FK soundness), S-4
+    // (no-cycles), S-9 (sibling-position uniqueness — only when a
+    // sibling other than the moved expression already occupies the
+    // target slot; same-position no-op is tolerated).
+
+    function permissivePremise(): PremiseEngine {
+        // Use permissive behavior so we can construct multi-level shapes
+        // (e.g. OR with operator children for the reparent target setup)
+        // without the assistive AN post-hook re-normalizing between
+        // setup calls.
+        const eng = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        eng.addVariable(VAR_R)
+        const { result: pe } = eng.createPremise()
+        return pe
+    }
+
+    it("reparents an expression onto a new parent at the given position (happy path)", () => {
+        // OR(formula(P), formula(Q)) → move expr-p to be a direct child of
+        // OR at position 2.
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("or-root", "or"))
+        pe.addExpression(
+            makeFormulaExpr("f1", { parentId: "or-root", position: 0 })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "f1",
+                position: 0,
+            })
+        )
+        pe.addExpression(
+            makeFormulaExpr("f2", { parentId: "or-root", position: 1 })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "f2",
+                position: 0,
+            })
+        )
+
+        const { result } = pe.reparentExpression("expr-p", "or-root", 2)
+        expect(result.parentId).toBe("or-root")
+        expect(result.position).toBe(2)
+        const orChildren = pe.getChildExpressions("or-root")
+        expect(orChildren.map((c) => c.id).sort()).toEqual([
+            "expr-p",
+            "f1",
+            "f2",
+        ])
+        // f1 now has no children — expr-p moved out.
+        expect(pe.getChildExpressions("f1")).toHaveLength(0)
+    })
+
+    it("supports newPosition: 0 cleanly (used by native AN-1)", () => {
+        // Setup: F → OR (the formula has the OR at some non-zero
+        // position). Reparent OR to position 0 under F.
+        const pe = permissivePremise()
+        pe.addExpression(makeFormulaExpr("f", { parentId: null }))
+        pe.addExpression(
+            makeOpExpr("or-1", "or", { parentId: "f", position: 5 })
+        )
+
+        const { result } = pe.reparentExpression("or-1", "f", 0)
+        expect(result.position).toBe(0)
+        expect(result.parentId).toBe("f")
+        const children = pe.getChildExpressions("f")
+        expect(children).toHaveLength(1)
+        expect(children[0].id).toBe("or-1")
+        expect(children[0].position).toBe(0)
+    })
+
+    it("throws when expressionId does not exist (entity-not-found)", () => {
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("and-root", "and"))
+        expect(() =>
+            pe.reparentExpression("does-not-exist", "and-root", 0)
+        ).toThrowError(/not found in premise/)
+    })
+
+    it("throws when newParentId does not exist (S-1 FK soundness)", () => {
+        const pe = permissivePremise()
+        pe.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        expect(() =>
+            pe.reparentExpression("expr-p", "ghost-parent", 0)
+        ).toThrowError(/not found in premise/)
+    })
+
+    it("throws S-4 when newParentId === expressionId (self-parent cycle)", () => {
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("or-root", "or"))
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "or-root",
+                position: 0,
+            })
+        )
+        expect(() =>
+            pe.reparentExpression("or-root", "or-root", 0)
+        ).toThrowError(/S-4.*under itself/)
+    })
+
+    it("throws S-4 when newParentId is a descendant of expressionId (would create a cycle)", () => {
+        // OR_outer → formula → OR_inner. Try to reparent OR_outer under
+        // OR_inner — a cycle.
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("or-outer", "or"))
+        pe.addExpression(
+            makeFormulaExpr("f", { parentId: "or-outer", position: 0 })
+        )
+        pe.addExpression(
+            makeOpExpr("or-inner", "or", { parentId: "f", position: 0 })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "or-inner",
+                position: 0,
+            })
+        )
+        expect(() =>
+            pe.reparentExpression("or-outer", "or-inner", 1)
+        ).toThrowError(/S-4.*cycle/)
+    })
+
+    it("throws S-9 when newPosition is already occupied by a different sibling", () => {
+        // OR(P at 0, Q at 1). Try to reparent P to position 1 — Q
+        // already there.
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("or-root", "or"))
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "or-root",
+                position: 0,
+            })
+        )
+        pe.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "or-root",
+                position: 1,
+            })
+        )
+        expect(() =>
+            pe.reparentExpression("expr-p", "or-root", 1)
+        ).toThrowError(/S-9.*already occupied/)
+    })
+
+    it("tolerates same-parent, same-position no-op (does not throw S-9 on its own slot)", () => {
+        // expr-p is already at (or-root, 0). Reparenting it to the same
+        // slot should be a no-op, not an S-9 throw. (The expression's
+        // own position is not a "colliding sibling" against itself.)
+        const pe = permissivePremise()
+        pe.addExpression(makeOpExpr("or-root", "or"))
+        pe.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "or-root",
+                position: 0,
+            })
+        )
+        const { result } = pe.reparentExpression("expr-p", "or-root", 0)
+        expect(result.parentId).toBe("or-root")
+        expect(result.position).toBe(0)
+    })
+})

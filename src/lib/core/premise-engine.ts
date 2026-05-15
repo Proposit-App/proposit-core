@@ -687,6 +687,123 @@ export class PremiseEngine<
     }
 
     /**
+     * Reparent an existing expression onto a new parent at the given
+     * position. Bundled-composite mutation per spec §8 — the parent
+     * reference, position field, and checksum-dirty propagation update
+     * atomically in a single call. No transient orphan state is
+     * externally observable.
+     *
+     * Enforces Structural rules only (S-1 FK soundness, S-4 no-cycles,
+     * entity-not-found, and S-9 logical sibling-position uniqueness at
+     * the bundled-composite level — same-position collisions with the
+     * moved expression's own prior slot are tolerated as transient,
+     * since the move atomically frees that slot). Higher-tier violations
+     * never throw here — Evaluable/Derivable/Presentable issues surface
+     * through `validate(tier)` per spec §7.1.
+     *
+     * Used by the native AN-1 (formula-buffer insertion) and AN-4
+     * (same-operator absorption) passes in `src/lib/grammar/an-rules.ts`,
+     * and available to repair primitives and future composite ops that
+     * need a public reparent surface (e.g. `removeOrphanOperators`).
+     *
+     * @throws If `expressionId` or `newParentId` does not exist in this
+     *         premise.
+     * @throws S-4: if `newParentId === expressionId` or `newParentId` is
+     *         a descendant of `expressionId`.
+     * @throws S-9: if another sibling (NOT the expression being moved)
+     *         already occupies `newPosition` under `newParentId`.
+     *
+     * @since 1.0.0
+     */
+    public reparentExpression(
+        expressionId: string,
+        newParentId: string,
+        newPosition: number
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        return this.withValidation(() => {
+            const expression = this.expressions.getExpression(expressionId)
+            if (!expression) {
+                throw new Error(
+                    `Expression "${expressionId}" not found in premise "${this.premise.id}".`
+                )
+            }
+            const newParent = this.expressions.getExpression(newParentId)
+            if (!newParent) {
+                throw new Error(
+                    `Parent expression "${newParentId}" not found in premise "${this.premise.id}".`
+                )
+            }
+
+            // S-4 no-cycles: newParent cannot be expressionId itself nor
+            // a descendant of expressionId.
+            if (newParentId === expressionId) {
+                throw new Error(
+                    `S-4: cannot reparent expression "${expressionId}" under itself.`
+                )
+            }
+            if (this.isDescendantOf(newParentId, expressionId)) {
+                throw new Error(
+                    `S-4: cannot reparent expression "${expressionId}" under its descendant "${newParentId}" (would create a cycle).`
+                )
+            }
+
+            // S-9 sibling-position uniqueness — only fires if a sibling
+            // OTHER than the moved expression occupies the target slot.
+            // Same-parent move with newPosition === expression.position
+            // is a no-op-position case and tolerated.
+            const isSameParentSamePosition =
+                expression.parentId === newParentId &&
+                expression.position === newPosition
+            if (!isSameParentSamePosition) {
+                const siblings =
+                    this.expressions.getChildExpressions(newParentId)
+                const collision = siblings.find(
+                    (s) => s.id !== expressionId && s.position === newPosition
+                )
+                if (collision) {
+                    throw new Error(
+                        `S-9: position ${newPosition} is already occupied by sibling "${collision.id}" under parent "${newParentId}".`
+                    )
+                }
+            }
+
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.reparentExpression(
+                    expressionId,
+                    newParentId,
+                    newPosition
+                )
+                const changes = this.finalizeExpressionMutation(collector)
+                return {
+                    result: this.expressions.getExpression(expressionId)!,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
+            }
+        })
+    }
+
+    /**
+     * Returns true iff `candidateId` is a descendant of `ancestorId` in
+     * this premise's expression tree. Used by `reparentExpression` for
+     * the S-4 no-cycles check.
+     */
+    private isDescendantOf(candidateId: string, ancestorId: string): boolean {
+        const stack: string[] = [ancestorId]
+        while (stack.length > 0) {
+            const cursor = stack.pop()!
+            for (const child of this.expressions.getChildExpressions(cursor)) {
+                if (child.id === candidateId) return true
+                stack.push(child.id)
+            }
+        }
+        return false
+    }
+
+    /**
      * Performs a full normalization sweep on this premise's expression tree.
      * Collapses unjustified formulas, operators with 0/1 children, and inserts
      * formula buffers where needed. Works regardless of `autoNormalize` setting.
