@@ -253,22 +253,20 @@ To express "this derivation should NOT be supported by this axiom," wrap the axi
 
 ### Derivation Premises
 
-As of v0.11.0, every premise carries an immutable `type` discriminator:
+Every premise carries an immutable `type` discriminator:
 
-- **Freeform** (`type: "freeform"`) — the classic premise with no structural constraints. Allows any well-formed expression tree. This is the default when no `type` is specified.
-- **Derivation** (`type: "derivation"`) — a structurally-constrained premise that commits to deriving a specific named claim. Requires a `derivedClaimId` at creation time. The expression tree is restricted to one of two canonical forms:
-    - **Naked-Q** — a single variable expression at the root, referencing the consequent variable bound to `derivedClaimId`. This is the initial state created automatically on `createPremise({ type: "derivation", derivedClaimId })` and represents "no support given yet."
-    - **Implication/biconditional form** — `IMPLIES(antecedent, Q)` or `IFF(antecedent, Q)`, where Q is the consequent variable and the antecedent can be any valid expression tree (typically a variable or `OR` of source variables).
+- **Freeform** (`type: "freeform"`) — the classic premise with no shape constraints beyond Structural data integrity. Allows any well-formed expression tree.
+- **Derivation** (`type: "derivation"`) — a shape-constrained premise that commits to deriving a specific named claim. Requires a `derivedClaimId` at creation time.
 
-The consequent slot (the Q variable expression) is locked — it cannot be removed, reassigned, or negated. The root operator can only be swapped between `implies` and `iff` — not changed to `and`, `or`, or `not`.
+A derivation premise's expression tree is constrained Structurally (S-14) to a root operator in `{ variable, implies, iff }` and Derivable-ly (D-1) to one of two canonical shapes:
 
-Use `ManagedDerivationPremiseEngine` (an opt-in subclass of `PremiseEngine`) to enforce these rules on every mutation:
+- **Naked-Q** — a single variable expression at the root, bound to `derivedClaimId`. This is the initial state created automatically on `createPremise({ type: "derivation", derivedClaimId })` and represents "no support given yet." Naked-Q is a **valid Derivable state** — `validate('derivable')` does not flag it. (Whether a naked-Q premise should be populated is an application-layer UX concern in `proposit-server`.)
+- **Populated form** — root `IMPLIES` with the consequent at position 1, and the antecedent being either a single claim variable (D-2) or `OR` of same-grounding-kind claim variables (D-3 — no mixing of citation and axiom claim variables in a single antecedent). At Presentable the `OR` is wrapped in a `formula` buffer (`IMPLIES(formula(OR(c, c, ...)), Q)`) per P-1.
+
+`IFF` is structurally allowed at a derivation premise's root (S-14, preserving the existing two-way-propagation evaluation feature for programmatic / CLI consumers) but is flagged as a Derivable violation (D-1 restricts the populated form to `IMPLIES`).
 
 ```typescript
-import {
-    PropositCore,
-    ManagedDerivationPremiseEngine,
-} from "@proposit/proposit-core"
+import { PropositCore } from "@proposit/proposit-core"
 
 const core = new PropositCore()
 
@@ -303,20 +301,14 @@ const { result: pm } = engine.createPremise({
     derivedClaimId: claim.id,
 })
 
-// pm is a PremiseEngine; upgrade to the managed engine for mutation safety
-// (In practice, pass a factory to ArgumentEngine so engines are created as managed)
-
-// One-shot populate from citations: builds IMPLIES(VariableS1, Q)
-// (Requires a ManagedDerivationPremiseEngine instance)
+// Populate from citations (factory; atomic replacement of the naked-Q tree)
+const result = engine.populateFromCitations(pm.getId(), core.citations)
+// result = { kind: 'populated' | 'no-op', state, resolved? }
 ```
 
-The `populateFromSupports` helper on `ManagedDerivationPremiseEngine` is the recommended way to build the antecedent from the combined citation + axiom support set (renamed from `populateFromCitations` in v0.12.0):
+`populateFromCitations` and `populateFromAxioms` are the recommended way to build a derivation premise's antecedent from the relevant connection library. Each method operates on **one grounding kind** (D-3 forbids mixing) and is a **factory** — it constructs the fully-populated tree (`IMPLIES(c, Q)` for `n = 1`; `IMPLIES(OR(c1, …, cn), Q)` for `n ≥ 2`) and atomically replaces the existing naked-Q tree. If the premise is already populated, the factory **no-ops and returns the existing state** — D-3 is non-Structural, so mutations never throw on it. The UI explicitly confirms with the user (and clears the antecedent via a repair primitive) before switching grounding kinds, satisfying the no-changes-without-consent principle.
 
-- `n = 0` supports: no change (premise stays in naked-Q form)
-- `n = 1` support: produces `IMPLIES(S1, Q)`
-- `n ≥ 2` supports: produces `IMPLIES(OR(S1, ..., Sn), Q)`
-
-The helper takes `(citationLib, axiomLib, argumentEngine)`. Citations are listed first, axioms second; source order preserved within each. `populateFromSupports` is one-shot — it rejects calls on premises that already have a non-empty antecedent. Delete and re-create the premise to repopulate.
+For mid-edit cases where a single command should populate from whichever support kind exists, the CLI's `premises populate-supports` command runs `populateFromCitations` first, then `populateFromAxioms` on the result — citations take effect when present, otherwise axioms do, matching the D-3 "no mixing" rule.
 
 ### Auto-variable creation
 
@@ -773,35 +765,50 @@ const result = richArg.evaluate({
 
 ## Invalid Constructions and How They're Handled
 
-The engine enforces structural invariants at two levels: **construction-time** (throws immediately) and **validation-time** (detected by `validateEvaluability()` before evaluation). The tables below list every invalid construction.
+The engine enforces invariants at two levels:
 
-### Expression tree — prevented at construction time
+- **Mutation-time throws** for **Structural-tier** rules (S-1..S-14 — see `docs/Proposit_Grammar.md` §3.1). Mutations on `ArgumentEngine` / `PremiseEngine` reject Structural violations with a thrown error.
+- **Validation-time violations** for everything else. `engine.validate('evaluable' | 'derivable' | 'presentable')` returns `readonly TViolation[]` covering tiers up to the requested level. Mutations **never** throw on Evaluable, Derivable, or Presentable issues — they surface through `validate(tier)` and can be addressed by the AN post-hook (`assistive` behavior) or by user-initiated repair primitives.
 
-| Invalid construction                                                             | What happens                                                                                               |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `implies` or `iff` with `parentId !== null`                                      | Throws — root-only operators must be the root of a premise's tree                                          |
-| Non-`not` operator as direct child of another operator                           | Throws — a `formula` node must sit between them (unless `autoNormalize` is `true`, which auto-inserts one) |
-| Expression with `parentId === id` (self-parentage)                               | Throws                                                                                                     |
-| Duplicate expression ID within a premise                                         | Throws                                                                                                     |
-| Expression references a non-existent `parentId`                                  | Throws                                                                                                     |
-| Expression's parent is a `variable` expression                                   | Throws — only operators and formulas can have children                                                     |
-| `formula` node already has a child (adding a second)                             | Throws — formulas allow exactly one child                                                                  |
-| `not` operator already has a child (adding a second)                             | Throws — `not` is unary                                                                                    |
-| `implies` or `iff` already has two children (adding a third)                     | Throws — binary operators require exactly two                                                              |
-| Two siblings share the same `position` under the same parent                     | Throws                                                                                                     |
-| `insertExpression` with `leftNodeId === rightNodeId`                             | Throws                                                                                                     |
-| `insertExpression` or `wrapExpression` targeting a root-only operator as a child | Throws — `implies`/`iff` cannot be subordinated                                                            |
-| `wrapExpression` with `not` as the wrapping operator                             | Throws — `not` is unary but wrapping always produces two children                                          |
-| Expression's `argumentId`/`argumentVersion` doesn't match the premise            | Throws                                                                                                     |
+The tables below list invalid constructions and what happens.
 
-### Expression tree — detected by validation
+### Expression tree — Structural (thrown on mutation)
 
-| Invalid construction                                                  | Error code                      |
-| --------------------------------------------------------------------- | ------------------------------- |
-| `and` or `or` operator with fewer than 2 children                     | `EXPR_CHILD_COUNT_INVALID`      |
-| `not` or `formula` with 0 children                                    | `EXPR_CHILD_COUNT_INVALID`      |
-| `implies` or `iff` without exactly 2 children with distinct positions | `EXPR_BINARY_POSITIONS_INVALID` |
-| Expression references an undeclared variable                          | `EXPR_VARIABLE_UNDECLARED`      |
+| Invalid construction                                                             | What happens / rule                                            |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `implies` or `iff` with `parentId !== null`                                      | Throws — S-5 (root-only IMPLIES/IFF)                           |
+| Expression with `parentId === id` (self-parentage)                               | Throws — S-4 (no cycles)                                       |
+| Duplicate expression ID within a premise                                         | Throws — S-10 (`EXPR_DUPLICATE_ID`)                            |
+| Expression references a non-existent `parentId`                                  | Throws — S-1 (FK soundness)                                    |
+| Expression's parent is a `variable` expression                                   | Throws — only operators and formulas can have children         |
+| `formula` node with zero or more than one child                                  | Throws — S-13 (`formula` unary)                                |
+| `not` operator with anything other than one child                                | Throws — S-12 (`not` unary)                                    |
+| `implies` or `iff` with anything other than two children                         | Throws — S-8 (binary arity)                                    |
+| `implies` or `iff` antecedent / consequent at wrong positions                    | Throws — S-8 (`EXPR_BINARY_POSITIONS_INVALID`)                 |
+| Two siblings share the same `position` under the same parent                     | Throws — S-9 (sibling position uniqueness)                     |
+| `insertExpression` with `leftNodeId === rightNodeId`                             | Throws                                                         |
+| `insertExpression` or `wrapExpression` targeting a root-only operator as a child | Throws — S-5 (root-only IMPLIES/IFF)                           |
+| `wrapExpression` with `not` as the wrapping operator                             | Throws — `not` is unary; wrapping always produces two children |
+| Expression's `argumentId`/`argumentVersion` doesn't match the premise            | Throws — S-1 (FK soundness)                                    |
+| Derivation premise root operator outside `{ variable, implies, iff }`            | Throws — S-14 (`DERIVATION_ROOT_OPERATOR_INVALID`)             |
+
+In v1.0 the engine no longer throws on non-`not` operators placed as direct children of operators (the pre-1.0 `enforceFormulaBetweenOperators` throw). That shape is now a **Presentable** issue (P-1); in `assistive` behavior the AN post-hook inserts a `formula` buffer (AN-1), and in `permissive` behavior it surfaces via `validate('presentable')`. Neither mode throws.
+
+### Expression tree — Evaluable / Presentable violations (returned by `validate`)
+
+| Invalid construction                                             | Rule code | Tier        |
+| ---------------------------------------------------------------- | --------- | ----------- |
+| `and` or `or` operator with fewer than 2 children                | `E-1`     | Evaluable   |
+| Variable binding does not resolve                                | `E-3`     | Evaluable   |
+| Axiomatic-bound variable assignment supplied to `evaluate`       | `E-4`     | Evaluable   |
+| Derivation premise expression tree lacks the consequent variable | `E-5`     | Evaluable   |
+| Claim has more than one paired derivation premise                | `E-6`     | Evaluable   |
+| Argument has premises but no conclusion designated               | `E-7`     | Evaluable   |
+| Non-`not` operator placed directly under another operator        | `P-1`     | Presentable |
+| `not(not(x))` chain in the tree                                  | `P-2`     | Presentable |
+| `formula` wrapping no operator (leaf or single `not`)            | `P-3`     | Presentable |
+| Single-child `and` / `or`                                        | `P-4`     | Presentable |
+| Same-operator parent/grandchild separated only by `formula`      | `P-5`     | Presentable |
 
 ### Variables — prevented at construction time
 
@@ -826,41 +833,43 @@ The engine enforces structural invariants at two levels: **construction-time** (
 | -------------------------------------------------- | -------------------------- | -------- |
 | Premise-bound variable references an empty premise | `EXPR_BOUND_PREMISE_EMPTY` | Warning  |
 
-### Premises — prevented at construction time
+### Premises — Structural (thrown on mutation)
 
-| Invalid construction                                                                   | What happens / error code                              |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Duplicate premise ID                                                                   | Throws                                                 |
-| Adding a second root expression (`parentId: null`) to a premise                        | Throws                                                 |
-| `createPremise({ type: "derivation" })` without `derivedClaimId`                       | Throws — `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` |
-| `createPremise({ type: "derivation", derivedClaimId })` when claim not in library      | Throws — `CREATE_DERIVATION_CLAIM_NOT_FOUND`           |
-| `ManagedDerivationPremiseEngine` constructed on a non-derivation premise               | Throws — `DERIVATION_TYPE_MISMATCH`                    |
-| `ManagedDerivationPremiseEngine.fromSnapshot` on a structurally invalid tree           | Throws — `DERIVATION_STRUCTURE_INVALID`                |
-| Removing or negating the consequent expression on a managed derivation premise         | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
-| Updating the consequent variable ID or operator on a managed derivation premise        | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
-| Inserting an expression into the consequent slot of a managed derivation premise       | Throws — `DERIVATION_CONSEQUENT_LOCKED`                |
-| Swapping root operator to `and`/`or`/`not` on a managed derivation premise             | Throws — `DERIVATION_ROOT_OPERATOR_INVALID`            |
-| `populateFromSupports` on a derivation premise that already has a non-empty antecedent | Throws — `DERIVATION_ANTECEDENT_NON_EMPTY`             |
-| `ensureClaimBoundVariable(claimId)` when the claim is not in the library               | Throws — `CLAIM_NOT_FOUND`                             |
-| Restoring a pre-v0.11 snapshot whose premises lack the `type` field                    | Throws — `LEGACY_PREMISE_MISSING_TYPE`                 |
+| Invalid construction                                                              | What happens / error code                              |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Duplicate premise ID                                                              | Throws — S-10                                          |
+| Adding a second root expression (`parentId: null`) to a premise                   | Throws                                                 |
+| `createPremise({ type: "derivation" })` without `derivedClaimId`                  | Throws — `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` |
+| `createPremise({ type: "derivation", derivedClaimId })` when claim not in library | Throws — `CREATE_DERIVATION_CLAIM_NOT_FOUND`           |
+| Setting a derivation premise's root operator to `and`/`or`/`not`/`formula`        | Throws — S-14 (`DERIVATION_ROOT_OPERATOR_INVALID`)     |
+| `ensureClaimBoundVariable(claimId)` when the claim is not in the library          | Throws — `CLAIM_NOT_FOUND`                             |
+| Restoring a pre-v0.11 snapshot whose premises lack the `type` field               | Throws — `LEGACY_PREMISE_MISSING_TYPE`                 |
 
-### Premises — detected by validation
+In v1.0 there is no `ManagedDerivationPremiseEngine` subclass — derivation-premise canonical shape is enforced via the Derivable-tier rules (D-1..D-6, surfaced through `validate('derivable')`) and the new Evaluable rule E-6 (claim-derivation pairing, cardinality ≤ 1). Mutations on derivation premises go through the regular `PremiseEngine` and never throw on Derivable issues — they surface via `validate(tier)` and can be cleaned up by AN (assistive mode) or repair primitives.
 
-| Invalid construction                                          | Error code                                   |
-| ------------------------------------------------------------- | -------------------------------------------- |
-| Premise has no expressions                                    | `PREMISE_EMPTY`                              |
-| Premise has expressions but no root                           | `PREMISE_ROOT_MISSING`                       |
-| `rootExpressionId` doesn't match the actual root              | `PREMISE_ROOT_MISMATCH`                      |
-| Derivation premise tree is structurally broken (at eval time) | `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` |
+### Premises — Evaluable / Derivable violations (returned by `validate`)
 
-### Argument — detected by validation
+| Invalid construction                                                                   | Rule code | Tier      |
+| -------------------------------------------------------------------------------------- | --------- | --------- |
+| Derivation premise expression tree lacks the consequent variable                       | `E-5`     | Evaluable |
+| Normal claim has more than one paired derivation premise                               | `E-6`     | Evaluable |
+| Derivation premise's populated form is not `IMPLIES(c, Q)` or `IMPLIES(OR, Q)`         | `D-1`     | Derivable |
+| Derivation premise antecedent has a single citation not wrapped as `IMPLIES(c, Q)`     | `D-2`     | Derivable |
+| Derivation premise antecedent mixes axiom-bound and citation-bound variables           | `D-3`     | Derivable |
+| Variable bound to an axiomatic claim appears outside a derivation premise's antecedent | `D-4`     | Derivable |
+| Variable bound to a citation claim appears outside a derivation premise's antecedent   | `D-5`     | Derivable |
+| Derivation premise has `role: "conclusion"`                                            | `D-6`     | Derivable |
 
-| Invalid construction                                        | Error code                             |
-| ----------------------------------------------------------- | -------------------------------------- |
-| No conclusion premise designated                            | `ARGUMENT_NO_CONCLUSION`               |
-| Conclusion premise ID points to a non-existent premise      | `ARGUMENT_CONCLUSION_NOT_FOUND`        |
-| Same variable ID used with multiple symbols across premises | `ARGUMENT_VARIABLE_ID_SYMBOL_MISMATCH` |
-| Same variable symbol used with multiple IDs across premises | `ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS`   |
+Naked-Q (a derivation premise whose tree is a single variable bound to `derivedClaimId`) is a **valid Derivable state** in v1.0 — it represents "no support given yet" and is not flagged by `validate('derivable')`. `evaluate()` and `checkValidity()` **skip** naked-Q derivation premises (they neither assert their consequent nor support its derivation); this replaces the pre-1.0 `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` throw. Server-side publish-time pruning deletes naked-Q derivation premises before storage, so post-publish arguments never carry them.
+
+### Argument — Evaluable violations (returned by `validate`)
+
+| Invalid construction                                        | Rule code / engine code                                          | Tier       |
+| ----------------------------------------------------------- | ---------------------------------------------------------------- | ---------- |
+| Argument has premises but no conclusion designated          | `E-7` (`ARGUMENT_NO_CONCLUSION`)                                 | Evaluable  |
+| Conclusion premise ID points to a non-existent premise      | `E-7` (`ARGUMENT_CONCLUSION_NOT_FOUND`)                          | Evaluable  |
+| Same variable ID used with multiple symbols across premises | `ARGUMENT_VARIABLE_ID_SYMBOL_MISMATCH` (engine error)            | —          |
+| Same variable symbol used with multiple IDs across premises | S-11 (`ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS`) — thrown on mutation | Structural |
 
 ### Claims, citations, and axioms — prevented at construction time
 
@@ -894,16 +903,18 @@ These are not errors — they're intentional structural maintenance:
 | `removePremise(id)`    | All variables bound to the premise are removed (which cascades to their expressions). If the premise was the conclusion, the conclusion becomes unset.                                                                                              |
 | `removeExpression(id)` | The expression's subtree is deleted. Ancestor operators with 0 remaining children are deleted. Operators with 1 remaining child promote that child into their slot (operator collapse). Promotions are checked against nesting and root-only rules. |
 
-### Grammar configuration
+### Engine behavior (`assistive` vs `permissive`)
 
-Two options on `grammarConfig` control expression tree strictness:
+The pre-1.0 `grammarConfig` / `autoNormalize` / `enforceFormulaBetweenOperators` machinery is removed in v1.0. Expression-tree shape is now driven by the four-tier grammar (Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable; see `docs/Proposit_Grammar.md`) together with a single engine setting:
 
-| Option                           | Default | Effect                                                                                                                                                                                                                         |
-| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `enforceFormulaBetweenOperators` | `true`  | When `true`, non-`not` operators cannot be direct children of operators — a `formula` buffer is required.                                                                                                                      |
-| `autoNormalize`                  | `false` | When `true`, `addExpression` auto-inserts `formula` buffers instead of throwing. Only applies to `addExpression` and `loadExpressions` — `insertExpression`, `wrapExpression`, and `removeExpression` always enforce or throw. |
+| Setting                  | Default    | Effect                                                                                                                                                                                                                   |
+| ------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `behavior: "assistive"`  | (default)  | After every successful Structural mutation, the engine runs auto-normalization (AN-1..AN-4) as a post-hook. AN preserves Presentable: if the pre-mutation state was Presentable, the post-mutation state is Presentable. |
+| `behavior: "permissive"` | (advanced) | AN does not run. Mutations execute exactly as described; the engine guarantees Structural integrity only. Evaluable / Derivable / Presentable violations surface via `validate(tier)` and never throw.                   |
 
-`PERMISSIVE_GRAMMAR_CONFIG` (`{ enforceFormulaBetweenOperators: false, autoNormalize: false }`) is used by `fromSnapshot`/`fromData` to load previously saved trees without re-validation.
+Set the behavior at construction (`new ArgumentEngine(arg, claims, { behavior: 'permissive' })`) or at runtime (`engine.setBehavior('permissive')`). Switching `permissive → assistive` does **not** auto-run a global `normalize()` pass — the UI prompts the user explicitly before invoking it.
+
+`fromSnapshot()` and `fromData()` accept any **Structural** state — there is no `LOAD_GRAMMAR` / `STRICT_GRAMMAR` split. Lower-tier violations are queryable post-load via `validate(tier)`. The only load failure is a truly broken (non-Structural) snapshot.
 
 ## API Reference
 

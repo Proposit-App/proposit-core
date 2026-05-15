@@ -62,9 +62,7 @@ _Since v0.11.0._
 
 Returns the derivation-specific subset of `validateEvaluability` checks. Only `type: "derivation"` premises are inspected; freeform premises are ignored. Useful for pre-checking derivation structure before entering the full evaluation pipeline, without requiring a conclusion or complete role state.
 
-Derivation premises with broken trees produce violations with code `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`.
-
-_Since v0.11.0._
+In v1.0 this method's checks have been folded into the four-tier grammar — derivation-premise shape lives at the Derivable tier (D-1..D-6) and naked-Q is a **valid Derivable state** (no longer a `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` throw). For new code, prefer `engine.validate('derivable')` and filter the returned `TViolation[]` by `code` starting with `D-`. The `validateDerivationStructures()` wrapper is retained for backwards compatibility.
 
 ---
 
@@ -265,7 +263,7 @@ Returns a cross-premise summary of every variable referenced by expressions, key
 
 ### `validateEvaluability()` → `TValidationResult`
 
-Checks whether the argument is structurally ready to evaluate. Returns `{ ok, issues }`. As of v0.11.0, the sweep includes a derivation premise pre-flight: every `type: "derivation"` premise is validated via `validateDerivationStructure`. Broken derivation premises produce issues with code `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` and prevent `evaluate()` and `checkValidity()` from proceeding. Use `validateDerivationStructures()` to isolate derivation checks without running the full evaluability sweep.
+Checks whether the argument is structurally ready to evaluate. Returns `{ ok, issues }`. The sweep includes a derivation premise pre-flight: every `type: "derivation"` premise is checked against the Derivable-tier rules (D-1..D-6 — see `docs/Proposit_Grammar.md` §3.3). **Naked-Q derivation premises are valid in v1.0** and are skipped by `evaluate()` / `checkValidity()` rather than being rejected (this replaces the pre-1.0 `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` throw). Use `validateDerivationStructures()` to isolate derivation checks, or prefer `engine.validate('derivable')` for the full Derivable-tier violation list.
 
 As of v0.12.0, `evaluate()` and `checkValidity()` additionally run a claim-type pre-pass on their assignment input. If the assignment contains an entry for a claim-bound variable whose bound claim has `type === "axiomatic"`, the call is rejected with `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` before any evaluation work runs. This is enforced inside `ArgumentEngine` (not in the standalone evaluator), so the structural `TArgumentEvaluationContext` interface is unchanged. As of v0.12.1, key presence is checked via `Object.hasOwn`, so an explicit `undefined` value in the assignment map is rejected too.
 
@@ -338,9 +336,11 @@ Returns a serialisable snapshot of the full engine state (`{ argument, variables
 
 ---
 
-### `static fromSnapshot(snapshot, claimLibrary, claimCitationLibrary, grammarConfig?, checksumVerification?, generateId?)` → `ArgumentEngine`
+### `static fromSnapshot(snapshot, claimLibrary, checksumVerification?, generateId?)` → `ArgumentEngine`
 
-Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `claimLibrary` (implementing `TClaimLookup`) and `claimCitationLibrary` (implementing `TClaimConnectionLookup<TCitation>` as of v0.12.0) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`. The optional `grammarConfig` parameter overrides expression-tree grammar enforcement during restoration — defaults to `PERMISSIVE_GRAMMAR_CONFIG` so that previously saved trees load without validation errors. The optional `checksumVerification` (`"ignore" | "strict"`) controls whether stored checksums are verified or ignored on load; the optional `generateId` overrides the snapshot's persisted ID generator.
+Reconstructs an `ArgumentEngine` from a previously captured snapshot. Requires the same `claimLibrary` (implementing `TClaimLookup`) that would be passed to the constructor. Creates a `VariableManager` from the snapshot's variable data, then passes it as a dependency to each `PremiseEngine.fromSnapshot()`. **Accepts any Structural-valid snapshot** — lower-tier violations (Evaluable, Derivable, Presentable) are queryable post-load via `engine.validate(tier)` rather than rejected at load time. Truly broken (non-Structural) snapshots throw `InvariantViolationError`. The optional `checksumVerification` (`"ignore" | "strict"`) controls whether stored checksums are verified or ignored on load; the optional `generateId` overrides the snapshot's persisted ID generator.
+
+> `behavior` is intentionally not serialized into the snapshot — a restored engine defaults to `'assistive'`. The fork path (`forkArgumentEngine` / `PropositCore.forkArgument`) threads the source engine's `behavior` through explicitly so fork callers don't lose the setting. Non-fork callers may pass an explicit `behavior` via `setBehavior()` after restoration.
 
 ---
 
@@ -352,13 +352,13 @@ Runs a comprehensive invariant validation sweep on the entire argument. Delegate
 
 ### `rollback(snapshot)` → `void`
 
-Restores the engine's internal state in place from a previously captured snapshot. Validates the restored state against the engine's grammar config; if validation fails, the pre-rollback state is restored and `InvariantViolationError` is thrown. Equivalent to reconstructing via `fromSnapshot` but mutates the existing instance (preserving references held by callers).
+Restores the engine's internal state in place from a previously captured snapshot. Validates the restored state at the Structural tier; if Structural validation fails, the pre-rollback state is restored and `InvariantViolationError` is thrown. Equivalent to reconstructing via `fromSnapshot` but mutates the existing instance (preserving references held by callers).
 
 ---
 
-### `static fromData(argument, claimLibrary, claimCitationLibrary, variables, premises, expressions, roles, config?, grammarConfig?, checksumVerification?)` → `ArgumentEngine`
+### `static fromData(argument, claimLibrary, variables, premises, expressions, roles, config?, checksumVerification?)` → `ArgumentEngine`
 
-Bulk-loads an engine from flat arrays (as returned by DB queries). Requires `claimLibrary` and `claimCitationLibrary` instances. Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments. The optional `grammarConfig` parameter controls grammar enforcement during loading — defaults to the config in `options`, or `DEFAULT_GRAMMAR_CONFIG` if none is provided. Validates the loaded state; throws `InvariantViolationError` if the data is invalid under the grammar config.
+Bulk-loads an engine from flat arrays (as returned by DB queries). Requires a `claimLibrary` (implementing `TClaimLookup`). Groups expressions by `premiseId`, creates a shared `VariableManager`, creates each `PremiseEngine` with its expressions loaded in BFS order, and sets roles. Generic type parameters are inferred from the arguments. Accepts any **Structural-valid** input; throws `InvariantViolationError` on Structural failures. Lower-tier violations are queryable post-load via `engine.validate(tier)`.
 
 ---
 
@@ -374,7 +374,7 @@ Top-level orchestrator that owns all five libraries and provides unified snapsho
 
 ### `new PropositCore(options?)`
 
-Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → citations → axioms → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `grammarConfig`).
+Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → citations → axioms → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `behavior`).
 
 Public library fields (v0.12.0 — all single-word nouns):
 
@@ -607,7 +607,7 @@ Options (`TForkArgumentOptions`):
 - `generateId?: () => string` — custom ID generator (defaults to `crypto.randomUUID`)
 - `checksumConfig?: TCoreChecksumConfig` — override checksum config (defaults to source's config)
 - `positionConfig?: TCorePositionConfig` — override position config (defaults to source's config)
-- `grammarConfig?: TGrammarConfig` — override grammar config (defaults to source's config)
+- `behavior?: "assistive" | "permissive"` — override the forked engine's behavior (defaults to the source engine's behavior)
 
 ---
 
@@ -1057,107 +1057,58 @@ Reconstructs a `PremiseEngine` from a snapshot, with the argument and `VariableM
 
 ---
 
-## `ManagedDerivationPremiseEngine`
+## Derivation premise APIs on `ArgumentEngine`
 
-Opt-in subclass of `PremiseEngine` that enforces the derivation premise invariants on every mutation. Import from `@proposit/proposit-core`.
+_Added in v1.0._ The pre-1.0 `ManagedDerivationPremiseEngine` subclass and its `populateFromSupports` helper are **removed**. Derivation-premise canonical shape is now enforced by the Derivable-tier rules (D-1..D-6 — see `docs/Proposit_Grammar.md` §3.3) and surfaced through `engine.validate('derivable')`. Mutations on derivation premises go through the regular `PremiseEngine` and never throw on Derivable violations. The replacement APIs live on `ArgumentEngine` (not on a subclass).
 
-_Since v0.11.0._
+### `populateFromCitations(premiseId, citationLib)` → `TPopulateResult`
 
-### `new ManagedDerivationPremiseEngine(premise, deps, config?)`
+Factory that constructs the per-claim derivation premise's expression tree in its **fully populated** form from the relevant citation connections for the premise's `derivedClaimId`, and **atomically replaces** the existing naked-Q tree.
 
-Constructs a managed engine. Validates immediately that `premise.type === "derivation"` — throws `InvariantViolationError(DERIVATION_TYPE_MISMATCH)` otherwise. Expression-tree structural validation is deferred to `fromSnapshot` and mutation overrides because premises are always constructed before expressions are loaded.
+- `n = 0` citation connections — `kind: 'no-op'`; the premise stays in naked-Q form.
+- `n = 1` citation connection — produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))` (D-2 single-citation form).
+- `n ≥ 2` citation connections — produces `IMPLIES(formula(OR(VariableExpression(S1), …, VariableExpression(Sn))), VariableExpression(Q))` (D-1 populated form; the `formula` buffer between `IMPLIES` and `OR` is inserted by AN-1 in `assistive` behavior).
 
-- `premise` — `TOptionalChecksum<TPremise>` with `type: "derivation"` and `derivedClaimId`.
-- `deps` — `{ argument, variables, expressionIndex? }` (same as `PremiseEngine` constructor).
-- `config?` — optional `TLogicEngineOptions`.
+For each connection, calls `engine.ensureClaimBoundVariable(supportingClaimId)` to materialize the claim-bound variable.
 
----
+Return shape (`TPopulateResult`):
 
-### `static fromSnapshot(snapshot, argument, variables, expressionIndex?, grammarConfig?, generateId?)` → `ManagedDerivationPremiseEngine`
+```ts
+{
+  kind: 'populated' | 'no-op',
+  state: TCoreDerivationPremise,
+  resolved?: readonly TViolation[],
+}
+```
 
-Reconstructs a `ManagedDerivationPremiseEngine` from a snapshot. Delegates to `PremiseEngine.fromSnapshot` for full restoration, then upgrades the prototype and validates:
+If the target premise is **not naked-Q** (already populated), the factory **no-ops and returns `{ kind: 'no-op', state }`** — it does **not** throw. D-3 (no mixing axioms and citations) is a non-Structural rule, so mutations never throw on it. To switch grounding kinds, the caller must explicitly empty the antecedent via a clearing repair primitive first; this satisfies the no-changes-without-consent principle while still respecting the Structural-only mutation-throw contract.
 
-1. Checks `snapshot.premise.type === "derivation"` — throws `DERIVATION_TYPE_MISMATCH` if not.
-2. Restores all expressions via the parent's restoration logic.
-3. Validates the full tree against derivation structural rules — throws `DERIVATION_STRUCTURE_INVALID` if the tree is malformed.
+### `populateFromAxioms(premiseId, axiomLib)` → `TPopulateResult`
 
-The `generateId` parameter is stored on the instance for use by `populateFromSupports`.
+Same factory pattern as `populateFromCitations`, but reads from the global axiom library (`core.axioms`) and produces an axiom-grounded antecedent. Like the citation variant, returns `{ kind: 'no-op', state }` on already-populated premises instead of throwing.
 
----
-
-### `populateFromSupports(citationLib, axiomLib, argumentEngine)` → `void`
-
-_Renamed from `populateFromCitations` in v0.12.0; signature gains the `axiomLib` parameter._
-
-One-shot helper that builds the antecedent of this derivation premise from the combined support set drawn from the global citation library and the global axiom library for the derived claim.
-
-The supporting connections are concatenated in a stable order — citations first (in their `getConnectionsForClaim` order), then axioms (also in their `getConnectionsForClaim` order). Behavior by total count `n`:
-
-- **`n = 0`** — no change; the premise stays in its current form (typically naked-Q).
-- **`n = 1`** — produces `IMPLIES(VariableExpression(S1), VariableExpression(Q))`.
-- **`n ≥ 2`** — produces `IMPLIES(formula(OR(VariableExpression(S1), …, VariableExpression(Sn))), VariableExpression(Q))`. The `formula` buffer between `IMPLIES` and `OR` is auto-inserted by the engine's standard grammar (`wrapInsertFormula`).
-
-For each supporting connection, calls `argumentEngine.ensureClaimBoundVariable(connection.supportingClaimId)` to materialize a claim-bound variable, and registers the result in the engine's local `VariableManager`. The antecedent construction uses `super.*` calls internally to bypass per-mutation overrides, then validates the final tree with `assertWellFormed()`.
-
-Throws `InvariantViolationError(DERIVATION_ANTECEDENT_NON_EMPTY)` when the derivation premise already has a non-empty antecedent (i.e., root is `implies`/`iff` with a position-0 child). Delete and re-create the premise to repopulate.
-
-> **Append-mode is deferred.** v0.12 keeps the naked-Q precondition. A user who wants to revise the support set (e.g., add an axiom after a citation-only populate) must delete and re-create the derivation premise.
-
-> **Changed in v0.11.2:** the n ≥ 2 branch uses standard grammar throughout, so the produced shape matches what every other engine path (auto-normalize on load, manual rebuild) would emit. Pre-v0.11.2 produced `IMPLIES(OR(...), Q)` without the formula buffer by temporarily switching to `PERMISSIVE_GRAMMAR_CONFIG`. Stored pre-v0.11.2 data remains valid — `validateDerivationStructure` accepts both shapes — but consumer-side `combinedChecksum` checks may now report drift on pre-v0.11.2 trees and converge after a one-time normalization pass.
-
----
-
-### Mutation overrides
-
-All `PremiseEngine` mutation methods are overridden to enforce derivation rules. Each override calls `assertWellFormed()` after the mutation (or before, for `loadExpressions`):
-
-| Method                  | Additional enforcement                                                                                                                             |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `addExpression`         | Validates tree after.                                                                                                                              |
-| `appendExpression`      | Validates tree after.                                                                                                                              |
-| `addExpressionRelative` | Validates tree after.                                                                                                                              |
-| `updateExpression`      | Blocks changes to the consequent's `variableId` or `operator` (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                              |
-| `removeExpression`      | Blocks removal of the consequent expression (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                                |
-| `insertExpression`      | Blocks insertion into the consequent slot (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                                  |
-| `toggleNegation`        | Blocks negation of the consequent expression (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                               |
-| `wrapExpression`        | Blocks wrapping of the consequent expression (`DERIVATION_CONSEQUENT_LOCKED`); validates tree after.                                               |
-| `changeOperator`        | Blocks swapping the root operator to `and`/`or`/`not` (`DERIVATION_ROOT_OPERATOR_INVALID`); only `implies↔iff` is permitted; validates tree after. |
-| `normalizeExpressions`  | Validates tree after normalization (normalization could destroy the consequent structure).                                                         |
-| `loadExpressions`       | Validates the entire proposed expression set before mutation — atomically rejects malformed bulk loads.                                            |
-
----
-
-## `validateDerivationStructure(premise, expressions, variables)` → `TInvariantValidationResult`
-
-Standalone pure function. Validates that a derivation premise's expression tree conforms to the structural rules:
-
-- Root must be either a single variable expression for the derived claim's variable (naked form), or an `implies`/`iff` operator with arity 2.
-- In implication/biconditional form: position-1 child (consequent slot) must be the variable expression for `derivedClaimId`'s variable. Position-0 child (antecedent) can be any valid expression.
-
-Returns a `TInvariantValidationResult` with one violation per detected rule break, all using `DERIVATION_STRUCTURE_INVALID` (the message differentiates them). Has no engine dependencies; takes raw arrays of expressions and variables.
-
-Exported from `@proposit/proposit-core`.
-
-_Since v0.11.0._
+A typical "populate this derivation premise from whichever grounding kind exists" flow runs `populateFromCitations` first; if it produces `kind: 'populated'`, the subsequent `populateFromAxioms` call no-ops (the target is no longer naked-Q). If no citations exist, `populateFromAxioms` takes effect with whatever axiom connections are present. This matches D-3's "no mixing" rule.
 
 ---
 
 ## Error Codes
 
-### Derivation premise errors (v0.11.0)
+### Derivation premise errors
 
-| Code                                          | When thrown                                                                                                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DERIVATION_TYPE_MISMATCH`                    | `ManagedDerivationPremiseEngine` constructed or restored on a non-derivation premise.                                                                               |
-| `DERIVATION_STRUCTURE_INVALID`                | Expression tree violates derivation structural rules (used by `validateDerivationStructure`, `ManagedDerivationPremiseEngine.fromSnapshot`, and `loadExpressions`). |
-| `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`  | A derivation premise tree is broken at `validateEvaluability()` / `validateDerivationStructures()` call time.                                                       |
-| `DERIVATION_CONSEQUENT_LOCKED`                | Mutation targets the locked consequent expression — removal, negation, variable change, operator change, or insertion into consequent slot.                         |
-| `DERIVATION_ROOT_OPERATOR_INVALID`            | `changeOperator` attempted to swap root `implies`/`iff` to a non-implication operator.                                                                              |
-| `DERIVATION_ANTECEDENT_NON_EMPTY`             | `populateFromSupports` called on a premise that already has a non-empty antecedent.                                                                                 |
-| `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` | `createPremise({ type: "derivation" })` called without `derivedClaimId`.                                                                                            |
-| `CREATE_DERIVATION_CLAIM_NOT_FOUND`           | `createPremise({ type: "derivation", derivedClaimId })` but claim is not in the library.                                                                            |
-| `CLAIM_NOT_FOUND`                             | `ensureClaimBoundVariable(claimId)` but claim is not in the library.                                                                                                |
-| `LEGACY_PREMISE_MISSING_TYPE`                 | Snapshot restore encountered a premise record without the `type` field (pre-v0.11 data). Use this as a migration trigger.                                           |
+| Code                                          | When thrown                                                                                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `DERIVATION_ROOT_OPERATOR_INVALID`            | S-14. Mutation would set a `type: "derivation"` premise's root operator to anything other than `variable`, `implies`, or `iff`. |
+| `CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID` | `createPremise({ type: "derivation" })` called without `derivedClaimId`.                                                        |
+| `CREATE_DERIVATION_CLAIM_NOT_FOUND`           | `createPremise({ type: "derivation", derivedClaimId })` but claim is not in the library.                                        |
+| `CLAIM_NOT_FOUND`                             | `ensureClaimBoundVariable(claimId)` but claim is not in the library.                                                            |
+| `LEGACY_PREMISE_MISSING_TYPE`                 | Snapshot restore encountered a premise record without the `type` field (pre-v0.11 data). Use this as a migration trigger.       |
+
+The pre-1.0 codes `DERIVATION_TYPE_MISMATCH`, `DERIVATION_STRUCTURE_INVALID`, `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`, `DERIVATION_CONSEQUENT_LOCKED`, and `DERIVATION_ANTECEDENT_NON_EMPTY` are **removed in v1.0**. The conditions they covered are now handled by:
+
+- The four-tier grammar's Derivable rules (D-1..D-6) surfaced through `engine.validate('derivable')` — see `docs/Proposit_Grammar.md` §3.3.
+- `S-14` (derivation premise root operator) thrown at mutation time.
+- The factory methods (`populateFromCitations` / `populateFromAxioms`) returning `{ kind: 'no-op' }` on already-populated premises instead of throwing.
+- Naked-Q being a **valid Derivable state** in v1.0 (no longer an evaluation throw).
 
 ---
 
@@ -1317,50 +1268,34 @@ const serialized = serializeChecksumConfig(engine.getChecksumConfig())
 
 ---
 
-## Grammar Configuration
+## Grammar and engine behavior
 
-Types and constants for controlling structural rule enforcement in expression trees, exported from `types/grammar.ts`:
+_The pre-1.0 `grammarConfig` / `TGrammarOptions` / `TAutoNormalizeConfig` / `resolveAutoNormalize` / `DEFAULT_GRAMMAR_CONFIG` / `PERMISSIVE_GRAMMAR_CONFIG` surface is **removed in v1.0**._ Expression-tree shape is now driven by the four-tier grammar (Structural ⊇ Evaluable ⊇ Derivable ⊇ Presentable — see `docs/Proposit_Grammar.md` §3 for the full rule inventory) together with a single engine setting.
 
-### `TGrammarOptions`
+### `engine.behavior: 'assistive' | 'permissive'`
 
-Individual structural rule toggles. Each boolean controls whether a specific constraint is enforced:
+Controls whether the auto-normalization (AN) post-hook runs after each successful Structural mutation.
 
-| Field                            | Default | Description                                                                        |
-| -------------------------------- | ------- | ---------------------------------------------------------------------------------- |
-| `enforceFormulaBetweenOperators` | `true`  | Require a `formula` node between a parent operator and a non-`not` operator child. |
+- **`'assistive'`** (default): runs AN-1..AN-4 after every successful mutation. AN preserves Presentable — if the pre-mutation state was Presentable, the post-mutation state is Presentable. (See `docs/Proposit_Grammar.md` §4.)
+- **`'permissive'`**: AN does not run. Mutations execute exactly as described; the engine guarantees Structural integrity only. Lower-tier violations (Evaluable, Derivable, Presentable) are queryable via `validate(tier)` and never throw.
 
-### `TAutoNormalizeConfig`
+Set at construction:
 
-Granular auto-normalization flags. Each flag controls a specific automatic structural correction:
+```ts
+const engine = new ArgumentEngine(arg, claims, { behavior: "permissive" })
+```
 
-| Field                    | Description                                                                                                     |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `wrapInsertFormula`      | Insert a formula node when `addExpression`/`insertExpression`/`wrapExpression` creates operator-under-operator. |
-| `negationInsertFormula`  | Insert a formula buffer when `toggleNegation` wraps a non-not operator in NOT.                                  |
-| `collapseDoubleNegation` | Collapse NOT(NOT(x)) → x during `toggleNegation` and `normalize`.                                               |
-| `collapseEmptyFormula`   | Collapse empty formulas/operators and promote single children after `removeExpression`.                         |
-| `repositionOnCollision`  | Auto-redistribute sibling positions when a midpoint collision is detected.                                      |
-| `absorbSameOperator`     | Absorb same-operator children through a formula after an operator swap in `updateExpression`.                   |
+Or at runtime via `engine.setBehavior(...)`. Switching `permissive → assistive` does **not** auto-run a global `normalize()` pass; the UI prompts the user explicitly before invoking `engine.normalize()`.
 
-### `TGrammarConfig`
+### Wire-format types
 
-Extends `TGrammarOptions` with an additional control:
+| Export             | Description                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TGrammarTier`     | `'structural' \| 'evaluable' \| 'derivable' \| 'presentable'` (string-literal union).                                                      |
+| `TGrammarRuleCode` | Union of `'S-1'`..`'S-14'`, `'E-1'`+`'E-3'`..`'E-7'`, `'D-1'`..`'D-6'`, `'P-1'`..`'P-5'`. Codes `E-2` and `D-7` are reserved (not reused). |
+| `TViolation`       | `{ tier, code, message, argumentId?, premiseId?, expressionId?, variableId?, claimId?, … }`. Returned by `engine.validate(tier)`.          |
 
-| Field           | Type                              | Default | Description                                                                                               |
-| --------------- | --------------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
-| `autoNormalize` | `boolean \| TAutoNormalizeConfig` | `true`  | `true` enables all normalizations; `false` disables all; an object enables per-behavior granular control. |
-
-### `resolveAutoNormalize(grammarConfig, flag)` → `boolean`
-
-Resolves a single granular flag from the grammar config. Returns `true`/`false` for boolean configs; looks up the specific flag for object configs.
-
-### `DEFAULT_GRAMMAR_CONFIG`
-
-`{ enforceFormulaBetweenOperators: true, autoNormalize: true }` — all rules enforced, auto-normalize on. Used by all mutating engine operations by default.
-
-### `PERMISSIVE_GRAMMAR_CONFIG`
-
-`{ enforceFormulaBetweenOperators: false, autoNormalize: false }` — no structural rules enforced. Used by default in `fromData`, `fromSnapshot`, and `rollback` so that previously persisted trees load without validation errors.
+All three types are defined as TypeBox schemas + derived TS types in `src/lib/grammar/types.ts` and re-exported from `@proposit/shared/schemas/grammar` for consumer ergonomics.
 
 ---
 
@@ -1368,15 +1303,15 @@ Resolves a single granular flag from the grammar config. Returns `true`/`false` 
 
 Constants, types, and a helper for midpoint-based position computation, exported from `utils/position.ts`:
 
-| Export                    | Value / Signature                                      | Description                                           |
-| ------------------------- | ------------------------------------------------------ | ----------------------------------------------------- |
-| `POSITION_MIN`            | `-2147483647`                                          | Default lower bound (signed int32).                   |
-| `POSITION_MAX`            | `2147483647`                                           | Default upper bound (signed int32).                   |
-| `POSITION_INITIAL`        | `0`                                                    | Default position for first children.                  |
-| `DEFAULT_POSITION_CONFIG` | `{ min, max, initial }`                                | Default `TCorePositionConfig` matching the above.     |
-| `TCorePositionConfig`     | `{ min, max, initial }`                                | Type for configurable position range.                 |
-| `TLogicEngineOptions`     | `{ checksumConfig?, positionConfig?, grammarConfig? }` | Universal config type for all engine/manager classes. |
-| `midpoint(a, b)`          | `a + (b - a) / 2`                                      | Overflow-safe midpoint of two positions.              |
+| Export                    | Value / Signature                                              | Description                                           |
+| ------------------------- | -------------------------------------------------------------- | ----------------------------------------------------- |
+| `POSITION_MIN`            | `-2147483647`                                                  | Default lower bound (signed int32).                   |
+| `POSITION_MAX`            | `2147483647`                                                   | Default upper bound (signed int32).                   |
+| `POSITION_INITIAL`        | `0`                                                            | Default position for first children.                  |
+| `DEFAULT_POSITION_CONFIG` | `{ min, max, initial }`                                        | Default `TCorePositionConfig` matching the above.     |
+| `TCorePositionConfig`     | `{ min, max, initial }`                                        | Type for configurable position range.                 |
+| `TLogicEngineOptions`     | `{ checksumConfig?, positionConfig?, behavior?, generateId? }` | Universal config type for all engine/manager classes. |
+| `midpoint(a, b)`          | `a + (b - a) / 2`                                              | Overflow-safe midpoint of two positions.              |
 
 ~52 bisections at the same insertion point before losing floating-point precision.
 
@@ -1428,7 +1363,7 @@ Returns `{ engine, claimLibrary, claimCitationLibrary, claimAxiomLibrary, warnin
 1. **Formula parse + structural validation.** Each premise's `formula` string is parsed via `parseFormula`; the AST is then walked to enforce the root-only constraint for `implies`/`iff`. Failures emit `FORMULA_PARSE_ERROR` or `FORMULA_STRUCTURE_ERROR`.
 2. **Argument creation.** A fresh `TArg` is built from `genId()` plus the result of `mapArgument(parsed)`.
 3. **Claim library population.** Every parsed claim is inserted into a new `ClaimLibrary` with its `type` discriminator (`'normal' | 'citation' | 'axiomatic'`); the `miniId` → `{ id, version }` map is retained for downstream resolution. The two connection libraries are constructed against the populated claim library.
-4. **Engine construction.** `ArgumentEngine` is built with `grammarConfig: { enforceFormulaBetweenOperators: true, autoNormalize: true }` and the caller-supplied `generateId`.
+4. **Engine construction.** `ArgumentEngine` is built with `behavior: 'assistive'` (the default) and the caller-supplied `generateId`.
 5. **Variables.** Each parsed variable is resolved against `claimMiniId`. Unresolved miniIds emit `UNRESOLVED_CLAIM_MINIID`; in non-strict mode the variable is dropped and its symbol removed from the declared-symbol set so downstream formula checks fire as `UNDECLARED_VARIABLE_SYMBOL`.
 6. **Premises and expression trees.** Each surviving parsed premise becomes a `PremiseEngine` via `engine.createPremise(mapPremise(parsed))`; the formula AST is then walked into expression objects (operator/variable/formula nodes) under `parentId: null` at `POSITION_INITIAL`.
 7. **Conclusion designation.** `setConclusionPremise` is invoked for the premise whose `miniId` matches `arg.conclusionPremiseMiniId`. An unresolvable miniId emits `UNRESOLVED_CONCLUSION_MINIID`.
@@ -1683,7 +1618,7 @@ Premise-bound variables enable hierarchical argument structure: variable Q bound
 
 | Type                             | Description                                                                                                    |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `TForkArgumentOptions`           | Options for `forkArgumentEngine`: `generateId`, `checksumConfig`, `positionConfig`, `grammarConfig`            |
+| `TForkArgumentOptions`           | Options for `forkArgumentEngine`: `generateId`, `checksumConfig`, `positionConfig`, `behavior`                 |
 | `TForkRemapTable`                | Maps original entity IDs to forked counterparts: `argumentId`, `premises`, `expressions`, `variables` (Maps)   |
 | `TCoreEntityForkRecord`          | Base fork record (`{ entityId, forkedFromEntityId, forkedFromArgumentId, forkedFromArgumentVersion, forkId }`) |
 | `TCoreArgumentForkRecord`        | Alias for `TCoreEntityForkRecord` (no extra fields)                                                            |

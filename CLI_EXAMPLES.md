@@ -366,7 +366,7 @@ proposit-core axioms remove <axiom-connection-id>
 
 ### Render shows axiom support
 
-When an argument's `render` output lists claims and connections, axiom-backed derivations appear alongside citation-backed ones — the render walk reads both `core.citations` and `core.axioms` for each claim. Derivation premises whose `populateFromSupports` ran see the axiomatic claim's variable in the antecedent.
+When an argument's `render` output lists claims and connections, axiom-backed derivations appear alongside citation-backed ones — the render walk reads both `core.citations` and `core.axioms` for each claim. Derivation premises whose antecedent was populated via `populate-supports` (citations first, then axioms — see §7b) see the supporting claim's variable in the antecedent.
 
 ### Evaluation note
 
@@ -376,9 +376,9 @@ Axiomatic claim-bound variables are forced to `true` at evaluation time. Passing
 
 ## 7b. Derivation Premises
 
-A **derivation premise** is structurally committed to deriving a specific named claim. It carries a `derivedClaimId` that never changes, and its expression tree is locked to either naked-Q form (no antecedent yet) or `IMPLIES(antecedent, Q)` / `IFF(antecedent, Q)` form.
+A **derivation premise** is structurally committed to deriving a specific named claim. It carries a `derivedClaimId` that never changes. Structurally (S-14) its expression tree's root is one of `variable` (naked-Q form), `implies`, or `iff`. The Derivable-tier rules (D-1..D-6 — see `docs/Proposit_Grammar.md` §3.3) restrict the populated form further to `IMPLIES(c, Q)` (single-citation antecedent), `IMPLIES(OR(c1, …, cn), Q)` (OR-of-same-grounding-kind antecedent), or `IMPLIES(axiom-variable, Q)` (single-axiomatic-claim antecedent). Mixing citation-bound and axiom-bound variables in a single antecedent is a D-3 violation. Naked-Q is a **valid Derivable state** and represents "no support given yet."
 
-The `populate-supports` command is the recommended way to build the antecedent automatically. As of v0.12.0 it wraps `ManagedDerivationPremiseEngine.populateFromSupports` and pulls supporting connections from both `core.citations` and `core.axioms`. Renamed from v0.11's `populate-citations` to reflect the broader behavior.
+The `premises populate-supports` command is the CLI's recommended way to build the antecedent automatically. As of v1.0 it calls the engine's `populateFromCitations` first; if citations populate the antecedent, the subsequent `populateFromAxioms` no-ops (the target is no longer naked-Q). If no citation connections exist for the derived claim, `populateFromAxioms` takes effect with whatever axiom connections are present. This matches the D-3 "no mixing" rule (one antecedent grounded by one kind). To switch a populated derivation premise from citations to axioms (or vice versa), the user must explicitly empty the antecedent via a clearing repair primitive first — the factory methods no-op on already-populated premises rather than silently dropping user data.
 
 ### Step 1: Create a citation claim (the external support)
 
