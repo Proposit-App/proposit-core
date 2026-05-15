@@ -370,7 +370,7 @@ export class ExpressionManager<
      * @throws If the position is already occupied under the parent.
      */
     public addExpression(input: TExpressionInput<TExpr>) {
-        let expression = input
+        const expression = input
 
         if (this.expressions.has(expression.id)) {
             throw new Error(
@@ -395,7 +395,7 @@ export class ExpressionManager<
         }
 
         if (expression.parentId !== null) {
-            let parent = this.expressions.get(expression.parentId)
+            const parent = this.expressions.get(expression.parentId)
             if (!parent) {
                 throw new Error(
                     `Parent expression "${expression.parentId}" does not exist.`
@@ -416,7 +416,7 @@ export class ExpressionManager<
             // BetweenOperators` — deleted in D2.
 
             if (parent.type === "operator") {
-                this.assertChildLimit(parent.operator, expression.parentId!)
+                this.assertChildLimit(parent.operator, expression.parentId)
             } else {
                 const childCount =
                     this.childExpressionIdsByParentId.get(expression.parentId)

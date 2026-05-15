@@ -186,7 +186,9 @@ export class ArgumentEngine<
     // chokepoint is `applyANToFixedPoint` in
     // `src/lib/grammar/an-rules.ts`, so both
     // `runAssistiveNormalization` (post-hook) and `normalizeArgument`
-    // (`engine.normalize()`) are covered by the same gate.
+    // (`engine.normalize()`) are covered by the same gate. The
+    // accessor pair is `beginApplyAN()` / `endApplyAN()` below
+    // (marked `@internal` — not part of the public API).
     private applyingAN = false
     private checksumDirty = true
     private cachedMetaChecksum: string | undefined
@@ -593,33 +595,35 @@ export class ArgumentEngine<
     /**
      * Acquire the AN re-entrance guard. Returns `true` iff the guard
      * was acquired (i.e. AN is not already running for this engine);
-     * the caller is then obligated to call `_endApplyAN()` after the
-     * AN sweep. Returns `false` if AN is already in progress, in which
-     * case the caller short-circuits to avoid nested AN sweeps.
+     * the caller is then obligated to call `endApplyAN()` after the
+     * AN sweep. Returns `false` if AN is already in progress, in
+     * which case the caller short-circuits to avoid nested AN
+     * sweeps.
      *
      * Used by `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`
-     * (the single chokepoint for both `runAssistiveNormalization` and
-     * `normalizeArgument`). The post-mutation hook in `setOnMutate`
-     * calls `runAssistiveNormalization(this)` which delegates to
-     * `applyANToFixedPoint`; AN's own mutations re-fire `setOnMutate`,
-     * which would otherwise recurse. This guard breaks the recursion.
+     * (the single chokepoint for both `runAssistiveNormalization`
+     * and `normalizeArgument`). The post-mutation hook in
+     * `setOnMutate` calls `runAssistiveNormalization(this)` which
+     * delegates to `applyANToFixedPoint`; AN's own mutations re-fire
+     * `setOnMutate`, which would otherwise recurse. This guard
+     * breaks the recursion.
      *
      * @internal
      * @since 1.0.0
      */
-    public _beginApplyAN(): boolean {
+    public beginApplyAN(): boolean {
         if (this.applyingAN) return false
         this.applyingAN = true
         return true
     }
 
     /**
-     * Release the AN re-entrance guard. Pairs with `_beginApplyAN()`.
+     * Release the AN re-entrance guard. Pairs with `beginApplyAN()`.
      *
      * @internal
      * @since 1.0.0
      */
-    public _endApplyAN(): void {
+    public endApplyAN(): void {
         this.applyingAN = false
     }
 

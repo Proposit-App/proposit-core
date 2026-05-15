@@ -799,13 +799,13 @@ export function applyANToFixedPoint<
     // `pe.wrapInFormula`) re-fire `setOnMutate` on the engine, which
     // calls `runAssistiveNormalization(this)` → `applyANToFixedPoint`
     // again. The guard short-circuits nested entries so the outer
-    // sweep runs uninterrupted. `_beginApplyAN` returns `false` when
+    // sweep runs uninterrupted. `beginApplyAN` returns `false` when
     // AN is already in progress; we no-op in that case.
-    if (!engine._beginApplyAN()) return
+    if (!engine.beginApplyAN()) return
     try {
         applyANRulesToConvergence(engine)
     } finally {
-        engine._endApplyAN()
+        engine.endApplyAN()
     }
 }
 
