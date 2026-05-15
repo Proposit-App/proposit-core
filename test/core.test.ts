@@ -31347,9 +31347,9 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 1,
             })
         )
-        expect(() =>
-            pe.reparentExpression("expr-q", "expr-p", 0)
-        ).toThrowError(/S-1.*non-operator\/formula parent.*type=variable/)
+        expect(() => pe.reparentExpression("expr-q", "expr-p", 0)).toThrowError(
+            /S-1.*non-operator\/formula parent.*type=variable/
+        )
     })
 
     it("throws S-1 arity when reparenting under a unary `not` that already has its child", () => {
@@ -31373,9 +31373,9 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 1,
             })
         )
-        expect(() =>
-            pe.reparentExpression("expr-q", "not-1", 1)
-        ).toThrowError(/"not" can only have one child/)
+        expect(() => pe.reparentExpression("expr-q", "not-1", 1)).toThrowError(
+            /"not" can only have one child/
+        )
     })
 
     // Note: the implies/iff arity case (2-children cap) is not
@@ -31404,11 +31404,7 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
                 position: 1,
             })
         )
-        const { result } = pe.reparentExpression(
-            "expr-q",
-            "implies-root",
-            1
-        )
+        const { result } = pe.reparentExpression("expr-q", "implies-root", 1)
         expect(result.parentId).toBe("implies-root")
         expect(result.position).toBe(1)
     })
@@ -31451,8 +31447,8 @@ describe("PremiseEngine.wrapInFormula (D0f)", () => {
                 position: 1,
             })
         )
-        expect(() =>
-            pe.wrapInFormula("expr-p", "f-existing")
-        ).toThrowError(/S-10.*already exists/)
+        expect(() => pe.wrapInFormula("expr-p", "f-existing")).toThrowError(
+            /S-10.*already exists/
+        )
     })
 })

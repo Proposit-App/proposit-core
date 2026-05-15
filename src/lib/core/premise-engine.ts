@@ -764,10 +764,7 @@ export class PremiseEngine<
             // a variable (or any other non-container) and produce a
             // malformed AST that no validator catches. Parity with
             // `addExpression` at em.ts:418-422.
-            if (
-                newParent.type !== "operator" &&
-                newParent.type !== "formula"
-            ) {
+            if (newParent.type !== "operator" && newParent.type !== "formula") {
                 throw new Error(
                     `S-1: cannot reparent under non-operator/formula parent "${newParentId}" (type=${newParent.type}).`
                 )
@@ -819,12 +816,8 @@ export class PremiseEngine<
                     // reparent call's pre-check shape: replicate its
                     // logic here so we don't widen EM's surface.
                     const childCount =
-                        this.expressions.getChildExpressions(newParentId)
-                            .length
-                    if (
-                        newParent.operator === "not" &&
-                        childCount >= 1
-                    ) {
+                        this.expressions.getChildExpressions(newParentId).length
+                    if (newParent.operator === "not" && childCount >= 1) {
                         throw new Error(
                             `Operator expression "${newParentId}" with "not" can only have one child.`
                         )
@@ -840,8 +833,7 @@ export class PremiseEngine<
                     }
                 } else if (newParent.type === "formula") {
                     const childCount =
-                        this.expressions.getChildExpressions(newParentId)
-                            .length
+                        this.expressions.getChildExpressions(newParentId).length
                     if (childCount >= 1) {
                         throw new Error(
                             `Formula expression "${newParentId}" can only have one child.`
