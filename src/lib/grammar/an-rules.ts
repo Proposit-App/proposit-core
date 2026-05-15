@@ -23,18 +23,23 @@
 // **D0e — AN-1 + AN-2 + AN-3 + AN-4 all native.** `applyAN1`,
 // `applyAN2`, `applyAN3`, and `applyAN4` implement their rules
 // directly against the public `PremiseEngine` mutation API. AN-1 uses
-// `pe.addExpression(formula)` + `pe.reparentExpression(child,
-// formulaId, 0)` to insert formula buffers between operators; AN-2
-// and AN-3 use `pe.removeExpression(id, false)`; AN-4 uses
+// `pe.wrapInFormula(childOpId, formulaId)` to atomically insert a
+// formula buffer between an operator parent and a non-`not` operator
+// child (composing this from `addExpression` + `reparentExpression`
+// would trip S-9 transiently and violate parent child-limits under
+// unary `not` and binary `implies`/`iff` parents — see the
+// `wrapInFormula` JSDoc on PE for the full argument). AN-2 and AN-3
+// use `pe.removeExpression(id, false)`. AN-4 uses
 // `pe.reparentExpression(c_i, outerId, position_i)` + a final
-// `pe.removeExpression(formula, false)` cleanup. The four
-// `applyAN*` exports no longer delegate to the legacy
-// `pe.normalizeExpressions()` full sweep; D0f follows up by deleting
-// the now-unused `runLegacyNormalizeAndReportChange` helper and
-// switching `applyANToFixedPoint`'s `||` short-circuit chain to a
-// reduce-or accumulator. D2 removes the legacy per-flag
-// `grammarConfig` machinery and the 11 P-1 throw sites that AN-1
-// + the PERMISSIVE swap in `normalize.ts` currently work around.
+// `pe.removeExpression(formula, false)` cleanup. The four `applyAN*`
+// exports no longer delegate to the legacy `pe.normalizeExpressions()`
+// full sweep; the `runLegacyNormalizeAndReportChange` helper is
+// removed in this commit. D0f follows up by switching
+// `applyANToFixedPoint`'s `||` short-circuit chain to a reduce-or
+// accumulator (synthesis P2 #2 — deferred per D0e dispatch). D2
+// removes the legacy per-flag `grammarConfig` machinery and the 11
+// P-1 throw sites that the PERMISSIVE swap in `normalize.ts`
+// currently works around.
 //
 // The per-rule tests (`test/grammar/an-rules.test.ts`) assert behavior
 // the native implementation must preserve once it lands; today they
@@ -561,11 +566,32 @@ function redistributeChildrenEvenly<
  * Run AN-1 (insert formula buffer between operators) on every premise
  * of `engine`. Returns `true` iff any mutation occurred.
  *
- * **D0a state: delegates to `pe.normalizeExpressions()`.** Native
- * rewrite lands in D0e — AN-1 is sequenced last because it's the most
- * complex rule (parent-position bookkeeping + PERMISSIVE config swap
- * to avoid the legacy inline P-1 enforcement throw, which is queued
- * for removal in D2).
+ * **D0e: native rewrite.** Walks each premise's expression tree
+ * looking for non-`not` operators whose parent is also an operator —
+ * i.e., the P-1 violation shape `parent-op → child-op (non-not)`. For
+ * each match, calls `pe.wrapInFormula(childOpId, formulaId)` which
+ * atomically inserts a freshly-minted `formula` between parent and
+ * child. The formula takes the child's original slot; the child
+ * becomes the formula's sole child at position 0. Per spec §5.1 the
+ * result preserves P-1.
+ *
+ * Why a dedicated `wrapInFormula` primitive rather than composing
+ * `addExpression(formula)` + `reparentExpression(child)`:
+ *
+ *   - `addExpression(formula, parent, childPosition)` would throw S-9
+ *     because the child still occupies that slot.
+ *   - For unary `not` parents and binary `implies`/`iff` parents,
+ *     `assertChildLimit` would reject the formula even transiently —
+ *     even though the *net* child count of the parent is unchanged
+ *     after the wrap (the formula displaces the child).
+ *
+ * `pe.wrapInFormula` sidesteps both by performing the insertion +
+ * reparent as one bundled-composite mutation per spec §8 (see the PE
+ * method's JSDoc for the atomicity contract).
+ *
+ * The new formula's id is minted via `engine.idGenerator` so id
+ * provenance stays at the engine boundary (matches the
+ * `populateFromGrounding` factory pattern in `populate-from.ts`).
  *
  * @since 1.0.0
  */
@@ -576,30 +602,67 @@ export function applyAN1<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): boolean {
-    return runLegacyNormalizeAndReportChange(engine)
+    let anyChanged = false
+    const gen = engine.idGenerator
+    for (const pe of engine.listPremises()) {
+        let premiseChanged = true
+        while (premiseChanged) {
+            premiseChanged = insertOneFormulaBufferInPremise(pe, gen)
+            if (premiseChanged) anyChanged = true
+        }
+    }
+    return anyChanged
+}
+
+/**
+ * Find one P-1 violation in `pe`'s tree (non-`not` operator whose
+ * parent is also an operator) and wrap the child in a formula buffer.
+ * Returns `true` iff a wrap occurred.
+ *
+ * Single-fire-per-call shape matches AN-2/AN-3/AN-4 so cascading
+ * mutations don't trip mid-iteration tree-walk invariants.
+ */
+function insertOneFormulaBufferInPremise<
+    TArg extends TCoreArgument,
+    TPremise extends TCorePremise,
+    TExpr extends TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable,
+>(pe: PremiseEngine<TArg, TPremise, TExpr, TVar>, gen: () => string): boolean {
+    for (const expr of pe.getExpressions()) {
+        // P-1 fires on a non-`not` operator that is a direct child of
+        // another operator.
+        if (expr.type !== "operator") continue
+        if (expr.operator === "not") continue
+        if (expr.parentId === null) continue
+
+        const parent = pe.getExpression(expr.parentId)
+        if (!parent || parent.type !== "operator") continue
+
+        // Wrap the child in a fresh formula. The primitive is atomic:
+        // formula takes the child's slot, child becomes formula's sole
+        // child at position 0.
+        pe.wrapInFormula(expr.id, gen())
+        return true
+    }
+    return false
 }
 
 /**
  * Run AN-1..AN-4 to fixed point on every premise of `engine`.
  *
- * **D0c state: AN-2 and AN-3 are native; AN-1/4 still delegate to
- * `pe.normalizeExpressions()`.** Each call of the delegating rules
- * runs the full legacy sweep (which itself is fixed-pointed), so
- * within a single iteration of this driver any delegating call
- * converges the tree. AN-2 and AN-3 native passes are effectively
- * fast-paths before the legacy sweep — they catch their specific
- * patterns explicitly so the regression-guard tests can spy on the
- * native code paths. D0f rewires this function to call the four
- * native passes in order (AN-2, AN-3, AN-4, AN-1 — buffer
- * insertion sequenced last so earlier passes see the post-collapse
- * tree).
+ * **D0e state: all four rules are native.** The driver issues
+ * single-rule passes in order — AN-2, AN-3, AN-4, AN-1 — so buffer
+ * insertion sees the post-collapse tree (avoids inserting a buffer
+ * that would then need to be collapsed by AN-3). The outer loop is
+ * the actual convergence driver: each iteration fires at most one
+ * rule's pattern (via the `||` short-circuit) and loops until no
+ * pattern remains. D0f re-evaluates the short-circuit semantics
+ * (synthesis P2 #2 — `let changed = applyAN2(eng); changed =
+ * applyAN3(eng) || changed; …` reduce-or vs the current chain).
  *
  * Convergence cap: `MAX_AN_ITERATIONS = 10`. Typical convergence is ≤ 3
  * iterations (spec §5.1); the cap protects against pathological inputs
  * (e.g. malformed Structural state that would otherwise oscillate).
- * In D0c, the outer loop typically exits within 1 iteration because
- * the legacy sweep already drives the rest of convergence. Once
- * D0d-D0e are native, the outer loop is what drives convergence.
  *
  * @since 1.0.0
  */
@@ -612,17 +675,17 @@ export function applyANToFixedPoint<
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
     let lastChangedRule: "AN-1" | "AN-2" | "AN-3" | "AN-4" | null = null
     for (let i = 0; i < MAX_AN_ITERATIONS; i++) {
-        // Order matches the post-D0f intent: AN-2/3/4 before AN-1
-        // so buffer insertion sees the post-collapse tree. In the
-        // current D0c-D0d delegation, `applyAN4`/`applyAN1` still
-        // run the full legacy sweep, so only the first non-no-op
-        // call reports change; subsequent calls in the same
-        // iteration are effective no-ops. The redundancy is
-        // acceptable scaffolding; D0d-D0e replace each function
-        // with a single-rule implementation that fires only when
-        // its pattern matches. The `||` short-circuit semantics
-        // become meaningful only post-D0f — see the D0f task in the
-        // plan for the convergence-ordering revisit.
+        // Order: AN-2/3/4 before AN-1 so buffer insertion (AN-1)
+        // sees the post-collapse tree (avoids inserting a buffer
+        // that AN-3 would then collapse). All four rules are now
+        // native single-rule passes (D0e), so the `||` short-circuit
+        // means at most one rule fires per outer iteration — if AN-2
+        // fires, AN-3/4/1 are skipped this iteration and we loop
+        // back. Worst-case the chain takes ~4x as many iterations as
+        // a reduce-or accumulator; spec §5.1 budgets "≤ 3 iterations
+        // typical" so this is comfortably within the MAX_AN_ITERATIONS
+        // cap on the existing test corpus. D0f revisits the
+        // short-circuit semantics (synthesis P2 #2).
         let changed = false
         if (applyAN2(engine)) {
             lastChangedRule = "AN-2"
@@ -642,10 +705,10 @@ export function applyANToFixedPoint<
     // Diagnostic context: include the iteration count and the
     // last-changed rule + a representative premise id. Helps the
     // next dev triage where the loop is oscillating when the cap
-    // trips. Unreachable in D0c-D0d on Presentable-clean inputs
-    // (the legacy sweep is internally fixed-pointed and converges
-    // in a single outer iteration); becomes reachable once D0e is
-    // native and the outer loop is the actual convergence driver.
+    // trips. As of D0e the outer loop is the actual convergence
+    // driver — all four rules are native single-rule passes — so
+    // a cap-trip indicates a real oscillation, not a budgeting
+    // artifact of the prior delegation pattern.
     const premises = engine.listPremises()
     const representativePremiseId =
         premises.length > 0 ? premises[0].getId() : "<no premises>"
@@ -658,37 +721,9 @@ export function applyANToFixedPoint<
     )
 }
 
-/**
- * D0a-only helper. Runs `pe.normalizeExpressions()` on every premise
- * of `engine`. Returns `true` iff any mutation occurred (detected by
- * comparing pre/post per-premise expression counts; rough but
- * sufficient as a change indicator for the convergence loop above).
- *
- * Deleted in D0f when each `applyAN*` becomes a single-rule native
- * implementation.
- */
-function runLegacyNormalizeAndReportChange<
-    TArg extends TCoreArgument,
-    TPremise extends TCorePremise,
-    TExpr extends TCorePropositionalExpression,
-    TVar extends TCorePropositionalVariable,
-    TClaim extends TCoreClaim,
->(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): boolean {
-    let anyChanged = false
-    for (const pe of engine.listPremises()) {
-        const beforeIds = new Set(pe.getExpressions().map((e) => e.id))
-        pe.normalizeExpressions()
-        const afterIds = new Set(pe.getExpressions().map((e) => e.id))
-        if (beforeIds.size !== afterIds.size) {
-            anyChanged = true
-            continue
-        }
-        for (const id of beforeIds) {
-            if (!afterIds.has(id)) {
-                anyChanged = true
-                break
-            }
-        }
-    }
-    return anyChanged
-}
+// `runLegacyNormalizeAndReportChange` lived here during D0a-D0d as a
+// shared delegation helper for applyAN1 / applyAN4. With AN-1 and AN-4
+// natively implemented in D0e, no caller remains and the helper is
+// removed. D0f follows up by re-evaluating the `||` short-circuit
+// chain in `applyANToFixedPoint` (synthesis P2 #2 — left intact this
+// cycle per dispatch instructions).

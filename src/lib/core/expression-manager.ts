@@ -2438,6 +2438,78 @@ export class ExpressionManager<
     }
 
     /**
+     * Inserts a new `formula` node between an existing expression and
+     * its current parent atomically. The formula takes the child's
+     * original slot (parentId + position); the child becomes the
+     * formula's sole child at position 0.
+     *
+     * Used by the native AN-1 (formula-buffer insertion) pass in
+     * `src/lib/grammar/an-rules.ts` per spec §5.1. Composing this from
+     * `addExpression` + `reparentExpression` is not possible without
+     * trip-wires: `addExpression(formula, parent, childPosition)` would
+     * throw S-9 (child still occupies that slot), and `assertChildLimit`
+     * would reject the extra child under unary `not` parents and binary
+     * `implies`/`iff` parents even transiently. This primitive sidesteps
+     * both: the net child count of the parent is unchanged by the wrap
+     * (the formula displaces the child), so the limit isn't actually
+     * violated, just transiently if expressed via two atomic mutations.
+     *
+     * Generates the formula's id via the caller-supplied `formulaId`
+     * parameter so the caller (PE) can plug in the engine's
+     * `idGenerator` rather than this manager minting one internally —
+     * keeps id provenance explicit at the PE boundary.
+     *
+     * The new formula inherits the source child's `argumentId`,
+     * `argumentVersion`, and `premiseId` automatically.
+     *
+     * @throws If `childId` does not exist.
+     * @throws If `childId` is at the root (`parentId === null`) — there
+     *         is no operator parent to insert a buffer beneath.
+     */
+    public wrapInFormula(childId: string, formulaId: string): void {
+        const child = this.expressions.get(childId)
+        if (!child) {
+            throw new Error(`Expression "${childId}" does not exist.`)
+        }
+        if (child.parentId === null) {
+            throw new Error(
+                `Cannot wrap root expression "${childId}" in a formula — no parent operator above it.`
+            )
+        }
+        const childParentId = child.parentId
+        const childPosition = child.position
+
+        // Register the formula at the child's old slot. Bypasses the
+        // S-9 check via direct map insertion — at this transient point
+        // the child still nominally occupies childPosition (its
+        // parentId/position fields are unchanged), but the position
+        // *set* under childParentId already contains childPosition (it
+        // was added when the child was inserted), and Set.add is
+        // idempotent, so re-adding it for the formula is safe. The
+        // very next reparent call moves the child to (formulaId, 0),
+        // freeing childPosition from the child's tracking and leaving
+        // it owned by the formula alone.
+        this.registerFormulaBuffer(
+            child as unknown as TExpr,
+            childParentId,
+            childPosition,
+            formulaId
+        )
+
+        // Move the child under the new formula at position 0. The
+        // child's old slot under childParentId is freed by `reparent`,
+        // then the formula's `add(childPosition)` we did above keeps
+        // childPosition owned by the formula. Result: a single formula
+        // sits where the child was, the child is the formula's only
+        // descendant at position 0.
+        this.reparent(childId, formulaId, 0)
+
+        // Mark the formula dirty so its descendant/combined checksums
+        // recompute (it now has a child).
+        this.markExpressionDirty(formulaId)
+    }
+
+    /**
      * Deletes a single expression that has no children.
      * Does NOT trigger operator collapse. Caller must ensure children
      * have been reparented away first.

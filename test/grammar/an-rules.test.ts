@@ -950,6 +950,457 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     })
 })
 
+describe("applyAN1 — insert formula buffer between operators (D0e native)", () => {
+    // Contract / regression-guard tests for AN-1 (P-1).
+    //
+    // **Implementation state (D0e — native).** `applyAN1` walks each
+    // premise's expression tree looking for non-`not` operators whose
+    // parent is also an operator (the P-1 violation shape) and calls
+    // `pe.wrapInFormula(childOpId, formulaId)` to insert a freshly-
+    // minted formula between parent and child. The formula takes the
+    // child's original slot; the child becomes the formula's sole
+    // child at position 0.
+    //
+    // Mirrors the structure of AN-2/AN-3 tests: cross-premise variables
+    // are used to avoid the self-circular-binding check, and the engine
+    // is permissive so the per-mutation AN post-hook doesn't fire
+    // between setup `addExpression` calls.
+
+    function setupTwoPremisesWithCrossVars(): {
+        eng: ArgumentEngine
+        peB: ReturnType<ArgumentEngine["createPremise"]>["result"]
+        varAId: string
+        varBId: string
+    } {
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varB = allVars.find((v) => v.boundPremiseId === peC.getId())!
+        return { eng, peB, varAId: varA.id, varBId: varB.id }
+    }
+
+    it("inserts a formula buffer when an OR is a direct child of an AND", () => {
+        // Build: AND(OR(a, b), b). Native AN-1 wraps the OR in a
+        // formula so the tree becomes AND(formula(OR(a, b)), b).
+        const { eng, peB, varAId, varBId } = setupTwoPremisesWithCrossVars()
+        peB.addExpression({
+            id: "and-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "or-child",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "and-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-child",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-b1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "or-child",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "ve-b2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "and-root",
+            position: 1,
+        })
+
+        const changed = applyAN1(eng)
+
+        expect(changed).toBe(true)
+        // Tree should be AND → [formula → OR → [a, b1], b2]. The OR's
+        // id and the variable expression ids are preserved.
+        const orChild = peB.getExpression("or-child")!
+        expect(orChild.parentId).not.toBe("and-root")
+        const formulaParent = peB.getExpression(orChild.parentId!)!
+        expect(formulaParent.type).toBe("formula")
+        expect(formulaParent.parentId).toBe("and-root")
+        expect(orChild.position).toBe(0)
+        // Variable expressions under the OR survive the wrap.
+        const veA = peB.getExpression("ve-a")!
+        const veB1 = peB.getExpression("ve-b1")!
+        expect(veA.parentId).toBe("or-child")
+        expect(veB1.parentId).toBe("or-child")
+    })
+
+    it("inserts a formula buffer when an OR is a direct child of NOT (single-child-parent case)", () => {
+        // Build: NOT(OR(a, b)). Native AN-1 wraps the OR in a formula
+        // so the tree becomes NOT(formula(OR(a, b))). The NOT parent
+        // has assertChildLimit=1, so this case exercises the
+        // `pe.wrapInFormula` primitive's child-limit sidestep.
+        const { eng, peB, varAId, varBId } = setupTwoPremisesWithCrossVars()
+        peB.addExpression({
+            id: "not-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "or-child",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "not-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-child",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-b",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "or-child",
+            position: 1,
+        })
+
+        const changed = applyAN1(eng)
+
+        expect(changed).toBe(true)
+        const orChild = peB.getExpression("or-child")!
+        const formulaParent = peB.getExpression(orChild.parentId!)!
+        expect(formulaParent.type).toBe("formula")
+        expect(formulaParent.parentId).toBe("not-root")
+    })
+
+    it("inserts a formula buffer when an OR is a direct child of IMPLIES (binary-parent case)", () => {
+        // Build: IMPLIES(OR(a, b), b). assertChildLimit("implies")=2,
+        // so wrapping OR in a formula transiently would violate the
+        // limit if expressed as `addExpression(formula) + reparent`.
+        // `wrapInFormula` handles it atomically.
+        const { eng, peB, varAId, varBId } = setupTwoPremisesWithCrossVars()
+        peB.addExpression({
+            id: "implies-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "implies",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "or-antecedent",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "implies-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-antecedent",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-b1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "or-antecedent",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "ve-b2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "implies-root",
+            position: 1,
+        })
+
+        const changed = applyAN1(eng)
+
+        expect(changed).toBe(true)
+        // IMPLIES should still have exactly 2 children (formula at
+        // antecedent slot, ve-b2 at consequent slot).
+        const impliesChildren = peB.getChildExpressions("implies-root")
+        expect(impliesChildren).toHaveLength(2)
+        const antecedent = impliesChildren.find(
+            (c) => c.position === impliesChildren[0].position
+        )!
+        expect(antecedent.type).toBe("formula")
+        // The OR's id is preserved through the wrap.
+        const orChild = peB.getExpression("or-antecedent")!
+        expect(orChild.parentId).toBe(antecedent.id)
+    })
+
+    it("is a no-op when there is no operator-under-operator violation (Presentable shape)", () => {
+        // Build: AND(formula(OR(a, b)), b). Already Presentable per
+        // P-1 — formula already buffers the OR under AND. AN-1 must
+        // not fire.
+        const { eng, peB, varAId, varBId } = setupTwoPremisesWithCrossVars()
+        peB.addExpression({
+            id: "and-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "f-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "and-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "or-child",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "f-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-child",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-b1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "or-child",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "ve-b2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "and-root",
+            position: 1,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN1(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
+    })
+
+    it("does NOT fire when child is `not` (P-1's exception — NOT can be a direct operator child)", () => {
+        // Build: AND(NOT(a), b). The NOT child does NOT require a
+        // formula buffer per P-1; AN-1 must skip it.
+        const { eng, peB, varAId, varBId } = setupTwoPremisesWithCrossVars()
+        peB.addExpression({
+            id: "and-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "not-child",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "not",
+            parentId: "and-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "not-child",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-b",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "and-root",
+            position: 1,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN1(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
+    })
+
+    it("uses pe.wrapInFormula (not addExpression+reparent) on the native code path", () => {
+        // Spy on `pe.wrapInFormula` to confirm AN-1 issues the
+        // wrap-primitive call directly. Locks in the native code path
+        // — a future regression that goes back through
+        // `pe.normalizeExpressions()` or composes the operation from
+        // simpler primitives would fail this assertion.
+        const { eng, peB, varAId, varBId } = setupTwoPremisesWithCrossVars()
+        peB.addExpression({
+            id: "and-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "or-child",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "and-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "or-child",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-b1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "or-child",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "ve-b2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varBId,
+            parentId: "and-root",
+            position: 1,
+        })
+
+        const wrapSpy = vi.spyOn(peB, "wrapInFormula")
+
+        applyAN1(eng)
+
+        expect(wrapSpy).toHaveBeenCalledTimes(1)
+        // First arg is the child operator id; second is a fresh
+        // formula id minted by engine.idGenerator (verified by
+        // shape — it's a string).
+        const [childIdArg, formulaIdArg] = wrapSpy.mock.calls[0]
+        expect(childIdArg).toBe("or-child")
+        expect(typeof formulaIdArg).toBe("string")
+
+        wrapSpy.mockRestore()
+    })
+})
+
 describe("applyANToFixedPoint — drives all four rules to convergence", () => {
     it("is a no-op on a Presentable-clean tree", () => {
         // Two-premise setup: peA's auto-created premise-bound variable

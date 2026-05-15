@@ -805,6 +805,64 @@ export class PremiseEngine<
     }
 
     /**
+     * Wrap an existing expression in a freshly-minted `formula` node
+     * atomically. The formula takes the child's original parent slot
+     * (parentId + position); the child becomes the formula's sole
+     * child at position 0. Bundled-composite mutation per spec §8.
+     *
+     * Used by the native AN-1 (formula-buffer insertion) pass in
+     * `src/lib/grammar/an-rules.ts`. Composing this from
+     * `addExpression` + `reparentExpression` is not possible: the
+     * intermediate state would either (a) violate S-9 with the child
+     * still occupying the formula's target slot, or (b) trip the
+     * parent's `assertChildLimit` (unary `not`, binary
+     * `implies`/`iff`) even though the *net* child count of the parent
+     * is unchanged after the wrap.
+     *
+     * The new formula's id is minted via the engine's `idGenerator`
+     * accessor and returned in the mutation result. Argument fields
+     * (`argumentId`, `argumentVersion`, `premiseId`) are inherited
+     * from the source child.
+     *
+     * @throws If `childId` does not exist in this premise.
+     * @throws If `childId` is at the root (no parent to insert a
+     *         buffer beneath).
+     *
+     * @since 1.0.0
+     */
+    public wrapInFormula(
+        childId: string,
+        formulaId: string
+    ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
+        return this.withValidation(() => {
+            const child = this.expressions.getExpression(childId)
+            if (!child) {
+                throw new Error(
+                    `Expression "${childId}" not found in premise "${this.premise.id}".`
+                )
+            }
+            if (child.parentId === null) {
+                throw new Error(
+                    `Cannot wrap root expression "${childId}" in a formula — no parent operator above it.`
+                )
+            }
+
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                this.expressions.wrapInFormula(childId, formulaId)
+                const changes = this.finalizeExpressionMutation(collector)
+                return {
+                    result: this.expressions.getExpression(formulaId)!,
+                    changes,
+                }
+            } finally {
+                this.expressions.setCollector(null)
+            }
+        })
+    }
+
+    /**
      * Returns true iff `candidateId` is a descendant of `ancestorId` in
      * this premise's expression tree. Used by `reparentExpression` for
      * the S-4 no-cycles check.

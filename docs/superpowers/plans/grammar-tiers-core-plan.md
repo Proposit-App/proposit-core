@@ -2,15 +2,17 @@
 
 > **Implementation status — 2026-05-14 (latest), branch `grammar-tiers/core` at HEAD.**
 >
-> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) + D0c (AN-3 native) complete. Phase D0d partially landed — AN-4 contract tests + dual-review fold; AN-4 native rewrite re-routed to D0e (see below).**
-> Tests at 1611 passed + 9 skipped (1607 prior + 4 D0d new
-> `an-rules.test.ts` tests). `pnpm run check` green.
+> **Phases A, B (all), C1–C8 complete. Phase D0a (scaffold) + D0b (AN-2 native) + D0c (AN-3 native) + D0d (AN-4 contract tests + fold) + D0e (AN-1 + AN-4 native, plus the two new bundled-composite PE primitives `reparentExpression` and `wrapInFormula`) complete. All four AN rules are now native single-rule passes against the public PE mutation API; the legacy delegation through `pe.normalizeExpressions()` is gone.**
+> Tests at 1625 passed + 9 skipped (1611 prior + 14 new — 8 reparentExpression primitive tests + 6 AN-1 contract tests). `pnpm run check` green.
 >
 > **Latest commits (newest first):**
 >
 > ```
-> <D0d-tests> —   — D0d (partial): applyAN4 regression-guard tests; native rewrite re-routed to D0e (see below)
-> <D0d-fold>  —   — fold D0a dual-review polish (generic AN signatures, normalize.ts comment, convergence-cap context, idGenerator @internal, test coupling note)
+> <D0e-an1>   —   — D0e: applyAN1 native (formula buffer insertion via pe.wrapInFormula) + delete legacy delegation helper
+> 4323113     —   — D0e: applyAN4 native (multi-child same-operator absorption via pe.reparentExpression)
+> 10d8fef     —   — D0e: public reparentExpression + normalize.ts swap target fix (PERMISSIVE)
+> 80bea1c     —   — D0d (partial): applyAN4 regression-guard tests; native rewrite re-routed to D0e (see below)
+> 6ba7882     —   — fold D0a dual-review polish (generic AN signatures, normalize.ts comment, convergence-cap context, idGenerator @internal, test coupling note)
 > e55f2c0     —   — D0c: applyAN3 native (0/1-child operator + formula collapse via PE.removeExpression)
 > 79da962     —   — D0b: applyAN2 native (double-negation collapse via PE.removeExpression)
 > 9fb18ae     —   — D0a scaffold: src/lib/grammar/an-rules.ts (delegated impl) + rewire bridges
@@ -23,12 +25,46 @@
 >
 > **D0 per-rule native-rewrite status:**
 >
-> | Rule | Native? | Notes                                                                                             |
-> | ---- | ------- | ------------------------------------------------------------------------------------------------- |
-> | AN-1 | no      | still delegating; rewrite lands D0e (option (a) confirmed — add `pe.reparentExpression`)          |
-> | AN-2 | **yes** | D0b — double-negation collapse via two `pe.removeExpression(id, false)` calls                     |
-> | AN-3 | **yes** | D0c — 0/1-child operator + formula collapse via `pe.removeExpression(id, false)`                  |
-> | AN-4 | no      | **still delegating**; native rewrite gated on D0e's `pe.reparentExpression` (see D0d notes below) |
+> | Rule | Native? | Notes                                                                                                                                |
+> | ---- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+> | AN-1 | **yes** | D0e — formula buffer insertion via `pe.wrapInFormula(childOpId, formulaId)` (new bundled-composite primitive — see D0e notes)        |
+> | AN-2 | **yes** | D0b — double-negation collapse via two `pe.removeExpression(id, false)` calls                                                        |
+> | AN-3 | **yes** | D0c — 0/1-child operator + formula collapse via `pe.removeExpression(id, false)`                                                     |
+> | AN-4 | **yes** | D0e — same-operator absorption via `pe.reparentExpression(c_i, outerId, position_i)` + `pe.removeExpression(formula, false)` cleanup |
+>
+> **D0e implementation notes (2026-05-14, fresh-context dev #3):**
+>
+> The D0e dispatch's proposed AN-1 sequence — `pe.addExpression(formula, parent, childPosition)` followed by `pe.reparentExpression(child, formulaId, 0)` — turned out to be infeasible against the existing public API for the same class of reason that D0d's dispatch fell through:
+>
+> 1. `addExpression(formula, parent, childPosition)` throws S-9 at em.ts:469–471 because the child still occupies that slot — `addExpression` does NOT shift colliding siblings (confirmed by reading the implementation; the dispatch flagged this as "verify").
+> 2. For unary `not` parents and binary `implies`/`iff` parents, `assertChildLimit` (em.ts:1763–1779) rejects the formula as an _extra_ child even though the wrap's _net_ effect leaves the parent's child count unchanged (the formula displaces the child).
+>
+> **Resolution: add a small dedicated `pe.wrapInFormula(childId, formulaId)` bundled-composite primitive** that performs the insertion atomically. It uses EM's private `registerFormulaBuffer` + `reparent` helpers under the hood (via a new public `em.wrapInFormula` thin wrapper) so the formula takes the child's slot and the child becomes the formula's sole child at position 0 in one atomic mutation. This sidesteps both trip-wires above by design: the parent's child count is conserved across the operation, and there is no intermediate state where the formula and child both nominally occupy the same position.
+>
+> The primitive is a one-method addition with the same testability + encapsulation profile as `pe.reparentExpression`. JSDoc tags it as bundled-composite per spec §8. It's also reusable by future operations that need to wrap an existing subtree in a formula (e.g. a hypothetical `wrapExistingExpressionInFormula` repair primitive, or a UI-driven "add parentheses" action). Better than overloading `reparentExpression` with shift-on-collision semantics that would complicate the primitive's invariant story.
+>
+> **What D0e landed this cycle (3 commits + 1 deferred):**
+>
+> 1. `pe.reparentExpression(exprId, newParentId, newPosition)` — bundled-composite primitive per spec §8. Throws S-1 (entity-not-found), S-4 (no-cycles via descendant check), S-9 (sibling collision, excluding the moved expression's own slot). Same-parent same-position is a tolerated no-op. 8 new tests under `test/core.test.ts`.
+> 2. `pe.wrapInFormula(childId, formulaId)` — bundled-composite primitive per spec §8. Atomically inserts a formula between an existing child and its current parent. Throws on entity-not-found and root-wrap attempts. Tests live under the AN-1 describe in `test/grammar/an-rules.test.ts` (the primitive is exercised through every AN-1 firing).
+> 3. `normalize.ts:99` swap target fixed from `DEFAULT_GRAMMAR_CONFIG` to `PERMISSIVE_GRAMMAR_CONFIG`. D0d review caught that `DEFAULT` has `enforceFormulaBetweenOperators: true` and therefore did NOT actually disarm the inline P-1 throw — the swap was a no-op in D0a-D0d and would have become a live bug in D0e+ when native AN paths route through `removeExpression(_, false)`'s 1-child P-1 enforcement branch. Comment rewritten to attribute the trip path correctly.
+> 4. Native AN-4 implementation in `applyAN4` — walks each premise for the P-5 absorption shape, ports the legacy position-spacing + redistribution-fallback from `EM.absorbSameOperator`, reparents inner children to outer with `pe.reparentExpression`, removes inner OP + formula via `pe.removeExpression`. The 4 contract regression-guard tests from D0d's partial landing assert ID preservation + position ordering and remain green.
+> 5. Native AN-1 implementation in `applyAN1` — walks each premise for the P-1 violation shape (non-`not` operator child of operator parent), wraps each match via `pe.wrapInFormula`. 6 new contract regression-guard tests in `an-rules.test.ts` cover AND/IMPLIES/NOT parent cases + the Presentable-no-op + the NOT-child no-op (exception per P-1) + a wrap-primitive spy.
+> 6. Deleted `runLegacyNormalizeAndReportChange` — no caller remains.
+>
+> **Deferred to D0f per dispatch instructions:**
+>
+> - The `||` short-circuit chain in `applyANToFixedPoint` — synthesis P2 #2 still tracking, comment in-place referencing the D0f follow-up.
+> - The `runAssistiveNormalization` + `normalizeArgument` bridges still call into `applyANToFixedPoint`, but the bridges themselves are unchanged. D0f re-evaluates whether `normalizeArgument`'s try/finally PE-config swap moves inside `applyANToFixedPoint` (per the original D0 design).
+> - `hasBinaryOperatorInBoundedSubtree` shared-helper lift — still unaddressed (D0a P2 #3 → D0d P2 #3). The two files (`an-rules.ts` and `validators/presentable.ts`) are not both touched in D0e's core changes; folding the lift now would be in-and-out edit churn. Recommend folding in D0f.
+>
+> **P2 carryover from D0b/D0c + D0d syntheses, addressed in D0e:**
+>
+> - D0b/D0c P2 #1 (type-generics fold): unchanged — applyAN\* are already generic and the call sites already drop the casts (folded into D0d's `6ba7882`).
+> - D0b/D0c P2 #4 + D0d P2 #1 (normalize.ts comment + swap target): **addressed in `10d8fef`**. Swap target now PERMISSIVE; comment rewritten.
+> - D0b/D0c P2 #6 + D0d's mis-attributed trip path: **addressed in `10d8fef`** (PERMISSIVE disarms the throw; parked P-1 cascade concern resolved).
+> - D0d P2 #2 (multi-child position math): **addressed in `4323113`** (legacy spacing algorithm + redistribution fallback ported into native AN-4).
+> - D0a/D0b/D0c/D0d P3 #3 (`hasBinaryOperatorInBoundedSubtree` duplication): deferred to D0f as noted above.
 >
 > **D0d implementation notes (2026-05-14, fresh-context dev #2):**
 >
