@@ -948,6 +948,192 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
             .sort()
         expect(afterIds).toEqual(beforeIds)
     })
+
+    it("absorbs through the redistribute-fallback path when outer children sit near POSITION_MAX (D0f)", () => {
+        // D0f — P2 #1: pre-D0f the redistribute scratch range was
+        // hard-coded to `[max - total, max - 1]`. With outer children
+        // clustered near `POSITION_MAX`, the phase-1 reparent in
+        // `redistributeChildrenEvenly` could land a scratch position
+        // on a different sibling's current slot — tripping S-9 from
+        // inside `pe.reparentExpression`. The D0f fix scans downward
+        // from `max`, skipping positions held by current children AND
+        // positions reserved for the phase-2 final targets, so neither
+        // phase reparents collides.
+        //
+        // Fixture: max=20 positionConfig; outer-OR has 5 children at
+        // [ve-a@3, ve-sib1@15, formula@17, ve-sib2@18, ve-e@20].
+        // formulaIdx=2; leftPos=15, rightPos=18 → gap=3. inner has
+        // 3 children → count=3 → gap (3) ≤ count (3) triggers
+        // redistribute. Pre-D0f scratchBase = 20 - 5 = 15; phase-1
+        // move children[0] (ve-a at 3) → 15 collides with
+        // children[1] (ve-sib1 at 15). The D0f scan skips the
+        // forbidden set {current ∪ targets} = {3, 4, 8, 12, 15, 16,
+        // 17, 18, 20} (targets are evenly-spaced [4, 8, 12, 16, 20]
+        // by the trunc formula `min + range/(total+1) * (i+1)`) and
+        // returns valid scratches.
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+            positionConfig: { min: 0, max: 20, initial: 10 },
+        })
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peD } = eng.createPremise()
+        const { result: peE } = eng.createPremise()
+        const { result: peF } = eng.createPremise()
+        const { result: peG } = eng.createPremise()
+        const { result: peH } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varC = allVars.find((v) => v.boundPremiseId === peC.getId())!
+        const varD = allVars.find((v) => v.boundPremiseId === peD.getId())!
+        const varE = allVars.find((v) => v.boundPremiseId === peE.getId())!
+        const varF = allVars.find((v) => v.boundPremiseId === peF.getId())!
+        const varG = allVars.find((v) => v.boundPremiseId === peG.getId())!
+        const varH = allVars.find((v) => v.boundPremiseId === peH.getId())!
+
+        peB.addExpression({
+            id: "or-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: null,
+            position: 0,
+        })
+        // Outer children sorted by position: ve-a@3, ve-sib1@15,
+        // formula@17, ve-sib2@18, ve-e@20. formulaIdx=2;
+        // leftPos=15 (ve-sib1), rightPos=18 (ve-sib2). gap=3. count=3
+        // (inner has 3 children) → triggers redistribute.
+        // Pre-D0f scratchBase = max - total = 20 - 5 = 15. Phase-1
+        // move children[0] (ve-a at 3) → 15 collides with children[1]
+        // (ve-sib1 at 15). S-9 throws.
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varA.id,
+            parentId: "or-outer",
+            position: 3,
+        })
+        peB.addExpression({
+            id: "ve-sib1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varH.id,
+            parentId: "or-outer",
+            position: 15,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "or-outer",
+            position: 17,
+        })
+        peB.addExpression({
+            id: "ve-sib2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varF.id,
+            parentId: "or-outer",
+            position: 18,
+        })
+        peB.addExpression({
+            id: "ve-e",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varE.id,
+            parentId: "or-outer",
+            position: 20,
+        })
+        peB.addExpression({
+            id: "or-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varC.id,
+            parentId: "or-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varD.id,
+            parentId: "or-inner",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "ve-g",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varG.id,
+            parentId: "or-inner",
+            position: 2,
+        })
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        const ids = after.map((e) => e.id).sort()
+        expect(ids).toEqual([
+            "or-outer",
+            "ve-a",
+            "ve-c",
+            "ve-d",
+            "ve-e",
+            "ve-g",
+            "ve-sib1",
+            "ve-sib2",
+        ])
+        // Order preservation: ve-a leftmost, then ve-sib1 (the
+        // formula's left neighbor), then the three inner children
+        // (ve-c, ve-d, ve-g) in their original inner order, then
+        // ve-sib2 (right neighbor), then ve-e rightmost.
+        const orderedChildren = peB
+            .getChildExpressions("or-outer")
+            .map((c) => c.id)
+        expect(orderedChildren).toEqual([
+            "ve-a",
+            "ve-sib1",
+            "ve-c",
+            "ve-d",
+            "ve-g",
+            "ve-sib2",
+            "ve-e",
+        ])
+    })
 })
 
 describe("applyAN1 — insert formula buffer between operators (D0e native)", () => {

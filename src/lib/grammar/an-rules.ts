@@ -467,18 +467,26 @@ function absorbSameOperatorMatch<
  * Implementation routes through `pe.reparentExpression(child.id,
  * parentId, newPos)` so the operation is observable via the public
  * mutation API and respects S-9 (which tolerates same-parent moves —
- * see `PremiseEngine.reparentExpression` JSDoc). We do the moves in
- * order, but the order within a same-parent redistribution doesn't
- * matter for the final state: each move detaches the child from its
- * old slot (freeing the position) before attaching at the new
- * position.
+ * see `PremiseEngine.reparentExpression` JSDoc).
  *
  * **Two-phase ordering** required to avoid transient S-9 collisions:
- * if a child's new position happens to equal another child's existing
- * position, the single-shot reparent would throw S-9. Park each child
- * at a unique position in a high-half scratch range first (which is
- * guaranteed not to collide with any low-half target position), then
- * place them at their final positions in a second pass.
+ * the bulk move uses scratch positions that are guaranteed disjoint
+ * from (a) every currently-occupied position under `parentId` and (b)
+ * the final target positions, then phase 2 places each child at its
+ * target. Scratch positions are picked by scanning from `max`
+ * downward, skipping any position currently held by a child of
+ * `parentId`. This is robust against the pathological case where some
+ * children sit close to `POSITION_MAX` — the prior fixed-scratch range
+ * `[max - total, max - 1]` could collide with existing children near
+ * the top, tripping the S-9 check inside `pe.reparentExpression`. The
+ * D0e review (P2 #1) flagged this as the redistribute-fallback's own
+ * raison d'être was pathological position-keyspace clustering, so the
+ * collision case was structurally reachable.
+ *
+ * Edge case: total saturation (every position from `min` to `max`
+ * occupied) is astronomical — `total > range` (≈ 4.3B) — and is not
+ * defended against here. If the scratch scan can't find `total`
+ * disjoint positions an Error is thrown with diagnostic context.
  */
 function redistributeChildrenEvenly<
     TArg extends TCoreArgument,
@@ -504,19 +512,57 @@ function redistributeChildrenEvenly<
         targets.push(Math.trunc(min + (range / (total + 1)) * (i + 1)))
     }
 
-    // Phase 1: park each child at a scratch position in the top half
-    // of the range that cannot collide with any target (which all sit
-    // in the lower half by `range / (total + 1)` construction). The
-    // scratch positions are densely packed at the top so they also
-    // don't collide with each other.
-    const scratchBase = max - total
+    // Build the forbidden-position set: union of (a) current
+    // positions held by children of parentId and (b) the final
+    // target positions. Phase-1 scratches must avoid both:
+    //
+    //   (a) avoids S-9 on a not-yet-moved sibling during phase 1;
+    //   (b) avoids S-9 in phase 2, where targets land on positions
+    //       still held by not-yet-moved children carrying scratch
+    //       positions from phase 1.
+    //
+    // The pre-D0f hard-coded scratch window `[max - total, max - 1]`
+    // happened to cover both concerns *only* when current positions
+    // were well below the top of the range — making the bug
+    // structurally reachable for clustered-near-max inputs (which is
+    // the redistribute-fallback's own raison d'être).
+    const forbidden = new Set<number>()
+    for (const c of children) {
+        forbidden.add(c.position)
+    }
+    for (const t of targets) {
+        forbidden.add(t)
+    }
+
+    // Phase 1: scan downward from `max` selecting `total` distinct
+    // scratch positions not in `forbidden`. The resulting scratches
+    // are pairwise distinct (the scan never revisits) and disjoint
+    // from all current child positions AND from all target positions,
+    // so neither phase-1 nor phase-2 reparents can trip S-9.
+    const scratches: number[] = []
+    let cursor = max
+    while (scratches.length < total && cursor >= min) {
+        if (!forbidden.has(cursor)) {
+            scratches.push(cursor)
+        }
+        cursor--
+    }
+    if (scratches.length < total) {
+        throw new Error(
+            `AN-4 redistributeChildrenEvenly: cannot find ${total} ` +
+                `disjoint scratch positions in [${min}, ${max}] for ` +
+                `parent "${parentId}" (current+target occupied: ${forbidden.size}).`
+        )
+    }
+
     for (let i = 0; i < total; i++) {
-        pe.reparentExpression(children[i].id, parentId, scratchBase + i)
+        pe.reparentExpression(children[i].id, parentId, scratches[i])
     }
 
     // Phase 2: move each child to its final target position. Targets
-    // are all distinct by construction and all in the lower half, so
-    // no two moves collide.
+    // are pairwise distinct by `range / (total + 1)` construction and
+    // disjoint from scratches by the `forbidden` exclusion above, so
+    // no phase-2 reparent collides.
     for (let i = 0; i < total; i++) {
         pe.reparentExpression(children[i].id, parentId, targets[i])
     }
