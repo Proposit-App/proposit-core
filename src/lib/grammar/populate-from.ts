@@ -178,7 +178,7 @@ export function populateFromGrounding<
     // assistive mode — permissive callers want the un-normalized
     // form per the populate-from JSDoc.
     const savedBehavior = engine.behavior
-    if (savedBehavior !== "permissive") {
+    if (savedBehavior === "assistive") {
         engine.setBehavior("permissive")
     }
     try {
@@ -263,7 +263,7 @@ export function populateFromGrounding<
         // Step 5: restore the original behavior and (if we switched)
         // run the single explicit normalize() to apply AN-1 on the
         // fully-built tree.
-        if (savedBehavior !== "permissive") {
+        if (savedBehavior === "assistive") {
             engine.setBehavior(savedBehavior)
             engine.normalize()
         }
@@ -273,7 +273,7 @@ export function populateFromGrounding<
         // throw. The build is not transactional — callers expect the
         // engine state to surface the partial build for diagnosis;
         // only the behavior flag gets restored.
-        if (savedBehavior !== "permissive") {
+        if (savedBehavior === "assistive") {
             engine.setBehavior(savedBehavior)
         }
         throw e
