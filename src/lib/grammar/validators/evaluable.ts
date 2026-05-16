@@ -191,37 +191,53 @@ export function validateE6(ctx: TValidatorContext): readonly TViolation[] {
 }
 
 /**
- * E-7 — Argument has conclusion premise. An argument that has at least
- * one premise has exactly one premise designated as the conclusion via
- * `roleState.conclusionPremiseId`. A brand-new argument with zero
- * premises is exempt.
+ * E-7 — Argument has conclusion premise. An argument that has two or
+ * more premises has exactly one premise designated as the conclusion
+ * via `roleState.conclusionPremiseId`. Zero- and one-premise arguments
+ * are exempt: zero is the brand-new state, and one is trivially
+ * auto-promotable — the single premise *is* the conclusion regardless
+ * of designation, so requiring an explicit `conclusionPremiseId` adds
+ * no semantic information.
+ *
+ * If a `conclusionPremiseId` is set, it must resolve to an existing
+ * premise regardless of premise count — a dangling reference is a
+ * data-integrity issue caught at any cardinality.
+ *
+ * Pre-1.0.2 E-7 fired on any argument with `premises.length >= 1` and
+ * no `conclusionPremiseId`. That over-strict reading false-flagged the
+ * "user just added their first premise via the supporting-role
+ * default path" case, blocking new-argument workflows in normal
+ * (assistive) mode. The 1.0.2 relaxation moves the threshold to ≥ 2
+ * premises.
  */
 export function validateE7(ctx: TValidatorContext): readonly TViolation[] {
-    if (ctx.premises.length === 0) return []
     const conclusionId = ctx.roleState.conclusionPremiseId
-    if (conclusionId === undefined) {
-        return [
-            {
-                tier: "evaluable",
-                code: "E-7",
-                message: "argument has premises but no conclusion designated",
-                argumentId: ctx.argument.id,
-            },
-        ]
+    // Dangling conclusionPremiseId is always a violation (data integrity).
+    if (conclusionId !== undefined) {
+        const found = ctx.premises.some((p) => p.id === conclusionId)
+        if (!found) {
+            return [
+                {
+                    tier: "evaluable",
+                    code: "E-7",
+                    message: `conclusionPremiseId ${conclusionId} does not match any premise`,
+                    argumentId: ctx.argument.id,
+                    premiseId: conclusionId,
+                },
+            ]
+        }
+        return []
     }
-    const found = ctx.premises.some((p) => p.id === conclusionId)
-    if (!found) {
-        return [
-            {
-                tier: "evaluable",
-                code: "E-7",
-                message: `conclusionPremiseId ${conclusionId} does not match any premise`,
-                argumentId: ctx.argument.id,
-                premiseId: conclusionId,
-            },
-        ]
-    }
-    return []
+    // No conclusion designated. Exempt at 0 or 1 premises; require at ≥ 2.
+    if (ctx.premises.length < 2) return []
+    return [
+        {
+            tier: "evaluable",
+            code: "E-7",
+            message: "argument has premises but no conclusion designated",
+            argumentId: ctx.argument.id,
+        },
+    ]
 }
 
 export function validateEvaluable(
