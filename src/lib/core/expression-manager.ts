@@ -1530,15 +1530,35 @@ export class ExpressionManager<
         const anchorParentId = existingNode.parentId
         const anchorPosition = existingNode.position
 
-        // Determine child positions (midpoint-spaced for future bisection).
+        // Determine child positions. For `implies`/`iff` the S-8 invariant
+        // pins the two children to exact positions [0, 1] — bisection
+        // headroom is irrelevant because S-8 also fixes arity at 2. For
+        // `and`/`or` (and `formula`, though it's never produced here), use
+        // midpoint-spaced positions so future inserts can bisect.
+        const isBinaryOp =
+            operator.operator === "implies" || operator.operator === "iff"
         const existingPosition =
             leftNodeId !== undefined
-                ? this.positionConfig.initial
-                : midpoint(this.positionConfig.initial, this.positionConfig.max)
+                ? isBinaryOp
+                    ? 0
+                    : this.positionConfig.initial
+                : isBinaryOp
+                  ? 1
+                  : midpoint(
+                        this.positionConfig.initial,
+                        this.positionConfig.max
+                    )
         const siblingPosition =
             leftNodeId !== undefined
-                ? midpoint(this.positionConfig.initial, this.positionConfig.max)
-                : this.positionConfig.initial
+                ? isBinaryOp
+                    ? 1
+                    : midpoint(
+                          this.positionConfig.initial,
+                          this.positionConfig.max
+                      )
+                : isBinaryOp
+                  ? 0
+                  : this.positionConfig.initial
 
         // Reparent existing node under operator.
         this.reparent(existingNodeId, operator.id, existingPosition)

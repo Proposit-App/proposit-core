@@ -1250,16 +1250,27 @@ export class PremiseEngine<
                     } as TExpressionInput<TExpr>
                     this.expressions.addExpression(newOpExpr)
 
-                    // Now reparent the children under the new sub-operator
+                    // Now reparent the children under the new sub-operator.
+                    // For `implies`/`iff` S-8 pins positions to exact [0, 1];
+                    // for `and`/`or` keep the midpoint-spaced pattern so
+                    // future inserts can bisect. (S-5 throws on non-root
+                    // implies/iff at addExpression above, so this branch is
+                    // unreachable for the binary case today — the explicit
+                    // [0, 1] is defense-in-depth against future loosening
+                    // of S-5 enforcement at the mutation surface.)
+                    const isBinaryOp =
+                        newOperator === "implies" || newOperator === "iff"
                     this.expressions.reparentExpression(
                         firstChild.id,
                         newOpId,
-                        POSITION_INITIAL
+                        isBinaryOp ? 0 : POSITION_INITIAL
                     )
                     this.expressions.reparentExpression(
                         secondChild.id,
                         newOpId,
-                        midpoint(POSITION_INITIAL, POSITION_MAX)
+                        isBinaryOp
+                            ? 1
+                            : midpoint(POSITION_INITIAL, POSITION_MAX)
                     )
 
                     const changes = this.finalizeExpressionMutation(collector)

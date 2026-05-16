@@ -9718,6 +9718,116 @@ describe("wrapExpression", () => {
         expect(left.position).toBe(POSITION_INITIAL)
         expect(right.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
     })
+
+    // --- S-8 regression: implies/iff children must land at exactly [0, 1] ---
+    //
+    // Pre-1.0.1 the wrapExpression path computed child positions as
+    // `[POSITION_INITIAL, midpoint(POSITION_INITIAL, POSITION_MAX)]` for
+    // every binary wrap. With POSITION_INITIAL = 0 and POSITION_MAX =
+    // 2147483647 that gave `[0, 1073741823]` — fine for `and`/`or` but a
+    // direct violation of S-8 (which mandates `[0, 1]` literally for
+    // `implies`/`iff`). Discovered via grammar-tiers cycle 4d on the
+    // server side; see `docs/change-requests/2026-05-15-createExpressionWithOperator-s8-position-bug.md`.
+
+    it("wrapExpression with implies puts children at [0, 1] (left existing)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        pm.wrapExpression(
+            wrapOp("op-implies", "implies"),
+            wrapVar("expr-q", VAR_Q.id),
+            "expr-p" // P at position 0 (antecedent), Q at position 1 (consequent)
+        )
+        const p = pm.getExpression("expr-p")!
+        const q = pm.getExpression("expr-q")!
+        expect(p.position).toBe(0)
+        expect(q.position).toBe(1)
+        expect(
+            eng.validate("structural").filter((v) => v.code === "S-8")
+        ).toEqual([])
+    })
+
+    it("wrapExpression with implies puts children at [0, 1] (right existing)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        pm.wrapExpression(
+            wrapOp("op-implies", "implies"),
+            wrapVar("expr-q", VAR_Q.id),
+            undefined,
+            "expr-p" // Q at position 0 (antecedent), P at position 1 (consequent)
+        )
+        const p = pm.getExpression("expr-p")!
+        const q = pm.getExpression("expr-q")!
+        expect(q.position).toBe(0)
+        expect(p.position).toBe(1)
+        expect(
+            eng.validate("structural").filter((v) => v.code === "S-8")
+        ).toEqual([])
+    })
+
+    it("wrapExpression with iff puts children at [0, 1]", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        pm.wrapExpression(
+            wrapOp("op-iff", "iff"),
+            wrapVar("expr-q", VAR_Q.id),
+            "expr-p"
+        )
+        const p = pm.getExpression("expr-p")!
+        const q = pm.getExpression("expr-q")!
+        expect(p.position).toBe(0)
+        expect(q.position).toBe(1)
+        expect(
+            eng.validate("structural").filter((v) => v.code === "S-8")
+        ).toEqual([])
+    })
+
+    it("wrapExpression with and retains midpoint-spaced positions (regression guard)", () => {
+        // Asserts the implies/iff special-case did not break the
+        // bisection-friendly multi-child spacing for and/or.
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        pm.wrapExpression(
+            wrapOp("op-and", "and"),
+            wrapVar("expr-q", VAR_Q.id),
+            "expr-p"
+        )
+        const p = pm.getExpression("expr-p")!
+        const q = pm.getExpression("expr-q")!
+        expect(p.position).toBe(POSITION_INITIAL)
+        expect(q.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
+        expect(q.position - p.position).toBeGreaterThan(1)
+        expect(eng.validate("structural")).toEqual([])
+    })
+
+    it("wrapExpression with or retains midpoint-spaced positions (regression guard)", () => {
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeVarExpr("expr-p", VAR_P.id))
+        pm.wrapExpression(
+            wrapOp("op-or", "or"),
+            wrapVar("expr-q", VAR_Q.id),
+            "expr-p"
+        )
+        const p = pm.getExpression("expr-p")!
+        const q = pm.getExpression("expr-q")!
+        expect(p.position).toBe(POSITION_INITIAL)
+        expect(q.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
+        expect(eng.validate("structural")).toEqual([])
+    })
 })
 
 // ---------------------------------------------------------------------------
