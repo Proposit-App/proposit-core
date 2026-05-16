@@ -1,10 +1,10 @@
 # Upcoming release notes
 
-Patch release relaxing two grammar rules that were over-strict and
-blocking real user workflows when downstream consumers (notably
-`proposit-server`) activated the four-tier validation gates for
-normal-mode users. Both fixes are bug fixes against the v1.0
-contract; no API surface changes.
+Patch release fixing one over-strict grammar rule (S-8) and one
+mutation-surface gap that let consumers leave the engine in an
+E-7-violating state mid-mutation. Both surfaced when downstream
+consumers (notably `proposit-server`) activated the four-tier
+validation gates for normal-mode users.
 
 ## What changed
 
@@ -33,36 +33,80 @@ Knock-on cleanups: the 1.0.1 patches that pinned `wrapExpression`,
 sites now use the uniform midpoint-spaced pattern, mirroring
 `and` / `or`.
 
-### E-7 relaxed to fire only on 2+ premises
+### Engine-enforced E-7 invariant — non-empty argument always has a conclusion
 
-E-7 previously fired on any argument with `≥ 1` premises and no
-designated conclusion. The threshold has moved to `≥ 2`: a 1-premise
-argument with no designation is exempt — the single premise is
-trivially the conclusion regardless of designation, so requiring an
-explicit `conclusionPremiseId` adds no semantic information.
+E-7 ("an argument with premises has a designated conclusion") was
+firing 422s on the most common new-argument UI flow: when the user
+clicked "Add Premise" on a fresh argument and the UI sent the default
+`role: "supporting"`, the upstream `mutateCreatePremise` helper
+honored that role by calling `engine.clearConclusionPremise()` —
+undoing core's auto-conclusion-assignment and leaving the engine
+with 1 premise / no conclusion designated. The server's Derivable
+gate then tripped E-7 and blocked the request.
 
-The pre-1.0.2 reading blocked the most common new-argument UI flow:
-when a user added their first premise via an "Add Premise" button
-that defaulted to `role: "supporting"`, the upstream `mutateCreatePremise`
-helper honored that role by undoing core's auto-conclusion-assignment
-— leaving the engine with 1 premise / no conclusion and tripping E-7
-in the server's normal-mode Derivable gate. Users couldn't add their
-first premise without a 422.
+E-7's strict reading ("any non-empty argument requires an explicit
+conclusion") is correct as a product invariant — every argument is
+working toward a conclusion, and the engine should never sit in a
+state where premises exist with no conclusion designated. The fix
+moves the constraint enforcement from "validate-time complaint" to
+"mutation-time invariant guard" so callers can't break the
+invariant in the first place:
 
-A dangling `conclusionPremiseId` (set, but no premise has that id)
-remains a violation at any cardinality — that's a data-integrity
-concern, not a designation-completeness concern.
+- **`clearConclusionPremise()` is now a no-op on a non-empty
+  argument.** The shared helper's clear call after `createPremiseWithId`
+  becomes a structural no-op; the auto-assigned conclusion survives,
+  and the post-mutation state is `1 premise / that premise is the
+conclusion`. E-7 passes. On a zero-premise argument the call still
+  clears (vacuous invariant).
+- **`removePremise(conclusionPremiseId)` on a multi-premise argument
+  atomically reassigns conclusion** to the lowest-id remaining
+  premise (sorted lexicographically) rather than leaving
+  `conclusionPremiseId === undefined`. When removing the last
+  remaining premise, the conclusion clears as before (vacuous on
+  the empty argument).
+
+Consumers that want a different reassignment policy after a
+conclusion delete (e.g., server's `createdOn` ordering, or a UI
+sibling position) can issue their own `setConclusionPremise(...)`
+call immediately after `removePremise(...)` — the post-mutation
+E-7 keeps passing because a conclusion stays designated throughout.
+
+Snapshot loading (`fromSnapshot` / `fromData`) deliberately bypasses
+these mutation-surface guards — it accepts any Structural-valid state
+and surfaces E-7 (and the rest of the higher-tier rules) through
+`validate()` like other Evaluable issues. The validator stays as the
+safety net for loaded snapshots and direct data-shape construction
+that the mutation-surface guards can't intercept.
+
+E-7's strict reading is unchanged. The rule still fires on any
+non-empty argument with no `conclusionPremiseId` set, and on any
+argument (empty or not) with a dangling `conclusionPremiseId`.
 
 ## Impact
 
-Consumers calling `engine.validate(tier)` (any tier ≥ Structural for
-S-8; any tier ≥ Evaluable for E-7) will see fewer false positives.
-Specifically:
+Consumers calling `engine.validate(tier)` will see fewer false
+positives from the engine's own mutation paths:
 
 - Pre-1.0.1-era arguments with midpoint-spaced binary children no
   longer trip S-8.
 - The "user added their first premise via `role: 'supporting'`" path
-  no longer trips E-7.
+  no longer reaches an E-7-violating state — the engine refuses the
+  clear, and the post-mutation state passes E-7 trivially.
+
+Consumers that previously called `clearConclusionPremise()` on a
+non-empty argument and depended on the cleared state should note
+the silent no-op — the previous behavior was always an
+E-7-violating intermediate state, so this is a bug fix rather than
+a breaking change, but the behavior of "the conclusion stays
+designated" is now load-bearing.
+
+Consumers that previously called `removePremise(conclusionId)` on a
+multi-premise argument and observed the cleared role state should
+note the new auto-reassign — the post-mutation
+`roleState.conclusionPremiseId` will now point at the lowest-id
+remaining premise rather than `undefined`. Callers that want to
+override the lowest-id default can `setConclusionPremise(...)`
+immediately after the remove.
 
 No data migration is required. No API surface changed.
 
@@ -74,6 +118,12 @@ No data migration is required. No API surface changed.
   all binary writes).
 - S-9 sibling-position uniqueness — unchanged; still the only rule
   guarding position collisions.
-- E-7 dangling-reference check — unchanged; still fires at any
-  premise count.
+- E-7 itself — strict reading preserved; only the mutation surface
+  changed to keep the engine from producing E-7-violating
+  intermediate states.
+- `setConclusionPremise(id)` — unchanged; still throws on a
+  non-existent premise id.
+- Snapshot loading semantics — unchanged; `fromSnapshot` /
+  `fromData` still accept any Structural-valid state and surface
+  higher-tier issues through `validate()`.
 - No new error codes, validator codes, or schema fields.
