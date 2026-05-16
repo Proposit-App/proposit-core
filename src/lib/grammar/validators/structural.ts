@@ -10,7 +10,7 @@
 // S-5  root-only IMPLIES/IFF
 // S-6  premise type discriminator consistency
 // S-7  claim type immutability (creation-time invariant; runtime no-op)
-// S-8  binary operator arity + positions
+// S-8  binary operator arity
 // S-9  sibling position uniqueness
 // S-10 entity ID uniqueness
 // S-11 variable symbol uniqueness
@@ -357,13 +357,19 @@ function childrenByParent(
 }
 
 /**
- * S-8 — Binary operator arity + positions. `implies` and `iff` have
- * exactly 2 children, at positions `0` and `1`.
+ * S-8 — Binary operator arity. `implies` and `iff` have exactly 2
+ * children. Child ordering (antecedent at lower position, consequent at
+ * higher) is conveyed by the relative sibling positions — any
+ * `[a, b]` with `a < b` is semantically equivalent to `[0, 1]`. The
+ * absolute position values are sibling-ordering metadata maintained by
+ * the mutation primitives and are not a Structural invariant; sibling
+ * uniqueness is enforced separately by S-9.
  *
- * One violation per binary expression. When arity is wrong the position
- * check is skipped — position invariants are only meaningful for an
- * exactly-2-child shape; reporting both would noise the violation list
- * with the same structural problem.
+ * Pre-1.0.2 S-8 also pinned positions to literal `[0, 1]`. That check
+ * was over-strict — it false-flagged existing arguments whose binary
+ * operators sat at midpoint-spaced positions (e.g., `[0, 1073741823]`,
+ * the default `wrapExpression` spacing for variadic operators). The
+ * position pin was relaxed in 1.0.2 to arity-only.
  */
 export function validateS8(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
@@ -377,18 +383,6 @@ export function validateS8(ctx: TValidatorContext): readonly TViolation[] {
                 tier: "structural",
                 code: "S-8",
                 message: `${e.operator} expression ${e.id} has ${kids.length} children (expected 2)`,
-                argumentId: ctx.argument.id,
-                premiseId: e.premiseId,
-                expressionId: e.id,
-            })
-            // Position check only meaningful with exactly 2 children.
-            continue
-        }
-        if (kids[0].position !== 0 || kids[1].position !== 1) {
-            violations.push({
-                tier: "structural",
-                code: "S-8",
-                message: `${e.operator} expression ${e.id} children are at positions ${kids[0].position},${kids[1].position} (expected 0,1)`,
                 argumentId: ctx.argument.id,
                 premiseId: e.premiseId,
                 expressionId: e.id,

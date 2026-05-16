@@ -494,7 +494,7 @@ describe("grammar/structural", () => {
         })
     })
 
-    describe("S-8 binary operator arity + positions", () => {
+    describe("S-8 binary operator arity (implies/iff have exactly 2 children)", () => {
         it("returns a violation when implies has != 2 children", () => {
             const ctx = buildContext({
                 premises: [makeFreeformPremise({ id: "p-1" })],
@@ -553,7 +553,13 @@ describe("grammar/structural", () => {
             expect(violations[0].code).toBe("S-8")
         })
 
-        it("returns a violation when implies children are not at positions 0 and 1", () => {
+        // Pre-1.0.2 S-8 also pinned positions to literal [0, 1]. The
+        // 1.0.2 relaxation drops the position check — only arity matters.
+        // The two non-[0,1] cases below now PASS S-8 (any [a, b] with
+        // a < b is equivalent to [0, 1] under S-8's relaxed reading);
+        // S-9 still guards sibling-position uniqueness.
+
+        it("returns an empty array for IMPLIES(a@5, b@10) (positions are sibling metadata, not S-8 concern)", () => {
             const ctx = buildContext({
                 premises: [makeFreeformPremise({ id: "p-1" })],
                 expressions: [
@@ -575,9 +581,37 @@ describe("grammar/structural", () => {
                     }),
                 ],
             })
-            const violations = validateS8(ctx)
-            expect(violations.length).toBeGreaterThanOrEqual(1)
-            expect(violations[0].code).toBe("S-8")
+            expect(validateS8(ctx)).toEqual([])
+        })
+
+        it("returns an empty array for IMPLIES(a@0, b@1073741823) (midpoint-spaced positions are valid)", () => {
+            // Regression for the bug that motivated the 1.0.2 relaxation:
+            // pre-1.0.1 wrapExpression/insertExpression assigned midpoint
+            // positions to all binary children (including implies/iff);
+            // S-8 falsely flagged these as violations. Post-1.0.2 they
+            // are valid by construction.
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("implies", {
+                        id: "e-impl",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        premiseId: "p-1",
+                        parentId: "e-impl",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "c-1",
+                        premiseId: "p-1",
+                        parentId: "e-impl",
+                        position: 1073741823,
+                    }),
+                ],
+            })
+            expect(validateS8(ctx)).toEqual([])
         })
 
         it("returns an empty array for IMPLIES(a@0, b@1)", () => {
