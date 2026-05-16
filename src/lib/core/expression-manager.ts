@@ -1350,16 +1350,22 @@ export class ExpressionManager<
         const anchorParentId = anchor.parentId
         const anchorPosition = anchor.position
 
-        // Compute child positions (midpoint-spaced for future bisection),
-        // matching the pattern used by wrapExpression.
+        // Compute child positions. For `implies`/`iff` the S-8 invariant
+        // pins the two children to exact positions [0, 1] — bisection
+        // headroom is irrelevant because S-8 also fixes arity at 2. For
+        // `and`/`or` (and `formula`, though it's never produced here), use
+        // midpoint-spaced positions so future inserts can bisect. Mirrors
+        // the wrapExpression branch landed in c303aa4.
+        const isBinaryOp =
+            expression.type === "operator" &&
+            (expression.operator === "implies" || expression.operator === "iff")
         let leftPosition: number
         let rightPosition: number
         if (leftNodeId !== undefined && rightNodeId !== undefined) {
-            leftPosition = this.positionConfig.initial
-            rightPosition = midpoint(
-                this.positionConfig.initial,
-                this.positionConfig.max
-            )
+            leftPosition = isBinaryOp ? 0 : this.positionConfig.initial
+            rightPosition = isBinaryOp
+                ? 1
+                : midpoint(this.positionConfig.initial, this.positionConfig.max)
         } else if (leftNodeId !== undefined) {
             leftPosition = this.positionConfig.initial
             rightPosition = this.positionConfig.initial // unused

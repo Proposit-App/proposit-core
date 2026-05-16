@@ -714,6 +714,87 @@ describe("insertExpression", () => {
             )
         ).toThrow(/leftNodeId and rightNodeId must be different/)
     })
+
+    // --- S-8 regression: implies/iff children must land at exactly [0, 1] ---
+    //
+    // Pre-1.0.1.1 the insertExpression path computed binary-with-both-nodes
+    // child positions as `[POSITION_INITIAL, midpoint(POSITION_INITIAL,
+    // POSITION_MAX)]` for every operator. With POSITION_INITIAL = 0 and
+    // POSITION_MAX = 2147483647 that gave `[0, 1073741823]` — fine for
+    // `and`/`or` but a direct violation of S-8 (which mandates `[0, 1]`
+    // literally for `implies`/`iff`). Same defect as wrapExpression
+    // (c303aa4); reachable via PremiseEngine.insertExpression and the
+    // shipped CLI `src/cli/commands/expressions.ts:295`.
+
+    it("insertExpression with implies + both nodes at root assigns positions [0, 1] (satisfies S-8)", () => {
+        // Pre-state: op-and (root) → [expr-p (pos 0), expr-q (pos 1)].
+        // op-and is a root anchor, so S-5 (implies-must-land-at-root) passes.
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+        // Insert implies wrapping op-and (left) + expr-q (right).
+        pm.insertExpression(
+            makeOpExpr("op-implies", "implies"),
+            "op-and",
+            "expr-q"
+        )
+        const opAnd = pm.getExpression("op-and")!
+        const exprQ = pm.getExpression("expr-q")!
+        expect(opAnd.parentId).toBe("op-implies")
+        expect(exprQ.parentId).toBe("op-implies")
+        expect(opAnd.position).toBe(0)
+        expect(exprQ.position).toBe(1)
+        expect(
+            eng.validate("structural").filter((v) => v.code === "S-8")
+        ).toEqual([])
+    })
+
+    it("insertExpression with iff + both nodes at root assigns positions [0, 1] (satisfies S-8)", () => {
+        // Pre-state: op-and (root) → [expr-p (pos 0), expr-q (pos 1)].
+        // op-and is a root anchor, so S-5 (iff-must-land-at-root) passes.
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        eng.addVariable(VAR_Q)
+        const { result: pm } = eng.createPremise()
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        pm.addExpression(
+            makeVarExpr("expr-p", VAR_P.id, {
+                parentId: "op-and",
+                position: 0,
+            })
+        )
+        pm.addExpression(
+            makeVarExpr("expr-q", VAR_Q.id, {
+                parentId: "op-and",
+                position: 1,
+            })
+        )
+        // Insert iff wrapping op-and (left) + expr-q (right).
+        pm.insertExpression(makeOpExpr("op-iff", "iff"), "op-and", "expr-q")
+        const opAnd = pm.getExpression("op-and")!
+        const exprQ = pm.getExpression("expr-q")!
+        expect(opAnd.parentId).toBe("op-iff")
+        expect(exprQ.parentId).toBe("op-iff")
+        expect(opAnd.position).toBe(0)
+        expect(exprQ.position).toBe(1)
+        expect(
+            eng.validate("structural").filter((v) => v.code === "S-8")
+        ).toEqual([])
+    })
 })
 
 // ---------------------------------------------------------------------------
