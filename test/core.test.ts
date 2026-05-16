@@ -715,18 +715,20 @@ describe("insertExpression", () => {
         ).toThrow(/leftNodeId and rightNodeId must be different/)
     })
 
-    // --- S-8 regression: implies/iff children must land at exactly [0, 1] ---
+    // --- S-8 regression: implies/iff children sit at midpoint-spaced
+    // positions (relaxed S-8, post-1.0.2) ---
     //
-    // Pre-1.0.1.1 the insertExpression path computed binary-with-both-nodes
-    // child positions as `[POSITION_INITIAL, midpoint(POSITION_INITIAL,
-    // POSITION_MAX)]` for every operator. With POSITION_INITIAL = 0 and
-    // POSITION_MAX = 2147483647 that gave `[0, 1073741823]` — fine for
-    // `and`/`or` but a direct violation of S-8 (which mandates `[0, 1]`
-    // literally for `implies`/`iff`). Same defect as wrapExpression
-    // (c303aa4); reachable via PremiseEngine.insertExpression and the
-    // shipped CLI `src/cli/commands/expressions.ts:295`.
+    // History: pre-1.0.1 insertExpression assigned `[POSITION_INITIAL,
+    // midpoint(POSITION_INITIAL, POSITION_MAX)]` to all binary children.
+    // Cycle 1.0.1 (b9b898b) pinned `implies`/`iff` to exact [0, 1] to
+    // satisfy the over-strict S-8 position check. Cycle 1.0.2 relaxed
+    // S-8 to arity-only and reverted insertExpression to the uniform
+    // midpoint-spaced pattern — `[0, 1]` and `[0, 1073741823]` are both
+    // valid for binary operators under the relaxed rule. These tests
+    // pin the post-1.0.2 behavior: midpoint-spaced positions land on
+    // implies/iff just like and/or, and S-8 emits no violations.
 
-    it("insertExpression with implies + both nodes at root assigns positions [0, 1] (satisfies S-8)", () => {
+    it("insertExpression with implies + both nodes at root uses midpoint-spaced positions (S-8 clean)", () => {
         // Pre-state: op-and (root) → [expr-p (pos 0), expr-q (pos 1)].
         // op-and is a root anchor, so S-5 (implies-must-land-at-root) passes.
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
@@ -756,14 +758,14 @@ describe("insertExpression", () => {
         const exprQ = pm.getExpression("expr-q")!
         expect(opAnd.parentId).toBe("op-implies")
         expect(exprQ.parentId).toBe("op-implies")
-        expect(opAnd.position).toBe(0)
-        expect(exprQ.position).toBe(1)
+        expect(opAnd.position).toBe(POSITION_INITIAL)
+        expect(exprQ.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
         expect(
             eng.validate("structural").filter((v) => v.code === "S-8")
         ).toEqual([])
     })
 
-    it("insertExpression with iff + both nodes at root assigns positions [0, 1] (satisfies S-8)", () => {
+    it("insertExpression with iff + both nodes at root uses midpoint-spaced positions (S-8 clean)", () => {
         // Pre-state: op-and (root) → [expr-p (pos 0), expr-q (pos 1)].
         // op-and is a root anchor, so S-5 (iff-must-land-at-root) passes.
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
@@ -789,8 +791,8 @@ describe("insertExpression", () => {
         const exprQ = pm.getExpression("expr-q")!
         expect(opAnd.parentId).toBe("op-iff")
         expect(exprQ.parentId).toBe("op-iff")
-        expect(opAnd.position).toBe(0)
-        expect(exprQ.position).toBe(1)
+        expect(opAnd.position).toBe(POSITION_INITIAL)
+        expect(exprQ.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
         expect(
             eng.validate("structural").filter((v) => v.code === "S-8")
         ).toEqual([])
@@ -6119,6 +6121,88 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
 })
 
 // ---------------------------------------------------------------------------
+// E-7 regression — single-premise no-conclusion is exempt (cycle 1.0.2)
+// ---------------------------------------------------------------------------
+//
+// Cycle 4f smoke-test on proposit-server v0.13.0 (Derivable gate
+// activated for normal-mode users) exposed E-7 firing on the first
+// premise of a freshly-created argument. The trigger is the shared
+// `mutateCreatePremise` helper, which explicitly undoes core's
+// auto-conclusion-assignment when the caller requests `role:
+// "supporting"` — so the post-mutation state is 1 premise / no
+// conclusion. Pre-1.0.2 E-7 fired on that state; the route then
+// raised 422 GRAMMAR_VIOLATIONS, blocking the user from adding their
+// first premise via the UI's default "supporting" role.
+//
+// The 1.0.2 relaxation exempts the 1-premise case: the lone premise
+// is trivially the conclusion regardless of designation, so no
+// information is conveyed by requiring an explicit
+// `conclusionPremiseId`. These engine-level tests pin that contract
+// against the same call sequence the server's `assertNoViolations`
+// path uses.
+describe("ArgumentEngine — E-7 exempts 1-premise no-conclusion state", () => {
+    it("validate('derivable') is empty after createPremise + clearConclusionPremise (smoke-test reproducer)", () => {
+        // Reproduces the server-side call sequence:
+        //   sharedCreatePremise(engine, premiseId, { role: "supporting" })
+        // which expands to:
+        //   1. engine.createPremiseWithId(premiseId, { type: "freeform" })
+        //      → core auto-sets conclusionPremiseId = premiseId
+        //   2. engine.clearConclusionPremise()
+        //      → shared undoes the auto-assignment to honor the
+        //        requested "supporting" role
+        // Then the route runs assertNoViolations("derivable", engine).
+        // Pre-1.0.2 E-7 fired here; post-1.0.2 it doesn't.
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "assistive",
+        })
+        eng.createPremiseWithId("p-supporting")
+        eng.clearConclusionPremise()
+        // Sanity-check the pre-validate state: 1 premise, no conclusion.
+        expect(eng.listPremiseIds()).toEqual(["p-supporting"])
+        expect(eng.getRoleState().conclusionPremiseId).toBeUndefined()
+        // The Derivable tier includes Structural + Evaluable. None of
+        // these should fire for this minimal state.
+        const violations = eng.validate("derivable")
+        const e7s = violations.filter((v) => v.code === "E-7")
+        expect(e7s).toEqual([])
+    })
+
+    it("validate('presentable') is empty for 1-premise no-conclusion (full union, no E-7 leakage)", () => {
+        // Presentable is the strictest tier (Structural + Evaluable +
+        // Derivable + Presentable). E-7 belongs to Evaluable; with
+        // the relaxation it must not appear at any tier ≥ Evaluable
+        // for the 1-premise case.
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "assistive",
+        })
+        eng.createPremiseWithId("p-supporting")
+        eng.clearConclusionPremise()
+        const violations = eng.validate("presentable")
+        expect(violations.filter((v) => v.code === "E-7")).toEqual([])
+    })
+
+    it("validate('derivable') fires E-7 on 2+ premises with no conclusion", () => {
+        // Regression in the other direction: the relaxation must not
+        // mask the legitimate 2+-premise case where no conclusion is
+        // designated. The user's argument is genuinely incomplete here
+        // — auto-promotion is no longer trivial because there are
+        // multiple candidates.
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive", // permissive mode so AN doesn't intervene
+        })
+        eng.createPremiseWithId("p-1")
+        eng.createPremiseWithId("p-2")
+        eng.clearConclusionPremise()
+        expect(eng.listPremiseIds()).toEqual(["p-1", "p-2"])
+        expect(eng.getRoleState().conclusionPremiseId).toBeUndefined()
+        const violations = eng.validate("derivable")
+        const e7s = violations.filter((v) => v.code === "E-7")
+        expect(e7s.length).toBeGreaterThanOrEqual(1)
+        expect(e7s[0].message).toMatch(/no conclusion designated/)
+    })
+})
+
+// ---------------------------------------------------------------------------
 // PremiseEngine — updateExpression
 // ---------------------------------------------------------------------------
 
@@ -9800,17 +9884,21 @@ describe("wrapExpression", () => {
         expect(right.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
     })
 
-    // --- S-8 regression: implies/iff children must land at exactly [0, 1] ---
+    // --- S-8 regression: implies/iff children sit at midpoint-spaced
+    // positions (relaxed S-8, post-1.0.2) ---
     //
-    // Pre-1.0.1 the wrapExpression path computed child positions as
-    // `[POSITION_INITIAL, midpoint(POSITION_INITIAL, POSITION_MAX)]` for
-    // every binary wrap. With POSITION_INITIAL = 0 and POSITION_MAX =
-    // 2147483647 that gave `[0, 1073741823]` — fine for `and`/`or` but a
-    // direct violation of S-8 (which mandates `[0, 1]` literally for
-    // `implies`/`iff`). Discovered via grammar-tiers cycle 4d on the
-    // server side; see `docs/change-requests/2026-05-15-createExpressionWithOperator-s8-position-bug.md`.
+    // History: pre-1.0.1 wrapExpression assigned `[POSITION_INITIAL,
+    // midpoint(POSITION_INITIAL, POSITION_MAX)]` to all binary children.
+    // Cycle 1.0.1 (c303aa4) pinned `implies`/`iff` to exact [0, 1] to
+    // satisfy the over-strict S-8 position check. Cycle 1.0.2 relaxed
+    // S-8 to arity-only and reverted wrapExpression to the uniform
+    // midpoint-spaced pattern — `[0, 1]` and `[0, 1073741823]` are both
+    // valid for binary operators under the relaxed rule. These tests
+    // pin the post-1.0.2 behavior across all four binary wrap shapes
+    // (implies/iff × left-existing/right-existing) plus and/or regression
+    // guards.
 
-    it("wrapExpression with implies puts children at [0, 1] (left existing)", () => {
+    it("wrapExpression with implies uses midpoint-spaced positions (left existing) — S-8 clean", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -9819,18 +9907,18 @@ describe("wrapExpression", () => {
         pm.wrapExpression(
             wrapOp("op-implies", "implies"),
             wrapVar("expr-q", VAR_Q.id),
-            "expr-p" // P at position 0 (antecedent), Q at position 1 (consequent)
+            "expr-p" // P at antecedent slot (lower position), Q at consequent slot
         )
         const p = pm.getExpression("expr-p")!
         const q = pm.getExpression("expr-q")!
-        expect(p.position).toBe(0)
-        expect(q.position).toBe(1)
+        expect(p.position).toBe(POSITION_INITIAL)
+        expect(q.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
         expect(
             eng.validate("structural").filter((v) => v.code === "S-8")
         ).toEqual([])
     })
 
-    it("wrapExpression with implies puts children at [0, 1] (right existing)", () => {
+    it("wrapExpression with implies uses midpoint-spaced positions (right existing) — S-8 clean", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -9840,18 +9928,18 @@ describe("wrapExpression", () => {
             wrapOp("op-implies", "implies"),
             wrapVar("expr-q", VAR_Q.id),
             undefined,
-            "expr-p" // Q at position 0 (antecedent), P at position 1 (consequent)
+            "expr-p" // Q at antecedent slot, P at consequent slot
         )
         const p = pm.getExpression("expr-p")!
         const q = pm.getExpression("expr-q")!
-        expect(q.position).toBe(0)
-        expect(p.position).toBe(1)
+        expect(q.position).toBe(POSITION_INITIAL)
+        expect(p.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
         expect(
             eng.validate("structural").filter((v) => v.code === "S-8")
         ).toEqual([])
     })
 
-    it("wrapExpression with iff puts children at [0, 1]", () => {
+    it("wrapExpression with iff uses midpoint-spaced positions — S-8 clean", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -9864,16 +9952,16 @@ describe("wrapExpression", () => {
         )
         const p = pm.getExpression("expr-p")!
         const q = pm.getExpression("expr-q")!
-        expect(p.position).toBe(0)
-        expect(q.position).toBe(1)
+        expect(p.position).toBe(POSITION_INITIAL)
+        expect(q.position).toBe(midpoint(POSITION_INITIAL, POSITION_MAX))
         expect(
             eng.validate("structural").filter((v) => v.code === "S-8")
         ).toEqual([])
     })
 
     it("wrapExpression with and retains midpoint-spaced positions (regression guard)", () => {
-        // Asserts the implies/iff special-case did not break the
-        // bisection-friendly multi-child spacing for and/or.
+        // Asserts the and/or path was unaffected by the binary-op
+        // refactoring across 1.0.1 → 1.0.2.
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)

@@ -411,9 +411,12 @@ describe("grammar/evaluable", () => {
     })
 
     describe("E-7 argument has conclusion premise", () => {
-        it("returns a violation when an argument with premises has no conclusion designated", () => {
+        it("returns a violation when a 2+-premise argument has no conclusion designated", () => {
             const ctx = buildContext({
-                premises: [makeFreeformPremise({ id: "p-1" })],
+                premises: [
+                    makeFreeformPremise({ id: "p-1" }),
+                    makeFreeformPremise({ id: "p-2" }),
+                ],
                 roleState: {},
             })
             const violations = validateE7(ctx)
@@ -443,6 +446,24 @@ describe("grammar/evaluable", () => {
             expect(validateE7(ctx)).toEqual([])
         })
 
+        // Regression for the cycle 4f smoke-test bug: the UI's "add
+        // premise" flow on a fresh argument sends role: "supporting",
+        // which leaves the engine with 1 premise and no conclusion
+        // designated (the shared mutateCreatePremise helper undoes
+        // core's auto-conclusion-assignment when the caller asks for
+        // "supporting"). Pre-1.0.2 this state tripped E-7 and produced
+        // a 422 in the server's normal-mode Derivable gate, blocking
+        // the first-premise UI flow. The 1.0.2 relaxation exempts the
+        // 1-premise case — the single premise is trivially the
+        // conclusion regardless of designation.
+        it("returns an empty array for a 1-premise argument with no conclusion designated", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                roleState: {},
+            })
+            expect(validateE7(ctx)).toEqual([])
+        })
+
         it("returns an empty array for an argument with a designated conclusion", () => {
             const ctx = buildContext({
                 premises: [
@@ -457,10 +478,15 @@ describe("grammar/evaluable", () => {
 
     describe("aggregator validateEvaluable", () => {
         it("concatenates every per-rule validator's output", () => {
-            // Context that fails E-1 (and with 1 child) and E-7 (premises
-            // but no conclusion).
+            // Context that fails E-1 (and with 1 child) and E-7 (2+
+            // premises but no conclusion). Two premises are needed for
+            // E-7 to fire under the 1.0.2 relaxation (1-premise case is
+            // exempt as trivially auto-promotable).
             const ctx = buildContext({
-                premises: [makeFreeformPremise({ id: "p-1" })],
+                premises: [
+                    makeFreeformPremise({ id: "p-1" }),
+                    makeFreeformPremise({ id: "p-2" }),
+                ],
                 expressions: [
                     makeOperatorExpression("and", {
                         id: "e-and",
