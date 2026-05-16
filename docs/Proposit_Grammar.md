@@ -163,11 +163,11 @@ queryable violations (`validate(tier)`) rather than thrown errors.
 - **Structural** — the floor. Engine data integrity: operator types valid,
   FK references resolve, entity IDs and variable symbols unique within
   scope, no orphan refs, no cycles, fixed-arity-operator invariants
-  (`not`/`formula` unary, `implies`/`iff` binary at fixed positions),
-  sibling positions unique within a parent, derivation premise roots
-  restricted to `variable`/`implies`/`iff`. **Mutations throw when they
-  would produce a non-Structural state.** The engine guarantees an
-  `ArgumentEngine` instance never holds a non-Structural state.
+  (`not`/`formula` unary, `implies`/`iff` binary), sibling positions
+  unique within a parent, derivation premise roots restricted to
+  `variable`/`implies`/`iff`. **Mutations throw when they would produce
+  a non-Structural state.** The engine guarantees an `ArgumentEngine`
+  instance never holds a non-Structural state.
 
 - **Evaluable** — required for `evaluate()` and `checkValidity()` to run.
   Every operator has the right number of operands (variadic arity floor),
@@ -323,15 +323,20 @@ is therefore a no-op.
 
 - **Validator:** `validateS7` (returns `[]` unconditionally; documented).
 
-#### S-8 — Binary operator arity and positions
+#### S-8 — Binary operator arity
 
-`implies` and `iff` have **exactly** two children, ordered as
-`[antecedent, consequent]` at positions `0` and `1` respectively.
+`implies` and `iff` have **exactly** two children. The lower-positioned
+child is the antecedent and the higher-positioned child is the
+consequent; the absolute position values are sibling-ordering metadata
+maintained by the mutation primitives — any `[a, b]` with `a < b` is
+semantically equivalent. Sibling-position uniqueness is enforced
+separately by S-9.
 
-> _Rationale: pulling binary arity and position semantics into Structural eliminates ambiguity that would otherwise exist between S-5 (root-only) and E-1 (variadic-arity floor), and prevents the engine from ever holding a malformed `IMPLIES(a, b, c)` or position-swapped state._
+> _Rationale: pulling binary arity into Structural eliminates ambiguity that would otherwise exist between S-5 (root-only) and E-1 (variadic-arity floor), and prevents the engine from ever holding a malformed `IMPLIES(a, b, c)` state. Positions themselves carry no Structural meaning beyond their ordering relationship — pinning them to literal `[0, 1]` (as the pre-1.0.2 rule did) false-flagged the engine's own midpoint-spaced bisection pattern (e.g., `[0, 1073741823]` from `wrapExpression`)._
 
-- **Invalid:** `IMPLIES(a@0, b@1, c@2)`; `IMPLIES(a@1, b@0)`.
-- **Valid:** `IMPLIES(a@0, b@1)`; `IFF(a@0, b@1)`.
+- **Invalid:** `IMPLIES(a)` (1 child); `IMPLIES(a, b, c)` (3 children).
+- **Valid:** `IMPLIES(a@0, b@1)`; `IMPLIES(a@0, b@1073741823)`;
+  `IFF(a@0, b@1)`.
 - **Validator:** `validateS8`.
 
 #### S-9 — Sibling position uniqueness
@@ -453,12 +458,19 @@ that claim.
 
 #### E-7 — Argument has conclusion premise
 
-An argument that has at least one premise has exactly one premise
-designated as the conclusion via the argument's role state. A
-brand-new argument with zero premises is exempt.
+An argument that has **two or more** premises has exactly one premise
+designated as the conclusion via the argument's role state. Zero- and
+one-premise arguments are exempt: zero is the brand-new state, and
+one is trivially auto-promotable — the single premise _is_ the
+conclusion regardless of designation, so requiring an explicit
+`conclusionPremiseId` adds no information. A dangling
+`conclusionPremiseId` (set, but no premise has that id) is always a
+violation regardless of premise count.
 
-- **Invalid:** an argument with three premises and `roleState.conclusionPremiseId === undefined`.
-- **Valid:** an argument with zero premises (brand-new); an argument with one or more premises and a designated conclusion.
+> _Rationale: the strict pre-1.0.2 reading ("at least one premise requires an explicit conclusion") false-flagged the user's first-premise UI flow. Most UI defaults send `role: "supporting"` for the "Add Premise" action; the upstream shared helper honors that by undoing core's auto-conclusion-assignment, leaving the engine in the 1-premise no-conclusion state. The relaxation matches the semantics — "the only premise is the conclusion" needs no explicit designation._
+
+- **Invalid:** an argument with three premises and `roleState.conclusionPremiseId === undefined`; any argument with `roleState.conclusionPremiseId` set to a non-existent premise id.
+- **Valid:** an argument with zero premises (brand-new); an argument with exactly one premise and no designation (auto-promotable); an argument with one or more premises and a designated conclusion.
 - **Validator:** `validateE7`.
 
 ### 3.3 Derivable rules
