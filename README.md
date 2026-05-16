@@ -802,7 +802,7 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 | Axiomatic-bound variable assignment supplied to `evaluate`       | `E-4`     | Evaluable   |
 | Derivation premise expression tree lacks the consequent variable | `E-5`     | Evaluable   |
 | Claim has more than one paired derivation premise                | `E-6`     | Evaluable   |
-| Argument has 2+ premises but no conclusion designated            | `E-7`     | Evaluable   |
+| Argument has premises but no conclusion designated               | `E-7`     | Evaluable   |
 | Non-`not` operator placed directly under another operator        | `P-1`     | Presentable |
 | `not(not(x))` chain in the tree                                  | `P-2`     | Presentable |
 | `formula` wrapping no operator (leaf or single `not`)            | `P-3`     | Presentable |
@@ -865,7 +865,7 @@ Naked-Q (a derivation premise whose tree is a single variable bound to `derivedC
 
 | Invalid construction                                        | Rule code / engine code                                          | Tier       |
 | ----------------------------------------------------------- | ---------------------------------------------------------------- | ---------- |
-| Argument has 2+ premises but no conclusion designated       | `E-7` (`ARGUMENT_NO_CONCLUSION`)                                 | Evaluable  |
+| Argument has premises but no conclusion designated          | `E-7` (`ARGUMENT_NO_CONCLUSION`)                                 | Evaluable  |
 | Conclusion premise ID points to a non-existent premise      | `E-7` (`ARGUMENT_CONCLUSION_NOT_FOUND`)                          | Evaluable  |
 | Same variable ID used with multiple symbols across premises | `ARGUMENT_VARIABLE_ID_SYMBOL_MISMATCH` (engine error)            | —          |
 | Same variable symbol used with multiple IDs across premises | S-11 (`ARGUMENT_VARIABLE_SYMBOL_AMBIGUOUS`) — thrown on mutation | Structural |

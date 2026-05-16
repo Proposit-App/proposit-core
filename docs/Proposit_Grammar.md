@@ -458,19 +458,18 @@ that claim.
 
 #### E-7 — Argument has conclusion premise
 
-An argument that has **two or more** premises has exactly one premise
-designated as the conclusion via the argument's role state. Zero- and
-one-premise arguments are exempt: zero is the brand-new state, and
-one is trivially auto-promotable — the single premise _is_ the
-conclusion regardless of designation, so requiring an explicit
-`conclusionPremiseId` adds no information. A dangling
+An argument that has at least one premise has exactly one premise
+designated as the conclusion via `roleState.conclusionPremiseId`. A
+brand-new argument with zero premises is exempt. A dangling
 `conclusionPremiseId` (set, but no premise has that id) is always a
 violation regardless of premise count.
 
-> _Rationale: the strict pre-1.0.2 reading ("at least one premise requires an explicit conclusion") false-flagged the user's first-premise UI flow. Most UI defaults send `role: "supporting"` for the "Add Premise" action; the upstream shared helper honors that by undoing core's auto-conclusion-assignment, leaving the engine in the 1-premise no-conclusion state. The relaxation matches the semantics — "the only premise is the conclusion" needs no explicit designation._
+> _Rationale: every non-empty argument must commit to a single conclusion premise; supporting premises and constraints all derive meaning relative to it. The cycle 4f smoke-test that surfaced this rule's interaction with the server's "Add Premise" UI flow was resolved in 1.0.2 by guarding the engine's mutation surface, not by relaxing E-7 — see "Engine-enforced invariant" below._
 
-- **Invalid:** an argument with three premises and `roleState.conclusionPremiseId === undefined`; any argument with `roleState.conclusionPremiseId` set to a non-existent premise id.
-- **Valid:** an argument with zero premises (brand-new); an argument with exactly one premise and no designation (auto-promotable); an argument with one or more premises and a designated conclusion.
+> _**Engine-enforced invariant (1.0.2):** core guards the "non-empty argument always has a conclusion" invariant at the mutation surface. `clearConclusionPremise()` is a no-op when premises exist (the call refuses to leave the engine in an E-7-violating state). `removePremise(conclusionPremiseId)` on a multi-premise argument atomically reassigns the conclusion role to the lowest-id remaining premise rather than clearing. Snapshot loads (`fromSnapshot` / `fromData`) deliberately bypass these mutation-surface guards — they accept any Structural-valid state and surface E-7 via `validate()` like other Evaluable issues. The rule's strict reading therefore stays in place as the validate-time safety net for loaded snapshots and direct data-shape construction._
+
+- **Invalid:** an argument with one or more premises and `roleState.conclusionPremiseId === undefined`; any argument with `roleState.conclusionPremiseId` set to a non-existent premise id.
+- **Valid:** an argument with zero premises (brand-new); an argument with one or more premises and a designated conclusion.
 - **Validator:** `validateE7`.
 
 ### 3.3 Derivable rules
