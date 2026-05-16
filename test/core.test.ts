@@ -1875,7 +1875,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
         )
     }
 
-    it("supports role APIs and removes roles when a premise is deleted", () => {
+    it("supports role APIs and auto-reassigns conclusion to lowest-id remaining premise when conclusion is deleted (cycle 1.0.2 invariant guard)", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -1896,8 +1896,35 @@ describe("ArgumentEngine — roles and evaluation", () => {
             conclusionPremiseId: conclusion.getId(),
         })
 
+        // Pre-1.0.2: removing the conclusion left
+        // `conclusionPremiseId = undefined` even when other premises
+        // remained, tripping E-7 post-mutation. Post-1.0.2: the
+        // invariant guard auto-reassigns conclusion to the lowest-id
+        // remaining premise — here, `support` is the only premise
+        // left, so it becomes the new conclusion.
         eng.removePremise(conclusion.getId())
+        expect(eng.getRoleState().conclusionPremiseId).toBe(support.getId())
+        // E-7 stays satisfied across the delete.
+        expect(
+            eng.validate("evaluable").filter((v) => v.code === "E-7")
+        ).toEqual([])
+    })
+
+    it("clears conclusion when removing the last remaining premise (zero-premise post-state is empty-argument case)", () => {
+        // The complement of the previous test: when removing the
+        // conclusion empties the argument, the invariant is vacuously
+        // satisfied and `conclusionPremiseId` is cleared as before.
+        const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
+        eng.addVariable(VAR_P)
+        const { result: only } = eng.createPremise({ title: "only" })
+        eng.setConclusionPremise(only.getId())
+        eng.removePremise(only.getId())
         expect(eng.getRoleState().conclusionPremiseId).toBeUndefined()
+        expect(eng.listPremiseIds()).toEqual([])
+        // Zero-premise argument: E-7 vacuous.
+        expect(
+            eng.validate("evaluable").filter((v) => v.code === "E-7")
+        ).toEqual([])
     })
 
     it("prevents duplicate variable symbols at the engine level", () => {
@@ -5159,15 +5186,45 @@ describe("ArgumentEngine — mutation changesets", () => {
         expect(changes.roles?.conclusionPremiseId).toBe(pm.getId())
     })
 
-    it("clearConclusionPremise returns empty role state", () => {
+    it("clearConclusionPremise on a zero-premise argument is allowed (vacuous invariant)", () => {
+        // On an empty argument the invariant ("non-empty argument
+        // always has a conclusion") is vacuously satisfied, so the
+        // original clear semantics still apply — the call doesn't
+        // refuse and the conclusionPremiseId stays undefined.
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
+        // Build state then drain so the engine has touched the
+        // conclusion role at least once, then verify clearing on
+        // the zero-premise post-state is permitted.
+        const { result: pm } = eng.createPremise()
+        eng.removePremise(pm.getId())
+        const { result, changes } = eng.clearConclusionPremise()
+        expect(result.conclusionPremiseId).toBeUndefined()
+        // Changes may be empty (already undefined from removePremise);
+        // what matters is the call doesn't refuse / throw on the
+        // zero-premise path.
+        expect(changes).toBeDefined()
+    })
+
+    it("clearConclusionPremise on a non-empty argument is a no-op (invariant guard)", () => {
+        // 1.0.2 invariant guard: a non-empty argument always has a
+        // conclusion designated. clearConclusionPremise on a
+        // non-empty argument refuses to clear; the call returns the
+        // current (unchanged) role state with an empty changeset.
         const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
             behavior: "permissive",
         })
         const { result: pm } = eng.createPremise()
         eng.setConclusionPremise(pm.getId())
+        const before = eng.getRoleState().conclusionPremiseId
         const { result, changes } = eng.clearConclusionPremise()
-        expect(result.conclusionPremiseId).toBeUndefined()
-        expect(changes.roles).toBeDefined()
+        // Engine still considers pm the conclusion.
+        expect(result.conclusionPremiseId).toBe(before)
+        expect(eng.getRoleState().conclusionPremiseId).toBe(pm.getId())
+        // No-op produces an empty changeset (no roles key, no other
+        // mutations).
+        expect(changes.roles).toBeUndefined()
     })
 })
 
@@ -6087,12 +6144,20 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
         expect(changes.roles).toBeUndefined()
     })
 
-    it("createPremise after clearConclusionPremise auto-sets again", () => {
+    it("createPremise after the argument is fully drained re-fires auto-conclusion-assignment", () => {
+        // The 1.0.2 invariant guard makes `clearConclusionPremise` a
+        // no-op while premises exist, so the only path to a no-conclusion
+        // state on a previously non-empty argument is to drain all
+        // premises. Once drained, `clearConclusionPremise` is allowed
+        // (the vacuous zero-premise case), and the next `createPremise`
+        // is the "first premise" again — auto-conclusion-assignment
+        // re-fires.
         const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
             behavior: "permissive",
         })
-        eng.createPremise()
-        eng.clearConclusionPremise()
+        const { result: first } = eng.createPremise()
+        eng.removePremise(first.getId())
+        eng.clearConclusionPremise() // vacuous on zero-premise argument
         const { result: pm2, changes } = eng.createPremise()
         expect(eng.getRoleState().conclusionPremiseId).toBe(pm2.getId())
         expect(changes.roles?.conclusionPremiseId).toBe(pm2.getId())
@@ -6121,57 +6186,60 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
 })
 
 // ---------------------------------------------------------------------------
-// E-7 regression — single-premise no-conclusion is exempt (cycle 1.0.2)
+// E-7 invariant guard — engine refuses to leave non-empty argument without
+// conclusion (cycle 1.0.2)
 // ---------------------------------------------------------------------------
 //
 // Cycle 4f smoke-test on proposit-server v0.13.0 (Derivable gate
 // activated for normal-mode users) exposed E-7 firing on the first
-// premise of a freshly-created argument. The trigger is the shared
-// `mutateCreatePremise` helper, which explicitly undoes core's
-// auto-conclusion-assignment when the caller requests `role:
-// "supporting"` — so the post-mutation state is 1 premise / no
-// conclusion. Pre-1.0.2 E-7 fired on that state; the route then
-// raised 422 GRAMMAR_VIOLATIONS, blocking the user from adding their
-// first premise via the UI's default "supporting" role.
+// premise of a freshly-created argument. The trigger was the shared
+// `mutateCreatePremise` helper, which after `createPremiseWithId`
+// calls `engine.clearConclusionPremise()` to honor a caller-supplied
+// `role: "supporting"` — pre-1.0.2 that successfully cleared the
+// auto-assigned conclusion, leaving the engine in a 1 premise / no
+// conclusion state that tripped E-7 and produced 422.
 //
-// The 1.0.2 relaxation exempts the 1-premise case: the lone premise
-// is trivially the conclusion regardless of designation, so no
-// information is conveyed by requiring an explicit
-// `conclusionPremiseId`. These engine-level tests pin that contract
-// against the same call sequence the server's `assertNoViolations`
-// path uses.
-describe("ArgumentEngine — E-7 exempts 1-premise no-conclusion state", () => {
-    it("validate('derivable') is empty after createPremise + clearConclusionPremise (smoke-test reproducer)", () => {
+// The 1.0.2 fix is an engine-enforced invariant: a non-empty argument
+// always has a conclusion designated. `clearConclusionPremise()` on
+// a non-empty argument is a no-op; the auto-assigned conclusion
+// survives even when downstream callers ask to clear it. The shared
+// helper's clear call becomes a structural no-op, the post-mutation
+// state is `1 premise / that premise is the conclusion`, and E-7
+// passes.
+//
+// E-7 itself retains its strict pre-1.0.2 reading; the validate-time
+// safety net still catches snapshot loads or direct data-shape
+// construction that the mutation-time guard cannot intercept.
+describe("ArgumentEngine — E-7 invariant guard on non-empty argument", () => {
+    it("smoke-test reproducer: createPremise + clearConclusionPremise on fresh argument keeps the premise as conclusion", () => {
         // Reproduces the server-side call sequence:
         //   sharedCreatePremise(engine, premiseId, { role: "supporting" })
         // which expands to:
         //   1. engine.createPremiseWithId(premiseId, { type: "freeform" })
         //      → core auto-sets conclusionPremiseId = premiseId
         //   2. engine.clearConclusionPremise()
-        //      → shared undoes the auto-assignment to honor the
-        //        requested "supporting" role
-        // Then the route runs assertNoViolations("derivable", engine).
-        // Pre-1.0.2 E-7 fired here; post-1.0.2 it doesn't.
+        //      → shared asks core to honor "supporting" by clearing
+        // Pre-1.0.2: step 2 succeeded → 1 premise / no conclusion →
+        // E-7 → 422. Post-1.0.2: step 2 is a no-op → 1 premise / that
+        // premise is still the conclusion → E-7 passes.
         const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
             behavior: "assistive",
         })
         eng.createPremiseWithId("p-supporting")
         eng.clearConclusionPremise()
-        // Sanity-check the pre-validate state: 1 premise, no conclusion.
+        // Post-mutation state: 1 premise, that premise IS the
+        // conclusion (the no-op refused to clear).
         expect(eng.listPremiseIds()).toEqual(["p-supporting"])
-        expect(eng.getRoleState().conclusionPremiseId).toBeUndefined()
-        // The Derivable tier includes Structural + Evaluable. None of
-        // these should fire for this minimal state.
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-supporting")
+        // Derivable validate cleanly — no E-7.
         const violations = eng.validate("derivable")
-        const e7s = violations.filter((v) => v.code === "E-7")
-        expect(e7s).toEqual([])
+        expect(violations.filter((v) => v.code === "E-7")).toEqual([])
     })
 
-    it("validate('presentable') is empty for 1-premise no-conclusion (full union, no E-7 leakage)", () => {
+    it("validate('presentable') is empty for the smoke-test state (no E-7 leakage at any tier)", () => {
         // Presentable is the strictest tier (Structural + Evaluable +
-        // Derivable + Presentable). E-7 belongs to Evaluable; with
-        // the relaxation it must not appear at any tier ≥ Evaluable
-        // for the 1-premise case.
+        // Derivable + Presentable). The invariant-guard post-mutation
+        // state must satisfy every tier including E-7 at Evaluable.
         const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
             behavior: "assistive",
         })
@@ -6181,24 +6249,142 @@ describe("ArgumentEngine — E-7 exempts 1-premise no-conclusion state", () => {
         expect(violations.filter((v) => v.code === "E-7")).toEqual([])
     })
 
-    it("validate('derivable') fires E-7 on 2+ premises with no conclusion", () => {
-        // Regression in the other direction: the relaxation must not
-        // mask the legitimate 2+-premise case where no conclusion is
-        // designated. The user's argument is genuinely incomplete here
-        // — auto-promotion is no longer trivial because there are
-        // multiple candidates.
+    it("clearConclusionPremise is a no-op on a 2+ premise argument too (guard is cardinality-independent for non-empty)", () => {
+        // The invariant guard fires the same way regardless of premise
+        // count — any non-empty argument must keep a conclusion.
+        // Whichever premise is currently the conclusion stays the
+        // conclusion across a clear attempt.
         const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
-            behavior: "permissive", // permissive mode so AN doesn't intervene
+            behavior: "permissive", // permissive so AN doesn't intervene
         })
-        eng.createPremiseWithId("p-1")
+        eng.createPremiseWithId("p-1") // auto-conclusion
         eng.createPremiseWithId("p-2")
-        eng.clearConclusionPremise()
-        expect(eng.listPremiseIds()).toEqual(["p-1", "p-2"])
-        expect(eng.getRoleState().conclusionPremiseId).toBeUndefined()
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-1")
+        const { changes } = eng.clearConclusionPremise()
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-1")
+        expect(changes.roles).toBeUndefined()
+        // E-7 still satisfied because p-1 is still the conclusion.
         const violations = eng.validate("derivable")
+        expect(violations.filter((v) => v.code === "E-7")).toEqual([])
+    })
+
+    it("E-7 still fires via validate when a snapshot is loaded with premises but no conclusion (safety net)", () => {
+        // The mutation-surface guard cannot intercept snapshot loads
+        // — `fromSnapshot` / `fromData` accept any Structural state
+        // and surface Evaluable/Derivable/Presentable issues via
+        // `validate(tier)`. E-7 remains the safety net for that
+        // path. Simulated here by constructing the validator context
+        // directly (the snapshot-load test for E-7 lives in
+        // test/grammar/evaluable.test.ts; this asserts the
+        // engine-level passthrough).
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
+        const { result: pm } = eng.createPremise()
+        eng.setConclusionPremise(pm.getId())
+        // Take a snapshot of the 1 premise / conclusion-set state,
+        // then surgically reproduce the invariant break via a fresh
+        // engine instance loaded from a manipulated snapshot.
+        const snapshot = eng.snapshot()
+        const broken = {
+            ...snapshot,
+            conclusionPremiseId: undefined,
+        }
+        const restored = ArgumentEngine.fromSnapshot(broken, aLib())
+        // The restored engine accepts the snapshot (Structural-clean)
+        // but `validate('evaluable')` reports the E-7 violation.
+        const violations = restored.validate("evaluable")
         const e7s = violations.filter((v) => v.code === "E-7")
         expect(e7s.length).toBeGreaterThanOrEqual(1)
         expect(e7s[0].message).toMatch(/no conclusion designated/)
+    })
+
+    // --- removePremise(conclusionPremiseId) — auto-reassign on
+    // multi-premise argument (cycle 1.0.2 invariant guard) ---
+    //
+    // Pre-1.0.2 behavior was "delete conclusion premise → clear
+    // conclusionPremiseId", leaving E-7-violating state when other
+    // premises remained. Post-1.0.2 the engine atomically reassigns
+    // conclusion to the lowest-id remaining premise (sorted
+    // lexicographically) so the invariant holds across the delete.
+
+    it("removePremise auto-reassigns conclusion to lowest-id remaining premise (2-premise argument)", () => {
+        // Two explicit premise ids, chosen so the lexicographic order
+        // is deterministic and the auto-promoted choice is unambiguous.
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
+        eng.createPremiseWithId("p-aaa") // auto-conclusion
+        eng.createPremiseWithId("p-bbb")
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-aaa")
+        // Promote p-bbb to conclusion so we can test the
+        // "remove-conclusion-that-isn't-also-the-lowest-id" case.
+        eng.setConclusionPremise("p-bbb")
+        const { changes } = eng.removePremise("p-bbb")
+        // Auto-reassign picks p-aaa (lowest-id remaining).
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-aaa")
+        expect(changes.roles?.conclusionPremiseId).toBe("p-aaa")
+        // E-7 stays satisfied.
+        expect(
+            eng.validate("evaluable").filter((v) => v.code === "E-7")
+        ).toEqual([])
+    })
+
+    it("removePremise cycle: 3-premise argument → delete middle conclusion → delete next conclusion → both auto-promote", () => {
+        // Reviewer-requested coverage: walk the auto-promote chain
+        // across two consecutive deletes to confirm the lowest-id
+        // selector composes cleanly.
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
+        eng.createPremiseWithId("p-aaa")
+        eng.createPremiseWithId("p-bbb")
+        eng.createPremiseWithId("p-ccc")
+        // Make the middle (p-bbb) the conclusion so the first delete
+        // exercises the "conclusion isn't lowest-id" path.
+        eng.setConclusionPremise("p-bbb")
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-bbb")
+
+        // First delete: remove p-bbb (conclusion). Remaining: [p-aaa,
+        // p-ccc]. Auto-promote picks p-aaa (lowest id).
+        eng.removePremise("p-bbb")
+        expect(eng.listPremiseIds()).toEqual(["p-aaa", "p-ccc"])
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-aaa")
+        expect(
+            eng.validate("evaluable").filter((v) => v.code === "E-7")
+        ).toEqual([])
+
+        // Second delete: remove p-aaa (now the conclusion). Remaining:
+        // [p-ccc]. Auto-promote picks p-ccc (only id left).
+        eng.removePremise("p-aaa")
+        expect(eng.listPremiseIds()).toEqual(["p-ccc"])
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-ccc")
+        expect(
+            eng.validate("evaluable").filter((v) => v.code === "E-7")
+        ).toEqual([])
+
+        // Third delete: remove p-ccc (last). Remaining: []. Conclusion
+        // clears (vacuous on empty argument).
+        eng.removePremise("p-ccc")
+        expect(eng.listPremiseIds()).toEqual([])
+        expect(eng.getRoleState().conclusionPremiseId).toBeUndefined()
+        expect(
+            eng.validate("evaluable").filter((v) => v.code === "E-7")
+        ).toEqual([])
+    })
+
+    it("removePremise on a non-conclusion premise leaves conclusionPremiseId untouched", () => {
+        // The auto-reassign only fires when the deleted premise IS
+        // the conclusion. Deleting a non-conclusion premise touches
+        // no roles, and the changeset includes no roles delta.
+        const eng = new ArgumentEngine({ id: "arg1", version: 0 }, aLib(), {
+            behavior: "permissive",
+        })
+        eng.createPremiseWithId("p-aaa") // auto-conclusion
+        eng.createPremiseWithId("p-bbb")
+        const { changes } = eng.removePremise("p-bbb")
+        expect(eng.getRoleState().conclusionPremiseId).toBe("p-aaa")
+        expect(changes.roles).toBeUndefined()
     })
 })
 
@@ -9068,17 +9254,62 @@ describe("ArgumentEngine subscribe", () => {
         expect(notified).toBe(true)
     })
 
-    it("notifies subscriber when conclusion is cleared", () => {
+    it("notifies subscriber when conclusion is cleared on an empty argument", () => {
+        // Under the 1.0.2 invariant guard `clearConclusionPremise` is a
+        // no-op on a non-empty argument and therefore does NOT notify.
+        // The notification path is only exercised on the zero-premise
+        // branch (or when transitioning the conclusion from set →
+        // undefined via the only legitimate route, draining all
+        // premises — but `removePremise` already drives its own
+        // notification). Use a setConclusionPremise → removePremise →
+        // clearConclusionPremise sequence so the final clear actually
+        // transitions state (rolesa stay as-is because removePremise
+        // already cleared them, so clear is also redundant). We
+        // instead use the "set then clear on zero premises" shape
+        // via a brand-new engine where conclusionPremiseId stays
+        // undefined throughout — then we verify the subscriber path
+        // still fires on the role-state mutation.
+        //
+        // Realistically the post-1.0.2 contract is: `clearConclusionPremise`
+        // notifies only when it actually transitions state. The
+        // simplest reproducer is to call it on a zero-premise engine
+        // whose conclusionPremiseId happens to be set (only reachable
+        // via fromSnapshot, but we can simulate by setting then
+        // removing in sequence and observing the subscriber on the
+        // intentional clear).
         const engine = new ArgumentEngine(ARG, aLib(), {
             behavior: "permissive",
         })
-        engine.createPremise()
+        const { result: pm } = engine.createPremise()
+        engine.setConclusionPremise(pm.getId())
+        engine.removePremise(pm.getId()) // drains + clears conclusion
+        let notified = false
+        engine.subscribe(() => {
+            notified = true
+        })
+        // Zero premises now. clearConclusionPremise on the zero-premise
+        // branch still emits a roles changeset when conclusionPremiseId
+        // is undefined → undefined, which counts as a markDirty mutation
+        // for notification purposes.
+        engine.clearConclusionPremise()
+        expect(notified).toBe(true)
+    })
+
+    it("does NOT notify subscriber when clearConclusionPremise is guarded out on a non-empty argument", () => {
+        // The complement of the previous test: when the invariant
+        // guard refuses to clear, no state changes — subscribers
+        // must not be notified for a no-op.
+        const engine = new ArgumentEngine(ARG, aLib(), {
+            behavior: "permissive",
+        })
+        const { result: pm } = engine.createPremise()
+        engine.setConclusionPremise(pm.getId())
         let notified = false
         engine.subscribe(() => {
             notified = true
         })
         engine.clearConclusionPremise()
-        expect(notified).toBe(true)
+        expect(notified).toBe(false)
     })
 
     it("notifies subscriber on rollback", () => {

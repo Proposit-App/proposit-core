@@ -411,6 +411,35 @@ describe("grammar/evaluable", () => {
     })
 
     describe("E-7 argument has conclusion premise", () => {
+        // E-7 retains its strict pre-1.0.2 reading: any non-empty
+        // argument with no `conclusionPremiseId` violates. The 1.0.2
+        // change moved the constraint to the engine mutation surface
+        // (`clearConclusionPremise` no-op on non-empty, `removePremise`
+        // auto-reassigns on conclusion-deletion-with-others-remaining)
+        // — E-7 stays as the validate-time safety net for snapshot
+        // loads and direct data-shape construction that the
+        // mutation-surface guards can't intercept.
+
+        it("returns a violation when a 1-premise argument has no conclusion designated", () => {
+            // Strict pre-1.0.2 reading: even a single premise requires
+            // an explicit designation at the validator level. In
+            // production this state is unreachable through the
+            // mutation API (the engine guards `clearConclusionPremise`
+            // / `removePremise`), but `validateE7` runs against
+            // arbitrary contexts (snapshot loads, direct fixture
+            // construction) and must still catch it.
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                roleState: {},
+            })
+            const violations = validateE7(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "evaluable",
+                code: "E-7",
+            })
+        })
+
         it("returns a violation when a 2+-premise argument has no conclusion designated", () => {
             const ctx = buildContext({
                 premises: [
@@ -446,24 +475,6 @@ describe("grammar/evaluable", () => {
             expect(validateE7(ctx)).toEqual([])
         })
 
-        // Regression for the cycle 4f smoke-test bug: the UI's "add
-        // premise" flow on a fresh argument sends role: "supporting",
-        // which leaves the engine with 1 premise and no conclusion
-        // designated (the shared mutateCreatePremise helper undoes
-        // core's auto-conclusion-assignment when the caller asks for
-        // "supporting"). Pre-1.0.2 this state tripped E-7 and produced
-        // a 422 in the server's normal-mode Derivable gate, blocking
-        // the first-premise UI flow. The 1.0.2 relaxation exempts the
-        // 1-premise case — the single premise is trivially the
-        // conclusion regardless of designation.
-        it("returns an empty array for a 1-premise argument with no conclusion designated", () => {
-            const ctx = buildContext({
-                premises: [makeFreeformPremise({ id: "p-1" })],
-                roleState: {},
-            })
-            expect(validateE7(ctx)).toEqual([])
-        })
-
         it("returns an empty array for an argument with a designated conclusion", () => {
             const ctx = buildContext({
                 premises: [
@@ -478,15 +489,12 @@ describe("grammar/evaluable", () => {
 
     describe("aggregator validateEvaluable", () => {
         it("concatenates every per-rule validator's output", () => {
-            // Context that fails E-1 (and with 1 child) and E-7 (2+
-            // premises but no conclusion). Two premises are needed for
-            // E-7 to fire under the 1.0.2 relaxation (1-premise case is
-            // exempt as trivially auto-promotable).
+            // Context that fails E-1 (and with 1 child) and E-7
+            // (premise with no conclusion). A 1-premise no-conclusion
+            // fixture suffices under the strict E-7 reading restored
+            // in 1.0.2.
             const ctx = buildContext({
-                premises: [
-                    makeFreeformPremise({ id: "p-1" }),
-                    makeFreeformPremise({ id: "p-2" }),
-                ],
+                premises: [makeFreeformPremise({ id: "p-1" })],
                 expressions: [
                     makeOperatorExpression("and", {
                         id: "e-and",
