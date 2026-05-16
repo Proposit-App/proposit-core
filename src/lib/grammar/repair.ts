@@ -270,6 +270,23 @@ function pickLargestAntecedent<
         ) {
             // Count variable expressions whose ancestor chain reaches the
             // position-0 child of the implies/iff root.
+            //
+            // Note (1.0.2): S-8 relaxed to arity-only — binary children
+            // may now sit at any `[a, b]` with `a < b` (e.g.,
+            // midpoint-spaced `[0, 1073741823]`). This `position === 0`
+            // lookup is therefore brittle in principle: a producer that
+            // wrote non-zero positions would cause this to miss the
+            // antecedent. In practice this function is reached only
+            // from `removeDuplicateDerivationPremises` with
+            // `strategy: 'keep-largest-antecedent'`, and the antecedent
+            // subtree under inspection was built by
+            // `populateFromCitations` / `populateFromAxioms`
+            // (`populate-from.ts`), which writes literal `position: 0`
+            // for the implies antecedent. The dependency on that
+            // writer's choice is intentional; if the populated-form
+            // writer ever switches to midpoint spacing, replace this
+            // with the position-sorted `kids[0]` pattern used by
+            // `validateD1` (`validators/derivable.ts`).
             const antecedent = exprs.find(
                 (e) => e.parentId === root.id && e.position === 0
             )
