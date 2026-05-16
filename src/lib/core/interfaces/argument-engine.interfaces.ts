@@ -169,7 +169,23 @@ export interface TPremiseCrud<
         TArg
     >
     /**
-     * Removes a premise and clears any role assignments that reference it.
+     * Removes a premise and reassigns any role assignments that
+     * reference it.
+     *
+     * **Invariant guard (1.0.2):** when the removed premise was the
+     * conclusion AND other premises remain after the delete, the
+     * conclusion role is atomically reassigned to the **lowest-id
+     * remaining premise** (sorted lexicographically) rather than left
+     * `undefined`, preserving the engine-level invariant that a
+     * non-empty argument always has a conclusion designated (E-7).
+     * When the removed premise was the conclusion AND no premises
+     * remain, the role is cleared as before (vacuous invariant on the
+     * empty argument). Consumers that want a different reassignment
+     * policy (e.g., server-side `createdOn` ordering or a UI-defined
+     * sibling position) should issue their own
+     * `setConclusionPremise(...)` call immediately after this method
+     * returns — the post-mutation E-7 will continue to pass because
+     * a conclusion stays designated throughout.
      *
      * @param premiseId - The ID of the premise to remove.
      * @returns The removed premise data, or `undefined` if not found.
@@ -458,7 +474,19 @@ export interface TArgumentRoleState<
     /**
      * Clears the conclusion designation.
      *
-     * @returns The updated role state and changeset.
+     * **Invariant guard (1.0.2):** A non-empty argument always has a
+     * conclusion designated (E-7). On an argument with one or more
+     * premises this method is a **no-op** — it returns the current
+     * (unchanged) role state with an empty changeset rather than
+     * leaving the engine in an E-7-violating state. The only path to
+     * legitimately end up with no conclusion designated is to remove
+     * every premise first. On a zero-premise argument the call still
+     * clears (vacuously satisfies the invariant).
+     *
+     * @returns The current role state and changeset. If premises
+     *   exist, the changeset is empty (no-op); if zero premises, the
+     *   role state is cleared and the changeset reflects the role
+     *   change.
      */
     clearConclusionPremise(): TCoreMutationResult<
         TCoreArgumentRoleState,

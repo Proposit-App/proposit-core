@@ -1054,8 +1054,39 @@ export class ArgumentEngine<
             }
             this.premises.delete(premiseId)
             collector.removedPremise(data)
+            // Invariant guard (cycle 1.0.2): a non-empty argument always
+            // has a conclusion designated. When the removed premise was
+            // the conclusion AND other premises remain, atomically
+            // reassign the role to the lowest-id remaining premise
+            // rather than leaving conclusionPremiseId === undefined
+            // (which would trip E-7). When the removed premise was the
+            // conclusion AND no premises remain, the invariant is
+            // vacuously satisfied — clear the role as before.
+            //
+            // Why lowest-id: core premises carry no `position` field
+            // (sibling ordering at the premise level is server-side
+            // metadata, typically by createdOn). Lowest-id is the only
+            // core-knowable, deterministic, snapshot-stable selector
+            // — sorting `listPremiseIds()` by lexicographic id matches
+            // the engine's existing premise-enumeration order, so the
+            // promoted premise is the one consumers will already think
+            // of as "first" in any list view backed by `listPremises()`.
+            // Consumers that want a different selector (e.g., server
+            // ordering by `createdOn` or UI ordering by user-set
+            // position) can opt out of this auto-reassign by issuing
+            // their own `setConclusionPremise(...)` call immediately
+            // after `removePremise(...)` — the post-mutation E-7 will
+            // continue to pass because a conclusion stays designated
+            // throughout.
             if (this.conclusionPremiseId === premiseId) {
-                this.conclusionPremiseId = undefined
+                const remainingIds = Array.from(this.premises.keys()).sort(
+                    (a, b) => a.localeCompare(b)
+                )
+                if (remainingIds.length > 0) {
+                    this.conclusionPremiseId = remainingIds[0]
+                } else {
+                    this.conclusionPremiseId = undefined
+                }
                 collector.setRoles(this.getRoleState())
             }
             // Cascade: remove variables bound to the deleted premise
@@ -1745,6 +1776,31 @@ export class ArgumentEngine<
         TArg
     > {
         return this.withValidation(() => {
+            // Invariant guard (cycle 1.0.2): a non-empty argument always
+            // has a conclusion designated. If premises exist, this call
+            // is a no-op rather than a state change — the caller's
+            // intent ("remove the conclusion designation") is structurally
+            // incompatible with the premise count, and the only way to
+            // legitimately leave a non-empty argument without a
+            // conclusion is to remove every premise first. Returning the
+            // current (unchanged) role state with an empty changeset
+            // keeps the shared-helper call site that asks for "supporting"
+            // on a fresh-argument first-premise from breaking E-7
+            // post-mutation — the engine simply refuses to clear, the
+            // first premise keeps its auto-assigned conclusion role,
+            // and the post-mutation state is `1 premise / that premise
+            // is the conclusion`, which satisfies the invariant.
+            //
+            // When there are zero premises the original semantics apply
+            // — clearing on an empty argument is fine because the
+            // invariant ("non-empty argument has a conclusion") is
+            // vacuously satisfied.
+            if (this.premises.size > 0) {
+                return {
+                    result: this.getRoleState(),
+                    changes: {},
+                }
+            }
             this.conclusionPremiseId = undefined
             const roles = this.getRoleState()
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
