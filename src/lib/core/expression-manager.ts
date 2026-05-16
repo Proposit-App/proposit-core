@@ -1350,22 +1350,19 @@ export class ExpressionManager<
         const anchorParentId = anchor.parentId
         const anchorPosition = anchor.position
 
-        // Compute child positions. For `implies`/`iff` the S-8 invariant
-        // pins the two children to exact positions [0, 1] — bisection
-        // headroom is irrelevant because S-8 also fixes arity at 2. For
-        // `and`/`or` (and `formula`, though it's never produced here), use
-        // midpoint-spaced positions so future inserts can bisect. Mirrors
-        // the wrapExpression branch landed in c303aa4.
-        const isBinaryOp =
-            expression.type === "operator" &&
-            (expression.operator === "implies" || expression.operator === "iff")
+        // Compute child positions (midpoint-spaced for future bisection),
+        // matching the pattern used by wrapExpression. As of core 1.0.2
+        // S-8 is arity-only — `implies`/`iff` siblings may sit at any
+        // `[a, b]` with `a < b` (S-9 still guards uniqueness), so no
+        // operator-specific branching is needed here.
         let leftPosition: number
         let rightPosition: number
         if (leftNodeId !== undefined && rightNodeId !== undefined) {
-            leftPosition = isBinaryOp ? 0 : this.positionConfig.initial
-            rightPosition = isBinaryOp
-                ? 1
-                : midpoint(this.positionConfig.initial, this.positionConfig.max)
+            leftPosition = this.positionConfig.initial
+            rightPosition = midpoint(
+                this.positionConfig.initial,
+                this.positionConfig.max
+            )
         } else if (leftNodeId !== undefined) {
             leftPosition = this.positionConfig.initial
             rightPosition = this.positionConfig.initial // unused
@@ -1536,35 +1533,19 @@ export class ExpressionManager<
         const anchorParentId = existingNode.parentId
         const anchorPosition = existingNode.position
 
-        // Determine child positions. For `implies`/`iff` the S-8 invariant
-        // pins the two children to exact positions [0, 1] — bisection
-        // headroom is irrelevant because S-8 also fixes arity at 2. For
-        // `and`/`or` (and `formula`, though it's never produced here), use
-        // midpoint-spaced positions so future inserts can bisect.
-        const isBinaryOp =
-            operator.operator === "implies" || operator.operator === "iff"
+        // Determine child positions (midpoint-spaced for future bisection).
+        // As of core 1.0.2 S-8 is arity-only — `implies`/`iff` siblings
+        // may sit at any `[a, b]` with `a < b` (S-9 still guards
+        // uniqueness), so the same midpoint pattern used for `and`/`or`
+        // applies to all binary wraps.
         const existingPosition =
             leftNodeId !== undefined
-                ? isBinaryOp
-                    ? 0
-                    : this.positionConfig.initial
-                : isBinaryOp
-                  ? 1
-                  : midpoint(
-                        this.positionConfig.initial,
-                        this.positionConfig.max
-                    )
+                ? this.positionConfig.initial
+                : midpoint(this.positionConfig.initial, this.positionConfig.max)
         const siblingPosition =
             leftNodeId !== undefined
-                ? isBinaryOp
-                    ? 1
-                    : midpoint(
-                          this.positionConfig.initial,
-                          this.positionConfig.max
-                      )
-                : isBinaryOp
-                  ? 0
-                  : this.positionConfig.initial
+                ? midpoint(this.positionConfig.initial, this.positionConfig.max)
+                : this.positionConfig.initial
 
         // Reparent existing node under operator.
         this.reparent(existingNodeId, operator.id, existingPosition)
