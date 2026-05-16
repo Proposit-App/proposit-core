@@ -97,7 +97,10 @@ and E-7 passes trivially.
 
 When the removed premise was the conclusion AND other premises
 remain, the conclusion role is atomically reassigned to the
-**lowest-id remaining premise** (sorted lexicographically) inside
+**lowest-id remaining premise** (sorted by the engine's canonical
+premise enumeration order, matching `listPremiseIds()` —
+`localeCompare` on UUID strings, locale-invariant for the
+`[0-9a-f-]` character set) inside
 the same mutation pass that emits the `removedPremise` change. The
 roles delta in the changeset reflects the new conclusion id rather
 than `undefined`. When the removed premise was the conclusion AND
@@ -233,5 +236,4 @@ have specified at the outset; the 1.0.2 patch closes the gap.
 
 ## Hash range
 
-`b1abed0..HEAD` (final range will be stamped in the version-bump
-commit).
+`283c793..c36051a`
