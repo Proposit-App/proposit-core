@@ -210,6 +210,12 @@ export async function executePipeline<TInput, TOutput>(
 
     const failures: TProcessingFailure[] = []
     const records = new Map<string, TStageRecord>()
+    // A PipelineConfigurationError raised inside a stage's `run`
+    // (i.e. a `ctx.get` called on a non-dependency stage id) is a
+    // caller bug, not a recoverable runtime failure. We capture the
+    // first one and re-throw after the scheduler drains so the
+    // executor still emits the bookend events.
+    let capturedConfigError: PipelineConfigurationError | null = null
 
     // Build per-stage `ctx.get` dep sets up front so we can throw on
     // out-of-deps access.
@@ -343,14 +349,9 @@ export async function executePipeline<TInput, TOutput>(
             })
         } catch (err) {
             if (err instanceof PipelineConfigurationError) {
-                // ctx.get violation — surface as a thrown error after we
-                // mark this stage failed and emit stage:end.
-                failures.push({
-                    stage: stage.id,
-                    code: err.code,
-                    message: err.message,
-                    severity: "error",
-                })
+                // ctx.get violation — caller bug. Stash for re-throw,
+                // mark the stage failed for bookkeeping, and emit
+                // stage:end so consumers see a clean per-stage close.
                 records.set(stage.id, {
                     outcome: "failed",
                     output: undefined,
@@ -361,7 +362,8 @@ export async function executePipeline<TInput, TOutput>(
                     status: "failed",
                     at: now(),
                 })
-                throw err
+                capturedConfigError ??= err
+                return
             }
             if (err instanceof LlmStageRetryExhaustedError) {
                 failures.push({
@@ -490,6 +492,21 @@ export async function executePipeline<TInput, TOutput>(
     // Wait for the pool to drain (race exits at the first settled
     // promise; we want them all settled).
     await Promise.allSettled(pool.map((p) => p.promise))
+
+    // If a stage observed a configuration violation (ctx.get on a
+    // non-dep), surface that as a thrown error after emitting the
+    // pipeline:end bookend so event consumers still see a clean
+    // close.
+    if (capturedConfigError !== null) {
+        const err: PipelineConfigurationError = capturedConfigError
+        emit({
+            kind: "pipeline:end",
+            status: "failed",
+            output: "null",
+            at: now(),
+        })
+        throw err
+    }
 
     // -- Finalize --
 
