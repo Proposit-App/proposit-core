@@ -118,6 +118,40 @@ export type {
 } from "./core/argument-validation.js"
 export { InvariantViolationError } from "./core/invariant-violation-error.js"
 export {
+    executePipeline,
+    optional,
+    deterministicStage,
+    llmStage,
+    subPipelineStage,
+    DEFAULT_RETRY_POLICY,
+    PipelineConfigurationError,
+    LlmStageRetryExhaustedError,
+} from "./pipelines/index.js"
+export type {
+    TStage,
+    TStageContext,
+    TStageStatus,
+    TPipeline,
+    TPipelineFinalize,
+    TProcessingFailure,
+    TPipelineResult,
+    TPipelineEvent,
+    TDepSpec,
+    TOptionalDep,
+    TRetryPolicy,
+    TRetryReason,
+    TExecutePipelineDeps,
+} from "./pipelines/index.js"
+export type {
+    TLlmProvider,
+    TLlmRequest,
+    TLlmResponse,
+    TLlmTokenUsage,
+    TLlmModel,
+    TReasoningEffort,
+    TToolSpec,
+} from "./llm/index.js"
+export {
     InvalidArgumentStructureError,
     UnknownExpressionError,
     NotOperatorNotDecidableError,
