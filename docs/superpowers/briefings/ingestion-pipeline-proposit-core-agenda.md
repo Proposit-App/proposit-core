@@ -111,11 +111,33 @@ export type PipelineResult<TOut> = {
 }
 
 export type PipelineEvent =
-    | { kind: "pipeline:start"; pipelineId: string; pipelineVersion: string; at: number }
-    | { kind: "pipeline:end"; status: "completed" | "failed"; output: "present" | "null"; at: number }
+    | {
+          kind: "pipeline:start"
+          pipelineId: string
+          pipelineVersion: string
+          at: number
+      }
+    | {
+          kind: "pipeline:end"
+          status: "completed" | "failed"
+          output: "present" | "null"
+          at: number
+      }
     | { kind: "stage:start"; stageId: string; at: number }
-    | { kind: "stage:end"; stageId: string; status: StageStatus; tokenUsage?: TokenUsage; at: number }
-    | { kind: "stage:retry"; stageId: string; attempt: number; reason: string; at: number }
+    | {
+          kind: "stage:end"
+          stageId: string
+          status: StageStatus
+          tokenUsage?: TokenUsage
+          at: number
+      }
+    | {
+          kind: "stage:retry"
+          stageId: string
+          attempt: number
+          reason: string
+          at: number
+      }
 ```
 
 ```ts
@@ -131,15 +153,15 @@ export type ToolSpec =
     | { kind: "file_search"; vectorStoreId: string }
     | { kind: "mcp"; serverUrl: string; toolName?: string }
     | {
-        kind: "function"
-        name: string
-        description: string
-        parameters: TSchema
-        handler: (args: unknown) => Promise<unknown>
-    }
+          kind: "function"
+          name: string
+          description: string
+          parameters: TSchema
+          handler: (args: unknown) => Promise<unknown>
+      }
 
 export type LlmRequest<T> = {
-    model: string                           // typed as string (not LlmModel) for forward-compat
+    model: string // typed as string (not LlmModel) for forward-compat
     reasoningEffort?: ReasoningEffort
     systemPrompt: string
     userMessage: string
@@ -147,7 +169,7 @@ export type LlmRequest<T> = {
     tools?: readonly ToolSpec[]
     maxOutputTokens?: number
     signal?: AbortSignal
-    _typeMarker?: T                         // phantom for inference; runtime undefined
+    _typeMarker?: T // phantom for inference; runtime undefined
 }
 
 export type LlmResponse<T> = {
@@ -285,46 +307,46 @@ Mock-provider keying: the simplest approach is for `llmStage`'s `buildPrompt` to
 Coverage from spec §11.1, all against the mock provider:
 
 1. **DAG validation at entry.**
-   - Pipeline with a cycle: `executePipeline` throws with `DAG_CYCLE` error before any stage runs.
-   - Pipeline with an unknown dep: throws with `UNKNOWN_DEP`.
-   - Pipeline with a self-dep: throws with `SELF_DEP`.
-   - Pipeline with a `finalize.dependsOn` entry referencing a non-existent stage: throws.
+    - Pipeline with a cycle: `executePipeline` throws with `DAG_CYCLE` error before any stage runs.
+    - Pipeline with an unknown dep: throws with `UNKNOWN_DEP`.
+    - Pipeline with a self-dep: throws with `SELF_DEP`.
+    - Pipeline with a `finalize.dependsOn` entry referencing a non-existent stage: throws.
 
 2. **Concurrency.**
-   - Two stages with no shared deps: assert via mock's `onCall` records that they overlap in time (start within 50ms of each other; resolve before the next batch).
-   - Three independent stages with `concurrencyLimit: 2`: at most two in flight simultaneously.
+    - Two stages with no shared deps: assert via mock's `onCall` records that they overlap in time (start within 50ms of each other; resolve before the next batch).
+    - Three independent stages with `concurrencyLimit: 2`: at most two in flight simultaneously.
 
 3. **Failure propagation.**
-   - Required dep: stage A fails → stage B (with required dep on A) has outcome `skipped`, never starts.
-   - Optional dep: stage A fails → stage B (with optional dep on A) runs; `ctx.get<TA>('a')` returns `undefined`; `ctx.stageStatus('a')` returns `'failed'`.
-   - Mixed: stage A fails, stage B (required on A) is skipped, stage C (optional on B + required on D-which-passes) runs and sees `B` as `skipped`.
+    - Required dep: stage A fails → stage B (with required dep on A) has outcome `skipped`, never starts.
+    - Optional dep: stage A fails → stage B (with optional dep on A) runs; `ctx.get<TA>('a')` returns `undefined`; `ctx.stageStatus('a')` returns `'failed'`.
+    - Mixed: stage A fails, stage B (required on A) is skipped, stage C (optional on B + required on D-which-passes) runs and sees `B` as `skipped`.
 
 4. **Schema validation.**
-   - Stage returns output that fails `outputSchema`: emits `ProcessingFailure { code: 'OUTPUT_SCHEMA_INVALID', severity: 'error' }`; stage marked `failed`; downstream-required marked `skipped`.
+    - Stage returns output that fails `outputSchema`: emits `ProcessingFailure { code: 'OUTPUT_SCHEMA_INVALID', severity: 'error' }`; stage marked `failed`; downstream-required marked `skipped`.
 
 5. **Retry.**
-   - Schema-validation failure on attempt 1, success on attempt 2: stage completes; one `stage:retry` event with `reason: 'schema_validation'`.
-   - Schema-validation failure on both attempts: stage `failed`; final `ProcessingFailure` carries the latest validation error.
-   - Validation error longer than `maxAppendedErrorBytes`: appended portion is truncated with `…<truncated>`.
-   - Transient (5xx-style mock error) retry: same shape but `reason: 'transient'`.
-   - Rate-limit not in `retryOn` by default: no retry; stage `failed` immediately.
+    - Schema-validation failure on attempt 1, success on attempt 2: stage completes; one `stage:retry` event with `reason: 'schema_validation'`.
+    - Schema-validation failure on both attempts: stage `failed`; final `ProcessingFailure` carries the latest validation error.
+    - Validation error longer than `maxAppendedErrorBytes`: appended portion is truncated with `…<truncated>`.
+    - Transient (5xx-style mock error) retry: same shape but `reason: 'transient'`.
+    - Rate-limit not in `retryOn` by default: no retry; stage `failed` immediately.
 
 6. **Token usage aggregation.**
-   - Three llmStages with `tokenUsage: { input: 100, output: 50 }`, `{ input: 200, output: 100 }`, `{ input: 50, output: 25 }` → `PipelineResult.tokenUsage: { input: 350, output: 175 }`.
-   - Deterministic stages don't contribute.
+    - Three llmStages with `tokenUsage: { input: 100, output: 50 }`, `{ input: 200, output: 100 }`, `{ input: 50, output: 25 }` → `PipelineResult.tokenUsage: { input: 350, output: 175 }`.
+    - Deterministic stages don't contribute.
 
 7. **Cancellation.**
-   - Signal aborted mid-stage: provider receives the signal; in-flight stage's mock response races with abort; pending stages don't start; result has `output: null` and accurate `stageOutcomes`.
+    - Signal aborted mid-stage: provider receives the signal; in-flight stage's mock response races with abort; pending stages don't start; result has `output: null` and accurate `stageOutcomes`.
 
 8. **Pipeline events.**
-   - Happy path: `pipeline:start` → ordered `stage:start` / `stage:end` per stage (concurrent stages interleave) → `pipeline:end` with `status: 'completed'`, `output: 'present'`.
-   - Failure path: `pipeline:end` has `status: 'completed'` (the pipeline succeeded; the failure is a ProcessingFailure) OR `status: 'failed'` (an exceptional throw escaped). Be precise about which case is which — the spec says only DAG-validation errors and abort throw; everything else surfaces in the result.
-   - `output: 'null'` when finalize returns null OR its required deps were skipped.
+    - Happy path: `pipeline:start` → ordered `stage:start` / `stage:end` per stage (concurrent stages interleave) → `pipeline:end` with `status: 'completed'`, `output: 'present'`.
+    - Failure path: `pipeline:end` has `status: 'completed'` (the pipeline succeeded; the failure is a ProcessingFailure) OR `status: 'failed'` (an exceptional throw escaped). Be precise about which case is which — the spec says only DAG-validation errors and abort throw; everything else surfaces in the result.
+    - `output: 'null'` when finalize returns null OR its required deps were skipped.
 
 9. **Finalize semantics.**
-   - All required finalize deps `completed`: `finalize.run` invoked; result reflects what it returned.
-   - One required finalize dep `failed`: `finalize.run` NOT invoked; `output: null`; the failed stage's `ProcessingFailure` is in `failures`.
-   - Optional finalize dep `skipped`: `finalize.run` invoked normally; `ctx.get<T>('that-stage')` returns `undefined`.
+    - All required finalize deps `completed`: `finalize.run` invoked; result reflects what it returned.
+    - One required finalize dep `failed`: `finalize.run` NOT invoked; `output: null`; the failed stage's `ProcessingFailure` is in `failures`.
+    - Optional finalize dep `skipped`: `finalize.run` invoked normally; `ctx.get<T>('that-stage')` returns `undefined`.
 
 10. **`subPipelineStage` smoke test.**
     - One nested pipeline runs inside a larger one; events from the nested pipeline are visible (with prefixed stage ids); the nested result becomes the outer stage's output.
