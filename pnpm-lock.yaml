@@ -10,6 +10,9 @@ importers:
             commander:
                 specifier: ^14.0.3
                 version: 14.0.3
+            openai:
+                specifier: ">=4.0.0"
+                version: 6.38.0
             typebox:
                 specifier: ^1.1.14
                 version: 1.1.14
@@ -453,6 +456,7 @@ packages:
             }
         cpu: [arm]
         os: [linux]
+        libc: [glibc]
 
     "@rollup/rollup-linux-arm-musleabihf@4.60.1":
         resolution:
@@ -461,6 +465,7 @@ packages:
             }
         cpu: [arm]
         os: [linux]
+        libc: [musl]
 
     "@rollup/rollup-linux-arm64-gnu@4.60.1":
         resolution:
@@ -469,6 +474,7 @@ packages:
             }
         cpu: [arm64]
         os: [linux]
+        libc: [glibc]
 
     "@rollup/rollup-linux-arm64-musl@4.60.1":
         resolution:
@@ -477,6 +483,7 @@ packages:
             }
         cpu: [arm64]
         os: [linux]
+        libc: [musl]
 
     "@rollup/rollup-linux-loong64-gnu@4.60.1":
         resolution:
@@ -485,6 +492,7 @@ packages:
             }
         cpu: [loong64]
         os: [linux]
+        libc: [glibc]
 
     "@rollup/rollup-linux-loong64-musl@4.60.1":
         resolution:
@@ -493,6 +501,7 @@ packages:
             }
         cpu: [loong64]
         os: [linux]
+        libc: [musl]
 
     "@rollup/rollup-linux-ppc64-gnu@4.60.1":
         resolution:
@@ -501,6 +510,7 @@ packages:
             }
         cpu: [ppc64]
         os: [linux]
+        libc: [glibc]
 
     "@rollup/rollup-linux-ppc64-musl@4.60.1":
         resolution:
@@ -509,6 +519,7 @@ packages:
             }
         cpu: [ppc64]
         os: [linux]
+        libc: [musl]
 
     "@rollup/rollup-linux-riscv64-gnu@4.60.1":
         resolution:
@@ -517,6 +528,7 @@ packages:
             }
         cpu: [riscv64]
         os: [linux]
+        libc: [glibc]
 
     "@rollup/rollup-linux-riscv64-musl@4.60.1":
         resolution:
@@ -525,6 +537,7 @@ packages:
             }
         cpu: [riscv64]
         os: [linux]
+        libc: [musl]
 
     "@rollup/rollup-linux-s390x-gnu@4.60.1":
         resolution:
@@ -533,6 +546,7 @@ packages:
             }
         cpu: [s390x]
         os: [linux]
+        libc: [glibc]
 
     "@rollup/rollup-linux-x64-gnu@4.60.1":
         resolution:
@@ -541,6 +555,7 @@ packages:
             }
         cpu: [x64]
         os: [linux]
+        libc: [glibc]
 
     "@rollup/rollup-linux-x64-musl@4.60.1":
         resolution:
@@ -549,6 +564,7 @@ packages:
             }
         cpu: [x64]
         os: [linux]
+        libc: [musl]
 
     "@rollup/rollup-openbsd-x64@4.60.1":
         resolution:
@@ -1435,6 +1451,21 @@ packages:
             {
                 integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==,
             }
+
+    openai@6.38.0:
+        resolution:
+            {
+                integrity: sha512-AoMplt2UalrpgUDMh3L09QWjNRlgJPipclQvA6sYAaeF6nHNBMgmikAZGmcYLn8on4d9sQY9Q8bOLfrBS7Lc8g==,
+            }
+        hasBin: true
+        peerDependencies:
+            ws: ^8.18.0
+            zod: ^3.25 || ^4.0
+        peerDependenciesMeta:
+            ws:
+                optional: true
+            zod:
+                optional: true
 
     optionator@0.9.4:
         resolution:
@@ -2631,6 +2662,8 @@ snapshots:
     natural-compare@1.4.0: {}
 
     obug@2.1.1: {}
+
+    openai@6.38.0: {}
 
     optionator@0.9.4:
         dependencies:
