@@ -13,6 +13,8 @@ import { cliLog } from "../logging.js"
 import { errorExit, printJson, printLine, printWarning } from "../output.js"
 import { resolveApiKey, createLlmProvider } from "../llm/index.js"
 
+const DEFAULT_PARSE_MODEL = "gpt-5.4"
+
 class CliArgumentParser extends BasicsArgumentParser {
     private readonly cliTitle?: string
     private readonly cliDescription: string
@@ -101,19 +103,21 @@ export function registerParseCommand(args: Command): void {
                 const responseSchema = BasicsParsingSchema
                 const systemPrompt = buildParsingPrompt(responseSchema)
 
-                // 4. Call LLM
-                const provider = createLlmProvider(opts.llm, {
-                    apiKey,
-                    model: opts.model,
-                })
+                // 4. Call LLM via the abstract provider interface from
+                //    src/lib/llm/. The CLI factory instantiates the
+                //    concrete OpenAI Responses-API provider behind
+                //    the abstract shape.
+                const provider = createLlmProvider(opts.llm, { apiKey })
 
                 let result: Record<string, unknown>
                 try {
-                    result = await provider.complete({
+                    const response = await provider.respond({
+                        model: opts.model ?? DEFAULT_PARSE_MODEL,
                         systemPrompt,
                         userMessage: inputText,
-                        responseSchema,
+                        outputSchema: responseSchema,
                     })
+                    result = response.output as Record<string, unknown>
                 } catch (error) {
                     const msg =
                         error instanceof Error ? error.message : String(error)

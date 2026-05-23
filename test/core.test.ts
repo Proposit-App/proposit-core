@@ -13493,7 +13493,7 @@ describe("LLM provider abstraction", () => {
                 apiKey: "sk-test",
             })
             expect(provider).toBeDefined()
-            expect(typeof provider.complete).toBe("function")
+            expect(typeof provider.respond).toBe("function")
         })
 
         it("throws on unknown provider name", () => {

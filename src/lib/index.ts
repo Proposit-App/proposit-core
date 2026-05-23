@@ -153,6 +153,21 @@ export type {
     TReasoningEffort,
     TToolSpec,
 } from "./llm/index.js"
+// Concrete OpenAI Responses-API provider, surfaced from the lib
+// barrel for ergonomic single-import access from consumers
+// (`@proposit/proposit-core` package-root import). The provider also
+// has a dedicated subpath export at `@proposit/proposit-core/extensions/openai`
+// for callers that prefer to tree-shake provider machinery out of
+// their builds.
+export { createOpenAiResponsesProvider } from "../extensions/openai/index.js"
+export type { TCreateOpenAiResponsesProviderOptions } from "../extensions/openai/index.js"
+export {
+    NonRetryableLlmError,
+    RateLimitLlmError,
+    SchemaValidationLlmError,
+    ToolLoopExhaustedError,
+    TransientLlmError,
+} from "../extensions/openai/index.js"
 export {
     InvalidArgumentStructureError,
     UnknownExpressionError,
