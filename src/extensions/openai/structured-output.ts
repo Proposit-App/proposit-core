@@ -18,12 +18,19 @@
 // structured-output docs):
 //
 //   * Every object lists `additionalProperties: false`.
-//   * Every object lists `required` with all non-optional property
-//     names — strict mode requires every declared property be either
-//     required or omitted from the schema entirely.
-//   * Optional properties stay declared under `properties` so the
-//     model can emit them when relevant; the absence of the key from
-//     `required` makes them strict-mode-compatible.
+//   * Every object lists `required` with **every** declared property
+//     name — strict mode requires every declared property be present
+//     in `required`; omitting a key from `required` is rejected.
+//   * `Type.Optional(T)` properties surface as
+//     `{ anyOf: [<T>, { type: "null" }] }` and remain in `required`.
+//     This is the strict-mode-compatible way to express "this field
+//     can be absent" — the model emits `null` when no value applies
+//     and our downstream TypeBox check tolerates the null/undefined
+//     equivalence for Optional members. Naively dropping Optional
+//     keys from `required` produces a schema OpenAI rejects with a
+//     400 strict-mode error (folded from slice 1B reviewer P1 #2).
+//   * `Type.Union` of literals of one JSON-Schema type collapses to
+//     a single `enum`; general unions surface as `anyOf`.
 //
 // The converter ignores TypeBox `$id` / `description` / other
 // metadata on inner types — only structural fields are projected.
@@ -178,10 +185,17 @@ function convertObject(schema: TSchema): TOpenAiJsonSchema {
     const properties: Record<string, TOpenAiJsonSchema> = {}
     const required: string[] = []
     for (const [key, propSchema] of Object.entries(object.properties)) {
-        properties[key] = typeboxToOpenAiSchema(propSchema)
-        if (!isOptional(propSchema)) {
-            required.push(key)
+        // OpenAI strict mode requires every declared key in `required`.
+        // For `Type.Optional(T)` we widen the schema to allow null and
+        // keep the key in `required`; this is the strict-mode-compatible
+        // way to express optionality (a literally omitted key is
+        // rejected by the API).
+        if (isOptional(propSchema)) {
+            properties[key] = nullableSchemaFor(propSchema)
+        } else {
+            properties[key] = typeboxToOpenAiSchema(propSchema)
         }
+        required.push(key)
     }
     return {
         type: "object",
@@ -189,6 +203,33 @@ function convertObject(schema: TSchema): TOpenAiJsonSchema {
         properties,
         required,
     }
+}
+
+function nullableSchemaFor(propSchema: TSchema): TOpenAiJsonSchema {
+    const inner = typeboxToOpenAiSchema(propSchema)
+    // If the inner schema is already an anyOf (e.g. an explicit
+    // Union, including a Nullable that already added null), preserve
+    // the existing structure and just ensure a `{ type: "null" }`
+    // branch is present rather than wrapping in a redundant anyOf.
+    if (isPlainAnyOf(inner)) {
+        const branches = inner.anyOf
+        if (branches.some(isNullBranch)) {
+            return inner
+        }
+        return { anyOf: [...branches, { type: "null" }] }
+    }
+    return { anyOf: [inner, { type: "null" }] }
+}
+
+function isPlainAnyOf(
+    schema: TOpenAiJsonSchema
+): schema is { anyOf: TOpenAiJsonSchema[] } {
+    const candidate = schema as { anyOf?: unknown }
+    return Array.isArray(candidate.anyOf)
+}
+
+function isNullBranch(branch: TOpenAiJsonSchema): boolean {
+    return (branch as { type?: unknown }).type === "null"
 }
 
 function convertRecord(schema: TSchema): TOpenAiJsonSchema {

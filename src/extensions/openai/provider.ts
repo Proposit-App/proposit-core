@@ -151,7 +151,28 @@ export function createOpenAiResponsesProvider(
             lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
 
             const functionCalls = pickFunctionCalls(envelope.output)
+            // Edge case — simultaneous `function_call` + final
+            // `message` in the same response: the Responses API
+            // contract says the model emits either tool calls or a
+            // final answer in a given turn, not both, but a
+            // misbehaving prompt could in principle yield both. The
+            // provider's policy here is conservative: if any
+            // `function_call` items appear, treat the round as a
+            // tool-call round (execute handlers, ignore the message,
+            // re-call). The follow-up round gets to produce the
+            // final answer. Callers that want the message even when
+            // tools fire would need a different exit condition; we
+            // accept this behavior as V1.
             if (functionCalls.length > 0) {
+                // Per the Responses-API conversation-history
+                // contract, the next request must include each
+                // original `function_call` item the model emitted,
+                // immediately followed by its matching
+                // `function_call_output`. Omitting the
+                // `function_call` items returns a 400 with a
+                // conversation-state error on round 2+. Order is
+                // preserved across all calls in the round (slice
+                // 1B.1 reviewer fold P1 #1).
                 for (const call of functionCalls) {
                     const handler = findFunctionHandler(req.tools, call.name)
                     if (!handler) {
@@ -161,6 +182,15 @@ export function createOpenAiResponsesProvider(
                     }
                     const parsedArgs = safeParseJson(call.arguments)
                     const handlerResult = await handler.handler(parsedArgs)
+                    // Echo the original function_call (verbatim
+                    // wire-shape) before its matching output. The
+                    // API enforces this pairing by `call_id`.
+                    input.push({
+                        type: "function_call",
+                        call_id: call.callId,
+                        name: call.name,
+                        arguments: call.arguments,
+                    })
                     input.push({
                         type: "function_call_output",
                         call_id: call.callId,
@@ -251,7 +281,24 @@ function classifyHttpError(status: number, message: string): Error {
     if (status === 429) {
         return new RateLimitLlmError({ message, status })
     }
-    if (status === 400 || status === 422) {
+    // 400 vs 422 split (slice 1B.1 reviewer fold P2 #1):
+    //
+    // OpenAI returns 400 for malformed requests — typically a
+    // converter bug, an unsupported parameter, or a request shape
+    // the API doesn't accept. Retrying a 400 just burns the second
+    // attempt; classify as non-retryable so the framework surfaces
+    // the error immediately.
+    //
+    // OpenAI returns 422 when the model's structured-output reply
+    // failed server-side strict-mode validation. A re-roll can
+    // sometimes succeed, so we route 422 through the
+    // schema-validation class (which carries `retryReason:
+    // "transient"` as the V1 retry workaround until the framework
+    // grows a dedicated `schema_validation` retry tag).
+    if (status === 400) {
+        return new NonRetryableLlmError({ message, status })
+    }
+    if (status === 422) {
         return new SchemaValidationLlmError({ message, status })
     }
     return new NonRetryableLlmError({ message, status })

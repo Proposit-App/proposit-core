@@ -390,18 +390,136 @@ describe("createOpenAiResponsesProvider — tool-call agent loop", () => {
         expect(handler).toHaveBeenCalledWith({ value: "hi" })
         expect(fetchMock).toHaveBeenCalledTimes(2)
 
-        // Second call should carry the tool result in input.
+        // Second call should carry the original function_call AND
+        // its matching function_call_output in input, in that order
+        // (per the Responses-API conversation-history contract — slice
+        // 1B.1 reviewer fold P1 #1).
         const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit]
         const secondBody = JSON.parse(secondInit.body as string) as {
             input: Record<string, unknown>[]
         }
-        const toolResult = secondBody.input.find(
+        const fnCallIdx = secondBody.input.findIndex(
+            (m) => m.type === "function_call"
+        )
+        const fnOutputIdx = secondBody.input.findIndex(
             (m) => m.type === "function_call_output"
         )
-        expect(toolResult).toBeDefined()
-        // `call_id` is the wire-format key from the OpenAI spec.
-        const toolResultRecord = toolResult!
-        expect(toolResultRecord.call_id).toBe("call_1")
+        expect(fnCallIdx).toBeGreaterThanOrEqual(0)
+        expect(fnOutputIdx).toBeGreaterThanOrEqual(0)
+        // function_call appears before function_call_output.
+        expect(fnCallIdx).toBeLessThan(fnOutputIdx)
+        // Both items pair on the same call_id.
+        const fnCall = secondBody.input[fnCallIdx]
+        const toolResult = secondBody.input[fnOutputIdx]
+        expect(fnCall.call_id).toBe("call_1")
+        expect(fnCall.name).toBe("echo")
+        // The function_call's arguments are echoed verbatim as the
+        // wire-format JSON string the model emitted.
+        expect(fnCall.arguments).toBe(JSON.stringify({ value: "hi" }))
+        expect(toolResult.call_id).toBe("call_1")
+    })
+
+    it("re-emits ALL function_call items + outputs in order for a multi-tool-call response", async () => {
+        // Per the Responses-API contract, when the model emits N
+        // function_call items in one response, the next request must
+        // include all N original function_call items paired with
+        // their N function_call_output companions — same order.
+        // Slice 1B.1 reviewer fold P1 #1 (multi-call assertion).
+        const handler = vi
+            .fn()
+            .mockResolvedValueOnce({ tag: "first" })
+            .mockResolvedValueOnce({ tag: "second" })
+
+        // First fetch: response with two function_call items.
+        const twoCallResponse = (): Response => {
+            // Wire-format JSON for the multi-call response — snake_case
+            // mirrors the OpenAI Responses API payload.
+            const json = {
+                id: "resp_multi",
+                output: [
+                    {
+                        type: "function_call",
+                        call_id: "call_a",
+                        name: "echo",
+                        arguments: JSON.stringify({ value: "alpha" }),
+                    },
+                    {
+                        type: "function_call",
+                        call_id: "call_b",
+                        name: "echo",
+                        arguments: JSON.stringify({ value: "beta" }),
+                    },
+                ],
+                usage: { input_tokens: 3, output_tokens: 4 },
+            }
+            return new Response(JSON.stringify(json), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            })
+        }
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(twoCallResponse())
+            .mockResolvedValueOnce(
+                buildSuccessResponse({ body: { answer: "done" } })
+            )
+
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+
+        const response = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "sys",
+            userMessage: "usr",
+            outputSchema: simpleSchema,
+            tools: [
+                {
+                    kind: "function",
+                    name: "echo",
+                    description: "Echoes.",
+                    parameters: Type.Object({ value: Type.String() }),
+                    handler,
+                },
+            ],
+        })
+
+        expect(response.output).toEqual({ answer: "done" })
+        expect(handler).toHaveBeenCalledTimes(2)
+        // Handlers fire in the order the model emitted the calls.
+        expect(handler.mock.calls[0]).toEqual([{ value: "alpha" }])
+        expect(handler.mock.calls[1]).toEqual([{ value: "beta" }])
+
+        // Second fetch body carries all four input items in the
+        // [call_a, output_a, call_b, output_b] order.
+        const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit]
+        const secondBody = JSON.parse(secondInit.body as string) as {
+            input: Record<string, unknown>[]
+        }
+        const toolItems = secondBody.input.filter(
+            (m) =>
+                m.type === "function_call" || m.type === "function_call_output"
+        )
+        expect(toolItems).toHaveLength(4)
+        expect(toolItems[0]).toMatchObject({
+            type: "function_call",
+            call_id: "call_a",
+            name: "echo",
+        })
+        expect(toolItems[1]).toMatchObject({
+            type: "function_call_output",
+            call_id: "call_a",
+        })
+        expect(toolItems[2]).toMatchObject({
+            type: "function_call",
+            call_id: "call_b",
+            name: "echo",
+        })
+        expect(toolItems[3]).toMatchObject({
+            type: "function_call_output",
+            call_id: "call_b",
+        })
     })
 
     it("throws ToolLoopExhaustedError when the model loops past the configured maxToolCallRounds", async () => {
@@ -501,10 +619,15 @@ describe("createOpenAiResponsesProvider — error classification", () => {
         ).rejects.toBeInstanceOf(RateLimitLlmError)
     })
 
-    it("throws SchemaValidationLlmError on 400", async () => {
+    it("throws NonRetryableLlmError on 400 (converter-bug 400s shouldn't burn a retry)", async () => {
+        // 400 from OpenAI typically signals a malformed request or
+        // unsupported parameter — a code bug on our side, not
+        // something a re-roll fixes. Classify as non-retryable so
+        // the framework surfaces immediately. Slice 1B.1 reviewer
+        // fold P2 #1.
         const fetchMock: TFetchMock = vi
             .fn()
-            .mockResolvedValue(buildErrorResponse(400, "bad schema"))
+            .mockResolvedValue(buildErrorResponse(400, "bad request"))
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
             fetch: asFetch(fetchMock),
@@ -516,10 +639,10 @@ describe("createOpenAiResponsesProvider — error classification", () => {
                 userMessage: "usr",
                 outputSchema: simpleSchema,
             })
-        ).rejects.toBeInstanceOf(SchemaValidationLlmError)
+        ).rejects.toBeInstanceOf(NonRetryableLlmError)
     })
 
-    it("throws SchemaValidationLlmError on 422", async () => {
+    it("throws SchemaValidationLlmError on 422 (model output failed strict-mode; re-roll may succeed)", async () => {
         const fetchMock: TFetchMock = vi
             .fn()
             .mockResolvedValue(buildErrorResponse(422, "unprocessable"))

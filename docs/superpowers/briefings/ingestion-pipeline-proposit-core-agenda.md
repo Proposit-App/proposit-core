@@ -581,10 +581,12 @@ Coverage per the agenda + the spec §11.1 framework tests already covering the f
 When the model returns one or more `function_call` items in the response, the provider currently appends only `function_call_output` items to the input array before re-calling. The live Responses API requires the original `function_call` items to be echoed back too (per the conversation history contract), or the next round returns 400 with a conversation-state error.
 
 **Fix in `src/extensions/openai/provider.ts:154-174` (or wherever the agent loop assembles the next-round input):**
-- For each `function_call` item the model returned, append it (verbatim) to the running input list *before* appending its matching `function_call_output`. Preserve the order the model emitted them in.
+
+- For each `function_call` item the model returned, append it (verbatim) to the running input list _before_ appending its matching `function_call_output`. Preserve the order the model emitted them in.
 - Pair `function_call.call_id` ↔ `function_call_output.call_id` correctly; the API enforces this.
 
 **Test in `test/extensions/openai/provider.test.ts`:**
+
 - Extend the existing tool-loop test (around line 393) to assert that the second `fetch` invocation's `input` field contains BOTH the original `function_call` items AND the matching `function_call_output` items, in that order, with paired `call_id`s.
 - Add a multi-tool-call test: model returns two `function_call` items in one response → handler executes both → second round's input contains all four items (two `function_call` + two `function_call_output`), order preserved.
 
@@ -593,19 +595,22 @@ When the model returns one or more `function_call` items in the response, the pr
 The converter at `src/extensions/openai/structured-output.ts:173-192` (`convertObject` or equivalent) currently omits `Type.Optional(...)` properties from the `required` array. OpenAI strict mode requires **every declared property in `required`**; the way to express optionality is `{ anyOf: [<schema>, { type: "null" }] }` while keeping the property name in `required`. Today's converter unit test at `test/extensions/openai/structured-output.test.ts:29-46` actually pins the broken behavior — it must be updated to pin the corrected behavior.
 
 **Fix in `structured-output.ts`:**
+
 - When a property is `Type.Optional(T)`, emit it as `{ anyOf: [<T-converted>, { type: "null" }] }` in `properties` AND include its name in `required`.
 - Document this in the converter's leading docstring so the next maintainer doesn't reintroduce the bug.
 
 **Tests in `test/extensions/openai/structured-output.test.ts`:**
+
 - **Update** the existing `Type.Optional` test to assert the new correct shape (anyOf-with-null + still in `required`).
 - Add a test: `Type.Object({ a: Type.String(), b: Type.Optional(Type.Number()) })` → required `["a", "b"]`, `b.anyOf = [{ type: "number" }, { type: "null" }]`.
 - Add an integration-shape test (no real API call needed): an object with a mix of required, Optional, and Nullable (Union with Null) properties produces a strict-mode-valid schema.
 
 **P2 #1 — Split 400 from 422 in `classifyHttpError`.**
 
-Today both 400 and 422 are classified as `SchemaValidationLlmError`. A 400 is more likely a converter bug or malformed request — retrying is wasted work. A 422 (strict-mode violation by the model's output) *can* sometimes succeed on a re-roll.
+Today both 400 and 422 are classified as `SchemaValidationLlmError`. A 400 is more likely a converter bug or malformed request — retrying is wasted work. A 422 (strict-mode violation by the model's output) _can_ sometimes succeed on a re-roll.
 
 **Fix in `src/extensions/openai/provider.ts` (or wherever `classifyHttpError` lives):**
+
 - 400 → `NonRetryableLlmError` (with the OpenAI error body in `message` if extractable).
 - 422 → `SchemaValidationLlmError` (with `retryReason: "transient"` per the V1 workaround discussed in 1B; framework refactor to a real `schema_validation` retry tag is deferred).
 - Other 4xx (401/403/404) → `NonRetryableLlmError` (unchanged).
@@ -627,6 +632,7 @@ When the model returns both a `function_call` and a final assistant `message` in
 ### Test plan additions
 
 Per the fix sections above. Roughly 4 new tests:
+
 - Tool-loop function_call-history assertion (extend existing).
 - Tool-loop multi-tool-call test (new).
 - Optional → anyOf-with-null + required (replace existing + add complex case).

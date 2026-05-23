@@ -21,6 +21,19 @@
 export type TOpenAiInputMessage =
     | { role: "system" | "user" | "assistant"; content: string }
     | {
+          // Echo of a `function_call` item the model emitted in a
+          // prior round. The Responses API requires the original
+          // `function_call` to be present in the conversation
+          // history alongside its `function_call_output` companion —
+          // omitting it surfaces as a 400 conversation-state error
+          // on the next request. We preserve the wire shape (call_id,
+          // name, arguments) verbatim from the response.
+          type: "function_call"
+          call_id: string
+          name: string
+          arguments: string
+      }
+    | {
           type: "function_call_output"
           call_id: string
           output: string

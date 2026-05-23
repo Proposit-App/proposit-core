@@ -7,9 +7,10 @@
 // primitives. The strict-mode rules we encode here:
 //
 //   - Every object lists `additionalProperties: false`.
-//   - Every object lists `required: [...all-non-optional-keys]`.
-//   - Optional properties are omitted from `required` but remain
-//     declared under `properties`.
+//   - Every object lists `required` with every declared key —
+//     strict mode requires it. Optional properties widen to
+//     `{ anyOf: [<T>, { type: "null" }] }` and stay in `required`
+//     (the strict-mode-compatible encoding of optionality).
 //   - Unions surface as `anyOf: [...]`.
 //   - A union of `Type.Literal` of the same primitive collapses to a
 //     single `enum: [...]` for compactness (OpenAI's strict mode
@@ -26,7 +27,11 @@ import { Value } from "typebox/value"
 import { typeboxToOpenAiSchema } from "../../../src/extensions/openai/structured-output.js"
 
 describe("typeboxToOpenAiSchema", () => {
-    it("converts a flat Type.Object with required + optional properties", () => {
+    it("converts a flat Type.Object with required + optional properties (Optional → anyOf-with-null, key kept in required)", () => {
+        // OpenAI strict mode requires every declared property in
+        // `required`. Optional properties widen to allow null and
+        // remain in `required` — the strict-mode-compatible encoding
+        // of "this field can be absent".
         const schema = Type.Object({
             id: Type.String(),
             count: Type.Number(),
@@ -39,10 +44,87 @@ describe("typeboxToOpenAiSchema", () => {
             properties: {
                 id: { type: "string" },
                 count: { type: "number" },
-                label: { type: "string" },
+                label: { anyOf: [{ type: "string" }, { type: "null" }] },
             },
-            required: ["id", "count"],
+            required: ["id", "count", "label"],
         })
+    })
+
+    it("emits Type.Optional(Type.Number()) as anyOf-with-null while keeping the key in required", () => {
+        const schema = Type.Object({
+            a: Type.String(),
+            b: Type.Optional(Type.Number()),
+        })
+        const json = typeboxToOpenAiSchema(schema) as {
+            required: string[]
+            properties: Record<string, { anyOf?: unknown }>
+        }
+        expect(json.required).toEqual(["a", "b"])
+        expect(json.properties.b.anyOf).toEqual([
+            { type: "number" },
+            { type: "null" },
+        ])
+    })
+
+    it("does not double-wrap when Type.Optional wraps a value that is already nullable (Union with Null)", () => {
+        // An Optional(Nullable(...)) schema should stay anyOf with a
+        // single null branch — the converter must not add a redundant
+        // null member.
+        const inner = Type.Union([Type.String(), Type.Null()])
+        const schema = Type.Object({
+            value: Type.Optional(inner),
+        })
+        const json = typeboxToOpenAiSchema(schema) as {
+            properties: { value: { anyOf: { type?: string }[] } }
+            required: string[]
+        }
+        const branches = json.properties.value.anyOf
+        const nullBranches = branches.filter((b) => b.type === "null")
+        expect(nullBranches).toHaveLength(1)
+        expect(json.required).toContain("value")
+    })
+
+    it("produces a strict-mode-valid schema for an object mixing required, Optional, and Nullable fields", () => {
+        const schema = Type.Object({
+            required: Type.String(),
+            optional: Type.Optional(Type.Number()),
+            nullable: Type.Union([Type.Boolean(), Type.Null()]),
+            optionalNullable: Type.Optional(
+                Type.Union([Type.String(), Type.Null()])
+            ),
+        })
+        const json = typeboxToOpenAiSchema(schema) as {
+            additionalProperties: boolean
+            required: string[]
+            properties: Record<string, unknown>
+        }
+        // Strict mode: additionalProperties false, every declared key
+        // in required.
+        expect(json.additionalProperties).toBe(false)
+        expect(json.required.sort()).toEqual(
+            ["nullable", "optional", "optionalNullable", "required"].sort()
+        )
+        // Required field stays untouched.
+        expect(json.properties.required).toEqual({ type: "string" })
+        // Optional widens to anyOf-with-null.
+        expect(json.properties.optional).toEqual({
+            anyOf: [{ type: "number" }, { type: "null" }],
+        })
+        // Nullable (Union containing Null) passes through as-is — the
+        // Optional widener only fires for the Optional modifier, not
+        // for explicit Nullable unions.
+        const nullable = json.properties.nullable as {
+            anyOf: { type?: string }[]
+        }
+        expect(nullable.anyOf.some((b) => b.type === "boolean")).toBe(true)
+        expect(nullable.anyOf.some((b) => b.type === "null")).toBe(true)
+        // OptionalNullable: no redundant double null branch.
+        const optNullable = json.properties.optionalNullable as {
+            anyOf: { type?: string }[]
+        }
+        expect(optNullable.anyOf.filter((b) => b.type === "null")).toHaveLength(
+            1
+        )
     })
 
     it("converts Type.Array of strings", () => {
@@ -187,6 +269,13 @@ describe("typeboxToOpenAiSchema", () => {
         const json = typeboxToOpenAiSchema(schema)
         expect(json).toHaveProperty("type", "object")
         expect(json).toHaveProperty("additionalProperties", false)
-        expect(json).toHaveProperty("required", ["id", "tags", "status"])
+        // Optional `extra` stays in `required` (strict-mode rule); the
+        // model emits `null` when no value applies.
+        expect(json).toHaveProperty("required", [
+            "id",
+            "tags",
+            "status",
+            "extra",
+        ])
     })
 })
