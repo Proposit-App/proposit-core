@@ -32,6 +32,11 @@
             "types": "./dist/extensions/basics/index.d.ts",
             "import": "./dist/extensions/basics/index.js",
             "default": "./dist/extensions/basics/index.js"
+        },
+        "./extensions/openai": {
+            "types": "./dist/extensions/openai/index.d.ts",
+            "import": "./dist/extensions/openai/index.js",
+            "default": "./dist/extensions/openai/index.js"
         }
     },
     "bin": {
@@ -81,5 +86,13 @@
         "commander": "^14.0.3",
         "typebox": "^1.1.14",
         "yaml": "^2.8.3"
+    },
+    "peerDependencies": {
+        "openai": ">=4.0.0"
+    },
+    "peerDependenciesMeta": {
+        "openai": {
+            "optional": true
+        }
     }
 }
