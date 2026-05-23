@@ -566,3 +566,82 @@ Coverage per the agenda + the spec §11.1 framework tests already covering the f
 - Same skill stack as slice 1A (TDD, verification-before-completion, brain-style TS).
 - **Responses-API shape vs chat-completions shape.** The two APIs differ: Responses uses `input` (an array of content blocks) instead of `messages`; the `output` is an array of content blocks instead of `choices[0].message.content`; tool calls and usage have similar but different field names. Read OpenAI's current Responses-API docs before writing the request/response shape — don't extrapolate from the chat-completions code in `src/cli/llm/openai.ts`. The point of this slice is the switch.
 - **CLI parity** is the most likely place behavior drifts unexpectedly. Test it. If you're uncertain whether the CLI smoke will still work after the move, surface as DONE_WITH_CONCERNS and let the orchestrator decide.
+
+---
+
+## Slice 1B.1 — Reviewer fold (P1s + P2 polish)
+
+**Triggered by:** dual-review synthesis at `/Users/brian/Projects/Proposit-App/docs/reviews/proposit-core/2026-05-22-6c804b4-f823e16-ingestion-pipeline-1B.md`.
+**Branch:** continue on `ingestion-pipeline/phase-1`.
+
+### Scope — fold these items in one commit batch
+
+**P1 #1 — Tool agent loop drops the original `function_call` items from the running input array.**
+
+When the model returns one or more `function_call` items in the response, the provider currently appends only `function_call_output` items to the input array before re-calling. The live Responses API requires the original `function_call` items to be echoed back too (per the conversation history contract), or the next round returns 400 with a conversation-state error.
+
+**Fix in `src/extensions/openai/provider.ts:154-174` (or wherever the agent loop assembles the next-round input):**
+- For each `function_call` item the model returned, append it (verbatim) to the running input list *before* appending its matching `function_call_output`. Preserve the order the model emitted them in.
+- Pair `function_call.call_id` ↔ `function_call_output.call_id` correctly; the API enforces this.
+
+**Test in `test/extensions/openai/provider.test.ts`:**
+- Extend the existing tool-loop test (around line 393) to assert that the second `fetch` invocation's `input` field contains BOTH the original `function_call` items AND the matching `function_call_output` items, in that order, with paired `call_id`s.
+- Add a multi-tool-call test: model returns two `function_call` items in one response → handler executes both → second round's input contains all four items (two `function_call` + two `function_call_output`), order preserved.
+
+**P1 #2 — `Type.Optional` properties produce strict-mode-invalid JSON Schema.**
+
+The converter at `src/extensions/openai/structured-output.ts:173-192` (`convertObject` or equivalent) currently omits `Type.Optional(...)` properties from the `required` array. OpenAI strict mode requires **every declared property in `required`**; the way to express optionality is `{ anyOf: [<schema>, { type: "null" }] }` while keeping the property name in `required`. Today's converter unit test at `test/extensions/openai/structured-output.test.ts:29-46` actually pins the broken behavior — it must be updated to pin the corrected behavior.
+
+**Fix in `structured-output.ts`:**
+- When a property is `Type.Optional(T)`, emit it as `{ anyOf: [<T-converted>, { type: "null" }] }` in `properties` AND include its name in `required`.
+- Document this in the converter's leading docstring so the next maintainer doesn't reintroduce the bug.
+
+**Tests in `test/extensions/openai/structured-output.test.ts`:**
+- **Update** the existing `Type.Optional` test to assert the new correct shape (anyOf-with-null + still in `required`).
+- Add a test: `Type.Object({ a: Type.String(), b: Type.Optional(Type.Number()) })` → required `["a", "b"]`, `b.anyOf = [{ type: "number" }, { type: "null" }]`.
+- Add an integration-shape test (no real API call needed): an object with a mix of required, Optional, and Nullable (Union with Null) properties produces a strict-mode-valid schema.
+
+**P2 #1 — Split 400 from 422 in `classifyHttpError`.**
+
+Today both 400 and 422 are classified as `SchemaValidationLlmError`. A 400 is more likely a converter bug or malformed request — retrying is wasted work. A 422 (strict-mode violation by the model's output) *can* sometimes succeed on a re-roll.
+
+**Fix in `src/extensions/openai/provider.ts` (or wherever `classifyHttpError` lives):**
+- 400 → `NonRetryableLlmError` (with the OpenAI error body in `message` if extractable).
+- 422 → `SchemaValidationLlmError` (with `retryReason: "transient"` per the V1 workaround discussed in 1B; framework refactor to a real `schema_validation` retry tag is deferred).
+- Other 4xx (401/403/404) → `NonRetryableLlmError` (unchanged).
+- 5xx + 429 → `TransientLlmError` / `RateLimitLlmError` (unchanged).
+
+**Test:** add (or extend) the error-classification test in `provider.test.ts` to pin 400 → `NonRetryableLlmError` separately from 422 → `SchemaValidationLlmError`.
+
+**P2 #2 — Document the simultaneous `function_call` + `message` emission edge case.**
+
+When the model returns both a `function_call` and a final assistant `message` in the same response (rare but possible), the provider currently short-circuits to the next round (treats it as a tool call). This is acceptable behavior but undocumented; the next maintainer reading the agent loop will likely puzzle over it.
+
+**Fix:** add a docstring near the tool-loop dispatch in `provider.ts` explaining the policy: "When a response contains both `function_call` items and a final `message`, the loop treats it as a tool-call round (executes handlers, ignores the message, re-calls). If you wanted the message even when tools fire, you'd need a different exit condition — but the Responses API contract is that the model can't both call tools AND give a final answer in the same turn; this case shouldn't happen in practice, and our policy is conservative."
+
+### Items NOT in this fold (deferred or rejected)
+
+- **P3 (JSON-parse classification):** acceptable for V1 (already in the original DWC); revisit if a real-corpus regression surfaces in slice 1C or later.
+- **Framework refactor: `classifyError` getting its own `"schema_validation"` retry tag:** deferred. The current `retryReason: "transient"` workaround on `SchemaValidationLlmError` works — schema-validation 422s retry once per default policy. A proper framework-side refactor is out of scope for this slice; track as an open question (could land alongside slice 1C or be a separate Phase 2 follow-up).
+
+### Test plan additions
+
+Per the fix sections above. Roughly 4 new tests:
+- Tool-loop function_call-history assertion (extend existing).
+- Tool-loop multi-tool-call test (new).
+- Optional → anyOf-with-null + required (replace existing + add complex case).
+- 400 vs 422 classification split (extend existing).
+
+### Exit criteria
+
+- All previous tests still pass.
+- New tests pass.
+- `pnpm run check` green.
+- One commit on `ingestion-pipeline/phase-1`: `fix(openai): fold reviewer P1s + P2 polish for slice 1B`.
+- Spec §6.2 patch landed by the orchestrator (FYI: `text.format` is the live shape; the orchestrator has already updated the spec).
+
+### Carry-forward to slice 1C
+
+- The v1 single-shot pipeline uses `BasicsParsingSchema` which today uses `Nullable(...)` (Union with Null) — that pattern is strict-mode-clean and unchanged by this fold.
+- If any future stage spec (in slice 2A) uses `Type.Optional(...)`, the converter now handles it correctly post-fold.
+- The `additionalProperties: true` overridden to `false` by strict-mode behavior is unchanged and still relies on slice 1C's corpus replay to catch any parser-side dependency on extra fields.
