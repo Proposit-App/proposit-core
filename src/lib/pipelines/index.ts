@@ -20,6 +20,8 @@ export {
     subPipelineStage,
     DEFAULT_RETRY_POLICY,
     LlmStageRetryExhaustedError,
+    StageAbortedError,
+    SubPipelineFailedError,
 } from "./stage-helpers.js"
 export type { TRetryPolicy, TRetryReason } from "./stage-helpers.js"
 

@@ -27,6 +27,8 @@ import type {
 import { depId, isOptionalDep } from "./types.js"
 import {
     LlmStageRetryExhaustedError,
+    StageAbortedError,
+    SubPipelineFailedError,
     readStashedTokenUsage,
 } from "./stage-helpers.js"
 import type { TLlmProvider, TLlmTokenUsage } from "../llm/types.js"
@@ -47,6 +49,7 @@ export class PipelineConfigurationError extends Error {
         | "UNKNOWN_DEP"
         | "DUPLICATE_STAGE_ID"
         | "GET_OUTSIDE_DEPS"
+        | "STATUS_OUTSIDE_DEPS"
     public readonly stageId?: string
     public readonly depId?: string
 
@@ -229,14 +232,6 @@ export async function executePipeline<TInput, TOutput>(
 
     // -- Helpers --
 
-    const stageStatus = (id: string): TStageStatus => {
-        const record = records.get(id)
-        if (record) return record.outcome
-        // Unknown stage id at runtime would have failed DAG validation;
-        // the caller's static dep set already restricts what's askable.
-        return "skipped"
-    }
-
     const makeCtx = (
         allowedDeps: Set<string>,
         contextLabel: string
@@ -257,7 +252,25 @@ export async function executePipeline<TInput, TOutput>(
                 if (record.outcome !== "completed") return undefined
                 return record.output as T
             },
-            stageStatus,
+            stageStatus(stageId: string): TStageStatus {
+                // Mirror the `ctx.get` strictness: stages may only
+                // query the status of stages declared in their own
+                // `dependsOn` (required OR optional). Querying a
+                // non-dependency is a caller bug — surface it loudly
+                // rather than silently returning "skipped" for a
+                // stage id the calling stage shouldn't be peeking at.
+                if (!allowedDeps.has(stageId)) {
+                    throw new PipelineConfigurationError({
+                        code: "STATUS_OUTSIDE_DEPS",
+                        message: `${contextLabel} called ctx.stageStatus("${stageId}"), which is not in its dependsOn.`,
+                        stageId: contextLabel,
+                        depId: stageId,
+                    })
+                }
+                const record = records.get(stageId)
+                if (record) return record.outcome
+                return "skipped"
+            },
             llm: deps.llm,
             generateId,
             signal,
@@ -297,7 +310,13 @@ export async function executePipeline<TInput, TOutput>(
 
     const runStage = async (stage: TStage<unknown>): Promise<void> => {
         if (signal.aborted) {
-            // Pending stages don't start once aborted.
+            // Pending stages don't start once aborted. Emit `stage:start`
+            // before `stage:end` so consumers walking the event stream
+            // for symmetric pairs (e.g. the SSE bridge in slice 2C) see
+            // a balanced sequence — every `stage:end` is preceded by a
+            // matching `stage:start`.
+            const startAt = now()
+            emit({ kind: "stage:start", stageId: stage.id, at: startAt })
             records.set(stage.id, { outcome: "skipped", output: undefined })
             emit({
                 kind: "stage:end",
@@ -365,7 +384,45 @@ export async function executePipeline<TInput, TOutput>(
                 capturedConfigError ??= err
                 return
             }
+            if (err instanceof StageAbortedError) {
+                // Caller cancellation surfaced mid-stage. This is not
+                // a stage failure to report — no ProcessingFailure is
+                // recorded — and the outcome is `skipped` rather than
+                // `failed` so consumers can distinguish abort from a
+                // genuine provider error.
+                records.set(stage.id, {
+                    outcome: "skipped",
+                    output: undefined,
+                })
+                emit({
+                    kind: "stage:end",
+                    stageId: stage.id,
+                    status: "skipped",
+                    at: now(),
+                })
+                return
+            }
             if (err instanceof LlmStageRetryExhaustedError) {
+                failures.push({
+                    stage: stage.id,
+                    code: err.code,
+                    message: err.message,
+                    severity: "error",
+                    context: err.failureContext,
+                })
+                records.set(stage.id, {
+                    outcome: "failed",
+                    output: undefined,
+                })
+                emit({
+                    kind: "stage:end",
+                    stageId: stage.id,
+                    status: "failed",
+                    at: now(),
+                })
+                return
+            }
+            if (err instanceof SubPipelineFailedError) {
                 failures.push({
                     stage: stage.id,
                     code: err.code,

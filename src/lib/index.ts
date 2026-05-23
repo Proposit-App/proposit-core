@@ -126,6 +126,8 @@ export {
     DEFAULT_RETRY_POLICY,
     PipelineConfigurationError,
     LlmStageRetryExhaustedError,
+    StageAbortedError,
+    SubPipelineFailedError,
 } from "./pipelines/index.js"
 export type {
     TStage,

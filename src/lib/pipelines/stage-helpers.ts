@@ -57,16 +57,67 @@ export const DEFAULT_RETRY_POLICY: TRetryPolicy = {
 const TRUNCATION_SUFFIX = "…<truncated>"
 
 function truncateValidationError(error: string, capBytes: number): string {
-    // Bytes here mean UTF-16 code units, which matches the
-    // "string length" reading consumers expect when configuring
-    // `maxAppendedErrorBytes`. Sub-2-KB caps make the multi-byte
-    // distinction immaterial; we document the choice in the spec
-    // commentary.
+    // NOTE: `capBytes` is measured in JavaScript `string.length` —
+    // UTF-16 code units, not UTF-8 bytes. The spec (§6.3) phrases the
+    // cap as "bytes"; for ASCII-heavy validation errors the two are
+    // equal, and for non-ASCII paths a 2048 cap is roughly 2–4 KB of
+    // UTF-8 depending on character distribution. We accept this drift
+    // for V1: realistic TypeBox validation errors are short and
+    // English; a future polish pass can switch to
+    // `new TextEncoder().encode(error).length` if a real workload
+    // shows the distinction matters.
     if (error.length <= capBytes) {
         return error
     }
     const head = Math.max(0, capBytes - TRUNCATION_SUFFIX.length)
     return error.slice(0, head) + TRUNCATION_SUFFIX
+}
+
+/**
+ * Thrown by any stage when an `AbortSignal` cancels execution
+ * mid-flight. The executor recognizes this class and marks the stage
+ * as `skipped` (not `failed`); no `ProcessingFailure` is recorded
+ * because a caller-driven cancellation is not a stage failure to
+ * report. Distinguishing abort from a genuine provider error matters
+ * for server-side cancellation observability (slice 2C's SSE bridge
+ * routes these differently).
+ */
+export class StageAbortedError extends Error {
+    public readonly stageId: string
+
+    constructor(args: { stageId: string; message?: string }) {
+        super(args.message ?? "aborted")
+        this.name = "StageAbortedError"
+        this.stageId = args.stageId
+    }
+}
+
+/**
+ * Thrown by `subPipelineStage`'s wrapper when the nested pipeline
+ * returns `output: null` (any required dep of its finalize was
+ * skipped/failed, or its finalize itself returned null). The wrapper
+ * surfaces this as a stage failure on the outer pipeline so the
+ * caller sees a clean per-stage failure rather than an LLM-flavored
+ * misnomer. Kept separate from `LlmStageRetryExhaustedError` because
+ * no LLM call and no retry are involved.
+ */
+export class SubPipelineFailedError extends Error {
+    public readonly stageId: string
+    public readonly code: string
+    public readonly failureContext: Record<string, unknown> | undefined
+
+    constructor(args: {
+        stageId: string
+        code: string
+        message: string
+        context?: Record<string, unknown>
+    }) {
+        super(args.message)
+        this.name = "SubPipelineFailedError"
+        this.stageId = args.stageId
+        this.code = args.code
+        this.failureContext = args.context
+    }
 }
 
 /**
@@ -189,13 +240,10 @@ export function llmStage<TOutput>(config: {
             while (attempt < policy.maxAttempts) {
                 attempt += 1
                 if (ctx.signal.aborted) {
-                    throw new LlmStageRetryExhaustedError({
-                        stageId: config.id,
-                        reason: "transient",
-                        code: "ABORTED",
-                        attempts: attempt,
-                        message: "aborted",
-                    })
+                    // Loop-top abort: caller cancelled before (or
+                    // between) attempts. Surface as a `skipped` stage
+                    // rather than a failure.
+                    throw new StageAbortedError({ stageId: config.id })
                 }
 
                 const req: TLlmRequest<TOutput> = {
@@ -261,6 +309,17 @@ export function llmStage<TOutput>(config: {
                         // Re-throw our own marker; the catch below shouldn't
                         // see it. Defensive.
                         throw err
+                    }
+                    if (err instanceof StageAbortedError) {
+                        throw err
+                    }
+                    // Mid-flight abort surfaces here when the provider
+                    // honored the signal and threw. Recognize it before
+                    // classifying as a generic non-retryable failure so
+                    // the executor can mark this stage `skipped`, not
+                    // `failed` with `LLM_NON_RETRYABLE_ERROR`.
+                    if (ctx.signal.aborted) {
+                        throw new StageAbortedError({ stageId: config.id })
                     }
                     const reason = classifyError(err)
                     const message =
@@ -376,11 +435,9 @@ export function subPipelineStage<TOutput>(config: {
                 })
             }
             if (result.output === null) {
-                throw new LlmStageRetryExhaustedError({
+                throw new SubPipelineFailedError({
                     stageId: config.id,
-                    reason: "transient",
                     code: "SUB_PIPELINE_NULL_OUTPUT",
-                    attempts: 1,
                     message:
                         "Nested pipeline returned null output; the outer stage cannot complete.",
                     context: {

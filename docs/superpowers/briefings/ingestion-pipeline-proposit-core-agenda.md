@@ -399,6 +399,7 @@ Coverage from spec §11.1, all against the mock provider:
 When an `AbortSignal` fires during an in-flight `llmStage` provider call, the stage currently catches the abort, classifies it via the non-retryable branch, and surfaces as `failed` with `LLM_NON_RETRYABLE_ERROR`. This is wrong for two reasons: (a) the spec's cancellation contract (§5.4 step 11) says aborted in-flight stages don't constitute a "failure" — they're scheduled-and-cancelled, more like `skipped`; (b) when slice 1B lands the real OpenAI provider, real cancellation will produce confusing failure codes that the server's task-status logic will likely misroute.
 
 **Fix:**
+
 - In `llmStage`'s catch branch, detect aborted-due-to-signal (`error.name === 'AbortError'` or equivalent; whichever the framework uses to surface signal cancellation) and re-throw a typed `StageAbortedError` (new class).
 - In the executor, when a stage throws `StageAbortedError`, mark the stage `skipped` (not `failed`); emit a `stage:end` event with `status: 'skipped'`; do not add a `ProcessingFailure` (the abort is not a failure to report; it's the caller's cancellation taking effect).
 - Add a test: in-flight stage + abort fires mid-stage → stage outcome `skipped`, no `ProcessingFailure`, `stage:end.status === 'skipped'`.

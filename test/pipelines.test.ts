@@ -23,6 +23,8 @@ import {
     DEFAULT_RETRY_POLICY,
     LlmStageRetryExhaustedError,
     PipelineConfigurationError,
+    StageAbortedError,
+    SubPipelineFailedError,
     deterministicStage,
     executePipeline,
     llmStage,
@@ -836,6 +838,11 @@ describe("executePipeline — cancellation", () => {
         expect(result.output).toBeNull()
         expect(bRan).toBe(false)
         expect(result.stageOutcomes.b).toBe("skipped")
+        // The aborted stage itself is `skipped`, not `failed` — caller
+        // cancellation is distinct from a provider error.
+        expect(result.stageOutcomes.a).toBe("skipped")
+        // No ProcessingFailure is recorded for the aborted stage.
+        expect(result.failures.some((f) => f.stage === "a")).toBe(false)
     })
 })
 
@@ -1106,5 +1113,277 @@ describe("LlmStageRetryExhaustedError", () => {
         expect(err.reason).toBe("transient")
         expect(err.code).toBe("LLM_TRANSIENT_ERROR")
         expect(err.attempts).toBe(2)
+    })
+})
+
+// ---------------- Slice 1A.1 — reviewer fold ----------------
+
+// P2 #1 — Mid-flight abort surfaces as `skipped` with no ProcessingFailure.
+describe("slice 1A.1 — P2 #1: mid-flight abort surfaces as skipped", () => {
+    it("aborted in-flight llmStage is `skipped`, not `failed`, with no failure recorded", async () => {
+        const events: TPipelineEvent[] = []
+        const controller = new AbortController()
+        const llm = createMockLlmProvider({
+            // Mock will sleep `responseDelayMs` then check signal; on
+            // abort it throws Error("mock-llm: aborted") without a
+            // `retryReason` tag — pre-fold this surfaced as
+            // LLM_NON_RETRYABLE_ERROR; post-fold llmStage recognizes
+            // the in-flight abort and throws StageAbortedError instead.
+            responses: {
+                a: [{ kind: "ok", output: { value: 1 } }],
+            },
+            responseDelayMs: 80,
+        })
+        const aStage = llmStage<{ value: number }>({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Object({ value: Type.Number() }),
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: a--> sys",
+                user: "u",
+            }),
+            retry: { backoffMs: 0 },
+        })
+        const pipeline = buildPipeline<{ value: number }>({
+            stages: [aStage],
+            finalize: {
+                dependsOn: ["a"],
+                run: (ctx) => ctx.get<{ value: number }>("a") ?? { value: -1 },
+            },
+        })
+        setTimeout(() => controller.abort(), 20)
+        const result = await executePipeline(
+            pipeline,
+            {},
+            {
+                llm,
+                signal: controller.signal,
+                onEvent: (e) => events.push(e),
+            }
+        )
+        expect(result.stageOutcomes.a).toBe("skipped")
+        expect(result.failures.find((f) => f.stage === "a")).toBeUndefined()
+        // The finalize was bypassed because its required dep `a` is
+        // not `completed`. Per spec §5.4 step 6, output is null.
+        expect(result.output).toBeNull()
+        const aEnd = events.find(
+            (e) => e.kind === "stage:end" && e.stageId === "a"
+        )
+        if (aEnd?.kind === "stage:end") {
+            expect(aEnd.status).toBe("skipped")
+        } else {
+            throw new Error("expected a stage:end event for stage 'a'")
+        }
+    })
+})
+
+// P3 #1 — Abort fast-path emits paired stage:start / stage:end.
+describe("slice 1A.1 — P3 #1: abort fast-path emits paired start/end events", () => {
+    it("a stage that never starts because the signal was already aborted still emits stage:start before stage:end", async () => {
+        const events: TPipelineEvent[] = []
+        const controller = new AbortController()
+        // Build a 2-stage pipeline; abort early so the second stage
+        // enters runStage with `signal.aborted === true` and goes
+        // through the abort fast-path.
+        const llm = createMockLlmProvider({
+            responses: {
+                a: [{ kind: "ok", output: { value: 1 } }],
+            },
+            responseDelayMs: 60,
+        })
+        const aStage = llmStage<{ value: number }>({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Object({ value: Type.Number() }),
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: a--> sys",
+                user: "u",
+            }),
+            retry: { backoffMs: 0 },
+        })
+        const bStage = deterministicStage({
+            id: "b",
+            dependsOn: ["a"],
+            outputSchema: Type.Number(),
+            fn: () => 5,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [aStage, bStage],
+            finalize: { dependsOn: ["b"], run: () => 99 },
+        })
+        setTimeout(() => controller.abort(), 10)
+        await executePipeline(
+            pipeline,
+            {},
+            {
+                llm,
+                signal: controller.signal,
+                onEvent: (e) => events.push(e),
+            }
+        )
+        // For stage `b`, the pre-stage abort-fast-path triggers.
+        const bEvents = events.filter(
+            (e) =>
+                (e.kind === "stage:start" || e.kind === "stage:end") &&
+                "stageId" in e &&
+                e.stageId === "b"
+        )
+        expect(bEvents.length).toBe(2)
+        expect(bEvents[0].kind).toBe("stage:start")
+        expect(bEvents[1].kind).toBe("stage:end")
+    })
+})
+
+// P3 #2 — Optional-dep cycle detection.
+describe("slice 1A.1 — P3 #2: optional-dep cycle detection", () => {
+    it("DAG_CYCLE throws when the cycle edge is via optional(...)", async () => {
+        const visited: string[] = []
+        const aStage = deterministicStage({
+            id: "a",
+            dependsOn: [optional("b")],
+            outputSchema: Type.Number(),
+            fn: () => {
+                visited.push("a")
+                return 1
+            },
+        })
+        const bStage = deterministicStage({
+            id: "b",
+            dependsOn: ["a"],
+            outputSchema: Type.Number(),
+            fn: () => {
+                visited.push("b")
+                return 2
+            },
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [aStage, bStage],
+            finalize: { dependsOn: ["a"], run: () => 0 },
+        })
+        await expect(
+            executePipeline(pipeline, {}, { llm: emptyMockLlm() })
+        ).rejects.toMatchObject({
+            name: "PipelineConfigurationError",
+            code: "DAG_CYCLE",
+        })
+        expect(visited).toEqual([])
+    })
+})
+
+// P3 #3 — ctx.stageStatus enforces the same dep allowlist as ctx.get.
+describe("slice 1A.1 — P3 #3: ctx.stageStatus enforces dep allowlist", () => {
+    it("throws PipelineConfigurationError when stage calls ctx.stageStatus on a non-dep", async () => {
+        const aStage = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        const bStage: TStage<number> = deterministicStage({
+            id: "b",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: (ctx: TStageContext) => {
+                // 'a' is not in b's dependsOn — must throw.
+                ctx.stageStatus("a")
+                return 0
+            },
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [aStage, bStage],
+            finalize: {
+                dependsOn: [optional("b")],
+                run: (ctx) => ctx.get<number>("b") ?? -1,
+            },
+        })
+        await expect(
+            executePipeline(pipeline, {}, { llm: emptyMockLlm() })
+        ).rejects.toMatchObject({
+            name: "PipelineConfigurationError",
+            code: "STATUS_OUTSIDE_DEPS",
+        })
+    })
+})
+
+// P3 #5 — subPipelineStage null-output throws SubPipelineFailedError.
+describe("slice 1A.1 — P3 #5: subPipelineStage null-output throws SubPipelineFailedError", () => {
+    it("nested null output surfaces as SubPipelineFailedError (not LlmStageRetryExhaustedError)", async () => {
+        // Build a nested pipeline whose required finalize dep fails so
+        // the nested result is `output: null`. The outer wrapper must
+        // throw `SubPipelineFailedError`, the executor must surface it
+        // as a stage failure on the outer pipeline with code
+        // `SUB_PIPELINE_NULL_OUTPUT`.
+        const failingInnerStage = deterministicStage({
+            id: "inner-bad",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => {
+                throw new Error("inner stage broken")
+            },
+        })
+        const innerPipeline: TPipeline<unknown, number> = {
+            id: "inner-pipeline",
+            version: "0",
+            inputSchema: Type.Object({}),
+            outputSchema: Type.Number(),
+            stages: [failingInnerStage],
+            finalize: {
+                dependsOn: ["inner-bad"],
+                run: () => 1,
+            },
+        }
+        const wrapper = subPipelineStage<number>({
+            id: "wrap",
+            dependsOn: [],
+            pipeline: innerPipeline,
+        })
+        const outer = buildPipeline<number>({
+            stages: [wrapper],
+            finalize: {
+                dependsOn: [optional("wrap")],
+                run: (ctx) => ctx.get<number>("wrap") ?? -1,
+            },
+        })
+        const result = await executePipeline(outer, {}, { llm: emptyMockLlm() })
+        expect(result.stageOutcomes.wrap).toBe("failed")
+        // The outer failure list contains (a) the forwarded inner
+        // stage failure (`STAGE_UNCAUGHT_ERROR` from the throwing
+        // inner stage, re-attached to the wrapper id) and (b) the
+        // SubPipelineFailedError-induced `SUB_PIPELINE_NULL_OUTPUT`.
+        // Assert the latter is present — it's the load-bearing
+        // signal that the wrapper recognized the nested null.
+        const subPipelineFailure = result.failures.find(
+            (f) => f.code === "SUB_PIPELINE_NULL_OUTPUT"
+        )
+        expect(subPipelineFailure).toBeDefined()
+        expect(subPipelineFailure?.stage).toBe("wrap")
+    })
+
+    it("SubPipelineFailedError is a real Error subclass with the expected fields", () => {
+        const err = new SubPipelineFailedError({
+            stageId: "wrap",
+            code: "SUB_PIPELINE_NULL_OUTPUT",
+            message: "boom",
+            context: { subPipelineId: "inner-pipeline" },
+        })
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("SubPipelineFailedError")
+        expect(err.stageId).toBe("wrap")
+        expect(err.code).toBe("SUB_PIPELINE_NULL_OUTPUT")
+        expect(err.failureContext).toEqual({
+            subPipelineId: "inner-pipeline",
+        })
+    })
+})
+
+describe("StageAbortedError class shape", () => {
+    it("is a real Error subclass with the expected fields", () => {
+        const err = new StageAbortedError({ stageId: "x" })
+        expect(err).toBeInstanceOf(Error)
+        expect(err.name).toBe("StageAbortedError")
+        expect(err.stageId).toBe("x")
+        expect(err.message).toBe("aborted")
     })
 })
