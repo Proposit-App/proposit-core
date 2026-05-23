@@ -994,40 +994,44 @@ Cut a minor release of `@proposit/proposit-core` containing the new pipeline fra
 5. **Commit the lockfile fix.** `git add pnpm-lock.yaml` then `git commit -m "chore(deps): regenerate pnpm-lock with openai peerDep entry (CI fix)"`. One commit; lockfile only.
 
 6. **Rotate release notes + changelog for v1.1.1.**
-   - **Keep** `docs/release-notes/v1.1.0.md` and `docs/changelogs/v1.1.0.md` as-is (historical record).
-   - **Create** `docs/release-notes/v1.1.1.md`:
-     ```
-     # v1.1.1 — Publish-cycle fix for v1.1.0
+    - **Keep** `docs/release-notes/v1.1.0.md` and `docs/changelogs/v1.1.0.md` as-is (historical record).
+    - **Create** `docs/release-notes/v1.1.1.md`:
 
-     v1.1.0 never reached npm due to a CI failure (lockfile drift on the new
-     `openai` optional peerDependency). v1.1.1 contains the v1.1.0 changes plus
-     the lockfile regeneration. No code changes from v1.1.0.
+        ```
+        # v1.1.1 — Publish-cycle fix for v1.1.0
 
-     See `v1.1.0.md` for the full release notes.
-     ```
-   - **Create** `docs/changelogs/v1.1.1.md`:
-     ```
-     # v1.1.1 — changelog
+        v1.1.0 never reached npm due to a CI failure (lockfile drift on the new
+        `openai` optional peerDependency). v1.1.1 contains the v1.1.0 changes plus
+        the lockfile regeneration. No code changes from v1.1.0.
 
-     ## v1.1.0 publish-cycle fix
-     - <lockfile-fix-commit-sha> — regenerate pnpm-lock.yaml to include the
-       openai optional peerDependency added in slice 1B (commit 90caf81).
+        See `v1.1.0.md` for the full release notes.
+        ```
 
-     ## What's in v1.1.0
-     See v1.1.0.md.
-     ```
-   - Do NOT touch `docs/release-notes/upcoming.md` or `docs/changelogs/upcoming.md` — already fresh.
-   - Commit: `chore: publish-prep — add v1.1.1 release notes + changelog (publish-cycle fix)`.
+    - **Create** `docs/changelogs/v1.1.1.md`:
+
+        ```
+        # v1.1.1 — changelog
+
+        ## v1.1.0 publish-cycle fix
+        - <lockfile-fix-commit-sha> — regenerate pnpm-lock.yaml to include the
+          openai optional peerDependency added in slice 1B (commit 90caf81).
+
+        ## What's in v1.1.0
+        See v1.1.0.md.
+        ```
+
+    - Do NOT touch `docs/release-notes/upcoming.md` or `docs/changelogs/upcoming.md` — already fresh.
+    - Commit: `chore: publish-prep — add v1.1.1 release notes + changelog (publish-cycle fix)`.
 
 7. **Bump version.** `pnpm version patch` → commit `1.1.1`. Verify `git log --oneline -3`.
 
 8. **Tag.** `git tag v1.1.1` at HEAD. Verify: `git tag --list 'v1.1.*'` shows `v1.1.0` AND `v1.1.1`.
 
 9. **Push to origin.**
-   - `git push origin main`
-   - `git push origin v1.1.1`
-   - Watch the CI workflow: `gh run list --workflow=ci.yml --limit 3`. Must pass this time.
-   - Deploy-docs workflow may also fire — check it runs green.
+    - `git push origin main`
+    - `git push origin v1.1.1`
+    - Watch the CI workflow: `gh run list --workflow=ci.yml --limit 3`. Must pass this time.
+    - Deploy-docs workflow may also fire — check it runs green.
 
 10. **STOP — hand off to the user for the manual `pnpm publish`.** Do NOT run `pnpm publish` yourself. The user has the `proposit-admin` npm auth; they'll run the publish. Return DONE_WITH_CONCERNS with a clear "ready for manual publish" status.
 
