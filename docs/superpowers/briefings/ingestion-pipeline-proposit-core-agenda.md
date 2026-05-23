@@ -805,6 +805,7 @@ If any fixture surfaces a strict-mode regression (the model produces a field tha
 Today `src/extensions/argument-ingestion/shared/basics-extension.ts:25-77` redeclares per-entity extension consts (`BASICS_NORMAL_CLAIM_EXTENSION`, `BASICS_CITATION_CLAIM_EXTENSION`, `BASICS_AXIOMATIC_CLAIM_EXTENSION`, `BASICS_PREMISE_EXTENSION`, `BASICS_ARGUMENT_EXTENSION`, etc.) verbatim from `src/extensions/basics/schemata.ts:13-69`. Dormant in v1 (the pipeline factory only reads `responseSchema`), load-bearing in slice 2A where per-stage outputs need the granular extension shapes.
 
 **Fix:**
+
 - In `src/extensions/basics/schemata.ts`: export the per-entity extension consts (`BasicsNormalClaimExtension`, etc., or whatever they're spelled — match the existing naming convention there).
 - In `src/extensions/argument-ingestion/shared/basics-extension.ts`: replace the duplicated consts with imports from `../../basics/schemata.js`.
 - No behavior change; this is a deduplication. Verify the `responseSchema` it composes is still byte-identical (TypeBox schemas should equate structurally).
@@ -822,12 +823,14 @@ Do not change the runtime behavior. The retry is the right default.
 **P2 #3 — Fixture parity-intent labels.**
 
 The golden-corpus fixtures pin v1's specific behavior, including cases where v1 isn't ideal:
+
 - `ambiguous-conclusion/expected.json` — v1 force-chose a conclusion + invented a 4th claim. v2 (per spec §7.5) should fail-soft with `argument: null`.
 - `enthymeme/expected.json` — v1 produced 2 claims + 2 premises (didn't invent the missing premise). v2 will likely do similarly; this case may stay `parity: "strict"`.
 
 Add a top-level `parity` field to each fixture's `expected.json`. Possible values per spec §11.4: `"strict"`, `"v2-strict-upgrade"`, `"v2-only"`. Slice 2A's reviewer otherwise has to spelunk through fixture contents to figure out the intent.
 
 **Fix:**
+
 - `straightforward/expected.json`: add `"parity": "strict"`.
 - `with-url-citation/expected.json`: `"parity": "strict"` (v1's citation handling should match v2's; if not, slice 2A can re-record).
 - `with-axiom/expected.json`: `"parity": "strict"` (same rationale).
@@ -847,8 +850,9 @@ If `createIngestionV1Pipeline` accepts a `customInstructions` parameter that goe
 **P3 #3 — `pipeline.outputSchema` not honest about `processingFailures` augmentation.**
 
 The pipeline's `outputSchema` is set to `extension.responseSchema`, but the actual output (post-finalize) is augmented with `processingFailures: ProcessingFailure[]`. The schema thus declares less than the runtime output. Two options:
+
 - (a) Augment `outputSchema` to include `processingFailures` (slight TypeBox stitching).
-- (b) Add an inline comment near the `outputSchema` declaration noting the asymmetry is intentional (the `processingFailures` field is wire-stable but added post-finalize; consumers should treat `outputSchema` as the *core* output and read `processingFailures` separately).
+- (b) Add an inline comment near the `outputSchema` declaration noting the asymmetry is intentional (the `processingFailures` field is wire-stable but added post-finalize; consumers should treat `outputSchema` as the _core_ output and read `processingFailures` separately).
 
 **Pick (b) for now** — augmenting the schema would require Type.Intersect or a similar dance and adds value mostly for slice 1G/2C server-side wiring. A docstring suffices.
 

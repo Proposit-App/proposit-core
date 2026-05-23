@@ -146,6 +146,17 @@ export function registerParseCommand(args: Command): void {
                     errorExit(msg)
                 }
 
+                // Forward-compatibility branch — `output === null` is
+                // not reachable under the v1 single-shot pipeline
+                // (the `parse-argument` stage either completes or
+                // throws via `LlmStageRetryExhaustedError`, both of
+                // which surface here as a failures-non-empty + null
+                // output OR an outer `executePipeline` throw caught
+                // above). Slice 2A's v2 multi-stage pipeline will
+                // reach this branch when its finalize returns null
+                // on irresolvable-conclusion / empty-canonicalization
+                // outcomes (per spec §7.5). Leave the branch wired
+                // so the v2 cutover doesn't need to revisit the CLI.
                 if (pipelineResult.output === null) {
                     const failureSummary = pipelineResult.failures
                         .map((f) => `[${f.code}] ${f.message}`)

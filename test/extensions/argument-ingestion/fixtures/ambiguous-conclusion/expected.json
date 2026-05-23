@@ -1,4 +1,5 @@
 {
+    "parity": "v2-strict-upgrade",
     "argument": {
         "claims": [
             {

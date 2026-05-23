@@ -6,8 +6,18 @@
 // `TParsedArgumentResponse` schema. The pipeline's `finalize` stage
 // is required-dependent on `parse-argument` and merges the LLM
 // response with an empty `processingFailures` slot via
-// `finalizeResponse`. Behavior is bit-for-bit identical to the pre-
-// pipeline CLI parse path (`src/cli/commands/parse.ts` before slice 1C).
+// `finalizeResponse`.
+//
+// **Parity with the pre-1C CLI path.** Behaviorally equivalent to the
+// pre-1C CLI path on schema-conformant LLM outputs (recorded-corpus
+// parity). The new framework adds a single schema-validation retry
+// per stage (default `RetryPolicy` from slice 1A — `maxAttempts: 2`,
+// `retryOn: ["schema_validation", "transient"]`); the pre-1C
+// direct-call path failed hard on the first schema-invalid response.
+// This is a usability improvement, not a regression. The golden
+// corpus exercises only the happy path, so the parity guarantee
+// holds for any LLM response shape the corpus pins; off-corpus
+// schema-invalid responses now retry once before the stage fails.
 //
 // v2 (Phase 2 / slice 2A) replaces the single stage with a graph of
 // decomposed stages; the same `finalizeResponse` helper drives the
@@ -78,6 +88,19 @@ export function createIngestionV1Pipeline(
         id: PIPELINE_ID,
         version: PIPELINE_VERSION,
         inputSchema: INGESTION_INPUT_SCHEMA,
+        // The pipeline's declared `outputSchema` is the extension's
+        // raw `responseSchema` — i.e., the LLM's structured output
+        // shape. The actual runtime output (post-finalize) is
+        // augmented with a `processingFailures: TProcessingFailure[]`
+        // slot by `finalizeResponse`, so the runtime payload declares
+        // one more field than this schema. The asymmetry is
+        // intentional for V1: `outputSchema` advertises the *core*
+        // output that downstream parsers (e.g. `ArgumentParser`)
+        // consume, while `processingFailures` is a side-channel for
+        // observability that consumers read separately. A future
+        // slice (1G / 2C server wiring) may stitch the failure slot
+        // into the schema via `Type.Intersect`; for now a docstring
+        // is the contract.
         outputSchema: extension.responseSchema,
         stages: [parseStage],
         finalize: {

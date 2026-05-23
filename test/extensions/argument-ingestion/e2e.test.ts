@@ -27,6 +27,36 @@
 // behavior we want CI to pin (including edge cases like v1's force-
 // choice on the `ambiguous-conclusion` fixture and the
 // enthymeme-claim-preservation behavior).
+//
+// **Fixture rigidity is intentional.** Recorded fixtures pin specific
+// v1 LLM outputs. CI failures here fall into two buckets, both of
+// which are signals to investigate — not flake:
+//
+//   1. **Prompt-drift guard fires** (`RecordedPromptStaleError` /
+//      `RECORDED_PROMPT_STALE`). The request hash includes the
+//      model, system prompt, user message, and output schema; any
+//      change to `buildParsingPrompt`, the response schema, or the
+//      pipeline's request-shape construction invalidates the hash.
+//      Re-record with `INGESTION_TEST_RECORD=1`; review the diff in
+//      `recorded-llm.json` to confirm the change was intended.
+//
+//   2. **`expected.json` mismatch on re-record.** If the live model
+//      produces a meaningfully different response (e.g. picks a
+//      different conclusion on `ambiguous-conclusion`, or adds an
+//      implicit premise on `enthymeme`), the fixture's
+//      `expected.json` will diverge. That's a load-bearing finding —
+//      it means either the model's behavior has shifted or the
+//      fixture's assumptions were too brittle. Review by hand
+//      before committing the new `expected.json`.
+//
+// Each `expected.json` carries a `parity` field declaring the
+// fixture's intent for the future v1↔v2 parity test (slice 2A):
+// `"strict"` means v1 and v2 should match byte-for-byte;
+// `"v2-strict-upgrade"` means v1's behavior is being pinned for
+// historical reference but v2 is expected to upgrade the outcome
+// (e.g., `ambiguous-conclusion` should soft-fail under v2 per spec
+// §7.5). The e2e driver does not consume `parity` today; it's
+// metadata for slice 2A's reviewer.
 
 import fs from "node:fs"
 import path from "node:path"
@@ -71,16 +101,41 @@ function readInput(fixtureDir: string): string {
     return fs.readFileSync(path.join(fixtureDir, "input.txt"), "utf-8").trim()
 }
 
-function readExpected(fixtureDir: string): unknown {
-    const p = path.join(fixtureDir, "expected.json")
-    if (!fs.existsSync(p)) return undefined
-    return JSON.parse(fs.readFileSync(p, "utf-8")) as unknown
+type TExpectedFile = Record<string, unknown> & {
+    parity?: "strict" | "v2-strict-upgrade" | "v2-only"
 }
 
-function writeExpected(fixtureDir: string, value: unknown): void {
+function readExpected(fixtureDir: string): TExpectedFile | undefined {
+    const p = path.join(fixtureDir, "expected.json")
+    if (!fs.existsSync(p)) return undefined
+    return JSON.parse(fs.readFileSync(p, "utf-8")) as TExpectedFile
+}
+
+/**
+ * Split `expected.json` into (a) the per-fixture metadata (currently
+ * just `parity`) and (b) the runtime output the pipeline should
+ * reproduce. Metadata fields don't appear in the runtime output and
+ * are excluded from the equality comparison.
+ */
+function splitExpected(expected: TExpectedFile): {
+    parity: TExpectedFile["parity"]
+    runtime: Record<string, unknown>
+} {
+    const { parity, ...runtime } = expected
+    return { parity, runtime }
+}
+
+function writeExpected(
+    fixtureDir: string,
+    runtime: Record<string, unknown>,
+    parity: TExpectedFile["parity"]
+): void {
+    // Preserve any caller-supplied metadata (parity label) at the
+    // top of the file; the pipeline's runtime output follows.
+    const body: TExpectedFile = parity ? { parity, ...runtime } : { ...runtime }
     fs.writeFileSync(
         path.join(fixtureDir, "expected.json"),
-        JSON.stringify(value, null, 2) + "\n",
+        JSON.stringify(body, null, 2) + "\n",
         "utf-8"
     )
 }
@@ -105,6 +160,25 @@ function buildProviderForMode(fixtureDir: string): TLlmProvider {
 }
 
 const mode = recordingMode()
+
+// Pin the `parity` field shape across all fixtures — metadata for
+// slice 2A's v1↔v2 parity test. Each fixture must declare its
+// intent so the future reviewer can read it without spelunking the
+// runtime output.
+describe("v1 ingestion pipeline — fixture parity labels", () => {
+    const VALID_PARITY = new Set(["strict", "v2-strict-upgrade", "v2-only"])
+    for (const name of FIXTURE_NAMES) {
+        const fixtureDir = path.join(FIXTURES_ROOT, name)
+        const has = fs.existsSync(path.join(fixtureDir, "expected.json"))
+        const itOrSkip = has ? it : it.skip
+        itOrSkip(`${name}: expected.json declares a valid parity field`, () => {
+            const expected = readExpected(fixtureDir)
+            expect(expected).toBeDefined()
+            expect(expected?.parity).toBeDefined()
+            expect(VALID_PARITY.has(expected!.parity as string)).toBe(true)
+        })
+    }
+})
 
 describe(`v1 ingestion pipeline — golden corpus (${mode} mode)`, () => {
     for (const name of FIXTURE_NAMES) {
@@ -132,9 +206,13 @@ describe(`v1 ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 const actual = result.output as Record<string, unknown>
 
                 if (mode === "record") {
-                    // Always overwrite the expected.json in record mode
-                    // so the dev reviews the draft and re-commits.
-                    writeExpected(fixtureDir, actual)
+                    // Always overwrite the expected.json in record
+                    // mode so the dev reviews the draft and re-
+                    // commits. Preserve the existing `parity` label
+                    // (if any) — the recording step doesn't change
+                    // the fixture's parity intent.
+                    const prior = readExpected(fixtureDir)
+                    writeExpected(fixtureDir, actual, prior?.parity)
                     return
                 }
 
@@ -144,7 +222,8 @@ describe(`v1 ingestion pipeline — golden corpus (${mode} mode)`, () => {
                         `Fixture ${name} has no expected.json. Re-record with INGESTION_TEST_RECORD=1.`
                     )
                 }
-                expect(actual).toEqual(expected)
+                const { runtime } = splitExpected(expected)
+                expect(actual).toEqual(runtime)
             }
         )
     }
