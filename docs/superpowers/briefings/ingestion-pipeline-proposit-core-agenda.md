@@ -888,3 +888,85 @@ P3 #1 (dead `customInstructions`): if the option is removed, any test referencin
 - Per-entity extension consts are now centralized in `src/extensions/basics/schemata.ts` — slice 2A's per-stage outputs can compose against those directly.
 - Fixtures pin v1 behavior with explicit `parity` labels — slice 2A's reviewer can read intent without spelunking.
 - The pipeline's `outputSchema` asymmetry with `processingFailures` will revisit in slice 2A if it actually causes problems.
+
+---
+
+## Slice 1D — Release proposit-core@1.1.0
+
+**Branch:** merge `ingestion-pipeline/phase-1` → `main`, then cut the release on `main`.
+**Pre-condition:** slices 1A through 1C.1 all complete on `ingestion-pipeline/phase-1` at HEAD `75c1738`. **User has explicitly approved the publish.**
+
+### Goal
+
+Cut a minor release of `@proposit/proposit-core` containing the new pipeline framework + OpenAI provider extension + v1 single-shot ingestion pipeline. Publish to npm. Tag.
+
+### Sequence (run on `proposit-core/`)
+
+1. **Verify HEAD is clean and green.** `git status`, `git log --oneline -3`, `pnpm run check`. If any check fails, STOP and surface.
+
+2. **Merge `ingestion-pipeline/phase-1` → `main`.**
+   - `git checkout main`
+   - `git pull --ff-only origin main` (sanity — main shouldn't have moved since `268c723`/`v1.0.2`)
+   - `git merge --no-ff ingestion-pipeline/phase-1 -m "Merge ingestion-pipeline/phase-1: pipeline framework + OpenAI provider + v1 single-shot ingestion"`
+   - `--no-ff` preserves the slice structure in `git log`.
+
+3. **Update `CLAUDE.md`** with a brief "Pipeline framework" subsection under "Key design rules". Two paragraphs max:
+   - P1: framework lives in `src/lib/pipelines/`; abstract `TLlmProvider` interface in `src/lib/llm/`; concrete OpenAI provider in `src/extensions/openai/`; ingestion pipelines in `src/extensions/argument-ingestion/`. `lib/` has zero third-party SDK deps; extensions/ can have optional peerDependencies.
+   - P2: `executePipeline(pipeline, input, { llm, ... })` orchestrates a DAG of stages with declared deps, retry policy, and structured `TProcessingFailure` reporting. `pipeline.finalize` has its own `dependsOn`; when any required dep is skipped/failed, finalize is bypassed and `output: null`. See `src/lib/pipelines/types.ts` for the public surface.
+   - Commit: `docs(CLAUDE.md): add Pipeline framework subsection (post-ingestion-pipeline Phase 1)`.
+
+4. **Rotate release notes + changelog.**
+   - `mv docs/release-notes/upcoming.md docs/release-notes/v1.1.0.md`
+   - `mv docs/changelogs/upcoming.md docs/changelogs/v1.1.0.md`
+   - Write `docs/release-notes/v1.1.0.md` (npm-consumer-facing; technical-but-readable). Cover: pipeline framework (`executePipeline`, `deterministicStage`, `llmStage`, `optional`, plus types like `TStage`/`TPipeline`/`TStageContext`/`TProcessingFailure`/`TPipelineResult`/`TPipelineEvent`); abstract `TLlmProvider` interface in `lib/llm/`; concrete `createOpenAiResponsesProvider` in `extensions/openai/` (raw fetch, inlined TypeBox→strict-mode JSON Schema converter, function-tool agent loop, error classes); `createIngestionV1Pipeline` + `basicsExtension`; CLI `--pipeline <v1|v2>` flag (v1 default; v2 reserved for the upcoming v1.2.0); optional `openai` peerDep (declared but unused — V1 implementation uses raw `fetch`); previous chat-completions adapter removed in favor of the Responses API; `TParsedArgumentResponse` shape unchanged; `ArgumentParser.build()` unchanged; one schema-validation retry added by default on LLM stages (usability improvement over the previous direct-call hard-fail).
+   - Write `docs/changelogs/v1.1.0.md` (developer-facing, ordered by slice with commit-hash ranges). Cover slices 1A (`89adac1..7e28be0`), 1A.1 (`edccb33`), 1B (`6c804b4..f823e16`), 1B.1 (`e69afed`), 1C (`460fb1f..af752d3`), 1C.1 (`75c1738`). End with verification note: `pnpm run check` green, 1573 tests, build clean, live OpenAI integration test passes, all 5 golden-corpus fixtures replay clean.
+   - Create fresh empty `docs/release-notes/upcoming.md` + `docs/changelogs/upcoming.md` with just a `# upcoming` heading.
+   - Commit: `chore: publish-prep — rename release-notes + changelog to v1.1.0; start fresh upcoming.md`.
+
+5. **Bump version.** `pnpm version minor` — produces a commit `1.1.0` matching `1.0.2`'s shape. Verify with `git log --oneline -2`.
+
+6. **Tag.** `git tag v1.1.0` at HEAD. Verify: `git tag --list 'v1.1.*'`.
+
+7. **Push to origin.**
+   - `git push origin main`
+   - `git push origin v1.1.0`
+   - The tag push triggers the release + docs deployment workflows.
+
+8. **Verify npm publish landed.** After workflows complete (~1-3 min):
+   - `npm view @proposit/proposit-core@1.1.0` — returns version metadata, not 404.
+
+9. **Smoke check in a fresh tmp dir.**
+   ```bash
+   cd /tmp && rm -rf core-smoke-v1.1.0 && mkdir core-smoke-v1.1.0 && cd core-smoke-v1.1.0
+   pnpm init
+   pnpm add @proposit/proposit-core@1.1.0
+   cat > smoke.mjs <<EOF
+   import { createOpenAiResponsesProvider, createIngestionV1Pipeline, basicsExtension, executePipeline } from "@proposit/proposit-core";
+   console.log("createOpenAiResponsesProvider:", typeof createOpenAiResponsesProvider);
+   console.log("createIngestionV1Pipeline:", typeof createIngestionV1Pipeline);
+   console.log("basicsExtension:", typeof basicsExtension);
+   console.log("executePipeline:", typeof executePipeline);
+   EOF
+   node smoke.mjs
+   ```
+   Expected: 4 lines, all reporting `function` or `object`; no module-resolution errors.
+
+### Exit criteria
+
+- `main` has the merge of `ingestion-pipeline/phase-1` + the `1.1.0` version-bump commit.
+- Tag `v1.1.0` on origin pointing at the version-bump commit.
+- `@proposit/proposit-core@1.1.0` exists on npm.
+- GitHub Actions release + docs workflows ran green.
+- Smoke check resolves the new exports.
+- Fresh starter `docs/release-notes/upcoming.md` + `docs/changelogs/upcoming.md`.
+
+### Notes
+
+- No co-authoring trailers; no `--no-verify`; no force-push.
+- If npm publish fails (auth, network), STOP and surface — orchestrator handles the escalation.
+- If workflows fail or smoke fails, STOP and surface — packaging regression is worth catching before slice 1E/1G proceed.
+
+### What is NOT in this slice
+
+- Slice 1E (shared task contracts) — separate dispatch in `proposit-shared`.
+- Phase 2 work — gated on the Phase 1 boundary (Task 10 in the workspace plan).
