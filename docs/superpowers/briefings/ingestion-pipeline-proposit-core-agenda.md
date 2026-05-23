@@ -970,3 +970,94 @@ Cut a minor release of `@proposit/proposit-core` containing the new pipeline fra
 
 - Slice 1E (shared task contracts) — separate dispatch in `proposit-shared`.
 - Phase 2 work — gated on the Phase 1 boundary (Task 10 in the workspace plan).
+
+---
+
+## Slice 1D.1 — Re-cut release as v1.1.1 (lockfile fix)
+
+**Triggered by:** slice 1D BLOCKED on CI lockfile drift (`pnpm install --frozen-lockfile` failed on the v1.1.0 commit because slice 1B's `package.json` peerDep addition wasn't reflected in `pnpm-lock.yaml`). Slice 1D agenda also wrongly asserted a tag-push publish workflow exists in `proposit-core` — there isn't one; manual `pnpm publish` is the convention.
+
+**User-chosen approach:** Option B. Leave `v1.1.0` tag as a historical bookmark; cut `v1.1.1` with the lockfile fix; user runs the manual publish.
+
+**Branch:** continue on `main` (currently at `2399f90`, the v1.1.0 version-bump commit).
+
+### Sequence
+
+1. **Verify state.** `git status` clean tree on `main` at `2399f90`. `git tag --list 'v1.*'` shows `v1.0.1`, `v1.0.2`, `v1.1.0`.
+
+2. **Regenerate the lockfile.** Run `pnpm install` (NOT `--frozen-lockfile`). Regenerates `pnpm-lock.yaml` to include the `openai` peerDep entry that slice 1B added to `package.json`. Verify: `grep -n "openai" pnpm-lock.yaml` returns at least one match after the regen. No other files should change — if `pnpm install` modifies things beyond the lockfile, STOP and surface.
+
+3. **Verify CI gate locally.** Run `pnpm install --frozen-lockfile` — this is what CI runs. It must succeed without complaint. If it still fails, STOP and surface.
+
+4. **Verify full check.** Run `pnpm run check`. All 1573 tests + typecheck + lint + build must pass.
+
+5. **Commit the lockfile fix.** `git add pnpm-lock.yaml` then `git commit -m "chore(deps): regenerate pnpm-lock with openai peerDep entry (CI fix)"`. One commit; lockfile only.
+
+6. **Rotate release notes + changelog for v1.1.1.**
+   - **Keep** `docs/release-notes/v1.1.0.md` and `docs/changelogs/v1.1.0.md` as-is (historical record).
+   - **Create** `docs/release-notes/v1.1.1.md`:
+     ```
+     # v1.1.1 — Publish-cycle fix for v1.1.0
+
+     v1.1.0 never reached npm due to a CI failure (lockfile drift on the new
+     `openai` optional peerDependency). v1.1.1 contains the v1.1.0 changes plus
+     the lockfile regeneration. No code changes from v1.1.0.
+
+     See `v1.1.0.md` for the full release notes.
+     ```
+   - **Create** `docs/changelogs/v1.1.1.md`:
+     ```
+     # v1.1.1 — changelog
+
+     ## v1.1.0 publish-cycle fix
+     - <lockfile-fix-commit-sha> — regenerate pnpm-lock.yaml to include the
+       openai optional peerDependency added in slice 1B (commit 90caf81).
+
+     ## What's in v1.1.0
+     See v1.1.0.md.
+     ```
+   - Do NOT touch `docs/release-notes/upcoming.md` or `docs/changelogs/upcoming.md` — already fresh.
+   - Commit: `chore: publish-prep — add v1.1.1 release notes + changelog (publish-cycle fix)`.
+
+7. **Bump version.** `pnpm version patch` → commit `1.1.1`. Verify `git log --oneline -3`.
+
+8. **Tag.** `git tag v1.1.1` at HEAD. Verify: `git tag --list 'v1.1.*'` shows `v1.1.0` AND `v1.1.1`.
+
+9. **Push to origin.**
+   - `git push origin main`
+   - `git push origin v1.1.1`
+   - Watch the CI workflow: `gh run list --workflow=ci.yml --limit 3`. Must pass this time.
+   - Deploy-docs workflow may also fire — check it runs green.
+
+10. **STOP — hand off to the user for the manual `pnpm publish`.** Do NOT run `pnpm publish` yourself. The user has the `proposit-admin` npm auth; they'll run the publish. Return DONE_WITH_CONCERNS with a clear "ready for manual publish" status.
+
+### Exit criteria (steps 1-9; step 10 is the handoff)
+
+- `main` has the lockfile-fix commit + the v1.1.1 version-bump commit on top of `2399f90`.
+- Tag `v1.1.1` on origin.
+- CI workflow on the new HEAD passes.
+- `pnpm run check` green on the v1.1.1 commit.
+- `docs/release-notes/v1.1.1.md` + `docs/changelogs/v1.1.1.md` committed.
+- Working tree clean.
+- User explicitly told what to run for the manual publish.
+
+### Handoff message for the user (return verbatim in your status)
+
+```
+v1.1.1 ready to publish. Run from /Users/brian/Projects/Proposit-App/proposit-core/:
+
+  git checkout main
+  git pull origin main
+  npm whoami        # confirm logged in as proposit-admin
+  pnpm publish      # invokes prepublishOnly: pnpm run check (~30s); then uploads
+
+After it lands, confirm:
+
+  npm view @proposit/proposit-core@1.1.1
+```
+
+### Notes
+
+- The `v1.1.0` git tag stays on origin as a historical bookmark. Harmless (semver: `1.1.0 < 1.1.1`); consumers get `1.1.1`.
+- Future workspace slice could add `.github/workflows/publish.yml` to automate, and delete the orphan `v1.1.0` tag. Out of scope here.
+- No co-authoring trailers; no `--no-verify`; no force-push.
