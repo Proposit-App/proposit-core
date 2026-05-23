@@ -651,3 +651,140 @@ Per the fix sections above. Roughly 4 new tests:
 - The v1 single-shot pipeline uses `BasicsParsingSchema` which today uses `Nullable(...)` (Union with Null) — that pattern is strict-mode-clean and unchanged by this fold.
 - If any future stage spec (in slice 2A) uses `Type.Optional(...)`, the converter now handles it correctly post-fold.
 - The `additionalProperties: true` overridden to `false` by strict-mode behavior is unchanged and still relies on slice 1C's corpus replay to catch any parser-side dependency on extra fields.
+
+---
+
+## Slice 1C — v1-single-shot ingestion pipeline + golden corpus
+
+**Branch:** continue on `ingestion-pipeline/phase-1` (do NOT branch from main; build on top of slice 1B.1 at `e69afed`).
+
+### Goal
+
+Land `src/extensions/argument-ingestion/` with the v1 single-shot pipeline + the shared `finalize-response.ts` / `role-derivation.ts` helpers that v2 will also use. Behavior is **bit-for-bit identical to today's CLI/server path** on a recorded golden corpus. CLI's `parse` command switches to invoking the pipeline factory.
+
+Strict-mode caveat surfaced in slice 1B reviewer: today's `BasicsParsingSchema` uses `Nullable(...)`, not `Type.Optional(...)`, so the converter's strict-mode rewrite (`additionalProperties: false`) doesn't break the schema. But if the live LLM was *historically* emitting extra fields the parser ignored, strict mode now blocks those. The golden corpus is the gate that catches such drift — record carefully, watch for regressions vs the chat-completions baseline.
+
+### Files to create
+
+- `src/extensions/argument-ingestion/index.ts` — barrel; exports `createIngestionV1Pipeline`, `basicsExtension` (composes `BasicsParsingSchema` + per-entity extension schemas from `src/extensions/basics/`).
+- `src/extensions/argument-ingestion/v1-single-shot.ts` — `createIngestionV1Pipeline(extension: TIngestionExtension): TPipeline<...>` factory. One stage: `llmStage` with `gpt-5.4`, outputSchema = `extension.responseSchema`. `finalize.dependsOn: ["parse-argument"]` (required); `finalize.run(ctx)` merges `processingFailures: []`.
+- `src/extensions/argument-ingestion/shared/finalize-response.ts` — assembles `TParsedArgumentResponse` from accumulated stage outputs + failures. For v1, just merges the single LLM stage's output with empty `processingFailures`; for v2 this does most of the work.
+- `src/extensions/argument-ingestion/shared/role-derivation.ts` — pure function: given relations + selected conclusion miniId, returns per-claim role assignment (`'conclusion' | 'premise' | 'intermediate'`). For v1, trivially returns the LLM's assigned roles unchanged (the LLM produces them); for v2 this is load-bearing.
+- `src/extensions/argument-ingestion/shared/types.ts` — `TIngestionExtension` type (`{ responseSchema, claimSchema, variableSchema, premiseSchema, argumentSchema }`); internal stage-output types reused across v1/v2.
+- `src/extensions/argument-ingestion/shared/basics-extension.ts` — `basicsExtension: TIngestionExtension` value composed from `src/extensions/basics/`. The default extension passed to `createIngestionV1Pipeline` (and later `createIngestionV2Pipeline`).
+- `test/extensions/argument-ingestion/v1-single-shot.test.ts` — pipeline unit tests with mock provider. Asserts stage outputs known shape → finalize produces expected `TParsedArgumentResponse`; single LLM stage's prompt matches `buildParsingPrompt(BasicsParsingSchema)`.
+- `test/extensions/argument-ingestion/finalize-response.test.ts` — shared finalize helper unit tests.
+- `test/extensions/argument-ingestion/role-derivation.test.ts` — shared role-derivation unit tests (v1 + v2 cases).
+- `test/extensions/argument-ingestion/e2e.test.ts` — golden-corpus e2e test driver using `RecordingLlmProvider`.
+- `test/extensions/argument-ingestion/recording-provider.ts` — `RecordingLlmProvider` impl (records on `INGESTION_TEST_RECORD=1`, replays in CI). **Includes the prompt-drift guard** per spec §11.3: on replay, recompute the prompt+schema hash from the current `buildPrompt(ctx)` and compare against the recorded hash; fail with `RECORDED_PROMPT_STALE: stage <id> — prompt has changed since recording; re-record with INGESTION_TEST_RECORD=1` on mismatch.
+- Golden corpus fixtures:
+  - `test/extensions/argument-ingestion/fixtures/straightforward/input.txt`
+  - `test/extensions/argument-ingestion/fixtures/straightforward/expected.json` (or `expected-v1.json` if `parity: "v2-strict-upgrade"` later)
+  - `test/extensions/argument-ingestion/fixtures/straightforward/recorded-llm.json`
+  - Same triplet for `with-url-citation`, `with-axiom`, `ambiguous-conclusion`, `enthymeme`.
+
+### Files to modify
+
+- `src/lib/index.ts` — re-export `createIngestionV1Pipeline` + `basicsExtension` + `TIngestionExtension` type so server + CLI consumers can import from the package root.
+- `src/cli/commands/parse.ts` — switch the CLI's `parse` command to call:
+  ```ts
+  const pipeline = createIngestionV1Pipeline(basicsExtension)
+  const result = await executePipeline(pipeline, { text }, { llm: provider })
+  if (result.output === null) {
+    // surface result.failures + the failureText
+  } else {
+    const built = parser.build(result.output)
+    // ... existing CLI persistence + output path
+  }
+  ```
+  Add a `--pipeline <v1|v2>` flag with default `v1` in Phase 1 (Phase 2 will add `v2`). The flag wires only `v1` for now; passing `v2` errors out cleanly with "v2 pipeline not yet shipped — coming in Phase 2."
+
+### Recording / replay protocol
+
+- `RecordingLlmProvider` constructor: `createRecordingLlmProvider({ fixtureDir: string; mode: "record" | "replay" }): TLlmProvider`. The mode is controlled by `INGESTION_TEST_RECORD=1` env var; when set, mode is `record`, otherwise `replay`.
+- **Record mode:** the real OpenAI provider is invoked; each call's `{ systemPrompt, userMessage, outputSchema, ... }` is hashed (SHA-256 over a stable JSON of the request); the request + response are written to `recorded-llm.json` keyed by the hash. Multiple calls in one pipeline run produce a JSON array of records.
+- **Replay mode:** each call computes the same hash, looks up the matching record, returns the recorded response. If the hash doesn't match any recorded entry: throw `RECORDED_PROMPT_STALE` with the stage id and a hint to re-record.
+- The recorded JSON files are checked into the repo and reviewed in PRs; the CI lane runs replay-only with no `OPENAI_API_KEY` set.
+
+### Golden corpus seeds
+
+Per spec §11.3:
+
+| Fixture | Input shape | Expected output |
+|---|---|---|
+| `straightforward` | 3-claim argument, single conclusion, two normal premises, no citations | Full `TParsedArgumentResponse` with `argument != null`, 3 claims (1 conclusion + 2 premise), 2 premises, no citations |
+| `with-url-citation` | `"According to <URL>, X. Therefore Y."` | Argument with at least one citation-typed claim carrying the URL |
+| `with-axiom` | `"By definition, X. So Y."` | Argument with at least one axiomatic-typed claim |
+| `ambiguous-conclusion` | Text with multiple plausible conclusions | Expected to fail soft: `argument: null`, `failureText: "No single conclusion could be selected."` OR (under v1's force-choice behavior) one specific conclusion the LLM picked — record what v1 actually does and pin it. The fixture will likely be `parity: "v2-strict-upgrade"` in slice 2A; for now just record v1's behavior. |
+| `enthymeme` | Argument with implicit premise | v1 should NOT invent claims — record what it actually does (likely produces only the explicit claims) |
+
+### Test plan (TDD)
+
+1. **Pipeline unit tests** (mock-provider-driven):
+   - Construct `createIngestionV1Pipeline(basicsExtension)`. Assert the pipeline has one stage (`parse-argument`), correct `dependsOn` (empty), `outputSchema === basicsExtension.responseSchema`.
+   - Inject a mock provider that returns a known `TParsedArgumentResponse`-shaped value; assert `executePipeline` returns `{ output: { ...mock.output, processingFailures: [] }, ... }`.
+   - Inject a mock provider that returns a schema-invalid output; assert the stage fails with `OUTPUT_SCHEMA_INVALID`; result is `output: null` (because finalize.dependsOn requires this stage).
+   - Inject a mock provider that returns `{ argument: null, failureText: "..." }`; assert finalize passes it through with `processingFailures: []`.
+
+2. **`finalize-response` unit tests:** trivial input/output mapping; covers the merge logic.
+
+3. **`role-derivation` unit tests** (will be much richer in slice 2A; for now): given a relations + conclusion-miniId input, returns the right per-claim role map. v1 trivial case: LLM already produced roles; pass them through.
+
+4. **`RecordingLlmProvider` unit tests:**
+   - Record mode: real-fetch is replaced with a fake; hashing is deterministic; output file is written in expected shape.
+   - Replay mode: hash hit → returns recorded response.
+   - Replay mode: hash miss → throws `RECORDED_PROMPT_STALE` with correct stage id + message.
+
+5. **Golden corpus e2e tests:**
+   - Record once locally (`INGESTION_TEST_RECORD=1 OPENAI_API_KEY=... pnpm test`).
+   - Commit the resulting `recorded-llm.json` + `expected.json` files.
+   - CI replay (no API key): all 5 fixtures pass replay; final `TParsedArgumentResponse` matches `expected.json`.
+   - Prompt-drift guard: deliberately tamper with `buildPrompt` in a test → recording-provider throws `RECORDED_PROMPT_STALE`.
+
+6. **CLI smoke:** `pnpm cli -- parse "<small text>" --pipeline v1` runs end-to-end with `OPENAI_API_KEY` set. `--pipeline v2` errors out cleanly.
+
+### Recording instructions for the dev
+
+The dev needs to record corpus fixtures against the real OpenAI Responses API. This requires:
+- An `OPENAI_API_KEY` set in the local environment (the user has one).
+- A small budget — each fixture is one LLM call (v1 is single-shot), so 5 fixtures = 5 calls. Total cost should be cents.
+- Recording is one-time; subsequent CI runs use replay only.
+
+The dev should:
+1. Implement the pipeline + provider first.
+2. Implement the `RecordingLlmProvider` with record + replay modes.
+3. Write the fixture input files (`input.txt` for each of the 5 fixtures).
+4. Record: `INGESTION_TEST_RECORD=1 OPENAI_API_KEY=$OPENAI_API_KEY pnpm vitest run test/extensions/argument-ingestion/e2e.test.ts`. This populates `recorded-llm.json` + a draft `expected.json` for each fixture.
+5. **Review the draft `expected.json` files manually** — they should reflect the actual v1 behavior, including the `ambiguous-conclusion` case where v1 may force a choice and the `enthymeme` case where v1 may or may not invent claims. Don't blindly accept; make sure the recorded output is what you'd want to assert v1 produces.
+6. Commit the input, recorded-llm, and expected files together.
+7. Run again *without* `INGESTION_TEST_RECORD` to verify CI-style replay passes.
+
+If any fixture surfaces a strict-mode regression (the model produces a field that strict mode now rejects), that's a load-bearing finding for the spec — surface as a concern.
+
+### Exit criteria
+
+- All pipeline + helper + recording-provider unit tests pass.
+- All 5 golden-corpus e2e tests pass under CI replay (no API key needed).
+- Prompt-drift guard fails as expected when `buildPrompt` is tampered with.
+- CLI `parse --pipeline v1` runs end-to-end against a real key; CLI `parse --pipeline v2` errors out cleanly.
+- `pnpm test`, `pnpm run typecheck`, `pnpm run lint`, `pnpm run build` green.
+- `pnpm run check` green.
+- Bash CLI smoke test (`bash scripts/smoke-test.sh` after `pnpm build`) still passes.
+- Reviewer P1 findings folded.
+
+### What is NOT in this slice
+
+- v2-multi-stage pipeline (slice 2A).
+- Per-stage prompts for v2 stages (slice 2A).
+- v1-v2 parity test (slice 2A — can't exist until v2 does).
+- Server-side integration (slice 1G).
+- Publishing core 1.1.0 (slice 1D).
+
+### Notes for the dev agent
+
+- This slice builds on slices 1A + 1A.1 + 1B + 1B.1 (commit range `89adac1..e69afed`). Skim the framework + provider before writing.
+- The existing `src/lib/parsing/ArgumentParser` is **unchanged** — your pipeline produces a `TParsedArgumentResponse` and the existing `.build()` consumes it to hydrate an `ArgumentEngine`. Don't refactor `ArgumentParser`.
+- `basicsExtension` should compose the schemas from `src/extensions/basics/schemata.ts`. Read that file to understand what extension fields look like (claim union `title+body | title+url | axiom+title`, premise `+title`, argument `+title`).
+- **Recording is one-time, manual, with a real API key.** Do not commit a fake `recorded-llm.json` that wasn't actually recorded; the prompt-drift guard would mask the regression. Record properly.
+- **The strict-mode caveat from slice 1B reviewer is load-bearing here.** If any fixture's recording surfaces a model output that strict mode now rejects (which would manifest as a 422 from OpenAI mid-record), that's the regression slice 1B's reviewer expected this corpus to catch. Surface as DONE_WITH_CONCERNS.
+- Same skill stack: TDD, verification-before-completion, brain-style TS, no co-authoring trailers.
