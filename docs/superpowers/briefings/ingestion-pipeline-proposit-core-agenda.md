@@ -790,3 +790,97 @@ If any fixture surfaces a strict-mode regression (the model produces a field tha
 - **Recording is one-time, manual, with a real API key.** Do not commit a fake `recorded-llm.json` that wasn't actually recorded; the prompt-drift guard would mask the regression. Record properly.
 - **The strict-mode caveat from slice 1B reviewer is load-bearing here.** If any fixture's recording surfaces a model output that strict mode now rejects (which would manifest as a 422 from OpenAI mid-record), that's the regression slice 1B's reviewer expected this corpus to catch. Surface as DONE_WITH_CONCERNS.
 - Same skill stack: TDD, verification-before-completion, brain-style TS, no co-authoring trailers.
+
+---
+
+## Slice 1C.1 — Reviewer fold (P2s + P3s)
+
+**Triggered by:** dual-review synthesis at `/Users/brian/Projects/Proposit-App/docs/reviews/proposit-core/2026-05-22-460fb1f-af752d3-ingestion-pipeline-1C.md`.
+**Branch:** continue on `ingestion-pipeline/phase-1`.
+
+### Scope — one commit batch
+
+**P2 #1 — Schema duplication in `basics-extension.ts`.**
+
+Today `src/extensions/argument-ingestion/shared/basics-extension.ts:25-77` redeclares per-entity extension consts (`BASICS_NORMAL_CLAIM_EXTENSION`, `BASICS_CITATION_CLAIM_EXTENSION`, `BASICS_AXIOMATIC_CLAIM_EXTENSION`, `BASICS_PREMISE_EXTENSION`, `BASICS_ARGUMENT_EXTENSION`, etc.) verbatim from `src/extensions/basics/schemata.ts:13-69`. Dormant in v1 (the pipeline factory only reads `responseSchema`), load-bearing in slice 2A where per-stage outputs need the granular extension shapes.
+
+**Fix:**
+- In `src/extensions/basics/schemata.ts`: export the per-entity extension consts (`BasicsNormalClaimExtension`, etc., or whatever they're spelled — match the existing naming convention there).
+- In `src/extensions/argument-ingestion/shared/basics-extension.ts`: replace the duplicated consts with imports from `../../basics/schemata.js`.
+- No behavior change; this is a deduplication. Verify the `responseSchema` it composes is still byte-identical (TypeBox schemas should equate structurally).
+
+**P2 #2 — CLI parity-claim overclaim.**
+
+`src/extensions/argument-ingestion/v1-single-shot.ts:9-10` (or wherever the file leader comment lives) currently claims v1 is "bit-for-bit identical to today's CLI/server path." That's aspirational: the new pipeline path runs through `executePipeline`'s default 2-attempt schema-validation retry, which the old direct-call CLI path did NOT have. The recorded-fixture corpus doesn't exercise the schema-invalid path, so the claim happens to be true on the corpus — but it's not literally true for all inputs.
+
+**Fix:** **Take option (a) — update the comment to be honest.** The new retry-on-schema-validation is a feature, not a bug; users today seeing schema-validation failures get retried once with the validation error appended (slice 1A.1's default policy). The old CLI failed hard on the first schema-invalid response. Update the comment to something like:
+
+> "Behaviorally equivalent to the pre-1C CLI path on schema-conformant LLM outputs (recorded-corpus parity). The new framework adds a single schema-validation retry per stage (default RetryPolicy from slice 1A); the pre-1C direct-call path failed hard on the first schema-invalid response. This is a usability improvement, not a regression."
+
+Do not change the runtime behavior. The retry is the right default.
+
+**P2 #3 — Fixture parity-intent labels.**
+
+The golden-corpus fixtures pin v1's specific behavior, including cases where v1 isn't ideal:
+- `ambiguous-conclusion/expected.json` — v1 force-chose a conclusion + invented a 4th claim. v2 (per spec §7.5) should fail-soft with `argument: null`.
+- `enthymeme/expected.json` — v1 produced 2 claims + 2 premises (didn't invent the missing premise). v2 will likely do similarly; this case may stay `parity: "strict"`.
+
+Add a top-level `parity` field to each fixture's `expected.json`. Possible values per spec §11.4: `"strict"`, `"v2-strict-upgrade"`, `"v2-only"`. Slice 2A's reviewer otherwise has to spelunk through fixture contents to figure out the intent.
+
+**Fix:**
+- `straightforward/expected.json`: add `"parity": "strict"`.
+- `with-url-citation/expected.json`: `"parity": "strict"` (v1's citation handling should match v2's; if not, slice 2A can re-record).
+- `with-axiom/expected.json`: `"parity": "strict"` (same rationale).
+- `ambiguous-conclusion/expected.json`: `"parity": "v2-strict-upgrade"`.
+- `enthymeme/expected.json`: `"parity": "strict"` (v1 + v2 should both not invent claims).
+
+The e2e test driver can ignore the field for now (it's metadata for slice 2A's parity test); just make sure the JSON files parse cleanly.
+
+**P3 #1 — Dead `customInstructions` option path.**
+
+If `createIngestionV1Pipeline` accepts a `customInstructions` parameter that goes nowhere (no stage consumes it), remove it. If it IS consumed somewhere, leave it.
+
+**P3 #2 — Dead `output === null` branch in CLI.**
+
+`src/cli/commands/parse.ts` has a forward-compat branch for `result.output === null` that v1 can never trigger (v1's single stage either completes or throws). Add an inline comment noting it's forward-compat for v2 (slice 2A) where finalize can return null on irresolvable conclusion / empty canonicalization. Don't delete it — slice 2A will use it.
+
+**P3 #3 — `pipeline.outputSchema` not honest about `processingFailures` augmentation.**
+
+The pipeline's `outputSchema` is set to `extension.responseSchema`, but the actual output (post-finalize) is augmented with `processingFailures: ProcessingFailure[]`. The schema thus declares less than the runtime output. Two options:
+- (a) Augment `outputSchema` to include `processingFailures` (slight TypeBox stitching).
+- (b) Add an inline comment near the `outputSchema` declaration noting the asymmetry is intentional (the `processingFailures` field is wire-stable but added post-finalize; consumers should treat `outputSchema` as the *core* output and read `processingFailures` separately).
+
+**Pick (b) for now** — augmenting the schema would require Type.Intersect or a similar dance and adds value mostly for slice 1G/2C server-side wiring. A docstring suffices.
+
+**P3 #4 — Fixture rigidity comment.**
+
+Add a comment to `test/extensions/argument-ingestion/e2e.test.ts` noting that recorded fixtures pin specific v1 LLM outputs and will fail if either (a) the prompt changes (drift guard fires) or (b) the model produces a meaningfully different response on re-record. Both are signals to investigate, not flake.
+
+### Items NOT in this fold
+
+- The pre-existing smoke-test step-5 failure: workspace-level follow-up. Tracked in MEMORY (orchestrator-owned). Not a slice issue.
+- Qwen's downgraded "P1"s (mutation-of-input + parity-as-contract-break): confirmed non-findings per the synthesis. No action.
+
+### Test plan additions
+
+None required for P2 #2 (comment-only) or P3 #3 (comment-only). P3 #4 (test-file comment-only).
+
+P2 #1 (schema dedup): the existing test suite should continue to pass; if any test references the duplicated consts directly, update those references. Add a one-line assertion if you want to pin the structural equality of the composed `responseSchema` (optional).
+
+P2 #3 (parity labels): no new tests; just JSON additions. Optionally a quick test that asserts each fixture's `expected.json` has a `parity` field with a valid value.
+
+P3 #1 (dead `customInstructions`): if the option is removed, any test referencing it must be removed too.
+
+### Exit criteria
+
+- All previous tests still pass.
+- `pnpm run check` green.
+- One commit on `ingestion-pipeline/phase-1`: `fix(ingestion): fold reviewer P2 + P3 polish for slice 1C`.
+- Schema dedup verified by inspection (composed `responseSchema` byte-equal across the refactor).
+- All 5 fixtures have `parity` field.
+
+### Carry-forward to slice 2A (Phase 2)
+
+- Per-entity extension consts are now centralized in `src/extensions/basics/schemata.ts` — slice 2A's per-stage outputs can compose against those directly.
+- Fixtures pin v1 behavior with explicit `parity` labels — slice 2A's reviewer can read intent without spelunking.
+- The pipeline's `outputSchema` asymmetry with `processingFailures` will revisit in slice 2A if it actually causes problems.
