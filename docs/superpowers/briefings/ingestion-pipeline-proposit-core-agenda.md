@@ -445,3 +445,124 @@ When a `subPipelineStage`'s nested pipeline returns `output: null`, the wrapping
 ### Carry-forward to slice 1B (and slice 1E in shared)
 
 - Type aliases are exported with `T*` prefix (`TStage`, `TPipeline`, `TStageContext`, `TProcessingFailure`, `TPipelineResult`, `TPipelineEvent`, `TDepSpec`, `TOptionalDep`, `TLlmProvider`, `TLlmRequest`, `TLlmResponse`, `TToolSpec`). Helper values keep their unprefixed names. Downstream slices (1B, 1C) and the shared-repo `processing-failure.ts` re-export module must use these `T*` spellings on imports. The spec text uses unprefixed names for spec-text readability only; the runtime/types are prefixed.
+
+---
+
+## Slice 1B — OpenAI Responses-API provider (extensions/openai/)
+
+**Branch:** continue on `ingestion-pipeline/phase-1` (do NOT branch from main again; build on top of slice 1A.1).
+
+### Goal
+
+Land `src/extensions/openai/` containing the concrete `TLlmProvider` implementation backed by raw `fetch` to `https://api.openai.com/v1/responses`. Promote the existing `src/cli/llm/openai.ts` body into this extension and switch from `/v1/chat/completions` to the Responses API in the same move. Declare `openai` as an optional `peerDependency` — forward-looking insurance; V1 implementation does not import the SDK.
+
+### Files to create
+
+- `src/extensions/openai/provider.ts` — `createOpenAiResponsesProvider({ apiKey, model?, baseUrl?, fetch? }): TLlmProvider`.
+- `src/extensions/openai/structured-output.ts` — inlined TypeBox → OpenAI structured-output JSON Schema converter. Minimum subset: `Type.Object`, `Type.Array`, `Type.String`, `Type.Number`, `Type.Integer`, `Type.Boolean`, `Type.Union(Literal(...))` (discriminated unions over string literals), `Type.Literal`, `Type.Optional`, `Type.Record` (Record<string, T>). Unsupported TypeBox primitives throw at converter-build time with a clear error naming the unsupported primitive.
+- `src/extensions/openai/types.ts` — extension-internal types (Responses-API request shape, response shape, tool-call shape) that the provider uses but doesn't re-export.
+- `src/extensions/openai/index.ts` — barrel re-exporting `createOpenAiResponsesProvider` + any caller-facing config types.
+- `test/extensions/openai/structured-output.test.ts` — converter unit tests. 8-10 small TypeBox shapes → expected OpenAI JSON Schema strings (assert structural equality, not byte-equal). Cover every primitive in the supported subset; assert throws for an unsupported primitive (e.g. `Type.Tuple` or `Type.Date`).
+- `test/extensions/openai/provider.test.ts` — provider unit tests with an injected `fetch` mock. Cover:
+  - Request body shape: `model`, `input` (Responses API uses `input`, not `messages`), `response_format: { type: "json_schema", json_schema: { name, schema, strict: true } }`, `tools` (translated from `TToolSpec[]`), `max_output_tokens` (only when caller supplied `maxOutputTokens`).
+  - Response parsing: `output` extracted from the Responses-API `output` field (text content block → JSON.parse via TypeBox), `tokenUsage` extracted from `usage.input_tokens` / `usage.output_tokens` / `usage.reasoning_tokens`, `rawResponseId` set from `id`.
+  - Tool-call agent loop for a `function`-kind tool: model returns tool_call → extension calls the handler → appends tool_result → re-calls. Cap iterations at `maxToolCallRounds: 6` (configurable). Loop exhaustion throws an error that the calling `llmStage` surfaces as `TOOL_LOOP_EXHAUSTED`.
+  - Error classification: 5xx + 429 → throw `TransientLlmError`; 400/422 (OpenAI's strict-mode schema validation failures) → throw `SchemaValidationLlmError`; other 4xx → throw `NonRetryableLlmError`. These error classes already exist in `src/lib/llm/types.ts` (from slice 1A) or live in `src/extensions/openai/provider.ts` next to the provider — pick the cleanest location; the framework's retry policy in `llmStage` keys off the error class name regardless.
+  - `AbortSignal` propagation: when the caller's signal aborts, the provider's `fetch` receives the signal and surfaces an abort error. Slice 1A.1 already wires this to `StageAbortedError` in the framework; the provider just needs to pass `signal` through.
+- `test/extensions/openai/integration.test.ts` (optional, gated): one integration test gated by `INTEGRATION_TEST_OPENAI=1` that hits the real Responses API with a trivial structured-output request. Not run in CI; documented as a manual pre-release gate.
+
+### Files to modify
+
+- `src/cli/llm/index.ts` + `src/cli/llm/openai.ts` — move the existing OpenAI adapter body into `src/extensions/openai/provider.ts`, then either delete `src/cli/llm/openai.ts` entirely or replace with a one-line re-export `export { createOpenAiResponsesProvider } from "../../extensions/openai/index.js"` for a one-release transition. Decide based on what `src/cli/commands/parse.ts` imports — if `parse.ts` is updated in this slice, you can delete; if you want to defer the CLI import update to slice 1C, leave the re-export.
+- `src/cli/commands/parse.ts` — update imports to point at `src/extensions/openai/` (or via the lib barrel if that's cleaner). Behavior of the `parse` command is unchanged. The CLI smoke test (`pnpm cli -- parse "test text" --dry-run` with `OPENAI_API_KEY` set) must still work end-to-end; without the key, the existing error path is preserved. **Critical caveat:** today's `parse.ts` calls chat-completions; the Responses API has a different output shape (text content block vs. message content). The slice 1B implementation must produce JSON in the exact shape `parse.ts` parses today, OR `parse.ts`'s downstream parser code must be adapted in the same commit. Verify the CLI smoke still works before committing — this is the most likely place behavior could drift.
+- `package.json`:
+  - Add `peerDependencies: { "openai": ">=4.0.0" }`.
+  - Add `peerDependenciesMeta: { "openai": { "optional": true } }`.
+  - Do not add to `dependencies`. The V1 implementation uses raw `fetch`; the SDK is forward-looking only.
+- `src/lib/index.ts` — re-export `createOpenAiResponsesProvider` from `src/extensions/openai/index.ts` so server / CLI consumers can import from the package root. Be surgical: only the constructor + caller-facing types.
+
+### Provider implementation notes
+
+- **Base URL.** Default to `https://api.openai.com/v1/responses`. Allow override via `baseUrl` config for local proxies, Azure routing, or future redirects.
+- **`fetch` defaults to `globalThis.fetch`.** Caller can inject a polyfill via the `fetch` config option (useful for tests with a `fetchMock`, or for older Node where the global isn't present). Per spec §6.2: Node ≥18 and modern browsers have it natively; mobile (Expo) has it.
+- **Structured output.** `response_format: { type: "json_schema", json_schema: { name, schema, strict: true } }`. `name` derives from `outputSchema.$id` if present, otherwise a stable short hash of the schema JSON (e.g. first 12 hex chars of SHA-256). The Responses API requires `strict: true` for proper enforcement; do not omit it.
+- **Tool translation.** Translate `TToolSpec[]` directly: `web_search` / `file_search` / `mcp` map to the Responses API's built-in tool shape; `function` tools translate to the function-call schema with the TypeBox `parameters` converted to JSON Schema via the same converter used for the response.
+- **Agent loop (for `function` tools).** When the model's response contains tool_calls instead of (or in addition to) the structured output, the provider:
+  1. Executes each tool's handler with the model-provided args (validated against the tool's `parameters` schema via `Value.Parse`).
+  2. Appends a tool_result message to the input list with the handler's return.
+  3. Re-calls the Responses API with the extended input.
+  4. Repeats up to `maxToolCallRounds: 6` (config); on exhaustion throws an error the framework's retry policy classifies as non-retryable (`TOOL_LOOP_EXHAUSTED`).
+  Built-in tools (`web_search`, `file_search`, `mcp`) execute on OpenAI's infrastructure and don't enter this loop — they appear in the response with their results already incorporated.
+- **Error classification.** Surface `TransientLlmError` / `SchemaValidationLlmError` / `NonRetryableLlmError` (introduce these error classes if slice 1A didn't already; place them in `src/lib/llm/types.ts` if framework-wide useful, otherwise in `src/extensions/openai/provider.ts`). The framework's `llmStage` retry policy keys off `instanceof TransientLlmError` and `instanceof SchemaValidationLlmError` for the default `retryOn: ["schema_validation", "transient"]` behavior.
+- **Token usage.** Map Responses API `usage` field → `{ input: usage.input_tokens, output: usage.output_tokens, reasoning: usage.reasoning_tokens }`. The framework's `llmStage` invokes the WeakMap side-channel to attach this to the next `stage:end` event.
+
+### Deferred decisions locked in this briefing
+
+- **TypeBox → OpenAI JSON Schema converter is INLINED** (per spec §14 item 2 + the dispatch-prompt decision). `extensions/openai/structured-output.ts` is ~150 lines covering the minimum subset listed above. Do NOT add `typebox-to-openai` as a dep. If a future stage needs a TypeBox primitive not in the supported subset, the converter's `throws` path surfaces a clear error and the stage's per-stage spec must change to use a supported primitive (or the converter must be extended in a separate slice).
+- **`fetch` polyfill posture** (per spec §14 item 9): no polyfill ships with `proposit-core`. The provider reads `globalThis.fetch` by default; callers in older runtimes inject. Node ≥18 / Expo / modern browsers all have it.
+- **Agent loop max iterations:** 6 (matches typical OpenAI examples). Tunable per call via `maxToolCallRounds` on the `TLlmRequest`.
+
+### Test plan (TDD — author tests before implementation)
+
+Coverage per the agenda + the spec §11.1 framework tests already covering the framework side:
+
+1. **Structured-output converter unit tests.**
+   - 8-10 small TypeBox shapes (object, array, string, number, boolean, union of literals, literal, optional, record). For each, the produced JSON Schema validates a TypeBox-valid value (round-trip via `Value.Parse`).
+   - Unsupported primitive (e.g. `Type.Tuple([...])`) throws with a clear message naming the primitive.
+
+2. **Provider request shape.**
+   - Inject `fetch` mock; assert the URL is the Responses API endpoint; assert `Authorization: Bearer <apiKey>` header; assert body has `model`, `input` (with system + user content blocks per Responses-API shape), `response_format` with `strict: true`, `tools` translated correctly when supplied.
+   - When `maxOutputTokens` is supplied, it appears as `max_output_tokens`; when omitted, the field is absent.
+
+3. **Provider response parsing.**
+   - Mock response with `output` containing a JSON text block → returns `{ output: parsed, tokenUsage: {...}, rawResponseId: ... }`.
+   - Token usage extracted from `usage.input_tokens` / `output_tokens` / `reasoning_tokens`.
+
+4. **Tool-call agent loop.**
+   - Mock response with `tool_calls` for a `function` tool → provider invokes handler, appends tool_result, re-calls (assert two `fetch` invocations).
+   - Loop exhaustion after 6 rounds → throws (assert the error message / class).
+   - Built-in tool (`web_search`) declared → does NOT enter the loop (assert single `fetch` call when model doesn't return tool_calls).
+
+5. **Error classification.**
+   - 500 → `TransientLlmError`.
+   - 429 → `TransientLlmError`.
+   - 400 (invalid schema) → `SchemaValidationLlmError`.
+   - 422 (strict-mode violation) → `SchemaValidationLlmError`.
+   - 401 → `NonRetryableLlmError`.
+   - 403 → `NonRetryableLlmError`.
+
+6. **Abort propagation.**
+   - Inject a `fetch` mock that observes `signal`. Call `respond` with a signal; abort the signal before the fetch resolves; assert the fetch sees the abort.
+
+7. **CLI smoke** (manual or scripted, NOT in the test file): `pnpm build && pnpm cli -- parse "<small test text>" --dry-run` runs end-to-end with `OPENAI_API_KEY` set. The dry-run path doesn't actually call the Responses API (it short-circuits before the request); use this to verify the CLI still wires up correctly. For a real-API smoke, run `pnpm cli -- parse "<text>"` once locally (your judgment on which corpus).
+
+### Commit shape
+
+- Suggested order: (1) error classes + interfaces (if introducing new classes); (2) structured-output converter + tests; (3) provider with fetch mock + tests for request/response shapes; (4) tool-call agent loop + tests; (5) error classification + tests; (6) CLI imports updated; (7) package.json peerDep update; (8) one-line re-export or deletion of `src/cli/llm/openai.ts`.
+- Each commit `pnpm run check` green.
+- Final commit message: `feat(openai): land Responses-API provider in extensions/openai/ (slice 1B)`.
+
+### Exit criteria
+
+- All extension unit tests pass (converter + provider).
+- `pnpm test`, `pnpm run typecheck`, `pnpm run lint`, `pnpm run build` green.
+- `package.json` carries `peerDependencies.openai` + `peerDependenciesMeta.openai.optional: true`.
+- `src/cli/llm/openai.ts` either deleted or reduced to a one-line re-export. The CLI's `parse.ts` imports the provider via the new path (extension barrel or lib barrel).
+- CLI smoke: `pnpm cli -- parse "<small text>"` runs end-to-end against a real key (run manually before commit; cite the output in the status return).
+- Grep proof: `grep -r "from \"openai" src/` returns nothing (no SDK imports anywhere; raw fetch only).
+- Grep proof: no remaining references to `/v1/chat/completions` (we've switched to Responses API).
+
+### What is NOT in this slice
+
+- Ingestion pipelines (slice 1C).
+- Any change to `src/lib/parsing/` (left intact for slice 1C).
+- A real `openai` SDK import (the peerDep is forward-looking; raw fetch only in V1).
+- The Agents SDK (`@openai/agents`) — explicit non-goal per spec §3.
+- Changing the framework primitives from slice 1A (don't widen `TLlmProvider`'s interface or change retry semantics — those are framework-side concerns, this slice is provider-side only).
+
+### Notes for the dev agent
+
+- This slice builds on the slice 1A + 1A.1 work in commits `89adac1..edccb33`. Read those commits + the resulting `src/lib/pipelines/` + `src/lib/llm/` code before writing the provider.
+- Same skill stack as slice 1A (TDD, verification-before-completion, brain-style TS).
+- **Responses-API shape vs chat-completions shape.** The two APIs differ: Responses uses `input` (an array of content blocks) instead of `messages`; the `output` is an array of content blocks instead of `choices[0].message.content`; tool calls and usage have similar but different field names. Read OpenAI's current Responses-API docs before writing the request/response shape — don't extrapolate from the chat-completions code in `src/cli/llm/openai.ts`. The point of this slice is the switch.
+- **CLI parity** is the most likely place behavior drifts unexpectedly. Test it. If you're uncertain whether the CLI smoke will still work after the move, surface as DONE_WITH_CONCERNS and let the orchestrator decide.
