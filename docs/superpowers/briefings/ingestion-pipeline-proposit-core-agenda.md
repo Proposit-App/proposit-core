@@ -111,11 +111,33 @@ export type PipelineResult<TOut> = {
 }
 
 export type PipelineEvent =
-    | { kind: "pipeline:start"; pipelineId: string; pipelineVersion: string; at: number }
-    | { kind: "pipeline:end"; status: "completed" | "failed"; output: "present" | "null"; at: number }
+    | {
+          kind: "pipeline:start"
+          pipelineId: string
+          pipelineVersion: string
+          at: number
+      }
+    | {
+          kind: "pipeline:end"
+          status: "completed" | "failed"
+          output: "present" | "null"
+          at: number
+      }
     | { kind: "stage:start"; stageId: string; at: number }
-    | { kind: "stage:end"; stageId: string; status: StageStatus; tokenUsage?: TokenUsage; at: number }
-    | { kind: "stage:retry"; stageId: string; attempt: number; reason: string; at: number }
+    | {
+          kind: "stage:end"
+          stageId: string
+          status: StageStatus
+          tokenUsage?: TokenUsage
+          at: number
+      }
+    | {
+          kind: "stage:retry"
+          stageId: string
+          attempt: number
+          reason: string
+          at: number
+      }
 ```
 
 ```ts
@@ -131,15 +153,15 @@ export type ToolSpec =
     | { kind: "file_search"; vectorStoreId: string }
     | { kind: "mcp"; serverUrl: string; toolName?: string }
     | {
-        kind: "function"
-        name: string
-        description: string
-        parameters: TSchema
-        handler: (args: unknown) => Promise<unknown>
-    }
+          kind: "function"
+          name: string
+          description: string
+          parameters: TSchema
+          handler: (args: unknown) => Promise<unknown>
+      }
 
 export type LlmRequest<T> = {
-    model: string                           // typed as string (not LlmModel) for forward-compat
+    model: string // typed as string (not LlmModel) for forward-compat
     reasoningEffort?: ReasoningEffort
     systemPrompt: string
     userMessage: string
@@ -147,7 +169,7 @@ export type LlmRequest<T> = {
     tools?: readonly ToolSpec[]
     maxOutputTokens?: number
     signal?: AbortSignal
-    _typeMarker?: T                         // phantom for inference; runtime undefined
+    _typeMarker?: T // phantom for inference; runtime undefined
 }
 
 export type LlmResponse<T> = {
@@ -285,46 +307,46 @@ Mock-provider keying: the simplest approach is for `llmStage`'s `buildPrompt` to
 Coverage from spec §11.1, all against the mock provider:
 
 1. **DAG validation at entry.**
-   - Pipeline with a cycle: `executePipeline` throws with `DAG_CYCLE` error before any stage runs.
-   - Pipeline with an unknown dep: throws with `UNKNOWN_DEP`.
-   - Pipeline with a self-dep: throws with `SELF_DEP`.
-   - Pipeline with a `finalize.dependsOn` entry referencing a non-existent stage: throws.
+    - Pipeline with a cycle: `executePipeline` throws with `DAG_CYCLE` error before any stage runs.
+    - Pipeline with an unknown dep: throws with `UNKNOWN_DEP`.
+    - Pipeline with a self-dep: throws with `SELF_DEP`.
+    - Pipeline with a `finalize.dependsOn` entry referencing a non-existent stage: throws.
 
 2. **Concurrency.**
-   - Two stages with no shared deps: assert via mock's `onCall` records that they overlap in time (start within 50ms of each other; resolve before the next batch).
-   - Three independent stages with `concurrencyLimit: 2`: at most two in flight simultaneously.
+    - Two stages with no shared deps: assert via mock's `onCall` records that they overlap in time (start within 50ms of each other; resolve before the next batch).
+    - Three independent stages with `concurrencyLimit: 2`: at most two in flight simultaneously.
 
 3. **Failure propagation.**
-   - Required dep: stage A fails → stage B (with required dep on A) has outcome `skipped`, never starts.
-   - Optional dep: stage A fails → stage B (with optional dep on A) runs; `ctx.get<TA>('a')` returns `undefined`; `ctx.stageStatus('a')` returns `'failed'`.
-   - Mixed: stage A fails, stage B (required on A) is skipped, stage C (optional on B + required on D-which-passes) runs and sees `B` as `skipped`.
+    - Required dep: stage A fails → stage B (with required dep on A) has outcome `skipped`, never starts.
+    - Optional dep: stage A fails → stage B (with optional dep on A) runs; `ctx.get<TA>('a')` returns `undefined`; `ctx.stageStatus('a')` returns `'failed'`.
+    - Mixed: stage A fails, stage B (required on A) is skipped, stage C (optional on B + required on D-which-passes) runs and sees `B` as `skipped`.
 
 4. **Schema validation.**
-   - Stage returns output that fails `outputSchema`: emits `ProcessingFailure { code: 'OUTPUT_SCHEMA_INVALID', severity: 'error' }`; stage marked `failed`; downstream-required marked `skipped`.
+    - Stage returns output that fails `outputSchema`: emits `ProcessingFailure { code: 'OUTPUT_SCHEMA_INVALID', severity: 'error' }`; stage marked `failed`; downstream-required marked `skipped`.
 
 5. **Retry.**
-   - Schema-validation failure on attempt 1, success on attempt 2: stage completes; one `stage:retry` event with `reason: 'schema_validation'`.
-   - Schema-validation failure on both attempts: stage `failed`; final `ProcessingFailure` carries the latest validation error.
-   - Validation error longer than `maxAppendedErrorBytes`: appended portion is truncated with `…<truncated>`.
-   - Transient (5xx-style mock error) retry: same shape but `reason: 'transient'`.
-   - Rate-limit not in `retryOn` by default: no retry; stage `failed` immediately.
+    - Schema-validation failure on attempt 1, success on attempt 2: stage completes; one `stage:retry` event with `reason: 'schema_validation'`.
+    - Schema-validation failure on both attempts: stage `failed`; final `ProcessingFailure` carries the latest validation error.
+    - Validation error longer than `maxAppendedErrorBytes`: appended portion is truncated with `…<truncated>`.
+    - Transient (5xx-style mock error) retry: same shape but `reason: 'transient'`.
+    - Rate-limit not in `retryOn` by default: no retry; stage `failed` immediately.
 
 6. **Token usage aggregation.**
-   - Three llmStages with `tokenUsage: { input: 100, output: 50 }`, `{ input: 200, output: 100 }`, `{ input: 50, output: 25 }` → `PipelineResult.tokenUsage: { input: 350, output: 175 }`.
-   - Deterministic stages don't contribute.
+    - Three llmStages with `tokenUsage: { input: 100, output: 50 }`, `{ input: 200, output: 100 }`, `{ input: 50, output: 25 }` → `PipelineResult.tokenUsage: { input: 350, output: 175 }`.
+    - Deterministic stages don't contribute.
 
 7. **Cancellation.**
-   - Signal aborted mid-stage: provider receives the signal; in-flight stage's mock response races with abort; pending stages don't start; result has `output: null` and accurate `stageOutcomes`.
+    - Signal aborted mid-stage: provider receives the signal; in-flight stage's mock response races with abort; pending stages don't start; result has `output: null` and accurate `stageOutcomes`.
 
 8. **Pipeline events.**
-   - Happy path: `pipeline:start` → ordered `stage:start` / `stage:end` per stage (concurrent stages interleave) → `pipeline:end` with `status: 'completed'`, `output: 'present'`.
-   - Failure path: `pipeline:end` has `status: 'completed'` (the pipeline succeeded; the failure is a ProcessingFailure) OR `status: 'failed'` (an exceptional throw escaped). Be precise about which case is which — the spec says only DAG-validation errors and abort throw; everything else surfaces in the result.
-   - `output: 'null'` when finalize returns null OR its required deps were skipped.
+    - Happy path: `pipeline:start` → ordered `stage:start` / `stage:end` per stage (concurrent stages interleave) → `pipeline:end` with `status: 'completed'`, `output: 'present'`.
+    - Failure path: `pipeline:end` has `status: 'completed'` (the pipeline succeeded; the failure is a ProcessingFailure) OR `status: 'failed'` (an exceptional throw escaped). Be precise about which case is which — the spec says only DAG-validation errors and abort throw; everything else surfaces in the result.
+    - `output: 'null'` when finalize returns null OR its required deps were skipped.
 
 9. **Finalize semantics.**
-   - All required finalize deps `completed`: `finalize.run` invoked; result reflects what it returned.
-   - One required finalize dep `failed`: `finalize.run` NOT invoked; `output: null`; the failed stage's `ProcessingFailure` is in `failures`.
-   - Optional finalize dep `skipped`: `finalize.run` invoked normally; `ctx.get<T>('that-stage')` returns `undefined`.
+    - All required finalize deps `completed`: `finalize.run` invoked; result reflects what it returned.
+    - One required finalize dep `failed`: `finalize.run` NOT invoked; `output: null`; the failed stage's `ProcessingFailure` is in `failures`.
+    - Optional finalize dep `skipped`: `finalize.run` invoked normally; `ctx.get<T>('that-stage')` returns `undefined`.
 
 10. **`subPipelineStage` smoke test.**
     - One nested pipeline runs inside a larger one; events from the nested pipeline are visible (with prefixed stage ids); the nested result becomes the outer stage's output.
@@ -362,3 +384,589 @@ Coverage from spec §11.1, all against the mock provider:
 - **No co-authoring trailers** in commits (per `proposit-core/CLAUDE.md`).
 - **If any spec section is ambiguous** between what the agenda says and what the spec at `/Users/brian/Projects/Proposit-App/docs/superpowers/specs/2026-05-22-ingestion-pipeline-overview.md` says, follow this agenda — it's the most-distilled version. If both seem ambiguous, surface as a question via the implementer-prompt template (DONE_WITH_CONCERNS or NEEDS_CONTEXT status) rather than guess.
 - **Working branch:** `ingestion-pipeline/phase-1` off `proposit-core/main`. Create the branch as your first action if not already on it. Final merge to `main` happens after slice 1D's release commit.
+
+---
+
+## Slice 1A.1 — Reviewer fold (P2 + selected P3s)
+
+**Triggered by:** dual-review synthesis at `/Users/brian/Projects/Proposit-App/docs/reviews/proposit-core/2026-05-22-89adac1-7e28be0-ingestion-pipeline-1A.md`.
+**Branch:** continue on `ingestion-pipeline/phase-1`.
+
+### Scope — fold these items in one commit batch
+
+**P2 #1 — Mid-flight aborted stage surfaces as `failed` with `LLM_NON_RETRYABLE_ERROR`.**
+
+When an `AbortSignal` fires during an in-flight `llmStage` provider call, the stage currently catches the abort, classifies it via the non-retryable branch, and surfaces as `failed` with `LLM_NON_RETRYABLE_ERROR`. This is wrong for two reasons: (a) the spec's cancellation contract (§5.4 step 11) says aborted in-flight stages don't constitute a "failure" — they're scheduled-and-cancelled, more like `skipped`; (b) when slice 1B lands the real OpenAI provider, real cancellation will produce confusing failure codes that the server's task-status logic will likely misroute.
+
+**Fix:**
+
+- In `llmStage`'s catch branch, detect aborted-due-to-signal (`error.name === 'AbortError'` or equivalent; whichever the framework uses to surface signal cancellation) and re-throw a typed `StageAbortedError` (new class).
+- In the executor, when a stage throws `StageAbortedError`, mark the stage `skipped` (not `failed`); emit a `stage:end` event with `status: 'skipped'`; do not add a `ProcessingFailure` (the abort is not a failure to report; it's the caller's cancellation taking effect).
+- Add a test: in-flight stage + abort fires mid-stage → stage outcome `skipped`, no `ProcessingFailure`, `stage:end.status === 'skipped'`.
+- Update the existing cancellation test that only asserts downstream outcome — extend it to also assert the aborted stage's own outcome.
+
+**P3 #1 — Abort fast-path emits `stage:end` without preceding `stage:start`.**
+
+The executor's pre-stage abort check (when a stage is about to start but the signal has already fired) emits `stage:end` directly without `stage:start`. This is inconsistent with every other path (failure, skip-via-required-dep, success) which all emit both.
+
+**Fix:** either (a) emit `stage:start` immediately before the `stage:end` in the abort fast-path, or (b) document that pre-start-aborted stages get no events at all and remove the orphan `stage:end`. Pick (a) for consistency — the SSE bridge in slice 2C will rely on paired start/end events.
+
+**P3 #2 — Optional-dep cycle detection has no test pinning the behavior.**
+
+The dev's implementation correctly rejects cycles even when the cycle edge is via `optional(...)`. The agenda is silent on this, so the dev's choice is defensible. Add one test that pins it: pipeline with stage A depending on `optional("b")` and stage B depending on `"a"` → DAG validation throws with `DAG_CYCLE` at `executePipeline` entry, before any stage runs.
+
+**P3 #3 — `ctx.stageStatus(id)` does not enforce the `dependsOn` allowlist that `ctx.get` enforces.**
+
+For consistency, `ctx.stageStatus(stageId)` should throw with `PipelineConfigurationError` (or the same error class `ctx.get` throws) when called with an `id` not in the calling stage's `dependsOn` (required OR optional). This is the conservative default — if a stage isn't declared as a dep, the calling stage shouldn't be peeking at its status. (The orchestrator's decision: yes, match strictness.)
+
+**Fix:** mirror the `ctx.get` closure check in `ctx.stageStatus`. Add a test that pins the throw.
+
+**P3 #5 — `subPipelineStage` null-output throws `LlmStageRetryExhaustedError` (misnomer).**
+
+When a `subPipelineStage`'s nested pipeline returns `output: null`, the wrapping stage currently throws `LlmStageRetryExhaustedError` — which is semantically wrong (no LLM, no retry). Introduce a new error class `SubPipelineFailedError` and throw that instead. Add a test that pins the new class name in the thrown error's `name` field.
+
+### Items NOT in this fold (deferred or rejected)
+
+- **P3 #4 (UTF-16 vs UTF-8 byte counting in `maxAppendedErrorBytes`):** accept as-is for V1. Add a one-line comment in `stage-helpers.ts` near the truncation site noting that the cap is measured in JavaScript string `.length` (UTF-16 code units), not UTF-8 bytes — so a 2048 cap is roughly 2-4 KB of UTF-8 depending on character distribution. No behavior change.
+- **`pipeline:end.status` partial-failure semantics:** non-finding per the synthesis. No action.
+- **Briefing markdown prettify (concern #5):** already absorbed in the dev's commit `7e28be0`. The orchestrator accepts the change. No action.
+
+### Test plan additions
+
+- One new test in `test/pipelines.test.ts` for each of P2 #1, P3 #1, P3 #2, P3 #3, P3 #5. Five new tests minimum.
+
+### Exit criteria
+
+- All previous tests still pass.
+- Five new tests pass (one per fold item).
+- `pnpm run check` green.
+- One commit on `ingestion-pipeline/phase-1` with message `fix(pipelines): fold dual-review findings (P2 + P3s) for slice 1A`.
+
+### Carry-forward to slice 1B (and slice 1E in shared)
+
+- Type aliases are exported with `T*` prefix (`TStage`, `TPipeline`, `TStageContext`, `TProcessingFailure`, `TPipelineResult`, `TPipelineEvent`, `TDepSpec`, `TOptionalDep`, `TLlmProvider`, `TLlmRequest`, `TLlmResponse`, `TToolSpec`). Helper values keep their unprefixed names. Downstream slices (1B, 1C) and the shared-repo `processing-failure.ts` re-export module must use these `T*` spellings on imports. The spec text uses unprefixed names for spec-text readability only; the runtime/types are prefixed.
+
+---
+
+## Slice 1B — OpenAI Responses-API provider (extensions/openai/)
+
+**Branch:** continue on `ingestion-pipeline/phase-1` (do NOT branch from main again; build on top of slice 1A.1).
+
+### Goal
+
+Land `src/extensions/openai/` containing the concrete `TLlmProvider` implementation backed by raw `fetch` to `https://api.openai.com/v1/responses`. Promote the existing `src/cli/llm/openai.ts` body into this extension and switch from `/v1/chat/completions` to the Responses API in the same move. Declare `openai` as an optional `peerDependency` — forward-looking insurance; V1 implementation does not import the SDK.
+
+### Files to create
+
+- `src/extensions/openai/provider.ts` — `createOpenAiResponsesProvider({ apiKey, model?, baseUrl?, fetch? }): TLlmProvider`.
+- `src/extensions/openai/structured-output.ts` — inlined TypeBox → OpenAI structured-output JSON Schema converter. Minimum subset: `Type.Object`, `Type.Array`, `Type.String`, `Type.Number`, `Type.Integer`, `Type.Boolean`, `Type.Union(Literal(...))` (discriminated unions over string literals), `Type.Literal`, `Type.Optional`, `Type.Record` (Record<string, T>). Unsupported TypeBox primitives throw at converter-build time with a clear error naming the unsupported primitive.
+- `src/extensions/openai/types.ts` — extension-internal types (Responses-API request shape, response shape, tool-call shape) that the provider uses but doesn't re-export.
+- `src/extensions/openai/index.ts` — barrel re-exporting `createOpenAiResponsesProvider` + any caller-facing config types.
+- `test/extensions/openai/structured-output.test.ts` — converter unit tests. 8-10 small TypeBox shapes → expected OpenAI JSON Schema strings (assert structural equality, not byte-equal). Cover every primitive in the supported subset; assert throws for an unsupported primitive (e.g. `Type.Tuple` or `Type.Date`).
+- `test/extensions/openai/provider.test.ts` — provider unit tests with an injected `fetch` mock. Cover:
+    - Request body shape: `model`, `input` (Responses API uses `input`, not `messages`), `response_format: { type: "json_schema", json_schema: { name, schema, strict: true } }`, `tools` (translated from `TToolSpec[]`), `max_output_tokens` (only when caller supplied `maxOutputTokens`).
+    - Response parsing: `output` extracted from the Responses-API `output` field (text content block → JSON.parse via TypeBox), `tokenUsage` extracted from `usage.input_tokens` / `usage.output_tokens` / `usage.reasoning_tokens`, `rawResponseId` set from `id`.
+    - Tool-call agent loop for a `function`-kind tool: model returns tool_call → extension calls the handler → appends tool_result → re-calls. Cap iterations at `maxToolCallRounds: 6` (configurable). Loop exhaustion throws an error that the calling `llmStage` surfaces as `TOOL_LOOP_EXHAUSTED`.
+    - Error classification: 5xx + 429 → throw `TransientLlmError`; 400/422 (OpenAI's strict-mode schema validation failures) → throw `SchemaValidationLlmError`; other 4xx → throw `NonRetryableLlmError`. These error classes already exist in `src/lib/llm/types.ts` (from slice 1A) or live in `src/extensions/openai/provider.ts` next to the provider — pick the cleanest location; the framework's retry policy in `llmStage` keys off the error class name regardless.
+    - `AbortSignal` propagation: when the caller's signal aborts, the provider's `fetch` receives the signal and surfaces an abort error. Slice 1A.1 already wires this to `StageAbortedError` in the framework; the provider just needs to pass `signal` through.
+- `test/extensions/openai/integration.test.ts` (optional, gated): one integration test gated by `INTEGRATION_TEST_OPENAI=1` that hits the real Responses API with a trivial structured-output request. Not run in CI; documented as a manual pre-release gate.
+
+### Files to modify
+
+- `src/cli/llm/index.ts` + `src/cli/llm/openai.ts` — move the existing OpenAI adapter body into `src/extensions/openai/provider.ts`, then either delete `src/cli/llm/openai.ts` entirely or replace with a one-line re-export `export { createOpenAiResponsesProvider } from "../../extensions/openai/index.js"` for a one-release transition. Decide based on what `src/cli/commands/parse.ts` imports — if `parse.ts` is updated in this slice, you can delete; if you want to defer the CLI import update to slice 1C, leave the re-export.
+- `src/cli/commands/parse.ts` — update imports to point at `src/extensions/openai/` (or via the lib barrel if that's cleaner). Behavior of the `parse` command is unchanged. The CLI smoke test (`pnpm cli -- parse "test text" --dry-run` with `OPENAI_API_KEY` set) must still work end-to-end; without the key, the existing error path is preserved. **Critical caveat:** today's `parse.ts` calls chat-completions; the Responses API has a different output shape (text content block vs. message content). The slice 1B implementation must produce JSON in the exact shape `parse.ts` parses today, OR `parse.ts`'s downstream parser code must be adapted in the same commit. Verify the CLI smoke still works before committing — this is the most likely place behavior could drift.
+- `package.json`:
+    - Add `peerDependencies: { "openai": ">=4.0.0" }`.
+    - Add `peerDependenciesMeta: { "openai": { "optional": true } }`.
+    - Do not add to `dependencies`. The V1 implementation uses raw `fetch`; the SDK is forward-looking only.
+- `src/lib/index.ts` — re-export `createOpenAiResponsesProvider` from `src/extensions/openai/index.ts` so server / CLI consumers can import from the package root. Be surgical: only the constructor + caller-facing types.
+
+### Provider implementation notes
+
+- **Base URL.** Default to `https://api.openai.com/v1/responses`. Allow override via `baseUrl` config for local proxies, Azure routing, or future redirects.
+- **`fetch` defaults to `globalThis.fetch`.** Caller can inject a polyfill via the `fetch` config option (useful for tests with a `fetchMock`, or for older Node where the global isn't present). Per spec §6.2: Node ≥18 and modern browsers have it natively; mobile (Expo) has it.
+- **Structured output.** `response_format: { type: "json_schema", json_schema: { name, schema, strict: true } }`. `name` derives from `outputSchema.$id` if present, otherwise a stable short hash of the schema JSON (e.g. first 12 hex chars of SHA-256). The Responses API requires `strict: true` for proper enforcement; do not omit it.
+- **Tool translation.** Translate `TToolSpec[]` directly: `web_search` / `file_search` / `mcp` map to the Responses API's built-in tool shape; `function` tools translate to the function-call schema with the TypeBox `parameters` converted to JSON Schema via the same converter used for the response.
+- **Agent loop (for `function` tools).** When the model's response contains tool_calls instead of (or in addition to) the structured output, the provider:
+    1. Executes each tool's handler with the model-provided args (validated against the tool's `parameters` schema via `Value.Parse`).
+    2. Appends a tool_result message to the input list with the handler's return.
+    3. Re-calls the Responses API with the extended input.
+    4. Repeats up to `maxToolCallRounds: 6` (config); on exhaustion throws an error the framework's retry policy classifies as non-retryable (`TOOL_LOOP_EXHAUSTED`).
+       Built-in tools (`web_search`, `file_search`, `mcp`) execute on OpenAI's infrastructure and don't enter this loop — they appear in the response with their results already incorporated.
+- **Error classification.** Surface `TransientLlmError` / `SchemaValidationLlmError` / `NonRetryableLlmError` (introduce these error classes if slice 1A didn't already; place them in `src/lib/llm/types.ts` if framework-wide useful, otherwise in `src/extensions/openai/provider.ts`). The framework's `llmStage` retry policy keys off `instanceof TransientLlmError` and `instanceof SchemaValidationLlmError` for the default `retryOn: ["schema_validation", "transient"]` behavior.
+- **Token usage.** Map Responses API `usage` field → `{ input: usage.input_tokens, output: usage.output_tokens, reasoning: usage.reasoning_tokens }`. The framework's `llmStage` invokes the WeakMap side-channel to attach this to the next `stage:end` event.
+
+### Deferred decisions locked in this briefing
+
+- **TypeBox → OpenAI JSON Schema converter is INLINED** (per spec §14 item 2 + the dispatch-prompt decision). `extensions/openai/structured-output.ts` is ~150 lines covering the minimum subset listed above. Do NOT add `typebox-to-openai` as a dep. If a future stage needs a TypeBox primitive not in the supported subset, the converter's `throws` path surfaces a clear error and the stage's per-stage spec must change to use a supported primitive (or the converter must be extended in a separate slice).
+- **`fetch` polyfill posture** (per spec §14 item 9): no polyfill ships with `proposit-core`. The provider reads `globalThis.fetch` by default; callers in older runtimes inject. Node ≥18 / Expo / modern browsers all have it.
+- **Agent loop max iterations:** 6 (matches typical OpenAI examples). Tunable per call via `maxToolCallRounds` on the `TLlmRequest`.
+
+### Test plan (TDD — author tests before implementation)
+
+Coverage per the agenda + the spec §11.1 framework tests already covering the framework side:
+
+1. **Structured-output converter unit tests.**
+    - 8-10 small TypeBox shapes (object, array, string, number, boolean, union of literals, literal, optional, record). For each, the produced JSON Schema validates a TypeBox-valid value (round-trip via `Value.Parse`).
+    - Unsupported primitive (e.g. `Type.Tuple([...])`) throws with a clear message naming the primitive.
+
+2. **Provider request shape.**
+    - Inject `fetch` mock; assert the URL is the Responses API endpoint; assert `Authorization: Bearer <apiKey>` header; assert body has `model`, `input` (with system + user content blocks per Responses-API shape), `response_format` with `strict: true`, `tools` translated correctly when supplied.
+    - When `maxOutputTokens` is supplied, it appears as `max_output_tokens`; when omitted, the field is absent.
+
+3. **Provider response parsing.**
+    - Mock response with `output` containing a JSON text block → returns `{ output: parsed, tokenUsage: {...}, rawResponseId: ... }`.
+    - Token usage extracted from `usage.input_tokens` / `output_tokens` / `reasoning_tokens`.
+
+4. **Tool-call agent loop.**
+    - Mock response with `tool_calls` for a `function` tool → provider invokes handler, appends tool_result, re-calls (assert two `fetch` invocations).
+    - Loop exhaustion after 6 rounds → throws (assert the error message / class).
+    - Built-in tool (`web_search`) declared → does NOT enter the loop (assert single `fetch` call when model doesn't return tool_calls).
+
+5. **Error classification.**
+    - 500 → `TransientLlmError`.
+    - 429 → `TransientLlmError`.
+    - 400 (invalid schema) → `SchemaValidationLlmError`.
+    - 422 (strict-mode violation) → `SchemaValidationLlmError`.
+    - 401 → `NonRetryableLlmError`.
+    - 403 → `NonRetryableLlmError`.
+
+6. **Abort propagation.**
+    - Inject a `fetch` mock that observes `signal`. Call `respond` with a signal; abort the signal before the fetch resolves; assert the fetch sees the abort.
+
+7. **CLI smoke** (manual or scripted, NOT in the test file): `pnpm build && pnpm cli -- parse "<small test text>" --dry-run` runs end-to-end with `OPENAI_API_KEY` set. The dry-run path doesn't actually call the Responses API (it short-circuits before the request); use this to verify the CLI still wires up correctly. For a real-API smoke, run `pnpm cli -- parse "<text>"` once locally (your judgment on which corpus).
+
+### Commit shape
+
+- Suggested order: (1) error classes + interfaces (if introducing new classes); (2) structured-output converter + tests; (3) provider with fetch mock + tests for request/response shapes; (4) tool-call agent loop + tests; (5) error classification + tests; (6) CLI imports updated; (7) package.json peerDep update; (8) one-line re-export or deletion of `src/cli/llm/openai.ts`.
+- Each commit `pnpm run check` green.
+- Final commit message: `feat(openai): land Responses-API provider in extensions/openai/ (slice 1B)`.
+
+### Exit criteria
+
+- All extension unit tests pass (converter + provider).
+- `pnpm test`, `pnpm run typecheck`, `pnpm run lint`, `pnpm run build` green.
+- `package.json` carries `peerDependencies.openai` + `peerDependenciesMeta.openai.optional: true`.
+- `src/cli/llm/openai.ts` either deleted or reduced to a one-line re-export. The CLI's `parse.ts` imports the provider via the new path (extension barrel or lib barrel).
+- CLI smoke: `pnpm cli -- parse "<small text>"` runs end-to-end against a real key (run manually before commit; cite the output in the status return).
+- Grep proof: `grep -r "from \"openai" src/` returns nothing (no SDK imports anywhere; raw fetch only).
+- Grep proof: no remaining references to `/v1/chat/completions` (we've switched to Responses API).
+
+### What is NOT in this slice
+
+- Ingestion pipelines (slice 1C).
+- Any change to `src/lib/parsing/` (left intact for slice 1C).
+- A real `openai` SDK import (the peerDep is forward-looking; raw fetch only in V1).
+- The Agents SDK (`@openai/agents`) — explicit non-goal per spec §3.
+- Changing the framework primitives from slice 1A (don't widen `TLlmProvider`'s interface or change retry semantics — those are framework-side concerns, this slice is provider-side only).
+
+### Notes for the dev agent
+
+- This slice builds on the slice 1A + 1A.1 work in commits `89adac1..edccb33`. Read those commits + the resulting `src/lib/pipelines/` + `src/lib/llm/` code before writing the provider.
+- Same skill stack as slice 1A (TDD, verification-before-completion, brain-style TS).
+- **Responses-API shape vs chat-completions shape.** The two APIs differ: Responses uses `input` (an array of content blocks) instead of `messages`; the `output` is an array of content blocks instead of `choices[0].message.content`; tool calls and usage have similar but different field names. Read OpenAI's current Responses-API docs before writing the request/response shape — don't extrapolate from the chat-completions code in `src/cli/llm/openai.ts`. The point of this slice is the switch.
+- **CLI parity** is the most likely place behavior drifts unexpectedly. Test it. If you're uncertain whether the CLI smoke will still work after the move, surface as DONE_WITH_CONCERNS and let the orchestrator decide.
+
+---
+
+## Slice 1B.1 — Reviewer fold (P1s + P2 polish)
+
+**Triggered by:** dual-review synthesis at `/Users/brian/Projects/Proposit-App/docs/reviews/proposit-core/2026-05-22-6c804b4-f823e16-ingestion-pipeline-1B.md`.
+**Branch:** continue on `ingestion-pipeline/phase-1`.
+
+### Scope — fold these items in one commit batch
+
+**P1 #1 — Tool agent loop drops the original `function_call` items from the running input array.**
+
+When the model returns one or more `function_call` items in the response, the provider currently appends only `function_call_output` items to the input array before re-calling. The live Responses API requires the original `function_call` items to be echoed back too (per the conversation history contract), or the next round returns 400 with a conversation-state error.
+
+**Fix in `src/extensions/openai/provider.ts:154-174` (or wherever the agent loop assembles the next-round input):**
+
+- For each `function_call` item the model returned, append it (verbatim) to the running input list _before_ appending its matching `function_call_output`. Preserve the order the model emitted them in.
+- Pair `function_call.call_id` ↔ `function_call_output.call_id` correctly; the API enforces this.
+
+**Test in `test/extensions/openai/provider.test.ts`:**
+
+- Extend the existing tool-loop test (around line 393) to assert that the second `fetch` invocation's `input` field contains BOTH the original `function_call` items AND the matching `function_call_output` items, in that order, with paired `call_id`s.
+- Add a multi-tool-call test: model returns two `function_call` items in one response → handler executes both → second round's input contains all four items (two `function_call` + two `function_call_output`), order preserved.
+
+**P1 #2 — `Type.Optional` properties produce strict-mode-invalid JSON Schema.**
+
+The converter at `src/extensions/openai/structured-output.ts:173-192` (`convertObject` or equivalent) currently omits `Type.Optional(...)` properties from the `required` array. OpenAI strict mode requires **every declared property in `required`**; the way to express optionality is `{ anyOf: [<schema>, { type: "null" }] }` while keeping the property name in `required`. Today's converter unit test at `test/extensions/openai/structured-output.test.ts:29-46` actually pins the broken behavior — it must be updated to pin the corrected behavior.
+
+**Fix in `structured-output.ts`:**
+
+- When a property is `Type.Optional(T)`, emit it as `{ anyOf: [<T-converted>, { type: "null" }] }` in `properties` AND include its name in `required`.
+- Document this in the converter's leading docstring so the next maintainer doesn't reintroduce the bug.
+
+**Tests in `test/extensions/openai/structured-output.test.ts`:**
+
+- **Update** the existing `Type.Optional` test to assert the new correct shape (anyOf-with-null + still in `required`).
+- Add a test: `Type.Object({ a: Type.String(), b: Type.Optional(Type.Number()) })` → required `["a", "b"]`, `b.anyOf = [{ type: "number" }, { type: "null" }]`.
+- Add an integration-shape test (no real API call needed): an object with a mix of required, Optional, and Nullable (Union with Null) properties produces a strict-mode-valid schema.
+
+**P2 #1 — Split 400 from 422 in `classifyHttpError`.**
+
+Today both 400 and 422 are classified as `SchemaValidationLlmError`. A 400 is more likely a converter bug or malformed request — retrying is wasted work. A 422 (strict-mode violation by the model's output) _can_ sometimes succeed on a re-roll.
+
+**Fix in `src/extensions/openai/provider.ts` (or wherever `classifyHttpError` lives):**
+
+- 400 → `NonRetryableLlmError` (with the OpenAI error body in `message` if extractable).
+- 422 → `SchemaValidationLlmError` (with `retryReason: "transient"` per the V1 workaround discussed in 1B; framework refactor to a real `schema_validation` retry tag is deferred).
+- Other 4xx (401/403/404) → `NonRetryableLlmError` (unchanged).
+- 5xx + 429 → `TransientLlmError` / `RateLimitLlmError` (unchanged).
+
+**Test:** add (or extend) the error-classification test in `provider.test.ts` to pin 400 → `NonRetryableLlmError` separately from 422 → `SchemaValidationLlmError`.
+
+**P2 #2 — Document the simultaneous `function_call` + `message` emission edge case.**
+
+When the model returns both a `function_call` and a final assistant `message` in the same response (rare but possible), the provider currently short-circuits to the next round (treats it as a tool call). This is acceptable behavior but undocumented; the next maintainer reading the agent loop will likely puzzle over it.
+
+**Fix:** add a docstring near the tool-loop dispatch in `provider.ts` explaining the policy: "When a response contains both `function_call` items and a final `message`, the loop treats it as a tool-call round (executes handlers, ignores the message, re-calls). If you wanted the message even when tools fire, you'd need a different exit condition — but the Responses API contract is that the model can't both call tools AND give a final answer in the same turn; this case shouldn't happen in practice, and our policy is conservative."
+
+### Items NOT in this fold (deferred or rejected)
+
+- **P3 (JSON-parse classification):** acceptable for V1 (already in the original DWC); revisit if a real-corpus regression surfaces in slice 1C or later.
+- **Framework refactor: `classifyError` getting its own `"schema_validation"` retry tag:** deferred. The current `retryReason: "transient"` workaround on `SchemaValidationLlmError` works — schema-validation 422s retry once per default policy. A proper framework-side refactor is out of scope for this slice; track as an open question (could land alongside slice 1C or be a separate Phase 2 follow-up).
+
+### Test plan additions
+
+Per the fix sections above. Roughly 4 new tests:
+
+- Tool-loop function_call-history assertion (extend existing).
+- Tool-loop multi-tool-call test (new).
+- Optional → anyOf-with-null + required (replace existing + add complex case).
+- 400 vs 422 classification split (extend existing).
+
+### Exit criteria
+
+- All previous tests still pass.
+- New tests pass.
+- `pnpm run check` green.
+- One commit on `ingestion-pipeline/phase-1`: `fix(openai): fold reviewer P1s + P2 polish for slice 1B`.
+- Spec §6.2 patch landed by the orchestrator (FYI: `text.format` is the live shape; the orchestrator has already updated the spec).
+
+### Carry-forward to slice 1C
+
+- The v1 single-shot pipeline uses `BasicsParsingSchema` which today uses `Nullable(...)` (Union with Null) — that pattern is strict-mode-clean and unchanged by this fold.
+- If any future stage spec (in slice 2A) uses `Type.Optional(...)`, the converter now handles it correctly post-fold.
+- The `additionalProperties: true` overridden to `false` by strict-mode behavior is unchanged and still relies on slice 1C's corpus replay to catch any parser-side dependency on extra fields.
+
+---
+
+## Slice 1C — v1-single-shot ingestion pipeline + golden corpus
+
+**Branch:** continue on `ingestion-pipeline/phase-1` (do NOT branch from main; build on top of slice 1B.1 at `e69afed`).
+
+### Goal
+
+Land `src/extensions/argument-ingestion/` with the v1 single-shot pipeline + the shared `finalize-response.ts` / `role-derivation.ts` helpers that v2 will also use. Behavior is **bit-for-bit identical to today's CLI/server path** on a recorded golden corpus. CLI's `parse` command switches to invoking the pipeline factory.
+
+Strict-mode caveat surfaced in slice 1B reviewer: today's `BasicsParsingSchema` uses `Nullable(...)`, not `Type.Optional(...)`, so the converter's strict-mode rewrite (`additionalProperties: false`) doesn't break the schema. But if the live LLM was _historically_ emitting extra fields the parser ignored, strict mode now blocks those. The golden corpus is the gate that catches such drift — record carefully, watch for regressions vs the chat-completions baseline.
+
+### Files to create
+
+- `src/extensions/argument-ingestion/index.ts` — barrel; exports `createIngestionV1Pipeline`, `basicsExtension` (composes `BasicsParsingSchema` + per-entity extension schemas from `src/extensions/basics/`).
+- `src/extensions/argument-ingestion/v1-single-shot.ts` — `createIngestionV1Pipeline(extension: TIngestionExtension): TPipeline<...>` factory. One stage: `llmStage` with `gpt-5.4`, outputSchema = `extension.responseSchema`. `finalize.dependsOn: ["parse-argument"]` (required); `finalize.run(ctx)` merges `processingFailures: []`.
+- `src/extensions/argument-ingestion/shared/finalize-response.ts` — assembles `TParsedArgumentResponse` from accumulated stage outputs + failures. For v1, just merges the single LLM stage's output with empty `processingFailures`; for v2 this does most of the work.
+- `src/extensions/argument-ingestion/shared/role-derivation.ts` — pure function: given relations + selected conclusion miniId, returns per-claim role assignment (`'conclusion' | 'premise' | 'intermediate'`). For v1, trivially returns the LLM's assigned roles unchanged (the LLM produces them); for v2 this is load-bearing.
+- `src/extensions/argument-ingestion/shared/types.ts` — `TIngestionExtension` type (`{ responseSchema, claimSchema, variableSchema, premiseSchema, argumentSchema }`); internal stage-output types reused across v1/v2.
+- `src/extensions/argument-ingestion/shared/basics-extension.ts` — `basicsExtension: TIngestionExtension` value composed from `src/extensions/basics/`. The default extension passed to `createIngestionV1Pipeline` (and later `createIngestionV2Pipeline`).
+- `test/extensions/argument-ingestion/v1-single-shot.test.ts` — pipeline unit tests with mock provider. Asserts stage outputs known shape → finalize produces expected `TParsedArgumentResponse`; single LLM stage's prompt matches `buildParsingPrompt(BasicsParsingSchema)`.
+- `test/extensions/argument-ingestion/finalize-response.test.ts` — shared finalize helper unit tests.
+- `test/extensions/argument-ingestion/role-derivation.test.ts` — shared role-derivation unit tests (v1 + v2 cases).
+- `test/extensions/argument-ingestion/e2e.test.ts` — golden-corpus e2e test driver using `RecordingLlmProvider`.
+- `test/extensions/argument-ingestion/recording-provider.ts` — `RecordingLlmProvider` impl (records on `INGESTION_TEST_RECORD=1`, replays in CI). **Includes the prompt-drift guard** per spec §11.3: on replay, recompute the prompt+schema hash from the current `buildPrompt(ctx)` and compare against the recorded hash; fail with `RECORDED_PROMPT_STALE: stage <id> — prompt has changed since recording; re-record with INGESTION_TEST_RECORD=1` on mismatch.
+- Golden corpus fixtures:
+    - `test/extensions/argument-ingestion/fixtures/straightforward/input.txt`
+    - `test/extensions/argument-ingestion/fixtures/straightforward/expected.json` (or `expected-v1.json` if `parity: "v2-strict-upgrade"` later)
+    - `test/extensions/argument-ingestion/fixtures/straightforward/recorded-llm.json`
+    - Same triplet for `with-url-citation`, `with-axiom`, `ambiguous-conclusion`, `enthymeme`.
+
+### Files to modify
+
+- `src/lib/index.ts` — re-export `createIngestionV1Pipeline` + `basicsExtension` + `TIngestionExtension` type so server + CLI consumers can import from the package root.
+- `src/cli/commands/parse.ts` — switch the CLI's `parse` command to call:
+    ```ts
+    const pipeline = createIngestionV1Pipeline(basicsExtension)
+    const result = await executePipeline(pipeline, { text }, { llm: provider })
+    if (result.output === null) {
+        // surface result.failures + the failureText
+    } else {
+        const built = parser.build(result.output)
+        // ... existing CLI persistence + output path
+    }
+    ```
+    Add a `--pipeline <v1|v2>` flag with default `v1` in Phase 1 (Phase 2 will add `v2`). The flag wires only `v1` for now; passing `v2` errors out cleanly with "v2 pipeline not yet shipped — coming in Phase 2."
+
+### Recording / replay protocol
+
+- `RecordingLlmProvider` constructor: `createRecordingLlmProvider({ fixtureDir: string; mode: "record" | "replay" }): TLlmProvider`. The mode is controlled by `INGESTION_TEST_RECORD=1` env var; when set, mode is `record`, otherwise `replay`.
+- **Record mode:** the real OpenAI provider is invoked; each call's `{ systemPrompt, userMessage, outputSchema, ... }` is hashed (SHA-256 over a stable JSON of the request); the request + response are written to `recorded-llm.json` keyed by the hash. Multiple calls in one pipeline run produce a JSON array of records.
+- **Replay mode:** each call computes the same hash, looks up the matching record, returns the recorded response. If the hash doesn't match any recorded entry: throw `RECORDED_PROMPT_STALE` with the stage id and a hint to re-record.
+- The recorded JSON files are checked into the repo and reviewed in PRs; the CI lane runs replay-only with no `OPENAI_API_KEY` set.
+
+### Golden corpus seeds
+
+Per spec §11.3:
+
+| Fixture                | Input shape                                                            | Expected output                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `straightforward`      | 3-claim argument, single conclusion, two normal premises, no citations | Full `TParsedArgumentResponse` with `argument != null`, 3 claims (1 conclusion + 2 premise), 2 premises, no citations                                                                                                                                                                                                              |
+| `with-url-citation`    | `"According to <URL>, X. Therefore Y."`                                | Argument with at least one citation-typed claim carrying the URL                                                                                                                                                                                                                                                                   |
+| `with-axiom`           | `"By definition, X. So Y."`                                            | Argument with at least one axiomatic-typed claim                                                                                                                                                                                                                                                                                   |
+| `ambiguous-conclusion` | Text with multiple plausible conclusions                               | Expected to fail soft: `argument: null`, `failureText: "No single conclusion could be selected."` OR (under v1's force-choice behavior) one specific conclusion the LLM picked — record what v1 actually does and pin it. The fixture will likely be `parity: "v2-strict-upgrade"` in slice 2A; for now just record v1's behavior. |
+| `enthymeme`            | Argument with implicit premise                                         | v1 should NOT invent claims — record what it actually does (likely produces only the explicit claims)                                                                                                                                                                                                                              |
+
+### Test plan (TDD)
+
+1. **Pipeline unit tests** (mock-provider-driven):
+    - Construct `createIngestionV1Pipeline(basicsExtension)`. Assert the pipeline has one stage (`parse-argument`), correct `dependsOn` (empty), `outputSchema === basicsExtension.responseSchema`.
+    - Inject a mock provider that returns a known `TParsedArgumentResponse`-shaped value; assert `executePipeline` returns `{ output: { ...mock.output, processingFailures: [] }, ... }`.
+    - Inject a mock provider that returns a schema-invalid output; assert the stage fails with `OUTPUT_SCHEMA_INVALID`; result is `output: null` (because finalize.dependsOn requires this stage).
+    - Inject a mock provider that returns `{ argument: null, failureText: "..." }`; assert finalize passes it through with `processingFailures: []`.
+
+2. **`finalize-response` unit tests:** trivial input/output mapping; covers the merge logic.
+
+3. **`role-derivation` unit tests** (will be much richer in slice 2A; for now): given a relations + conclusion-miniId input, returns the right per-claim role map. v1 trivial case: LLM already produced roles; pass them through.
+
+4. **`RecordingLlmProvider` unit tests:**
+    - Record mode: real-fetch is replaced with a fake; hashing is deterministic; output file is written in expected shape.
+    - Replay mode: hash hit → returns recorded response.
+    - Replay mode: hash miss → throws `RECORDED_PROMPT_STALE` with correct stage id + message.
+
+5. **Golden corpus e2e tests:**
+    - Record once locally (`INGESTION_TEST_RECORD=1 OPENAI_API_KEY=... pnpm test`).
+    - Commit the resulting `recorded-llm.json` + `expected.json` files.
+    - CI replay (no API key): all 5 fixtures pass replay; final `TParsedArgumentResponse` matches `expected.json`.
+    - Prompt-drift guard: deliberately tamper with `buildPrompt` in a test → recording-provider throws `RECORDED_PROMPT_STALE`.
+
+6. **CLI smoke:** `pnpm cli -- parse "<small text>" --pipeline v1` runs end-to-end with `OPENAI_API_KEY` set. `--pipeline v2` errors out cleanly.
+
+### Recording instructions for the dev
+
+The dev needs to record corpus fixtures against the real OpenAI Responses API. This requires:
+
+- An `OPENAI_API_KEY` set in the local environment (the user has one).
+- A small budget — each fixture is one LLM call (v1 is single-shot), so 5 fixtures = 5 calls. Total cost should be cents.
+- Recording is one-time; subsequent CI runs use replay only.
+
+The dev should:
+
+1. Implement the pipeline + provider first.
+2. Implement the `RecordingLlmProvider` with record + replay modes.
+3. Write the fixture input files (`input.txt` for each of the 5 fixtures).
+4. Record: `INGESTION_TEST_RECORD=1 OPENAI_API_KEY=$OPENAI_API_KEY pnpm vitest run test/extensions/argument-ingestion/e2e.test.ts`. This populates `recorded-llm.json` + a draft `expected.json` for each fixture.
+5. **Review the draft `expected.json` files manually** — they should reflect the actual v1 behavior, including the `ambiguous-conclusion` case where v1 may force a choice and the `enthymeme` case where v1 may or may not invent claims. Don't blindly accept; make sure the recorded output is what you'd want to assert v1 produces.
+6. Commit the input, recorded-llm, and expected files together.
+7. Run again _without_ `INGESTION_TEST_RECORD` to verify CI-style replay passes.
+
+If any fixture surfaces a strict-mode regression (the model produces a field that strict mode now rejects), that's a load-bearing finding for the spec — surface as a concern.
+
+### Exit criteria
+
+- All pipeline + helper + recording-provider unit tests pass.
+- All 5 golden-corpus e2e tests pass under CI replay (no API key needed).
+- Prompt-drift guard fails as expected when `buildPrompt` is tampered with.
+- CLI `parse --pipeline v1` runs end-to-end against a real key; CLI `parse --pipeline v2` errors out cleanly.
+- `pnpm test`, `pnpm run typecheck`, `pnpm run lint`, `pnpm run build` green.
+- `pnpm run check` green.
+- Bash CLI smoke test (`bash scripts/smoke-test.sh` after `pnpm build`) still passes.
+- Reviewer P1 findings folded.
+
+### What is NOT in this slice
+
+- v2-multi-stage pipeline (slice 2A).
+- Per-stage prompts for v2 stages (slice 2A).
+- v1-v2 parity test (slice 2A — can't exist until v2 does).
+- Server-side integration (slice 1G).
+- Publishing core 1.1.0 (slice 1D).
+
+### Notes for the dev agent
+
+- This slice builds on slices 1A + 1A.1 + 1B + 1B.1 (commit range `89adac1..e69afed`). Skim the framework + provider before writing.
+- The existing `src/lib/parsing/ArgumentParser` is **unchanged** — your pipeline produces a `TParsedArgumentResponse` and the existing `.build()` consumes it to hydrate an `ArgumentEngine`. Don't refactor `ArgumentParser`.
+- `basicsExtension` should compose the schemas from `src/extensions/basics/schemata.ts`. Read that file to understand what extension fields look like (claim union `title+body | title+url | axiom+title`, premise `+title`, argument `+title`).
+- **Recording is one-time, manual, with a real API key.** Do not commit a fake `recorded-llm.json` that wasn't actually recorded; the prompt-drift guard would mask the regression. Record properly.
+- **The strict-mode caveat from slice 1B reviewer is load-bearing here.** If any fixture's recording surfaces a model output that strict mode now rejects (which would manifest as a 422 from OpenAI mid-record), that's the regression slice 1B's reviewer expected this corpus to catch. Surface as DONE_WITH_CONCERNS.
+- Same skill stack: TDD, verification-before-completion, brain-style TS, no co-authoring trailers.
+
+---
+
+## Slice 1C.1 — Reviewer fold (P2s + P3s)
+
+**Triggered by:** dual-review synthesis at `/Users/brian/Projects/Proposit-App/docs/reviews/proposit-core/2026-05-22-460fb1f-af752d3-ingestion-pipeline-1C.md`.
+**Branch:** continue on `ingestion-pipeline/phase-1`.
+
+### Scope — one commit batch
+
+**P2 #1 — Schema duplication in `basics-extension.ts`.**
+
+Today `src/extensions/argument-ingestion/shared/basics-extension.ts:25-77` redeclares per-entity extension consts (`BASICS_NORMAL_CLAIM_EXTENSION`, `BASICS_CITATION_CLAIM_EXTENSION`, `BASICS_AXIOMATIC_CLAIM_EXTENSION`, `BASICS_PREMISE_EXTENSION`, `BASICS_ARGUMENT_EXTENSION`, etc.) verbatim from `src/extensions/basics/schemata.ts:13-69`. Dormant in v1 (the pipeline factory only reads `responseSchema`), load-bearing in slice 2A where per-stage outputs need the granular extension shapes.
+
+**Fix:**
+
+- In `src/extensions/basics/schemata.ts`: export the per-entity extension consts (`BasicsNormalClaimExtension`, etc., or whatever they're spelled — match the existing naming convention there).
+- In `src/extensions/argument-ingestion/shared/basics-extension.ts`: replace the duplicated consts with imports from `../../basics/schemata.js`.
+- No behavior change; this is a deduplication. Verify the `responseSchema` it composes is still byte-identical (TypeBox schemas should equate structurally).
+
+**P2 #2 — CLI parity-claim overclaim.**
+
+`src/extensions/argument-ingestion/v1-single-shot.ts:9-10` (or wherever the file leader comment lives) currently claims v1 is "bit-for-bit identical to today's CLI/server path." That's aspirational: the new pipeline path runs through `executePipeline`'s default 2-attempt schema-validation retry, which the old direct-call CLI path did NOT have. The recorded-fixture corpus doesn't exercise the schema-invalid path, so the claim happens to be true on the corpus — but it's not literally true for all inputs.
+
+**Fix:** **Take option (a) — update the comment to be honest.** The new retry-on-schema-validation is a feature, not a bug; users today seeing schema-validation failures get retried once with the validation error appended (slice 1A.1's default policy). The old CLI failed hard on the first schema-invalid response. Update the comment to something like:
+
+> "Behaviorally equivalent to the pre-1C CLI path on schema-conformant LLM outputs (recorded-corpus parity). The new framework adds a single schema-validation retry per stage (default RetryPolicy from slice 1A); the pre-1C direct-call path failed hard on the first schema-invalid response. This is a usability improvement, not a regression."
+
+Do not change the runtime behavior. The retry is the right default.
+
+**P2 #3 — Fixture parity-intent labels.**
+
+The golden-corpus fixtures pin v1's specific behavior, including cases where v1 isn't ideal:
+
+- `ambiguous-conclusion/expected.json` — v1 force-chose a conclusion + invented a 4th claim. v2 (per spec §7.5) should fail-soft with `argument: null`.
+- `enthymeme/expected.json` — v1 produced 2 claims + 2 premises (didn't invent the missing premise). v2 will likely do similarly; this case may stay `parity: "strict"`.
+
+Add a top-level `parity` field to each fixture's `expected.json`. Possible values per spec §11.4: `"strict"`, `"v2-strict-upgrade"`, `"v2-only"`. Slice 2A's reviewer otherwise has to spelunk through fixture contents to figure out the intent.
+
+**Fix:**
+
+- `straightforward/expected.json`: add `"parity": "strict"`.
+- `with-url-citation/expected.json`: `"parity": "strict"` (v1's citation handling should match v2's; if not, slice 2A can re-record).
+- `with-axiom/expected.json`: `"parity": "strict"` (same rationale).
+- `ambiguous-conclusion/expected.json`: `"parity": "v2-strict-upgrade"`.
+- `enthymeme/expected.json`: `"parity": "strict"` (v1 + v2 should both not invent claims).
+
+The e2e test driver can ignore the field for now (it's metadata for slice 2A's parity test); just make sure the JSON files parse cleanly.
+
+**P3 #1 — Dead `customInstructions` option path.**
+
+If `createIngestionV1Pipeline` accepts a `customInstructions` parameter that goes nowhere (no stage consumes it), remove it. If it IS consumed somewhere, leave it.
+
+**P3 #2 — Dead `output === null` branch in CLI.**
+
+`src/cli/commands/parse.ts` has a forward-compat branch for `result.output === null` that v1 can never trigger (v1's single stage either completes or throws). Add an inline comment noting it's forward-compat for v2 (slice 2A) where finalize can return null on irresolvable conclusion / empty canonicalization. Don't delete it — slice 2A will use it.
+
+**P3 #3 — `pipeline.outputSchema` not honest about `processingFailures` augmentation.**
+
+The pipeline's `outputSchema` is set to `extension.responseSchema`, but the actual output (post-finalize) is augmented with `processingFailures: ProcessingFailure[]`. The schema thus declares less than the runtime output. Two options:
+
+- (a) Augment `outputSchema` to include `processingFailures` (slight TypeBox stitching).
+- (b) Add an inline comment near the `outputSchema` declaration noting the asymmetry is intentional (the `processingFailures` field is wire-stable but added post-finalize; consumers should treat `outputSchema` as the _core_ output and read `processingFailures` separately).
+
+**Pick (b) for now** — augmenting the schema would require Type.Intersect or a similar dance and adds value mostly for slice 1G/2C server-side wiring. A docstring suffices.
+
+**P3 #4 — Fixture rigidity comment.**
+
+Add a comment to `test/extensions/argument-ingestion/e2e.test.ts` noting that recorded fixtures pin specific v1 LLM outputs and will fail if either (a) the prompt changes (drift guard fires) or (b) the model produces a meaningfully different response on re-record. Both are signals to investigate, not flake.
+
+### Items NOT in this fold
+
+- The pre-existing smoke-test step-5 failure: workspace-level follow-up. Tracked in MEMORY (orchestrator-owned). Not a slice issue.
+- Qwen's downgraded "P1"s (mutation-of-input + parity-as-contract-break): confirmed non-findings per the synthesis. No action.
+
+### Test plan additions
+
+None required for P2 #2 (comment-only) or P3 #3 (comment-only). P3 #4 (test-file comment-only).
+
+P2 #1 (schema dedup): the existing test suite should continue to pass; if any test references the duplicated consts directly, update those references. Add a one-line assertion if you want to pin the structural equality of the composed `responseSchema` (optional).
+
+P2 #3 (parity labels): no new tests; just JSON additions. Optionally a quick test that asserts each fixture's `expected.json` has a `parity` field with a valid value.
+
+P3 #1 (dead `customInstructions`): if the option is removed, any test referencing it must be removed too.
+
+### Exit criteria
+
+- All previous tests still pass.
+- `pnpm run check` green.
+- One commit on `ingestion-pipeline/phase-1`: `fix(ingestion): fold reviewer P2 + P3 polish for slice 1C`.
+- Schema dedup verified by inspection (composed `responseSchema` byte-equal across the refactor).
+- All 5 fixtures have `parity` field.
+
+### Carry-forward to slice 2A (Phase 2)
+
+- Per-entity extension consts are now centralized in `src/extensions/basics/schemata.ts` — slice 2A's per-stage outputs can compose against those directly.
+- Fixtures pin v1 behavior with explicit `parity` labels — slice 2A's reviewer can read intent without spelunking.
+- The pipeline's `outputSchema` asymmetry with `processingFailures` will revisit in slice 2A if it actually causes problems.
+
+---
+
+## Slice 1D — Release proposit-core@1.1.0
+
+**Branch:** merge `ingestion-pipeline/phase-1` → `main`, then cut the release on `main`.
+**Pre-condition:** slices 1A through 1C.1 all complete on `ingestion-pipeline/phase-1` at HEAD `75c1738`. **User has explicitly approved the publish.**
+
+### Goal
+
+Cut a minor release of `@proposit/proposit-core` containing the new pipeline framework + OpenAI provider extension + v1 single-shot ingestion pipeline. Publish to npm. Tag.
+
+### Sequence (run on `proposit-core/`)
+
+1. **Verify HEAD is clean and green.** `git status`, `git log --oneline -3`, `pnpm run check`. If any check fails, STOP and surface.
+
+2. **Merge `ingestion-pipeline/phase-1` → `main`.**
+    - `git checkout main`
+    - `git pull --ff-only origin main` (sanity — main shouldn't have moved since `268c723`/`v1.0.2`)
+    - `git merge --no-ff ingestion-pipeline/phase-1 -m "Merge ingestion-pipeline/phase-1: pipeline framework + OpenAI provider + v1 single-shot ingestion"`
+    - `--no-ff` preserves the slice structure in `git log`.
+
+3. **Update `CLAUDE.md`** with a brief "Pipeline framework" subsection under "Key design rules". Two paragraphs max:
+    - P1: framework lives in `src/lib/pipelines/`; abstract `TLlmProvider` interface in `src/lib/llm/`; concrete OpenAI provider in `src/extensions/openai/`; ingestion pipelines in `src/extensions/argument-ingestion/`. `lib/` has zero third-party SDK deps; extensions/ can have optional peerDependencies.
+    - P2: `executePipeline(pipeline, input, { llm, ... })` orchestrates a DAG of stages with declared deps, retry policy, and structured `TProcessingFailure` reporting. `pipeline.finalize` has its own `dependsOn`; when any required dep is skipped/failed, finalize is bypassed and `output: null`. See `src/lib/pipelines/types.ts` for the public surface.
+    - Commit: `docs(CLAUDE.md): add Pipeline framework subsection (post-ingestion-pipeline Phase 1)`.
+
+4. **Rotate release notes + changelog.**
+    - `mv docs/release-notes/upcoming.md docs/release-notes/v1.1.0.md`
+    - `mv docs/changelogs/upcoming.md docs/changelogs/v1.1.0.md`
+    - Write `docs/release-notes/v1.1.0.md` (npm-consumer-facing; technical-but-readable). Cover: pipeline framework (`executePipeline`, `deterministicStage`, `llmStage`, `optional`, plus types like `TStage`/`TPipeline`/`TStageContext`/`TProcessingFailure`/`TPipelineResult`/`TPipelineEvent`); abstract `TLlmProvider` interface in `lib/llm/`; concrete `createOpenAiResponsesProvider` in `extensions/openai/` (raw fetch, inlined TypeBox→strict-mode JSON Schema converter, function-tool agent loop, error classes); `createIngestionV1Pipeline` + `basicsExtension`; CLI `--pipeline <v1|v2>` flag (v1 default; v2 reserved for the upcoming v1.2.0); optional `openai` peerDep (declared but unused — V1 implementation uses raw `fetch`); previous chat-completions adapter removed in favor of the Responses API; `TParsedArgumentResponse` shape unchanged; `ArgumentParser.build()` unchanged; one schema-validation retry added by default on LLM stages (usability improvement over the previous direct-call hard-fail).
+    - Write `docs/changelogs/v1.1.0.md` (developer-facing, ordered by slice with commit-hash ranges). Cover slices 1A (`89adac1..7e28be0`), 1A.1 (`edccb33`), 1B (`6c804b4..f823e16`), 1B.1 (`e69afed`), 1C (`460fb1f..af752d3`), 1C.1 (`75c1738`). End with verification note: `pnpm run check` green, 1573 tests, build clean, live OpenAI integration test passes, all 5 golden-corpus fixtures replay clean.
+    - Create fresh empty `docs/release-notes/upcoming.md` + `docs/changelogs/upcoming.md` with just a `# upcoming` heading.
+    - Commit: `chore: publish-prep — rename release-notes + changelog to v1.1.0; start fresh upcoming.md`.
+
+5. **Bump version.** `pnpm version minor` — produces a commit `1.1.0` matching `1.0.2`'s shape. Verify with `git log --oneline -2`.
+
+6. **Tag.** `git tag v1.1.0` at HEAD. Verify: `git tag --list 'v1.1.*'`.
+
+7. **Push to origin.**
+    - `git push origin main`
+    - `git push origin v1.1.0`
+    - The tag push triggers the release + docs deployment workflows.
+
+8. **Verify npm publish landed.** After workflows complete (~1-3 min):
+    - `npm view @proposit/proposit-core@1.1.0` — returns version metadata, not 404.
+
+9. **Smoke check in a fresh tmp dir.**
+    ```bash
+    cd /tmp && rm -rf core-smoke-v1.1.0 && mkdir core-smoke-v1.1.0 && cd core-smoke-v1.1.0
+    pnpm init
+    pnpm add @proposit/proposit-core@1.1.0
+    cat > smoke.mjs <<EOF
+    import { createOpenAiResponsesProvider, createIngestionV1Pipeline, basicsExtension, executePipeline } from "@proposit/proposit-core";
+    console.log("createOpenAiResponsesProvider:", typeof createOpenAiResponsesProvider);
+    console.log("createIngestionV1Pipeline:", typeof createIngestionV1Pipeline);
+    console.log("basicsExtension:", typeof basicsExtension);
+    console.log("executePipeline:", typeof executePipeline);
+    EOF
+    node smoke.mjs
+    ```
+    Expected: 4 lines, all reporting `function` or `object`; no module-resolution errors.
+
+### Exit criteria
+
+- `main` has the merge of `ingestion-pipeline/phase-1` + the `1.1.0` version-bump commit.
+- Tag `v1.1.0` on origin pointing at the version-bump commit.
+- `@proposit/proposit-core@1.1.0` exists on npm.
+- GitHub Actions release + docs workflows ran green.
+- Smoke check resolves the new exports.
+- Fresh starter `docs/release-notes/upcoming.md` + `docs/changelogs/upcoming.md`.
+
+### Notes
+
+- No co-authoring trailers; no `--no-verify`; no force-push.
+- If npm publish fails (auth, network), STOP and surface — orchestrator handles the escalation.
+- If workflows fail or smoke fails, STOP and surface — packaging regression is worth catching before slice 1E/1G proceed.
+
+### What is NOT in this slice
+
+- Slice 1E (shared task contracts) — separate dispatch in `proposit-shared`.
+- Phase 2 work — gated on the Phase 1 boundary (Task 10 in the workspace plan).

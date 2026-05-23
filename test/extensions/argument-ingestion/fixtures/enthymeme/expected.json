@@ -1,0 +1,51 @@
+{
+    "parity": "strict",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "role": "premise",
+                "type": "normal",
+                "title": "Socrates is a man",
+                "body": "Socrates is a man."
+            },
+            {
+                "miniId": "c2",
+                "role": "conclusion",
+                "type": "normal",
+                "title": "Socrates is mortal",
+                "body": "Socrates is mortal."
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "v1",
+                "symbol": "Socrates_Man",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "v2",
+                "symbol": "Socrates_Mortal",
+                "claimMiniId": "c2"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "p1",
+                "formula": "Socrates_Man",
+                "title": "Stated premise"
+            },
+            {
+                "miniId": "p2",
+                "formula": "Socrates_Mortal",
+                "title": "Stated conclusion"
+            }
+        ],
+        "conclusionPremiseMiniId": "p2",
+        "title": "Socrates mortality claim"
+    },
+    "uncategorizedText": null,
+    "selectionRationale": null,
+    "failureText": null,
+    "processingFailures": []
+}

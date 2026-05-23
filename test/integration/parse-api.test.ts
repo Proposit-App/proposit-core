@@ -12,7 +12,7 @@ import {
     BasicsArgumentParser,
     BasicsParsingSchema,
 } from "../../src/extensions/basics/index.js"
-import { createOpenAiProvider } from "../../src/cli/llm/openai.js"
+import { createOpenAiResponsesProvider } from "../../src/extensions/openai/index.js"
 
 // ---------------------------------------------------------------------------
 // Load API key
@@ -41,12 +41,14 @@ const describeIf = apiKey ? describe : describe.skip
 // Tests
 // ---------------------------------------------------------------------------
 
+const DEFAULT_PARSE_MODEL = "gpt-5.4"
+
 describeIf("parse API integration", () => {
-    let provider: ReturnType<typeof createOpenAiProvider>
+    let provider: ReturnType<typeof createOpenAiResponsesProvider>
     let systemPrompt: string
 
     beforeAll(() => {
-        provider = createOpenAiProvider({ apiKey: apiKey! })
+        provider = createOpenAiResponsesProvider({ apiKey: apiKey! })
         systemPrompt = buildParsingPrompt(BasicsParsingSchema)
     })
 
@@ -61,25 +63,27 @@ This means we need to take action to reduce carbon emissions.
 See also: https://www.ipcc.ch/report/ar6/
             `.trim()
 
-        const raw = await provider.complete({
+        const llmResponse = await provider.respond({
+            model: DEFAULT_PARSE_MODEL,
             systemPrompt,
             userMessage: inputText,
-            responseSchema: BasicsParsingSchema,
+            outputSchema: BasicsParsingSchema,
         })
+        const raw = llmResponse.output as Record<string, unknown>
 
         // Validate against schema
         const parser = new BasicsArgumentParser()
-        const response = parser.validate(raw)
+        const parsed = parser.validate(raw)
 
-        expect(response.argument).not.toBeNull()
-        const arg = response.argument!
+        expect(parsed.argument).not.toBeNull()
+        const arg = parsed.argument!
 
         // Should have extracted at least one citation-typed claim
         const citationClaims = arg.claims.filter((c) => c.type === "citation")
         expect(citationClaims.length).toBeGreaterThanOrEqual(1)
 
         // Build engine to verify full pipeline
-        const built = parser.build(response, { strict: false })
+        const built = parser.build(parsed, { strict: false })
         expect(built.engine).toBeDefined()
         const allClaims = built.claimLibrary.getAll()
         const builtCitationClaims = allClaims.filter(
@@ -111,22 +115,24 @@ See also: https://www.ipcc.ch/report/ar6/
 If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.
             `.trim()
 
-        const raw = await provider.complete({
+        const llmResponse = await provider.respond({
+            model: DEFAULT_PARSE_MODEL,
             systemPrompt,
             userMessage: inputText,
-            responseSchema: BasicsParsingSchema,
+            outputSchema: BasicsParsingSchema,
         })
+        const raw = llmResponse.output as Record<string, unknown>
 
         const parser = new BasicsArgumentParser()
-        const response = parser.validate(raw)
+        const parsed = parser.validate(raw)
 
-        expect(response.argument).not.toBeNull()
-        const citationClaims = response.argument!.claims.filter(
+        expect(parsed.argument).not.toBeNull()
+        const citationClaims = parsed.argument!.claims.filter(
             (c) => c.type === "citation"
         )
         expect(citationClaims).toEqual([])
 
-        const built = parser.build(response, { strict: false })
+        const built = parser.build(parsed, { strict: false })
         const builtCitationClaims = built.claimLibrary
             .getAll()
             .filter((c) => (c as Record<string, unknown>).type === "citation")

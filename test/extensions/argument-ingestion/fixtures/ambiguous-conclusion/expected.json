@@ -1,0 +1,85 @@
+{
+    "parity": "v2-strict-upgrade",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "role": "premise",
+                "type": "normal",
+                "title": "Remote work improves productivity",
+                "body": "Working remotely improves productivity for many people."
+            },
+            {
+                "miniId": "c2",
+                "role": "premise",
+                "type": "normal",
+                "title": "Remote work reduces commuting time",
+                "body": "Working remotely reduces commuting time."
+            },
+            {
+                "miniId": "c3",
+                "role": "premise",
+                "type": "normal",
+                "title": "Reduced commuting improves balance",
+                "body": "Reducing commuting time improves work-life balance."
+            },
+            {
+                "miniId": "c4",
+                "role": "conclusion",
+                "type": "normal",
+                "title": "Remote work improves balance",
+                "body": "Working remotely improves work-life balance."
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "v1",
+                "symbol": "Remote_Productivity",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "v2",
+                "symbol": "Remote_Reduce_Commute",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "v3",
+                "symbol": "ReduceCommute_Balance",
+                "claimMiniId": "c3"
+            },
+            {
+                "miniId": "v4",
+                "symbol": "Remote_Balance",
+                "claimMiniId": "c4"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "p1",
+                "formula": "Remote_Productivity",
+                "title": "Productivity benefit"
+            },
+            {
+                "miniId": "p2",
+                "formula": "Remote_Reduce_Commute",
+                "title": "Remote cuts commuting"
+            },
+            {
+                "miniId": "p3",
+                "formula": "ReduceCommute_Balance",
+                "title": "Less commuting helps balance"
+            },
+            {
+                "miniId": "p4",
+                "formula": "(Remote_Reduce_Commute and ReduceCommute_Balance) implies Remote_Balance",
+                "title": "Remote work improves balance"
+            }
+        ],
+        "conclusionPremiseMiniId": "p4",
+        "title": "Remote work benefits"
+    },
+    "uncategorizedText": null,
+    "selectionRationale": null,
+    "failureText": null,
+    "processingFailures": []
+}

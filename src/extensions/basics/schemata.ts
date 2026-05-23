@@ -9,8 +9,15 @@ import {
 import { CorePremiseSchema } from "../../lib/schemata/propositional.js"
 import { buildParsingResponseSchema } from "../../lib/parsing/schemata.js"
 
-// Parsing response extensions
-const BasicsNormalClaimExtension = Type.Object({
+// Parsing response extensions.
+//
+// These per-entity extension shapes are exported so downstream
+// consumers (e.g. `src/extensions/argument-ingestion/shared/
+// basics-extension.ts`) can compose against the same definitions
+// without duplication. The composite `BasicsParsingSchema` at the
+// bottom of the file is the canonical response schema; the per-entity
+// `Basics*Extension` consts are the building blocks.
+export const BasicsNormalClaimExtension = Type.Object({
     title: Type.String({
         maxLength: 50,
         description: "A short title summarizing the claim",
@@ -22,7 +29,7 @@ const BasicsNormalClaimExtension = Type.Object({
     type: CoreClaimNormalTypeSchema,
 })
 
-const BasicsCitationClaimExtension = Type.Object({
+export const BasicsCitationClaimExtension = Type.Object({
     title: Type.String({
         maxLength: 50,
         description: "A short title summarizing the claim",
@@ -34,7 +41,7 @@ const BasicsCitationClaimExtension = Type.Object({
     type: CoreClaimCitationTypeSchema,
 })
 
-const BasicsAxiomaticClaimExtension = Type.Object({
+export const BasicsAxiomaticClaimExtension = Type.Object({
     axiom: Type.String({
         maxLength: 50,
         description: "The axiom supporting the claim",
@@ -42,7 +49,7 @@ const BasicsAxiomaticClaimExtension = Type.Object({
     type: CoreClaimAxiomaticTypeSchema,
 })
 
-const BasicsClaimExtension = Type.Union(
+export const BasicsClaimExtension = Type.Union(
     [
         BasicsNormalClaimExtension,
         BasicsCitationClaimExtension,
@@ -54,14 +61,22 @@ const BasicsClaimExtension = Type.Union(
     }
 )
 
-const BasicsPremiseExtension = Type.Object({
+/**
+ * Variable extension under the basics schema is empty — the core
+ * `ParsedVariableSchema` already carries everything the basics
+ * pipeline needs. Exported so the ingestion extension descriptor
+ * can compose against a single source of truth.
+ */
+export const BasicsVariableExtension = Type.Object({})
+
+export const BasicsPremiseExtension = Type.Object({
     title: Type.String({
         maxLength: 50,
         description: "A short title for this premise",
     }),
 })
 
-const BasicsArgumentExtension = Type.Object({
+export const BasicsArgumentExtension = Type.Object({
     title: Type.String({
         maxLength: 50,
         description: "A short title for the argument",

@@ -1,12 +1,20 @@
-export type {
-    TLlmCompletionRequest,
-    TLlmProvider,
-    TLlmProviderOptions,
-} from "./types.js"
-export { createOpenAiProvider, OPENAI_API_KEY_ENV } from "./openai.js"
+// CLI-side LLM factory.
+//
+// Slice 1B moved the concrete OpenAI provider into
+// `src/extensions/openai/`. This module now provides only the CLI's
+// API-key resolution + the named-provider factory; the provider
+// itself is constructed from `createOpenAiResponsesProvider` in the
+// extensions tree. Callers should depend on `TLlmProvider` (from
+// `src/lib/llm/`) as their provider contract, not on this CLI
+// factory's shape.
 
-import { createOpenAiProvider, OPENAI_API_KEY_ENV } from "./openai.js"
-import type { TLlmProvider, TLlmProviderOptions } from "./types.js"
+import {
+    createOpenAiResponsesProvider,
+    type TCreateOpenAiResponsesProviderOptions,
+} from "../../extensions/openai/index.js"
+import type { TLlmProvider } from "../../lib/llm/index.js"
+
+export const OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 
 const PROVIDER_ENV_VARS: Record<string, string> = {
     openai: OPENAI_API_KEY_ENV,
@@ -25,13 +33,21 @@ export function resolveApiKey(providerName: string, explicit?: string): string {
     )
 }
 
+export type TCliLlmProviderOptions = Pick<
+    TCreateOpenAiResponsesProviderOptions,
+    "apiKey" | "baseUrl"
+>
+
 export function createLlmProvider(
     name: string,
-    options: TLlmProviderOptions
+    options: TCliLlmProviderOptions
 ): TLlmProvider {
     switch (name) {
         case "openai":
-            return createOpenAiProvider(options)
+            return createOpenAiResponsesProvider({
+                apiKey: options.apiKey,
+                baseUrl: options.baseUrl,
+            })
         default:
             throw new Error(
                 `Unknown LLM provider "${name}". Supported: openai.`

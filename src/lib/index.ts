@@ -118,6 +118,76 @@ export type {
 } from "./core/argument-validation.js"
 export { InvariantViolationError } from "./core/invariant-violation-error.js"
 export {
+    executePipeline,
+    optional,
+    deterministicStage,
+    llmStage,
+    subPipelineStage,
+    DEFAULT_RETRY_POLICY,
+    PipelineConfigurationError,
+    LlmStageRetryExhaustedError,
+    StageAbortedError,
+    SubPipelineFailedError,
+} from "./pipelines/index.js"
+export type {
+    TStage,
+    TStageContext,
+    TStageStatus,
+    TPipeline,
+    TPipelineFinalize,
+    TProcessingFailure,
+    TPipelineResult,
+    TPipelineEvent,
+    TDepSpec,
+    TOptionalDep,
+    TRetryPolicy,
+    TRetryReason,
+    TExecutePipelineDeps,
+} from "./pipelines/index.js"
+export type {
+    TLlmProvider,
+    TLlmRequest,
+    TLlmResponse,
+    TLlmTokenUsage,
+    TLlmModel,
+    TReasoningEffort,
+    TToolSpec,
+} from "./llm/index.js"
+// Concrete OpenAI Responses-API provider, surfaced from the lib
+// barrel for ergonomic single-import access from consumers
+// (`@proposit/proposit-core` package-root import). The provider also
+// has a dedicated subpath export at `@proposit/proposit-core/extensions/openai`
+// for callers that prefer to tree-shake provider machinery out of
+// their builds.
+export { createOpenAiResponsesProvider } from "../extensions/openai/index.js"
+export type { TCreateOpenAiResponsesProviderOptions } from "../extensions/openai/index.js"
+export {
+    NonRetryableLlmError,
+    RateLimitLlmError,
+    SchemaValidationLlmError,
+    ToolLoopExhaustedError,
+    TransientLlmError,
+} from "../extensions/openai/index.js"
+// v1 argument-ingestion pipeline + default extension. Surfaced from
+// the lib barrel for ergonomic single-import access from server / CLI
+// consumers; the `@proposit/proposit-core/extensions/argument-ingestion`
+// subpath export (when added in slice 1D's package.json bump) gives
+// callers an alternate tree-shake-friendly path.
+export {
+    createIngestionV1Pipeline,
+    basicsExtension,
+    finalizeResponse,
+    deriveRoles,
+} from "../extensions/argument-ingestion/index.js"
+export type {
+    TCreateIngestionV1PipelineOptions,
+    TIngestionExtension,
+    TIngestionInput,
+    TFinalizeResponseInput,
+    TClaimRole,
+    TDeriveRolesInput,
+} from "../extensions/argument-ingestion/index.js"
+export {
     InvalidArgumentStructureError,
     UnknownExpressionError,
     NotOperatorNotDecidableError,

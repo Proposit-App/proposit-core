@@ -1,10 +1,6 @@
 import type { Command } from "commander"
-import { buildParsingPrompt } from "../../lib/parsing/index.js"
 import type { TParsedArgument } from "../../lib/parsing/index.js"
-import {
-    BasicsArgumentParser,
-    BasicsParsingSchema,
-} from "../../extensions/basics/index.js"
+import { BasicsArgumentParser } from "../../extensions/basics/index.js"
 import { hydratePropositCore, persistEngine, persistCore } from "../engine.js"
 import { PropositCore } from "../../lib/core/proposit-core.js"
 import { ClaimLibrary } from "../../lib/core/claim-library.js"
@@ -12,6 +8,14 @@ import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import { cliLog } from "../logging.js"
 import { errorExit, printJson, printLine, printWarning } from "../output.js"
 import { resolveApiKey, createLlmProvider } from "../llm/index.js"
+import {
+    basicsExtension,
+    createIngestionV1Pipeline,
+    executePipeline,
+} from "../../lib/index.js"
+import type { TParsedArgumentResponse } from "../../lib/parsing/index.js"
+
+const DEFAULT_PARSE_MODEL = "gpt-5.4"
 
 class CliArgumentParser extends BasicsArgumentParser {
     private readonly cliTitle?: string
@@ -54,6 +58,11 @@ export function registerParseCommand(args: Command): void {
         .option("--api-key <key>", "API key (overrides env var)")
         .option("--model <model>", "Model override")
         .option(
+            "--pipeline <version>",
+            "Ingestion pipeline version (v1 only in Phase 1; v2 lands in Phase 2)",
+            "v1"
+        )
+        .option(
             "--title <title>",
             "Argument title (overrides LLM-generated title)"
         )
@@ -66,12 +75,29 @@ export function registerParseCommand(args: Command): void {
                     llm: string
                     apiKey?: string
                     model?: string
+                    pipeline: string
                     title?: string
                     description: string
                     dryRun?: boolean
                 }
             ) => {
-                // 1. Resolve API key
+                // 1. Resolve pipeline version. v1 is the only
+                //    supported value in Phase 1; v2 lands in Phase 2
+                //    (slice 2A) and is wired as a clean rejection
+                //    until then so users discover the flag exists
+                //    without silent fallbacks.
+                if (opts.pipeline !== "v1") {
+                    if (opts.pipeline === "v2") {
+                        errorExit(
+                            "v2 pipeline not yet shipped — coming in Phase 2."
+                        )
+                    }
+                    errorExit(
+                        `Unknown pipeline version "${opts.pipeline}". Supported: v1.`
+                    )
+                }
+
+                // 2. Resolve API key
                 let apiKey: string
                 try {
                     apiKey = resolveApiKey(opts.llm, opts.apiKey)
@@ -81,7 +107,7 @@ export function registerParseCommand(args: Command): void {
                     )
                 }
 
-                // 2. Resolve input text
+                // 3. Resolve input text
                 let inputText: string
                 if (text) {
                     inputText = text
@@ -97,52 +123,84 @@ export function registerParseCommand(args: Command): void {
                     errorExit("Input text is empty.")
                 }
 
-                // 3. Build prompt and schema
-                const responseSchema = BasicsParsingSchema
-                const systemPrompt = buildParsingPrompt(responseSchema)
-
-                // 4. Call LLM
-                const provider = createLlmProvider(opts.llm, {
-                    apiKey,
-                    model: opts.model,
+                // 4. Build the v1 ingestion pipeline and execute.
+                //    The pipeline owns the LLM call + structured-
+                //    output validation; the CLI is left with engine
+                //    construction + persistence.
+                const provider = createLlmProvider(opts.llm, { apiKey })
+                const pipeline = createIngestionV1Pipeline(basicsExtension, {
+                    model: opts.model ?? DEFAULT_PARSE_MODEL,
                 })
 
-                let result: Record<string, unknown>
+                let pipelineResult
                 try {
-                    result = await provider.complete({
-                        systemPrompt,
-                        userMessage: inputText,
-                        responseSchema,
-                    })
+                    pipelineResult = await executePipeline(
+                        pipeline,
+                        { text: inputText },
+                        { llm: provider }
+                    )
                 } catch (error) {
                     const msg =
                         error instanceof Error ? error.message : String(error)
-                    await cliLog("parse:llm-error", { error: msg })
+                    await cliLog("parse:pipeline-error", { error: msg })
                     errorExit(msg)
                 }
+
+                // Forward-compatibility branch — `output === null` is
+                // not reachable under the v1 single-shot pipeline
+                // (the `parse-argument` stage either completes or
+                // throws via `LlmStageRetryExhaustedError`, both of
+                // which surface here as a failures-non-empty + null
+                // output OR an outer `executePipeline` throw caught
+                // above). Slice 2A's v2 multi-stage pipeline will
+                // reach this branch when its finalize returns null
+                // on irresolvable-conclusion / empty-canonicalization
+                // outcomes (per spec §7.5). Leave the branch wired
+                // so the v2 cutover doesn't need to revisit the CLI.
+                if (pipelineResult.output === null) {
+                    const failureSummary = pipelineResult.failures
+                        .map((f) => `[${f.code}] ${f.message}`)
+                        .join("; ")
+                    await cliLog("parse:pipeline-null-output", {
+                        provider: opts.llm,
+                        model: opts.model ?? "(default)",
+                        failures: pipelineResult.failures,
+                    })
+                    errorExit(
+                        failureSummary ||
+                            "Ingestion pipeline returned no output."
+                    )
+                }
+
+                const response: TParsedArgumentResponse &
+                    Record<string, unknown> = pipelineResult.output
 
                 // 5. Log raw LLM response
                 await cliLog("parse:llm-response", {
                     provider: opts.llm,
                     model: opts.model ?? "(default)",
                     inputText,
-                    response: result,
+                    response,
                 })
 
                 // 6. Dry-run: print raw response and exit
                 if (opts.dryRun) {
-                    printJson(result)
+                    printJson(response as unknown as Record<string, unknown>)
                     return
                 }
 
-                // 7. Validate
+                // 7. Validate via the parser (re-validates against
+                //    the parser's schema; idempotent in the happy
+                //    path).
                 const parser = new CliArgumentParser(
                     opts.title,
                     opts.description
                 )
-                let response
+                let validated
                 try {
-                    response = parser.validate(result)
+                    validated = parser.validate(
+                        response as unknown as Record<string, unknown>
+                    )
                 } catch (error) {
                     const msg =
                         error instanceof Error ? error.message : String(error)
@@ -151,12 +209,12 @@ export function registerParseCommand(args: Command): void {
                 }
 
                 // 8. Check for null argument
-                if (response.argument === null) {
+                if (validated.argument === null) {
                     const msg =
-                        response.failureText ??
+                        validated.failureText ??
                         "The LLM could not parse the input as an argument."
                     await cliLog("parse:null-argument", {
-                        failureText: response.failureText,
+                        failureText: validated.failureText,
                     })
                     errorExit(msg)
                 }
@@ -164,7 +222,7 @@ export function registerParseCommand(args: Command): void {
                 // 9. Build engine
                 let built
                 try {
-                    built = parser.build(response, { strict: false })
+                    built = parser.build(validated, { strict: false })
                 } catch (error) {
                     const msg =
                         error instanceof Error ? error.message : String(error)
