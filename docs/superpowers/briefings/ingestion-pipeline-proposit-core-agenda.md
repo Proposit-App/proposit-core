@@ -905,51 +905,51 @@ Cut a minor release of `@proposit/proposit-core` containing the new pipeline fra
 1. **Verify HEAD is clean and green.** `git status`, `git log --oneline -3`, `pnpm run check`. If any check fails, STOP and surface.
 
 2. **Merge `ingestion-pipeline/phase-1` → `main`.**
-   - `git checkout main`
-   - `git pull --ff-only origin main` (sanity — main shouldn't have moved since `268c723`/`v1.0.2`)
-   - `git merge --no-ff ingestion-pipeline/phase-1 -m "Merge ingestion-pipeline/phase-1: pipeline framework + OpenAI provider + v1 single-shot ingestion"`
-   - `--no-ff` preserves the slice structure in `git log`.
+    - `git checkout main`
+    - `git pull --ff-only origin main` (sanity — main shouldn't have moved since `268c723`/`v1.0.2`)
+    - `git merge --no-ff ingestion-pipeline/phase-1 -m "Merge ingestion-pipeline/phase-1: pipeline framework + OpenAI provider + v1 single-shot ingestion"`
+    - `--no-ff` preserves the slice structure in `git log`.
 
 3. **Update `CLAUDE.md`** with a brief "Pipeline framework" subsection under "Key design rules". Two paragraphs max:
-   - P1: framework lives in `src/lib/pipelines/`; abstract `TLlmProvider` interface in `src/lib/llm/`; concrete OpenAI provider in `src/extensions/openai/`; ingestion pipelines in `src/extensions/argument-ingestion/`. `lib/` has zero third-party SDK deps; extensions/ can have optional peerDependencies.
-   - P2: `executePipeline(pipeline, input, { llm, ... })` orchestrates a DAG of stages with declared deps, retry policy, and structured `TProcessingFailure` reporting. `pipeline.finalize` has its own `dependsOn`; when any required dep is skipped/failed, finalize is bypassed and `output: null`. See `src/lib/pipelines/types.ts` for the public surface.
-   - Commit: `docs(CLAUDE.md): add Pipeline framework subsection (post-ingestion-pipeline Phase 1)`.
+    - P1: framework lives in `src/lib/pipelines/`; abstract `TLlmProvider` interface in `src/lib/llm/`; concrete OpenAI provider in `src/extensions/openai/`; ingestion pipelines in `src/extensions/argument-ingestion/`. `lib/` has zero third-party SDK deps; extensions/ can have optional peerDependencies.
+    - P2: `executePipeline(pipeline, input, { llm, ... })` orchestrates a DAG of stages with declared deps, retry policy, and structured `TProcessingFailure` reporting. `pipeline.finalize` has its own `dependsOn`; when any required dep is skipped/failed, finalize is bypassed and `output: null`. See `src/lib/pipelines/types.ts` for the public surface.
+    - Commit: `docs(CLAUDE.md): add Pipeline framework subsection (post-ingestion-pipeline Phase 1)`.
 
 4. **Rotate release notes + changelog.**
-   - `mv docs/release-notes/upcoming.md docs/release-notes/v1.1.0.md`
-   - `mv docs/changelogs/upcoming.md docs/changelogs/v1.1.0.md`
-   - Write `docs/release-notes/v1.1.0.md` (npm-consumer-facing; technical-but-readable). Cover: pipeline framework (`executePipeline`, `deterministicStage`, `llmStage`, `optional`, plus types like `TStage`/`TPipeline`/`TStageContext`/`TProcessingFailure`/`TPipelineResult`/`TPipelineEvent`); abstract `TLlmProvider` interface in `lib/llm/`; concrete `createOpenAiResponsesProvider` in `extensions/openai/` (raw fetch, inlined TypeBox→strict-mode JSON Schema converter, function-tool agent loop, error classes); `createIngestionV1Pipeline` + `basicsExtension`; CLI `--pipeline <v1|v2>` flag (v1 default; v2 reserved for the upcoming v1.2.0); optional `openai` peerDep (declared but unused — V1 implementation uses raw `fetch`); previous chat-completions adapter removed in favor of the Responses API; `TParsedArgumentResponse` shape unchanged; `ArgumentParser.build()` unchanged; one schema-validation retry added by default on LLM stages (usability improvement over the previous direct-call hard-fail).
-   - Write `docs/changelogs/v1.1.0.md` (developer-facing, ordered by slice with commit-hash ranges). Cover slices 1A (`89adac1..7e28be0`), 1A.1 (`edccb33`), 1B (`6c804b4..f823e16`), 1B.1 (`e69afed`), 1C (`460fb1f..af752d3`), 1C.1 (`75c1738`). End with verification note: `pnpm run check` green, 1573 tests, build clean, live OpenAI integration test passes, all 5 golden-corpus fixtures replay clean.
-   - Create fresh empty `docs/release-notes/upcoming.md` + `docs/changelogs/upcoming.md` with just a `# upcoming` heading.
-   - Commit: `chore: publish-prep — rename release-notes + changelog to v1.1.0; start fresh upcoming.md`.
+    - `mv docs/release-notes/upcoming.md docs/release-notes/v1.1.0.md`
+    - `mv docs/changelogs/upcoming.md docs/changelogs/v1.1.0.md`
+    - Write `docs/release-notes/v1.1.0.md` (npm-consumer-facing; technical-but-readable). Cover: pipeline framework (`executePipeline`, `deterministicStage`, `llmStage`, `optional`, plus types like `TStage`/`TPipeline`/`TStageContext`/`TProcessingFailure`/`TPipelineResult`/`TPipelineEvent`); abstract `TLlmProvider` interface in `lib/llm/`; concrete `createOpenAiResponsesProvider` in `extensions/openai/` (raw fetch, inlined TypeBox→strict-mode JSON Schema converter, function-tool agent loop, error classes); `createIngestionV1Pipeline` + `basicsExtension`; CLI `--pipeline <v1|v2>` flag (v1 default; v2 reserved for the upcoming v1.2.0); optional `openai` peerDep (declared but unused — V1 implementation uses raw `fetch`); previous chat-completions adapter removed in favor of the Responses API; `TParsedArgumentResponse` shape unchanged; `ArgumentParser.build()` unchanged; one schema-validation retry added by default on LLM stages (usability improvement over the previous direct-call hard-fail).
+    - Write `docs/changelogs/v1.1.0.md` (developer-facing, ordered by slice with commit-hash ranges). Cover slices 1A (`89adac1..7e28be0`), 1A.1 (`edccb33`), 1B (`6c804b4..f823e16`), 1B.1 (`e69afed`), 1C (`460fb1f..af752d3`), 1C.1 (`75c1738`). End with verification note: `pnpm run check` green, 1573 tests, build clean, live OpenAI integration test passes, all 5 golden-corpus fixtures replay clean.
+    - Create fresh empty `docs/release-notes/upcoming.md` + `docs/changelogs/upcoming.md` with just a `# upcoming` heading.
+    - Commit: `chore: publish-prep — rename release-notes + changelog to v1.1.0; start fresh upcoming.md`.
 
 5. **Bump version.** `pnpm version minor` — produces a commit `1.1.0` matching `1.0.2`'s shape. Verify with `git log --oneline -2`.
 
 6. **Tag.** `git tag v1.1.0` at HEAD. Verify: `git tag --list 'v1.1.*'`.
 
 7. **Push to origin.**
-   - `git push origin main`
-   - `git push origin v1.1.0`
-   - The tag push triggers the release + docs deployment workflows.
+    - `git push origin main`
+    - `git push origin v1.1.0`
+    - The tag push triggers the release + docs deployment workflows.
 
 8. **Verify npm publish landed.** After workflows complete (~1-3 min):
-   - `npm view @proposit/proposit-core@1.1.0` — returns version metadata, not 404.
+    - `npm view @proposit/proposit-core@1.1.0` — returns version metadata, not 404.
 
 9. **Smoke check in a fresh tmp dir.**
-   ```bash
-   cd /tmp && rm -rf core-smoke-v1.1.0 && mkdir core-smoke-v1.1.0 && cd core-smoke-v1.1.0
-   pnpm init
-   pnpm add @proposit/proposit-core@1.1.0
-   cat > smoke.mjs <<EOF
-   import { createOpenAiResponsesProvider, createIngestionV1Pipeline, basicsExtension, executePipeline } from "@proposit/proposit-core";
-   console.log("createOpenAiResponsesProvider:", typeof createOpenAiResponsesProvider);
-   console.log("createIngestionV1Pipeline:", typeof createIngestionV1Pipeline);
-   console.log("basicsExtension:", typeof basicsExtension);
-   console.log("executePipeline:", typeof executePipeline);
-   EOF
-   node smoke.mjs
-   ```
-   Expected: 4 lines, all reporting `function` or `object`; no module-resolution errors.
+    ```bash
+    cd /tmp && rm -rf core-smoke-v1.1.0 && mkdir core-smoke-v1.1.0 && cd core-smoke-v1.1.0
+    pnpm init
+    pnpm add @proposit/proposit-core@1.1.0
+    cat > smoke.mjs <<EOF
+    import { createOpenAiResponsesProvider, createIngestionV1Pipeline, basicsExtension, executePipeline } from "@proposit/proposit-core";
+    console.log("createOpenAiResponsesProvider:", typeof createOpenAiResponsesProvider);
+    console.log("createIngestionV1Pipeline:", typeof createIngestionV1Pipeline);
+    console.log("basicsExtension:", typeof basicsExtension);
+    console.log("executePipeline:", typeof executePipeline);
+    EOF
+    node smoke.mjs
+    ```
+    Expected: 4 lines, all reporting `function` or `object`; no module-resolution errors.
 
 ### Exit criteria
 
