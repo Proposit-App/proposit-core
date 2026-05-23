@@ -168,6 +168,25 @@ export {
     ToolLoopExhaustedError,
     TransientLlmError,
 } from "../extensions/openai/index.js"
+// v1 argument-ingestion pipeline + default extension. Surfaced from
+// the lib barrel for ergonomic single-import access from server / CLI
+// consumers; the `@proposit/proposit-core/extensions/argument-ingestion`
+// subpath export (when added in slice 1D's package.json bump) gives
+// callers an alternate tree-shake-friendly path.
+export {
+    createIngestionV1Pipeline,
+    basicsExtension,
+    finalizeResponse,
+    deriveRoles,
+} from "../extensions/argument-ingestion/index.js"
+export type {
+    TCreateIngestionV1PipelineOptions,
+    TIngestionExtension,
+    TIngestionInput,
+    TFinalizeResponseInput,
+    TClaimRole,
+    TDeriveRolesInput,
+} from "../extensions/argument-ingestion/index.js"
 export {
     InvalidArgumentStructureError,
     UnknownExpressionError,
