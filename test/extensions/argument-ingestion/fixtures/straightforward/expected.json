@@ -1,0 +1,67 @@
+{
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "role": "premise",
+                "type": "normal",
+                "title": "Rain implies wet ground",
+                "body": "If it rains, the ground gets wet."
+            },
+            {
+                "miniId": "c2",
+                "role": "premise",
+                "type": "normal",
+                "title": "It is raining",
+                "body": "It is raining."
+            },
+            {
+                "miniId": "c3",
+                "role": "conclusion",
+                "type": "normal",
+                "title": "The ground is wet",
+                "body": "The ground is wet."
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "v1",
+                "symbol": "Rain_Then_WetGround",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "v2",
+                "symbol": "Raining",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "v3",
+                "symbol": "Ground_Wet",
+                "claimMiniId": "c3"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "p1",
+                "formula": "Raining implies Ground_Wet",
+                "title": "Conditional premise"
+            },
+            {
+                "miniId": "p2",
+                "formula": "Raining",
+                "title": "Observed rain"
+            },
+            {
+                "miniId": "p3",
+                "formula": "Ground_Wet",
+                "title": "Conclusion"
+            }
+        ],
+        "conclusionPremiseMiniId": "p3",
+        "title": "Rain implies wet ground"
+    },
+    "uncategorizedText": null,
+    "selectionRationale": null,
+    "failureText": null,
+    "processingFailures": []
+}

@@ -1,0 +1,66 @@
+{
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "role": "premise",
+                "type": "axiomatic",
+                "axiom": "A bachelor is an unmarried man by definition."
+            },
+            {
+                "miniId": "c2",
+                "role": "premise",
+                "type": "normal",
+                "title": "John is a bachelor",
+                "body": "John is a bachelor."
+            },
+            {
+                "miniId": "c3",
+                "role": "conclusion",
+                "type": "normal",
+                "title": "John is unmarried",
+                "body": "John is unmarried."
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "v1",
+                "symbol": "Bachelor_Implies_UnmarriedMan",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "v2",
+                "symbol": "John_Bachelor",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "v3",
+                "symbol": "John_Unmarried",
+                "claimMiniId": "c3"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "p1",
+                "formula": "Bachelor_Implies_UnmarriedMan",
+                "title": "Definition of bachelor"
+            },
+            {
+                "miniId": "p2",
+                "formula": "John_Bachelor",
+                "title": "John is a bachelor"
+            },
+            {
+                "miniId": "p3",
+                "formula": "(Bachelor_Implies_UnmarriedMan and John_Bachelor) implies John_Unmarried",
+                "title": "Therefore John is unmarried"
+            }
+        ],
+        "conclusionPremiseMiniId": "p3",
+        "title": "John is unmarried because he is a bachelor"
+    },
+    "uncategorizedText": null,
+    "selectionRationale": null,
+    "failureText": null,
+    "processingFailures": []
+}
