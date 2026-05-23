@@ -1,0 +1,456 @@
+// Concrete `TLlmProvider` backed by the OpenAI Responses API.
+//
+// Slice 1B (per the agenda + spec §6) provides the V1 adapter: raw
+// `fetch` to `https://api.openai.com/v1/responses` with strict-mode
+// structured output via the inlined TypeBox → JSON Schema converter,
+// translation of the framework's `TToolSpec` discriminated union
+// into the Responses-API tool-shape, and a function-tool agent loop
+// capped by `maxToolCallRounds` (default 6). Built-in tools
+// (`web_search` / `file_search` / `mcp`) execute on OpenAI's
+// infrastructure and don't enter the loop.
+//
+// The provider deliberately uses raw `fetch` rather than the
+// `openai` npm SDK. `openai` is declared as an optional peer in
+// `package.json` for forward-looking insurance — future slices may
+// adopt it; V1 keeps the dependency surface minimal.
+//
+// Error classification routes HTTP-status families into framework-
+// recognized error classes (see `./errors.ts`):
+//
+//   * 5xx                        → `TransientLlmError`
+//   * 429                        → `RateLimitLlmError`
+//   * 400, 422                   → `SchemaValidationLlmError`
+//   * 401, 403, other 4xx        → `NonRetryableLlmError`
+//   * loop cap exceeded          → `ToolLoopExhaustedError`
+//
+// The framework's `llmStage` retry policy classifies via the
+// `retryReason` tag on the thrown error; the class names exist for
+// caller observability (`instanceof` checks) and stack-trace
+// readability.
+
+import type { TSchema } from "typebox"
+import type {
+    TLlmProvider,
+    TLlmRequest,
+    TLlmResponse,
+    TLlmTokenUsage,
+    TToolSpec,
+} from "../../lib/llm/types.js"
+import { typeboxToOpenAiSchema } from "./structured-output.js"
+import {
+    NonRetryableLlmError,
+    RateLimitLlmError,
+    SchemaValidationLlmError,
+    ToolLoopExhaustedError,
+    TransientLlmError,
+} from "./errors.js"
+import type {
+    TOpenAiFetch,
+    TOpenAiInputMessage,
+    TOpenAiOutputItem,
+    TOpenAiResponsesEnvelope,
+    TOpenAiResponsesRequestBody,
+    TOpenAiTool,
+} from "./types.js"
+
+const DEFAULT_BASE_URL = "https://api.openai.com/v1/responses"
+const DEFAULT_MAX_TOOL_ROUNDS = 6
+
+export type TCreateOpenAiResponsesProviderOptions = {
+    apiKey: string
+    /** Override the default `https://api.openai.com/v1/responses`. */
+    baseUrl?: string
+    /**
+     * Injectable `fetch`. Defaults to `globalThis.fetch`. Tests inject
+     * mocks; runtimes without a global `fetch` (older Node) inject a
+     * polyfill.
+     */
+    fetch?: TOpenAiFetch
+    /**
+     * Cap on the number of round-trips the function-tool agent loop
+     * can take before throwing `ToolLoopExhaustedError`. Defaults to
+     * 6. Built-in tools (`web_search` / `file_search` / `mcp`) don't
+     * count against this cap — they run server-side.
+     */
+    maxToolCallRounds?: number
+}
+
+export function createOpenAiResponsesProvider(
+    options: TCreateOpenAiResponsesProviderOptions
+): TLlmProvider {
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+    const fetchImpl =
+        options.fetch ?? (globalThis.fetch as TOpenAiFetch | undefined)
+    if (!fetchImpl) {
+        throw new Error(
+            "createOpenAiResponsesProvider: no fetch implementation available. Pass `fetch` explicitly or run in an environment that provides `globalThis.fetch` (Node ≥18, modern browsers, Expo)."
+        )
+    }
+    const maxToolRounds = options.maxToolCallRounds ?? DEFAULT_MAX_TOOL_ROUNDS
+
+    const respond = async <T>(
+        req: TLlmRequest<T>
+    ): Promise<TLlmResponse<T>> => {
+        const schemaName = deriveSchemaName(req.outputSchema)
+        const convertedSchema = typeboxToOpenAiSchema(req.outputSchema)
+        const tools = req.tools ? translateTools(req.tools) : undefined
+
+        // Build the running `input` array. Subsequent agent-loop
+        // iterations append tool-result messages to this same array.
+        const input: TOpenAiInputMessage[] = [
+            { role: "system", content: req.systemPrompt },
+            { role: "user", content: req.userMessage },
+        ]
+
+        let lastUsage: TLlmTokenUsage = { input: 0, output: 0 }
+        let lastResponseId: string | undefined
+
+        for (let round = 0; round < maxToolRounds; round += 1) {
+            const body: TOpenAiResponsesRequestBody = {
+                model: req.model,
+                input,
+                text: {
+                    format: {
+                        type: "json_schema",
+                        name: schemaName,
+                        strict: true,
+                        schema: convertedSchema,
+                    },
+                },
+            }
+            if (req.maxOutputTokens !== undefined) {
+                body.max_output_tokens = req.maxOutputTokens
+            }
+            if (req.reasoningEffort) {
+                body.reasoning = { effort: req.reasoningEffort }
+            }
+            if (tools) {
+                body.tools = tools
+            }
+
+            const response = await callOnce({
+                url: baseUrl,
+                apiKey: options.apiKey,
+                body,
+                fetchImpl,
+                signal: req.signal,
+            })
+
+            const envelope: TOpenAiResponsesEnvelope = await response
+                .json()
+                .then((j) => j as TOpenAiResponsesEnvelope)
+                .catch((err: unknown) => {
+                    throw new TransientLlmError({
+                        message: `OpenAI response body was not valid JSON: ${
+                            err instanceof Error ? err.message : String(err)
+                        }`,
+                    })
+                })
+
+            lastResponseId = envelope.id ?? lastResponseId
+            lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
+
+            const functionCalls = pickFunctionCalls(envelope.output)
+            if (functionCalls.length > 0) {
+                for (const call of functionCalls) {
+                    const handler = findFunctionHandler(req.tools, call.name)
+                    if (!handler) {
+                        throw new NonRetryableLlmError({
+                            message: `OpenAI requested unknown function tool "${call.name}".`,
+                        })
+                    }
+                    const parsedArgs = safeParseJson(call.arguments)
+                    const handlerResult = await handler.handler(parsedArgs)
+                    input.push({
+                        type: "function_call_output",
+                        call_id: call.callId,
+                        output:
+                            typeof handlerResult === "string"
+                                ? handlerResult
+                                : JSON.stringify(handlerResult),
+                    })
+                }
+                // Loop back for the next round.
+                continue
+            }
+
+            const text = extractAssistantText(envelope.output)
+            if (text === undefined) {
+                throw new TransientLlmError({
+                    message:
+                        "OpenAI Responses API returned no assistant text content.",
+                })
+            }
+            const parsed = safeParseJson(text)
+            return {
+                output: parsed as T,
+                tokenUsage: lastUsage,
+                rawResponseId: lastResponseId,
+            }
+        }
+
+        throw new ToolLoopExhaustedError({
+            message: `Function-tool agent loop exceeded ${maxToolRounds.toString()} rounds without a final response.`,
+            rounds: maxToolRounds,
+        })
+    }
+
+    return { respond }
+}
+
+// -- HTTP --
+
+async function callOnce(args: {
+    url: string
+    apiKey: string
+    body: TOpenAiResponsesRequestBody
+    fetchImpl: TOpenAiFetch
+    signal?: AbortSignal
+}): Promise<Response> {
+    let response: Response
+    try {
+        response = await args.fetchImpl(args.url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${args.apiKey}`,
+            },
+            body: JSON.stringify(args.body),
+            signal: args.signal,
+        })
+    } catch (err) {
+        // Aborts come through as a thrown error with `name === "AbortError"`
+        // (DOM spec). Surface as-is so `llmStage`'s mid-flight-abort
+        // detector turns it into `StageAbortedError`. Other low-level
+        // fetch failures are transient.
+        if (isAbortError(err)) {
+            throw err
+        }
+        throw new TransientLlmError({
+            message: `Network error calling OpenAI: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+
+    if (response.ok) {
+        return response
+    }
+
+    const errorBody = await response.text().catch(() => "")
+    const message = `OpenAI Responses API ${response.status.toString()}: ${
+        errorBody || response.statusText
+    }`
+    throw classifyHttpError(response.status, message)
+}
+
+function classifyHttpError(status: number, message: string): Error {
+    if (status >= 500) {
+        return new TransientLlmError({ message, status })
+    }
+    if (status === 429) {
+        return new RateLimitLlmError({ message, status })
+    }
+    if (status === 400 || status === 422) {
+        return new SchemaValidationLlmError({ message, status })
+    }
+    return new NonRetryableLlmError({ message, status })
+}
+
+function isAbortError(err: unknown): boolean {
+    return (
+        typeof err === "object" &&
+        err !== null &&
+        (err as { name?: unknown }).name === "AbortError"
+    )
+}
+
+// -- response parsing --
+
+type TParsedFunctionCall = {
+    callId: string
+    name: string
+    arguments: string
+}
+
+function pickFunctionCalls(
+    output: TOpenAiOutputItem[] | undefined
+): TParsedFunctionCall[] {
+    if (!output) return []
+    const calls: TParsedFunctionCall[] = []
+    for (const item of output) {
+        if (item.type === "function_call") {
+            /* eslint-disable @typescript-eslint/naming-convention */
+            const fc = item as {
+                call_id: string
+                name: string
+                arguments: string
+            }
+            /* eslint-enable @typescript-eslint/naming-convention */
+            calls.push({
+                callId: fc.call_id,
+                name: fc.name,
+                arguments: fc.arguments,
+            })
+        }
+    }
+    return calls
+}
+
+function extractAssistantText(
+    output: TOpenAiOutputItem[] | undefined
+): string | undefined {
+    if (!output) return undefined
+    for (const item of output) {
+        if (item.type === "message") {
+            const msg = item as {
+                content?: { type?: string; text?: string }[]
+            }
+            const blocks = msg.content ?? []
+            const textBlock = blocks.find(
+                (b) => b.type === "output_text" || b.type === "text"
+            )
+            if (textBlock?.text !== undefined) {
+                return textBlock.text
+            }
+        }
+    }
+    return undefined
+}
+
+function safeParseJson(raw: string): unknown {
+    try {
+        return JSON.parse(raw) as unknown
+    } catch (err) {
+        throw new SchemaValidationLlmError({
+            message: `OpenAI returned malformed JSON in structured-output text: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+}
+
+function extractUsage(envelope: TOpenAiResponsesEnvelope): TLlmTokenUsage {
+    const usage = envelope.usage
+    if (!usage) return { input: 0, output: 0 }
+    const result: TLlmTokenUsage = {
+        input: usage.input_tokens ?? 0,
+        output: usage.output_tokens ?? 0,
+    }
+    const reasoning = usage.output_tokens_details?.reasoning_tokens
+    if (reasoning !== undefined) {
+        result.reasoning = reasoning
+    }
+    return result
+}
+
+function mergeUsage(
+    accumulated: TLlmTokenUsage,
+    next: TLlmTokenUsage
+): TLlmTokenUsage {
+    const merged: TLlmTokenUsage = {
+        input: accumulated.input + next.input,
+        output: accumulated.output + next.output,
+    }
+    if (accumulated.reasoning !== undefined || next.reasoning !== undefined) {
+        merged.reasoning = (accumulated.reasoning ?? 0) + (next.reasoning ?? 0)
+    }
+    return merged
+}
+
+// -- tool translation --
+
+function translateTools(tools: readonly TToolSpec[]): TOpenAiTool[] {
+    return tools.map((tool) => {
+        switch (tool.kind) {
+            case "web_search":
+                return { type: "web_search" }
+            case "file_search":
+                return {
+                    type: "file_search",
+                    vector_store_ids: [tool.vectorStoreId],
+                }
+            case "mcp": {
+                const out: TOpenAiTool = {
+                    type: "mcp",
+                    server_url: tool.serverUrl,
+                }
+                if (tool.toolName) {
+                    return {
+                        ...out,
+                        allowed_tools: [tool.toolName],
+                    }
+                }
+                return out
+            }
+            case "function":
+                return {
+                    type: "function",
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: typeboxToOpenAiSchema(tool.parameters),
+                    strict: true,
+                }
+        }
+    })
+}
+
+function findFunctionHandler(
+    tools: readonly TToolSpec[] | undefined,
+    name: string
+): Extract<TToolSpec, { kind: "function" }> | undefined {
+    if (!tools) return undefined
+    for (const tool of tools) {
+        if (tool.kind === "function" && tool.name === name) {
+            return tool
+        }
+    }
+    return undefined
+}
+
+// -- schema name derivation --
+
+function deriveSchemaName(schema: TSchema): string {
+    const id = (schema as { $id?: unknown }).$id
+    if (typeof id === "string" && id.length > 0) {
+        return sanitizeName(id)
+    }
+    const serialized = canonicalJson(schema)
+    return `schema_${shortHash(serialized)}`
+}
+
+function sanitizeName(raw: string): string {
+    // OpenAI requires schema names match `^[a-zA-Z0-9_-]{1,64}$`.
+    const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64)
+    return cleaned.length > 0 ? cleaned : "schema"
+}
+
+function canonicalJson(value: unknown): string {
+    return JSON.stringify(value, (_key, v: unknown) => {
+        if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+            const obj = v as Record<string, unknown>
+            const sorted: Record<string, unknown> = {}
+            for (const key of Object.keys(obj).sort()) {
+                sorted[key] = obj[key]
+            }
+            return sorted
+        }
+        return v
+    })
+}
+
+function shortHash(input: string): string {
+    // Stable 12-hex-char hash. We avoid pulling `crypto.subtle` because
+    // it's async and would force `deriveSchemaName` to be async too;
+    // FNV-1a is sufficient for naming uniqueness within a process.
+    let h1 = 0xcbf29ce4
+    let h2 = 0x84222325
+    for (let i = 0; i < input.length; i += 1) {
+        const c = input.charCodeAt(i)
+        h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0
+        h2 = Math.imul(h2 ^ c, 0x01000193) >>> 0
+    }
+    const hex1 = h1.toString(16).padStart(8, "0")
+    const hex2 = h2.toString(16).padStart(8, "0")
+    return (hex1 + hex2).slice(0, 12)
+}
