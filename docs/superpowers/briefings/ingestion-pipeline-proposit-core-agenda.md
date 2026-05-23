@@ -384,3 +384,63 @@ Coverage from spec §11.1, all against the mock provider:
 - **No co-authoring trailers** in commits (per `proposit-core/CLAUDE.md`).
 - **If any spec section is ambiguous** between what the agenda says and what the spec at `/Users/brian/Projects/Proposit-App/docs/superpowers/specs/2026-05-22-ingestion-pipeline-overview.md` says, follow this agenda — it's the most-distilled version. If both seem ambiguous, surface as a question via the implementer-prompt template (DONE_WITH_CONCERNS or NEEDS_CONTEXT status) rather than guess.
 - **Working branch:** `ingestion-pipeline/phase-1` off `proposit-core/main`. Create the branch as your first action if not already on it. Final merge to `main` happens after slice 1D's release commit.
+
+---
+
+## Slice 1A.1 — Reviewer fold (P2 + selected P3s)
+
+**Triggered by:** dual-review synthesis at `/Users/brian/Projects/Proposit-App/docs/reviews/proposit-core/2026-05-22-89adac1-7e28be0-ingestion-pipeline-1A.md`.
+**Branch:** continue on `ingestion-pipeline/phase-1`.
+
+### Scope — fold these items in one commit batch
+
+**P2 #1 — Mid-flight aborted stage surfaces as `failed` with `LLM_NON_RETRYABLE_ERROR`.**
+
+When an `AbortSignal` fires during an in-flight `llmStage` provider call, the stage currently catches the abort, classifies it via the non-retryable branch, and surfaces as `failed` with `LLM_NON_RETRYABLE_ERROR`. This is wrong for two reasons: (a) the spec's cancellation contract (§5.4 step 11) says aborted in-flight stages don't constitute a "failure" — they're scheduled-and-cancelled, more like `skipped`; (b) when slice 1B lands the real OpenAI provider, real cancellation will produce confusing failure codes that the server's task-status logic will likely misroute.
+
+**Fix:**
+- In `llmStage`'s catch branch, detect aborted-due-to-signal (`error.name === 'AbortError'` or equivalent; whichever the framework uses to surface signal cancellation) and re-throw a typed `StageAbortedError` (new class).
+- In the executor, when a stage throws `StageAbortedError`, mark the stage `skipped` (not `failed`); emit a `stage:end` event with `status: 'skipped'`; do not add a `ProcessingFailure` (the abort is not a failure to report; it's the caller's cancellation taking effect).
+- Add a test: in-flight stage + abort fires mid-stage → stage outcome `skipped`, no `ProcessingFailure`, `stage:end.status === 'skipped'`.
+- Update the existing cancellation test that only asserts downstream outcome — extend it to also assert the aborted stage's own outcome.
+
+**P3 #1 — Abort fast-path emits `stage:end` without preceding `stage:start`.**
+
+The executor's pre-stage abort check (when a stage is about to start but the signal has already fired) emits `stage:end` directly without `stage:start`. This is inconsistent with every other path (failure, skip-via-required-dep, success) which all emit both.
+
+**Fix:** either (a) emit `stage:start` immediately before the `stage:end` in the abort fast-path, or (b) document that pre-start-aborted stages get no events at all and remove the orphan `stage:end`. Pick (a) for consistency — the SSE bridge in slice 2C will rely on paired start/end events.
+
+**P3 #2 — Optional-dep cycle detection has no test pinning the behavior.**
+
+The dev's implementation correctly rejects cycles even when the cycle edge is via `optional(...)`. The agenda is silent on this, so the dev's choice is defensible. Add one test that pins it: pipeline with stage A depending on `optional("b")` and stage B depending on `"a"` → DAG validation throws with `DAG_CYCLE` at `executePipeline` entry, before any stage runs.
+
+**P3 #3 — `ctx.stageStatus(id)` does not enforce the `dependsOn` allowlist that `ctx.get` enforces.**
+
+For consistency, `ctx.stageStatus(stageId)` should throw with `PipelineConfigurationError` (or the same error class `ctx.get` throws) when called with an `id` not in the calling stage's `dependsOn` (required OR optional). This is the conservative default — if a stage isn't declared as a dep, the calling stage shouldn't be peeking at its status. (The orchestrator's decision: yes, match strictness.)
+
+**Fix:** mirror the `ctx.get` closure check in `ctx.stageStatus`. Add a test that pins the throw.
+
+**P3 #5 — `subPipelineStage` null-output throws `LlmStageRetryExhaustedError` (misnomer).**
+
+When a `subPipelineStage`'s nested pipeline returns `output: null`, the wrapping stage currently throws `LlmStageRetryExhaustedError` — which is semantically wrong (no LLM, no retry). Introduce a new error class `SubPipelineFailedError` and throw that instead. Add a test that pins the new class name in the thrown error's `name` field.
+
+### Items NOT in this fold (deferred or rejected)
+
+- **P3 #4 (UTF-16 vs UTF-8 byte counting in `maxAppendedErrorBytes`):** accept as-is for V1. Add a one-line comment in `stage-helpers.ts` near the truncation site noting that the cap is measured in JavaScript string `.length` (UTF-16 code units), not UTF-8 bytes — so a 2048 cap is roughly 2-4 KB of UTF-8 depending on character distribution. No behavior change.
+- **`pipeline:end.status` partial-failure semantics:** non-finding per the synthesis. No action.
+- **Briefing markdown prettify (concern #5):** already absorbed in the dev's commit `7e28be0`. The orchestrator accepts the change. No action.
+
+### Test plan additions
+
+- One new test in `test/pipelines.test.ts` for each of P2 #1, P3 #1, P3 #2, P3 #3, P3 #5. Five new tests minimum.
+
+### Exit criteria
+
+- All previous tests still pass.
+- Five new tests pass (one per fold item).
+- `pnpm run check` green.
+- One commit on `ingestion-pipeline/phase-1` with message `fix(pipelines): fold dual-review findings (P2 + P3s) for slice 1A`.
+
+### Carry-forward to slice 1B (and slice 1E in shared)
+
+- Type aliases are exported with `T*` prefix (`TStage`, `TPipeline`, `TStageContext`, `TProcessingFailure`, `TPipelineResult`, `TPipelineEvent`, `TDepSpec`, `TOptionalDep`, `TLlmProvider`, `TLlmRequest`, `TLlmResponse`, `TToolSpec`). Helper values keep their unprefixed names. Downstream slices (1B, 1C) and the shared-repo `processing-failure.ts` re-export module must use these `T*` spellings on imports. The spec text uses unprefixed names for spec-text readability only; the runtime/types are prefixed.
