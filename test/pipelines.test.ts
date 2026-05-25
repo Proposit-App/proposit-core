@@ -1387,3 +1387,276 @@ describe("StageAbortedError class shape", () => {
         expect(err.message).toBe("aborted")
     })
 })
+
+// ---------------- Slice 2C.A — stage:llm-call event ----------------
+//
+// Tests for the new `stage:llm-call` event variant. The event must fire
+// from `llmStage` after every LLM-call attempt — including
+// schema-failed attempts whose retry is about to fire — carrying the
+// actual prompts sent, the raw provider output, the call's token usage,
+// and an optional `validationError` set iff schema validation rejected
+// the output. Deterministic stages emit zero events of this kind.
+
+describe("llmStage — stage:llm-call event", () => {
+    const outputSchema = Type.Object({ value: Type.Number() })
+
+    it("successful attempt fires exactly one stage:llm-call before stage:end with no validationError", async () => {
+        const events: TPipelineEvent[] = []
+        const stage = llmStage<{ value: number }>({
+            id: "s1",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: s1--> system-prompt",
+                user: "original-user",
+            }),
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                s1: [
+                    {
+                        kind: "ok",
+                        output: { value: 42 },
+                        tokenUsage: { input: 10, output: 20 },
+                    },
+                ],
+            },
+        })
+        const pipeline = buildPipeline<{ value: number }>({
+            stages: [stage],
+            finalize: {
+                dependsOn: ["s1"],
+                run: (ctx) => ctx.get<{ value: number }>("s1") ?? { value: -1 },
+            },
+        })
+        const result = await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        expect(result.output).toEqual({ value: 42 })
+
+        const llmCallEvents = events.filter((e) => e.kind === "stage:llm-call")
+        expect(llmCallEvents.length).toBe(1)
+        const evt = llmCallEvents[0]
+        if (evt.kind !== "stage:llm-call") {
+            throw new Error("expected stage:llm-call event")
+        }
+        expect(evt.stageId).toBe("s1")
+        expect(evt.attempt).toBe(1)
+        expect(evt.prompts.system).toBe("<!--stage-id: s1--> system-prompt")
+        expect(evt.prompts.user).toBe("original-user")
+        expect(evt.output).toEqual({ value: 42 })
+        expect(evt.tokenUsage).toEqual({ input: 10, output: 20 })
+        expect(evt.validationError).toBeUndefined()
+
+        // The event must fire BEFORE the corresponding stage:end.
+        const llmCallIdx = events.indexOf(evt)
+        const stageEndIdx = events.findIndex(
+            (e) => e.kind === "stage:end" && e.stageId === "s1"
+        )
+        expect(llmCallIdx).toBeGreaterThanOrEqual(0)
+        expect(stageEndIdx).toBeGreaterThan(llmCallIdx)
+    })
+
+    it("retry-then-succeed: emits stage:llm-call on both attempts; attempt 1 carries validationError, attempt 2's user message carries the retry suffix", async () => {
+        const events: TPipelineEvent[] = []
+        const stage = llmStage<{ value: number }>({
+            id: "s2",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: s2--> system",
+                user: "base-user",
+            }),
+            retry: { backoffMs: 0 },
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                s2: [
+                    {
+                        kind: "schema-invalid",
+                        output: { value: "not-a-number" },
+                        tokenUsage: { input: 5, output: 5 },
+                    },
+                    {
+                        kind: "ok",
+                        output: { value: 7 },
+                        tokenUsage: { input: 8, output: 9 },
+                    },
+                ],
+            },
+        })
+        const pipeline = buildPipeline<{ value: number }>({
+            stages: [stage],
+            finalize: {
+                dependsOn: ["s2"],
+                run: (ctx) => ctx.get<{ value: number }>("s2") ?? { value: -1 },
+            },
+        })
+        const result = await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        expect(result.output).toEqual({ value: 7 })
+        expect(result.stageOutcomes).toMatchObject({ s2: "completed" })
+
+        // Extract the relevant event sequence for stage s2.
+        const s2Events = events.filter(
+            (e) => "stageId" in e && e.stageId === "s2"
+        )
+        const kinds = s2Events.map((e) => e.kind)
+        expect(kinds).toEqual([
+            "stage:start",
+            "stage:llm-call",
+            "stage:retry",
+            "stage:llm-call",
+            "stage:end",
+        ])
+
+        const llmCallEvents = s2Events.filter(
+            (e) => e.kind === "stage:llm-call"
+        )
+        expect(llmCallEvents.length).toBe(2)
+
+        const first = llmCallEvents[0]
+        const second = llmCallEvents[1]
+        if (
+            first.kind !== "stage:llm-call" ||
+            second.kind !== "stage:llm-call"
+        ) {
+            throw new Error("expected stage:llm-call events")
+        }
+        expect(first.attempt).toBe(1)
+        expect(first.prompts.user).toBe("base-user")
+        expect(first.output).toEqual({ value: "not-a-number" })
+        expect(first.tokenUsage).toEqual({ input: 5, output: 5 })
+        expect(typeof first.validationError).toBe("string")
+        expect(first.validationError ?? "").toContain("/value")
+
+        expect(second.attempt).toBe(2)
+        expect(second.prompts.user).toContain("base-user")
+        expect(second.prompts.user).toContain(
+            "Your previous response failed schema validation"
+        )
+        expect(second.output).toEqual({ value: 7 })
+        expect(second.tokenUsage).toEqual({ input: 8, output: 9 })
+        expect(second.validationError).toBeUndefined()
+
+        // stage:end status is completed because attempt 2 succeeded.
+        const stageEnd = s2Events.find((e) => e.kind === "stage:end")
+        if (stageEnd?.kind === "stage:end") {
+            expect(stageEnd.status).toBe("completed")
+        }
+    })
+
+    it("retry-exhausted: emits stage:llm-call on both attempts with validationError set; stage:end is failed", async () => {
+        const events: TPipelineEvent[] = []
+        const stage = llmStage<{ value: number }>({
+            id: "s3",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: s3--> system",
+                user: "base-user-3",
+            }),
+            retry: { backoffMs: 0 },
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                s3: [
+                    {
+                        kind: "schema-invalid",
+                        output: { value: "bad1" },
+                    },
+                    {
+                        kind: "schema-invalid",
+                        output: { value: "bad2" },
+                    },
+                ],
+            },
+        })
+        const pipeline = buildPipeline<{ value: number }>({
+            stages: [stage],
+            finalize: {
+                dependsOn: [optional("s3")],
+                run: () => ({ value: -1 }),
+            },
+        })
+        const result = await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        expect(result.stageOutcomes).toMatchObject({ s3: "failed" })
+
+        const s3Events = events.filter(
+            (e) => "stageId" in e && e.stageId === "s3"
+        )
+        const kinds = s3Events.map((e) => e.kind)
+        expect(kinds).toEqual([
+            "stage:start",
+            "stage:llm-call",
+            "stage:retry",
+            "stage:llm-call",
+            "stage:end",
+        ])
+
+        const llmCallEvents = s3Events.filter(
+            (e) => e.kind === "stage:llm-call"
+        )
+        expect(llmCallEvents.length).toBe(2)
+        const first = llmCallEvents[0]
+        const second = llmCallEvents[1]
+        if (
+            first.kind !== "stage:llm-call" ||
+            second.kind !== "stage:llm-call"
+        ) {
+            throw new Error("expected stage:llm-call events")
+        }
+        expect(first.attempt).toBe(1)
+        expect(typeof first.validationError).toBe("string")
+        expect(first.output).toEqual({ value: "bad1" })
+
+        expect(second.attempt).toBe(2)
+        expect(typeof second.validationError).toBe("string")
+        expect(second.output).toEqual({ value: "bad2" })
+        expect(second.prompts.user).toContain(
+            "Your previous response failed schema validation"
+        )
+
+        const stageEnd = s3Events.find((e) => e.kind === "stage:end")
+        if (stageEnd?.kind === "stage:end") {
+            expect(stageEnd.status).toBe("failed")
+        }
+    })
+
+    it("deterministic stage emits zero stage:llm-call events", async () => {
+        const events: TPipelineEvent[] = []
+        const aStage = deterministicStage({
+            id: "det",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 42,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [aStage],
+            finalize: {
+                dependsOn: ["det"],
+                run: (ctx) => ctx.get<number>("det") ?? -1,
+            },
+        })
+        const result = await executePipeline(
+            pipeline,
+            {},
+            { llm: emptyMockLlm(), onEvent: (e) => events.push(e) }
+        )
+        expect(result.output).toBe(42)
+        const llmCallEvents = events.filter((e) => e.kind === "stage:llm-call")
+        expect(llmCallEvents.length).toBe(0)
+    })
+})

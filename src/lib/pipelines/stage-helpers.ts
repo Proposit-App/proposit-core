@@ -259,16 +259,49 @@ export function llmStage<TOutput>(config: {
 
                 try {
                     const response = await ctx.llm.respond<TOutput>(req)
-                    if (!Value.Check(config.outputSchema, response.output)) {
+                    const validationPassed = Value.Check(
+                        config.outputSchema,
+                        response.output
+                    )
+                    let validationError: string | undefined
+                    if (!validationPassed) {
                         const errors = [
                             ...Value.Errors(
                                 config.outputSchema,
                                 response.output
                             ),
                         ]
-                        const validationMessage = errors
+                        validationError = errors
                             .map((e) => `${e.instancePath}: ${e.message}`)
                             .join("; ")
+                    }
+
+                    // Emit per-attempt LLM-call event. Fires after the
+                    // call returns and after schema validation has run,
+                    // before retry/return branching. `validationError`
+                    // is `undefined` when the schema accepted the
+                    // output, a string when it rejected. `prompts.user`
+                    // is the as-sent message — on attempt 2+ this
+                    // includes any retry-suffix appended by the prior
+                    // attempt's schema-validation failure path.
+                    ctx.emit({
+                        kind: "stage:llm-call",
+                        stageId: config.id,
+                        attempt,
+                        prompts: {
+                            system: prompt.system,
+                            user: userMessage,
+                        },
+                        output: response.output,
+                        tokenUsage: response.tokenUsage,
+                        validationError,
+                        at: now(),
+                    })
+
+                    if (!validationPassed) {
+                        // validationError is defined here because
+                        // validationPassed is false.
+                        const validationMessage = validationError!
                         lastError = {
                             reason: "schema_validation",
                             code: "OUTPUT_SCHEMA_INVALID",
@@ -464,6 +497,8 @@ function prefixSubPipelineEvent(
         case "stage:end":
             return { ...event, stageId: prefix + event.stageId }
         case "stage:retry":
+            return { ...event, stageId: prefix + event.stageId }
+        case "stage:llm-call":
             return { ...event, stageId: prefix + event.stageId }
     }
 }
