@@ -146,3 +146,21 @@ export type TPipelineEvent =
           reason: string
           at: number
       }
+    | {
+          kind: "stage:llm-call"
+          stageId: string
+          /** 1, 2, ... — one event per LLM-call attempt. */
+          attempt: number
+          /** The actual prompts sent for this attempt (the user
+           *  message includes any retry-suffix appended on attempt
+           *  2+ after a prior schema-validation failure). */
+          prompts: { system: string; user: string }
+          /** Raw LLM JSON as returned. May not conform to the
+           *  stage's `outputSchema` if `validationError` is set. */
+          output: unknown
+          tokenUsage: TLlmTokenUsage
+          /** Set iff `outputSchema` rejected this output. When the
+           *  schema accepted the output the field is `undefined`. */
+          validationError?: string
+          at: number
+      }
