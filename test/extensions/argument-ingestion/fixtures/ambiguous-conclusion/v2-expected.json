@@ -1,0 +1,8 @@
+{
+  "parity": "v2-strict-upgrade",
+  "argument": null,
+  "failureText": "No single conclusion could be selected.",
+  "uncategorizedText": null,
+  "selectionRationale": "No support relations are present, so no claim is supported by an argument and there is no conclusion to select.",
+  "processingFailures": []
+}
