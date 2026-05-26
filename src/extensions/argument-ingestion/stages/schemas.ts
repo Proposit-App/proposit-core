@@ -36,61 +36,82 @@ export type TSpan = Static<typeof SpanSchema>
 
 // -- Stage 1: segmentation --
 
-export const SegmentationOutputSchema = Type.Array(
-    Type.Object({
-        segmentId: Type.String(),
-        text: Type.String(),
-        span: SpanSchema,
-    })
-)
+// **Why every LLM-stage output is wrapped in a single-key object.**
+// The OpenAI Responses-API strict-mode structured output requires the
+// root schema to be `{ "type": "object" }`. Bare top-level arrays are
+// rejected with a 400 `invalid_json_schema` ("schema must be a JSON
+// Schema of 'type: object', got 'type: array'"). To keep every LLM
+// stage's outputSchema acceptable to the converter + the API, we wrap
+// the natural array shape in a single-key envelope (`segments`,
+// `mentions`, `sources`, `axioms`, `relations`). Downstream readers
+// access the array via `output.segments` (etc.); the envelope is
+// shallow and does not change the per-item shape. The same regression
+// test that pins `typeboxToOpenAiSchema` survival now also asserts
+// every LLM-stage's converted root is `type: object`.
+
+export const SegmentationOutputSchema = Type.Object({
+    segments: Type.Array(
+        Type.Object({
+            segmentId: Type.String(),
+            text: Type.String(),
+            span: SpanSchema,
+        })
+    ),
+})
 export type TSegmentationOutput = Static<typeof SegmentationOutputSchema>
-export type TSegment = TSegmentationOutput[number]
+export type TSegment = TSegmentationOutput["segments"][number]
 
 // -- Stage 2: claim-mention-extraction --
 
-export const ClaimMentionExtractionOutputSchema = Type.Array(
-    Type.Object({
-        mentionId: Type.String(),
-        segmentId: Type.String(),
-        text: Type.String(),
-        span: SpanSchema,
-    })
-)
+export const ClaimMentionExtractionOutputSchema = Type.Object({
+    mentions: Type.Array(
+        Type.Object({
+            mentionId: Type.String(),
+            segmentId: Type.String(),
+            text: Type.String(),
+            span: SpanSchema,
+        })
+    ),
+})
 export type TClaimMentionExtractionOutput = Static<
     typeof ClaimMentionExtractionOutputSchema
 >
-export type TClaimMention = TClaimMentionExtractionOutput[number]
+export type TClaimMention = TClaimMentionExtractionOutput["mentions"][number]
 
 // -- Stage 3: citation-source-detection --
 
-export const CitationSourceDetectionOutputSchema = Type.Array(
-    Type.Object({
-        sourceId: Type.String(),
-        segmentIds: Type.Array(Type.String()),
-        sourceString: Type.String(),
-        url: Type.Union([Type.String(), Type.Null()]),
-        spans: Type.Array(SpanSchema),
-    })
-)
+export const CitationSourceDetectionOutputSchema = Type.Object({
+    sources: Type.Array(
+        Type.Object({
+            sourceId: Type.String(),
+            segmentIds: Type.Array(Type.String()),
+            sourceString: Type.String(),
+            url: Type.Union([Type.String(), Type.Null()]),
+            spans: Type.Array(SpanSchema),
+        })
+    ),
+})
 export type TCitationSourceDetectionOutput = Static<
     typeof CitationSourceDetectionOutputSchema
 >
-export type TCitationSource = TCitationSourceDetectionOutput[number]
+export type TCitationSource = TCitationSourceDetectionOutput["sources"][number]
 
 // -- Stage 4: axiom-indicator-detection --
 
-export const AxiomIndicatorDetectionOutputSchema = Type.Array(
-    Type.Object({
-        axiomId: Type.String(),
-        segmentIds: Type.Array(Type.String()),
-        indicator: Type.String(),
-        spans: Type.Array(SpanSchema),
-    })
-)
+export const AxiomIndicatorDetectionOutputSchema = Type.Object({
+    axioms: Type.Array(
+        Type.Object({
+            axiomId: Type.String(),
+            segmentIds: Type.Array(Type.String()),
+            indicator: Type.String(),
+            spans: Type.Array(SpanSchema),
+        })
+    ),
+})
 export type TAxiomIndicatorDetectionOutput = Static<
     typeof AxiomIndicatorDetectionOutputSchema
 >
-export type TAxiomIndicator = TAxiomIndicatorDetectionOutput[number]
+export type TAxiomIndicator = TAxiomIndicatorDetectionOutput["axioms"][number]
 
 // -- Stage 5: claim-canonicalization --
 
@@ -174,22 +195,24 @@ export const RelationKindSchema = Type.Union([
 ])
 export type TRelationKind = Static<typeof RelationKindSchema>
 
-export const RelationExtractionOutputSchema = Type.Array(
-    Type.Object({
-        relationId: Type.String(),
-        type: RelationKindSchema,
-        sources: Type.Array(Type.String()),
-        target: Type.String(),
-        evidence: Type.Object({
-            segmentIds: Type.Array(Type.String()),
-            quote: Type.String(),
-        }),
-    })
-)
+export const RelationExtractionOutputSchema = Type.Object({
+    relations: Type.Array(
+        Type.Object({
+            relationId: Type.String(),
+            type: RelationKindSchema,
+            sources: Type.Array(Type.String()),
+            target: Type.String(),
+            evidence: Type.Object({
+                segmentIds: Type.Array(Type.String()),
+                quote: Type.String(),
+            }),
+        })
+    ),
+})
 export type TRelationExtractionOutput = Static<
     typeof RelationExtractionOutputSchema
 >
-export type TRelation = TRelationExtractionOutput[number]
+export type TRelation = TRelationExtractionOutput["relations"][number]
 
 // -- Stage 10: conclusion-selection --
 

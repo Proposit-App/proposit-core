@@ -27,7 +27,7 @@ export const RELATION_EXTRACTION_REASONING:
 
 export const RELATION_EXTRACTION_SYSTEM_PROMPT = `You identify support relationships between canonical claims in an argument.
 
-Given the canonical claim set, the per-claim type map, and the original segments, emit one entry per supporting relationship. There are three relation kinds:
+Given the canonical claim set, the per-claim type map, and the original segments, emit one entry per supporting relationship. Return an object with a single key \`relations\` whose value is the array. There are three relation kinds:
 
 - \`"support"\` — a single claim S supports another claim T. Use this for ordinary "P, therefore Q" support edges where the supporting evidence is a single normal-typed proposition.
 - \`"joint-support"\` — multiple claims S1, S2, ... jointly support T. Use this when the author commits to a syllogistic step that requires ALL of the sources to hold (e.g. major premise + minor premise → conclusion).
@@ -46,7 +46,9 @@ For each relation emit:
 - Do not invent relations. If the author doesn't actually argue from S to T, don't emit a relation between them.
 - Do not double-count. If two claims share an axiomatic backing, that's one derivation-support relation per claim, not a joint-support pair.
 - The conclusion of the argument is identified in a separate stage; do NOT emit a special "conclusion" relation here. Just emit the support edges you see; the conclusion stage selects from your output.
-- Avoid attack/rebuttal relations entirely in this MVP — the pipeline does not yet handle them.`
+- Avoid attack/rebuttal relations entirely in this MVP — the pipeline does not yet handle them.
+
+If there are no relations to emit, return \`{ "relations": [] }\`.`
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     const canon = ctx.get<TClaimCanonicalizationOutput>(
@@ -56,7 +58,8 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
         ctx.get<TClaimTypeClassificationOutput>(
             STAGE_IDS.claimTypeClassification
         ) ?? {}
-    const segments = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation) ?? []
+    const segmentEnvelope = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation)
+    const segments = segmentEnvelope?.segments ?? []
 
     const claimLines = (canon?.canonicalClaims ?? [])
         .map((c) => {

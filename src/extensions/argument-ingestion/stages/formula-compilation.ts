@@ -42,7 +42,8 @@ export const FORMULA_COMPILATION_FAILURE_CODES = {
 } as const
 
 export type TCompileFormulasInput = {
-    relations: TRelationExtractionOutput
+    /** Bare relations array (unwrapped from the stage's envelope). */
+    relations: TRelationExtractionOutput["relations"]
     conclusion: TConclusionSelectionOutput | undefined
     variables: TVariableAssignmentOutput
     generateId: () => string
@@ -196,10 +197,10 @@ export const formulaCompilationStage: TStage<TFormulaCompilationOutput> =
         ],
         outputSchema: FormulaCompilationOutputSchema,
         fn: (ctx: TStageContext) => {
-            const relations =
-                ctx.get<TRelationExtractionOutput>(
-                    STAGE_IDS.relationExtraction
-                ) ?? []
+            const relationEnvelope = ctx.get<TRelationExtractionOutput>(
+                STAGE_IDS.relationExtraction
+            )
+            const relations = relationEnvelope?.relations ?? []
             const conclusion = ctx.get<TConclusionSelectionOutput>(
                 STAGE_IDS.conclusionSelection
             )

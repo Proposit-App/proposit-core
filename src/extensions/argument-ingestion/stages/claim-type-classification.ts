@@ -39,14 +39,14 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     const canon = ctx.get<TClaimCanonicalizationOutput>(
         STAGE_IDS.claimCanonicalization
     )
-    const citations =
-        ctx.get<TCitationSourceDetectionOutput>(
-            STAGE_IDS.citationSourceDetection
-        ) ?? []
-    const axioms =
-        ctx.get<TAxiomIndicatorDetectionOutput>(
-            STAGE_IDS.axiomIndicatorDetection
-        ) ?? []
+    const citationEnvelope = ctx.get<TCitationSourceDetectionOutput>(
+        STAGE_IDS.citationSourceDetection
+    )
+    const citations = citationEnvelope?.sources ?? []
+    const axiomEnvelope = ctx.get<TAxiomIndicatorDetectionOutput>(
+        STAGE_IDS.axiomIndicatorDetection
+    )
+    const axioms = axiomEnvelope?.axioms ?? []
 
     const claimLines = (canon?.canonicalClaims ?? [])
         .map(

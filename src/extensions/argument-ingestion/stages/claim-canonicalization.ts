@@ -131,18 +131,18 @@ function buildClaimRecordSchema(claimSchema: TSchema): TSchema {
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     const input = ctx.input as TIngestionInput
-    const mentions =
-        ctx.get<TClaimMentionExtractionOutput>(
-            STAGE_IDS.claimMentionExtraction
-        ) ?? []
-    const citations =
-        ctx.get<TCitationSourceDetectionOutput>(
-            STAGE_IDS.citationSourceDetection
-        ) ?? []
-    const axioms =
-        ctx.get<TAxiomIndicatorDetectionOutput>(
-            STAGE_IDS.axiomIndicatorDetection
-        ) ?? []
+    const mentionEnvelope = ctx.get<TClaimMentionExtractionOutput>(
+        STAGE_IDS.claimMentionExtraction
+    )
+    const mentions = mentionEnvelope?.mentions ?? []
+    const citationEnvelope = ctx.get<TCitationSourceDetectionOutput>(
+        STAGE_IDS.citationSourceDetection
+    )
+    const citations = citationEnvelope?.sources ?? []
+    const axiomEnvelope = ctx.get<TAxiomIndicatorDetectionOutput>(
+        STAGE_IDS.axiomIndicatorDetection
+    )
+    const axioms = axiomEnvelope?.axioms ?? []
 
     const mentionLines = mentions
         .map(

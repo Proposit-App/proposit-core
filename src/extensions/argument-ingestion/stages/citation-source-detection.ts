@@ -23,17 +23,18 @@ A source reference is any of:
 - a bracketed citation marker: \`[1]\`, \`[Smith 2024]\`
 - a fully-qualified URL
 
-For each detected source emit:
+Return an object with a single key \`sources\` whose value is the array of detected source references. For each detected source emit:
 - a fresh "sourceId" (src1, src2, ...)
 - the list of "segmentIds" the source occurs in (almost always one; multi-segment when one citation spans a clause boundary)
 - a short "sourceString" — the human-readable label (e.g. "NASA climate report", "Smith 2024")
 - the "url" field — the URL when one is present, otherwise null
-- the character "spans" — one [start, end) per occurrence, relative to the SEGMENT'S TEXT
+- the character "spans" — one span object ("start" inclusive, "end" exclusive) per occurrence, relative to the SEGMENT'S TEXT
 
-Do not detect mere mentions of people, organizations, or studies that are not invoked as supporting evidence. Quote attribution alone ("Bob said X") is not a citation unless Bob's saying is being used to support a claim. Emit an empty array when no sources are present.`
+Do not detect mere mentions of people, organizations, or studies that are not invoked as supporting evidence. Quote attribution alone ("Bob said X") is not a citation unless Bob's saying is being used to support a claim. Return \`{ "sources": [] }\` when no sources are present.`
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
-    const segments = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation) ?? []
+    const segmentation = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation)
+    const segments = segmentation?.segments ?? []
     const renderedSegments = segments
         .map((s) => `[${s.segmentId}] ${JSON.stringify(s.text)}`)
         .join("\n")

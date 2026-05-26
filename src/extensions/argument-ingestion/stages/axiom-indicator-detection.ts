@@ -24,16 +24,17 @@ Recognized indicator patterns include (non-exhaustive):
 - "as a matter of (logic | mathematics | definition)"
 - "trivially"
 
-For each detected indicator emit:
+Return an object with a single key \`axioms\` whose value is the array of detected indicators. For each detected indicator emit:
 - a fresh "axiomId" (ax1, ax2, ...)
 - the list of "segmentIds" the indicator occurs in (usually one; sometimes two when the indicator straddles a clause)
 - the "indicator" — the verbatim trigger phrase
-- the character "spans" — one [start, end) per occurrence, relative to the SEGMENT'S TEXT
+- the character "spans" — one span object ("start" inclusive, "end" exclusive) per occurrence, relative to the SEGMENT'S TEXT
 
-Hedging phrases ("clearly", "obviously", "of course") are NOT axiom indicators on their own — they are stylistic emphasis. Emit an empty array when no indicators are present.`
+Hedging phrases ("clearly", "obviously", "of course") are NOT axiom indicators on their own — they are stylistic emphasis. Return \`{ "axioms": [] }\` when no indicators are present.`
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
-    const segments = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation) ?? []
+    const segmentation = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation)
+    const segments = segmentation?.segments ?? []
     const renderedSegments = segments
         .map((s) => `[${s.segmentId}] ${JSON.stringify(s.text)}`)
         .join("\n")

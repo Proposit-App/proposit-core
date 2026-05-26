@@ -75,7 +75,8 @@ type TArgumentFinalForm = {
 
 function buildClaimToRole(args: {
     canonicalClaims: TClaimCanonicalizationOutput["canonicalClaims"]
-    relations: TRelationExtractionOutput
+    /** Bare relations array (unwrapped from the stage's envelope). */
+    relations: TRelationExtractionOutput["relations"]
     conclusionMiniId: string | null
 }): Record<string, "premise" | "conclusion" | "intermediate"> {
     const out: Record<string, "premise" | "conclusion" | "intermediate"> = {}
@@ -176,8 +177,10 @@ export function finalizeResponseV2(
     const conclusion = ctx.get<TConclusionSelectionOutput>(
         STAGE_IDS.conclusionSelection
     )
-    const relations =
-        ctx.get<TRelationExtractionOutput>(STAGE_IDS.relationExtraction) ?? []
+    const relationEnvelope = ctx.get<TRelationExtractionOutput>(
+        STAGE_IDS.relationExtraction
+    )
+    const relations = relationEnvelope?.relations ?? []
     const typeMap =
         ctx.get<TClaimTypeClassificationOutput>(
             STAGE_IDS.claimTypeClassification

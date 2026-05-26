@@ -115,45 +115,49 @@ function buildHappyMockResponses(): Record<
     string,
     { kind: "ok"; output: unknown }[]
 > {
-    const segmentation: TSegmentationOutput = [
-        {
-            segmentId: "s1",
-            text: "If it rains, ground gets wet.",
-            span: { start: 0, end: 29 },
-        },
-        {
-            segmentId: "s2",
-            text: "It is raining.",
-            span: { start: 30, end: 44 },
-        },
-        {
-            segmentId: "s3",
-            text: "Therefore, the ground is wet.",
-            span: { start: 45, end: 74 },
-        },
-    ]
-    const mentions: TClaimMentionExtractionOutput = [
-        {
-            mentionId: "m1",
-            segmentId: "s1",
-            text: "If it rains, ground gets wet.",
-            span: { start: 0, end: 29 },
-        },
-        {
-            mentionId: "m2",
-            segmentId: "s2",
-            text: "It is raining.",
-            span: { start: 0, end: 14 },
-        },
-        {
-            mentionId: "m3",
-            segmentId: "s3",
-            text: "the ground is wet",
-            span: { start: 11, end: 28 },
-        },
-    ]
-    const citations: TCitationSourceDetectionOutput = []
-    const axioms: TAxiomIndicatorDetectionOutput = []
+    const segmentation: TSegmentationOutput = {
+        segments: [
+            {
+                segmentId: "s1",
+                text: "If it rains, ground gets wet.",
+                span: { start: 0, end: 29 },
+            },
+            {
+                segmentId: "s2",
+                text: "It is raining.",
+                span: { start: 30, end: 44 },
+            },
+            {
+                segmentId: "s3",
+                text: "Therefore, the ground is wet.",
+                span: { start: 45, end: 74 },
+            },
+        ],
+    }
+    const mentions: TClaimMentionExtractionOutput = {
+        mentions: [
+            {
+                mentionId: "m1",
+                segmentId: "s1",
+                text: "If it rains, ground gets wet.",
+                span: { start: 0, end: 29 },
+            },
+            {
+                mentionId: "m2",
+                segmentId: "s2",
+                text: "It is raining.",
+                span: { start: 0, end: 14 },
+            },
+            {
+                mentionId: "m3",
+                segmentId: "s3",
+                text: "the ground is wet",
+                span: { start: 11, end: 28 },
+            },
+        ],
+    }
+    const citations: TCitationSourceDetectionOutput = { sources: [] }
+    const axioms: TAxiomIndicatorDetectionOutput = { axioms: [] }
 
     const canonicalization: TClaimCanonicalizationOutput = {
         canonicalClaims: [
@@ -198,15 +202,17 @@ function buildHappyMockResponses(): Record<
         c3: { type: "normal", sourceString: null },
     }
 
-    const relations: TRelationExtractionOutput = [
-        {
-            relationId: "r1",
-            type: "joint-support",
-            sources: ["c1", "c2"],
-            target: "c3",
-            evidence: { segmentIds: ["s3"], quote: "Therefore" },
-        },
-    ]
+    const relations: TRelationExtractionOutput = {
+        relations: [
+            {
+                relationId: "r1",
+                type: "joint-support",
+                sources: ["c1", "c2"],
+                target: "c3",
+                evidence: { segmentIds: ["s3"], quote: "Therefore" },
+            },
+        ],
+    }
 
     const selection: TConclusionSelectionOutput = {
         conclusionMiniId: "c3",
@@ -328,7 +334,9 @@ describe("createIngestionV2Pipeline — failure paths", () => {
         responses[STAGE_IDS.claimTypeClassification] = [
             { kind: "ok", output: {} },
         ]
-        responses[STAGE_IDS.relationExtraction] = [{ kind: "ok", output: [] }]
+        responses[STAGE_IDS.relationExtraction] = [
+            { kind: "ok", output: { relations: [] } },
+        ]
         responses[STAGE_IDS.conclusionSelection] = [
             {
                 kind: "ok",

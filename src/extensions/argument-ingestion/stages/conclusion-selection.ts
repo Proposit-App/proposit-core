@@ -53,8 +53,10 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
         ctx.get<TClaimTypeClassificationOutput>(
             STAGE_IDS.claimTypeClassification
         ) ?? {}
-    const relations =
-        ctx.get<TRelationExtractionOutput>(STAGE_IDS.relationExtraction) ?? []
+    const relationEnvelope = ctx.get<TRelationExtractionOutput>(
+        STAGE_IDS.relationExtraction
+    )
+    const relations = relationEnvelope?.relations ?? []
 
     const typeLines = Object.entries(typeMap)
         .map(([id, t]) => `  [${id}] type=${t.type}`)

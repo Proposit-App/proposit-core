@@ -57,18 +57,20 @@ describe("segmentationStage", () => {
     })
 
     it("returns the LLM's segmentation output verbatim", async () => {
-        const happy: TSegmentationOutput = [
-            {
-                segmentId: "s1",
-                text: "It rains.",
-                span: { start: 0, end: 9 },
-            },
-            {
-                segmentId: "s2",
-                text: "Ground is wet.",
-                span: { start: 10, end: 24 },
-            },
-        ]
+        const happy: TSegmentationOutput = {
+            segments: [
+                {
+                    segmentId: "s1",
+                    text: "It rains.",
+                    span: { start: 0, end: 9 },
+                },
+                {
+                    segmentId: "s2",
+                    text: "Ground is wet.",
+                    span: { start: 10, end: 24 },
+                },
+            ],
+        }
         const llm = createMockLlmProvider({
             responses: {
                 [STAGE_IDS.segmentation]: [{ kind: "ok", output: happy }],
@@ -83,7 +85,9 @@ describe("segmentationStage", () => {
             finalize: {
                 dependsOn: [STAGE_IDS.segmentation],
                 run: (ctx) =>
-                    ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation) ?? [],
+                    ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation) ?? {
+                        segments: [],
+                    },
             },
         }
         const result = await executePipeline(
@@ -106,21 +110,25 @@ describe("claimMentionExtractionStage", () => {
     })
 
     it("interpolates segments into the user prompt + returns mock output", async () => {
-        const segments: TSegmentationOutput = [
-            {
-                segmentId: "s1",
-                text: "It rains.",
-                span: { start: 0, end: 9 },
-            },
-        ]
-        const mentions: TClaimMentionExtractionOutput = [
-            {
-                mentionId: "m1",
-                segmentId: "s1",
-                text: "It rains.",
-                span: { start: 0, end: 9 },
-            },
-        ]
+        const segments: TSegmentationOutput = {
+            segments: [
+                {
+                    segmentId: "s1",
+                    text: "It rains.",
+                    span: { start: 0, end: 9 },
+                },
+            ],
+        }
+        const mentions: TClaimMentionExtractionOutput = {
+            mentions: [
+                {
+                    mentionId: "m1",
+                    segmentId: "s1",
+                    text: "It rains.",
+                    span: { start: 0, end: 9 },
+                },
+            ],
+        }
         const calls: { systemPrompt: string; userMessage: string }[] = []
         const llm = createMockLlmProvider({
             responses: {
@@ -154,7 +162,7 @@ describe("claimMentionExtractionStage", () => {
                 run: (ctx) =>
                     ctx.get<TClaimMentionExtractionOutput>(
                         STAGE_IDS.claimMentionExtraction
-                    ) ?? [],
+                    ) ?? { mentions: [] },
             },
         }
         const result = await executePipeline(
@@ -179,22 +187,26 @@ describe("citationSourceDetectionStage", () => {
     })
 
     it("returns the LLM's citation output", async () => {
-        const segments: TSegmentationOutput = [
-            {
-                segmentId: "s1",
-                text: "According to NASA.",
-                span: { start: 0, end: 18 },
-            },
-        ]
-        const sources: TCitationSourceDetectionOutput = [
-            {
-                sourceId: "src1",
-                segmentIds: ["s1"],
-                sourceString: "NASA",
-                url: null,
-                spans: [{ start: 13, end: 17 }],
-            },
-        ]
+        const segments: TSegmentationOutput = {
+            segments: [
+                {
+                    segmentId: "s1",
+                    text: "According to NASA.",
+                    span: { start: 0, end: 18 },
+                },
+            ],
+        }
+        const sources: TCitationSourceDetectionOutput = {
+            sources: [
+                {
+                    sourceId: "src1",
+                    segmentIds: ["s1"],
+                    sourceString: "NASA",
+                    url: null,
+                    spans: [{ start: 13, end: 17 }],
+                },
+            ],
+        }
         const llm = createMockLlmProvider({
             responses: {
                 [STAGE_IDS.citationSourceDetection]: [
@@ -222,7 +234,7 @@ describe("citationSourceDetectionStage", () => {
                 run: (ctx) =>
                     ctx.get<TCitationSourceDetectionOutput>(
                         STAGE_IDS.citationSourceDetection
-                    ) ?? [],
+                    ) ?? { sources: [] },
             },
         }
         const result = await executePipeline(
@@ -245,21 +257,25 @@ describe("axiomIndicatorDetectionStage", () => {
     })
 
     it("returns the LLM's axiom-indicator output", async () => {
-        const segments: TSegmentationOutput = [
-            {
-                segmentId: "s1",
-                text: "By definition, a bachelor is unmarried.",
-                span: { start: 0, end: 39 },
-            },
-        ]
-        const axioms: TAxiomIndicatorDetectionOutput = [
-            {
-                axiomId: "ax1",
-                segmentIds: ["s1"],
-                indicator: "By definition",
-                spans: [{ start: 0, end: 13 }],
-            },
-        ]
+        const segments: TSegmentationOutput = {
+            segments: [
+                {
+                    segmentId: "s1",
+                    text: "By definition, a bachelor is unmarried.",
+                    span: { start: 0, end: 39 },
+                },
+            ],
+        }
+        const axioms: TAxiomIndicatorDetectionOutput = {
+            axioms: [
+                {
+                    axiomId: "ax1",
+                    segmentIds: ["s1"],
+                    indicator: "By definition",
+                    spans: [{ start: 0, end: 13 }],
+                },
+            ],
+        }
         const llm = createMockLlmProvider({
             responses: {
                 [STAGE_IDS.axiomIndicatorDetection]: [
@@ -287,7 +303,7 @@ describe("axiomIndicatorDetectionStage", () => {
                 run: (ctx) =>
                     ctx.get<TAxiomIndicatorDetectionOutput>(
                         STAGE_IDS.axiomIndicatorDetection
-                    ) ?? [],
+                    ) ?? { axioms: [] },
             },
         }
         const result = await executePipeline(pipeline, { text: "x" }, { llm })
@@ -309,20 +325,22 @@ describe("createClaimCanonicalizationStage", () => {
 
     it("returns the LLM's canonicalization output", async () => {
         const stage = createClaimCanonicalizationStage(basicsExtension)
-        const mentions: TClaimMentionExtractionOutput = [
-            {
-                mentionId: "m1",
-                segmentId: "s1",
-                text: "P",
-                span: { start: 0, end: 1 },
-            },
-            {
-                mentionId: "m2",
-                segmentId: "s2",
-                text: "Q",
-                span: { start: 0, end: 1 },
-            },
-        ]
+        const mentions: TClaimMentionExtractionOutput = {
+            mentions: [
+                {
+                    mentionId: "m1",
+                    segmentId: "s1",
+                    text: "P",
+                    span: { start: 0, end: 1 },
+                },
+                {
+                    mentionId: "m2",
+                    segmentId: "s2",
+                    text: "Q",
+                    span: { start: 0, end: 1 },
+                },
+            ],
+        }
         const canon: TClaimCanonicalizationOutput = {
             canonicalClaims: [
                 {
@@ -370,14 +388,14 @@ describe("createClaimCanonicalizationStage", () => {
                 id: STAGE_IDS.citationSourceDetection,
                 dependsOn: [],
                 outputSchema: citationSourceDetectionStage.outputSchema,
-                fn: () => [],
+                fn: () => ({ sources: [] }),
             }
         )
         const axiomSeed = deterministicStage<TAxiomIndicatorDetectionOutput>({
             id: STAGE_IDS.axiomIndicatorDetection,
             dependsOn: [],
             outputSchema: axiomIndicatorDetectionStage.outputSchema,
-            fn: () => [],
+            fn: () => ({ axioms: [] }),
         })
         const pipeline: TPipeline<
             TPipelineInput,
@@ -451,14 +469,14 @@ describe("claimTypeClassificationStage", () => {
                 id: STAGE_IDS.citationSourceDetection,
                 dependsOn: [],
                 outputSchema: citationSourceDetectionStage.outputSchema,
-                fn: () => [],
+                fn: () => ({ sources: [] }),
             }
         )
         const axiomSeed = deterministicStage<TAxiomIndicatorDetectionOutput>({
             id: STAGE_IDS.axiomIndicatorDetection,
             dependsOn: [],
             outputSchema: axiomIndicatorDetectionStage.outputSchema,
-            fn: () => [],
+            fn: () => ({ axioms: [] }),
         })
         const pipeline: TPipeline<
             TPipelineInput,
@@ -499,13 +517,15 @@ describe("relationExtractionStage", () => {
     })
 
     it("returns the LLM's relation output", async () => {
-        const segments: TSegmentationOutput = [
-            {
-                segmentId: "s1",
-                text: "P, therefore Q.",
-                span: { start: 0, end: 14 },
-            },
-        ]
+        const segments: TSegmentationOutput = {
+            segments: [
+                {
+                    segmentId: "s1",
+                    text: "P, therefore Q.",
+                    span: { start: 0, end: 14 },
+                },
+            ],
+        }
         const canon: TClaimCanonicalizationOutput = {
             canonicalClaims: [
                 {
@@ -527,15 +547,17 @@ describe("relationExtractionStage", () => {
             c1: { type: "normal", sourceString: null },
             c2: { type: "normal", sourceString: null },
         }
-        const relations: TRelationExtractionOutput = [
-            {
-                relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
-                evidence: { segmentIds: ["s1"], quote: "therefore" },
-            },
-        ]
+        const relations: TRelationExtractionOutput = {
+            relations: [
+                {
+                    relationId: "r1",
+                    type: "support",
+                    sources: ["c1"],
+                    target: "c2",
+                    evidence: { segmentIds: ["s1"], quote: "therefore" },
+                },
+            ],
+        }
         const llm = createMockLlmProvider({
             responses: {
                 [STAGE_IDS.relationExtraction]: [
@@ -599,15 +621,17 @@ describe("conclusionSelectionStage", () => {
             c1: { type: "normal", sourceString: null },
             c2: { type: "normal", sourceString: null },
         }
-        const relations: TRelationExtractionOutput = [
-            {
-                relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
-                evidence: { segmentIds: ["s1"], quote: "" },
-            },
-        ]
+        const relations: TRelationExtractionOutput = {
+            relations: [
+                {
+                    relationId: "r1",
+                    type: "support",
+                    sources: ["c1"],
+                    target: "c2",
+                    evidence: { segmentIds: ["s1"], quote: "" },
+                },
+            ],
+        }
         const selection: TConclusionSelectionOutput = {
             conclusionMiniId: "c2",
             rationale: "c2 is the only terminal of the support graph.",
@@ -672,7 +696,7 @@ describe("conclusionSelectionStage", () => {
             id: STAGE_IDS.relationExtraction,
             dependsOn: [],
             outputSchema: relationExtractionStage.outputSchema,
-            fn: () => [],
+            fn: () => ({ relations: [] }),
         })
         const pipeline: TPipeline<TPipelineInput, TConclusionSelectionOutput> =
             {

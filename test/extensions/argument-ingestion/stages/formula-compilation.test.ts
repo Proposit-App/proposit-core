@@ -332,7 +332,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
 
     it("emits FORMULA_COMPILATION_SOURCES_EMPTY when a relation has no sources", () => {
         const failures: { code: string }[] = []
-        const relations: TRelationExtractionOutput = [
+        const relations: TRelationExtractionOutput["relations"] = [
             {
                 relationId: "r1",
                 type: "support",
