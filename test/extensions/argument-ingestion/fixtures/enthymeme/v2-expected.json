@@ -1,0 +1,51 @@
+{
+    "parity": "strict",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "Socrates is a man",
+                "body": "Socrates is a man.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "Socrates is mortal",
+                "body": "Socrates is mortal.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "Socrates_Man",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "Socrates_Mortal",
+                "claimMiniId": "c2"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-3",
+                "formula": "Socrates_Man implies Socrates_Mortal",
+                "title": "Support: Socrates_Man implies Socrates_Mortal"
+            },
+            {
+                "miniId": "gid-4",
+                "formula": "Socrates_Mortal",
+                "title": "Conclusion: Socrates_Mortal"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-4",
+        "title": "Socrates is mortal"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c2 is the supported target of the only support relation, with c1 serving as its premise.",
+    "processingFailures": []
+}

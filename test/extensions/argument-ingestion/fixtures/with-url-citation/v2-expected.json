@@ -1,0 +1,80 @@
+{
+    "parity": "strict",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "NASA reports temperature rise",
+                "url": "https://climate.nasa.gov/evidence/",
+                "type": "citation",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "Global temperatures have risen",
+                "body": "Global temperatures have risen significantly over the past century.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "Temperature rise causes extremes",
+                "body": "Rising global temperatures cause more frequent extreme weather events.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c4",
+                "title": "Extreme weather is more frequent",
+                "body": "People are seeing more frequent extreme weather events.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "NASA_Temp_Rise",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "Temps_Risen_Century",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "Temp_Rise_Extreme",
+                "claimMiniId": "c3"
+            },
+            {
+                "miniId": "gid-4",
+                "symbol": "More_Extreme_Weather",
+                "claimMiniId": "c4"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-5",
+                "formula": "NASA_Temp_Rise implies Temps_Risen_Century",
+                "title": "Derivation: NASA_Temp_Rise implies Temps_Risen_Ce…"
+            },
+            {
+                "miniId": "gid-6",
+                "formula": "(Temps_Risen_Century and Temp_Rise_Extreme) implies More_Extreme_Weather",
+                "title": "Joint support → (Temps_Risen_Century and Temp_Ris…"
+            },
+            {
+                "miniId": "gid-7",
+                "formula": "More_Extreme_Weather",
+                "title": "Conclusion: More_Extreme_Weather"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-7",
+        "title": "Extreme weather is more frequent"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c4 is the terminal normal claim supported by the joint support relation from c2 and c3, while it does not itself support any further claim.",
+    "processingFailures": []
+}

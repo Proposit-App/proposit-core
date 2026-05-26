@@ -17,6 +17,7 @@
     "include": [
         "src/**/*.ts",
         "test/**/*.ts",
+        "scripts/**/*.ts",
         "eslint.config.mjs",
         "*.mjs",
         ".ltstash/predicate.ts"
