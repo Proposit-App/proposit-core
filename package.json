@@ -65,7 +65,7 @@
         "docs": "typedoc",
         "cli": "node dist/cli.js",
         "preversion": "pnpm run check",
-        "postinstall": "pnpm prettier -w package.json pnpm-lock.yaml",
+        "prepare": "git config core.hooksPath .githooks || true",
         "prepublishOnly": "pnpm run check"
     },
     "devDependencies": {

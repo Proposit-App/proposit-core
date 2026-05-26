@@ -1,0 +1,46 @@
+#!/usr/bin/env sh
+#
+# pre-push hook: verify Prettier formatting before a push is allowed.
+#
+# Checks only the files added/modified on the current branch relative to its
+# counterpart on the remote being pushed to (the "remote branch of the same
+# name"). When that comparison point can't be determined — a brand-new branch,
+# a missing remote ref, or a detached HEAD — it falls back to checking every
+# file in the repo. Prettier respects .prettierignore in both modes.
+#
+# Bypass once with: git push --no-verify
+
+remote_name="$1"
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+
+base=""
+if [ -n "$remote_name" ] && [ -n "$branch" ] &&
+	git rev-parse --verify --quiet "refs/remotes/$remote_name/$branch" >/dev/null 2>&1; then
+	base="$remote_name/$branch"
+fi
+
+run_check() {
+	if "$@"; then
+		return 0
+	fi
+	echo ""
+	echo "pre-push: Prettier found unformatted files. Run 'pnpm prettify' to fix them, then re-stage and push."
+	echo "          (To bypass this check once: git push --no-verify)"
+	return 1
+}
+
+if [ -n "$base" ]; then
+	changed="$(git diff --name-only --diff-filter=ACMR "$base"...HEAD)"
+	if [ -z "$changed" ]; then
+		echo "pre-push: no added/modified files vs $base; skipping Prettier check."
+		exit 0
+	fi
+	echo "pre-push: checking Prettier formatting on files changed vs $base"
+	git diff -z --name-only --diff-filter=ACMR "$base"...HEAD |
+		run_check xargs -0 pnpm prettier --check --ignore-unknown
+	exit $?
+else
+	echo "pre-push: could not determine diff vs remote; checking all files."
+	run_check pnpm prettier --check .
+	exit $?
+fi

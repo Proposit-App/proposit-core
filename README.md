@@ -1196,4 +1196,13 @@ A CLI smoke test exercises every command against an isolated temp directory:
 pnpm run build && bash scripts/smoke-test.sh
 ```
 
+### Git hooks
+
+`pnpm install` runs a `prepare` script that points `core.hooksPath` at the
+tracked `.githooks/` directory, so the **pre-push** hook activates
+automatically. Before each push it runs Prettier (`--check`) on the files your
+branch changed relative to its remote counterpart, falling back to the whole
+repo when that comparison can't be made. Fix any reported files with
+`pnpm prettify`, or bypass the check once with `git push --no-verify`.
+
 See [CLI_EXAMPLES.md](CLI_EXAMPLES.md) for a full walkthrough.
