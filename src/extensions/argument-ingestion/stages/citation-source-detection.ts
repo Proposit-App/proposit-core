@@ -1,0 +1,52 @@
+// `citation-source-detection` — detects explicit source references in
+// the segmented input. Markdown links, "according to X", named
+// reports/papers, bracketed citation markers, etc. The downstream
+// `claim-canonicalization` stage uses this to route the right claims
+// to citation-typed records with their `url` / `title` populated.
+
+import {
+    STAGE_IDS,
+    CitationSourceDetectionOutputSchema,
+    type TCitationSourceDetectionOutput,
+    type TSegmentationOutput,
+} from "./schemas.js"
+import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
+import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
+
+export const CITATION_SOURCE_DETECTION_MODEL = "gpt-5.4-mini"
+
+export const CITATION_SOURCE_DETECTION_SYSTEM_PROMPT = `You scan the segments of an argument for explicit references to external sources of evidence.
+
+A source reference is any of:
+- a Markdown link: \`[label](url)\`
+- a named source: "according to X", "as reported in Y", "the X report"
+- a bracketed citation marker: \`[1]\`, \`[Smith 2024]\`
+- a fully-qualified URL
+
+For each detected source emit:
+- a fresh "sourceId" (src1, src2, ...)
+- the list of "segmentIds" the source occurs in (almost always one; multi-segment when one citation spans a clause boundary)
+- a short "sourceString" — the human-readable label (e.g. "NASA climate report", "Smith 2024")
+- the "url" field — the URL when one is present, otherwise null
+- the character "spans" — one [start, end) per occurrence, relative to the SEGMENT'S TEXT
+
+Do not detect mere mentions of people, organizations, or studies that are not invoked as supporting evidence. Quote attribution alone ("Bob said X") is not a citation unless Bob's saying is being used to support a claim. Emit an empty array when no sources are present.`
+
+function buildPrompt(ctx: TStageContext): { system: string; user: string } {
+    const segments = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation) ?? []
+    const renderedSegments = segments
+        .map((s) => `[${s.segmentId}] ${JSON.stringify(s.text)}`)
+        .join("\n")
+    const markedSystem = `<!-- stage-id: ${STAGE_IDS.citationSourceDetection} -->\n${CITATION_SOURCE_DETECTION_SYSTEM_PROMPT}`
+    const user = `Segments:\n\n${renderedSegments}\n\nDetect every citation/source reference.`
+    return { system: markedSystem, user }
+}
+
+export const citationSourceDetectionStage: TStage<TCitationSourceDetectionOutput> =
+    llmStage<TCitationSourceDetectionOutput>({
+        id: STAGE_IDS.citationSourceDetection,
+        dependsOn: [STAGE_IDS.segmentation],
+        outputSchema: CitationSourceDetectionOutputSchema,
+        model: CITATION_SOURCE_DETECTION_MODEL,
+        buildPrompt,
+    })

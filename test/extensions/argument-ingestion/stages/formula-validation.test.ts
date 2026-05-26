@@ -15,7 +15,7 @@ import type {
 } from "../../../../src/extensions/argument-ingestion/stages/schemas.js"
 
 function buildVars(
-    pairs: Array<[claimMiniId: string, symbol: string]>
+    pairs: [claimMiniId: string, symbol: string][]
 ): TVariableAssignmentOutput {
     return pairs.map(([claimMiniId, symbol], i) => ({
         miniId: `v${String(i + 1)}`,
@@ -101,9 +101,11 @@ describe("validateFormulas — parse errors", () => {
             compilation,
             variables: [],
         })
-        expect(result.failures.some(
-            (f) => f.code === FORMULA_VALIDATION_FAILURE_CODES.parseError
-        )).toBe(true)
+        expect(
+            result.failures.some(
+                (f) => f.code === FORMULA_VALIDATION_FAILURE_CODES.parseError
+            )
+        ).toBe(true)
     })
 
     it("emits parse error on dangling operator", () => {
@@ -122,9 +124,11 @@ describe("validateFormulas — parse errors", () => {
             compilation,
             variables: buildVars([["c1", "A"]]),
         })
-        expect(result.failures.some(
-            (f) => f.code === FORMULA_VALIDATION_FAILURE_CODES.parseError
-        )).toBe(true)
+        expect(
+            result.failures.some(
+                (f) => f.code === FORMULA_VALIDATION_FAILURE_CODES.parseError
+            )
+        ).toBe(true)
     })
 })
 
@@ -169,8 +173,7 @@ describe("validateFormulas — symbol-resolution errors", () => {
             variables: buildVars([["c1", "B"]]),
         })
         const unresolved = result.failures.filter(
-            (f) =>
-                f.code === FORMULA_VALIDATION_FAILURE_CODES.symbolUnresolved
+            (f) => f.code === FORMULA_VALIDATION_FAILURE_CODES.symbolUnresolved
         )
         expect(unresolved).toHaveLength(2)
         const names = unresolved.map((f) => f.context.unresolvedSymbol).sort()

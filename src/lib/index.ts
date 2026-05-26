@@ -175,8 +175,11 @@ export {
 // callers an alternate tree-shake-friendly path.
 export {
     createIngestionV1Pipeline,
+    createIngestionV2Pipeline,
     basicsExtension,
     finalizeResponse,
+    finalizeResponseV2,
+    FINALIZE_V2_FAILURE_TEXTS,
     deriveRoles,
 } from "../extensions/argument-ingestion/index.js"
 export type {
@@ -184,6 +187,7 @@ export type {
     TIngestionExtension,
     TIngestionInput,
     TFinalizeResponseInput,
+    TFinalizeResponseV2Input,
     TClaimRole,
     TDeriveRolesInput,
 } from "../extensions/argument-ingestion/index.js"

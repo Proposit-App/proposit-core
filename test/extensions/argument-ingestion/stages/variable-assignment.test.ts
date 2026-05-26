@@ -101,10 +101,7 @@ describe("assignVariables — happy path", () => {
     })
 
     it("mints a fresh `miniId` per claim from `generateId`", () => {
-        const claims = [
-            buildClaim("c1", "a"),
-            buildClaim("c2", "b"),
-        ]
+        const claims = [buildClaim("c1", "a"), buildClaim("c2", "b")]
         const variables = assignVariables({
             canonicalClaims: claims,
             generateId: counterIdGen(),
@@ -116,10 +113,7 @@ describe("assignVariables — happy path", () => {
 
 describe("assignVariables — invalid symbol falls back to p<n>", () => {
     it("falls back when a claim's suggestion is empty", () => {
-        const claims = [
-            buildClaim("c1", ""),
-            buildClaim("c2", "Valid"),
-        ]
+        const claims = [buildClaim("c1", ""), buildClaim("c2", "Valid")]
         const variables = assignVariables({
             canonicalClaims: claims,
             generateId: counterIdGen(),

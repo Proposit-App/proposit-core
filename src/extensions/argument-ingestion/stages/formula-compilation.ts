@@ -84,7 +84,10 @@ export function compileFormulas(
     input: TCompileFormulasInput
 ): TFormulaCompilationOutput {
     const claimToSymbol = buildClaimToSymbol(input.variables)
-    const emit = input.addFailure ?? (() => {})
+    const noopEmit: NonNullable<TCompileFormulasInput["addFailure"]> = () => {
+        // intentionally empty — tests can supply addFailure to capture emits
+    }
+    const emit = input.addFailure ?? noopEmit
 
     const premises: TFormulaCompilationOutput["premises"] = []
 

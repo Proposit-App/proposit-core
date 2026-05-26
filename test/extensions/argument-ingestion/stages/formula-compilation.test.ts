@@ -39,7 +39,7 @@ function counterIdGen(prefix = "p"): () => string {
 }
 
 function buildVars(
-    pairs: Array<[claimMiniId: string, symbol: string]>
+    pairs: [claimMiniId: string, symbol: string][]
 ): TVariableAssignmentOutput {
     return pairs.map(([claimMiniId, symbol], i) => ({
         miniId: `v${String(i + 1)}`,
@@ -253,7 +253,7 @@ describe("compileFormulas — conclusion premise minting", () => {
     })
 
     it("emits a failure and leaves conclusionPremiseMiniId null when the conclusion claim has no variable", () => {
-        const failures: Array<{ code: string }> = []
+        const failures: { code: string }[] = []
         const result = compileFormulas({
             relations: [],
             conclusion: { conclusionMiniId: "c2", rationale: "" },
@@ -274,7 +274,7 @@ describe("compileFormulas — conclusion premise minting", () => {
 
 describe("compileFormulas — symbol-resolution failures", () => {
     it("drops a relation whose target has no variable assignment", () => {
-        const failures: Array<{ code: string }> = []
+        const failures: { code: string }[] = []
         const result = compileFormulas({
             relations: [
                 {
@@ -301,7 +301,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
     })
 
     it("drops a relation when any source has no variable assignment", () => {
-        const failures: Array<{ code: string }> = []
+        const failures: { code: string }[] = []
         const result = compileFormulas({
             relations: [
                 {
@@ -331,7 +331,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
     })
 
     it("emits FORMULA_COMPILATION_SOURCES_EMPTY when a relation has no sources", () => {
-        const failures: Array<{ code: string }> = []
+        const failures: { code: string }[] = []
         const relations: TRelationExtractionOutput = [
             {
                 relationId: "r1",
@@ -351,9 +351,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
         expect(result.premises).toHaveLength(0)
         expect(
             failures.find(
-                (f) =>
-                    f.code ===
-                    FORMULA_COMPILATION_FAILURE_CODES.emptySources
+                (f) => f.code === FORMULA_COMPILATION_FAILURE_CODES.emptySources
             )
         ).toBeDefined()
     })

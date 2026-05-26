@@ -53,17 +53,17 @@ export type TValidateFormulasInput = {
 }
 
 export function validateFormulas(input: TValidateFormulasInput): {
-    failures: Array<{
+    failures: {
         code: string
         message: string
         context: Record<string, unknown>
-    }>
+    }[]
 } {
-    const failures: Array<{
+    const failures: {
         code: string
         message: string
         context: Record<string, unknown>
-    }> = []
+    }[] = []
     const knownSymbols = new Set(input.variables.map((v) => v.symbol))
     if (!input.compilation) return { failures }
 
@@ -106,10 +106,7 @@ export function validateFormulas(input: TValidateFormulasInput): {
 export const formulaValidationStage: TStage<TValidationStageOutput> =
     deterministicStage<TValidationStageOutput>({
         id: STAGE_IDS.formulaValidation,
-        dependsOn: [
-            STAGE_IDS.formulaCompilation,
-            STAGE_IDS.variableAssignment,
-        ],
+        dependsOn: [STAGE_IDS.formulaCompilation, STAGE_IDS.variableAssignment],
         outputSchema: ValidationStageOutputSchema,
         fn: (ctx) => {
             const compilation = ctx.get<TFormulaCompilationOutput>(

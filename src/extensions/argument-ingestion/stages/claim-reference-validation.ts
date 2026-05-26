@@ -50,20 +50,18 @@ export type TClaimReferenceFailureContext =
  * failures the stage will emit; the stage wrapper also calls
  * `ctx.addFailure` on each.
  */
-export function validateClaimReferences(
-    canon: TClaimCanonicalizationOutput
-): {
-    failures: Array<{
+export function validateClaimReferences(canon: TClaimCanonicalizationOutput): {
+    failures: {
         code: string
         message: string
         context: Record<string, unknown>
-    }>
+    }[]
 } {
-    const failures: Array<{
+    const failures: {
         code: string
         message: string
         context: Record<string, unknown>
-    }> = []
+    }[] = []
 
     // 1. miniId collisions.
     const miniIdCounts = new Map<string, number>()
