@@ -1,62 +1,62 @@
 {
-  "parity": "strict",
-  "argument": {
-    "claims": [
-      {
-        "miniId": "c1",
-        "axiom": "A bachelor is an unmarried man by definition.",
-        "type": "axiomatic",
-        "role": "premise"
-      },
-      {
-        "miniId": "c2",
-        "title": "John is a bachelor",
-        "body": "John is a bachelor.",
-        "type": "normal",
-        "role": "premise"
-      },
-      {
-        "miniId": "c3",
-        "title": "John is unmarried",
-        "body": "John is unmarried.",
-        "type": "normal",
-        "role": "conclusion"
-      }
-    ],
-    "variables": [
-      {
-        "miniId": "79cd2a91-c49e-48d5-aeed-d05f34ca9756",
-        "symbol": "Bachelor_Unmarried",
-        "claimMiniId": "c1"
-      },
-      {
-        "miniId": "abbf10b1-43fc-4e96-980f-df26c15d6bc1",
-        "symbol": "John_Bachelor",
-        "claimMiniId": "c2"
-      },
-      {
-        "miniId": "bee732f6-c0ce-4593-90f9-e15e1e7fa727",
-        "symbol": "John_Unmarried",
-        "claimMiniId": "c3"
-      }
-    ],
-    "premises": [
-      {
-        "miniId": "7f50a049-54b1-4767-bd63-6abe2afffc21",
-        "formula": "(Bachelor_Unmarried and John_Bachelor) implies John_Unmarried",
-        "title": "Joint support → (Bachelor_Unmarried and John_Bach…"
-      },
-      {
-        "miniId": "3e285ef4-94ce-46a3-a1bd-e3bd96e68d5c",
-        "formula": "John_Unmarried",
-        "title": "Conclusion: John_Unmarried"
-      }
-    ],
-    "conclusionPremiseMiniId": "3e285ef4-94ce-46a3-a1bd-e3bd96e68d5c",
-    "title": "John is unmarried"
-  },
-  "failureText": null,
-  "uncategorizedText": null,
-  "selectionRationale": "c3 is the normal claim targeted by the only support relation, while c1 and c2 function as supporting sources.",
-  "processingFailures": []
+    "parity": "strict",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "axiom": "A bachelor is an unmarried man by definition.",
+                "type": "axiomatic",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "John is a bachelor",
+                "body": "John is a bachelor.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "John is unmarried",
+                "body": "John is unmarried.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "Bachelor_Unmarried",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "John_Bachelor",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "John_Unmarried",
+                "claimMiniId": "c3"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-4",
+                "formula": "(Bachelor_Unmarried and John_Bachelor) implies John_Unmarried",
+                "title": "Joint support → (Bachelor_Unmarried and John_Bach…"
+            },
+            {
+                "miniId": "gid-5",
+                "formula": "John_Unmarried",
+                "title": "Conclusion: John_Unmarried"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-5",
+        "title": "John is unmarried"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c3 is the normal claim targeted by the only support relation, while c1 and c2 function as supporting sources.",
+    "processingFailures": []
 }

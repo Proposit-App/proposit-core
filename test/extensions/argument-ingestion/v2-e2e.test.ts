@@ -107,6 +107,37 @@ function writeExpected(
     )
 }
 
+// **Deterministic id generation for golden-corpus replay.**
+// `variable-assignment` and `formula-compilation` mint fresh variable
+// + premise miniIds via `ctx.generateId()`. The framework default is
+// `crypto.randomUUID()` (set in `executePipeline`'s
+// `defaultGenerateId`), which produces a different identifier on every
+// invocation. The recording run therefore committed UUIDs into the
+// `v2-expected.json` fixtures; subsequent replay runs minted fresh
+// UUIDs and the deep-equal assertion blew up on every fixture that
+// had a non-null `argument` (4 of 5 — `ambiguous-conclusion` was the
+// exception because its output is `{ argument: null, ... }` with no
+// minted ids).
+//
+// Approach (a) from the reviewer synthesis: inject a deterministic
+// counter-based `generateId` into the e2e test's `executePipeline`
+// call. Production behavior (and every other test path) keeps the
+// UUID default — only the golden-corpus harness gets the deterministic
+// version, used consistently across record + replay so the recorded
+// expected and the replay output share the same id sequence.
+//
+// A fresh counter per fixture means ids restart at 1 on each pipeline
+// run; the alphabetic prefix avoids collision with the canonicalizer's
+// claim miniIds (`c1`, `c2`, ...) and the relation/source/axiom ids
+// emitted by upstream stages (`r1`, `src1`, `ax1`).
+function createDeterministicGenerateId(prefix = "gid"): () => string {
+    let counter = 0
+    return () => {
+        counter += 1
+        return `${prefix}-${String(counter)}`
+    }
+}
+
 function buildProviderForMode(fixtureDir: string): TLlmProvider {
     const mode = recordingMode()
     if (mode === "record") {
@@ -190,6 +221,7 @@ describe(`v2 ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 const input = { text: readInput(fixtureDir) }
                 const result = await executePipeline(pipeline, input, {
                     llm: provider,
+                    generateId: createDeterministicGenerateId(),
                 })
 
                 if (mode === "record") {
@@ -236,6 +268,27 @@ describe(`v2 ingestion pipeline — golden corpus (${mode} mode)`, () => {
                     return
                 }
 
+                // Optional rewrite mode: when
+                // `REWRITE_V2_EXPECTED=1` is set and we're in replay
+                // (so no live LLM calls are made), the test rewrites
+                // `v2-expected.json` from the assembled pipeline output
+                // and exits without asserting. Used after a
+                // deterministic-only change (e.g., the
+                // `createDeterministicGenerateId` introduction) where
+                // the LLM recordings stay valid but the assembled
+                // expected output needs to be regenerated. **Do not
+                // commit the rewritten files without manual review.**
+                if (
+                    process.env.REWRITE_V2_EXPECTED === "1" &&
+                    result.output !== null
+                ) {
+                    const actual = result.output as Record<string, unknown>
+                    const prior = readExpected(fixtureDir)
+                    const parity =
+                        prior?.parity ?? inheritParityFromV1(fixtureDir)
+                    writeExpected(fixtureDir, actual, parity)
+                    return
+                }
                 const expected = readExpected(fixtureDir)
                 if (expected === undefined) {
                     throw new Error(

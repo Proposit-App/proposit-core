@@ -1,63 +1,63 @@
 {
-  "parity": "strict",
-  "argument": {
-    "claims": [
-      {
-        "miniId": "c1",
-        "title": "Rain makes the ground wet",
-        "body": "If it rains, the ground gets wet.",
-        "type": "normal",
-        "role": "premise"
-      },
-      {
-        "miniId": "c2",
-        "title": "It is raining",
-        "body": "It is raining.",
-        "type": "normal",
-        "role": "premise"
-      },
-      {
-        "miniId": "c3",
-        "title": "The ground is wet",
-        "body": "The ground is wet.",
-        "type": "normal",
-        "role": "conclusion"
-      }
-    ],
-    "variables": [
-      {
-        "miniId": "5fe816e1-8d07-4bbe-8fef-112c8b1bbb8c",
-        "symbol": "Rain_Implies_Wet",
-        "claimMiniId": "c1"
-      },
-      {
-        "miniId": "90a5041a-6965-4cd2-a142-ea2afc8f62be",
-        "symbol": "It_Is_Raining",
-        "claimMiniId": "c2"
-      },
-      {
-        "miniId": "c352c528-511b-46e3-aa3a-ea31ede7dc79",
-        "symbol": "Ground_Is_Wet",
-        "claimMiniId": "c3"
-      }
-    ],
-    "premises": [
-      {
-        "miniId": "cec191cc-8ee7-4e38-98dd-8400f58191b5",
-        "formula": "(Rain_Implies_Wet and It_Is_Raining) implies Ground_Is_Wet",
-        "title": "Joint support → (Rain_Implies_Wet and It_Is_Raini…"
-      },
-      {
-        "miniId": "59fef99e-4bf6-4eaa-9ebe-b4fc54d9df7f",
-        "formula": "Ground_Is_Wet",
-        "title": "Conclusion: Ground_Is_Wet"
-      }
-    ],
-    "conclusionPremiseMiniId": "59fef99e-4bf6-4eaa-9ebe-b4fc54d9df7f",
-    "title": "The ground is wet"
-  },
-  "failureText": null,
-  "uncategorizedText": null,
-  "selectionRationale": "c3 is the sole supported terminal claim, with c1 and c2 jointly supporting it.",
-  "processingFailures": []
+    "parity": "strict",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "Rain makes the ground wet",
+                "body": "If it rains, the ground gets wet.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "It is raining",
+                "body": "It is raining.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "The ground is wet",
+                "body": "The ground is wet.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "Rain_Implies_Wet",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "It_Is_Raining",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "Ground_Is_Wet",
+                "claimMiniId": "c3"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-4",
+                "formula": "(Rain_Implies_Wet and It_Is_Raining) implies Ground_Is_Wet",
+                "title": "Joint support → (Rain_Implies_Wet and It_Is_Raini…"
+            },
+            {
+                "miniId": "gid-5",
+                "formula": "Ground_Is_Wet",
+                "title": "Conclusion: Ground_Is_Wet"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-5",
+        "title": "The ground is wet"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c3 is the sole supported terminal claim, with c1 and c2 jointly supporting it.",
+    "processingFailures": []
 }

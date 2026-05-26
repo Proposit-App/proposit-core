@@ -1,80 +1,80 @@
 {
-  "parity": "strict",
-  "argument": {
-    "claims": [
-      {
-        "miniId": "c1",
-        "title": "NASA reports temperature rise",
-        "url": "https://climate.nasa.gov/evidence/",
-        "type": "citation",
-        "role": "premise"
-      },
-      {
-        "miniId": "c2",
-        "title": "Global temperatures have risen",
-        "body": "Global temperatures have risen significantly over the past century.",
-        "type": "normal",
-        "role": "premise"
-      },
-      {
-        "miniId": "c3",
-        "title": "Temperature rise causes extremes",
-        "body": "Rising global temperatures cause more frequent extreme weather events.",
-        "type": "normal",
-        "role": "premise"
-      },
-      {
-        "miniId": "c4",
-        "title": "Extreme weather is more frequent",
-        "body": "People are seeing more frequent extreme weather events.",
-        "type": "normal",
-        "role": "conclusion"
-      }
-    ],
-    "variables": [
-      {
-        "miniId": "6529d756-d1bc-4bc8-a770-27b071b4c421",
-        "symbol": "NASA_Temp_Rise",
-        "claimMiniId": "c1"
-      },
-      {
-        "miniId": "b8fdf54b-124a-4213-a4ce-3d0fc42efe8b",
-        "symbol": "Temps_Risen_Century",
-        "claimMiniId": "c2"
-      },
-      {
-        "miniId": "d25c8bf5-7ef5-45ed-94dc-f891fda40314",
-        "symbol": "Temp_Rise_Extreme",
-        "claimMiniId": "c3"
-      },
-      {
-        "miniId": "d090d434-1e20-4a78-95db-39c92eec13a2",
-        "symbol": "More_Extreme_Weather",
-        "claimMiniId": "c4"
-      }
-    ],
-    "premises": [
-      {
-        "miniId": "8caacdd8-0e55-4a5c-825a-cd9e8e41ad1e",
-        "formula": "NASA_Temp_Rise implies Temps_Risen_Century",
-        "title": "Derivation: NASA_Temp_Rise implies Temps_Risen_Ce…"
-      },
-      {
-        "miniId": "96d10fbc-e2d8-47ad-a8b6-c40d7dad9baa",
-        "formula": "(Temps_Risen_Century and Temp_Rise_Extreme) implies More_Extreme_Weather",
-        "title": "Joint support → (Temps_Risen_Century and Temp_Ris…"
-      },
-      {
-        "miniId": "9118603e-6787-4071-89ab-960ad849bb79",
-        "formula": "More_Extreme_Weather",
-        "title": "Conclusion: More_Extreme_Weather"
-      }
-    ],
-    "conclusionPremiseMiniId": "9118603e-6787-4071-89ab-960ad849bb79",
-    "title": "Extreme weather is more frequent"
-  },
-  "failureText": null,
-  "uncategorizedText": null,
-  "selectionRationale": "c4 is the terminal normal claim supported by the joint support relation from c2 and c3, while it does not itself support any further claim.",
-  "processingFailures": []
+    "parity": "strict",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "NASA reports temperature rise",
+                "url": "https://climate.nasa.gov/evidence/",
+                "type": "citation",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "Global temperatures have risen",
+                "body": "Global temperatures have risen significantly over the past century.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "Temperature rise causes extremes",
+                "body": "Rising global temperatures cause more frequent extreme weather events.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c4",
+                "title": "Extreme weather is more frequent",
+                "body": "People are seeing more frequent extreme weather events.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "NASA_Temp_Rise",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "Temps_Risen_Century",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "Temp_Rise_Extreme",
+                "claimMiniId": "c3"
+            },
+            {
+                "miniId": "gid-4",
+                "symbol": "More_Extreme_Weather",
+                "claimMiniId": "c4"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-5",
+                "formula": "NASA_Temp_Rise implies Temps_Risen_Century",
+                "title": "Derivation: NASA_Temp_Rise implies Temps_Risen_Ce…"
+            },
+            {
+                "miniId": "gid-6",
+                "formula": "(Temps_Risen_Century and Temp_Rise_Extreme) implies More_Extreme_Weather",
+                "title": "Joint support → (Temps_Risen_Century and Temp_Ris…"
+            },
+            {
+                "miniId": "gid-7",
+                "formula": "More_Extreme_Weather",
+                "title": "Conclusion: More_Extreme_Weather"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-7",
+        "title": "Extreme weather is more frequent"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c4 is the terminal normal claim supported by the joint support relation from c2 and c3, while it does not itself support any further claim.",
+    "processingFailures": []
 }
