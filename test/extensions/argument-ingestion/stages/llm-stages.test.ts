@@ -365,7 +365,10 @@ describe("createClaimCanonicalizationStage", () => {
                     >),
                 },
             ],
-            mentionToClaim: { m1: "c1", m2: "c2" },
+            mentionToClaim: [
+                { mentionId: "m1", claimMiniId: "c1" },
+                { mentionId: "m2", claimMiniId: "c2" },
+            ],
         }
         const llm = createMockLlmProvider({
             responses: {
@@ -446,10 +449,12 @@ describe("claimTypeClassificationStage", () => {
                     type: "normal",
                 },
             ],
-            mentionToClaim: { m1: "c1" },
+            mentionToClaim: [{ mentionId: "m1", claimMiniId: "c1" }],
         }
         const typeMap: TClaimTypeClassificationOutput = {
-            c1: { type: "normal", sourceString: null },
+            classifications: [
+                { miniId: "c1", type: "normal", sourceString: null },
+            ],
         }
         const llm = createMockLlmProvider({
             responses: {
@@ -541,11 +546,16 @@ describe("relationExtractionStage", () => {
                     type: "normal",
                 },
             ],
-            mentionToClaim: { m1: "c1", m2: "c2" },
+            mentionToClaim: [
+                { mentionId: "m1", claimMiniId: "c1" },
+                { mentionId: "m2", claimMiniId: "c2" },
+            ],
         }
         const typeMap: TClaimTypeClassificationOutput = {
-            c1: { type: "normal", sourceString: null },
-            c2: { type: "normal", sourceString: null },
+            classifications: [
+                { miniId: "c1", type: "normal", sourceString: null },
+                { miniId: "c2", type: "normal", sourceString: null },
+            ],
         }
         const relations: TRelationExtractionOutput = {
             relations: [
@@ -618,8 +628,10 @@ describe("conclusionSelectionStage", () => {
 
     it("returns the LLM's conclusion selection output", async () => {
         const typeMap: TClaimTypeClassificationOutput = {
-            c1: { type: "normal", sourceString: null },
-            c2: { type: "normal", sourceString: null },
+            classifications: [
+                { miniId: "c1", type: "normal", sourceString: null },
+                { miniId: "c2", type: "normal", sourceString: null },
+            ],
         }
         const relations: TRelationExtractionOutput = {
             relations: [
@@ -690,7 +702,7 @@ describe("conclusionSelectionStage", () => {
             id: STAGE_IDS.claimTypeClassification,
             dependsOn: [],
             outputSchema: claimTypeClassificationStage.outputSchema,
-            fn: () => ({}),
+            fn: () => ({ classifications: [] }),
         })
         const relSeed = deterministicStage<TRelationExtractionOutput>({
             id: STAGE_IDS.relationExtraction,

@@ -193,13 +193,19 @@ function buildHappyMockResponses(): Record<
                 } as Record<string, unknown>),
             },
         ],
-        mentionToClaim: { m1: "c1", m2: "c2", m3: "c3" },
+        mentionToClaim: [
+            { mentionId: "m1", claimMiniId: "c1" },
+            { mentionId: "m2", claimMiniId: "c2" },
+            { mentionId: "m3", claimMiniId: "c3" },
+        ],
     }
 
     const typeMap: TClaimTypeClassificationOutput = {
-        c1: { type: "normal", sourceString: null },
-        c2: { type: "normal", sourceString: null },
-        c3: { type: "normal", sourceString: null },
+        classifications: [
+            { miniId: "c1", type: "normal", sourceString: null },
+            { miniId: "c2", type: "normal", sourceString: null },
+            { miniId: "c3", type: "normal", sourceString: null },
+        ],
     }
 
     const relations: TRelationExtractionOutput = {
@@ -324,7 +330,7 @@ describe("createIngestionV2Pipeline — failure paths", () => {
                 kind: "ok",
                 output: {
                     canonicalClaims: [],
-                    mentionToClaim: {},
+                    mentionToClaim: [],
                 } satisfies TClaimCanonicalizationOutput,
             },
         ]
@@ -332,7 +338,7 @@ describe("createIngestionV2Pipeline — failure paths", () => {
         // canonical set; we still need to feed them something
         // schema-conformant.
         responses[STAGE_IDS.claimTypeClassification] = [
-            { kind: "ok", output: {} },
+            { kind: "ok", output: { classifications: [] } },
         ]
         responses[STAGE_IDS.relationExtraction] = [
             { kind: "ok", output: { relations: [] } },

@@ -36,6 +36,7 @@ import type { TStageContext } from "../../../lib/pipelines/index.js"
 import {
     STAGE_IDS,
     type TClaimCanonicalizationOutput,
+    type TClaimTypeClassificationEntry,
     type TClaimTypeClassificationOutput,
     type TConclusionSelectionOutput,
     type TFormulaCompilationOutput,
@@ -181,10 +182,13 @@ export function finalizeResponseV2(
         STAGE_IDS.relationExtraction
     )
     const relations = relationEnvelope?.relations ?? []
-    const typeMap =
-        ctx.get<TClaimTypeClassificationOutput>(
-            STAGE_IDS.claimTypeClassification
-        ) ?? {}
+    const typeEnvelope = ctx.get<TClaimTypeClassificationOutput>(
+        STAGE_IDS.claimTypeClassification
+    )
+    const typeByMiniId = new Map<string, TClaimTypeClassificationEntry>()
+    for (const entry of typeEnvelope?.classifications ?? []) {
+        typeByMiniId.set(entry.miniId, entry)
+    }
 
     const processingFailures: never[] = []
     const baseResponse = {
@@ -229,7 +233,7 @@ export function finalizeResponseV2(
     })
 
     const claims: TClaimFinalForm[] = canon.canonicalClaims.map((c) => {
-        const refinedType = typeMap[c.miniId]?.type ?? c.type
+        const refinedType = typeByMiniId.get(c.miniId)?.type ?? c.type
         const stripped = stripCanonicalizerOnlyFields(
             c as unknown as Record<string, unknown>
         )

@@ -21,13 +21,14 @@ export const CLAIM_TYPE_CLASSIFICATION_MODEL = "gpt-5.4"
 
 export const CLAIM_TYPE_CLASSIFICATION_SYSTEM_PROMPT = `You confirm or revise the type of each canonical claim in an argument-ingestion pipeline.
 
-For each canonical claim you receive (id, the canonicalizer's draft \`type\`, and the claim's body/title/url/axiom fields), emit:
-- the canonical \`type\`: one of "normal", "citation", "axiomatic"
-- a \`sourceString\` — populate when type is "citation" with the source label (or url) the claim is built on; null otherwise
+Return an object with a single key \`classifications\` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft \`type\`, and the claim's body/title/url/axiom fields), emit one entry with:
+- \`miniId\` — the canonical claim's miniId (copy verbatim)
+- \`type\` — one of "normal", "citation", "axiomatic"
+- \`sourceString\` — populate when type is "citation" with the source label (or url) the claim is built on; null otherwise
 
 Use the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.
 
-Output a map keyed by canonical claim miniId; every input claim must appear in the output exactly once.
+Every input claim must appear in \`classifications\` exactly once.
 
 ## Type rules
 

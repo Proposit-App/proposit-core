@@ -86,9 +86,11 @@ export function validateClaimReferences(canon: TClaimCanonicalizationOutput): {
     const knownMiniIds = new Set(canon.canonicalClaims.map((c) => c.miniId))
 
     // 2. mentionToClaim dangling references + empty mention ids.
-    for (const [mentionId, claimMiniId] of Object.entries(
-        canon.mentionToClaim
-    )) {
+    // mentionToClaim is now a list of { mentionId, claimMiniId }
+    // entries (lambda-fold 4 — OpenAI strict-mode doesn't accept
+    // Record-shaped maps with arbitrary string keys).
+    for (const entry of canon.mentionToClaim) {
+        const { mentionId, claimMiniId } = entry
         if (mentionId.trim().length === 0) {
             failures.push({
                 code: CLAIM_REFERENCE_FAILURE_CODES.emptyMentionId,
@@ -100,7 +102,7 @@ export function validateClaimReferences(canon: TClaimCanonicalizationOutput): {
         if (!knownMiniIds.has(claimMiniId)) {
             failures.push({
                 code: CLAIM_REFERENCE_FAILURE_CODES.danglingMapping,
-                message: `mentionToClaim["${mentionId}"] points at claim "${claimMiniId}" which is not in canonicalClaims.`,
+                message: `mentionToClaim entry "${mentionId}" points at claim "${claimMiniId}" which is not in canonicalClaims.`,
                 context: {
                     mentionId,
                     unknownClaimMiniId: claimMiniId,

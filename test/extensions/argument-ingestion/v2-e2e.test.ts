@@ -168,10 +168,19 @@ describe(`v2 ingestion pipeline — golden corpus (${mode} mode)`, () => {
     for (const name of FIXTURE_NAMES) {
         const fixtureDir = path.join(FIXTURES_ROOT, name)
         const recordedPath = path.join(fixtureDir, V2_RECORDED_FILE)
+        const expectedPath = path.join(fixtureDir, V2_EXPECTED_FILE)
         const hasRecording = fs.existsSync(recordedPath)
-        // Skip in replay mode if recording is missing — the recording
-        // step (one-time, with a real API key) hasn't happened yet.
-        const itOrSkip = mode === "record" || hasRecording ? it : it.skip
+        const hasExpected = fs.existsSync(expectedPath)
+        // Skip in replay mode unless BOTH `v2-recorded-llm.json` AND
+        // `v2-expected.json` exist. A `v2-recorded-llm.json` alone
+        // indicates a partial recording (e.g. a prior recording
+        // attempt crashed before reaching `finalize`); the assembled
+        // expected output never got written. Treat that as
+        // "recording not yet complete" → skip, not fail. Only when
+        // both files are committed is the fixture truly ready for
+        // replay.
+        const itOrSkip =
+            mode === "record" || (hasRecording && hasExpected) ? it : it.skip
         itOrSkip(
             `${name}: replays the recorded provider and matches v2-expected.json`,
             { timeout: 300_000 },

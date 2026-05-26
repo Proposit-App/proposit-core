@@ -76,7 +76,10 @@ describe("conclusionSelectionStage — failure emission", () => {
                 ],
             },
         })
-        const pipeline = buildStandalonePipeline({}, { relations: [] })
+        const pipeline = buildStandalonePipeline(
+            { classifications: [] },
+            { relations: [] }
+        )
         const result = await executePipeline(pipeline, { text: "x" }, { llm })
         // Stage itself completes (the wrapped stage returns the null
         // output unchanged; the failure is an informational side-channel).
@@ -112,7 +115,10 @@ describe("conclusionSelectionStage — failure emission", () => {
                 ],
             },
         })
-        const pipeline = buildStandalonePipeline({}, { relations: [] })
+        const pipeline = buildStandalonePipeline(
+            { classifications: [] },
+            { relations: [] }
+        )
         const result = await executePipeline(pipeline, { text: "x" }, { llm })
         const failure = result.failures.find(
             (f) => f.code === CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE
@@ -134,7 +140,10 @@ describe("conclusionSelectionStage — failure emission", () => {
                 ],
             },
         })
-        const pipeline = buildStandalonePipeline({}, { relations: [] })
+        const pipeline = buildStandalonePipeline(
+            { classifications: [] },
+            { relations: [] }
+        )
         const result = await executePipeline(pipeline, { text: "x" }, { llm })
         const failure = result.failures.find(
             (f) => f.code === CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE

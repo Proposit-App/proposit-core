@@ -15,7 +15,7 @@ function canon(
 ): TClaimCanonicalizationOutput {
     return {
         canonicalClaims: [],
-        mentionToClaim: {},
+        mentionToClaim: [],
         ...overrides,
     }
 }
@@ -38,7 +38,10 @@ describe("validateClaimReferences — happy path", () => {
                         type: "normal",
                     },
                 ],
-                mentionToClaim: { m1: "c1", m2: "c2" },
+                mentionToClaim: [
+                    { mentionId: "m1", claimMiniId: "c1" },
+                    { mentionId: "m2", claimMiniId: "c2" },
+                ],
             })
         )
         expect(out.failures).toEqual([])
@@ -123,7 +126,10 @@ describe("validateClaimReferences — dangling mappings", () => {
                         type: "normal",
                     },
                 ],
-                mentionToClaim: { m1: "c1", m2: "c99" },
+                mentionToClaim: [
+                    { mentionId: "m1", claimMiniId: "c1" },
+                    { mentionId: "m2", claimMiniId: "c99" },
+                ],
             })
         )
         const dangling = out.failures.filter(
@@ -147,7 +153,7 @@ describe("validateClaimReferences — empty mention ids", () => {
                         type: "normal",
                     },
                 ],
-                mentionToClaim: { "   ": "c1" },
+                mentionToClaim: [{ mentionId: "   ", claimMiniId: "c1" }],
             })
         )
         const empty = out.failures.filter(

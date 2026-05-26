@@ -49,17 +49,17 @@ Emit:
 The default disposition is "select"; only return null when ambiguity is genuine. Forcing a wrong choice is worse than admitting "no single conclusion could be selected" — downstream stages handle the null cleanly.`
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
-    const typeMap =
-        ctx.get<TClaimTypeClassificationOutput>(
-            STAGE_IDS.claimTypeClassification
-        ) ?? {}
+    const typeEnvelope = ctx.get<TClaimTypeClassificationOutput>(
+        STAGE_IDS.claimTypeClassification
+    )
+    const classifications = typeEnvelope?.classifications ?? []
     const relationEnvelope = ctx.get<TRelationExtractionOutput>(
         STAGE_IDS.relationExtraction
     )
     const relations = relationEnvelope?.relations ?? []
 
-    const typeLines = Object.entries(typeMap)
-        .map(([id, t]) => `  [${id}] type=${t.type}`)
+    const typeLines = classifications
+        .map((entry) => `  [${entry.miniId}] type=${entry.type}`)
         .join("\n")
     const relationLines =
         relations.length > 0

@@ -4,3 +4,9 @@ coverage/
 .claude/
 .untracked/
 src/lib/core/parser/formula-gen.js
+# Recording-provider outputs from `INGESTION_TEST_RECORD=1` runs.
+# Machine-generated (`JSON.stringify(file, null, 2)` — 2-space
+# indent) and re-overwritten on every re-record; not worth gating
+# CI on prettier-format compliance.
+test/extensions/argument-ingestion/fixtures/**/recorded-llm.json
+test/extensions/argument-ingestion/fixtures/**/v2-recorded-llm.json

@@ -11,6 +11,7 @@ import {
     STAGE_IDS,
     RelationExtractionOutputSchema,
     type TClaimCanonicalizationOutput,
+    type TClaimTypeClassificationEntry,
     type TClaimTypeClassificationOutput,
     type TRelationExtractionOutput,
     type TSegmentationOutput,
@@ -54,16 +55,19 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     const canon = ctx.get<TClaimCanonicalizationOutput>(
         STAGE_IDS.claimCanonicalization
     )
-    const typeMap =
-        ctx.get<TClaimTypeClassificationOutput>(
-            STAGE_IDS.claimTypeClassification
-        ) ?? {}
+    const typeEnvelope = ctx.get<TClaimTypeClassificationOutput>(
+        STAGE_IDS.claimTypeClassification
+    )
+    const typeByMiniId = new Map<string, TClaimTypeClassificationEntry>()
+    for (const entry of typeEnvelope?.classifications ?? []) {
+        typeByMiniId.set(entry.miniId, entry)
+    }
     const segmentEnvelope = ctx.get<TSegmentationOutput>(STAGE_IDS.segmentation)
     const segments = segmentEnvelope?.segments ?? []
 
     const claimLines = (canon?.canonicalClaims ?? [])
         .map((c) => {
-            const refinedType = typeMap[c.miniId]?.type ?? c.type
+            const refinedType = typeByMiniId.get(c.miniId)?.type ?? c.type
             return `  [${c.miniId}] type=${refinedType} symbol=${c.suggestedSymbol} fields=${JSON.stringify(
                 {
                     ...c,

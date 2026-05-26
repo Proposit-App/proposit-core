@@ -145,9 +145,26 @@ export const BaseCanonicalClaimSchema = Type.Object({
 })
 export type TBaseCanonicalClaim = Static<typeof BaseCanonicalClaimSchema>
 
+// **Why `mentionToClaim` is an array, not a map.** OpenAI Responses-API
+// strict-mode JSON Schema does not support `additionalProperties` or
+// `patternProperties` — fixed-shape objects only. `Type.Record(K, V)`
+// generates JSON Schema like `{ type: "object", additionalProperties:
+// <V> }`, which strict mode rejects with 400 `invalid_json_schema`
+// ("'required' is required to be supplied and to be an array
+// including every key in properties. Extra required key
+// 'mentionToClaim' supplied."). Surfacing the map as an explicit
+// `[{ mentionId, claimMiniId }, ...]` list bypasses the constraint
+// entirely. Downstream readers convert to a `Map<string, string>`
+// when they need O(1) lookups.
+export const MentionToClaimEntrySchema = Type.Object({
+    mentionId: Type.String(),
+    claimMiniId: Type.String(),
+})
+export type TMentionToClaimEntry = Static<typeof MentionToClaimEntrySchema>
+
 export const ClaimCanonicalizationOutputSchema = Type.Object({
     canonicalClaims: Type.Array(BaseCanonicalClaimSchema),
-    mentionToClaim: Type.Record(Type.String(), Type.String()),
+    mentionToClaim: Type.Array(MentionToClaimEntrySchema),
 })
 export type TClaimCanonicalizationOutput = Static<
     typeof ClaimCanonicalizationOutputSchema
@@ -157,17 +174,28 @@ export type TCanonicalClaim = TBaseCanonicalClaim & Record<string, unknown>
 
 // -- Stage 6: claim-type-classification --
 
-export const ClaimTypeClassificationOutputSchema = Type.Record(
-    Type.String(),
-    Type.Object({
-        type: Type.Union([
-            Type.Literal("normal"),
-            Type.Literal("citation"),
-            Type.Literal("axiomatic"),
-        ]),
-        sourceString: Type.Union([Type.String(), Type.Null()]),
-    })
-)
+// Same OpenAI strict-mode constraint as above. The natural shape
+// `Record<miniId, { type, sourceString }>` becomes an explicit list
+// of `{ miniId, type, sourceString }` entries, wrapped in a
+// single-key `classifications` envelope (the lambda-fold 3 root-
+// must-be-object invariant). Downstream readers build a Map on
+// receipt when they need keyed lookups.
+export const ClaimTypeClassificationEntrySchema = Type.Object({
+    miniId: Type.String(),
+    type: Type.Union([
+        Type.Literal("normal"),
+        Type.Literal("citation"),
+        Type.Literal("axiomatic"),
+    ]),
+    sourceString: Type.Union([Type.String(), Type.Null()]),
+})
+export type TClaimTypeClassificationEntry = Static<
+    typeof ClaimTypeClassificationEntrySchema
+>
+
+export const ClaimTypeClassificationOutputSchema = Type.Object({
+    classifications: Type.Array(ClaimTypeClassificationEntrySchema),
+})
 export type TClaimTypeClassificationOutput = Static<
     typeof ClaimTypeClassificationOutputSchema
 >

@@ -16,6 +16,7 @@
 
 import Type, { type TSchema } from "typebox"
 import {
+    MentionToClaimEntrySchema,
     STAGE_IDS,
     type TAxiomIndicatorDetectionOutput,
     type TClaimMentionExtractionOutput,
@@ -51,7 +52,7 @@ Your output has two parts:
    - \`suggestedSymbol\` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. "Rain_Wets_Ground", "NASA_Temp_Rise", "Socrates_Mortal"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like "Claim1".
    - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's \`type\`)
 
-2. \`mentionToClaim\` — a map from every mentionId in your input to its assigned canonical claim's miniId. Every mention id must appear exactly once. The mapping is total; do not drop mentions.
+2. \`mentionToClaim\` — an array of \`{ "mentionId": "...", "claimMiniId": "..." }\` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)
 
 ## Claim types
 
@@ -76,7 +77,11 @@ function buildResponseSchema(extension: TIngestionExtension): TSchema {
             canonicalClaims: Type.Array(
                 buildClaimRecordSchema(extension.claimSchema)
             ),
-            mentionToClaim: Type.Record(Type.String(), Type.String()),
+            // List-shape (not Record/map) for OpenAI strict-mode
+            // compatibility — see `MentionToClaimEntrySchema` docstring
+            // in `./schemas.ts` for the OpenAI 400 chain that motivated
+            // the shape change.
+            mentionToClaim: Type.Array(MentionToClaimEntrySchema),
         },
         { additionalProperties: false }
     )
