@@ -41,7 +41,7 @@ import type {
     TLlmResponse,
 } from "../../../src/lib/llm/types.js"
 
-const RECORDED_FILE = "recorded-llm.json"
+const DEFAULT_RECORDED_FILE = "recorded-llm.json"
 const FILE_VERSION = 1
 const STAGE_ID_MARKER = /<!--\s*stage-id:\s*([^\s>]+)\s*-->/
 
@@ -83,12 +83,19 @@ export type TRecordedFile = {
 }
 
 export type TCreateRecordingLlmProviderOptions = {
-    /** Directory containing the fixture's `recorded-llm.json`. */
+    /** Directory containing the fixture's recorded-llm file. */
     fixtureDir: string
     /** Mode override; defaults to env-driven (`INGESTION_TEST_RECORD=1`). */
     mode?: "record" | "replay"
     /** Underlying provider invoked in record mode. Required when mode === "record". */
     underlying?: TLlmProvider
+    /**
+     * File name (relative to `fixtureDir`) holding the recorded
+     * records. Defaults to `recorded-llm.json` (the v1 default).
+     * v2 callers pass `v2-recorded-llm.json` to keep v1 + v2 recordings
+     * side-by-side in the same fixture directory.
+     */
+    fileName?: string
 }
 
 export function recordingMode(): "record" | "replay" {
@@ -167,7 +174,10 @@ export function createRecordingLlmProvider(
     options: TCreateRecordingLlmProviderOptions
 ): TLlmProvider {
     const mode = options.mode ?? recordingMode()
-    const filePath = path.join(options.fixtureDir, RECORDED_FILE)
+    const filePath = path.join(
+        options.fixtureDir,
+        options.fileName ?? DEFAULT_RECORDED_FILE
+    )
 
     if (mode === "record") {
         if (!options.underlying) {
