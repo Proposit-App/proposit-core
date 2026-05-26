@@ -119,13 +119,17 @@ function buildHappyMockResponses(): Record<
         {
             segmentId: "s1",
             text: "If it rains, ground gets wet.",
-            span: [0, 29],
+            span: { start: 0, end: 29 },
         },
-        { segmentId: "s2", text: "It is raining.", span: [30, 44] },
+        {
+            segmentId: "s2",
+            text: "It is raining.",
+            span: { start: 30, end: 44 },
+        },
         {
             segmentId: "s3",
             text: "Therefore, the ground is wet.",
-            span: [45, 74],
+            span: { start: 45, end: 74 },
         },
     ]
     const mentions: TClaimMentionExtractionOutput = [
@@ -133,19 +137,19 @@ function buildHappyMockResponses(): Record<
             mentionId: "m1",
             segmentId: "s1",
             text: "If it rains, ground gets wet.",
-            span: [0, 29],
+            span: { start: 0, end: 29 },
         },
         {
             mentionId: "m2",
             segmentId: "s2",
             text: "It is raining.",
-            span: [0, 14],
+            span: { start: 0, end: 14 },
         },
         {
             mentionId: "m3",
             segmentId: "s3",
             text: "the ground is wet",
-            span: [11, 28],
+            span: { start: 11, end: 28 },
         },
     ]
     const citations: TCitationSourceDetectionOutput = []

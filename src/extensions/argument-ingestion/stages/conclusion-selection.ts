@@ -74,15 +74,48 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
-export const conclusionSelectionStage: TStage<TConclusionSelectionOutput> =
-    llmStage<TConclusionSelectionOutput>({
-        id: STAGE_IDS.conclusionSelection,
-        dependsOn: [
-            STAGE_IDS.claimTypeClassification,
-            STAGE_IDS.relationExtraction,
-        ],
-        outputSchema: ConclusionSelectionOutputSchema,
-        model: CONCLUSION_SELECTION_MODEL,
-        reasoningEffort: CONCLUSION_SELECTION_REASONING,
-        buildPrompt,
-    })
+// Inner llmStage that actually performs the LLM call.
+const innerStage = llmStage<TConclusionSelectionOutput>({
+    id: STAGE_IDS.conclusionSelection,
+    dependsOn: [
+        STAGE_IDS.claimTypeClassification,
+        STAGE_IDS.relationExtraction,
+    ],
+    outputSchema: ConclusionSelectionOutputSchema,
+    model: CONCLUSION_SELECTION_MODEL,
+    reasoningEffort: CONCLUSION_SELECTION_REASONING,
+    buildPrompt,
+})
+
+/**
+ * `conclusionSelectionStage` wraps the inner `llmStage` so that when
+ * the LLM returns `conclusionMiniId: null`, the stage emits a
+ * `ProcessingFailure` with code `NO_SINGLE_CONCLUSION` via
+ * `ctx.addFailure` (spec §7.2 row 10). The stage still completes
+ * successfully — the null output flows through `formula-compilation`
+ * (which emits `conclusionPremiseMiniId: null`) into `finalize-response-v2`
+ * (which assembles `{ argument: null, failureText: "No single
+ * conclusion could be selected." }`). The added failure is a
+ * UI-rendering hint, not a task-outcome signal; severity is `warning`
+ * to match the informational-only role of finalize's failureText path.
+ */
+export const conclusionSelectionStage: TStage<TConclusionSelectionOutput> = {
+    id: innerStage.id,
+    dependsOn: innerStage.dependsOn,
+    outputSchema: innerStage.outputSchema,
+    run: async (ctx) => {
+        const output = await innerStage.run(ctx)
+        if (output.conclusionMiniId === null) {
+            ctx.addFailure({
+                code: CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
+                message:
+                    output.rationale.length > 0
+                        ? output.rationale
+                        : "No single conclusion could be selected.",
+                severity: "warning",
+                context: { rationale: output.rationale },
+            })
+        }
+        return output
+    },
+}

@@ -5,7 +5,6 @@
 // a claim the canonicalizer marked "normal" that actually belongs to
 // "citation" because the source's content equals the claim's content).
 
-import Type from "typebox"
 import {
     STAGE_IDS,
     ClaimTypeClassificationOutputSchema,
@@ -36,10 +35,7 @@ Output a map keyed by canonical claim miniId; every input claim must appear in t
 - \`"citation"\` — content is "the cited source says/shows X" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.
 - \`"axiomatic"\` — content is invoked as self-evidently true AND an axiom indicator (e.g. "by definition") covers or precedes the claim.`
 
-const InputSchema = Type.Object({})
-
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
-    void InputSchema // suppress unused-import
     const canon = ctx.get<TClaimCanonicalizationOutput>(
         STAGE_IDS.claimCanonicalization
     )

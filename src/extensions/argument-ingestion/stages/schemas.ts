@@ -7,13 +7,40 @@
 
 import Type, { type Static } from "typebox"
 
+// **Span shape (`{ start, end }`).** Spans use a named-key object
+// rather than a positional tuple. The original tuple shape
+// (`Type.Tuple([Type.Number(), Type.Number()])`) caused the OpenAI
+// structured-output converter to throw `UnsupportedSchemaError:
+// "Tuple"` at request-build time — `segmentation` then surfaced a
+// `LLM_NON_RETRYABLE_ERROR` on first attempt, every downstream stage
+// cascade-skipped on the required dep, and the recording mode
+// completed in ~9ms with `output: null` and zero LLM calls. The
+// named-key form is also more LLM-friendly (each value carries its
+// semantic role rather than relying on positional convention) and
+// stays within the converter's supported subset (Object, Array,
+// String, Number, Integer, Boolean, Literal, Union, Optional, Record,
+// Null). See `test/extensions/argument-ingestion/stages/schema-converter-regression.test.ts`
+// for the regression coverage that pins every v2 LLM stage's
+// `outputSchema` through `typeboxToOpenAiSchema`.
+export const SpanSchema = Type.Object({
+    start: Type.Number({
+        description:
+            "Inclusive character offset where the span begins (relative to the parent text).",
+    }),
+    end: Type.Number({
+        description:
+            "Exclusive character offset where the span ends (relative to the parent text).",
+    }),
+})
+export type TSpan = Static<typeof SpanSchema>
+
 // -- Stage 1: segmentation --
 
 export const SegmentationOutputSchema = Type.Array(
     Type.Object({
         segmentId: Type.String(),
         text: Type.String(),
-        span: Type.Tuple([Type.Number(), Type.Number()]),
+        span: SpanSchema,
     })
 )
 export type TSegmentationOutput = Static<typeof SegmentationOutputSchema>
@@ -26,7 +53,7 @@ export const ClaimMentionExtractionOutputSchema = Type.Array(
         mentionId: Type.String(),
         segmentId: Type.String(),
         text: Type.String(),
-        span: Type.Tuple([Type.Number(), Type.Number()]),
+        span: SpanSchema,
     })
 )
 export type TClaimMentionExtractionOutput = Static<
@@ -42,7 +69,7 @@ export const CitationSourceDetectionOutputSchema = Type.Array(
         segmentIds: Type.Array(Type.String()),
         sourceString: Type.String(),
         url: Type.Union([Type.String(), Type.Null()]),
-        spans: Type.Array(Type.Tuple([Type.Number(), Type.Number()])),
+        spans: Type.Array(SpanSchema),
     })
 )
 export type TCitationSourceDetectionOutput = Static<
@@ -57,7 +84,7 @@ export const AxiomIndicatorDetectionOutputSchema = Type.Array(
         axiomId: Type.String(),
         segmentIds: Type.Array(Type.String()),
         indicator: Type.String(),
-        spans: Type.Array(Type.Tuple([Type.Number(), Type.Number()])),
+        spans: Type.Array(SpanSchema),
     })
 )
 export type TAxiomIndicatorDetectionOutput = Static<

@@ -58,8 +58,16 @@ describe("segmentationStage", () => {
 
     it("returns the LLM's segmentation output verbatim", async () => {
         const happy: TSegmentationOutput = [
-            { segmentId: "s1", text: "It rains.", span: [0, 9] },
-            { segmentId: "s2", text: "Ground is wet.", span: [10, 24] },
+            {
+                segmentId: "s1",
+                text: "It rains.",
+                span: { start: 0, end: 9 },
+            },
+            {
+                segmentId: "s2",
+                text: "Ground is wet.",
+                span: { start: 10, end: 24 },
+            },
         ]
         const llm = createMockLlmProvider({
             responses: {
@@ -99,14 +107,18 @@ describe("claimMentionExtractionStage", () => {
 
     it("interpolates segments into the user prompt + returns mock output", async () => {
         const segments: TSegmentationOutput = [
-            { segmentId: "s1", text: "It rains.", span: [0, 9] },
+            {
+                segmentId: "s1",
+                text: "It rains.",
+                span: { start: 0, end: 9 },
+            },
         ]
         const mentions: TClaimMentionExtractionOutput = [
             {
                 mentionId: "m1",
                 segmentId: "s1",
                 text: "It rains.",
-                span: [0, 9],
+                span: { start: 0, end: 9 },
             },
         ]
         const calls: { systemPrompt: string; userMessage: string }[] = []
@@ -168,7 +180,11 @@ describe("citationSourceDetectionStage", () => {
 
     it("returns the LLM's citation output", async () => {
         const segments: TSegmentationOutput = [
-            { segmentId: "s1", text: "According to NASA.", span: [0, 18] },
+            {
+                segmentId: "s1",
+                text: "According to NASA.",
+                span: { start: 0, end: 18 },
+            },
         ]
         const sources: TCitationSourceDetectionOutput = [
             {
@@ -176,7 +192,7 @@ describe("citationSourceDetectionStage", () => {
                 segmentIds: ["s1"],
                 sourceString: "NASA",
                 url: null,
-                spans: [[13, 17]],
+                spans: [{ start: 13, end: 17 }],
             },
         ]
         const llm = createMockLlmProvider({
@@ -233,7 +249,7 @@ describe("axiomIndicatorDetectionStage", () => {
             {
                 segmentId: "s1",
                 text: "By definition, a bachelor is unmarried.",
-                span: [0, 39],
+                span: { start: 0, end: 39 },
             },
         ]
         const axioms: TAxiomIndicatorDetectionOutput = [
@@ -241,7 +257,7 @@ describe("axiomIndicatorDetectionStage", () => {
                 axiomId: "ax1",
                 segmentIds: ["s1"],
                 indicator: "By definition",
-                spans: [[0, 13]],
+                spans: [{ start: 0, end: 13 }],
             },
         ]
         const llm = createMockLlmProvider({
@@ -294,8 +310,18 @@ describe("createClaimCanonicalizationStage", () => {
     it("returns the LLM's canonicalization output", async () => {
         const stage = createClaimCanonicalizationStage(basicsExtension)
         const mentions: TClaimMentionExtractionOutput = [
-            { mentionId: "m1", segmentId: "s1", text: "P", span: [0, 1] },
-            { mentionId: "m2", segmentId: "s2", text: "Q", span: [0, 1] },
+            {
+                mentionId: "m1",
+                segmentId: "s1",
+                text: "P",
+                span: { start: 0, end: 1 },
+            },
+            {
+                mentionId: "m2",
+                segmentId: "s2",
+                text: "Q",
+                span: { start: 0, end: 1 },
+            },
         ]
         const canon: TClaimCanonicalizationOutput = {
             canonicalClaims: [
@@ -474,7 +500,11 @@ describe("relationExtractionStage", () => {
 
     it("returns the LLM's relation output", async () => {
         const segments: TSegmentationOutput = [
-            { segmentId: "s1", text: "P, therefore Q.", span: [0, 14] },
+            {
+                segmentId: "s1",
+                text: "P, therefore Q.",
+                span: { start: 0, end: 14 },
+            },
         ]
         const canon: TClaimCanonicalizationOutput = {
             canonicalClaims: [
