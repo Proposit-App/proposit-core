@@ -186,6 +186,38 @@ describe(`v2 ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 if (mode === "record") {
                     // Always overwrite the v2-expected.json in record
                     // mode so the dev reviews the draft and re-commits.
+                    if (result.output === null) {
+                        // Diagnostic surfacing for the recording bug
+                        // chain. The bare `expect(result.output).not.
+                        // toBeNull()` assertion below tells us
+                        // *whether* the pipeline succeeded but not
+                        // *which stage* failed; dump the executor's
+                        // bookkeeping so the human running the
+                        // recording sees the per-stage outcome map +
+                        // every emitted ProcessingFailure (with the
+                        // stage id, code, message, and any context
+                        // payload). Token usage often helps too —
+                        // zero tokens means no LLM call landed; non-
+                        // zero usage with output: null means an
+                        // upstream stage succeeded but a downstream
+                        // one (or finalize's required-dep gate)
+                        // brought the result to null.
+                        console.error(
+                            `[v2-e2e] ${name} output: null. Diagnostic dump:`
+                        )
+                        console.error(
+                            "  stageOutcomes:",
+                            JSON.stringify(result.stageOutcomes, null, 2)
+                        )
+                        console.error(
+                            "  failures:",
+                            JSON.stringify(result.failures, null, 2)
+                        )
+                        console.error(
+                            "  tokenUsage:",
+                            JSON.stringify(result.tokenUsage, null, 2)
+                        )
+                    }
                     expect(result.output).not.toBeNull()
                     const actual = result.output as Record<string, unknown>
                     const prior = readExpected(fixtureDir)
@@ -202,6 +234,23 @@ describe(`v2 ingestion pipeline — golden corpus (${mode} mode)`, () => {
                     )
                 }
                 const { runtime } = splitExpected(expected)
+                if (result.output === null) {
+                    // Same diagnostic dump on the replay branch — a
+                    // recording exists but the assembled output is
+                    // null. Useful when re-running replay after a
+                    // schema change or new stage adjustment.
+                    console.error(
+                        `[v2-e2e] ${name} replay output: null. Diagnostic dump:`
+                    )
+                    console.error(
+                        "  stageOutcomes:",
+                        JSON.stringify(result.stageOutcomes, null, 2)
+                    )
+                    console.error(
+                        "  failures:",
+                        JSON.stringify(result.failures, null, 2)
+                    )
+                }
                 expect(result.output).not.toBeNull()
                 const actual = result.output as Record<string, unknown>
                 expect(actual).toEqual(runtime)
