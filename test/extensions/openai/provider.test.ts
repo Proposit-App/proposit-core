@@ -697,6 +697,109 @@ describe("createOpenAiResponsesProvider — error classification", () => {
     })
 })
 
+describe("createOpenAiResponsesProvider — incomplete-response detection", () => {
+    // **Regression for the v1.3.0 segmentation truncation.** When
+    // the Responses API hits the `max_output_tokens` cap (either an
+    // explicit cap or the model's default), it returns 200 OK with
+    // `status: "incomplete"` + `incomplete_details: { reason:
+    // "max_output_tokens" }` and a *partial* `output_text` that's
+    // valid JSON only up to the cut-off point. Pre-fix the provider
+    // ran the partial string through `safeParseJson`, which surfaced
+    // a `SyntaxError: Unterminated string in JSON at position N`
+    // wrapped as a `SchemaValidationLlmError`. The framework retried
+    // (schema_validation reason is retried by default) and hit the
+    // same wall on attempt 2. Now the provider detects the
+    // incomplete state and throws `TransientLlmError` with a tagged
+    // message naming the cap reason — the message is the load-bearing
+    // diagnostic for the dev reading server logs.
+    function buildIncompleteResponse(args: {
+        partialBody: string
+        reason: string
+        usage?: { inputTokens?: number; outputTokens?: number }
+    }): Response {
+        const usage = args.usage ?? { inputTokens: 100, outputTokens: 5 }
+        // Wire-format JSON literal — `status` + `incomplete_details`
+        // are the Responses-API fields that flag a truncated reply.
+        const json = {
+            id: "resp_incomplete",
+            status: "incomplete",
+            incomplete_details: { reason: args.reason },
+            output: [
+                {
+                    type: "message",
+                    role: "assistant",
+                    content: [
+                        {
+                            type: "output_text",
+                            text: args.partialBody,
+                        },
+                    ],
+                },
+            ],
+            usage: {
+                input_tokens: usage.inputTokens ?? 0,
+                output_tokens: usage.outputTokens ?? 0,
+            },
+        }
+        return new Response(JSON.stringify(json), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+        })
+    }
+
+    it("throws TransientLlmError when the response is incomplete (max_output_tokens cap hit)", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            buildIncompleteResponse({
+                // The partial body is what triggered the original
+                // bug — an "Unterminated string in JSON at position
+                // N" parse error in `safeParseJson`. We assert the
+                // fix surfaces the *cap* as the error reason, not
+                // the parse failure.
+                partialBody: '{"segments":[{"segmentId":"s1","text":"It rai',
+                reason: "max_output_tokens",
+            })
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+
+        await expect(
+            provider.respond({
+                model: "gpt-5.4-mini",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toMatchObject({
+            name: "TransientLlmError",
+            message: expect.stringMatching(/incomplete/i) as unknown,
+        })
+    })
+
+    it("includes the incomplete reason in the error message", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            buildIncompleteResponse({
+                partialBody: '{"answer":"par',
+                reason: "max_output_tokens",
+            })
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+
+        await expect(
+            provider.respond({
+                model: "gpt-5.4-mini",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toThrowError(/max_output_tokens/)
+    })
+})
+
 describe("createOpenAiResponsesProvider — abort propagation", () => {
     it("passes the abort signal through to fetch", async () => {
         const fetchMock: TFetchMock = vi
