@@ -777,11 +777,54 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
         })
     })
 
-    it("includes the incomplete reason in the error message", async () => {
+    it("includes the max_output_tokens reason + override-knob guidance in the error message", async () => {
+        // Each call gets a fresh `Response` because the Response body
+        // is single-use in undici; a second `.json()` on the same
+        // instance throws "Body is unusable".
+        const fetchMock: TFetchMock = vi.fn().mockImplementation(() =>
+            Promise.resolve(
+                buildIncompleteResponse({
+                    partialBody: '{"answer":"par',
+                    reason: "max_output_tokens",
+                })
+            )
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+
+        const err: unknown = await provider
+            .respond({
+                model: "gpt-5.4-mini",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+            .catch((e: unknown) => e)
+        if (!(err instanceof Error)) {
+            throw new Error("expected provider.respond to throw")
+        }
+        // Reason word verbatim from the envelope:
+        expect(err.message).toMatch(/max_output_tokens/)
+        // Actionable next-step: points at the stage-level override knob.
+        expect(err.message).toMatch(/maxOutputTokens/)
+    })
+
+    it("throws NonRetryableLlmError on incomplete with reason: content_filter (no wasted retry)", async () => {
+        // **Regression for the v1.3.1 P2 fold (post-validation).**
+        // OpenAI's content policy refusing the output is deterministic
+        // — the same prompt + the same input will refuse again. Pre-
+        // fold the provider returned `TransientLlmError` for any
+        // `status: "incomplete"` envelope, so the framework's default
+        // retry policy burned a second API call only to hit the same
+        // refusal. The classification split routes `content_filter`
+        // to `NonRetryableLlmError` so the failure surfaces on the
+        // first attempt with a clean message.
         const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
             buildIncompleteResponse({
-                partialBody: '{"answer":"par',
-                reason: "max_output_tokens",
+                partialBody: "",
+                reason: "content_filter",
             })
         )
         const provider = createOpenAiResponsesProvider({
@@ -796,7 +839,80 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
                 userMessage: "usr",
                 outputSchema: simpleSchema,
             })
-        ).rejects.toThrowError(/max_output_tokens/)
+        ).rejects.toMatchObject({
+            name: "NonRetryableLlmError",
+        })
+    })
+
+    it("content_filter error message names the policy refusal + says retrying won't help", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            buildIncompleteResponse({
+                partialBody: "",
+                reason: "content_filter",
+            })
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+
+        const err: unknown = await provider
+            .respond({
+                model: "gpt-5.4-mini",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+            .catch((e: unknown) => e)
+        if (!(err instanceof Error)) {
+            throw new Error("expected provider.respond to throw")
+        }
+        expect(err.message).toMatch(/content_filter/)
+        expect(err.message).toMatch(/content policy/i)
+        expect(err.message).toMatch(/[Rr]etry/)
+    })
+
+    it("falls back to TransientLlmError + warns on an unrecognized incomplete reason", async () => {
+        // For a reason value we don't recognize, the conservative
+        // default is `TransientLlmError` (treat it as retryable, we
+        // can't prove it's deterministic) plus a `console.warn` so
+        // the new value lands on operators' radar.
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            buildIncompleteResponse({
+                partialBody: '{"answer":"hi"',
+                reason: "future_unknown_reason",
+            })
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+
+        // Capture console.warn via a plain function swap rather than
+        // `vi.spyOn` — keeps the lint-strict types happy.
+        const original = console.warn as (...args: unknown[]) => void
+        const warns: string[] = []
+        console.warn = ((...args: unknown[]) => {
+            const first = args[0]
+            warns.push(typeof first === "string" ? first : String(first))
+        }) as (...args: unknown[]) => void
+        try {
+            await expect(
+                provider.respond({
+                    model: "gpt-5.4-mini",
+                    systemPrompt: "sys",
+                    userMessage: "usr",
+                    outputSchema: simpleSchema,
+                })
+            ).rejects.toMatchObject({ name: "TransientLlmError" })
+        } finally {
+            console.warn = original
+        }
+        // The warn line names the unrecognized reason so operators
+        // see the new value without opting into debug logging.
+        expect(
+            warns.some((line) => line.includes("future_unknown_reason"))
+        ).toBe(true)
     })
 })
 
