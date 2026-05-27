@@ -36,6 +36,11 @@ import type {
     TLlmTokenUsage,
     TToolSpec,
 } from "../../lib/llm/types.js"
+import {
+    debugLlmFailure,
+    debugLlmRequest,
+    debugLlmResponse,
+} from "../../lib/pipelines/debug-log.js"
 import { typeboxToOpenAiSchema } from "./structured-output.js"
 import {
     NonRetryableLlmError,
@@ -52,6 +57,8 @@ import type {
     TOpenAiResponsesRequestBody,
     TOpenAiTool,
 } from "./types.js"
+
+const STAGE_ID_MARKER = /<!--\s*stage-id:\s*([^\s>]+)\s*-->/
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1/responses"
 const DEFAULT_MAX_TOOL_ROUNDS = 6
@@ -94,6 +101,13 @@ export function createOpenAiResponsesProvider(
         const schemaName = deriveSchemaName(req.outputSchema)
         const convertedSchema = typeboxToOpenAiSchema(req.outputSchema)
         const tools = req.tools ? translateTools(req.tools) : undefined
+        // Extract the stage-id marker from the system prompt for
+        // debug-log correlation. Inert outside debug mode (the marker
+        // is an HTML comment); load-bearing for `PROPOSIT_PIPELINE_DEBUG=1`
+        // diagnostic lines so consumers can group request/response
+        // pairs by stage.
+        const stageIdMatch = STAGE_ID_MARKER.exec(req.systemPrompt)
+        const debugStageId = stageIdMatch ? stageIdMatch[1] : null
 
         // Build the running `input` array. Subsequent agent-loop
         // iterations append tool-result messages to this same array.
@@ -127,6 +141,17 @@ export function createOpenAiResponsesProvider(
             if (tools) {
                 body.tools = tools
             }
+
+            debugLlmRequest({
+                stageId: debugStageId,
+                model: req.model,
+                maxOutputTokens: req.maxOutputTokens,
+                reasoningEffort: req.reasoningEffort,
+                systemPromptLen: req.systemPrompt.length,
+                userMessageLen: req.userMessage.length,
+                systemPromptHead: req.systemPrompt,
+                userMessageHead: req.userMessage,
+            })
 
             const response = await callOnce({
                 url: baseUrl,
@@ -174,6 +199,21 @@ export function createOpenAiResponsesProvider(
             if (envelope.status === "incomplete") {
                 const reason =
                     envelope.incomplete_details?.reason ?? "unspecified"
+                // Surface the truncated `output_text` (when present)
+                // on the debug channel so devs running with
+                // `PROPOSIT_PIPELINE_DEBUG=1` can see exactly how far
+                // the model got before the cap fired.
+                const partialText = extractAssistantText(envelope.output)
+                debugLlmFailure({
+                    stageId: debugStageId,
+                    model: req.model,
+                    errorName: "TransientLlmError",
+                    errorMessage: `incomplete (reason: ${reason})`,
+                    status: envelope.status,
+                    incompleteReason: reason,
+                    rawText: partialText,
+                    tokenUsage: lastUsage,
+                })
                 throw new TransientLlmError({
                     message: `OpenAI Responses API returned status: "incomplete" (reason: ${reason}). The model stopped before finishing — typically because the output exceeded \`max_output_tokens\` (either an explicit cap on the request or the model's default). Pass a larger \`maxOutputTokens\` to TLlmRequest, or set the stage-level \`maxOutputTokens\` on the llmStage factory.`,
                 })
@@ -235,12 +275,42 @@ export function createOpenAiResponsesProvider(
 
             const text = extractAssistantText(envelope.output)
             if (text === undefined) {
+                debugLlmFailure({
+                    stageId: debugStageId,
+                    model: req.model,
+                    errorName: "TransientLlmError",
+                    errorMessage: "no assistant text content",
+                    status: envelope.status,
+                    tokenUsage: lastUsage,
+                })
                 throw new TransientLlmError({
                     message:
                         "OpenAI Responses API returned no assistant text content.",
                 })
             }
-            const parsed = safeParseJson(text)
+            let parsed: unknown
+            try {
+                parsed = safeParseJson(text)
+            } catch (err) {
+                debugLlmFailure({
+                    stageId: debugStageId,
+                    model: req.model,
+                    errorName: err instanceof Error ? err.name : "Error",
+                    errorMessage:
+                        err instanceof Error ? err.message : String(err),
+                    status: envelope.status,
+                    rawText: text,
+                    tokenUsage: lastUsage,
+                })
+                throw err
+            }
+            debugLlmResponse({
+                stageId: debugStageId,
+                status: envelope.status,
+                outputTextLen: text.length,
+                tokenUsage: lastUsage,
+                rawResponseId: lastResponseId,
+            })
             return {
                 output: parsed as T,
                 tokenUsage: lastUsage,

@@ -27,3 +27,16 @@ export type { TRetryPolicy, TRetryReason } from "./stage-helpers.js"
 
 export { executePipeline, PipelineConfigurationError } from "./execute.js"
 export type { TExecutePipelineDeps } from "./execute.js"
+
+export {
+    isDebugEnabled,
+    PROPOSIT_PIPELINE_DEBUG_ENV_VAR,
+    PROPOSIT_PIPELINE_DEBUG_PREFIX,
+    debugPipelineStart,
+    debugPipelineEnd,
+    debugStageStart,
+    debugStageEnd,
+    debugLlmRequest,
+    debugLlmResponse,
+    debugLlmFailure,
+} from "./debug-log.js"
