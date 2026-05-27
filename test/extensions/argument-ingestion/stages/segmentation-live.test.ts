@@ -8,11 +8,27 @@
 // `LLM_TRANSIENT_ERROR` and re-ran the stage; the second attempt hit
 // the same wall and the whole pipeline reported `output: null`.
 //
-// This test runs the real segmentation stage against the Singer text
-// the user reproduced the failure with ("Solution to World Poverty",
-// 15.5 KB / ~4 k input tokens). With the fix in place it must finish
-// without truncation, return a non-empty segments array, and not
-// trigger `validationError` on the stage's `outputSchema`.
+// This test runs the real segmentation stage against Madison's
+// "Federalist No. 10" (18 KB / ~4.5 k input tokens). With the v1.3.1
+// fix in place it must finish without truncation, return a non-empty
+// segments array, and not trigger `validationError` on the stage's
+// `outputSchema`.
+//
+// **Why Federalist 10 + not the original reproducer text.** The
+// v1.3.1 cycle initially used the Singer "Solution to World Poverty"
+// fixture (15.5 KB), which is the exact text the user reported the
+// bug with. Post-validation, the live test against that text
+// surfaced a *different* failure mode: OpenAI's content-policy
+// filter returns `status: "incomplete"` with
+// `incomplete_details.reason: "content_filter"` rather than
+// `"max_output_tokens"` — content_filter is deterministic and
+// covered separately by the provider unit tests (see
+// `provider.test.ts` "throws NonRetryableLlmError on incomplete with
+// reason: content_filter"). Federalist 10 is a comparable-size
+// political-philosophy text with no content-policy risk, so it
+// exercises the original max_output_tokens cap path cleanly. The
+// Singer text stays in `examples/texts/` as a workspace asset and
+// is the test bed for any future content_filter-specific scenarios.
 //
 // **Opt-in.** Gated on both `OPENAI_API_KEY` (env or
 // `.env.development`) AND `RUN_LIVE_LLM_TESTS=1` — vitest skips the
@@ -41,7 +57,7 @@ import type { TSegmentationOutput } from "../../../../src/extensions/argument-in
 
 const FIXTURE_DIR = path.resolve(
     import.meta.dirname,
-    "../fixtures-live/singer-solution"
+    "../fixtures-live/federalist-no-10"
 )
 
 function loadApiKey(): string | undefined {
@@ -64,9 +80,10 @@ const liveTestsEnabled = process.env.RUN_LIVE_LLM_TESTS === "1"
 const describeIf = apiKey && liveTestsEnabled ? describe : describe.skip
 
 // Tiny stand-in pipeline that runs *only* segmentation against the
-// Singer text. Lets us pin the failure mode to the segmentation
-// stage in isolation — same stage instance the real v2 factory wires
-// up, just without the eleven downstream stages weighing in.
+// Federalist 10 text. Lets us pin the failure mode to the
+// segmentation stage in isolation — same stage instance the real v2
+// factory wires up, just without the eleven downstream stages
+// weighing in.
 const INPUT_SCHEMA = Type.Object({ text: Type.String({ minLength: 1 }) })
 
 function buildSegmentationOnlyPipeline(): TPipeline<
@@ -90,10 +107,10 @@ function buildSegmentationOnlyPipeline(): TPipeline<
 }
 
 describeIf(
-    "segmentation stage — Singer reproducer (live LLM, RUN_LIVE_LLM_TESTS=1)",
+    "segmentation stage — Federalist 10 reproducer (live LLM, RUN_LIVE_LLM_TESTS=1)",
     () => {
         it(
-            "completes without truncation on the 15.5 KB Singer text",
+            "completes without truncation on the 18 KB Federalist No. 10 text",
             { timeout: 300_000 },
             async () => {
                 const inputPath = path.join(FIXTURE_DIR, "input.txt")
