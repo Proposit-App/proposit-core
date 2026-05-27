@@ -5,11 +5,21 @@
 // `TIngestionExtension` descriptor is forward-compatible across both
 // pipelines.
 
-export { createIngestionV1Pipeline } from "./v1-single-shot.js"
+export {
+    createIngestionV1Pipeline,
+    V1_PARSE_STAGE_ID,
+} from "./v1-single-shot.js"
 export type { TCreateIngestionV1PipelineOptions } from "./v1-single-shot.js"
 export { createIngestionV2Pipeline } from "./v2-multi-stage.js"
+export type { TCreateIngestionV2PipelineOptions } from "./v2-multi-stage.js"
+export { resolveLlmStageOptions } from "./shared/resolve-llm-stage-options.js"
 export { basicsExtension } from "./shared/basics-extension.js"
-export type { TIngestionExtension, TIngestionInput } from "./shared/types.js"
+export type {
+    TIngestionExtension,
+    TIngestionInput,
+    TIngestionLlmOptions,
+    TLlmStageOptionsOverride,
+} from "./shared/types.js"
 export { finalizeResponse } from "./shared/finalize-response.js"
 export type { TFinalizeResponseInput } from "./shared/finalize-response.js"
 export {

@@ -3,12 +3,36 @@
 export { STAGE_IDS } from "./schemas.js"
 export * from "./schemas.js"
 
-export { segmentationStage } from "./segmentation.js"
-export { claimMentionExtractionStage } from "./claim-mention-extraction.js"
-export { citationSourceDetectionStage } from "./citation-source-detection.js"
-export { axiomIndicatorDetectionStage } from "./axiom-indicator-detection.js"
-export { createClaimCanonicalizationStage } from "./claim-canonicalization.js"
-export { claimTypeClassificationStage } from "./claim-type-classification.js"
+export {
+    segmentationStage,
+    createSegmentationStage,
+    SEGMENTATION_MAX_OUTPUT_TOKENS,
+    SEGMENTATION_STAGE_DEFAULTS,
+} from "./segmentation.js"
+export {
+    claimMentionExtractionStage,
+    createClaimMentionExtractionStage,
+    CLAIM_MENTION_EXTRACTION_STAGE_DEFAULTS,
+} from "./claim-mention-extraction.js"
+export {
+    citationSourceDetectionStage,
+    createCitationSourceDetectionStage,
+    CITATION_SOURCE_DETECTION_STAGE_DEFAULTS,
+} from "./citation-source-detection.js"
+export {
+    axiomIndicatorDetectionStage,
+    createAxiomIndicatorDetectionStage,
+    AXIOM_INDICATOR_DETECTION_STAGE_DEFAULTS,
+} from "./axiom-indicator-detection.js"
+export {
+    createClaimCanonicalizationStage,
+    CLAIM_CANONICALIZATION_STAGE_DEFAULTS,
+} from "./claim-canonicalization.js"
+export {
+    claimTypeClassificationStage,
+    createClaimTypeClassificationStage,
+    CLAIM_TYPE_CLASSIFICATION_STAGE_DEFAULTS,
+} from "./claim-type-classification.js"
 export {
     claimReferenceValidationStage,
     validateClaimReferences,
@@ -19,8 +43,16 @@ export {
     assignVariables,
     isValidVariableSymbol,
 } from "./variable-assignment.js"
-export { relationExtractionStage } from "./relation-extraction.js"
-export { conclusionSelectionStage } from "./conclusion-selection.js"
+export {
+    relationExtractionStage,
+    createRelationExtractionStage,
+    RELATION_EXTRACTION_STAGE_DEFAULTS,
+} from "./relation-extraction.js"
+export {
+    conclusionSelectionStage,
+    createConclusionSelectionStage,
+    CONCLUSION_SELECTION_STAGE_DEFAULTS,
+} from "./conclusion-selection.js"
 export {
     formulaCompilationStage,
     compileFormulas,

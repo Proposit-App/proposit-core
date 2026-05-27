@@ -181,11 +181,16 @@ export {
     finalizeResponseV2,
     FINALIZE_V2_FAILURE_TEXTS,
     deriveRoles,
+    resolveLlmStageOptions,
+    V1_PARSE_STAGE_ID,
 } from "../extensions/argument-ingestion/index.js"
 export type {
     TCreateIngestionV1PipelineOptions,
+    TCreateIngestionV2PipelineOptions,
     TIngestionExtension,
     TIngestionInput,
+    TIngestionLlmOptions,
+    TLlmStageOptionsOverride,
     TFinalizeResponseInput,
     TFinalizeResponseV2Input,
     TClaimRole,

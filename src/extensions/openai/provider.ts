@@ -150,6 +150,35 @@ export function createOpenAiResponsesProvider(
             lastResponseId = envelope.id ?? lastResponseId
             lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
 
+            // **Truncation detection (v1.3.1).** When the model hits
+            // an output-token cap, the Responses API returns 200 OK
+            // with `status: "incomplete"` + `incomplete_details: {
+            // reason: "max_output_tokens" }` and a *partial*
+            // `output_text` that is only valid JSON up to the
+            // truncation point. Pre-v1.3.1 the provider blindly ran
+            // the partial text through `safeParseJson`, which surfaced
+            // a cryptic `SchemaValidationLlmError: Unterminated string
+            // in JSON at position N`. The framework's default policy
+            // then retried (schema_validation is retried) and the
+            // second attempt hit the exact same wall — producing the
+            // deterministic two-attempt-failure pattern reported by
+            // the user against the Singer fixture.
+            //
+            // We now surface the cap as a `TransientLlmError` with
+            // the reason interpolated into the message. Callers that
+            // hit this in production should either lift the
+            // stage-level `maxOutputTokens` cap (if they set one) or,
+            // when no cap was set, take this as a signal that the
+            // model's default cap is too low for the input size and
+            // pass an explicit `maxOutputTokens` on the request.
+            if (envelope.status === "incomplete") {
+                const reason =
+                    envelope.incomplete_details?.reason ?? "unspecified"
+                throw new TransientLlmError({
+                    message: `OpenAI Responses API returned status: "incomplete" (reason: ${reason}). The model stopped before finishing — typically because the output exceeded \`max_output_tokens\` (either an explicit cap on the request or the model's default). Pass a larger \`maxOutputTokens\` to TLlmRequest, or set the stage-level \`maxOutputTokens\` on the llmStage factory.`,
+                })
+            }
+
             const functionCalls = pickFunctionCalls(envelope.output)
             // Edge case — simultaneous `function_call` + final
             // `message` in the same response: the Responses API

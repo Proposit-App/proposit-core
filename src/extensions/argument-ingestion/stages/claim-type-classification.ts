@@ -16,6 +16,7 @@ import {
 import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
 import { optional } from "../../../lib/pipelines/types.js"
 import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
+import type { TLlmStageOptionsOverride } from "../shared/types.js"
 
 export const CLAIM_TYPE_CLASSIFICATION_MODEL = "gpt-5.4"
 
@@ -87,8 +88,15 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
-export const claimTypeClassificationStage: TStage<TClaimTypeClassificationOutput> =
-    llmStage<TClaimTypeClassificationOutput>({
+/** Internal default knobs for the claim-type-classification stage. */
+export const CLAIM_TYPE_CLASSIFICATION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
+    {}
+
+/** Build the claim-type-classification stage with optional caller overrides. */
+export function createClaimTypeClassificationStage(
+    options?: TLlmStageOptionsOverride
+): TStage<TClaimTypeClassificationOutput> {
+    return llmStage<TClaimTypeClassificationOutput>({
         id: STAGE_IDS.claimTypeClassification,
         dependsOn: [
             STAGE_IDS.claimCanonicalization,
@@ -97,5 +105,12 @@ export const claimTypeClassificationStage: TStage<TClaimTypeClassificationOutput
         ],
         outputSchema: ClaimTypeClassificationOutputSchema,
         model: CLAIM_TYPE_CLASSIFICATION_MODEL,
+        maxOutputTokens: options?.maxOutputTokens,
+        reasoningEffort: options?.reasoningEffort,
         buildPrompt,
     })
+}
+
+/** Backward-compatible default-options stage. */
+export const claimTypeClassificationStage: TStage<TClaimTypeClassificationOutput> =
+    createClaimTypeClassificationStage()

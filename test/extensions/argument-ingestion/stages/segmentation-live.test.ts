@@ -146,7 +146,7 @@ describeIf(
                 // recovered segments cover < 500 characters; this gate
                 // catches that regression.
                 expect(result.output).not.toBeNull()
-                const out = result.output as TSegmentationOutput
+                const out = result.output!
                 expect(out.segments.length).toBeGreaterThan(10)
                 const lastSpan = out.segments[out.segments.length - 1].span.end
                 expect(lastSpan).toBeGreaterThan(text.length * 0.8)
