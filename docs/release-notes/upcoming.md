@@ -10,12 +10,20 @@
   than the OpenAI Responses API's default per-model cap allowed, and the
   reply came back truncated mid-string. v1.3.1 sets a generous internal
   default on the segmentation stage (8 192 tokens) and detects the
-  truncated-reply case at the provider level, surfacing a clear
-  `TransientLlmError` ("OpenAI Responses API returned status:
-  'incomplete' (reason: max_output_tokens) ...") instead of a JSON-parse
-  error wrapped as a schema-validation failure. Reproduced against Peter
-  Singer's "Solution to World Poverty" (15.5 KB / ~4 k input tokens) and
-  pinned by a new live-LLM regression test.
+  truncated-reply case at the provider level. Pinned by a live-LLM
+  regression test gated on `OPENAI_API_KEY` + `RUN_LIVE_LLM_TESTS=1`.
+
+- **Content-filtered inputs now fail fast with a clean error.** When
+  OpenAI's content policy refuses to complete an output (response
+  envelope `incomplete_details.reason: "content_filter"`), the
+  provider now surfaces a `NonRetryableLlmError` on the first attempt
+  instead of letting the framework's default retry policy burn a
+  second API call on a deterministic refusal. The error message
+  names the policy refusal verbatim and tells the caller that
+  retrying won't help — the actionable next step is reviewing the
+  input or prompt. Output-token cap errors stay routed through the
+  retryable `TransientLlmError` path with a message that points at
+  the per-stage `maxOutputTokens` override knob.
 
 ## Added
 

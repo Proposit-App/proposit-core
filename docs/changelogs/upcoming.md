@@ -6,18 +6,37 @@ Commit range: `v1.3.0..HEAD`.
 
 - **`createIngestionV2Pipeline` segmentation truncation on large
   inputs.** Two coupled fixes for the deterministic failure pattern
-  reported against a 15.5 KB Singer fixture: (1) the OpenAI
-  `Responses` provider now inspects `envelope.status` and throws
-  `TransientLlmError` when the API returns `"incomplete"`, naming
-  the `incomplete_details.reason` in the message — previously a
-  truncated `output_text` was fed to `safeParseJson` and surfaced
-  as `SchemaValidationLlmError: Unterminated string in JSON at
-position N`; (2) the segmentation stage now ships an internal
-  `maxOutputTokens` default (`SEGMENTATION_MAX_OUTPUT_TOKENS =
-8192`) sized for typical long-form inputs. The provider-side
-  detection covers any stage that hits an output cap; the stage-side
-  default prevents the specific Singer reproducer from firing in the
-  first place.
+  reported against a 15.5 KB user fixture: (1) the OpenAI `Responses`
+  provider now inspects `envelope.status` and reacts on
+  `"incomplete"` rather than feeding the truncated `output_text` to
+  `safeParseJson` — previously surfaced as the cryptic
+  `SchemaValidationLlmError: Unterminated string in JSON at position N`;
+  (2) the segmentation stage now ships an internal `maxOutputTokens`
+  default (`SEGMENTATION_MAX_OUTPUT_TOKENS = 8192`) sized for typical
+  long-form inputs. The provider-side detection covers any stage that
+  hits an output cap; the stage-side default prevents the specific
+  reproducer from firing in the first place.
+- **`incomplete_details.reason` classification split (post-validation
+  fold).** The initial v1.3.1 cut classified every incomplete
+  envelope as `TransientLlmError` and let the framework retry. The
+  consumer-side validation cycle surfaced a deterministic failure
+  mode: OpenAI's content-policy filter returns
+  `incomplete_details.reason: "content_filter"`, and the retry was
+  wasted. The provider now splits the classification:
+  `max_output_tokens` → `TransientLlmError` (retryable; the
+  actionable fallback is raising the cap on the stage);
+  `content_filter` → `NonRetryableLlmError` (deterministic; surfaces
+  on the first attempt); any other reason → `TransientLlmError` as a
+  conservative default plus a `console.warn` so unrecognized values
+  land on operators' radar even when debug logging is off.
+- **Per-reason error messages.** A small `formatIncompleteMessage`
+  helper in the provider tailors the user-facing message by
+  `incomplete_details.reason`. The `max_output_tokens` message points
+  at the override knob
+  (`createIngestionV2Pipeline({ llm: { overrides: { ... } } })`); the
+  `content_filter` message names the policy refusal and says
+  retrying won't help; the generic-reason message names the reason
+  verbatim and points at the Responses API documentation.
 
 ## Added
 
@@ -71,15 +90,22 @@ position N`; (2) the segmentation stage now ships an internal
   `status?: string` and `incomplete_details?: { reason?: string }`
   to model the truncation-detection fields.
 - New tests:
-    - `test/extensions/openai/provider.test.ts` — two cases pinning
-      `TransientLlmError` on `status: incomplete`, with the cap
-      reason in the message.
+    - `test/extensions/openai/provider.test.ts` — five cases pinning
+      the incomplete-envelope branch: `TransientLlmError` on
+      `status: incomplete` (`max_output_tokens` reason); the
+      `max_output_tokens` message includes the
+      override-knob guidance; `NonRetryableLlmError` on
+      `content_filter`; the `content_filter` message names the policy
+      refusal + says retrying won't help; the unknown-reason
+      fallback emits `TransientLlmError` plus a `console.warn`.
     - `test/extensions/argument-ingestion/stages/segmentation-live.test.ts`
-      — opt-in live-LLM regression against Singer's "Solution to
-      World Poverty" (`OPENAI_API_KEY` + `RUN_LIVE_LLM_TESTS=1`).
-    - `test/extensions/argument-ingestion/fixtures-live/singer-solution/input.txt`
+      — opt-in live-LLM regression against Madison's Federalist
+      No. 10 (`OPENAI_API_KEY` + `RUN_LIVE_LLM_TESTS=1`).
+    - `test/extensions/argument-ingestion/fixtures-live/federalist-no-10/input.txt`
       — the fixture text, copied from
-      `proposit-server/public/debug-samples/`.
+      `examples/texts/05-federalist-no-10.txt` (~18 KB / ~4.5 k input
+      tokens, comparable to the user's reproducer text but free of
+      content-policy risk).
     - `test/extensions/argument-ingestion/llm-options-overrides.test.ts`
       — 9 unit tests pinning `resolveLlmStageOptions` precedence and
       the factory-to-LLM-request threading on both v1 and v2 pipelines.
