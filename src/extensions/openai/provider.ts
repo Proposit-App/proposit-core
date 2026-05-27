@@ -36,6 +36,11 @@ import type {
     TLlmTokenUsage,
     TToolSpec,
 } from "../../lib/llm/types.js"
+import {
+    debugLlmFailure,
+    debugLlmRequest,
+    debugLlmResponse,
+} from "../../lib/pipelines/debug-log.js"
 import { typeboxToOpenAiSchema } from "./structured-output.js"
 import {
     NonRetryableLlmError,
@@ -52,6 +57,8 @@ import type {
     TOpenAiResponsesRequestBody,
     TOpenAiTool,
 } from "./types.js"
+
+const STAGE_ID_MARKER = /<!--\s*stage-id:\s*([^\s>]+)\s*-->/
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1/responses"
 const DEFAULT_MAX_TOOL_ROUNDS = 6
@@ -94,6 +101,13 @@ export function createOpenAiResponsesProvider(
         const schemaName = deriveSchemaName(req.outputSchema)
         const convertedSchema = typeboxToOpenAiSchema(req.outputSchema)
         const tools = req.tools ? translateTools(req.tools) : undefined
+        // Extract the stage-id marker from the system prompt for
+        // debug-log correlation. Inert outside debug mode (the marker
+        // is an HTML comment); load-bearing for `PROPOSIT_PIPELINE_DEBUG=1`
+        // diagnostic lines so consumers can group request/response
+        // pairs by stage.
+        const stageIdMatch = STAGE_ID_MARKER.exec(req.systemPrompt)
+        const debugStageId = stageIdMatch ? stageIdMatch[1] : null
 
         // Build the running `input` array. Subsequent agent-loop
         // iterations append tool-result messages to this same array.
@@ -128,6 +142,17 @@ export function createOpenAiResponsesProvider(
                 body.tools = tools
             }
 
+            debugLlmRequest({
+                stageId: debugStageId,
+                model: req.model,
+                maxOutputTokens: req.maxOutputTokens,
+                reasoningEffort: req.reasoningEffort,
+                systemPromptLen: req.systemPrompt.length,
+                userMessageLen: req.userMessage.length,
+                systemPromptHead: req.systemPrompt,
+                userMessageHead: req.userMessage,
+            })
+
             const response = await callOnce({
                 url: baseUrl,
                 apiKey: options.apiKey,
@@ -149,6 +174,84 @@ export function createOpenAiResponsesProvider(
 
             lastResponseId = envelope.id ?? lastResponseId
             lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
+
+            // **Incomplete-envelope classification (v1.3.1).** When
+            // the model stops before finishing, the Responses API
+            // returns 200 OK with `status: "incomplete"` +
+            // `incomplete_details: { reason: <reason> }` and a
+            // *partial* `output_text`. Pre-v1.3.1 the provider
+            // blindly ran the partial text through `safeParseJson`,
+            // which surfaced a cryptic `SchemaValidationLlmError:
+            // Unterminated string in JSON at position N`. The
+            // framework's default policy then retried, hit the same
+            // wall on attempt 2, and produced the deterministic
+            // two-attempt-failure pattern users reported.
+            //
+            // The fold post-validation splits the classification by
+            // `incomplete_details.reason`:
+            //
+            //   * `max_output_tokens` → `TransientLlmError`
+            //     (retryable; a re-roll with the same prompt is the
+            //     correct strategy when the cap is the issue,
+            //     because a single retry may still succeed if the
+            //     model produces a slightly more compact answer;
+            //     and if it doesn't, the actionable next step is
+            //     raising the cap on the stage).
+            //   * `content_filter` → `NonRetryableLlmError`
+            //     (deterministic — OpenAI's policy filter doesn't
+            //     change between calls; retrying burns a second API
+            //     hit for no benefit. Surface immediately so the
+            //     caller can re-prompt with different input.)
+            //   * any other reason → `TransientLlmError` as a
+            //     conservative default, but emit a `console.warn`
+            //     so a new `incomplete_details.reason` value lands
+            //     on operators' radar even when debug logging is
+            //     off. Once we see the new reason in practice, the
+            //     classification gets extended.
+            if (envelope.status === "incomplete") {
+                const reason =
+                    envelope.incomplete_details?.reason ?? "unspecified"
+                // Surface the truncated `output_text` (when present)
+                // on the debug channel so devs running with
+                // `PROPOSIT_PIPELINE_DEBUG=1` can see exactly how far
+                // the model got before the stop fired.
+                const partialText = extractAssistantText(envelope.output)
+                const errorName =
+                    reason === "content_filter"
+                        ? "NonRetryableLlmError"
+                        : "TransientLlmError"
+                debugLlmFailure({
+                    stageId: debugStageId,
+                    model: req.model,
+                    errorName,
+                    errorMessage: `incomplete (reason: ${reason})`,
+                    status: envelope.status,
+                    incompleteReason: reason,
+                    rawText: partialText,
+                    tokenUsage: lastUsage,
+                })
+                const message = formatIncompleteMessage(reason)
+                if (reason === "content_filter") {
+                    throw new NonRetryableLlmError({ message })
+                }
+                if (
+                    reason !== "max_output_tokens" &&
+                    reason !== "unspecified"
+                ) {
+                    // Conservative default for an unknown reason:
+                    // treat as transient (we can't prove it's
+                    // deterministic) but warn so this lands on
+                    // operators' radar even when debug logging is
+                    // off. Plain `console.warn` rather than the
+                    // gated `debug-log` helper because the whole
+                    // point is "noticing the new value without
+                    // having to opt into debug mode".
+                    console.warn(
+                        `[proposit/openai] Unrecognized incomplete_details.reason "${reason}" — classifying as transient (retryable). If this reason is in fact deterministic, classify it explicitly in provider.ts.`
+                    )
+                }
+                throw new TransientLlmError({ message })
+            }
 
             const functionCalls = pickFunctionCalls(envelope.output)
             // Edge case — simultaneous `function_call` + final
@@ -206,12 +309,42 @@ export function createOpenAiResponsesProvider(
 
             const text = extractAssistantText(envelope.output)
             if (text === undefined) {
+                debugLlmFailure({
+                    stageId: debugStageId,
+                    model: req.model,
+                    errorName: "TransientLlmError",
+                    errorMessage: "no assistant text content",
+                    status: envelope.status,
+                    tokenUsage: lastUsage,
+                })
                 throw new TransientLlmError({
                     message:
                         "OpenAI Responses API returned no assistant text content.",
                 })
             }
-            const parsed = safeParseJson(text)
+            let parsed: unknown
+            try {
+                parsed = safeParseJson(text)
+            } catch (err) {
+                debugLlmFailure({
+                    stageId: debugStageId,
+                    model: req.model,
+                    errorName: err instanceof Error ? err.name : "Error",
+                    errorMessage:
+                        err instanceof Error ? err.message : String(err),
+                    status: envelope.status,
+                    rawText: text,
+                    tokenUsage: lastUsage,
+                })
+                throw err
+            }
+            debugLlmResponse({
+                stageId: debugStageId,
+                status: envelope.status,
+                outputTextLen: text.length,
+                tokenUsage: lastUsage,
+                rawResponseId: lastResponseId,
+            })
             return {
                 output: parsed as T,
                 tokenUsage: lastUsage,
@@ -310,6 +443,23 @@ function isAbortError(err: unknown): boolean {
         err !== null &&
         (err as { name?: unknown }).name === "AbortError"
     )
+}
+
+// -- incomplete-reason → user-facing message ----------------------------
+//
+// Per-reason error messages for the `status: "incomplete"` branch.
+// The message is the dev's first read when a stage fails — keep it
+// actionable, name the cap reason verbatim, and (for the truncation
+// case specifically) point at the override knob that fixes it.
+
+function formatIncompleteMessage(reason: string): string {
+    if (reason === "max_output_tokens") {
+        return `OpenAI Responses API returned status: "incomplete" (reason: max_output_tokens). The model's output exceeded the per-call \`max_output_tokens\` cap (either an explicit value on the request or the model's default). Pass a larger \`maxOutputTokens\` to TLlmRequest, or set the stage-level \`maxOutputTokens\` on the llmStage factory (e.g., the \`createIngestionV2Pipeline({ llm: { overrides: { ... } } })\` surface).`
+    }
+    if (reason === "content_filter") {
+        return `OpenAI Responses API returned status: "incomplete" (reason: content_filter). OpenAI's content policy refused to complete this output; the input or generated content was flagged. Retrying will not succeed — review the input text or the stage's prompt and re-request.`
+    }
+    return `OpenAI Responses API returned status: "incomplete" (reason: ${reason}). The model stopped before completing the response. See OpenAI Responses API documentation for the complete \`incomplete_details.reason\` enumeration.`
 }
 
 // -- response parsing --

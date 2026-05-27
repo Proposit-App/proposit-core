@@ -26,7 +26,11 @@ import {
 import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
 import { optional } from "../../../lib/pipelines/types.js"
 import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
-import type { TIngestionExtension, TIngestionInput } from "../shared/types.js"
+import type {
+    TIngestionExtension,
+    TIngestionInput,
+    TLlmStageOptionsOverride,
+} from "../shared/types.js"
 
 export const CLAIM_CANONICALIZATION_MODEL = "gpt-5.5"
 export const CLAIM_CANONICALIZATION_REASONING:
@@ -179,15 +183,25 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
+/** Internal default knobs for the claim-canonicalization stage. */
+export const CLAIM_CANONICALIZATION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
+    reasoningEffort: CLAIM_CANONICALIZATION_REASONING,
+}
+
 /**
  * Builds the `claim-canonicalization` stage for the supplied
  * extension. The stage's `outputSchema` carries the extension's
  * per-claim fields, so the LLM's structured-output schema matches the
  * extension's claim shape (e.g. for `basics`: a discriminated union
  * over `type`).
+ *
+ * `options` overrides the stage's internal defaults
+ * (`CLAIM_CANONICALIZATION_STAGE_DEFAULTS`). Threaded through by
+ * `createIngestionV2Pipeline` per its `TIngestionLlmOptions` surface.
  */
 export function createClaimCanonicalizationStage(
-    extension: TIngestionExtension
+    extension: TIngestionExtension,
+    options?: TLlmStageOptionsOverride
 ): TStage<TClaimCanonicalizationOutput> {
     return llmStage<TClaimCanonicalizationOutput>({
         id: STAGE_IDS.claimCanonicalization,
@@ -198,7 +212,9 @@ export function createClaimCanonicalizationStage(
         ],
         outputSchema: buildResponseSchema(extension),
         model: CLAIM_CANONICALIZATION_MODEL,
-        reasoningEffort: CLAIM_CANONICALIZATION_REASONING,
+        maxOutputTokens: options?.maxOutputTokens,
+        reasoningEffort:
+            options?.reasoningEffort ?? CLAIM_CANONICALIZATION_REASONING,
         buildPrompt,
     })
 }

@@ -18,6 +18,7 @@ import {
 } from "./schemas.js"
 import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
+import type { TLlmStageOptionsOverride } from "../shared/types.js"
 
 export const CONCLUSION_SELECTION_MODEL = "gpt-5.5"
 export const CONCLUSION_SELECTION_REASONING:
@@ -76,48 +77,63 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
-// Inner llmStage that actually performs the LLM call.
-const innerStage = llmStage<TConclusionSelectionOutput>({
-    id: STAGE_IDS.conclusionSelection,
-    dependsOn: [
-        STAGE_IDS.claimTypeClassification,
-        STAGE_IDS.relationExtraction,
-    ],
-    outputSchema: ConclusionSelectionOutputSchema,
-    model: CONCLUSION_SELECTION_MODEL,
+/** Internal default knobs for the conclusion-selection stage. */
+export const CONCLUSION_SELECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
     reasoningEffort: CONCLUSION_SELECTION_REASONING,
-    buildPrompt,
-})
+}
 
 /**
- * `conclusionSelectionStage` wraps the inner `llmStage` so that when
- * the LLM returns `conclusionMiniId: null`, the stage emits a
+ * Build the conclusion-selection stage with optional caller
+ * overrides. The stage wraps an inner `llmStage` so that when the LLM
+ * returns `conclusionMiniId: null`, it also emits a
  * `ProcessingFailure` with code `NO_SINGLE_CONCLUSION` via
  * `ctx.addFailure` (spec §7.2 row 10). The stage still completes
  * successfully — the null output flows through `formula-compilation`
- * (which emits `conclusionPremiseMiniId: null`) into `finalize-response-v2`
- * (which assembles `{ argument: null, failureText: "No single
- * conclusion could be selected." }`). The added failure is a
- * UI-rendering hint, not a task-outcome signal; severity is `warning`
- * to match the informational-only role of finalize's failureText path.
+ * (which emits `conclusionPremiseMiniId: null`) into
+ * `finalize-response-v2` (which assembles `{ argument: null,
+ * failureText: "No single conclusion could be selected." }`). The
+ * added failure is a UI-rendering hint, not a task-outcome signal;
+ * severity is `warning` to match the informational-only role of
+ * finalize's failureText path.
  */
-export const conclusionSelectionStage: TStage<TConclusionSelectionOutput> = {
-    id: innerStage.id,
-    dependsOn: innerStage.dependsOn,
-    outputSchema: innerStage.outputSchema,
-    run: async (ctx) => {
-        const output = await innerStage.run(ctx)
-        if (output.conclusionMiniId === null) {
-            ctx.addFailure({
-                code: CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
-                message:
-                    output.rationale.length > 0
-                        ? output.rationale
-                        : "No single conclusion could be selected.",
-                severity: "warning",
-                context: { rationale: output.rationale },
-            })
-        }
-        return output
-    },
+export function createConclusionSelectionStage(
+    options?: TLlmStageOptionsOverride
+): TStage<TConclusionSelectionOutput> {
+    const innerStage = llmStage<TConclusionSelectionOutput>({
+        id: STAGE_IDS.conclusionSelection,
+        dependsOn: [
+            STAGE_IDS.claimTypeClassification,
+            STAGE_IDS.relationExtraction,
+        ],
+        outputSchema: ConclusionSelectionOutputSchema,
+        model: CONCLUSION_SELECTION_MODEL,
+        maxOutputTokens: options?.maxOutputTokens,
+        reasoningEffort:
+            options?.reasoningEffort ?? CONCLUSION_SELECTION_REASONING,
+        buildPrompt,
+    })
+    return {
+        id: innerStage.id,
+        dependsOn: innerStage.dependsOn,
+        outputSchema: innerStage.outputSchema,
+        run: async (ctx) => {
+            const output = await innerStage.run(ctx)
+            if (output.conclusionMiniId === null) {
+                ctx.addFailure({
+                    code: CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
+                    message:
+                        output.rationale.length > 0
+                            ? output.rationale
+                            : "No single conclusion could be selected.",
+                    severity: "warning",
+                    context: { rationale: output.rationale },
+                })
+            }
+            return output
+        },
+    }
 }
+
+/** Backward-compatible default-options stage. */
+export const conclusionSelectionStage: TStage<TConclusionSelectionOutput> =
+    createConclusionSelectionStage()

@@ -31,6 +31,12 @@ import {
     SubPipelineFailedError,
     readStashedTokenUsage,
 } from "./stage-helpers.js"
+import {
+    debugPipelineEnd,
+    debugPipelineStart,
+    debugStageEnd,
+    debugStageStart,
+} from "./debug-log.js"
 import type { TLlmProvider, TLlmTokenUsage } from "../llm/types.js"
 
 export type TExecutePipelineDeps = {
@@ -210,6 +216,14 @@ export async function executePipeline<TInput, TOutput>(
         pipelineVersion: pipeline.version,
         at: startAt,
     })
+    debugPipelineStart({
+        pipelineId: pipeline.id,
+        pipelineVersion: pipeline.version,
+        stageCount: pipeline.stages.length,
+        rootStages: pipeline.stages
+            .filter((s) => s.dependsOn.length === 0)
+            .map((s) => s.id),
+    })
 
     const failures: TProcessingFailure[] = []
     const records = new Map<string, TStageRecord>()
@@ -309,24 +323,55 @@ export async function executePipeline<TInput, TOutput>(
     // -- Stage execution --
 
     const runStage = async (stage: TStage<unknown>): Promise<void> => {
+        const stageDeps = stage.dependsOn.map((d) => depId(d))
+        const stageStartAt = now()
+        const finishStage = (args: {
+            status: TStageStatus
+            tokenUsage?: TLlmTokenUsage
+            outputPresent: boolean
+        }): void => {
+            const endAt = now()
+            const event: TPipelineEvent =
+                args.tokenUsage !== undefined
+                    ? {
+                          kind: "stage:end",
+                          stageId: stage.id,
+                          status: args.status,
+                          tokenUsage: args.tokenUsage,
+                          at: endAt,
+                      }
+                    : {
+                          kind: "stage:end",
+                          stageId: stage.id,
+                          status: args.status,
+                          at: endAt,
+                      }
+            emit(event)
+            debugStageEnd({
+                stageId: stage.id,
+                status: args.status,
+                durationMs: endAt - stageStartAt,
+                outputPresence: args.outputPresent
+                    ? "present"
+                    : "null-or-undefined",
+                tokenUsage: args.tokenUsage,
+            })
+        }
+
         if (signal.aborted) {
             // Pending stages don't start once aborted. Emit `stage:start`
             // before `stage:end` so consumers walking the event stream
             // for symmetric pairs (e.g. the SSE bridge in slice 2C) see
             // a balanced sequence — every `stage:end` is preceded by a
             // matching `stage:start`.
-            const startAt = now()
-            emit({ kind: "stage:start", stageId: stage.id, at: startAt })
+            emit({ kind: "stage:start", stageId: stage.id, at: stageStartAt })
+            debugStageStart({ stageId: stage.id, deps: stageDeps })
             records.set(stage.id, { outcome: "skipped", output: undefined })
-            emit({
-                kind: "stage:end",
-                stageId: stage.id,
-                status: "skipped",
-                at: now(),
-            })
+            finishStage({ status: "skipped", outputPresent: false })
             return
         }
-        emit({ kind: "stage:start", stageId: stage.id, at: now() })
+        emit({ kind: "stage:start", stageId: stage.id, at: stageStartAt })
+        debugStageStart({ stageId: stage.id, deps: stageDeps })
         const ctx = makeCtx(stageDepIds.get(stage.id) ?? new Set(), stage.id)
         try {
             const output = await stage.run(ctx)
@@ -345,12 +390,7 @@ export async function executePipeline<TInput, TOutput>(
                     outcome: "failed",
                     output: undefined,
                 })
-                emit({
-                    kind: "stage:end",
-                    stageId: stage.id,
-                    status: "failed",
-                    at: now(),
-                })
+                finishStage({ status: "failed", outputPresent: false })
                 return
             }
             const tokenUsage = readStashedTokenUsage(ctx, stage.id)
@@ -359,12 +399,10 @@ export async function executePipeline<TInput, TOutput>(
                 output,
                 tokenUsage,
             })
-            emit({
-                kind: "stage:end",
-                stageId: stage.id,
+            finishStage({
                 status: "completed",
                 tokenUsage,
-                at: now(),
+                outputPresent: output !== null && output !== undefined,
             })
         } catch (err) {
             if (err instanceof PipelineConfigurationError) {
@@ -375,12 +413,7 @@ export async function executePipeline<TInput, TOutput>(
                     outcome: "failed",
                     output: undefined,
                 })
-                emit({
-                    kind: "stage:end",
-                    stageId: stage.id,
-                    status: "failed",
-                    at: now(),
-                })
+                finishStage({ status: "failed", outputPresent: false })
                 capturedConfigError ??= err
                 return
             }
@@ -394,12 +427,7 @@ export async function executePipeline<TInput, TOutput>(
                     outcome: "skipped",
                     output: undefined,
                 })
-                emit({
-                    kind: "stage:end",
-                    stageId: stage.id,
-                    status: "skipped",
-                    at: now(),
-                })
+                finishStage({ status: "skipped", outputPresent: false })
                 return
             }
             if (err instanceof LlmStageRetryExhaustedError) {
@@ -414,12 +442,7 @@ export async function executePipeline<TInput, TOutput>(
                     outcome: "failed",
                     output: undefined,
                 })
-                emit({
-                    kind: "stage:end",
-                    stageId: stage.id,
-                    status: "failed",
-                    at: now(),
-                })
+                finishStage({ status: "failed", outputPresent: false })
                 return
             }
             if (err instanceof SubPipelineFailedError) {
@@ -434,12 +457,7 @@ export async function executePipeline<TInput, TOutput>(
                     outcome: "failed",
                     output: undefined,
                 })
-                emit({
-                    kind: "stage:end",
-                    stageId: stage.id,
-                    status: "failed",
-                    at: now(),
-                })
+                finishStage({ status: "failed", outputPresent: false })
                 return
             }
             const message = err instanceof Error ? err.message : String(err)
@@ -450,12 +468,7 @@ export async function executePipeline<TInput, TOutput>(
                 severity: "error",
             })
             records.set(stage.id, { outcome: "failed", output: undefined })
-            emit({
-                kind: "stage:end",
-                stageId: stage.id,
-                status: "failed",
-                at: now(),
-            })
+            finishStage({ status: "failed", outputPresent: false })
         }
     }
 
@@ -484,16 +497,28 @@ export async function executePipeline<TInput, TOutput>(
                         outcome: "skipped",
                         output: undefined,
                     })
+                    const skipStartAt = now()
                     emit({
                         kind: "stage:start",
                         stageId: stage.id,
-                        at: now(),
+                        at: skipStartAt,
                     })
+                    debugStageStart({
+                        stageId: stage.id,
+                        deps: stage.dependsOn.map((d) => depId(d)),
+                    })
+                    const skipEndAt = now()
                     emit({
                         kind: "stage:end",
                         stageId: stage.id,
                         status: "skipped",
-                        at: now(),
+                        at: skipEndAt,
+                    })
+                    debugStageEnd({
+                        stageId: stage.id,
+                        status: "skipped",
+                        durationMs: skipEndAt - skipStartAt,
+                        outputPresence: "null-or-undefined",
                     })
                     remaining.delete(id)
                     skippedAny = true
@@ -556,11 +581,18 @@ export async function executePipeline<TInput, TOutput>(
     // close.
     if (capturedConfigError !== null) {
         const err: PipelineConfigurationError = capturedConfigError
+        const failEndAt = now()
         emit({
             kind: "pipeline:end",
             status: "failed",
             output: "null",
-            at: now(),
+            at: failEndAt,
+        })
+        debugPipelineEnd({
+            pipelineId: pipeline.id,
+            status: "failed",
+            output: "null",
+            durationMs: failEndAt - startAt,
         })
         throw err
     }
@@ -614,11 +646,21 @@ export async function executePipeline<TInput, TOutput>(
     const endStatus: "completed" | "failed" = signal.aborted
         ? "failed"
         : "completed"
+    const endAt = now()
+    const outputPresence: "present" | "null" =
+        output === null ? "null" : "present"
     emit({
         kind: "pipeline:end",
         status: endStatus,
-        output: output === null ? "null" : "present",
-        at: now(),
+        output: outputPresence,
+        at: endAt,
+    })
+    debugPipelineEnd({
+        pipelineId: pipeline.id,
+        status: endStatus,
+        output: outputPresence,
+        durationMs: endAt - startAt,
+        tokenUsage: aggregatedTokens,
     })
 
     return {

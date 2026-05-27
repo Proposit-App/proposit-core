@@ -32,24 +32,37 @@
 import Type from "typebox"
 import {
     STAGE_IDS,
-    axiomIndicatorDetectionStage,
-    citationSourceDetectionStage,
-    claimMentionExtractionStage,
     claimReferenceValidationStage,
-    claimTypeClassificationStage,
-    conclusionSelectionStage,
+    createAxiomIndicatorDetectionStage,
+    createCitationSourceDetectionStage,
     createClaimCanonicalizationStage,
+    createClaimMentionExtractionStage,
+    createClaimTypeClassificationStage,
+    createConclusionSelectionStage,
+    createRelationExtractionStage,
+    createSegmentationStage,
     formulaCompilationStage,
     formulaValidationStage,
-    relationExtractionStage,
-    segmentationStage,
     variableAssignmentStage,
+    SEGMENTATION_STAGE_DEFAULTS,
+    CLAIM_MENTION_EXTRACTION_STAGE_DEFAULTS,
+    CITATION_SOURCE_DETECTION_STAGE_DEFAULTS,
+    AXIOM_INDICATOR_DETECTION_STAGE_DEFAULTS,
+    CLAIM_CANONICALIZATION_STAGE_DEFAULTS,
+    CLAIM_TYPE_CLASSIFICATION_STAGE_DEFAULTS,
+    RELATION_EXTRACTION_STAGE_DEFAULTS,
+    CONCLUSION_SELECTION_STAGE_DEFAULTS,
 } from "./stages/index.js"
 import { optional } from "../../lib/pipelines/index.js"
 import type { TPipeline, TStage } from "../../lib/pipelines/index.js"
 import type { TParsedArgumentResponse } from "../../lib/parsing/index.js"
 import { finalizeResponseV2 } from "./shared/finalize-response-v2.js"
-import type { TIngestionExtension, TIngestionInput } from "./shared/types.js"
+import { resolveLlmStageOptions } from "./shared/resolve-llm-stage-options.js"
+import type {
+    TIngestionExtension,
+    TIngestionInput,
+    TIngestionLlmOptions,
+} from "./shared/types.js"
 
 const PIPELINE_ID = "argument-ingestion-v2"
 const PIPELINE_VERSION = "1.0.0"
@@ -57,6 +70,30 @@ const PIPELINE_VERSION = "1.0.0"
 const INGESTION_INPUT_SCHEMA = Type.Object({
     text: Type.String({ minLength: 1 }),
 })
+
+/**
+ * Options for `createIngestionV2Pipeline`.
+ *
+ * `llm.defaults` applies to every LLM stage that doesn't have a
+ * per-stage entry under `llm.overrides`; per-stage entries are keyed
+ * by stage id (`STAGE_IDS.segmentation`, etc.). The effective knobs
+ * compose stage-override > pipeline-default > internal stage default.
+ *
+ * @example
+ * ```ts
+ * createIngestionV2Pipeline(basicsExtension, {
+ *     llm: {
+ *         defaults: { maxOutputTokens: 16_384 },
+ *         overrides: {
+ *             [STAGE_IDS.segmentation]: { maxOutputTokens: 32_768 },
+ *         },
+ *     },
+ * })
+ * ```
+ */
+export type TCreateIngestionV2PipelineOptions = {
+    llm?: TIngestionLlmOptions
+}
 
 /**
  * Build the v2 multi-stage ingestion pipeline for the supplied
@@ -69,9 +106,67 @@ const INGESTION_INPUT_SCHEMA = Type.Object({
  * `executePipeline`.
  */
 export function createIngestionV2Pipeline(
-    extension: TIngestionExtension
+    extension: TIngestionExtension,
+    options?: TCreateIngestionV2PipelineOptions
 ): TPipeline<TIngestionInput, TParsedArgumentResponse> {
-    const canonicalizationStage = createClaimCanonicalizationStage(extension)
+    const llm = options?.llm
+    const segmentationStage = createSegmentationStage(
+        resolveLlmStageOptions(
+            STAGE_IDS.segmentation,
+            SEGMENTATION_STAGE_DEFAULTS,
+            llm
+        )
+    )
+    const claimMentionExtractionStage = createClaimMentionExtractionStage(
+        resolveLlmStageOptions(
+            STAGE_IDS.claimMentionExtraction,
+            CLAIM_MENTION_EXTRACTION_STAGE_DEFAULTS,
+            llm
+        )
+    )
+    const citationSourceDetectionStage = createCitationSourceDetectionStage(
+        resolveLlmStageOptions(
+            STAGE_IDS.citationSourceDetection,
+            CITATION_SOURCE_DETECTION_STAGE_DEFAULTS,
+            llm
+        )
+    )
+    const axiomIndicatorDetectionStage = createAxiomIndicatorDetectionStage(
+        resolveLlmStageOptions(
+            STAGE_IDS.axiomIndicatorDetection,
+            AXIOM_INDICATOR_DETECTION_STAGE_DEFAULTS,
+            llm
+        )
+    )
+    const canonicalizationStage = createClaimCanonicalizationStage(
+        extension,
+        resolveLlmStageOptions(
+            STAGE_IDS.claimCanonicalization,
+            CLAIM_CANONICALIZATION_STAGE_DEFAULTS,
+            llm
+        )
+    )
+    const claimTypeClassificationStage = createClaimTypeClassificationStage(
+        resolveLlmStageOptions(
+            STAGE_IDS.claimTypeClassification,
+            CLAIM_TYPE_CLASSIFICATION_STAGE_DEFAULTS,
+            llm
+        )
+    )
+    const relationExtractionStage = createRelationExtractionStage(
+        resolveLlmStageOptions(
+            STAGE_IDS.relationExtraction,
+            RELATION_EXTRACTION_STAGE_DEFAULTS,
+            llm
+        )
+    )
+    const conclusionSelectionStage = createConclusionSelectionStage(
+        resolveLlmStageOptions(
+            STAGE_IDS.conclusionSelection,
+            CONCLUSION_SELECTION_STAGE_DEFAULTS,
+            llm
+        )
+    )
     const stages: readonly TStage<unknown>[] = [
         segmentationStage,
         claimMentionExtractionStage,

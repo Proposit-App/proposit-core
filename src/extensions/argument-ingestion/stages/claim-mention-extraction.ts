@@ -13,6 +13,7 @@ import {
 } from "./schemas.js"
 import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
+import type { TLlmStageOptionsOverride } from "../shared/types.js"
 
 export const CLAIM_MENTION_EXTRACTION_MODEL = "gpt-5.4"
 
@@ -39,11 +40,25 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
-export const claimMentionExtractionStage: TStage<TClaimMentionExtractionOutput> =
-    llmStage<TClaimMentionExtractionOutput>({
+/** Internal default knobs for the claim-mention-extraction stage. */
+export const CLAIM_MENTION_EXTRACTION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
+    {}
+
+/** Build the claim-mention-extraction stage with optional caller overrides. */
+export function createClaimMentionExtractionStage(
+    options?: TLlmStageOptionsOverride
+): TStage<TClaimMentionExtractionOutput> {
+    return llmStage<TClaimMentionExtractionOutput>({
         id: STAGE_IDS.claimMentionExtraction,
         dependsOn: [STAGE_IDS.segmentation],
         outputSchema: ClaimMentionExtractionOutputSchema,
         model: CLAIM_MENTION_EXTRACTION_MODEL,
+        maxOutputTokens: options?.maxOutputTokens,
+        reasoningEffort: options?.reasoningEffort,
         buildPrompt,
     })
+}
+
+/** Backward-compatible default-options stage. */
+export const claimMentionExtractionStage: TStage<TClaimMentionExtractionOutput> =
+    createClaimMentionExtractionStage()

@@ -18,6 +18,7 @@ import {
 } from "./schemas.js"
 import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
+import type { TLlmStageOptionsOverride } from "../shared/types.js"
 
 export const RELATION_EXTRACTION_MODEL = "gpt-5.5"
 export const RELATION_EXTRACTION_REASONING:
@@ -88,8 +89,16 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
-export const relationExtractionStage: TStage<TRelationExtractionOutput> =
-    llmStage<TRelationExtractionOutput>({
+/** Internal default knobs for the relation-extraction stage. */
+export const RELATION_EXTRACTION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
+    reasoningEffort: RELATION_EXTRACTION_REASONING,
+}
+
+/** Build the relation-extraction stage with optional caller overrides. */
+export function createRelationExtractionStage(
+    options?: TLlmStageOptionsOverride
+): TStage<TRelationExtractionOutput> {
+    return llmStage<TRelationExtractionOutput>({
         id: STAGE_IDS.relationExtraction,
         dependsOn: [
             STAGE_IDS.claimCanonicalization,
@@ -98,6 +107,13 @@ export const relationExtractionStage: TStage<TRelationExtractionOutput> =
         ],
         outputSchema: RelationExtractionOutputSchema,
         model: RELATION_EXTRACTION_MODEL,
-        reasoningEffort: RELATION_EXTRACTION_REASONING,
+        maxOutputTokens: options?.maxOutputTokens,
+        reasoningEffort:
+            options?.reasoningEffort ?? RELATION_EXTRACTION_REASONING,
         buildPrompt,
     })
+}
+
+/** Backward-compatible default-options stage. */
+export const relationExtractionStage: TStage<TRelationExtractionOutput> =
+    createRelationExtractionStage()

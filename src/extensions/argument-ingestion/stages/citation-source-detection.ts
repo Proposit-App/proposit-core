@@ -12,6 +12,7 @@ import {
 } from "./schemas.js"
 import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
+import type { TLlmStageOptionsOverride } from "../shared/types.js"
 
 export const CITATION_SOURCE_DETECTION_MODEL = "gpt-5.4-mini"
 
@@ -43,11 +44,25 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
-export const citationSourceDetectionStage: TStage<TCitationSourceDetectionOutput> =
-    llmStage<TCitationSourceDetectionOutput>({
+/** Internal default knobs for the citation-source-detection stage. */
+export const CITATION_SOURCE_DETECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
+    {}
+
+/** Build the citation-source-detection stage with optional caller overrides. */
+export function createCitationSourceDetectionStage(
+    options?: TLlmStageOptionsOverride
+): TStage<TCitationSourceDetectionOutput> {
+    return llmStage<TCitationSourceDetectionOutput>({
         id: STAGE_IDS.citationSourceDetection,
         dependsOn: [STAGE_IDS.segmentation],
         outputSchema: CitationSourceDetectionOutputSchema,
         model: CITATION_SOURCE_DETECTION_MODEL,
+        maxOutputTokens: options?.maxOutputTokens,
+        reasoningEffort: options?.reasoningEffort,
         buildPrompt,
     })
+}
+
+/** Backward-compatible default-options stage. */
+export const citationSourceDetectionStage: TStage<TCitationSourceDetectionOutput> =
+    createCitationSourceDetectionStage()

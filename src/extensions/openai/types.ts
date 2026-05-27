@@ -94,6 +94,23 @@ export type TOpenAiOutputItem =
 
 export type TOpenAiResponsesEnvelope = {
     id?: string
+    /**
+     * Per the Responses API, the envelope-level `status` field is
+     * `"completed"` on a normal reply, `"incomplete"` when the model
+     * stopped before finishing (the most common reason for which is
+     * an `max_output_tokens` cap hit). Other documented values
+     * include `"in_progress"` (only seen on streaming/background
+     * responses, never on the synchronous path the provider takes).
+     */
+    status?: string
+    /**
+     * Populated when `status === "incomplete"`. The Responses API
+     * uses `reason` to identify *why* the model stopped early — the
+     * one we treat specifically is `"max_output_tokens"`; any other
+     * value still surfaces as a transient error, just without the
+     * cap-specific guidance text.
+     */
+    incomplete_details?: { reason?: string }
     output?: TOpenAiOutputItem[]
     usage?: {
         input_tokens?: number

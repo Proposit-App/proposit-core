@@ -14,6 +14,7 @@
 // in the descriptor so v2 stages can compose them.
 
 import type { TSchema } from "typebox"
+import type { TReasoningEffort } from "../../../lib/llm/types.js"
 
 /**
  * Bundle of TypeBox schemas a caller hands to an ingestion pipeline
@@ -47,4 +48,44 @@ export type TIngestionExtension = {
  */
 export type TIngestionInput = {
     text: string
+}
+
+/**
+ * Per-stage LLM knob overrides for an ingestion pipeline factory.
+ *
+ * Every field is optional and merges over the stage's internal
+ * default (which is in turn merged over the pipeline-level default).
+ * The merge order is: stage-override > pipeline-default > internal
+ * stage default. A missing field at every layer means the stage
+ * keeps its built-in behavior.
+ *
+ * Currently exposes the two knobs that have proven load-bearing for
+ * the v2 pipeline: `maxOutputTokens` (the output-budget cap; not
+ * setting one means the model's default applies, which is what
+ * caused the v1.3.0 segmentation truncation against the Singer
+ * fixture) and `reasoningEffort` (effort budget for reasoning
+ * models). The struct is forward-compatible — new knobs (e.g.
+ * `model` overrides) can land additively without breaking callers.
+ */
+export type TLlmStageOptionsOverride = {
+    maxOutputTokens?: number
+    reasoningEffort?: TReasoningEffort
+}
+
+/**
+ * Pipeline-level LLM-options surface threaded through every LLM
+ * stage by the ingestion-pipeline factories.
+ *
+ * `defaults` applies to all LLM stages in the pipeline that don't
+ * have a per-stage entry under `overrides`. A stage's internal
+ * default still takes effect for any knob neither `defaults` nor
+ * `overrides` sets.
+ *
+ * `overrides` is keyed by stage id (`STAGE_IDS.segmentation`,
+ * `STAGE_IDS.claimMentionExtraction`, etc.). v1 has only one LLM
+ * stage and uses the id `"parse-argument"`.
+ */
+export type TIngestionLlmOptions = {
+    defaults?: TLlmStageOptionsOverride
+    overrides?: Record<string, TLlmStageOptionsOverride>
 }

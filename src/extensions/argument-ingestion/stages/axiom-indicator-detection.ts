@@ -11,6 +11,7 @@ import {
 } from "./schemas.js"
 import { llmStage } from "../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../lib/pipelines/types.js"
+import type { TLlmStageOptionsOverride } from "../shared/types.js"
 
 export const AXIOM_INDICATOR_DETECTION_MODEL = "gpt-5.4-mini"
 
@@ -43,11 +44,25 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     return { system: markedSystem, user }
 }
 
-export const axiomIndicatorDetectionStage: TStage<TAxiomIndicatorDetectionOutput> =
-    llmStage<TAxiomIndicatorDetectionOutput>({
+/** Internal default knobs for the axiom-indicator-detection stage. */
+export const AXIOM_INDICATOR_DETECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
+    {}
+
+/** Build the axiom-indicator-detection stage with optional caller overrides. */
+export function createAxiomIndicatorDetectionStage(
+    options?: TLlmStageOptionsOverride
+): TStage<TAxiomIndicatorDetectionOutput> {
+    return llmStage<TAxiomIndicatorDetectionOutput>({
         id: STAGE_IDS.axiomIndicatorDetection,
         dependsOn: [STAGE_IDS.segmentation],
         outputSchema: AxiomIndicatorDetectionOutputSchema,
         model: AXIOM_INDICATOR_DETECTION_MODEL,
+        maxOutputTokens: options?.maxOutputTokens,
+        reasoningEffort: options?.reasoningEffort,
         buildPrompt,
     })
+}
+
+/** Backward-compatible default-options stage. */
+export const axiomIndicatorDetectionStage: TStage<TAxiomIndicatorDetectionOutput> =
+    createAxiomIndicatorDetectionStage()

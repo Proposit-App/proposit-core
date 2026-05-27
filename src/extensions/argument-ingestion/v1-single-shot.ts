@@ -29,11 +29,16 @@ import type { TPipeline } from "../../lib/pipelines/index.js"
 import { buildParsingPrompt } from "../../lib/parsing/index.js"
 import type { TParsedArgumentResponse } from "../../lib/parsing/index.js"
 import { finalizeResponse } from "./shared/finalize-response.js"
-import type { TIngestionExtension, TIngestionInput } from "./shared/types.js"
+import { resolveLlmStageOptions } from "./shared/resolve-llm-stage-options.js"
+import type {
+    TIngestionExtension,
+    TIngestionInput,
+    TIngestionLlmOptions,
+} from "./shared/types.js"
 
 const PIPELINE_ID = "argument-ingestion-v1"
 const PIPELINE_VERSION = "1.0.0"
-const PARSE_STAGE_ID = "parse-argument"
+export const V1_PARSE_STAGE_ID = "parse-argument"
 
 const DEFAULT_PARSE_MODEL = "gpt-5.4"
 
@@ -42,6 +47,13 @@ export type TCreateIngestionV1PipelineOptions = {
     model?: string
     /** Optional caller-supplied custom-instructions appendix. */
     customInstructions?: string
+    /**
+     * Per-stage LLM-knob overrides. v1 has a single LLM stage
+     * (`V1_PARSE_STAGE_ID === "parse-argument"`); both `defaults`
+     * and an entry under `overrides[V1_PARSE_STAGE_ID]` apply to it,
+     * with the per-stage entry winning over `defaults`.
+     */
+    llm?: TIngestionLlmOptions
 }
 
 const INGESTION_INPUT_SCHEMA = Type.Object({
@@ -68,13 +80,24 @@ export function createIngestionV1Pipeline(
     // RecordingLlmProvider) can key replays by stage. The OpenAI
     // provider treats this as an inert HTML comment in the system
     // message.
-    const markedSystemPrompt = `<!-- stage-id: ${PARSE_STAGE_ID} -->\n${systemPrompt}`
+    const markedSystemPrompt = `<!-- stage-id: ${V1_PARSE_STAGE_ID} -->\n${systemPrompt}`
+
+    // v1 has no internal LLM-knob defaults (the single stage shipped
+    // 1.1.0 without a `maxOutputTokens` cap or `reasoningEffort` —
+    // any caller overrides land directly on the request).
+    const parseStageLlmOptions = resolveLlmStageOptions(
+        V1_PARSE_STAGE_ID,
+        {},
+        options?.llm
+    )
 
     const parseStage = llmStage<TParsedArgumentResponse>({
-        id: PARSE_STAGE_ID,
+        id: V1_PARSE_STAGE_ID,
         dependsOn: [],
         outputSchema: extension.responseSchema,
         model,
+        maxOutputTokens: parseStageLlmOptions.maxOutputTokens,
+        reasoningEffort: parseStageLlmOptions.reasoningEffort,
         buildPrompt: (ctx) => {
             const input = ctx.input as TIngestionInput
             return {
@@ -104,9 +127,10 @@ export function createIngestionV1Pipeline(
         outputSchema: extension.responseSchema,
         stages: [parseStage],
         finalize: {
-            dependsOn: [PARSE_STAGE_ID],
+            dependsOn: [V1_PARSE_STAGE_ID],
             run: (ctx) => {
-                const parsed = ctx.get<TParsedArgumentResponse>(PARSE_STAGE_ID)
+                const parsed =
+                    ctx.get<TParsedArgumentResponse>(V1_PARSE_STAGE_ID)
                 if (!parsed) {
                     // Defensive: finalize.dependsOn is required, so
                     // the executor only invokes us when the upstream
@@ -114,7 +138,7 @@ export function createIngestionV1Pipeline(
                     // an output, the framework is misbehaving — throw
                     // rather than emit a half-built response.
                     throw new Error(
-                        `Pipeline "${PIPELINE_ID}" finalize invoked without a "${PARSE_STAGE_ID}" output.`
+                        `Pipeline "${PIPELINE_ID}" finalize invoked without a "${V1_PARSE_STAGE_ID}" output.`
                     )
                 }
                 return finalizeResponse({
