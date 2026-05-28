@@ -29,6 +29,15 @@ export { executePipeline, PipelineConfigurationError } from "./execute.js"
 export type { TExecutePipelineDeps } from "./execute.js"
 
 export {
+    LLM_QUOTA_EXHAUSTED,
+    LLM_RATE_LIMITED,
+    LLM_TRANSIENT_ERROR,
+    LLM_NON_RETRYABLE_ERROR,
+    LLM_UNKNOWN_ERROR,
+    OUTPUT_SCHEMA_INVALID,
+} from "./failure-codes.js"
+
+export {
     isDebugEnabled,
     PROPOSIT_PIPELINE_DEBUG_ENV_VAR,
     PROPOSIT_PIPELINE_DEBUG_PREFIX,

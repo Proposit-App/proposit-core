@@ -10,6 +10,7 @@ export type { TCreateOpenAiResponsesProviderOptions } from "./provider.js"
 export type { TOpenAiFetch } from "./types.js"
 export {
     NonRetryableLlmError,
+    QuotaExhaustedLlmError,
     RateLimitLlmError,
     SchemaValidationLlmError,
     ToolLoopExhaustedError,

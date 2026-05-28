@@ -8,6 +8,7 @@ import Type from "typebox"
 import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/provider.js"
 import {
     NonRetryableLlmError,
+    QuotaExhaustedLlmError,
     RateLimitLlmError,
     SchemaValidationLlmError,
     ToolLoopExhaustedError,
@@ -694,6 +695,116 @@ describe("createOpenAiResponsesProvider — error classification", () => {
                 outputSchema: simpleSchema,
             })
         ).rejects.toBeInstanceOf(NonRetryableLlmError)
+    })
+})
+
+describe("createOpenAiResponsesProvider — 429 quota vs rate-limit classification", () => {
+    // OpenAI returns BOTH transient throttling and persistent budget
+    // exhaustion as HTTP 429; they differ only in the response body's
+    // structured `error.code` / `error.type`. The provider parses the
+    // body and routes `insufficient_quota` to QuotaExhaustedLlmError,
+    // leaving every other (and every unparseable) 429 on the transient
+    // RateLimitLlmError path. CR 2026-05-27.
+
+    function buildRawResponse(status: number, rawBody: string): Response {
+        return new Response(rawBody, {
+            status,
+            headers: { "Content-Type": "application/json" },
+        })
+    }
+
+    it("throws QuotaExhaustedLlmError on a 429 whose body code is insufficient_quota", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            buildRawResponse(
+                429,
+                JSON.stringify({
+                    error: {
+                        type: "insufficient_quota",
+                        code: "insufficient_quota",
+                        message: "You exceeded your current quota",
+                    },
+                })
+            )
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(QuotaExhaustedLlmError)
+    })
+
+    it("throws RateLimitLlmError on a 429 whose body code is rate_limit_exceeded (transient, unchanged)", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            buildRawResponse(
+                429,
+                JSON.stringify({
+                    error: {
+                        type: "requests",
+                        code: "rate_limit_exceeded",
+                        message: "Rate limit reached",
+                    },
+                })
+            )
+        )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(RateLimitLlmError)
+    })
+
+    it("falls back to RateLimitLlmError on a 429 with an unparseable (non-JSON) body — never a false quota trip", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(
+                buildRawResponse(429, "<html>429 Too Many Requests</html>")
+            )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(RateLimitLlmError)
+    })
+
+    it('falls back to RateLimitLlmError on a 429 with {"error":{}} (no code/type discriminator)', async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(
+                buildRawResponse(429, JSON.stringify({ error: {} }))
+            )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            fetch: asFetch(fetchMock),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(RateLimitLlmError)
     })
 })
 

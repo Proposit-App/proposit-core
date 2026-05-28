@@ -18,6 +18,14 @@ import type {
 } from "./types.js"
 import type { TLlmRequest, TReasoningEffort, TToolSpec } from "../llm/types.js"
 import { executePipeline } from "./execute.js"
+import {
+    LLM_NON_RETRYABLE_ERROR,
+    LLM_QUOTA_EXHAUSTED,
+    LLM_RATE_LIMITED,
+    LLM_TRANSIENT_ERROR,
+    LLM_UNKNOWN_ERROR,
+    OUTPUT_SCHEMA_INVALID,
+} from "./failure-codes.js"
 
 // -- Deterministic --
 
@@ -37,7 +45,11 @@ export function deterministicStage<TOutput>(config: {
 
 // -- Retry policy --
 
-export type TRetryReason = "schema_validation" | "transient" | "rate_limit"
+export type TRetryReason =
+    | "schema_validation"
+    | "transient"
+    | "rate_limit"
+    | "quota_exhausted"
 
 export type TRetryPolicy = {
     maxAttempts: number
@@ -154,7 +166,11 @@ function classifyError(err: unknown): TRetryReason | "non_retryable" {
         return "non_retryable"
     }
     const tag = (err as { retryReason?: unknown }).retryReason
-    if (tag === "transient" || tag === "rate_limit") {
+    if (
+        tag === "transient" ||
+        tag === "rate_limit" ||
+        tag === "quota_exhausted"
+    ) {
         return tag
     }
     return "non_retryable"
@@ -304,7 +320,7 @@ export function llmStage<TOutput>(config: {
                         const validationMessage = validationError!
                         lastError = {
                             reason: "schema_validation",
-                            code: "OUTPUT_SCHEMA_INVALID",
+                            code: OUTPUT_SCHEMA_INVALID,
                             message: validationMessage,
                         }
                         const retryable =
@@ -360,7 +376,7 @@ export function llmStage<TOutput>(config: {
                     if (reason === "non_retryable") {
                         lastError = {
                             reason: "transient",
-                            code: "LLM_NON_RETRYABLE_ERROR",
+                            code: LLM_NON_RETRYABLE_ERROR,
                             message,
                         }
                         break
@@ -368,11 +384,17 @@ export function llmStage<TOutput>(config: {
                     lastError = {
                         reason,
                         code:
-                            reason === "rate_limit"
-                                ? "LLM_RATE_LIMITED"
-                                : "LLM_TRANSIENT_ERROR",
+                            reason === "quota_exhausted"
+                                ? LLM_QUOTA_EXHAUSTED
+                                : reason === "rate_limit"
+                                  ? LLM_RATE_LIMITED
+                                  : LLM_TRANSIENT_ERROR,
                         message,
                     }
+                    // Fail-fast for any reason not opted into `retryOn`.
+                    // `quota_exhausted` is absent from every default
+                    // policy, so a quota 429 breaks here on attempt 1 —
+                    // same control flow `rate_limit` already takes.
                     if (!policy.retryOn.includes(reason)) {
                         break
                     }
@@ -386,7 +408,7 @@ export function llmStage<TOutput>(config: {
 
             const failure = lastError ?? {
                 reason: "transient" as const,
-                code: "LLM_UNKNOWN_ERROR",
+                code: LLM_UNKNOWN_ERROR,
                 message: "llmStage retry loop exited without error context",
             }
             throw new LlmStageRetryExhaustedError({

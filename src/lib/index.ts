@@ -128,6 +128,12 @@ export {
     LlmStageRetryExhaustedError,
     StageAbortedError,
     SubPipelineFailedError,
+    LLM_QUOTA_EXHAUSTED,
+    LLM_RATE_LIMITED,
+    LLM_TRANSIENT_ERROR,
+    LLM_NON_RETRYABLE_ERROR,
+    LLM_UNKNOWN_ERROR,
+    OUTPUT_SCHEMA_INVALID,
 } from "./pipelines/index.js"
 export type {
     TStage,
@@ -163,6 +169,7 @@ export { createOpenAiResponsesProvider } from "../extensions/openai/index.js"
 export type { TCreateOpenAiResponsesProviderOptions } from "../extensions/openai/index.js"
 export {
     NonRetryableLlmError,
+    QuotaExhaustedLlmError,
     RateLimitLlmError,
     SchemaValidationLlmError,
     ToolLoopExhaustedError,

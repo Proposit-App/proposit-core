@@ -1,3 +1,3 @@
 # Upcoming changelog
 
-Commit range: `v1.3.1..HEAD`.
+Commit range: `v1.4.0..HEAD`.
