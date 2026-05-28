@@ -1,5 +1,35 @@
 # proposit-core — Claude Code Guide
 
+## Repository scope and identity
+
+`proposit-core` is a standalone open-source TypeScript library implementing a propositional-logic engine, with a CLI and optional extensions. Published as `@proposit/proposit-core`. The library is designed to be installable and usable on its own and has no inter-project dependencies within this organization.
+
+**This repo owns:**
+
+- The propositional-logic AST, grammar, engine, and mutation primitives
+- The four-tier grammar model and validator implementations
+- The grammar wire-format codes (`TGrammarTier`, `TGrammarRuleCode`, `TViolation`) and engine-error codes
+- The on-disk snapshot schema (`TPropositCoreSnapshot` and library wrappers) and hierarchical checksum protocol
+- The pipeline framework (DAG runtime, retry / circuit-breaker) and the abstract `TLlmProvider` interface — shipped as 1.1.0+ public API
+- The CLI — shipped as a `proposit-core` bin (`pnpm cli --` invokes it locally); the only execution surface this repo distributes
+- Optional extensions under `src/extensions/` (LLM providers, reference-type schemas, default ingestion pipelines, basic argument schemas), shipped as subpath exports. SDK-coupled extensions declare their SDK as an optional peer dependency.
+
+**This repo does NOT own:**
+
+- Any concept of user identity, sessions, or auth — the engine has no notion of "user"
+- Deployment infrastructure: web server, mobile build, hosted service. The CLI is the sole exception; the library otherwise leaves runtime entirely to its consumer.
+- HTML, React, or any front-end UI logic. The library may expose helpers that make the engine easier to use from a UI context, but the UI itself is always the consumer's concern.
+- Client/server transport schemas or API contracts
+- Dependencies on, or knowledge of, any other library in this organization
+
+**Push back on requests to:**
+
+- Add a dependency on, or import from, any other library in this organization
+- Add user-, account-, or session-aware code paths
+- Add framework-specific helpers (React hooks, Next.js route handlers, Expo modules)
+- Make the library depend on a hosted service to function
+- Move cross-runtime concerns (shared schemas, API client utilities) into this library
+
 ## Generic instructions
 
 - Git commit messages should not include any co-authoring content
