@@ -191,3 +191,17 @@ export function makeRateLimitError(message: string): Error {
     ;(err as unknown as { retryReason: string }).retryReason = "rate_limit"
     return err
 }
+
+/**
+ * Convenience helper: build a quota-exhaustion error suitable for the
+ * mock's `kind: "error"` response. Mirrors the `retryReason:
+ * "quota_exhausted"` tag the provider attaches to a
+ * `QuotaExhaustedLlmError` (persistent budget exhaustion — an
+ * `insufficient_quota` 429), which `classifyError` reads to drive
+ * fail-fast behavior.
+ */
+export function makeQuotaError(message: string): Error {
+    const err = new Error(message)
+    ;(err as unknown as { retryReason: string }).retryReason = "quota_exhausted"
+    return err
+}

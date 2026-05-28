@@ -18,7 +18,8 @@
 // recognized error classes (see `./errors.ts`):
 //
 //   * 5xx                        → `TransientLlmError`
-//   * 429                        → `RateLimitLlmError`
+//   * 429 (insufficient_quota)   → `QuotaExhaustedLlmError`
+//   * 429 (any other body)       → `RateLimitLlmError`
 //   * 400, 422                   → `SchemaValidationLlmError`
 //   * 401, 403, other 4xx        → `NonRetryableLlmError`
 //   * loop cap exceeded          → `ToolLoopExhaustedError`
@@ -44,6 +45,7 @@ import {
 import { typeboxToOpenAiSchema } from "./structured-output.js"
 import {
     NonRetryableLlmError,
+    QuotaExhaustedLlmError,
     RateLimitLlmError,
     SchemaValidationLlmError,
     ToolLoopExhaustedError,
@@ -404,14 +406,40 @@ async function callOnce(args: {
     const message = `OpenAI Responses API ${response.status.toString()}: ${
         errorBody || response.statusText
     }`
-    throw classifyHttpError(response.status, message)
+    // Best-effort structured extraction of the provider error
+    // code/type so a 429 can be split into persistent quota exhaustion
+    // vs. transient throttling. Never throws on malformed bodies — an
+    // unparseable body leaves `providerErrorCode` undefined, which
+    // `classifyHttpError` treats as the safe transient default.
+    let providerErrorCode: string | undefined
+    try {
+        const parsed = JSON.parse(errorBody) as {
+            error?: { code?: string; type?: string }
+        }
+        providerErrorCode = parsed.error?.code ?? parsed.error?.type
+    } catch {
+        providerErrorCode = undefined
+    }
+    throw classifyHttpError(response.status, message, providerErrorCode)
 }
 
-function classifyHttpError(status: number, message: string): Error {
+function classifyHttpError(
+    status: number,
+    message: string,
+    providerErrorCode?: string
+): Error {
     if (status >= 500) {
         return new TransientLlmError({ message, status })
     }
     if (status === 429) {
+        // 429 splits on the body's structured error code: persistent
+        // budget exhaustion (`insufficient_quota`) is fail-fast, every
+        // other (and every unparseable) 429 stays the transient
+        // throttle. The safe default is always "transient + retryable"
+        // — never a false quota trip.
+        if (providerErrorCode === "insufficient_quota") {
+            return new QuotaExhaustedLlmError({ message, status })
+        }
         return new RateLimitLlmError({ message, status })
     }
     // 400 vs 422 split (slice 1B.1 reviewer fold P2 #1):

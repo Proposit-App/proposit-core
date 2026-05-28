@@ -21,8 +21,10 @@ import { describe, expect, it } from "vitest"
 import Type from "typebox"
 import {
     DEFAULT_RETRY_POLICY,
+    LLM_QUOTA_EXHAUSTED,
     LlmStageRetryExhaustedError,
     PipelineConfigurationError,
+    QuotaExhaustedLlmError,
     StageAbortedError,
     SubPipelineFailedError,
     deterministicStage,
@@ -39,6 +41,7 @@ import type {
 } from "../src/lib/index.js"
 import {
     createMockLlmProvider,
+    makeQuotaError,
     makeRateLimitError,
     makeTransientError,
 } from "./mocks/llm.js"
@@ -684,7 +687,155 @@ describe("llmStage — retry policy", () => {
         expect(DEFAULT_RETRY_POLICY.retryOn).toContain("schema_validation")
         expect(DEFAULT_RETRY_POLICY.retryOn).toContain("transient")
         expect(DEFAULT_RETRY_POLICY.retryOn).not.toContain("rate_limit")
+        expect(DEFAULT_RETRY_POLICY.retryOn).not.toContain("quota_exhausted")
         expect(DEFAULT_RETRY_POLICY.maxAppendedErrorBytes).toBe(2048)
+    })
+})
+
+// ---------------- 5b. Quota-exhaustion classification (CR 2026-05-27) ----------------
+
+describe("llmStage — quota-exhaustion classification", () => {
+    const outputSchema = Type.Object({ value: Type.Number() })
+
+    it("quota error fails fast on attempt 1 (no retry) with code LLM_QUOTA_EXHAUSTED", async () => {
+        const events: TPipelineEvent[] = []
+        let callCount = 0
+        const stage = llmStage<{ value: number }>({
+            id: "q",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: q--> system",
+                user: "u",
+            }),
+            retry: { backoffMs: 0 },
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                // Two queued errors, but a fail-fast stage must only
+                // consume the first — proving no second attempt fires.
+                q: [
+                    {
+                        kind: "error",
+                        error: makeQuotaError("insufficient_quota"),
+                    },
+                    {
+                        kind: "error",
+                        error: makeQuotaError("insufficient_quota"),
+                    },
+                ],
+            },
+            onCall: () => {
+                callCount += 1
+            },
+        })
+        const pipeline = buildPipeline<unknown>({
+            stages: [stage],
+            finalize: { dependsOn: [optional("q")], run: () => null },
+        })
+        const result = await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+        expect(result.stageOutcomes).toMatchObject({ q: "failed" })
+        expect(callCount).toBe(1)
+        const retries = events.filter((e) => e.kind === "stage:retry")
+        expect(retries.length).toBe(0)
+        const failure = result.failures.find((f) => f.stage === "q")
+        expect(failure?.code).toBe(LLM_QUOTA_EXHAUSTED)
+        expect(failure?.code).toBe("LLM_QUOTA_EXHAUSTED")
+    })
+
+    it("quota stays non-retryable even when rate_limit IS in retryOn — fail-fast comes from absence in retryOn, not a hard-coded branch", async () => {
+        let callCount = 0
+        const stage = llmStage<{ value: number }>({
+            id: "q2",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: q2--> system",
+                user: "u",
+            }),
+            // rate_limit is retryable here; quota is still absent, so a
+            // quota 429 must NOT borrow rate_limit's retryability.
+            retry: { backoffMs: 0, retryOn: ["rate_limit"] },
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                q2: [
+                    {
+                        kind: "error",
+                        error: makeQuotaError("insufficient_quota"),
+                    },
+                    {
+                        kind: "error",
+                        error: makeQuotaError("insufficient_quota"),
+                    },
+                ],
+            },
+            onCall: () => {
+                callCount += 1
+            },
+        })
+        const pipeline = buildPipeline<unknown>({
+            stages: [stage],
+            finalize: { dependsOn: [optional("q2")], run: () => null },
+        })
+        const result = await executePipeline(pipeline, {}, { llm })
+        expect(result.stageOutcomes).toMatchObject({ q2: "failed" })
+        expect(callCount).toBe(1)
+        const failure = result.failures.find((f) => f.stage === "q2")
+        expect(failure?.code).toBe(LLM_QUOTA_EXHAUSTED)
+    })
+
+    it("transient attempt-count pin: a transient error under the default policy retries to exactly maxAttempts (regression guard for the quota branch)", async () => {
+        let callCount = 0
+        const stage = llmStage<{ value: number }>({
+            id: "tp",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: tp--> system",
+                user: "u",
+            }),
+            retry: { backoffMs: 0 },
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                tp: [
+                    { kind: "error", error: makeTransientError("boom-1") },
+                    { kind: "error", error: makeTransientError("boom-2") },
+                ],
+            },
+            onCall: () => {
+                callCount += 1
+            },
+        })
+        const pipeline = buildPipeline<unknown>({
+            stages: [stage],
+            finalize: { dependsOn: [optional("tp")], run: () => null },
+        })
+        const result = await executePipeline(pipeline, {}, { llm })
+        expect(result.stageOutcomes).toMatchObject({ tp: "failed" })
+        expect(callCount).toBe(DEFAULT_RETRY_POLICY.maxAttempts)
+        expect(callCount).toBe(2)
+        const failure = result.failures.find((f) => f.stage === "tp")
+        expect(failure?.code).toBe("LLM_TRANSIENT_ERROR")
+    })
+
+    it("exports LLM_QUOTA_EXHAUSTED constant and QuotaExhaustedLlmError class from the package root", () => {
+        expect(LLM_QUOTA_EXHAUSTED).toBe("LLM_QUOTA_EXHAUSTED")
+        const err = new QuotaExhaustedLlmError({
+            message: "boom",
+            status: 429,
+        })
+        expect(err).toBeInstanceOf(QuotaExhaustedLlmError)
+        expect(err.retryReason).toBe("quota_exhausted")
+        expect(err.status).toBe(429)
     })
 })
 

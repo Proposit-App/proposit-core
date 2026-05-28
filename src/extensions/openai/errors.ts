@@ -12,9 +12,18 @@
 //   * `TransientLlmError` — `retryReason: "transient"`. 5xx
 //     responses + low-level fetch failures. Retried under the
 //     default policy.
-//   * `RateLimitLlmError` — `retryReason: "rate_limit"`. 429
-//     responses. Not retried by default — callers can opt into
-//     `retryOn: ["..., "rate_limit"]`.
+//   * `RateLimitLlmError` — `retryReason: "rate_limit"`. Transient
+//     429 throttling (any 429 whose body is NOT
+//     `insufficient_quota`). Not retried by default — callers can opt
+//     into `retryOn: ["..., "rate_limit"]`.
+//   * `QuotaExhaustedLlmError` — `retryReason: "quota_exhausted"`.
+//     Persistent budget exhaustion (429 whose body code/type is
+//     `insufficient_quota`). Fail-fast: `"quota_exhausted"` is absent
+//     from every default `retryOn`, so the stage breaks on attempt 1
+//     and surfaces the distinct `LLM_QUOTA_EXHAUSTED` code. Note the
+//     fail-fast comes from the `retryOn` exclusion, NOT from
+//     subclassing `NonRetryableLlmError` (which would collapse the
+//     code back to `LLM_NON_RETRYABLE_ERROR`).
 //   * `SchemaValidationLlmError` — no `retryReason` tag; the
 //     framework's separate schema-validation retry path handles
 //     this. Thrown for 400/422 responses that signal strict-mode
@@ -48,6 +57,26 @@ export class RateLimitLlmError extends Error {
     constructor(args: { message: string; status?: number }) {
         super(args.message)
         this.name = "RateLimitLlmError"
+        this.status = args.status
+    }
+}
+
+/**
+ * Persistent provider budget exhaustion — OpenAI `insufficient_quota`,
+ * surfaced as a 429 whose body carries that code/type. Distinct from
+ * the transient {@link RateLimitLlmError} throttle: the framework reads
+ * the `quota_exhausted` tag, which is absent from every default
+ * `retryOn`, so the stage fails fast on attempt 1 and reports the
+ * distinct `LLM_QUOTA_EXHAUSTED` code. Carries the same optional
+ * `status` as the sibling error family for caller observability.
+ */
+export class QuotaExhaustedLlmError extends Error {
+    public readonly retryReason = "quota_exhausted" as const
+    public readonly status?: number
+
+    constructor(args: { message: string; status?: number }) {
+        super(args.message)
+        this.name = "QuotaExhaustedLlmError"
         this.status = args.status
     }
 }
