@@ -24516,6 +24516,14 @@ describe("Ingestion prompts — anti-attribution clause", () => {
         expect(prompt).toContain(ANTI_ATTRIBUTION_ANCHOR)
         // Names at least one banned frame so the model has a concrete example.
         expect(prompt).toContain("According to the author")
+        // The citation carve-out must survive in the production prompt too:
+        // citation claims summarizing an external cited source keep that
+        // source attribution — only author-attribution of the argument's
+        // own claims is forbidden. (CORE_PROMPT is the shipping path, so a
+        // future rewrite that drops this fence must fail CI here.)
+        expect(prompt).toContain(
+            "Citation claims that summarize what an external"
+        )
     })
 
     it("buildParsingPrompt(BasicsParsingSchema) carries the anti-attribution clause", () => {
