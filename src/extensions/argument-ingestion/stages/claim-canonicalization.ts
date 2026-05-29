@@ -69,9 +69,10 @@ When a mention is the antecedent of "according to X, P", split it into two claim
 ## Style
 
 - Claim titles + bodies are written in third-person, present-tense, active voice.
+- State the proposition itself — never prepend an author-attributive reporting frame such as "The author claims that…", "The author argues…", "The writer believes…", or "According to the author…". Write *what is asserted*, not *that someone asserts it*: emit "Rain wets the ground," not "The author claims that rain wets the ground." This applies to the \`title\`, \`body\`, and \`axiom\` prose for the argument's own (normal / axiomatic) claims.
 - Titles are short (≤ 50 characters); bodies fill in the detail.
-- For citation claims, the title summarizes what the source asserts (e.g. "NASA reports temperature rise"); the URL goes in \`url\`.
-- For axiomatic claims, the \`axiom\` field captures the self-evident proposition (e.g. "A bachelor is an unmarried man by definition.").
+- For citation claims, the title summarizes what the source asserts (e.g. "NASA reports temperature rise"); the URL goes in \`url\`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.
+- For axiomatic claims, the \`axiom\` field captures the self-evident proposition as a bare declarative statement (e.g. "A bachelor is an unmarried man by definition.").
 
 Output ONLY the schema-shaped object. No prose.`
 
