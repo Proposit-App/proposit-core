@@ -4,8 +4,8 @@
 
 Filed by the orchestrator on behalf of the human (2026-05-29). Argument
 ingestion is producing claim text wrapped in an **attributive reporting
-frame** — claims come out as *"The author claims that rain wets the
-ground"* instead of the bare proposition *"Rain wets the ground"*. The
+frame** — claims come out as _"The author claims that rain wets the
+ground"_ instead of the bare proposition _"Rain wets the ground"_. The
 human confirmed the desired output form: **strip the attribution, keep
 the existing third-person, present-tense, declarative voice.** This is
 NOT a request to switch to first-person grammar — the bare proposition
@@ -52,7 +52,7 @@ server adoption is downstream), but it must get the same anti-attribution
 clause so the defect doesn't reappear when v2 becomes default. Also
 review the citation title/body guidance (line 73) and the `axiom` prose
 field guidance — citation claims summarizing a source ("NASA reports
-temperature rise") are legitimately attributive *to the cited source*
+temperature rise") are legitimately attributive _to the cited source_
 and should NOT be flattened; only **author-attribution** of the user's
 own claims is the target. Be careful to preserve the citation-claim
 convention (title = "what the source asserts") while still removing
@@ -63,10 +63,10 @@ convention (title = "what the source asserts") while still removing
 For every in-code prompt that emits user-facing claim/proposition prose:
 
 - **Do:** emit the proposition as a standalone third-person, present-
-  tense, declarative sentence. *"Rain wets the ground."*
-- **Don't:** prepend author-attributive frames — *"The author claims
-  that…"*, *"The author argues…"*, *"The writer believes…"*,
-  *"According to the author…"*, etc.
+  tense, declarative sentence. _"Rain wets the ground."_
+- **Don't:** prepend author-attributive frames — _"The author claims
+  that…"_, _"The author argues…"_, _"The writer believes…"_,
+  _"According to the author…"_, etc.
 - **Preserve:** citation claims keep their "what the cited source
   asserts" framing (that attribution is to the external source, not the
   argument's author, and is intentional). Axiomatic claim `axiom` prose
@@ -137,7 +137,7 @@ deterministic prompt-string assertions plus an opt-in live check:
    evaporation") and assert no produced claim `title`/`body` starts with
    an author-attributive frame (regex against a small banned-prefix
    list: `^(the author|the writer|the speaker|according to the
-   author)\b` etc., case-insensitive). Keep the assertion lenient enough
+author)\b` etc., case-insensitive). Keep the assertion lenient enough
    to avoid flakiness on legitimate citation titles.
 
 Follow the repo's bug-repro convention: add the failing (or
@@ -156,7 +156,7 @@ by the orchestrator:
    notes + changelog.
 3. **Consumer-side validation** (orchestrator-dispatched): tarball
    (`pnpm pack`) → install into `proposit-server` → `pnpm run
-   check:full` + a live ingestion smoke confirming claims no longer
+check:full` + a live ingestion smoke confirming claims no longer
    carry attribution wrappers.
 4. Publish, then `proposit-server` bumps the `@proposit/proposit-core`
    dep and reverts the `file:` pin.
