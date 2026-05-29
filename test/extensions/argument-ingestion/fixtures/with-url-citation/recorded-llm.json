@@ -1,368 +1,368 @@
 {
-    "version": 1,
-    "records": [
-        {
-            "hash": "bff7aeb6172fc91f83d41c7876354a0adb6330cb68251578e7317d468d23b24d",
-            "stageId": "parse-argument",
-            "request": {
-                "model": "gpt-5.4",
-                "systemPrompt": "<!-- stage-id: parse-argument -->\nYou are an expert argument analyst specializing in propositional logic. Your task is to analyze text and extract a structured propositional argument from it.\n\n## Task\n\nGiven input text, identify:\n1. The distinct claims (propositions) being made\n2. Assign a variable (a short symbolic name) to each claim, one variable per claim\n3. Write logical formula strings connecting those variables into premises\n4. Identify which premise is the conclusion\n\n## Formula Syntax\n\nFormulas use infix notation with the following operators:\n\n- **and**: logical conjunction (A and B)\n- **or**: logical disjunction (A or B)\n- **not**: logical negation (not A)\n- **implies**: logical implication (A implies B)\n- **iff**: logical biconditional (A iff B)\n- **parentheses**: for grouping sub-expressions, e.g. (A or B) and C\n\n### Root-Only Operators\n\nThe operators **implies** and **iff** must appear ONLY at the root level of a formula. They cannot be nested inside other operators. For example:\n- Valid: \"A implies B\"\n- Valid: \"A and B\"\n- Invalid: \"(A implies B) and C\" — implies is nested, not at root\n\nIf you need to express a nested conditional, introduce an intermediate claim and a separate premise.\n\n### Variable Declaration Rule\n\n**Every symbol that appears in any premise formula MUST have a corresponding entry in the `variables` array, and every variable MUST reference a claim in the `claims` array.** If your argument requires intermediate reasoning steps — for example, when chaining implications across premises — you must declare a claim and variable for each intermediate proposition. A formula that references an undeclared symbol will be rejected and the premise will be dropped.\n\n## Response Structure\n\nYour response must conform to the provided JSON schema. Key fields:\n\n- **argument**: The parsed argument object, or null if the text cannot be parsed as an argument\n- **uncategorizedText**: Any portions of the input text that do not fit into the argument structure, or null\n- **selectionRationale**: If the text contains multiple potential arguments, explain why you chose the one you did, or null\n- **failureText**: If the argument cannot be parsed, explain why here, or null\n\n## Edge Cases\n\n- If the input text contains multiple distinct arguments, select the strongest or most complete one and explain your choice in selectionRationale.\n- If the input text cannot be reasonably interpreted as a propositional argument, set argument to null and provide an explanation in failureText.\n- If portions of the text are tangential or do not contribute to the argument, capture them in uncategorizedText.\n\n## Variable Symbols\n\nEach variable symbol should be a concise PascalCase summary of the claim it represents — short enough to scan at a glance, but specific enough to distinguish from other variables. Examples:\n\n| Claim | Good symbol | Bad symbol |\n|---|---|---|\n| \"The GDP grew an average of 4% every year for the past decade\" | GDP_Growth | G |\n| \"Unrestricted free speech leads to the spread of misinformation\" | FreeSpeech_Misinformation | Variable1 |\n| \"Increased funding reduces classroom overcrowding\" | Funding_Reduces_Overcrowding | FundingEffect |\n\nUse underscores to separate distinct concepts within a symbol when needed for clarity. Avoid single letters, numeric suffixes, or generic names like \"Premise1\".\n\nAbbreviations are encouraged to keep symbols short. Aim for under 20 characters when possible. Examples: \"Gross Domestic Product growth is 4%\" → GDP_Growth, \"The cost of a degree at most universities has risen sharply\" → Uni_Cost_Increase, \"Regulatory intervention is necessary\" → Reg_Intervention.\n\n## Writing Style\n\nWhen formulating claims, write in third person, present tense, active voice. Each claim should be a clear, standalone declarative sentence.\n\n## Claim Types\n\nEvery claim has a `type` field, which is one of:\n\n- **`\"normal\"`**: a claim authored as part of the argument's primary reasoning (the propositions being argued for or from). Most claims are normal.\n- **`\"citation\"`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** `claims` array as normal claims; they are NOT a separate array.\n- **`\"axiomatic\"`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: \"true by definition,\" \"logically required,\" \"historically established.\" Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied. Apps using this library may extend axiomatic claims with a `reasonCode` field describing the category of self-evidence, and may constrain that field to a closed enum of allowed values via their schema extension; the core parser does not require any such field.\n\nA citation claim is just a claim whose propositional content is \"the cited material says/shows X\". Logical relationships between all claim kinds — normal, citation, axiomatic — are expressed through variables, formulas, and premises. The parser derives the citation and axiom support graphs from those formulas; you do not list supports as a separate field.\n\n## Support via Formulas\n\nTo express that a citation-typed or axiomatic-typed claim supports another claim, include the supporting claim's variable in the antecedent (left-hand side) of an `implies` or `iff` premise whose consequent (right-hand side) is the supported claim's variable. For example, to express that citation C1 supports the normal claim X, write a premise with formula `C1_var implies X_var`.\n\nFor `iff` premises, the right-hand operand is treated as the supported claim by parser convention even though biconditionals are logically symmetric — place the supported claim on the right.\n\nConstraint premises (premises whose root operator is not `implies` or `iff`) do not register any support edges, even if their formulas mention citation- or axiomatic-typed variables.\n\nThe parser infers the citation and axiom support graphs from these formulas; do not list supports as a separate field.\n\n## Citation Claim Metadata\n\nCitation claims may carry additional fields (e.g., `url`, `citation`) defined by the consuming application's schema extension. When such fields are present in your assigned output schema, populate them from the source material:\n\n- Markdown links `[text](url)` → set the `url` field to the linked URL; the visible `text` typically informs the claim's natural-language content.\n- Footnote markers, anchor references, or bracketed reference numbers → preserve the linked URL or reference target in whichever field the schema provides for it.\n- Free-form citations (e.g., \"as reported in The New York Times, January 5\") → encode the citation text in the available `citation` (or equivalent) field.\n\nOnly populate fields that actually appear in your assigned output schema. Do not invent fields, and do not fabricate URLs or citation text that the source material does not contain.\n\n## MiniId Conventions\n\nEach entity type uses a distinct prefix for its miniId to avoid cross-reference confusion:\n\n- Claims (all kinds): `c1`, `c2`, `c3`, ... — the `type` field distinguishes `\"normal\"`, `\"citation\"`, and `\"axiomatic\"`.\n- Variables: `v1`, `v2`, `v3`, ...\n- Premises: `p1`, `p2`, `p3`, ...\n\nAlways use the correct prefix when referencing entities. Cross-type references:\n- `claimMiniId` on a variable → any claim in the `claims` array\n- `conclusionPremiseMiniId` → only `p`-prefixed miniIds (premises)\n\n## Self-Check\n\nBefore finalizing your response, verify:\n1. Every symbol that appears in any premise formula is declared in the `variables` array\n2. Every variable's `claimMiniId` references an existing claim in the `claims` array\n3. The `conclusionPremiseMiniId` references an existing premise in the `premises` array\n4. No `implies` or `iff` operator is nested inside another operator in any formula\n5. Every claim has a `type` field set to one of `\"normal\"`, `\"citation\"`, or `\"axiomatic\"`\n\n## Extension Fields\n\n- **argument.title** — A short title for the argument; maxLength: 50\n- **premise.title** — A short title for this premise; maxLength: 50",
-                "userMessage": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century. Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events.",
-                "outputSchema": {
-                    "type": "object",
-                    "required": [
-                        "argument",
-                        "uncategorizedText",
-                        "selectionRationale",
-                        "failureText"
-                    ],
-                    "properties": {
-                        "argument": {
-                            "anyOf": [
-                                {
-                                    "type": "object",
-                                    "required": [
-                                        "claims",
-                                        "variables",
-                                        "premises",
-                                        "conclusionPremiseMiniId",
-                                        "title"
-                                    ],
-                                    "properties": {
-                                        "claims": {
-                                            "type": "array",
-                                            "items": {
-                                                "anyOf": [
-                                                    {
-                                                        "type": "object",
-                                                        "required": [
-                                                            "miniId",
-                                                            "role",
-                                                            "type",
-                                                            "title",
-                                                            "body"
-                                                        ],
-                                                        "properties": {
-                                                            "miniId": {
-                                                                "type": "string"
-                                                            },
-                                                            "role": {
-                                                                "anyOf": [
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "premise"
-                                                                    },
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "conclusion"
-                                                                    },
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "intermediate"
-                                                                    }
-                                                                ]
-                                                            },
-                                                            "type": {
-                                                                "type": "string",
-                                                                "const": "normal",
-                                                                "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
-                                                            },
-                                                            "title": {
-                                                                "type": "string",
-                                                                "maxLength": 50,
-                                                                "description": "A short title summarizing the claim"
-                                                            },
-                                                            "body": {
-                                                                "type": "string",
-                                                                "maxLength": 500,
-                                                                "description": "A detailed description of the claim"
-                                                            }
-                                                        },
-                                                        "additionalProperties": true
-                                                    },
-                                                    {
-                                                        "type": "object",
-                                                        "required": [
-                                                            "miniId",
-                                                            "role",
-                                                            "type",
-                                                            "title",
-                                                            "url"
-                                                        ],
-                                                        "properties": {
-                                                            "miniId": {
-                                                                "type": "string"
-                                                            },
-                                                            "role": {
-                                                                "anyOf": [
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "premise"
-                                                                    },
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "conclusion"
-                                                                    },
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "intermediate"
-                                                                    }
-                                                                ]
-                                                            },
-                                                            "type": {
-                                                                "type": "string",
-                                                                "const": "citation",
-                                                                "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
-                                                            },
-                                                            "title": {
-                                                                "type": "string",
-                                                                "maxLength": 50,
-                                                                "description": "A short title summarizing the claim"
-                                                            },
-                                                            "url": {
-                                                                "type": "string",
-                                                                "maxLength": 500,
-                                                                "description": "The URL of the citation supporting the claim"
-                                                            }
-                                                        },
-                                                        "additionalProperties": true
-                                                    },
-                                                    {
-                                                        "type": "object",
-                                                        "required": [
-                                                            "miniId",
-                                                            "role",
-                                                            "type",
-                                                            "axiom"
-                                                        ],
-                                                        "properties": {
-                                                            "miniId": {
-                                                                "type": "string"
-                                                            },
-                                                            "role": {
-                                                                "anyOf": [
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "premise"
-                                                                    },
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "conclusion"
-                                                                    },
-                                                                    {
-                                                                        "type": "string",
-                                                                        "const": "intermediate"
-                                                                    }
-                                                                ]
-                                                            },
-                                                            "type": {
-                                                                "type": "string",
-                                                                "const": "axiomatic",
-                                                                "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
-                                                            },
-                                                            "axiom": {
-                                                                "type": "string",
-                                                                "maxLength": 50,
-                                                                "description": "The axiom supporting the claim"
-                                                            }
-                                                        },
-                                                        "additionalProperties": true
-                                                    }
-                                                ],
-                                                "description": "Field extensions for all claim types. Each claim must conform to exactly one of the three extensions below, depending on its type."
-                                            },
-                                            "minItems": 1
-                                        },
-                                        "variables": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object",
-                                                "required": [
-                                                    "miniId",
-                                                    "symbol",
-                                                    "claimMiniId"
-                                                ],
-                                                "properties": {
-                                                    "miniId": {
-                                                        "type": "string"
-                                                    },
-                                                    "symbol": {
-                                                        "type": "string"
-                                                    },
-                                                    "claimMiniId": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "additionalProperties": true
-                                            },
-                                            "minItems": 1
-                                        },
-                                        "premises": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object",
-                                                "required": [
-                                                    "miniId",
-                                                    "formula",
-                                                    "title"
-                                                ],
-                                                "properties": {
-                                                    "miniId": {
-                                                        "type": "string"
-                                                    },
-                                                    "formula": {
-                                                        "type": "string"
-                                                    },
-                                                    "title": {
-                                                        "type": "string",
-                                                        "maxLength": 50,
-                                                        "description": "A short title for this premise"
-                                                    }
-                                                },
-                                                "additionalProperties": true
-                                            },
-                                            "minItems": 1
-                                        },
-                                        "conclusionPremiseMiniId": {
-                                            "type": "string"
-                                        },
-                                        "title": {
-                                            "type": "string",
-                                            "maxLength": 50,
-                                            "description": "A short title for the argument"
-                                        }
-                                    },
-                                    "additionalProperties": true
-                                },
-                                {
-                                    "type": "null"
-                                }
+  "version": 1,
+  "records": [
+    {
+      "hash": "cccdc749d77f7bdcfb4a0fe35e62ca22e780f379081ef9b894527ad4fb94d8c5",
+      "stageId": "parse-argument",
+      "request": {
+        "model": "gpt-5.4",
+        "systemPrompt": "<!-- stage-id: parse-argument -->\nYou are an expert argument analyst specializing in propositional logic. Your task is to analyze text and extract a structured propositional argument from it.\n\n## Task\n\nGiven input text, identify:\n1. The distinct claims (propositions) being made\n2. Assign a variable (a short symbolic name) to each claim, one variable per claim\n3. Write logical formula strings connecting those variables into premises\n4. Identify which premise is the conclusion\n\n## Formula Syntax\n\nFormulas use infix notation with the following operators:\n\n- **and**: logical conjunction (A and B)\n- **or**: logical disjunction (A or B)\n- **not**: logical negation (not A)\n- **implies**: logical implication (A implies B)\n- **iff**: logical biconditional (A iff B)\n- **parentheses**: for grouping sub-expressions, e.g. (A or B) and C\n\n### Root-Only Operators\n\nThe operators **implies** and **iff** must appear ONLY at the root level of a formula. They cannot be nested inside other operators. For example:\n- Valid: \"A implies B\"\n- Valid: \"A and B\"\n- Invalid: \"(A implies B) and C\" — implies is nested, not at root\n\nIf you need to express a nested conditional, introduce an intermediate claim and a separate premise.\n\n### Variable Declaration Rule\n\n**Every symbol that appears in any premise formula MUST have a corresponding entry in the `variables` array, and every variable MUST reference a claim in the `claims` array.** If your argument requires intermediate reasoning steps — for example, when chaining implications across premises — you must declare a claim and variable for each intermediate proposition. A formula that references an undeclared symbol will be rejected and the premise will be dropped.\n\n## Response Structure\n\nYour response must conform to the provided JSON schema. Key fields:\n\n- **argument**: The parsed argument object, or null if the text cannot be parsed as an argument\n- **uncategorizedText**: Any portions of the input text that do not fit into the argument structure, or null\n- **selectionRationale**: If the text contains multiple potential arguments, explain why you chose the one you did, or null\n- **failureText**: If the argument cannot be parsed, explain why here, or null\n\n## Edge Cases\n\n- If the input text contains multiple distinct arguments, select the strongest or most complete one and explain your choice in selectionRationale.\n- If the input text cannot be reasonably interpreted as a propositional argument, set argument to null and provide an explanation in failureText.\n- If portions of the text are tangential or do not contribute to the argument, capture them in uncategorizedText.\n\n## Variable Symbols\n\nEach variable symbol should be a concise PascalCase summary of the claim it represents — short enough to scan at a glance, but specific enough to distinguish from other variables. Examples:\n\n| Claim | Good symbol | Bad symbol |\n|---|---|---|\n| \"The GDP grew an average of 4% every year for the past decade\" | GDP_Growth | G |\n| \"Unrestricted free speech leads to the spread of misinformation\" | FreeSpeech_Misinformation | Variable1 |\n| \"Increased funding reduces classroom overcrowding\" | Funding_Reduces_Overcrowding | FundingEffect |\n\nUse underscores to separate distinct concepts within a symbol when needed for clarity. Avoid single letters, numeric suffixes, or generic names like \"Premise1\".\n\nAbbreviations are encouraged to keep symbols short. Aim for under 20 characters when possible. Examples: \"Gross Domestic Product growth is 4%\" → GDP_Growth, \"The cost of a degree at most universities has risen sharply\" → Uni_Cost_Increase, \"Regulatory intervention is necessary\" → Reg_Intervention.\n\n## Writing Style\n\nWhen formulating claims, write in third person, present tense, active voice. Each claim should be a clear, standalone declarative sentence.\n\nState the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" (This applies only to author-attribution of the argument's own claims. Citation claims that summarize what an external **cited source** asserts — e.g. \"NASA reports a temperature rise\" — keep that source attribution; it is intentional and not the target here.)\n\n## Claim Types\n\nEvery claim has a `type` field, which is one of:\n\n- **`\"normal\"`**: a claim authored as part of the argument's primary reasoning (the propositions being argued for or from). Most claims are normal.\n- **`\"citation\"`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** `claims` array as normal claims; they are NOT a separate array.\n- **`\"axiomatic\"`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: \"true by definition,\" \"logically required,\" \"historically established.\" Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied. Apps using this library may extend axiomatic claims with a `reasonCode` field describing the category of self-evidence, and may constrain that field to a closed enum of allowed values via their schema extension; the core parser does not require any such field.\n\nA citation claim is just a claim whose propositional content is \"the cited material says/shows X\". Logical relationships between all claim kinds — normal, citation, axiomatic — are expressed through variables, formulas, and premises. The parser derives the citation and axiom support graphs from those formulas; you do not list supports as a separate field.\n\n## Support via Formulas\n\nTo express that a citation-typed or axiomatic-typed claim supports another claim, include the supporting claim's variable in the antecedent (left-hand side) of an `implies` or `iff` premise whose consequent (right-hand side) is the supported claim's variable. For example, to express that citation C1 supports the normal claim X, write a premise with formula `C1_var implies X_var`.\n\nFor `iff` premises, the right-hand operand is treated as the supported claim by parser convention even though biconditionals are logically symmetric — place the supported claim on the right.\n\nConstraint premises (premises whose root operator is not `implies` or `iff`) do not register any support edges, even if their formulas mention citation- or axiomatic-typed variables.\n\nThe parser infers the citation and axiom support graphs from these formulas; do not list supports as a separate field.\n\n## Citation Claim Metadata\n\nCitation claims may carry additional fields (e.g., `url`, `citation`) defined by the consuming application's schema extension. When such fields are present in your assigned output schema, populate them from the source material:\n\n- Markdown links `[text](url)` → set the `url` field to the linked URL; the visible `text` typically informs the claim's natural-language content.\n- Footnote markers, anchor references, or bracketed reference numbers → preserve the linked URL or reference target in whichever field the schema provides for it.\n- Free-form citations (e.g., \"as reported in The New York Times, January 5\") → encode the citation text in the available `citation` (or equivalent) field.\n\nOnly populate fields that actually appear in your assigned output schema. Do not invent fields, and do not fabricate URLs or citation text that the source material does not contain.\n\n## MiniId Conventions\n\nEach entity type uses a distinct prefix for its miniId to avoid cross-reference confusion:\n\n- Claims (all kinds): `c1`, `c2`, `c3`, ... — the `type` field distinguishes `\"normal\"`, `\"citation\"`, and `\"axiomatic\"`.\n- Variables: `v1`, `v2`, `v3`, ...\n- Premises: `p1`, `p2`, `p3`, ...\n\nAlways use the correct prefix when referencing entities. Cross-type references:\n- `claimMiniId` on a variable → any claim in the `claims` array\n- `conclusionPremiseMiniId` → only `p`-prefixed miniIds (premises)\n\n## Self-Check\n\nBefore finalizing your response, verify:\n1. Every symbol that appears in any premise formula is declared in the `variables` array\n2. Every variable's `claimMiniId` references an existing claim in the `claims` array\n3. The `conclusionPremiseMiniId` references an existing premise in the `premises` array\n4. No `implies` or `iff` operator is nested inside another operator in any formula\n5. Every claim has a `type` field set to one of `\"normal\"`, `\"citation\"`, or `\"axiomatic\"`\n\n## Extension Fields\n\n- **argument.title** — A short title for the argument; maxLength: 50\n- **premise.title** — A short title for this premise; maxLength: 50",
+        "userMessage": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century. Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "argument",
+            "uncategorizedText",
+            "selectionRationale",
+            "failureText"
+          ],
+          "properties": {
+            "argument": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "claims",
+                    "variables",
+                    "premises",
+                    "conclusionPremiseMiniId",
+                    "title"
+                  ],
+                  "properties": {
+                    "claims": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": [
+                              "miniId",
+                              "role",
+                              "type",
+                              "title",
+                              "body"
                             ],
-                            "default": null
-                        },
-                        "uncategorizedText": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "null"
-                                }
+                            "properties": {
+                              "miniId": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "premise"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "conclusion"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "intermediate"
+                                  }
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "normal",
+                                "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
+                              },
+                              "title": {
+                                "type": "string",
+                                "maxLength": 50,
+                                "description": "A short title summarizing the claim"
+                              },
+                              "body": {
+                                "type": "string",
+                                "maxLength": 500,
+                                "description": "A detailed description of the claim"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "miniId",
+                              "role",
+                              "type",
+                              "title",
+                              "url"
                             ],
-                            "default": null
-                        },
-                        "selectionRationale": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "null"
-                                }
+                            "properties": {
+                              "miniId": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "premise"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "conclusion"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "intermediate"
+                                  }
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "citation",
+                                "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
+                              },
+                              "title": {
+                                "type": "string",
+                                "maxLength": 50,
+                                "description": "A short title summarizing the claim"
+                              },
+                              "url": {
+                                "type": "string",
+                                "maxLength": 500,
+                                "description": "The URL of the citation supporting the claim"
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          {
+                            "type": "object",
+                            "required": [
+                              "miniId",
+                              "role",
+                              "type",
+                              "axiom"
                             ],
-                            "default": null
-                        },
-                        "failureText": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "null"
-                                }
-                            ],
-                            "default": null
-                        }
+                            "properties": {
+                              "miniId": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "premise"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "conclusion"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "intermediate"
+                                  }
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "axiomatic",
+                                "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
+                              },
+                              "axiom": {
+                                "type": "string",
+                                "maxLength": 50,
+                                "description": "The axiom supporting the claim"
+                              }
+                            },
+                            "additionalProperties": true
+                          }
+                        ],
+                        "description": "Field extensions for all claim types. Each claim must conform to exactly one of the three extensions below, depending on its type."
+                      },
+                      "minItems": 1
                     },
-                    "additionalProperties": true
+                    "variables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "miniId",
+                          "symbol",
+                          "claimMiniId"
+                        ],
+                        "properties": {
+                          "miniId": {
+                            "type": "string"
+                          },
+                          "symbol": {
+                            "type": "string"
+                          },
+                          "claimMiniId": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "minItems": 1
+                    },
+                    "premises": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "miniId",
+                          "formula",
+                          "title"
+                        ],
+                        "properties": {
+                          "miniId": {
+                            "type": "string"
+                          },
+                          "formula": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string",
+                            "maxLength": 50,
+                            "description": "A short title for this premise"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "minItems": 1
+                    },
+                    "conclusionPremiseMiniId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string",
+                      "maxLength": 50,
+                      "description": "A short title for the argument"
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                {
+                  "type": "null"
                 }
+              ],
+              "default": null
             },
-            "response": {
-                "output": {
-                    "argument": {
-                        "claims": [
-                            {
-                                "miniId": "c1",
-                                "role": "premise",
-                                "type": "citation",
-                                "title": "NASA reports temperature rise",
-                                "url": "https://climate.nasa.gov/evidence/"
-                            },
-                            {
-                                "miniId": "c2",
-                                "role": "premise",
-                                "type": "normal",
-                                "title": "Temperatures have risen",
-                                "body": "Global temperatures rise significantly over the past century."
-                            },
-                            {
-                                "miniId": "c3",
-                                "role": "premise",
-                                "type": "normal",
-                                "title": "Warming causes extreme weather",
-                                "body": "Rising global temperatures cause more frequent extreme weather events."
-                            },
-                            {
-                                "miniId": "c4",
-                                "role": "conclusion",
-                                "type": "normal",
-                                "title": "Extreme weather is more frequent",
-                                "body": "More frequent extreme weather events occur."
-                            }
-                        ],
-                        "variables": [
-                            {
-                                "miniId": "v1",
-                                "symbol": "NASA_Temp_Rise",
-                                "claimMiniId": "c1"
-                            },
-                            {
-                                "miniId": "v2",
-                                "symbol": "Global_Temp_Rise",
-                                "claimMiniId": "c2"
-                            },
-                            {
-                                "miniId": "v3",
-                                "symbol": "Temp_Causes_Extreme",
-                                "claimMiniId": "c3"
-                            },
-                            {
-                                "miniId": "v4",
-                                "symbol": "Extreme_Weather_More",
-                                "claimMiniId": "c4"
-                            }
-                        ],
-                        "premises": [
-                            {
-                                "miniId": "p1",
-                                "formula": "NASA_Temp_Rise implies Global_Temp_Rise",
-                                "title": "NASA supports warming claim"
-                            },
-                            {
-                                "miniId": "p2",
-                                "formula": "Global_Temp_Rise and Temp_Causes_Extreme",
-                                "title": "Warming and causal premise"
-                            },
-                            {
-                                "miniId": "p3",
-                                "formula": "(Global_Temp_Rise and Temp_Causes_Extreme) implies Extreme_Weather_More",
-                                "title": "Infer more extreme weather"
-                            }
-                        ],
-                        "conclusionPremiseMiniId": "p3",
-                        "title": "Warming implies more extreme weather"
-                    },
-                    "uncategorizedText": null,
-                    "selectionRationale": null,
-                    "failureText": null
+            "uncategorizedText": {
+              "anyOf": [
+                {
+                  "type": "string"
                 },
-                "tokenUsage": {
-                    "input": 2253,
-                    "output": 386,
-                    "reasoning": 0
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "selectionRationale": {
+              "anyOf": [
+                {
+                  "type": "string"
                 },
-                "rawResponseId": "resp_0d160805d4c435cf006a111771e9d881989dabb879f312633b"
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "failureText": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
             }
+          },
+          "additionalProperties": true
         }
-    ]
+      },
+      "response": {
+        "output": {
+          "argument": {
+            "claims": [
+              {
+                "miniId": "c1",
+                "role": "premise",
+                "type": "citation",
+                "title": "NASA reports temperature rise",
+                "url": "https://climate.nasa.gov/evidence/"
+              },
+              {
+                "miniId": "c2",
+                "role": "premise",
+                "type": "normal",
+                "title": "Temperatures have risen",
+                "body": "Global temperatures rise significantly over the past century."
+              },
+              {
+                "miniId": "c3",
+                "role": "premise",
+                "type": "normal",
+                "title": "Warming causes extreme weather",
+                "body": "Rising global temperatures cause more frequent extreme weather events."
+              },
+              {
+                "miniId": "c4",
+                "role": "conclusion",
+                "type": "normal",
+                "title": "Extreme weather is more frequent",
+                "body": "More frequent extreme weather events occur."
+              }
+            ],
+            "variables": [
+              {
+                "miniId": "v1",
+                "symbol": "NASA_Temp_Rise",
+                "claimMiniId": "c1"
+              },
+              {
+                "miniId": "v2",
+                "symbol": "Global_Temp_Rise",
+                "claimMiniId": "c2"
+              },
+              {
+                "miniId": "v3",
+                "symbol": "Temp_Causes_Extreme",
+                "claimMiniId": "c3"
+              },
+              {
+                "miniId": "v4",
+                "symbol": "Extreme_Weather_More",
+                "claimMiniId": "c4"
+              }
+            ],
+            "premises": [
+              {
+                "miniId": "p1",
+                "formula": "NASA_Temp_Rise implies Global_Temp_Rise",
+                "title": "NASA supports warming claim"
+              },
+              {
+                "miniId": "p2",
+                "formula": "Global_Temp_Rise and Temp_Causes_Extreme",
+                "title": "Warming and causal premise"
+              },
+              {
+                "miniId": "p3",
+                "formula": "(Global_Temp_Rise and Temp_Causes_Extreme) implies Extreme_Weather_More",
+                "title": "Infer more extreme weather"
+              }
+            ],
+            "conclusionPremiseMiniId": "p3",
+            "title": "Warming implies more extreme weather"
+          },
+          "uncategorizedText": null,
+          "selectionRationale": null,
+          "failureText": null
+        },
+        "tokenUsage": {
+          "input": 2253,
+          "output": 386,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0d160805d4c435cf006a111771e9d881989dabb879f312633b"
+      }
+    }
+  ]
 }
