@@ -57,17 +57,17 @@
             {
                 "miniId": "gid-5",
                 "formula": "NASA_Temp_Rise implies Temps_Risen_Century",
-                "title": "Derivation: NASA_Temp_Rise implies Temps_Risen_Ce…"
+                "title": "If \"NASA reports temperature rise\" then \"Global temperatures have risen\""
             },
             {
                 "miniId": "gid-6",
                 "formula": "(Temps_Risen_Century and Temp_Rise_Extreme) implies More_Extreme_Weather",
-                "title": "Joint support → (Temps_Risen_Century and Temp_Ris…"
+                "title": "If \"Global temperatures have risen\" and \"Temperature rise causes extremes\" then \"Extreme weather is more frequent\""
             },
             {
                 "miniId": "gid-7",
                 "formula": "More_Extreme_Weather",
-                "title": "Conclusion: More_Extreme_Weather"
+                "title": "Extreme weather is more frequent"
             }
         ],
         "conclusionPremiseMiniId": "gid-7",

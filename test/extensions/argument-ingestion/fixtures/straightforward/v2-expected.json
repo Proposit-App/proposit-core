@@ -45,12 +45,12 @@
             {
                 "miniId": "gid-4",
                 "formula": "(Rain_Implies_Wet and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "Joint support → (Rain_Implies_Wet and It_Is_Raini…"
+                "title": "If \"Rain makes the ground wet\" and \"It is raining\" then \"The ground is wet\""
             },
             {
                 "miniId": "gid-5",
                 "formula": "Ground_Is_Wet",
-                "title": "Conclusion: Ground_Is_Wet"
+                "title": "The ground is wet"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",

@@ -44,12 +44,12 @@
             {
                 "miniId": "gid-4",
                 "formula": "(Bachelor_Unmarried and John_Bachelor) implies John_Unmarried",
-                "title": "Joint support → (Bachelor_Unmarried and John_Bach…"
+                "title": "If \"A bachelor is an unmarried man by definition.\" and \"John is a bachelor\" then \"John is unmarried\""
             },
             {
                 "miniId": "gid-5",
                 "formula": "John_Unmarried",
-                "title": "Conclusion: John_Unmarried"
+                "title": "John is unmarried"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
