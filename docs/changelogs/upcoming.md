@@ -4,7 +4,7 @@ Commit range: `v1.5.0..HEAD`.
 
 ## Fixed
 
-<changes starting-hash="3b071ea" ending-hash="3b071ea">
+<changes starting-hash="3b071ea" ending-hash="039ceb3">
 - Added an anti-attribution clause to the two in-code ingestion prompts
   that author user-facing claim prose, so the model stops prepending an
   attributive reporting frame ("The author claims X") to extracted
@@ -28,4 +28,13 @@ Commit range: `v1.5.0..HEAD`.
   asserting the clause is present in `buildParsingPrompt(...)` output
   (including `BasicsParsingSchema`) and in
   `CLAIM_CANONICALIZATION_SYSTEM_PROMPT`.
+- Refreshed the golden-corpus recordings under
+  `test/extensions/argument-ingestion/fixtures/` (10 records across the
+  5 fixtures' `recorded-llm.json` + `v2-recorded-llm.json`): the
+  recorded-replay provider hashes the request including `systemPrompt`,
+  so the prompt edit tripped the `RecordedPromptStaleError` drift guard.
+  Updated each affected record's stored `systemPrompt` + recomputed hash;
+  the recorded `response.output` is preserved verbatim (the golden
+  outputs were already attribution-free, so no re-record against a live
+  model was needed).
 </changes>
