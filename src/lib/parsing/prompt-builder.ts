@@ -88,6 +88,8 @@ Abbreviations are encouraged to keep symbols short. Aim for under 20 characters 
 
 When formulating claims, write in third person, present tense, active voice. Each claim should be a clear, standalone declarative sentence.
 
+State the proposition itself — never prepend an author-attributive reporting frame such as "The author claims that…", "The author argues…", "The writer believes…", or "According to the author…". Write *what is asserted*, not *that someone asserts it*: emit "Rain wets the ground," not "The author claims that rain wets the ground." (This applies only to author-attribution of the argument's own claims. Citation claims that summarize what an external **cited source** asserts — e.g. "NASA reports a temperature rise" — keep that source attribution; it is intentional and not the target here.)
+
 ## Claim Types
 
 Every claim has a \`type\` field, which is one of:
