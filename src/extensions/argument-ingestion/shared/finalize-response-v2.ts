@@ -38,8 +38,10 @@ import {
     type TClaimCanonicalizationOutput,
     type TClaimTypeClassificationEntry,
     type TClaimTypeClassificationOutput,
+    type TCompiledPremise,
     type TConclusionSelectionOutput,
     type TFormulaCompilationOutput,
+    type TRelation,
     type TRelationExtractionOutput,
     type TVariableAssignmentOutput,
 } from "../stages/schemas.js"
@@ -117,23 +119,116 @@ function stripCanonicalizerOnlyFields(
     return stripped
 }
 
-function buildPremiseTitle(
-    formula: string,
-    roleHint: "support" | "joint-support" | "derivation" | "conclusion"
+// **Premise titles read as prose, not formulas.** Each premise title
+// is composed from the LLM-authored claim titles that back its
+// variables — mirroring how `buildArgumentTitle` reuses the conclusion
+// claim's title — rather than serializing the compiled symbolic
+// `formula`. The machine `formula` field is left untouched; only the
+// human-facing `title` changes.
+//
+// **Structure-walk, not string-substitution.** Each relation-derived
+// premise (support / joint-support / derivation) is composed by walking
+// the *relation* that produced it (`sources` → `target`, both claim
+// miniIds, with the relation `type` giving the connective shape) rather
+// than by parsing the `formula` string. The relation is the semantic
+// origin of the premise and carries the logical structure directly, so
+// composing from it avoids any fragile re-parse of the symbol string.
+// The conclusion premise has no source relation (it is synthesized from
+// a bare symbol), so it is composed by resolving that symbol to its
+// claim title.
+//
+// **No role prefix.** The display layer renders a separate "Conclusion"
+// chip, so a textual `Conclusion:` / `Support:` prefix on the prose is
+// redundant; titles are pure prose.
+//
+// **No truncation.** The pre-prose implementation capped titles at 50
+// chars, which mangled multi-claim premises mid-symbol. Prose titles
+// are emitted in full.
+
+type TTitleComposerMaps = {
+    /** claim miniId → display title (LLM `title`, else `axiom`). */
+    claimTitleByMiniId: Map<string, string>
+    /** assigned variable symbol → claim miniId. */
+    claimMiniIdBySymbol: Map<string, string>
+    /** claim miniId → assigned variable symbol (defensive fallback). */
+    symbolByClaimMiniId: Map<string, string>
+    /** relationId → the relation that produced a premise. */
+    relationById: Map<string, TRelation>
+}
+
+/**
+ * Resolve a claim miniId to its quoted display title, falling back to
+ * the claim's assigned variable symbol (quoted) when no title is
+ * authored — and to the bare claim miniId only if even the symbol is
+ * unresolvable. (Used for the source/target slots of relation-derived
+ * premises.) Never throws.
+ */
+function quotedClaimTitle(
+    claimMiniId: string,
+    maps: TTitleComposerMaps
 ): string {
-    const cap = 50
-    const truncate = (s: string): string =>
-        s.length <= cap ? s : s.slice(0, cap - 1) + "…"
-    switch (roleHint) {
-        case "conclusion":
-            return truncate(`Conclusion: ${formula}`)
-        case "joint-support":
-            return truncate(`Joint support → ${formula}`)
-        case "derivation":
-            return truncate(`Derivation: ${formula}`)
-        case "support":
-            return truncate(`Support: ${formula}`)
+    const title =
+        maps.claimTitleByMiniId.get(claimMiniId) ??
+        maps.symbolByClaimMiniId.get(claimMiniId) ??
+        claimMiniId
+    return `"${title}"`
+}
+
+function buildPremiseTitle(
+    premise: TCompiledPremise,
+    maps: TTitleComposerMaps
+): string {
+    if (premise.roleHint === "conclusion") {
+        // The conclusion premise is a bare symbol; its prose title is
+        // the conclusion claim's title (unquoted — the whole title is
+        // the proposition, not an embedded clause). Fall back to the
+        // symbol when the claim title is unresolvable.
+        const symbol = premise.formula.trim()
+        const claimMiniId = maps.claimMiniIdBySymbol.get(symbol)
+        return (
+            (claimMiniId !== undefined
+                ? maps.claimTitleByMiniId.get(claimMiniId)
+                : undefined) ?? symbol
+        )
     }
+
+    // Relation-derived premise: compose `If <antecedent> then
+    // <consequent>` by walking the source relation. The antecedent is
+    // the `and`-joined source claim titles; the consequent is the
+    // target claim title.
+    const relation =
+        premise.sourceRelationId !== null
+            ? maps.relationById.get(premise.sourceRelationId)
+            : undefined
+    if (relation === undefined) {
+        // No resolvable source relation — fall back to the raw formula
+        // so the title is never empty. (Should not occur in practice:
+        // every non-conclusion premise carries a sourceRelationId that
+        // resolves; the bare-formula fallback is purely defensive.)
+        return premise.formula
+    }
+
+    const antecedent = relation.sources
+        .map((src) => quotedClaimTitle(src, maps))
+        .join(" and ")
+    const consequent = quotedClaimTitle(relation.target, maps)
+    return `If ${antecedent} then ${consequent}`
+}
+
+function buildClaimTitleByMiniId(
+    canonicalClaims: TClaimCanonicalizationOutput["canonicalClaims"]
+): Map<string, string> {
+    const m = new Map<string, string>()
+    for (const claim of canonicalClaims) {
+        const record = claim as Record<string, unknown>
+        const title =
+            (record.title as string | undefined) ??
+            (record.axiom as string | undefined)
+        if (title !== undefined) {
+            m.set(claim.miniId, title)
+        }
+    }
+    return m
 }
 
 function buildArgumentTitle(
@@ -248,11 +343,22 @@ export function finalizeResponseV2(
         ...v,
     }))
 
+    const titleComposerMaps: TTitleComposerMaps = {
+        claimTitleByMiniId: buildClaimTitleByMiniId(canon.canonicalClaims),
+        claimMiniIdBySymbol: new Map(
+            variables.map((v) => [v.symbol, v.claimMiniId])
+        ),
+        symbolByClaimMiniId: new Map(
+            variables.map((v) => [v.claimMiniId, v.symbol])
+        ),
+        relationById: new Map(relations.map((r) => [r.relationId, r])),
+    }
+
     const finalPremises: TPremiseFinalForm[] = compilation.premises.map(
         (p) => ({
             miniId: p.premiseMiniId,
             formula: p.formula,
-            title: buildPremiseTitle(p.formula, p.roleHint),
+            title: buildPremiseTitle(p, titleComposerMaps),
         })
     )
 
