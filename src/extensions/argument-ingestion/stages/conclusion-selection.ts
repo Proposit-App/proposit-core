@@ -79,6 +79,7 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
 
 /** Internal default knobs for the conclusion-selection stage. */
 export const CONCLUSION_SELECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
+    model: CONCLUSION_SELECTION_MODEL,
     reasoningEffort: CONCLUSION_SELECTION_REASONING,
 }
 
@@ -106,7 +107,7 @@ export function createConclusionSelectionStage(
             STAGE_IDS.relationExtraction,
         ],
         outputSchema: ConclusionSelectionOutputSchema,
-        model: CONCLUSION_SELECTION_MODEL,
+        model: options?.model ?? CONCLUSION_SELECTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort:
             options?.reasoningEffort ?? CONCLUSION_SELECTION_REASONING,

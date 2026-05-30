@@ -46,7 +46,9 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
 
 /** Internal default knobs for the axiom-indicator-detection stage. */
 export const AXIOM_INDICATOR_DETECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
-    {}
+    {
+        model: AXIOM_INDICATOR_DETECTION_MODEL,
+    }
 
 /** Build the axiom-indicator-detection stage with optional caller overrides. */
 export function createAxiomIndicatorDetectionStage(
@@ -56,7 +58,7 @@ export function createAxiomIndicatorDetectionStage(
         id: STAGE_IDS.axiomIndicatorDetection,
         dependsOn: [STAGE_IDS.segmentation],
         outputSchema: AxiomIndicatorDetectionOutputSchema,
-        model: AXIOM_INDICATOR_DETECTION_MODEL,
+        model: options?.model ?? AXIOM_INDICATOR_DETECTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
         buildPrompt,

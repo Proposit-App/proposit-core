@@ -93,6 +93,26 @@ describe("resolveLlmStageOptions — precedence", () => {
         )
         expect(resolved).toEqual({ maxOutputTokens: 100 })
     })
+
+    it("threads a `model` override: pipeline-default and per-stage both win over the internal default", () => {
+        // Internal default carries the stage's hard-coded model const.
+        const internal = { model: "gpt-5.4-mini", maxOutputTokens: 100 }
+        // Pipeline default overrides the model.
+        expect(
+            resolveLlmStageOptions(STAGE_IDS.segmentation, internal, {
+                defaults: { model: "qwen3.6:latest" },
+            })
+        ).toEqual({ model: "qwen3.6:latest", maxOutputTokens: 100 })
+        // Per-stage override beats the pipeline default.
+        expect(
+            resolveLlmStageOptions(STAGE_IDS.segmentation, internal, {
+                defaults: { model: "qwen3.6:latest" },
+                overrides: {
+                    [STAGE_IDS.segmentation]: { model: "llama3:latest" },
+                },
+            })
+        ).toEqual({ model: "llama3:latest", maxOutputTokens: 100 })
+    })
 })
 
 // -- request-introspection provider -------------------------------------
@@ -105,6 +125,7 @@ describe("resolveLlmStageOptions — precedence", () => {
 
 type TRecordedRequest = {
     stageId: string | null
+    model: string
     maxOutputTokens?: number
     reasoningEffort?: string
 }
@@ -119,6 +140,7 @@ function recordingProvider(args: {
             const match = STAGE_ID_MARKER.exec(req.systemPrompt)
             args.onRecord({
                 stageId: match ? match[1] : null,
+                model: req.model,
                 maxOutputTokens: req.maxOutputTokens,
                 reasoningEffort: req.reasoningEffort,
             })
@@ -231,6 +253,88 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
         const segRec = records.find((r) => r.stageId === STAGE_IDS.segmentation)
         expect(segRec).toBeDefined()
         expect(segRec!.maxOutputTokens).toBe(32_768)
+    })
+
+    it("ships segmentation with its hard-coded model const when no override given (default unchanged)", async () => {
+        const segOutput = {
+            segments: [
+                { segmentId: "s1", text: "Hi.", span: { start: 0, end: 3 } },
+            ],
+        }
+        const mock = createMockLlmProvider({
+            responses: {
+                [STAGE_IDS.segmentation]: [{ kind: "ok", output: segOutput }],
+            },
+        })
+        const records: TRecordedRequest[] = []
+        const provider = recordingProvider({
+            underlying: mock,
+            onRecord: (r) => records.push(r),
+        })
+        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
+        const segRec = records.find((r) => r.stageId === STAGE_IDS.segmentation)
+        expect(segRec).toBeDefined()
+        expect(segRec!.model).toBe("gpt-5.4-mini")
+    })
+
+    it("REGRESSION (P1 #2): a `model` override actually REACHES the built llmStage request", async () => {
+        // Guards the silent-no-op regression: the resolver computing the
+        // right model but no stage factory reading it. Build a v2
+        // pipeline with a pipeline-level model default and assert the
+        // segmentation request carries the override, not the const.
+        const segOutput = {
+            segments: [
+                { segmentId: "s1", text: "Hi.", span: { start: 0, end: 3 } },
+            ],
+        }
+        const mock = createMockLlmProvider({
+            responses: {
+                [STAGE_IDS.segmentation]: [{ kind: "ok", output: segOutput }],
+            },
+        })
+        const records: TRecordedRequest[] = []
+        const provider = recordingProvider({
+            underlying: mock,
+            onRecord: (r) => records.push(r),
+        })
+        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+            llm: { defaults: { model: "qwen3.6:latest" } },
+        })
+        await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
+        const segRec = records.find((r) => r.stageId === STAGE_IDS.segmentation)
+        expect(segRec).toBeDefined()
+        expect(segRec!.model).toBe("qwen3.6:latest")
+    })
+
+    it("per-stage `model` override beats the pipeline default and reaches the request", async () => {
+        const segOutput = {
+            segments: [
+                { segmentId: "s1", text: "Hi.", span: { start: 0, end: 3 } },
+            ],
+        }
+        const mock = createMockLlmProvider({
+            responses: {
+                [STAGE_IDS.segmentation]: [{ kind: "ok", output: segOutput }],
+            },
+        })
+        const records: TRecordedRequest[] = []
+        const provider = recordingProvider({
+            underlying: mock,
+            onRecord: (r) => records.push(r),
+        })
+        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+            llm: {
+                defaults: { model: "qwen3.6:latest" },
+                overrides: {
+                    [STAGE_IDS.segmentation]: { model: "llama3:latest" },
+                },
+            },
+        })
+        await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
+        const segRec = records.find((r) => r.stageId === STAGE_IDS.segmentation)
+        expect(segRec).toBeDefined()
+        expect(segRec!.model).toBe("llama3:latest")
     })
 
     it("preserves the canonicalization stage's internal reasoningEffort when no override given", () => {

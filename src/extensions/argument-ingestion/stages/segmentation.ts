@@ -70,6 +70,7 @@ function buildSegmentationPrompt(ctx: TStageContext): {
  * pipeline factory can compose `resolveLlmStageOptions` over them.
  */
 export const SEGMENTATION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
+    model: SEGMENTATION_MODEL,
     maxOutputTokens: SEGMENTATION_MAX_OUTPUT_TOKENS,
 }
 
@@ -86,7 +87,7 @@ export function createSegmentationStage(
         id: STAGE_IDS.segmentation,
         dependsOn: [],
         outputSchema: SegmentationOutputSchema,
-        model: SEGMENTATION_MODEL,
+        model: options?.model ?? SEGMENTATION_MODEL,
         maxOutputTokens:
             options?.maxOutputTokens ?? SEGMENTATION_MAX_OUTPUT_TOKENS,
         reasoningEffort: options?.reasoningEffort,

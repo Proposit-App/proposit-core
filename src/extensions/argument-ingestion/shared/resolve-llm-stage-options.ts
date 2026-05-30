@@ -40,11 +40,17 @@ export function resolveLlmStageOptions(
     if (pipelineDefault.reasoningEffort !== undefined) {
         resolved.reasoningEffort = pipelineDefault.reasoningEffort
     }
+    if (pipelineDefault.model !== undefined) {
+        resolved.model = pipelineDefault.model
+    }
     if (perStage.maxOutputTokens !== undefined) {
         resolved.maxOutputTokens = perStage.maxOutputTokens
     }
     if (perStage.reasoningEffort !== undefined) {
         resolved.reasoningEffort = perStage.reasoningEffort
+    }
+    if (perStage.model !== undefined) {
+        resolved.model = perStage.model
     }
     return resolved
 }
