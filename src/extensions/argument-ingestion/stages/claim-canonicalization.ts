@@ -186,6 +186,7 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
 
 /** Internal default knobs for the claim-canonicalization stage. */
 export const CLAIM_CANONICALIZATION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
+    model: CLAIM_CANONICALIZATION_MODEL,
     reasoningEffort: CLAIM_CANONICALIZATION_REASONING,
 }
 
@@ -212,7 +213,7 @@ export function createClaimCanonicalizationStage(
             optional(STAGE_IDS.axiomIndicatorDetection),
         ],
         outputSchema: buildResponseSchema(extension),
-        model: CLAIM_CANONICALIZATION_MODEL,
+        model: options?.model ?? CLAIM_CANONICALIZATION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort:
             options?.reasoningEffort ?? CLAIM_CANONICALIZATION_REASONING,

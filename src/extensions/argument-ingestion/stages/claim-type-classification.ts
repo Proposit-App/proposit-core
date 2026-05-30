@@ -90,7 +90,9 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
 
 /** Internal default knobs for the claim-type-classification stage. */
 export const CLAIM_TYPE_CLASSIFICATION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
-    {}
+    {
+        model: CLAIM_TYPE_CLASSIFICATION_MODEL,
+    }
 
 /** Build the claim-type-classification stage with optional caller overrides. */
 export function createClaimTypeClassificationStage(
@@ -104,7 +106,7 @@ export function createClaimTypeClassificationStage(
             optional(STAGE_IDS.axiomIndicatorDetection),
         ],
         outputSchema: ClaimTypeClassificationOutputSchema,
-        model: CLAIM_TYPE_CLASSIFICATION_MODEL,
+        model: options?.model ?? CLAIM_TYPE_CLASSIFICATION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
         buildPrompt,

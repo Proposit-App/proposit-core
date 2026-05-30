@@ -59,17 +59,28 @@ export type TIngestionInput = {
  * stage default. A missing field at every layer means the stage
  * keeps its built-in behavior.
  *
- * Currently exposes the two knobs that have proven load-bearing for
- * the v2 pipeline: `maxOutputTokens` (the output-budget cap; not
- * setting one means the model's default applies, which is what
- * caused the v1.3.0 segmentation truncation against the Singer
- * fixture) and `reasoningEffort` (effort budget for reasoning
- * models). The struct is forward-compatible — new knobs (e.g.
- * `model` overrides) can land additively without breaking callers.
+ * Exposes the knobs that have proven load-bearing for the v2 pipeline:
+ * `maxOutputTokens` (the output-budget cap; not setting one means the
+ * model's default applies, which is what caused the v1.3.0 segmentation
+ * truncation against the Singer fixture), `reasoningEffort` (effort
+ * budget for reasoning models — OpenAI-specific; ignored by the Ollama
+ * provider), and `model` (the provider model identifier).
+ *
+ * The `model` knob lets a caller retarget every LLM stage at a
+ * different backend without forking the stages — e.g. pointing the
+ * whole v2 pipeline at a local Ollama model
+ * (`{ llm: { defaults: { model: "qwen3.6:latest" } } }`) for cost-free
+ * local development. Each stage keeps its own hard-coded `gpt-5.x`
+ * default when no override is supplied, so production behavior is
+ * unchanged.
+ *
+ * The struct is forward-compatible — new knobs can land additively
+ * without breaking callers.
  */
 export type TLlmStageOptionsOverride = {
     maxOutputTokens?: number
     reasoningEffort?: TReasoningEffort
+    model?: string
 }
 
 /**

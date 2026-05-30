@@ -46,7 +46,9 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
 
 /** Internal default knobs for the citation-source-detection stage. */
 export const CITATION_SOURCE_DETECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
-    {}
+    {
+        model: CITATION_SOURCE_DETECTION_MODEL,
+    }
 
 /** Build the citation-source-detection stage with optional caller overrides. */
 export function createCitationSourceDetectionStage(
@@ -56,7 +58,7 @@ export function createCitationSourceDetectionStage(
         id: STAGE_IDS.citationSourceDetection,
         dependsOn: [STAGE_IDS.segmentation],
         outputSchema: CitationSourceDetectionOutputSchema,
-        model: CITATION_SOURCE_DETECTION_MODEL,
+        model: options?.model ?? CITATION_SOURCE_DETECTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
         buildPrompt,

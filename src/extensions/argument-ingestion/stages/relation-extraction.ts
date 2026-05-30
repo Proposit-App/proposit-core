@@ -91,6 +91,7 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
 
 /** Internal default knobs for the relation-extraction stage. */
 export const RELATION_EXTRACTION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
+    model: RELATION_EXTRACTION_MODEL,
     reasoningEffort: RELATION_EXTRACTION_REASONING,
 }
 
@@ -106,7 +107,7 @@ export function createRelationExtractionStage(
             STAGE_IDS.segmentation,
         ],
         outputSchema: RelationExtractionOutputSchema,
-        model: RELATION_EXTRACTION_MODEL,
+        model: options?.model ?? RELATION_EXTRACTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort:
             options?.reasoningEffort ?? RELATION_EXTRACTION_REASONING,

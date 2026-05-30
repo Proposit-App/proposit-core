@@ -42,7 +42,9 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
 
 /** Internal default knobs for the claim-mention-extraction stage. */
 export const CLAIM_MENTION_EXTRACTION_STAGE_DEFAULTS: TLlmStageOptionsOverride =
-    {}
+    {
+        model: CLAIM_MENTION_EXTRACTION_MODEL,
+    }
 
 /** Build the claim-mention-extraction stage with optional caller overrides. */
 export function createClaimMentionExtractionStage(
@@ -52,7 +54,7 @@ export function createClaimMentionExtractionStage(
         id: STAGE_IDS.claimMentionExtraction,
         dependsOn: [STAGE_IDS.segmentation],
         outputSchema: ClaimMentionExtractionOutputSchema,
-        model: CLAIM_MENTION_EXTRACTION_MODEL,
+        model: options?.model ?? CLAIM_MENTION_EXTRACTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
         buildPrompt,
