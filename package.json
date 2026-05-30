@@ -37,6 +37,11 @@
             "types": "./dist/extensions/openai/index.d.ts",
             "import": "./dist/extensions/openai/index.js",
             "default": "./dist/extensions/openai/index.js"
+        },
+        "./extensions/ollama": {
+            "types": "./dist/extensions/ollama/index.d.ts",
+            "import": "./dist/extensions/ollama/index.js",
+            "default": "./dist/extensions/ollama/index.js"
         }
     },
     "bin": {
@@ -74,6 +79,7 @@
         "eslint-plugin-check-file": "^3.3.1",
         "eslint-plugin-n": "^17.24.0",
         "globals": "^17.4.0",
+        "ollama": "^0.6.3",
         "peggy": "^5.1.0",
         "prettier": "^3.8.1",
         "typedoc": "^0.28.18",
@@ -88,9 +94,13 @@
         "yaml": "^2.8.3"
     },
     "peerDependencies": {
+        "ollama": ">=0.5.0",
         "openai": ">=4.0.0"
     },
     "peerDependenciesMeta": {
+        "ollama": {
+            "optional": true
+        },
         "openai": {
             "optional": true
         }
