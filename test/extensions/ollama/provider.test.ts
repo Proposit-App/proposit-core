@@ -94,6 +94,49 @@ describe("OllamaProvider — request shape", () => {
         })
     })
 
+    it("sends a generous default options.num_ctx (32768) so real prompts aren't silently truncated", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const provider = new OllamaProvider({
+            client: mockClient({
+                onChat: (req) => {
+                    captured.push(req)
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "hi" } })
+                    )
+                },
+            }),
+        })
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(captured[0].options?.num_ctx).toBe(32768)
+    })
+
+    it("honors an explicit numCtx config override on options.num_ctx", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const provider = new OllamaProvider({
+            numCtx: 65536,
+            client: mockClient({
+                onChat: (req) => {
+                    captured.push(req)
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "hi" } })
+                    )
+                },
+            }),
+        })
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(captured[0].options?.num_ctx).toBe(65536)
+    })
+
     it("maps maxOutputTokens → options.num_predict (positive only; never 0)", async () => {
         const captured: TOllamaChatRequest[] = []
         const provider = new OllamaProvider({

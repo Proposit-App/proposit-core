@@ -57,16 +57,23 @@ const STAGE_ID_MARKER = /<!--\s*stage-id:\s*([^\s>]+)\s*-->/
 
 const DEFAULT_BASE_URL = "http://localhost:11434"
 const DEFAULT_MAX_TOOL_ROUNDS = 6
+// Generous default context window. Ollama silently truncates prompts
+// longer than `num_ctx` (no error — the model emits schema-valid JSON
+// from a truncated prompt), and its per-model default is often ~4096,
+// well under a real multi-KB ingestion prompt. See `TOllamaProviderConfig.numCtx`.
+const DEFAULT_NUM_CTX = 32768
 
 export class OllamaProvider implements TLlmProvider {
     private readonly config: TOllamaProviderConfig
     private clientPromise: Promise<TOllamaClient> | null = null
     private readonly maxToolRounds: number
+    private readonly numCtx: number
 
     constructor(config?: TOllamaProviderConfig) {
         this.config = config ?? {}
         this.maxToolRounds =
             this.config.maxToolCallRounds ?? DEFAULT_MAX_TOOL_ROUNDS
+        this.numCtx = this.config.numCtx ?? DEFAULT_NUM_CTX
     }
 
     async respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>> {
@@ -134,11 +141,15 @@ export class OllamaProvider implements TLlmProvider {
             if (tools) {
                 chatRequest.tools = tools
             }
-            // `maxOutputTokens` → num_predict. Positive only: 0 means
-            // "generate nothing"; -1/-2 are Ollama sentinels we never
-            // emit. `temperature: 0` for deterministic structured output.
+            // `temperature: 0` for deterministic structured output;
+            // `num_ctx` set generously so Ollama doesn't silently
+            // truncate a real multi-KB ingestion prompt (its per-model
+            // default is often ~4096). `maxOutputTokens` → num_predict,
+            // positive only: 0 means "generate nothing"; -1/-2 are Ollama
+            // sentinels we never emit.
             const options: NonNullable<TOllamaChatRequest["options"]> = {
                 temperature: 0,
+                num_ctx: this.numCtx,
             }
             if (req.maxOutputTokens !== undefined && req.maxOutputTokens > 0) {
                 options.num_predict = req.maxOutputTokens

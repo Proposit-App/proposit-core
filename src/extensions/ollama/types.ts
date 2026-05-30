@@ -52,6 +52,7 @@ export type TOllamaChatRequest = {
     options?: {
         temperature?: number
         num_predict?: number
+        num_ctx?: number
     }
 }
 /* eslint-enable @typescript-eslint/naming-convention */
@@ -89,6 +90,23 @@ export type TOllamaProviderConfig = {
      * surfaces as an actionable error at construction time.
      */
     client?: TOllamaClient
+    /**
+     * Context-window size sent as Ollama's `options.num_ctx`. Defaults
+     * to a generous **32768**.
+     *
+     * **Why this is set, and set generously.** Ollama's per-model
+     * default `num_ctx` is small (often ~4096) and Ollama **silently
+     * truncates** any prompt longer than `num_ctx` — no error is raised;
+     * the model dutifully emits schema-valid JSON from a truncated
+     * prompt, which then passes the framework's `Value.Check` and yields
+     * a quietly-wrong parse. A real v2 ingestion prompt (segmenting a
+     * multi-KB argument) easily exceeds 4096 tokens, so without a
+     * generous default the stated goal — running the *whole* pipeline
+     * locally on real text — would silently misbehave. Raise this
+     * further for very large inputs; lower it only if VRAM-constrained
+     * and inputs are known to be small.
+     */
+    numCtx?: number
     /**
      * Cap on function-tool agent-loop round-trips before throwing
      * `ToolLoopExhaustedError`. Defaults to 6, mirroring the OpenAI

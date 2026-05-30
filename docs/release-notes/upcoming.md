@@ -34,6 +34,12 @@ Notes:
 - Structured output uses Ollama's native JSON-schema-constrained
   generation (`format`). Token caps map to `num_predict`; the
   OpenAI-specific reasoning-effort knob is ignored.
+- The context window defaults to a generous 32768 tokens (configurable
+  via `new OllamaProvider({ numCtx })`). This matters because Ollama
+  **silently truncates** prompts longer than its context window — with
+  no error — so a small default would quietly mis-parse real
+  multi-kilobyte inputs. Raise `numCtx` further if you feed very large
+  documents.
 - The default everywhere is still OpenAI; the Ollama path is purely
   opt-in by explicit wiring.
 

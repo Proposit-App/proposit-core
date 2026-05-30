@@ -34,7 +34,14 @@ false`. A deliberate divergence from `typeboxToOpenAiSchema`, which
   `SchemaValidationLlmError`, which is tagged `transient` and would be
   retried), `ECONNRESET`/socket-drop→Transient, cold-VRAM-load
   5xx→Transient, 429→RateLimit, unclassified→NonRetryable (fail-fast). - `tokenUsage`: `prompt_eval_count → input`, `eval_count → output`,
-  `reasoning` unset.
+  `reasoning` unset. - `numCtx?` on `TOllamaProviderConfig` → `options.num_ctx`, defaulting
+  to a generous **32768**. Ollama silently truncates any prompt longer
+  than `num_ctx` (no error — the model emits schema-valid JSON from a
+  truncated prompt, so a quietly-wrong parse passes the framework's
+  `Value.Check`), and its per-model default is often ~4096 — far below
+  a real multi-KB ingestion prompt. The generous default lets the
+  default-constructed provider run the whole pipeline on real text
+  without silent truncation; raise it further for very large inputs.
 
 - **`model` override on the per-stage LLM options seam** (`922a049`).
   Added `model?: string` to `TLlmStageOptionsOverride`
