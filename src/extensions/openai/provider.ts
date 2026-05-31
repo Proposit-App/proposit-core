@@ -155,24 +155,13 @@ export function createOpenAiResponsesProvider(
                 userMessageHead: req.userMessage,
             })
 
-            const response = await callOnce({
+            const envelope = await fetchResponseEnvelope({
                 url: baseUrl,
                 apiKey: options.apiKey,
                 body,
                 fetchImpl,
                 signal: req.signal,
             })
-
-            const envelope: TOpenAiResponsesEnvelope = await response
-                .json()
-                .then((j) => j as TOpenAiResponsesEnvelope)
-                .catch((err: unknown) => {
-                    throw new TransientLlmError({
-                        message: `OpenAI response body was not valid JSON: ${
-                            err instanceof Error ? err.message : String(err)
-                        }`,
-                    })
-                })
 
             lastResponseId = envelope.id ?? lastResponseId
             lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
@@ -364,6 +353,32 @@ export function createOpenAiResponsesProvider(
 }
 
 // -- HTTP --
+
+async function fetchResponseEnvelope(args: {
+    url: string
+    apiKey: string
+    body: TOpenAiResponsesRequestBody
+    fetchImpl: TOpenAiFetch
+    signal?: AbortSignal
+}): Promise<TOpenAiResponsesEnvelope> {
+    const response = await callOnce({
+        url: args.url,
+        apiKey: args.apiKey,
+        body: args.body,
+        fetchImpl: args.fetchImpl,
+        signal: args.signal,
+    })
+    return response
+        .json()
+        .then((j) => j as TOpenAiResponsesEnvelope)
+        .catch((err: unknown) => {
+            throw new TransientLlmError({
+                message: `OpenAI response body was not valid JSON: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            })
+        })
+}
 
 async function callOnce(args: {
     url: string
