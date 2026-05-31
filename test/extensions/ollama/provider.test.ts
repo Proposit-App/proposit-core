@@ -57,7 +57,9 @@ function mockClient(args: {
     }
 }
 
-function streamOf(chunks: TOllamaChatResponse[]): AsyncIterable<TOllamaChatResponse> {
+function streamOf(
+    chunks: TOllamaChatResponse[]
+): AsyncIterable<TOllamaChatResponse> {
     return {
         // eslint-disable-next-line @typescript-eslint/require-await
         async *[Symbol.asyncIterator]() {
@@ -602,7 +604,9 @@ describe("OllamaProvider — streaming (Level 1a)", () => {
             client: mockClient({
                 onChat: (req) => {
                     captured.push(req)
-                    return Promise.resolve(okResponse({ body: { answer: "x" } }))
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "x" } })
+                    )
                 },
             }),
             stream: false,
@@ -623,7 +627,9 @@ describe("OllamaProvider — streaming (Level 1a)", () => {
             client: mockClient({
                 onChat: (req) => {
                     captured.push(req)
-                    return Promise.resolve(okResponse({ body: { answer: "x" } }))
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "x" } })
+                    )
                 },
             }),
         })
