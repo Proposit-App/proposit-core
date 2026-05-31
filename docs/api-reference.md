@@ -1548,7 +1548,7 @@ type TCreateOpenAiResponsesProviderOptions = {
     fetch?: TOpenAiFetch // defaults to globalThis.fetch; inject for tests / polyfills
     maxToolCallRounds?: number // function-tool agent-loop cap; default 6
     stream?: boolean // stream response over SSE; default true; no data-retention implications
-    backgroundMode?: boolean // submit-then-poll; requires store:true (NOT ZDR-compatible); no-tools V1 only; default false
+    backgroundMode?: boolean // submit-then-poll; requires store:true (NOT ZDR-compatible); no-tools V1 only; default false; takes precedence over `stream` when both set
     backgroundPollIntervalMs?: number // poll interval (ms) when backgroundMode is true; default 2000
 }
 ```
