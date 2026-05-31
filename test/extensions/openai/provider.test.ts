@@ -1341,6 +1341,73 @@ describe("OpenAI provider — background mode (Level 1c)", () => {
     })
 })
 
+describe("OpenAI provider — contract parity across modes", () => {
+    const completedPayload = {
+        id: "resp_x",
+        status: "completed",
+        output: [
+            {
+                type: "message",
+                content: [
+                    {
+                        type: "output_text",
+                        text: JSON.stringify({ answer: "same" }),
+                    },
+                ],
+            },
+        ],
+        usage: { input_tokens: 8, output_tokens: 4 },
+    }
+
+    it("returns the same output + tokenUsage for blocking, streaming, and background", async () => {
+        const blocking = createOpenAiResponsesProvider({
+            apiKey: "k",
+            stream: false,
+            fetch: () => Promise.resolve(jsonResponse(completedPayload)),
+        })
+        const streaming = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.completed",
+                            response: completedPayload,
+                        },
+                    ])
+                ),
+        })
+        const background = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundMode: true,
+            backgroundPollIntervalMs: 1,
+            fetch: (_url, init) =>
+                Promise.resolve(
+                    (init.method ?? "GET") === "POST"
+                        ? jsonResponse({ id: "resp_x", status: "queued" })
+                        : jsonResponse(completedPayload)
+                ),
+        })
+
+        const req = {
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        }
+        const [a, b, c] = await Promise.all([
+            blocking.respond(req),
+            streaming.respond(req),
+            background.respond(req),
+        ])
+        expect(a.output).toEqual({ answer: "same" })
+        expect(b.output).toEqual(a.output)
+        expect(c.output).toEqual(a.output)
+        expect(b.tokenUsage).toEqual(a.tokenUsage)
+        expect(c.tokenUsage).toEqual(a.tokenUsage)
+    })
+})
+
 describe("OpenAI provider — streaming (Level 1b)", () => {
     it("reconstructs the terminal envelope from SSE and returns the parsed output", async () => {
         const captured: { url: string; init: RequestInit }[] = []
