@@ -20,9 +20,9 @@ So a single LLM call holds one connection open for its entire duration — secon
 
 Set `stream: true` on the `ollama` SDK `chat()` call, **collect/concatenate the streamed `message.content` parts inside the provider's request method**, and return it as if it were a one-shot response — then `JSON.parse` + TypeBox `Value.Check` the concatenated result exactly as today. The caller never sees a stream; `respond()`'s contract is unchanged.
 
-This is the **community-validated** fix for the hardcoded ~300s (5-minute) timeout that applies specifically to **non-streaming** Ollama requests — see ollama/ollama#5081 (comment): *"If you run bigger models on consumer hardware, you will instantly discover the hardcoded 5-minute timeout for non-streaming requests. Our solution to handle long-running (like 10-minute) requests: `stream=true`, collect all parts in the low-level request method, return it like a one-shot request response."* (https://github.com/ollama/ollama/issues/5081#issuecomment-2678021167). This complements our own finding (undici client-side `headersTimeout` of 300s): both the client timeout and the known non-streaming ceiling are sidestepped because, with streaming, headers + the first chunk arrive immediately and `bodyTimeout` resets on each token chunk.
+This is the **community-validated** fix for the hardcoded ~300s (5-minute) timeout that applies specifically to **non-streaming** Ollama requests — see ollama/ollama#5081 (comment): _"If you run bigger models on consumer hardware, you will instantly discover the hardcoded 5-minute timeout for non-streaming requests. Our solution to handle long-running (like 10-minute) requests: `stream=true`, collect all parts in the low-level request method, return it like a one-shot request response."_ (https://github.com/ollama/ollama/issues/5081#issuecomment-2678021167). This complements our own finding (undici client-side `headersTimeout` of 300s): both the client timeout and the known non-streaming ceiling are sidestepped because, with streaming, headers + the first chunk arrive immediately and `bodyTimeout` resets on each token chunk.
 
-**Benefit:** the held-connection timeout class largely disappears for the *actively generating* case. (The *queued-behind-another-request* case — concurrent fan-out stages serializing on one loaded model instance — still benefits from the `requestTimeoutMs` backstop and/or `OLLAMA_NUM_PARALLEL`, so keep the 1.6.1 timeout.) **Watch:** streaming + the function-tool agent loop needs care, but ingestion stages are tool-free, so the common path is just "accumulate then parse." This should become the **primary** Ollama fix; the 1.6.1 raised timeout then degrades to a pure backstop for the queueing case.
+**Benefit:** the held-connection timeout class largely disappears for the _actively generating_ case. (The _queued-behind-another-request_ case — concurrent fan-out stages serializing on one loaded model instance — still benefits from the `requestTimeoutMs` backstop and/or `OLLAMA_NUM_PARALLEL`, so keep the 1.6.1 timeout.) **Watch:** streaming + the function-tool agent loop needs care, but ingestion stages are tool-free, so the common path is just "accumulate then parse." This should become the **primary** Ollama fix; the 1.6.1 raised timeout then degrades to a pure backstop for the queueing case.
 
 ### Level 1b — Stream OpenAI responses (`extensions/openai`) — optional parity
 
@@ -40,6 +40,7 @@ Use `background: true` so a long reasoning call does **not** depend on a continu
 **Encapsulation:** this can live entirely **inside** the OpenAI provider's `respond()` as a submit-then-poll loop — `respond()` still returns the final structured output, so the pipeline framework and the caller are unchanged. That makes Level 1c provider-local.
 
 **Considerations / watch-items:**
+
 - `store: true` is mandatory for background and is **not ZDR-compatible** (data retained ~10 min for polling). Confirm this is acceptable for Proposit's data-retention posture before enabling in prod; consider gating it (e.g. only for stages above some expected-duration threshold) rather than blanket-on.
 - Background mode currently has higher time-to-first-token than synchronous — fine for our non-interactive ingestion stages, but don't use it on any latency-sensitive path.
 - Interaction with the existing 6-round function-tool agent loop is more complex under background mode (each round would be its own background response). Ingestion is tool-free, so scope Level 1c to the no-tools path first and treat tool-loop + background as a follow-up.
@@ -47,6 +48,7 @@ Use `background: true` so a long reasoning call does **not** depend on a continu
 ### Level 2 — Resumable pipeline (stretch; pipeline framework + server)
 
 The deepest version of "don't require an active connection": **persist each stage's provider response id** (OpenAI background id; Ollama has no equivalent — see below) so an in-flight ingestion task can be **resumed after a server restart/crash** without re-running completed stages. This needs:
+
 - `src/lib/pipelines/` support for recording + resuming per-stage external job handles, and
 - `proposit-server`'s ingestion task layer to persist them alongside the existing `pipelineRuns`/`pipelineStages` observability triple and resume on restart.
 
