@@ -122,11 +122,15 @@ export type TOllamaProviderConfig = {
      * `import("ollama")`. Lets tests assert the SDK client is constructed
      * with the per-provider timeout-fetch without touching the real
      * package. Ignored when `client` is provided.
+     *
+     * @internal
      */
     importOllama?: () => Promise<TOllamaModule>
     /**
      * Injectable `undici`-module importer. Test seam — defaults to
      * `import("undici")`. See {@link requestTimeoutMs}.
+     *
+     * @internal
      */
     importUndici?: () => Promise<TUndiciModule>
     /**
