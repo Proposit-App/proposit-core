@@ -389,6 +389,133 @@ describe("OllamaProvider — function-tool agent loop", () => {
     })
 })
 
+describe("OllamaProvider — per-provider request timeout", () => {
+    it("constructs the SDK client with a custom fetch backed by a default 20-min undici Agent", async () => {
+        const capturedAgentOptions: { value?: unknown } = {}
+        const capturedOllamaConfig: { value?: unknown } = {}
+
+        const fakeUndici = {
+            Agent: class {
+                constructor(options: unknown) {
+                    capturedAgentOptions.value = options
+                }
+            },
+        }
+        const fakeOllamaModule = {
+            Ollama: class {
+                constructor(config: unknown) {
+                    capturedOllamaConfig.value = config
+                }
+                chat(): Promise<TOllamaChatResponse> {
+                    return Promise.resolve(okResponse({ body: { answer: "ok" } }))
+                }
+                abort(): void {
+                    // no-op
+                }
+            },
+        }
+
+        const provider = new OllamaProvider({
+            importUndici: () => Promise.resolve(fakeUndici),
+            importOllama: () => Promise.resolve(fakeOllamaModule),
+        })
+
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        expect(capturedAgentOptions.value).toMatchObject({
+            headersTimeout: 1_200_000,
+            bodyTimeout: 1_200_000,
+        })
+        // The SDK client was constructed with a custom fetch.
+        expect(
+            (capturedOllamaConfig.value as { fetch?: unknown }).fetch
+        ).toBeTypeOf("function")
+    })
+
+    it("honors an explicit requestTimeoutMs override on the Agent", async () => {
+        const capturedAgentOptions: { value?: unknown } = {}
+        const fakeUndici = {
+            Agent: class {
+                constructor(options: unknown) {
+                    capturedAgentOptions.value = options
+                }
+            },
+        }
+        const fakeOllamaModule = {
+            Ollama: class {
+                constructor() {
+                    // no-op
+                }
+                chat(): Promise<TOllamaChatResponse> {
+                    return Promise.resolve(okResponse({ body: { answer: "ok" } }))
+                }
+                abort(): void {
+                    // no-op
+                }
+            },
+        }
+
+        const provider = new OllamaProvider({
+            requestTimeoutMs: 600_000,
+            importUndici: () => Promise.resolve(fakeUndici),
+            importOllama: () => Promise.resolve(fakeOllamaModule),
+        })
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(capturedAgentOptions.value).toMatchObject({
+            headersTimeout: 600_000,
+            bodyTimeout: 600_000,
+        })
+    })
+
+    it("constructs the SDK client without a custom fetch when requestTimeoutMs is 0", async () => {
+        const capturedOllamaConfig: { value?: unknown } = {}
+        const fakeUndici = {
+            Agent: class {
+                constructor() {
+                    throw new Error("Agent must not be constructed when timeout is 0")
+                }
+            },
+        }
+        const fakeOllamaModule = {
+            Ollama: class {
+                constructor(config: unknown) {
+                    capturedOllamaConfig.value = config
+                }
+                chat(): Promise<TOllamaChatResponse> {
+                    return Promise.resolve(okResponse({ body: { answer: "ok" } }))
+                }
+                abort(): void {
+                    // no-op
+                }
+            },
+        }
+        const provider = new OllamaProvider({
+            requestTimeoutMs: 0,
+            importUndici: () => Promise.resolve(fakeUndici),
+            importOllama: () => Promise.resolve(fakeOllamaModule),
+        })
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(
+            (capturedOllamaConfig.value as { fetch?: unknown }).fetch
+        ).toBeUndefined()
+    })
+})
+
 describe("OllamaProvider — abort handling", () => {
     it("calls client.abort() when the signal fires and surfaces an AbortError", async () => {
         const onAbort = vi.fn()
