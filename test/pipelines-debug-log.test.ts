@@ -230,6 +230,7 @@ describe("debug helpers emit on console.debug when env var is on", () => {
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
             fetch: fetchMock as unknown as TOpenAiFetch,
+            stream: false,
         })
 
         await provider.respond({
@@ -282,6 +283,7 @@ describe("debug helpers emit on console.debug when env var is on", () => {
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
             fetch: fetchMock as unknown as TOpenAiFetch,
+            stream: false,
         })
 
         await expect(

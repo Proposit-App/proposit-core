@@ -1,3 +1,27 @@
 # Upcoming changelog
 
 Commit range: `v1.6.1..HEAD`.
+
+## Provider streaming + OpenAI background mode (`6e7f899..daff2c6`)
+
+### Level 1a — Ollama streaming by default
+
+- `OllamaProvider` now calls `chat()` with `stream: true` by default, accumulating chunks into a single synthesized response. This is the primary fix for Ollama's hardcoded ~300s non-streaming connection timeout (ollama/ollama#5081): undici's `bodyTimeout` resets per chunk, so long local thinking-model generations are no longer aborted mid-flight. (`6e7f899`)
+- New `stream?: boolean` knob on `TOllamaProviderConfig` (default `true`); set `false` to restore the legacy single-shot request.
+
+### Level 1b — OpenAI foreground SSE streaming by default
+
+- `createOpenAiResponsesProvider` now streams over SSE by default (`stream: true`), accumulating the response envelope inside the provider. No data-retention implications — the stream is consumed locally. (`50a695e`)
+- Internal refactor: extracted `fetchResponseEnvelope` HTTP step to enable both the SSE and blocking paths. (`f7c677a`)
+- New `stream?: boolean` knob on `TCreateOpenAiResponsesProviderOptions` (default `true`); set `false` to restore the blocking `response.json()` path.
+- **CLI note:** `src/cli/llm/index.ts` passes no `stream` override, so CLI calls to the OpenAI provider now stream by default (intended).
+
+### Level 1c — OpenAI background submit-then-poll (opt-in)
+
+- New `backgroundMode?: boolean` knob (default `false`): submits the request, then polls `GET /responses/{id}` until status is `completed`. Requires `store: true` (NOT ZDR-compatible); throws `NonRetryableLlmError` immediately when `tools` are present (no-tools V1 path only). (`565ccc3`)
+- New `backgroundPollIntervalMs?: number` knob (default `2000`): poll interval in ms, ignored unless `backgroundMode` is `true`.
+
+### Tests
+
+- Added contract-parity tests across blocking / stream / background OpenAI modes. (`b93b695`)
+- Added opt-in live test cases for Ollama streaming and OpenAI background mode. (`daff2c6`)

@@ -1547,6 +1547,9 @@ type TCreateOpenAiResponsesProviderOptions = {
     baseUrl?: string // default https://api.openai.com/v1/responses
     fetch?: TOpenAiFetch // defaults to globalThis.fetch; inject for tests / polyfills
     maxToolCallRounds?: number // function-tool agent-loop cap; default 6
+    stream?: boolean // stream response over SSE; default true; no data-retention implications
+    backgroundMode?: boolean // submit-then-poll; requires store:true (NOT ZDR-compatible); no-tools V1 only; default false
+    backgroundPollIntervalMs?: number // poll interval (ms) when backgroundMode is true; default 2000
 }
 ```
 
@@ -1570,6 +1573,7 @@ type TOllamaProviderConfig = {
     client?: TOllamaClient // pre-built SDK client; primarily a test seam
     numCtx?: number // → options.num_ctx, default 32768
     requestTimeoutMs?: number // per-provider HTTP timeout, default 1_200_000 (20 min)
+    stream?: boolean // stream chat() and accumulate chunks; default true; fixes ~300s non-streaming timeout
     maxToolCallRounds?: number // function-tool agent-loop cap, default 6
 }
 ```
