@@ -90,6 +90,24 @@ export type TCreateOpenAiResponsesProviderOptions = {
      * Set `false` to restore the blocking `response.json()` path.
      */
     stream?: boolean
+    /**
+     * Run long reasoning calls in OpenAI **background mode**
+     * (submit-then-poll) so the result does not depend on a
+     * continuously-held connection. Defaults to **`false`**.
+     *
+     * Background mode requires `store: true`, which retains the
+     * response server-side (~10 min, for polling) and is **NOT
+     * ZDR-compatible**. Enable only where that data-retention posture
+     * is acceptable. V1 supports the **no-tools path only**: a request
+     * that sets `backgroundMode` and carries `tools` throws
+     * `NonRetryableLlmError`.
+     */
+    backgroundMode?: boolean
+    /**
+     * Poll interval (ms) for the background submit-then-poll loop.
+     * Defaults to 2000. Ignored unless `backgroundMode` is `true`.
+     */
+    backgroundPollIntervalMs?: number
 }
 
 export function createOpenAiResponsesProvider(
@@ -105,10 +123,19 @@ export function createOpenAiResponsesProvider(
     }
     const maxToolRounds = options.maxToolCallRounds ?? DEFAULT_MAX_TOOL_ROUNDS
     const useStream = options.stream ?? true
+    const useBackground = options.backgroundMode ?? false
+    const backgroundPollIntervalMs = options.backgroundPollIntervalMs ?? 2000
 
     const respond = async <T>(
         req: TLlmRequest<T>
     ): Promise<TLlmResponse<T>> => {
+        if (useBackground && req.tools && req.tools.length > 0) {
+            throw new NonRetryableLlmError({
+                message:
+                    "OpenAI background mode does not support function tools in V1. Disable backgroundMode for tool-using requests, or run the tools synchronously.",
+            })
+        }
+
         const schemaName = deriveSchemaName(req.outputSchema)
         const convertedSchema = typeboxToOpenAiSchema(req.outputSchema)
         const tools = req.tools ? translateTools(req.tools) : undefined
@@ -171,6 +198,8 @@ export function createOpenAiResponsesProvider(
                 fetchImpl,
                 signal: req.signal,
                 stream: useStream,
+                background: useBackground,
+                pollIntervalMs: backgroundPollIntervalMs,
             })
 
             lastResponseId = envelope.id ?? lastResponseId
@@ -390,7 +419,19 @@ async function fetchResponseEnvelope(args: {
     fetchImpl: TOpenAiFetch
     signal?: AbortSignal
     stream: boolean
+    background: boolean
+    pollIntervalMs: number
 }): Promise<TOpenAiResponsesEnvelope> {
+    if (args.background) {
+        return runBackground({
+            url: args.url,
+            apiKey: args.apiKey,
+            body: args.body,
+            fetchImpl: args.fetchImpl,
+            signal: args.signal,
+            pollIntervalMs: args.pollIntervalMs,
+        })
+    }
     if (args.stream) {
         const response = await callOnce({
             url: args.url,
@@ -408,16 +449,214 @@ async function fetchResponseEnvelope(args: {
         fetchImpl: args.fetchImpl,
         signal: args.signal,
     })
+    return parseJsonOrThrowTransient(
+        response,
+        "OpenAI response body was not valid JSON"
+    )
+}
+
+async function parseJsonOrThrowTransient(
+    response: Response,
+    context: string
+): Promise<TOpenAiResponsesEnvelope> {
     return response
         .json()
         .then((j) => j as TOpenAiResponsesEnvelope)
         .catch((err: unknown) => {
             throw new TransientLlmError({
-                message: `OpenAI response body was not valid JSON: ${
+                message: `${context}: ${
                     err instanceof Error ? err.message : String(err)
                 }`,
             })
         })
+}
+
+function abortError(): Error {
+    const e = new Error("The OpenAI background request was aborted.")
+    e.name = "AbortError"
+    return e
+}
+
+// Resolves (never rejects) on abort by design: the poll loop owns the
+// abort→cancel→throw decision at exactly two checkpoints (top-of-loop and
+// the in-flight-GET catch), so this helper just needs to wake the loop
+// promptly instead of waiting out the full interval. Keeping it
+// non-throwing avoids a second, competing abort surface.
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise((resolve) => {
+        if (signal?.aborted) {
+            resolve()
+            return
+        }
+        const onAbort = (): void => {
+            cleanup()
+            resolve()
+        }
+        const cleanup = (): void => {
+            clearTimeout(timer)
+            signal?.removeEventListener("abort", onAbort)
+        }
+        const timer = setTimeout(() => {
+            cleanup()
+            resolve()
+        }, ms)
+        signal?.addEventListener("abort", onAbort, { once: true })
+    })
+}
+
+async function getResponseById(args: {
+    url: string
+    id: string
+    apiKey: string
+    fetchImpl: TOpenAiFetch
+    signal?: AbortSignal
+}): Promise<TOpenAiResponsesEnvelope> {
+    let response: Response
+    try {
+        response = await args.fetchImpl(`${args.url}/${args.id}`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${args.apiKey}` },
+            signal: args.signal,
+        })
+    } catch (err) {
+        if (isAbortError(err)) throw err
+        throw new TransientLlmError({
+            message: `Network error polling OpenAI background response: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+    if (!response.ok) {
+        const errorBody = await response.text().catch(() => "")
+        throw classifyHttpError(
+            response.status,
+            `OpenAI poll ${response.status.toString()}: ${
+                errorBody || response.statusText
+            }`
+        )
+    }
+    return parseJsonOrThrowTransient(
+        response,
+        "OpenAI poll body was not valid JSON"
+    )
+}
+
+// Intentionally takes no AbortSignal — cancel must fire even though the
+// caller's signal has already aborted; passing the fired signal would
+// abort the cancel itself.
+async function cancelBackground(args: {
+    url: string
+    id: string
+    apiKey: string
+    fetchImpl: TOpenAiFetch
+}): Promise<void> {
+    // Best-effort + idempotent — swallow errors; the abort is surfaced
+    // regardless of whether cancel succeeds.
+    try {
+        await args.fetchImpl(`${args.url}/${args.id}/cancel`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${args.apiKey}` },
+        })
+    } catch {
+        // ignore
+    }
+}
+
+function isTerminalBackgroundStatus(status: string | undefined): boolean {
+    return (
+        status === "completed" ||
+        status === "failed" ||
+        status === "incomplete" ||
+        status === "cancelled"
+    )
+}
+
+async function runBackground(args: {
+    url: string
+    apiKey: string
+    body: TOpenAiResponsesRequestBody
+    fetchImpl: TOpenAiFetch
+    signal?: AbortSignal
+    pollIntervalMs: number
+}): Promise<TOpenAiResponsesEnvelope> {
+    if (args.signal?.aborted) throw abortError()
+    const submit = await callOnce({
+        url: args.url,
+        apiKey: args.apiKey,
+        body: { ...args.body, background: true, store: true },
+        fetchImpl: args.fetchImpl,
+        signal: args.signal,
+    })
+    const submitEnvelope = await parseJsonOrThrowTransient(
+        submit,
+        "OpenAI background submit body was not valid JSON"
+    )
+    const id = submitEnvelope.id
+    if (!id) {
+        throw new TransientLlmError({
+            message: "OpenAI background submit returned no response id.",
+        })
+    }
+    // Fast-path: a small/cached request can come back already terminal on
+    // submit — return it directly rather than issuing a redundant poll GET
+    // (and avoid a `store`-expiry window between submit and first poll).
+    if (isTerminalBackgroundStatus(submitEnvelope.status)) {
+        if (submitEnvelope.status === "cancelled") throw abortError()
+        return submitEnvelope
+    }
+    for (;;) {
+        if (args.signal?.aborted) {
+            await cancelBackground({
+                url: args.url,
+                id,
+                apiKey: args.apiKey,
+                fetchImpl: args.fetchImpl,
+            })
+            throw abortError()
+        }
+        let env: TOpenAiResponsesEnvelope
+        try {
+            env = await getResponseById({
+                url: args.url,
+                id,
+                apiKey: args.apiKey,
+                fetchImpl: args.fetchImpl,
+                signal: args.signal,
+            })
+        } catch (err) {
+            // Abort landing DURING an in-flight poll GET surfaces as an
+            // AbortError from getResponseById (real fetch rejects the
+            // in-flight request). The top-of-loop check alone would miss
+            // it, so cancel here before re-throwing — this is what makes
+            // the "AbortSignal → cancel POST" guarantee hold mid-poll.
+            if (isAbortError(err)) {
+                await cancelBackground({
+                    url: args.url,
+                    id,
+                    apiKey: args.apiKey,
+                    fetchImpl: args.fetchImpl,
+                })
+                throw abortError()
+            }
+            throw err
+        }
+        const status = env.status
+        // Deliberately inlined rather than calling
+        // `isTerminalBackgroundStatus`: `cancelled` is terminal too but
+        // needs the opposite disposition (throw `abortError()` vs. return
+        // the envelope), so the two terminal cases are split here.
+        if (
+            status === "completed" ||
+            status === "failed" ||
+            status === "incomplete"
+        ) {
+            return env
+        }
+        if (status === "cancelled") {
+            throw abortError()
+        }
+        await abortableDelay(args.pollIntervalMs, args.signal)
+    }
 }
 
 async function callOnce(args: {

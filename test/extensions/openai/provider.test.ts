@@ -1118,6 +1118,229 @@ function sseResponseChunked(
     })
 }
 
+// -- background-mode helpers ----------------------------------------
+
+function jsonResponse(payload: unknown, status = 200): Response {
+    return new Response(JSON.stringify(payload), { status })
+}
+
+function abortLikeError(): Error {
+    // Mimics what a real fetch rejects with when its signal aborts
+    // mid-request, so the mock exercises the in-flight-poll cancel path.
+    const e = new Error("aborted")
+    e.name = "AbortError"
+    return e
+}
+
+describe("OpenAI provider — background mode (Level 1c)", () => {
+    it("submits background+store, polls to completed, returns parsed output", async () => {
+        const calls: { url: string; method: string; body?: unknown }[] = []
+        let getCount = 0
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundMode: true,
+            backgroundPollIntervalMs: 1,
+            fetch: (url, init) => {
+                const method = init.method ?? "GET"
+                calls.push({
+                    url,
+                    method,
+                    body: init.body
+                        ? JSON.parse(init.body as string)
+                        : undefined,
+                })
+                if (method === "POST") {
+                    return Promise.resolve(
+                        jsonResponse({ id: "resp_bg", status: "queued" })
+                    )
+                }
+                getCount += 1
+                if (getCount === 1) {
+                    return Promise.resolve(
+                        jsonResponse({ id: "resp_bg", status: "in_progress" })
+                    )
+                }
+                return Promise.resolve(
+                    jsonResponse({
+                        id: "resp_bg",
+                        status: "completed",
+                        output: [
+                            {
+                                type: "message",
+                                content: [
+                                    {
+                                        type: "output_text",
+                                        text: JSON.stringify({ answer: "bg" }),
+                                    },
+                                ],
+                            },
+                        ],
+                        usage: { input_tokens: 5, output_tokens: 2 },
+                    })
+                )
+            },
+        })
+
+        const res = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        expect(res.output).toEqual({ answer: "bg" })
+        const submit = calls.find((c) => c.method === "POST")
+        expect(submit?.body).toMatchObject({ background: true, store: true })
+        expect(submit?.body).not.toHaveProperty("stream")
+        expect(calls.filter((c) => c.method === "GET").length).toBe(2)
+        expect(calls.some((c) => c.url.endsWith("/resp_bg"))).toBe(true)
+    })
+
+    it("returns immediately when submit comes back already terminal (fast-path, zero poll GETs)", async () => {
+        const calls: { url: string; method: string }[] = []
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundMode: true,
+            backgroundPollIntervalMs: 1,
+            fetch: (url, init) => {
+                const method = init.method ?? "GET"
+                calls.push({ url, method })
+                return Promise.resolve(
+                    jsonResponse({
+                        id: "resp_fp",
+                        status: "completed",
+                        output: [
+                            {
+                                type: "message",
+                                content: [
+                                    {
+                                        type: "output_text",
+                                        text: JSON.stringify({ answer: "fp" }),
+                                    },
+                                ],
+                            },
+                        ],
+                        usage: { input_tokens: 1, output_tokens: 1 },
+                    })
+                )
+            },
+        })
+
+        const res = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        expect(res.output).toEqual({ answer: "fp" })
+        expect(calls.filter((c) => c.method === "GET").length).toBe(0)
+    })
+
+    it("rejects backgroundMode with tools as NonRetryableLlmError", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundMode: true,
+            fetch: () => Promise.reject(new Error("should not be called")),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                tools: [
+                    {
+                        kind: "function",
+                        name: "f",
+                        description: "d",
+                        parameters: simpleSchema,
+                        handler: () => Promise.resolve("x"),
+                    },
+                ],
+            })
+        ).rejects.toBeInstanceOf(NonRetryableLlmError)
+    })
+
+    it("cancels the background response when abort lands mid-poll", async () => {
+        const calls: { url: string; method: string }[] = []
+        const controller = new AbortController()
+        let aborted = false
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundMode: true,
+            backgroundPollIntervalMs: 5,
+            fetch: (url, init) => {
+                const method = init.method ?? "GET"
+                calls.push({ url, method })
+                if (method === "POST" && url.endsWith("/cancel")) {
+                    return Promise.resolve(
+                        jsonResponse({ id: "resp_c", status: "cancelled" })
+                    )
+                }
+                if (method === "POST") {
+                    return Promise.resolve(
+                        jsonResponse({ id: "resp_c", status: "queued" })
+                    )
+                }
+                // First GET: abort lands while this poll is in flight, so
+                // a faithful fetch rejects the in-flight request with an
+                // AbortError. runBackground must catch that and still
+                // issue the cancel POST before re-throwing.
+                if (!aborted) {
+                    aborted = true
+                    controller.abort()
+                    return Promise.reject(abortLikeError())
+                }
+                return Promise.reject(abortLikeError())
+            },
+        })
+
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                signal: controller.signal,
+            })
+        ).rejects.toMatchObject({ name: "AbortError" })
+        expect(calls.some((c) => c.url.endsWith("/cancel"))).toBe(true)
+    })
+
+    it("maps a terminal background failed status to NonRetryableLlmError", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundMode: true,
+            backgroundPollIntervalMs: 1,
+            fetch: (_url, init) =>
+                Promise.resolve(
+                    (init.method ?? "GET") === "POST"
+                        ? jsonResponse({ id: "resp_bf", status: "queued" })
+                        : jsonResponse({
+                              id: "resp_bf",
+                              status: "failed",
+                              error: { code: "server_error", message: "nope" },
+                          })
+                ),
+        })
+        const err: unknown = await provider
+            .respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+            .catch((e: unknown) => e)
+        expect(err).toBeInstanceOf(NonRetryableLlmError)
+        // The terminal `failed` envelope's `error.message` detail must
+        // survive routing into the thrown error's message.
+        expect(err).toMatchObject({
+            message: expect.stringContaining("nope") as unknown,
+        })
+    })
+})
+
 describe("OpenAI provider — streaming (Level 1b)", () => {
     it("reconstructs the terminal envelope from SSE and returns the parsed output", async () => {
         const captured: { url: string; init: RequestInit }[] = []
