@@ -151,7 +151,7 @@ describe("classifyOllamaError — failure-mode mapping", () => {
         )
         expect(result).toBeInstanceOf(TransientLlmError)
         expect((result as TransientLlmError).retryReason).toBe("transient")
-        expect(result.code).toBe(LLM_TRANSIENT_ERROR)
+        expect((result as TransientLlmError).code).toBe(LLM_TRANSIENT_ERROR)
     })
 
     it("undici UND_ERR_BODY_TIMEOUT (direct code) → TransientLlmError", () => {

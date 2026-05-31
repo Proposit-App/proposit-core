@@ -407,7 +407,9 @@ describe("OllamaProvider — per-provider request timeout", () => {
                     capturedOllamaConfig.value = config
                 }
                 chat(): Promise<TOllamaChatResponse> {
-                    return Promise.resolve(okResponse({ body: { answer: "ok" } }))
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "ok" } })
+                    )
                 }
                 abort(): void {
                     // no-op
@@ -452,7 +454,9 @@ describe("OllamaProvider — per-provider request timeout", () => {
                     // no-op
                 }
                 chat(): Promise<TOllamaChatResponse> {
-                    return Promise.resolve(okResponse({ body: { answer: "ok" } }))
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "ok" } })
+                    )
                 }
                 abort(): void {
                     // no-op
@@ -482,7 +486,9 @@ describe("OllamaProvider — per-provider request timeout", () => {
         const fakeUndici = {
             Agent: class {
                 constructor() {
-                    throw new Error("Agent must not be constructed when timeout is 0")
+                    throw new Error(
+                        "Agent must not be constructed when timeout is 0"
+                    )
                 }
             },
         }
@@ -492,7 +498,9 @@ describe("OllamaProvider — per-provider request timeout", () => {
                     capturedOllamaConfig.value = config
                 }
                 chat(): Promise<TOllamaChatResponse> {
-                    return Promise.resolve(okResponse({ body: { answer: "ok" } }))
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "ok" } })
+                    )
                 }
                 abort(): void {
                     // no-op
