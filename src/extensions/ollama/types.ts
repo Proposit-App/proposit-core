@@ -72,11 +72,38 @@ export type TOllamaClient = {
 /**
  * The shape of the dynamically-imported `ollama` module. `Ollama` is
  * the SDK's exported class-constructor name (an external symbol), so it
- * is exempt from the in-repo camelCase property-naming rule.
+ * is exempt from the in-repo camelCase property-naming rule. The SDK's
+ * `Config` accepts an optional `fetch` override (used by the
+ * per-provider raised-timeout dispatcher — see `./timeout-fetch.ts`).
  */
 /* eslint-disable @typescript-eslint/naming-convention */
 export type TOllamaModule = {
-    Ollama: new (config: { host: string }) => TOllamaClient
+    Ollama: new (config: {
+        host: string
+        fetch?: typeof fetch
+    }) => TOllamaClient
+}
+/* eslint-enable @typescript-eslint/naming-convention */
+
+/**
+ * Structural slice of the `undici` module the timeout-fetch helper uses.
+ * Modeled (not imported) so the optional `undici` peer stays out of the
+ * type graph — same pattern as {@link TOllamaModule} for the `ollama`
+ * peer. The undici `Agent` constructor accepts millisecond timeout
+ * options; we raise `headersTimeout` + `bodyTimeout` (and `connectTimeout`)
+ * so a long local thinking-model generation isn't aborted at undici's
+ * 300s default. `Agent` is undici's exported class-constructor name (an
+ * external symbol), exempt from the camelCase rule.
+ */
+/* eslint-disable @typescript-eslint/naming-convention */
+export type TUndiciAgentOptions = {
+    headersTimeout?: number
+    bodyTimeout?: number
+    connectTimeout?: number
+}
+export type TUndiciDispatcher = object
+export type TUndiciModule = {
+    Agent: new (options: TUndiciAgentOptions) => TUndiciDispatcher
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
@@ -90,6 +117,41 @@ export type TOllamaProviderConfig = {
      * surfaces as an actionable error at construction time.
      */
     client?: TOllamaClient
+    /**
+     * Injectable `ollama`-module importer. Test seam — defaults to
+     * `import("ollama")`. Lets tests assert the SDK client is constructed
+     * with the per-provider timeout-fetch without touching the real
+     * package. Ignored when `client` is provided.
+     *
+     * @internal
+     */
+    importOllama?: () => Promise<TOllamaModule>
+    /**
+     * Injectable `undici`-module importer. Test seam — defaults to
+     * `import("undici")`. See {@link requestTimeoutMs}.
+     *
+     * @internal
+     */
+    importUndici?: () => Promise<TUndiciModule>
+    /**
+     * Per-request HTTP timeout in milliseconds, applied via a
+     * **per-provider** undici `Agent` (raised `headersTimeout` +
+     * `bodyTimeout`) passed as the `ollama` SDK client's `fetch`
+     * dispatcher. Defaults to **1_200_000 (20 min)** — local thinking
+     * models legitimately take many minutes per structured-extraction
+     * stage, and undici's 300s default aborts them mid-generation with a
+     * `UND_ERR_HEADERS_TIMEOUT` `fetch failed`.
+     *
+     * **No global state is mutated** — the raised timeout is scoped to
+     * this provider's client only (never `setGlobalDispatcher`). Requires
+     * the optional `undici` peer; if it is not installed the provider
+     * falls back to the SDK's default fetch (300s) and relies on
+     * `classifyOllamaError` retrying the resulting timeout as transient.
+     *
+     * Set `0` to disable the custom dispatcher entirely (use the SDK
+     * default). A finite positive value is recommended.
+     */
+    requestTimeoutMs?: number
     /**
      * Context-window size sent as Ollama's `options.num_ctx`. Defaults
      * to a generous **32768**.

@@ -144,4 +144,38 @@ describe("classifyOllamaError — failure-mode mapping", () => {
         expect(result).toBeInstanceOf(NonRetryableLlmError)
         expect(result.message).toMatch(/ollama serve/i)
     })
+
+    it("undici UND_ERR_HEADERS_TIMEOUT (direct code) → TransientLlmError (transient)", () => {
+        const result = classifyOllamaError(
+            errWith({ code: "UND_ERR_HEADERS_TIMEOUT" })
+        )
+        expect(result).toBeInstanceOf(TransientLlmError)
+        expect((result as TransientLlmError).retryReason).toBe("transient")
+        expect((result as TransientLlmError).code).toBe(LLM_TRANSIENT_ERROR)
+    })
+
+    it("undici UND_ERR_BODY_TIMEOUT (direct code) → TransientLlmError", () => {
+        const result = classifyOllamaError(
+            errWith({ code: "UND_ERR_BODY_TIMEOUT" })
+        )
+        expect(result).toBeInstanceOf(TransientLlmError)
+        expect((result as TransientLlmError).retryReason).toBe("transient")
+    })
+
+    it("undici UND_ERR_CONNECT_TIMEOUT (direct code) → TransientLlmError", () => {
+        const result = classifyOllamaError(
+            errWith({ code: "UND_ERR_CONNECT_TIMEOUT" })
+        )
+        expect(result).toBeInstanceOf(TransientLlmError)
+        expect((result as TransientLlmError).retryReason).toBe("transient")
+    })
+
+    it("a `fetch failed` wrapper whose .cause.code is UND_ERR_HEADERS_TIMEOUT → Transient (the real-world v2 fan-out failure)", () => {
+        const cause = errWith({ code: "UND_ERR_HEADERS_TIMEOUT" })
+        const wrapper = new Error("fetch failed") as Error & { cause?: unknown }
+        wrapper.cause = cause
+        const result = classifyOllamaError(wrapper)
+        expect(result).toBeInstanceOf(TransientLlmError)
+        expect((result as TransientLlmError).retryReason).toBe("transient")
+    })
 })

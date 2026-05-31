@@ -16,6 +16,16 @@
 //   * `reasoningEffort` is ignored (no Ollama analogue);
 //     `maxOutputTokens` maps to `options.num_predict` (positive values
 //     only — never 0; -1/-2 are Ollama sentinels we never emit).
+//   * Thinking is left ON (the SDK/model default) — a prior finding
+//     showed `think: false` degrades structured-output fidelity (the
+//     model drops the required object wrapper → bare array, failing
+//     `Value.Check`). This trades latency (thinking-on stages can run
+//     several minutes) for correctness; the generous `requestTimeoutMs`
+//     default (see below) accommodates the latency.
+//   * A generous per-request timeout (`requestTimeoutMs`, default 20 min)
+//     is applied via a PER-PROVIDER undici `Agent` passed as the SDK
+//     client's `fetch` — never `setGlobalDispatcher`; a library must not
+//     mutate global state. See `./timeout-fetch.ts`.
 //   * Errors are classified by `./errors.ts` #classifyOllamaError, which
 //     carries the same `retryReason` tags + lib failure-codes as the
 //     OpenAI provider. No `ollama → openai` dependency, no lib change.
@@ -38,6 +48,7 @@ import {
     debugLlmResponse,
 } from "../../lib/pipelines/debug-log.js"
 import { typeboxToJsonSchema } from "./structured-output.js"
+import { buildTimeoutFetch } from "./timeout-fetch.js"
 import {
     NonRetryableLlmError,
     SchemaValidationLlmError,
@@ -62,18 +73,27 @@ const DEFAULT_MAX_TOOL_ROUNDS = 6
 // from a truncated prompt), and its per-model default is often ~4096,
 // well under a real multi-KB ingestion prompt. See `TOllamaProviderConfig.numCtx`.
 const DEFAULT_NUM_CTX = 32768
+// Generous per-request timeout for local thinking models. undici's 300s
+// default aborts long structured-extraction generations with
+// UND_ERR_HEADERS_TIMEOUT; 20 min gives qwen3.6-with-thinking room. The
+// timeout is applied via a PER-PROVIDER undici Agent (never global state)
+// — see ./timeout-fetch.ts and TOllamaProviderConfig.requestTimeoutMs.
+const DEFAULT_REQUEST_TIMEOUT_MS = 1_200_000
 
 export class OllamaProvider implements TLlmProvider {
     private readonly config: TOllamaProviderConfig
     private clientPromise: Promise<TOllamaClient> | null = null
     private readonly maxToolRounds: number
     private readonly numCtx: number
+    private readonly requestTimeoutMs: number
 
     constructor(config?: TOllamaProviderConfig) {
         this.config = config ?? {}
         this.maxToolRounds =
             this.config.maxToolCallRounds ?? DEFAULT_MAX_TOOL_ROUNDS
         this.numCtx = this.config.numCtx ?? DEFAULT_NUM_CTX
+        this.requestTimeoutMs =
+            this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
     }
 
     async respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>> {
@@ -270,9 +290,12 @@ export class OllamaProvider implements TLlmProvider {
 
     private async importAndConstructClient(): Promise<TOllamaClient> {
         const baseUrl = this.config.baseUrl ?? DEFAULT_BASE_URL
+        const importOllama =
+            this.config.importOllama ??
+            (() => import("ollama") as unknown as Promise<TOllamaModule>)
         let mod: TOllamaModule
         try {
-            mod = (await import("ollama")) as unknown as TOllamaModule
+            mod = await importOllama()
         } catch (err) {
             throw new Error(
                 "OllamaProvider: the optional `ollama` package is not installed. " +
@@ -283,7 +306,20 @@ export class OllamaProvider implements TLlmProvider {
                     }`
             )
         }
-        return new mod.Ollama({ host: baseUrl })
+        // Per-provider raised-timeout fetch (no global mutation). Falls
+        // back to the SDK default fetch when undici is unavailable or the
+        // caller set requestTimeoutMs to 0.
+        const timeoutFetch = await buildTimeoutFetch(
+            this.requestTimeoutMs,
+            this.config.importUndici
+        )
+        const sdkConfig: { host: string; fetch?: typeof fetch } = {
+            host: baseUrl,
+        }
+        if (timeoutFetch) {
+            sdkConfig.fetch = timeoutFetch
+        }
+        return new mod.Ollama(sdkConfig)
     }
 }
 

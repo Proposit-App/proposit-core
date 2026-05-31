@@ -85,6 +85,7 @@
         "typedoc": "^0.28.18",
         "typescript": "^6.0.2",
         "typescript-eslint": "^8.58.0",
+        "undici": "^8.3.0",
         "vitest": "^4.1.2"
     },
     "packageManager": "pnpm@10.23.0",
@@ -95,13 +96,17 @@
     },
     "peerDependencies": {
         "ollama": ">=0.5.0",
-        "openai": ">=4.0.0"
+        "openai": ">=4.0.0",
+        "undici": ">=6.0.0"
     },
     "peerDependenciesMeta": {
         "ollama": {
             "optional": true
         },
         "openai": {
+            "optional": true
+        },
+        "undici": {
             "optional": true
         }
     }

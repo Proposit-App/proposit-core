@@ -14,6 +14,9 @@
 //
 //   * `TransientLlmError` — `retryReason: "transient"`. Genuinely
 //     transient local hiccups: mid-stream `ECONNRESET`/socket drop,
+//     undici timeout cause-codes (`UND_ERR_HEADERS_TIMEOUT` /
+//     `UND_ERR_BODY_TIMEOUT` / `UND_ERR_CONNECT_TIMEOUT` — a long local
+//     thinking-model generation that outran the dispatcher timeout),
 //     cold-model-load 5xx (model pulled but still loading into VRAM),
 //     generic 5xx. Retried by the default policy.
 //   * `RateLimitLlmError` — `retryReason: "rate_limit"`. A local
@@ -164,6 +167,9 @@ const MODEL_NOT_FOUND_PATTERN =
  *   - context-overflow/eval err → NonRetryable (deterministic; never
  *                                 SchemaValidationLlmError).
  *   - `ECONNRESET` / socket drop→ Transient.
+ *   - undici timeout cause-codes→ Transient (`UND_ERR_HEADERS_TIMEOUT` /
+ *     `UND_ERR_BODY_TIMEOUT` / `UND_ERR_CONNECT_TIMEOUT`; a long local
+ *     thinking-model generation outran the timeout — retryable).
  *   - cold-load / generic 5xx   → Transient.
  *   - 429                       → RateLimit (remote/proxy setups).
  *   - anything else             → NonRetryable (safe fail-fast default).
@@ -183,7 +189,21 @@ export function classifyOllamaError(err: unknown): Error {
     }
 
     // Mid-stream socket drop / transient connection loss — retryable.
-    if (code === "ECONNRESET" || code === "ETIMEDOUT" || code === "EPIPE") {
+    // Includes undici's timeout cause-codes: a long local thinking-model
+    // generation that outruns the dispatcher's headers/body timeout (or a
+    // connect timeout) is transient against a still-working daemon, NOT a
+    // deterministic failure. The framework's default `retryOn: ["transient"]`
+    // then retries instead of dying `LLM_NON_RETRYABLE_ERROR`. undici wraps
+    // these as a `TypeError: fetch failed` whose `.cause.code` is the
+    // `UND_ERR_*` value — `nodeCodeOf` already probes one level of `.cause`.
+    if (
+        code === "ECONNRESET" ||
+        code === "ETIMEDOUT" ||
+        code === "EPIPE" ||
+        code === "UND_ERR_HEADERS_TIMEOUT" ||
+        code === "UND_ERR_BODY_TIMEOUT" ||
+        code === "UND_ERR_CONNECT_TIMEOUT"
+    ) {
         return new TransientLlmError({
             message: `Transient connection error talking to the Ollama daemon (${code}): ${message}`,
         })
