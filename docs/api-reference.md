@@ -1424,6 +1424,213 @@ Returns extension fields to spread onto every axiom connection added to `ClaimAx
 
 ---
 
+## Pipeline & providers
+
+_Since v1.1.0._
+
+The pipeline framework runs a DAG of processing stages — some deterministic, some backed by an LLM — and reports structured per-stage failures. It is **provider-agnostic**: stages depend only on the abstract `TLlmProvider` interface, and concrete providers are shipped as optional subpath extensions. `src/lib/` carries zero third-party SDK imports; the SDK-coupled providers live under `src/extensions/` and declare their SDKs as optional `peerDependencies`.
+
+The framework primitives, the `TLlmProvider` interface, the OpenAI provider, the failure-code constants, and the default ingestion-pipeline factories are all re-exported from the package root for single-import ergonomics. The two concrete providers additionally have dedicated subpath exports (`@proposit/proposit-core/extensions/openai`, `@proposit/proposit-core/extensions/ollama`) for callers that prefer to tree-shake provider machinery.
+
+### `TLlmProvider`
+
+```typescript
+type TLlmProvider = {
+    respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>>
+}
+```
+
+The single-method abstraction every stage calls. `respond<T>` takes a structured-output request and returns the parsed output plus token usage. The framework never depends on a concrete provider — pass any `TLlmProvider` implementation (production OpenAI, dev-only Ollama, or a test mock) as the `llm` dependency to `executePipeline`.
+
+```typescript
+type TLlmRequest<T> = {
+    /** Free-form for forward-compat. The known set is `TLlmModel`. */
+    model: string
+    reasoningEffort?: TReasoningEffort
+    systemPrompt: string
+    userMessage: string
+    outputSchema: TSchema
+    tools?: readonly TToolSpec[]
+    maxOutputTokens?: number
+    signal?: AbortSignal
+    _typeMarker?: T // phantom — always `undefined` at runtime
+}
+
+type TLlmResponse<T> = {
+    output: T
+    tokenUsage: TLlmTokenUsage // { input, output, reasoning? }
+    rawResponseId?: string
+}
+```
+
+`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local Ollama tag like `"qwen3.6:latest"` — without a core change. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
+
+`TToolSpec` is a discriminated union over `kind`:
+
+| `kind`        | Shape                                                                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`  | `{ kind: "web_search" }`                                                                                                                       |
+| `file_search` | `{ kind: "file_search"; vectorStoreId: string }`                                                                                               |
+| `mcp`         | `{ kind: "mcp"; serverUrl: string; toolName? }`                                                                                                |
+| `function`    | `{ kind: "function"; name; description; parameters: TSchema; handler: (args) => … }` — local function tool driven by the provider's agent loop |
+
+No ingestion stage uses tools today; the surface is provided for callers composing custom pipelines.
+
+---
+
+### `executePipeline(pipeline, input, deps)` → `Promise<TPipelineResult<TOutput>>`
+
+Orchestrates a `TPipeline`'s stage DAG and returns the assembled result. `deps` is `TExecutePipelineDeps`:
+
+- `llm: TLlmProvider` — required; the provider every `llmStage` calls.
+- `generateId?: () => string` — ID generator threaded into `ctx.generateId` (defaults to `globalThis.crypto.randomUUID`).
+- `signal?: AbortSignal` — mid-flight cancellation. Aborted stages surface as `skipped`, not `failed`, so callers can distinguish cancellation from a genuine error.
+- `onEvent?: (event: TPipelineEvent) => void` — observability hook (see `TPipelineEvent` below).
+- `concurrencyLimit?: number` — max stages run in parallel. Default `4`.
+
+The executor validates `input` against `pipeline.inputSchema` and the DAG (cycle / self-dep / unknown-dep / duplicate-id checks) up front. DAG-misconfiguration and input-schema rejection throw `PipelineConfigurationError`; everything else is reported as a `TProcessingFailure` rather than thrown. Each stage output is validated against its `outputSchema`; a schema-invalid output retries per the retry policy, then becomes a `failed` outcome with code `OUTPUT_SCHEMA_INVALID`. Failure propagation is required-vs-optional aware: a `failed`/`skipped` upstream marks required dependents as `skipped`, while `optional(id)`-wrapped dependents still run (with `ctx.get(id)` returning `undefined`). `pipeline.finalize` has its own `dependsOn`; when any required dep is `skipped` or `failed`, finalize is bypassed and the result carries `output: null`.
+
+---
+
+### Framework types
+
+| Type                            | Description                                                                                                                                                                            |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TPipeline<TInput, TOutput>`    | `{ id, version, inputSchema, outputSchema, stages, finalize }`. The unit `executePipeline` runs.                                                                                       |
+| `TStage<TOutput>`               | `{ id, dependsOn, outputSchema, run(ctx) }`. A single DAG node. Build via `deterministicStage` / `llmStage` / `subPipelineStage`.                                                      |
+| `TStageContext`                 | Passed to each stage's `run`: `input`, `get<T>(stageId)`, `stageStatus(stageId)`, `llm`, `generateId`, `signal`, `emit(event)`, `addFailure(f)`.                                       |
+| `TProcessingFailure`            | `{ stage, code, message, severity: "warning" \| "error", context? }`. The structured failure record. `code` is a bare `string` — match it against the exported failure-code constants. |
+| `TPipelineResult<TOutput>`      | `{ output: TOutput \| null, failures, stageOutcomes, tokenUsage? }`. `output` is `null` when finalize was bypassed.                                                                    |
+| `TPipelineEvent`                | Discriminated union over `kind`: `pipeline:start` / `pipeline:end` / `stage:start` / `stage:end` / `stage:retry` / `stage:llm-call`.                                                   |
+| `TDepSpec` / `TOptionalDep`     | A dependency is a bare stage-id `string` or an `optional(id)` wrapper. `optional(id)`, `isOptionalDep`, `depId` are exported helpers.                                                  |
+| `TRetryPolicy` / `TRetryReason` | Retry configuration; `TRetryReason` is `"schema_validation" \| "transient" \| "rate_limit" \| "quota_exhausted"`.                                                                      |
+
+The `stage:llm-call` event (since v1.2.0) fires after every LLM-call attempt, carrying the actual `prompts` sent (including the retry-suffix appended on attempt 2+), the raw `output`, the call's `tokenUsage`, and an optional `validationError` set whenever the output failed `outputSchema` validation. Its presence is the validation-fail signal; the payload shape is otherwise identical on success and failure. Deterministic stages and the thrown-error branch do not emit it.
+
+### `DEFAULT_RETRY_POLICY`
+
+```typescript
+const DEFAULT_RETRY_POLICY: TRetryPolicy = {
+    maxAttempts: 2,
+    backoffMs: 500,
+    retryOn: ["schema_validation", "transient"],
+    maxAppendedErrorBytes: 2048,
+}
+```
+
+The policy `llmStage` applies unless overridden. Note that `rate_limit` and `quota_exhausted` are **not** in the default `retryOn` — both fail fast on attempt 1. (A retryable transient and a schema-validation failure each get one retry.)
+
+### Failure-code constants
+
+Exported from the SDK-free `src/lib/pipelines/failure-codes.ts` (and re-exported from the package root) so a consumer's AI-budget breaker can match an imported value rather than a message substring. `TProcessingFailure.code` is a bare `string`; these are the stable wire-format values it takes for LLM-stage failures.
+
+| Constant                  | Meaning                                                                                                                  | Retryable?                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| `OUTPUT_SCHEMA_INVALID`   | Stage output failed local TypeBox `outputSchema` validation.                                                             | Yes (one retry by default)    |
+| `LLM_TRANSIENT_ERROR`     | Transient provider failure (5xx, network).                                                                               | Yes (by default)              |
+| `LLM_RATE_LIMITED`        | Transient provider throttling (HTTP 429, non-quota).                                                                     | No (not in default `retryOn`) |
+| `LLM_QUOTA_EXHAUSTED`     | Persistent provider budget exhaustion (OpenAI `insufficient_quota` 429). The signal a global AI-budget breaker trips on. | No (fail-fast)                |
+| `LLM_NON_RETRYABLE_ERROR` | Unrecoverable provider failure (e.g. 400/401/403).                                                                       | No                            |
+| `LLM_UNKNOWN_ERROR`       | Retry loop exited without captured error context (defensive).                                                            | —                             |
+
+---
+
+### `@proposit/proposit-core/extensions/openai`
+
+The **production default** provider. Calls the OpenAI Responses API over raw `fetch` (no `openai` SDK runtime dependency for the request path), with an inlined TypeBox → strict-mode JSON Schema converter and a function-tool agent loop. `openai` is declared as an **optional `peerDependency`**.
+
+#### `createOpenAiResponsesProvider(options)` → `TLlmProvider`
+
+```typescript
+type TCreateOpenAiResponsesProviderOptions = {
+    apiKey: string
+    baseUrl?: string // default https://api.openai.com/v1/responses
+    fetch?: TOpenAiFetch // defaults to globalThis.fetch; inject for tests / polyfills
+    maxToolCallRounds?: number // function-tool agent-loop cap; default 6
+}
+```
+
+Throws at construction if no `fetch` is available and none is injected. The provider routes HTTP 429s with a structured `insufficient_quota` body to `QuotaExhaustedLlmError` (`retryReason: "quota_exhausted"`, code `LLM_QUOTA_EXHAUSTED`); every other or unparseable 429 stays `RateLimitLlmError` (the safe default).
+
+**Error classes** (re-exported from the package root and this subpath; `instanceof`-matchable for finer-grained observability): `NonRetryableLlmError`, `QuotaExhaustedLlmError`, `RateLimitLlmError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`. The subpath also exports `typeboxToOpenAiSchema` (the strict-mode converter) and its `TOpenAiJsonSchema` type.
+
+---
+
+### `@proposit/proposit-core/extensions/ollama`
+
+A second concrete `TLlmProvider` for running the LLM stack against a local [Ollama](https://ollama.com) daemon (e.g. `qwen3.6:latest`) at zero API cost. **Dev/test only — production stays on OpenAI, which remains the default everywhere.**
+
+Surfaced **only** at the `@proposit/proposit-core/extensions/ollama` subpath — never the package root — because its error classes intentionally share names with the OpenAI ones and would collide. Uses the official `ollama` SDK (`>=0.5.0`) as an **optional `peerDependency`**; a missing package throws an actionable construction-time error.
+
+#### `new OllamaProvider(config?)` → `TLlmProvider`
+
+```typescript
+type TOllamaProviderConfig = {
+    baseUrl?: string // daemon URL, default http://localhost:11434
+    client?: TOllamaClient // pre-built SDK client; primarily a test seam
+    numCtx?: number // → options.num_ctx, default 32768
+    maxToolCallRounds?: number // function-tool agent-loop cap, default 6
+}
+```
+
+**`numCtx` is set generously on purpose.** Ollama **silently truncates** any prompt longer than `num_ctx` — no error is raised; the model emits schema-valid JSON from the truncated prompt, which passes `Value.Check` and yields a quietly-wrong parse. Per-model defaults are often ~4096, well below a real multi-KB ingestion prompt, so the generous 32768 default keeps "run the whole pipeline locally on real text" honest. Behavioral differences from the OpenAI provider: `maxOutputTokens` maps to `num_predict` (positive only); `reasoningEffort` is ignored; `rawResponseId` is left undefined; `signal` is honored via the SDK client's `abort()`.
+
+**Error classes** are surfaced from this subpath only and mirror the OpenAI names as **distinct classes** (the framework classifies by the `retryReason` tag, not class identity): `NonRetryableLlmError`, `RateLimitLlmError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`, plus `classifyOllamaError`. `classifyOllamaError` maps `ECONNREFUSED` / 404 / context-overflow → `NonRetryableLlmError` (overflow is deterministic — never the transient-tagged `SchemaValidationLlmError`) and `ECONNRESET` / cold-VRAM-load 5xx → `TransientLlmError`. The subpath also exports `typeboxToJsonSchema` (a standard-JSON-schema converter — `Type.Optional` keys are omitted from `required`, with no forced `additionalProperties: false`) and its `TOllamaJsonSchema` type.
+
+---
+
+### Argument-ingestion factories
+
+The default ingestion pipelines that turn natural-language text into a `TParsedArgumentResponse` (consumable by `ArgumentParser.build()`, above). Re-exported from the package root and from `@proposit/proposit-core/extensions/argument-ingestion`.
+
+#### `createIngestionV1Pipeline(extension, options?)` → `TPipeline<TIngestionInput, TParsedArgumentResponse>`
+
+_Since v1.1.0._ Single-shot pipeline: one `llmStage` (`parse-argument`) calls the configured LLM with a system prompt built from `extension.responseSchema` and the raw input text, then `finalize` merges the response. `options` is `TCreateIngestionV1PipelineOptions`: `model?` (overrides the default `gpt-5.4`), `customInstructions?`, and `llm?: TIngestionLlmOptions`.
+
+#### `createIngestionV2Pipeline(extension, options?)` → `TPipeline<TIngestionInput, TParsedArgumentResponse>`
+
+_Since v1.3.0._ Multi-stage pipeline: a 12-stage DAG (4 deterministic + 8 LLM) — `segmentation` → claim/citation/axiom detection → canonicalization → classification / reference-validation / variable-assignment → relation-extraction → conclusion-selection → formula-compilation → formula-validation → `finalize`. Same `extension` parameterization and same `TParsedArgumentResponse` output shape as v1, so downstream `ArgumentParser.build()` consumers don't change. `options` is `TCreateIngestionV2PipelineOptions` (`{ llm?: TIngestionLlmOptions }`).
+
+#### `basicsExtension`
+
+The default `TIngestionExtension` (the schema bundle a factory consumes). Pairs with `@proposit/proposit-core/extensions/basics` for the basic argument schemas. A `TIngestionExtension` carries `responseSchema` (the LLM's full output schema) plus per-entity extension slots (`claimSchema`, `variableSchema`, `premiseSchema`, `argumentSchema`) that the v2 stages compose.
+
+#### LLM-options seam — `TIngestionLlmOptions` / `TLlmStageOptionsOverride`
+
+Both factories accept an `llm?: TIngestionLlmOptions` knob that threads per-stage LLM overrides through every LLM stage without forking the stages:
+
+```typescript
+type TIngestionLlmOptions = {
+    defaults?: TLlmStageOptionsOverride // applies to every LLM stage
+    overrides?: Record<string, TLlmStageOptionsOverride> // keyed by stage id
+}
+
+type TLlmStageOptionsOverride = {
+    maxOutputTokens?: number
+    reasoningEffort?: TReasoningEffort // OpenAI-specific; ignored by Ollama
+    model?: string
+}
+```
+
+The merge order is **stage-override > pipeline-default > the stage's built-in default**. The `model?` knob (added v1.6.0) is the load-bearing seam for retargeting a whole pipeline at a different backend in one line — e.g. pointing v2 at a local Ollama model for cost-free local development:
+
+```typescript
+import {
+    createIngestionV2Pipeline,
+    basicsExtension,
+} from "@proposit/proposit-core"
+
+const pipeline = createIngestionV2Pipeline(basicsExtension, {
+    llm: { defaults: { model: "qwen3.6:latest" } },
+})
+// then run with the Ollama provider as the `llm` dependency:
+// await executePipeline(pipeline, { text }, { llm: new OllamaProvider() })
+```
+
+Each stage keeps its own hard-coded `gpt-5.x` default when no override is supplied, so production behavior is unchanged. (v1's independent `model?` on `TCreateIngestionV1PipelineOptions` predates this seam and remains separate by design.)
+
+---
+
 ## Types
 
 ### `TExpressionInput`
