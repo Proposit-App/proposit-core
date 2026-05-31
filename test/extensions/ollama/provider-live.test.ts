@@ -190,4 +190,84 @@ describeIf("OllamaProvider — live daemon (RUN_LOCAL_LLM_TESTS=1)", () => {
             }
         }
     )
+
+    it(
+        "(d) streaming completes a multi-KB ingestion-sized prompt without a 300s timeout",
+        // Ollama streaming (Level 1a) keeps the connection alive by
+        // delivering tokens incrementally, circumventing undici's
+        // default 300s body-timeout that fires on a silent connection.
+        // This test drives a deliberately large prompt through the
+        // existing (streaming-by-default) provider and asserts the
+        // output is structurally valid — not latency, not exact tokens.
+        { timeout: 600_000 },
+        async () => {
+            // Multi-KB ingestion-sized prompt: a several-paragraph
+            // argument text large enough to stress the streaming path.
+            const paragraph =
+                "Philosophers have long debated the relationship between knowledge and justified belief. " +
+                "Plato defined knowledge as justified true belief, yet Gettier cases challenge this account. " +
+                "If a person has a justified belief that is true only by accident, do they really know? " +
+                "Many epistemologists argue that an additional condition is required beyond justification and truth. " +
+                "Some propose a causal theory: the believer's justification must be appropriately caused by the fact. " +
+                "Others favor a safety condition: the belief could not easily have been false given the circumstances. " +
+                "Still others endorse a sensitivity condition: if the proposition were false, the belief would be revised. " +
+                "Reliabilists focus on whether the belief-forming process reliably yields true beliefs in general. " +
+                "Virtue epistemologists locate the key property in the intellectual virtues of the knower. " +
+                "Despite these proposals, no single account has achieved consensus in the philosophical community."
+            const userMessage = [
+                paragraph,
+                paragraph,
+                paragraph,
+                paragraph,
+                paragraph,
+                paragraph,
+            ].join("\n\n")
+
+            // Schema mirrors a claim-extraction stage output — an array
+            // of records with a label and a boolean confidence flag.
+            const Schema = Type.Object({
+                claims: Type.Array(
+                    Type.Object({
+                        claimId: Type.String(),
+                        text: Type.String(),
+                        isPrimary: Type.Boolean(),
+                        kind: Type.Union([
+                            Type.Literal("premise"),
+                            Type.Literal("conclusion"),
+                            Type.Literal("background"),
+                        ]),
+                    })
+                ),
+            })
+            type TClaims = Static<typeof Schema>
+
+            const result = await provider.respond<TClaims>({
+                model: MODEL,
+                systemPrompt:
+                    "Extract the main claims from the philosophical text. " +
+                    "Return strict JSON matching the schema. No prose outside the JSON. " +
+                    "For each claim assign a stable claimId (c1, c2, ...), the verbatim or " +
+                    "paraphrased claim text, whether it is a primary thesis (isPrimary), " +
+                    'and a kind of "premise", "conclusion", or "background".',
+                userMessage,
+                outputSchema: Schema,
+            })
+
+            // Structural validity is the gate: streaming must deliver a
+            // complete, schema-valid JSON object, not a truncated fragment.
+            expect(
+                Value.Check(Schema, result.output),
+                `Streaming output failed the source TypeBox schema — the generation may have been truncated. Output: ${JSON.stringify(
+                    result.output
+                )}`
+            ).toBe(true)
+            expect(result.output.claims.length).toBeGreaterThan(0)
+            // Every claim respects the Union enum.
+            for (const claim of result.output.claims) {
+                expect(["premise", "conclusion", "background"]).toContain(
+                    claim.kind
+                )
+            }
+        }
+    )
 })
