@@ -82,6 +82,14 @@ export type TCreateOpenAiResponsesProviderOptions = {
      * count against this cap — they run server-side.
      */
     maxToolCallRounds?: number
+    /**
+     * Stream the foreground response over SSE and accumulate to the
+     * terminal envelope inside the provider. Defaults to **`true`** —
+     * gives connection-drop resilience and parity with the Ollama
+     * provider. No data-retention implications (unlike `backgroundMode`).
+     * Set `false` to restore the blocking `response.json()` path.
+     */
+    stream?: boolean
 }
 
 export function createOpenAiResponsesProvider(
@@ -96,6 +104,7 @@ export function createOpenAiResponsesProvider(
         )
     }
     const maxToolRounds = options.maxToolCallRounds ?? DEFAULT_MAX_TOOL_ROUNDS
+    const useStream = options.stream ?? true
 
     const respond = async <T>(
         req: TLlmRequest<T>
@@ -161,10 +170,30 @@ export function createOpenAiResponsesProvider(
                 body,
                 fetchImpl,
                 signal: req.signal,
+                stream: useStream,
             })
 
             lastResponseId = envelope.id ?? lastResponseId
             lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
+
+            if (envelope.status === "failed") {
+                const err = envelope.error
+                const message = `OpenAI Responses API returned status: "failed"${
+                    err?.code ? ` (code: ${err.code})` : ""
+                }: ${err?.message ?? "no error detail provided"}`
+                debugLlmFailure({
+                    stageId: debugStageId,
+                    model: req.model,
+                    errorName: "NonRetryableLlmError",
+                    errorMessage: message,
+                    status: envelope.status,
+                    tokenUsage: lastUsage,
+                })
+                // A terminal `failed` envelope is a definitive failure of
+                // *this* response — surface immediately rather than burn a
+                // retry. The `error.message` is preserved for the caller.
+                throw new NonRetryableLlmError({ message })
+            }
 
             // **Incomplete-envelope classification (v1.3.1).** When
             // the model stops before finishing, the Responses API
@@ -360,7 +389,18 @@ async function fetchResponseEnvelope(args: {
     body: TOpenAiResponsesRequestBody
     fetchImpl: TOpenAiFetch
     signal?: AbortSignal
+    stream: boolean
 }): Promise<TOpenAiResponsesEnvelope> {
+    if (args.stream) {
+        const response = await callOnce({
+            url: args.url,
+            apiKey: args.apiKey,
+            body: { ...args.body, stream: true },
+            fetchImpl: args.fetchImpl,
+            signal: args.signal,
+        })
+        return readSseEnvelope(response)
+    }
     const response = await callOnce({
         url: args.url,
         apiKey: args.apiKey,
@@ -506,6 +546,121 @@ function formatIncompleteMessage(reason: string): string {
 }
 
 // -- response parsing --
+
+const SSE_TERMINAL_EVENTS = new Set([
+    "response.completed",
+    "response.incomplete",
+    "response.failed",
+])
+
+/**
+ * Parse one SSE event block. Returns the embedded full `response`
+ * envelope when the event is a terminal Responses-API event
+ * (`response.completed` / `.incomplete` / `.failed`); otherwise
+ * `undefined`. The terminal events carry a `type` field inside the
+ * data JSON, so we key off that and ignore the `event:` line.
+ */
+function parseSseEvent(raw: string): TOpenAiResponsesEnvelope | undefined {
+    let eventType: string | undefined
+    const dataLines: string[] = []
+    for (const line of raw.split("\n")) {
+        if (line.startsWith(":")) continue // SSE comment line — ignore.
+        if (line.startsWith("event:")) {
+            eventType = line.slice(6).trim()
+        } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).replace(/^ /, ""))
+        }
+    }
+    if (dataLines.length === 0) return undefined
+    let parsed: { type?: string; response?: TOpenAiResponsesEnvelope }
+    try {
+        parsed = JSON.parse(dataLines.join("\n")) as {
+            type?: string
+            response?: TOpenAiResponsesEnvelope
+        }
+    } catch {
+        return undefined
+    }
+    // Prefer the discriminator inside the data JSON (Responses-API
+    // events carry `type` there); fall back to the SSE `event:` line so
+    // the parser is robust if the API ever sends the type only there.
+    // (No `[DONE]` sentinel handling — that is a Chat-Completions frame
+    // the Responses API does not emit.)
+    const type = parsed.type ?? eventType
+    if (type && SSE_TERMINAL_EVENTS.has(type) && parsed.response) {
+        return parsed.response
+    }
+    return undefined
+}
+
+/**
+ * Read an SSE `text/event-stream` body and return the envelope carried
+ * by the terminal event. A stream that ends with no terminal event
+ * (connection drop) throws `TransientLlmError` so the framework retries.
+ * `AbortError` from the underlying reader propagates verbatim so
+ * `llmStage` marks the stage `skipped`.
+ *
+ * Note: the event-separator scan assumes LF (`\n\n`) framing, which the
+ * OpenAI Responses API emits. Reuse against a strict CRLF-only SSE
+ * server would need the separator scan adjusted to `\r\n\r\n`.
+ */
+async function readSseEnvelope(
+    response: Response
+): Promise<TOpenAiResponsesEnvelope> {
+    const body = response.body
+    if (!body) {
+        throw new TransientLlmError({
+            message: "OpenAI streaming response carried no body.",
+        })
+    }
+    const reader = body.getReader() as ReadableStreamDefaultReader<Uint8Array>
+    const decoder = new TextDecoder()
+    let buffer = ""
+    let terminal: TOpenAiResponsesEnvelope | undefined
+    try {
+        for (;;) {
+            const chunk = await reader.read()
+            if (chunk.done) break
+            buffer += decoder.decode(chunk.value, { stream: true })
+            let sep = buffer.indexOf("\n\n")
+            while (sep !== -1) {
+                const rawEvent = buffer.slice(0, sep)
+                buffer = buffer.slice(sep + 2)
+                const env = parseSseEvent(rawEvent)
+                if (env) terminal = env
+                sep = buffer.indexOf("\n\n")
+            }
+        }
+    } catch (err) {
+        if (isAbortError(err)) {
+            throw err
+        }
+        throw new TransientLlmError({
+            message: `OpenAI streaming read failed: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+    // Flush any bytes the streaming decoder is still holding (an
+    // incomplete multi-byte UTF-8 sequence at the final chunk boundary),
+    // then scan for any remaining terminal frame.
+    buffer += decoder.decode()
+    let tailSep = buffer.indexOf("\n\n")
+    while (tailSep !== -1) {
+        const rawEvent = buffer.slice(0, tailSep)
+        buffer = buffer.slice(tailSep + 2)
+        const env = parseSseEvent(rawEvent)
+        if (env) terminal = env
+        tailSep = buffer.indexOf("\n\n")
+    }
+    if (!terminal) {
+        throw new TransientLlmError({
+            message:
+                "OpenAI streaming ended without a terminal response event (connection drop?).",
+        })
+    }
+    return terminal
+}
 
 type TParsedFunctionCall = {
     callId: string

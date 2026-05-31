@@ -112,6 +112,7 @@ describe("createOpenAiResponsesProvider — request shape", () => {
             .mockResolvedValue(buildSuccessResponse({ body: { answer: "hi" } }))
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -137,6 +138,7 @@ describe("createOpenAiResponsesProvider — request shape", () => {
             .mockResolvedValue(buildSuccessResponse({ body: { answer: "ok" } }))
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -173,6 +175,7 @@ describe("createOpenAiResponsesProvider — request shape", () => {
             .mockResolvedValue(buildSuccessResponse({ body: { answer: "ok" } }))
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -195,6 +198,7 @@ describe("createOpenAiResponsesProvider — request shape", () => {
             .mockResolvedValue(buildSuccessResponse({ body: { answer: "ok" } }))
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -217,6 +221,7 @@ describe("createOpenAiResponsesProvider — request shape", () => {
             .mockResolvedValue(buildSuccessResponse({ body: { answer: "ok" } }))
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -276,6 +281,7 @@ describe("createOpenAiResponsesProvider — request shape", () => {
             .mockResolvedValue(buildSuccessResponse({ body: { answer: "ok" } }))
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             baseUrl: "https://proxy.test/v1/responses",
             fetch: asFetch(fetchMock),
         })
@@ -307,6 +313,7 @@ describe("createOpenAiResponsesProvider — response parsing", () => {
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -335,6 +342,7 @@ describe("createOpenAiResponsesProvider — response parsing", () => {
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -367,6 +375,7 @@ describe("createOpenAiResponsesProvider — tool-call agent loop", () => {
 
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -467,6 +476,7 @@ describe("createOpenAiResponsesProvider — tool-call agent loop", () => {
 
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -536,6 +546,7 @@ describe("createOpenAiResponsesProvider — tool-call agent loop", () => {
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
             maxToolCallRounds: 3,
         })
@@ -567,6 +578,7 @@ describe("createOpenAiResponsesProvider — tool-call agent loop", () => {
             )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -872,6 +884,7 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -902,6 +915,7 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -940,6 +954,7 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -964,6 +979,7 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -996,6 +1012,7 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
         )
         const provider = createOpenAiResponsesProvider({
             apiKey: "sk-test",
+            stream: false,
             fetch: asFetch(fetchMock),
         })
 
@@ -1059,5 +1076,230 @@ describe("createOpenAiResponsesProvider — abort propagation", () => {
         ).rejects.toThrowError(/abort/i)
         const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
         expect(init.signal).toBe(controller.signal)
+    })
+})
+
+// -- SSE streaming helpers ------------------------------------------
+
+function sseResponse(events: { type: string; response: unknown }[]): Response {
+    const body = events
+        .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
+        .join("")
+    const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(new TextEncoder().encode(body))
+            controller.close()
+        },
+    })
+    return new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+    })
+}
+
+function sseResponseChunked(
+    events: { type: string; response: unknown }[],
+    splitAt: number
+): Response {
+    const full = events
+        .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
+        .join("")
+    const enc = new TextEncoder().encode(full)
+    const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(enc.slice(0, splitAt))
+            controller.enqueue(enc.slice(splitAt))
+            controller.close()
+        },
+    })
+    return new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+    })
+}
+
+describe("OpenAI provider — streaming (Level 1b)", () => {
+    it("reconstructs the terminal envelope from SSE and returns the parsed output", async () => {
+        const captured: { url: string; init: RequestInit }[] = []
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: (url, init) => {
+                captured.push({ url, init })
+                return Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.completed",
+                            response: {
+                                id: "resp_1",
+                                status: "completed",
+                                output: [
+                                    {
+                                        type: "message",
+                                        content: [
+                                            {
+                                                type: "output_text",
+                                                text: JSON.stringify({
+                                                    answer: "streamed",
+                                                }),
+                                            },
+                                        ],
+                                    },
+                                ],
+                                usage: {
+                                    input_tokens: 11,
+                                    output_tokens: 3,
+                                },
+                            },
+                        },
+                    ])
+                )
+            },
+        })
+
+        const res = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        expect(res.output).toEqual({ answer: "streamed" })
+        expect(res.tokenUsage).toEqual({ input: 11, output: 3 })
+        const sentBody = JSON.parse(captured[0].init.body as string) as {
+            stream?: boolean
+        }
+        expect(sentBody.stream).toBe(true)
+    })
+
+    it("throws TransientLlmError when the stream ends without a terminal event", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.output_text.delta",
+                            response: { delta: "partial" },
+                        },
+                    ])
+                ),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("restores the blocking path when stream is false", async () => {
+        const captured: { init: RequestInit }[] = []
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            stream: false,
+            fetch: (_url, init) => {
+                captured.push({ init })
+                return Promise.resolve(
+                    new Response(
+                        JSON.stringify({
+                            id: "resp_b",
+                            status: "completed",
+                            output: [
+                                {
+                                    type: "message",
+                                    content: [
+                                        {
+                                            type: "output_text",
+                                            text: JSON.stringify({
+                                                answer: "blk",
+                                            }),
+                                        },
+                                    ],
+                                },
+                            ],
+                            usage: { input_tokens: 1, output_tokens: 1 },
+                        }),
+                        { status: 200 }
+                    )
+                )
+            },
+        })
+        const res = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(res.output).toEqual({ answer: "blk" })
+        const sentBody = JSON.parse(captured[0].init.body as string) as {
+            stream?: boolean
+        }
+        expect(sentBody.stream).toBeUndefined()
+    })
+
+    it("maps a terminal response.failed event to NonRetryableLlmError", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.failed",
+                            response: {
+                                id: "resp_f",
+                                status: "failed",
+                                error: {
+                                    code: "server_error",
+                                    message: "boom",
+                                },
+                            },
+                        },
+                    ])
+                ),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(NonRetryableLlmError)
+    })
+
+    it("reconstructs a terminal envelope split across read() chunks", async () => {
+        const completed = {
+            type: "response.completed",
+            response: {
+                id: "resp_split",
+                status: "completed",
+                output: [
+                    {
+                        type: "message",
+                        content: [
+                            {
+                                type: "output_text",
+                                text: JSON.stringify({ answer: "split" }),
+                            },
+                        ],
+                    },
+                ],
+                usage: { input_tokens: 2, output_tokens: 1 },
+            },
+        }
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            // split mid-frame so the buffering path is exercised
+            fetch: () => Promise.resolve(sseResponseChunked([completed], 40)),
+        })
+        const res = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(res.output).toEqual({ answer: "split" })
     })
 })

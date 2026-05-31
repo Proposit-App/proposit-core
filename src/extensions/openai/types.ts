@@ -65,6 +65,9 @@ export type TOpenAiResponsesRequestBody = {
     tools?: TOpenAiTool[]
     max_output_tokens?: number
     reasoning?: { effort: "minimal" | "low" | "medium" | "high" }
+    stream?: boolean
+    background?: boolean
+    store?: boolean
 }
 
 export type TOpenAiOutputContentBlock = {
