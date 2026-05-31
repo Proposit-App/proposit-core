@@ -16,6 +16,7 @@ import type {
     TOllamaChatRequest,
     TOllamaChatResponse,
     TOllamaClient,
+    TUndiciModule,
 } from "../../../src/extensions/ollama/types.js"
 
 const simpleSchema = Type.Object({
@@ -394,12 +395,14 @@ describe("OllamaProvider — per-provider request timeout", () => {
         const capturedAgentOptions: { value?: unknown } = {}
         const capturedOllamaConfig: { value?: unknown } = {}
 
-        const fakeUndici = {
+        const fakeUndici: TUndiciModule = {
             Agent: class {
                 constructor(options: unknown) {
                     capturedAgentOptions.value = options
                 }
             },
+            fetch: (() =>
+                Promise.resolve(new Response("{}"))) as unknown as typeof fetch,
         }
         const fakeOllamaModule = {
             Ollama: class {
@@ -441,12 +444,14 @@ describe("OllamaProvider — per-provider request timeout", () => {
 
     it("honors an explicit requestTimeoutMs override on the Agent", async () => {
         const capturedAgentOptions: { value?: unknown } = {}
-        const fakeUndici = {
+        const fakeUndici: TUndiciModule = {
             Agent: class {
                 constructor(options: unknown) {
                     capturedAgentOptions.value = options
                 }
             },
+            fetch: (() =>
+                Promise.resolve(new Response("{}"))) as unknown as typeof fetch,
         }
         const fakeOllamaModule = {
             Ollama: class {
@@ -483,7 +488,7 @@ describe("OllamaProvider — per-provider request timeout", () => {
 
     it("constructs the SDK client without a custom fetch when requestTimeoutMs is 0", async () => {
         const capturedOllamaConfig: { value?: unknown } = {}
-        const fakeUndici = {
+        const fakeUndici: TUndiciModule = {
             Agent: class {
                 constructor() {
                     throw new Error(
@@ -491,6 +496,9 @@ describe("OllamaProvider — per-provider request timeout", () => {
                     )
                 }
             },
+            fetch: (() => {
+                throw new Error("fetch must not be used when timeout is 0")
+            }) as unknown as typeof fetch,
         }
         const fakeOllamaModule = {
             Ollama: class {

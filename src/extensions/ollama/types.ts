@@ -104,6 +104,15 @@ export type TUndiciAgentOptions = {
 export type TUndiciDispatcher = object
 export type TUndiciModule = {
     Agent: new (options: TUndiciAgentOptions) => TUndiciDispatcher
+    /**
+     * undici's own `fetch`. The raised-timeout `Agent` MUST be passed as
+     * a `dispatcher` to *this* fetch — the one from the same undici
+     * module the `Agent` was constructed from. Node's bundled-undici
+     * global `fetch` rejects a foreign-undici `Agent` dispatcher with
+     * `UND_ERR_INVALID_ARG`, so the base fetch and the dispatcher must
+     * come from the same undici instance. See `./timeout-fetch.ts`.
+     */
+    fetch: typeof fetch
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
