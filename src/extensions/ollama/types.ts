@@ -28,6 +28,7 @@ export type TOllamaChatMessage = {
 
 export type TOllamaChatResponse = {
     message: TOllamaChatMessage
+    done?: boolean
     prompt_eval_count?: number
     eval_count?: number
 }
@@ -48,7 +49,7 @@ export type TOllamaChatRequest = {
     messages: TOllamaChatMessage[]
     format?: string | object
     tools?: TOllamaToolWire[]
-    stream?: false
+    stream?: boolean
     options?: {
         temperature?: number
         num_predict?: number
@@ -65,7 +66,9 @@ export type TOllamaChatRequest = {
  * injection seam.
  */
 export type TOllamaClient = {
-    chat(request: TOllamaChatRequest): Promise<TOllamaChatResponse>
+    chat(
+        request: TOllamaChatRequest
+    ): Promise<TOllamaChatResponse | AsyncIterable<TOllamaChatResponse>>
     abort(): void
 }
 
@@ -178,6 +181,17 @@ export type TOllamaProviderConfig = {
      * and inputs are known to be small.
      */
     numCtx?: number
+    /**
+     * Stream the `chat()` generation and accumulate the chunks inside
+     * the provider, returning a single synthesized response. Defaults
+     * to **`true`** — streaming is the primary fix for the hardcoded
+     * ~300s non-streaming Ollama timeout (ollama/ollama#5081): headers
+     * and the first chunk arrive immediately and undici's `bodyTimeout`
+     * resets per chunk, so a long local thinking-model generation is no
+     * longer aborted mid-flight. Set `false` to restore the legacy
+     * single one-shot (`stream: false`) request.
+     */
+    stream?: boolean
     /**
      * Cap on function-tool agent-loop round-trips before throwing
      * `ToolLoopExhaustedError`. Defaults to 6, mirroring the OpenAI

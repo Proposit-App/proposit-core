@@ -57,6 +57,17 @@ function mockClient(args: {
     }
 }
 
+function streamOf(chunks: TOllamaChatResponse[]): AsyncIterable<TOllamaChatResponse> {
+    return {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async *[Symbol.asyncIterator]() {
+            for (const c of chunks) {
+                yield c
+            }
+        },
+    }
+}
+
 describe("OllamaProvider — request shape", () => {
     it("sends model, system+user messages, format schema, temperature 0", async () => {
         const captured: TOllamaChatRequest[] = []
@@ -81,7 +92,7 @@ describe("OllamaProvider — request shape", () => {
         expect(captured).toHaveLength(1)
         const req = captured[0]
         expect(req.model).toBe("qwen3.6:latest")
-        expect(req.stream).toBe(false)
+        expect(req.stream).toBe(true)
         expect(req.messages).toEqual([
             { role: "system", content: "system here" },
             { role: "user", content: "user here" },
@@ -529,6 +540,120 @@ describe("OllamaProvider — per-provider request timeout", () => {
         expect(
             (capturedOllamaConfig.value as { fetch?: unknown }).fetch
         ).toBeUndefined()
+    })
+})
+
+describe("OllamaProvider — streaming (Level 1a)", () => {
+    it("accumulates streamed content into one parsed result and reads usage from the final chunk", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const full = JSON.stringify({ answer: "hello world" })
+        const mid = Math.floor(full.length / 2)
+        const provider = new OllamaProvider({
+            client: {
+                chat: (req: TOllamaChatRequest) => {
+                    captured.push(req)
+                    return Promise.resolve(
+                        streamOf([
+                            {
+                                message: {
+                                    role: "assistant",
+                                    content: full.slice(0, mid),
+                                },
+                                done: false,
+                                // Stale intermediate counts MUST be
+                                // overridden by the final chunk
+                                // (last-wins, not summed). The assertion
+                                // below expects 42/7, not 1041/1006.
+                                prompt_eval_count: 999,
+                                eval_count: 999,
+                            },
+                            {
+                                message: {
+                                    role: "assistant",
+                                    content: full.slice(mid),
+                                },
+                                done: true,
+                                prompt_eval_count: 42,
+                                eval_count: 7,
+                            },
+                        ])
+                    )
+                },
+                abort: noop,
+            },
+            stream: true,
+        })
+
+        const res = await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        expect(res.output).toEqual({ answer: "hello world" })
+        expect(res.tokenUsage).toEqual({ input: 42, output: 7 })
+        expect(captured[0].stream).toBe(true)
+    })
+
+    it("falls back to the one-shot path when stream is false", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const provider = new OllamaProvider({
+            client: mockClient({
+                onChat: (req) => {
+                    captured.push(req)
+                    return Promise.resolve(okResponse({ body: { answer: "x" } }))
+                },
+            }),
+            stream: false,
+        })
+        const res = await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(res.output).toEqual({ answer: "x" })
+        expect(captured[0].stream).toBe(false)
+    })
+
+    it("defaults stream to true when no knob is passed", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const provider = new OllamaProvider({
+            client: mockClient({
+                onChat: (req) => {
+                    captured.push(req)
+                    return Promise.resolve(okResponse({ body: { answer: "x" } }))
+                },
+            }),
+        })
+        // Await directly — the mock returns a valid one-shot response, so
+        // respond() resolves; no fire-and-forget + setTimeout race.
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(captured[0].stream).toBe(true)
+    })
+
+    it("rejects an empty (zero-chunk) stream as a schema-validation error", async () => {
+        const provider = new OllamaProvider({
+            client: {
+                chat: () => Promise.resolve(streamOf([])),
+                abort: noop,
+            },
+            stream: true,
+        })
+        await expect(
+            provider.respond({
+                model: "qwen3.6:latest",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(SchemaValidationLlmError)
     })
 })
 

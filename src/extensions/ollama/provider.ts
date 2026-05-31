@@ -58,6 +58,8 @@ import {
 import type {
     TOllamaChatMessage,
     TOllamaChatRequest,
+    TOllamaChatResponse,
+    TOllamaChatToolCall,
     TOllamaClient,
     TOllamaModule,
     TOllamaProviderConfig,
@@ -86,6 +88,7 @@ export class OllamaProvider implements TLlmProvider {
     private readonly maxToolRounds: number
     private readonly numCtx: number
     private readonly requestTimeoutMs: number
+    private readonly stream: boolean
 
     constructor(config?: TOllamaProviderConfig) {
         this.config = config ?? {}
@@ -94,6 +97,7 @@ export class OllamaProvider implements TLlmProvider {
         this.numCtx = this.config.numCtx ?? DEFAULT_NUM_CTX
         this.requestTimeoutMs =
             this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+        this.stream = this.config.stream ?? true
     }
 
     async respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>> {
@@ -156,7 +160,7 @@ export class OllamaProvider implements TLlmProvider {
                 // Build `format` from the single converted object so the
                 // schema can't drift from any prompt-grounding copy.
                 format: convertedSchema,
-                stream: false,
+                stream: this.stream,
             }
             if (tools) {
                 chatRequest.tools = tools
@@ -187,9 +191,10 @@ export class OllamaProvider implements TLlmProvider {
                 userMessageHead: req.userMessage,
             })
 
-            let response
+            let response: TOllamaChatResponse
             try {
-                response = await client.chat(chatRequest)
+                const raw = await client.chat(chatRequest)
+                response = isAsyncIterable(raw) ? await collectStream(raw) : raw
             } catch (err) {
                 // Mid-flight abort: the SDK rejects with an AbortError
                 // when our signal listener called client.abort().
@@ -348,6 +353,68 @@ function safeParseJson(raw: string): unknown {
                 err instanceof Error ? err.message : String(err)
             }`,
         })
+    }
+}
+
+function isAsyncIterable(
+    value: unknown
+): value is AsyncIterable<TOllamaChatResponse> {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        Symbol.asyncIterator in value
+    )
+}
+
+/**
+ * Consume a streamed `chat()` generation and synthesize a single
+ * `TOllamaChatResponse`: concatenated `message.content`, tool_calls
+ * captured from any chunk that carries them, and the eval counts from
+ * the final (`done: true`) chunk. The synthesized response feeds the
+ * existing one-shot processing path unchanged, so `respond()`'s
+ * contract is preserved.
+ */
+async function collectStream(
+    iterable: AsyncIterable<TOllamaChatResponse>
+): Promise<TOllamaChatResponse> {
+    let content = ""
+    let role = "assistant"
+    let toolCalls: TOllamaChatToolCall[] | undefined
+    let promptEvalCount = 0
+    let evalCount = 0
+    for await (const chunk of iterable) {
+        const msg = chunk.message
+        if (msg) {
+            content += msg.content ?? ""
+            if (msg.role) role = msg.role
+            // Ollama emits tool_calls complete within a single chunk
+            // (not OpenAI-style per-index deltas), so take the latest
+            // chunk that carries them — concatenating would DUPLICATE
+            // calls. Ingestion is tool-free; only tool-using callers
+            // exercise this path.
+            if (msg.tool_calls && msg.tool_calls.length > 0) {
+                toolCalls = msg.tool_calls
+            }
+        }
+        // Last-wins: the synthesized response carries the FINAL chunk's
+        // single-round eval counts, NOT a cumulative sum across chunks.
+        // The terminal chunk reports this round's complete terminal
+        // counts, so taking the last value is the correct per-round
+        // figure. `runChatLoop`'s `mergeUsage` then SUMS these per-round
+        // terminal counts across tool-call rounds — summing the chunk
+        // values here instead would double-count within a round.
+        if (chunk.prompt_eval_count !== undefined) {
+            promptEvalCount = chunk.prompt_eval_count
+        }
+        if (chunk.eval_count !== undefined) {
+            evalCount = chunk.eval_count
+        }
+    }
+    return {
+        message: { role, content, tool_calls: toolCalls },
+        done: true,
+        prompt_eval_count: promptEvalCount,
+        eval_count: evalCount,
     }
 }
 
