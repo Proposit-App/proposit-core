@@ -61,6 +61,7 @@ export function createAxiomIndicatorDetectionStage(
         model: options?.model ?? AXIOM_INDICATOR_DETECTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
+        retry: options?.retry,
         buildPrompt,
     })
 }

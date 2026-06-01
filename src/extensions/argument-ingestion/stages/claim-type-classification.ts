@@ -109,6 +109,7 @@ export function createClaimTypeClassificationStage(
         model: options?.model ?? CLAIM_TYPE_CLASSIFICATION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
+        retry: options?.retry,
         buildPrompt,
     })
 }

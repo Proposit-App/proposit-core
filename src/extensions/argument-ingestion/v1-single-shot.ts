@@ -98,6 +98,7 @@ export function createIngestionV1Pipeline(
         model,
         maxOutputTokens: parseStageLlmOptions.maxOutputTokens,
         reasoningEffort: parseStageLlmOptions.reasoningEffort,
+        retry: parseStageLlmOptions.retry,
         buildPrompt: (ctx) => {
             const input = ctx.input as TIngestionInput
             return {

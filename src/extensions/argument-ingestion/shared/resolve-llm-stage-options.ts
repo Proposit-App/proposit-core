@@ -52,5 +52,16 @@ export function resolveLlmStageOptions(
     if (perStage.model !== undefined) {
         resolved.model = perStage.model
     }
+    // `retry` is forwarded as a straight pass-through (last-writer-wins
+    // on the whole `Partial<TRetryPolicy>` object, like the scalar
+    // knobs). It is NOT merged against DEFAULT_RETRY_POLICY here —
+    // `llmStage` owns that merge, so merging in both places would
+    // double-merge.
+    if (pipelineDefault.retry !== undefined) {
+        resolved.retry = pipelineDefault.retry
+    }
+    if (perStage.retry !== undefined) {
+        resolved.retry = perStage.retry
+    }
     return resolved
 }

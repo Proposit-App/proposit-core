@@ -111,6 +111,7 @@ export function createConclusionSelectionStage(
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort:
             options?.reasoningEffort ?? CONCLUSION_SELECTION_REASONING,
+        retry: options?.retry,
         buildPrompt,
     })
     return {

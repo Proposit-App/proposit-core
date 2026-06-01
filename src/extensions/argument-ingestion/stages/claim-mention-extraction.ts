@@ -57,6 +57,7 @@ export function createClaimMentionExtractionStage(
         model: options?.model ?? CLAIM_MENTION_EXTRACTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
+        retry: options?.retry,
         buildPrompt,
     })
 }

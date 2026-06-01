@@ -217,6 +217,7 @@ export function createClaimCanonicalizationStage(
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort:
             options?.reasoningEffort ?? CLAIM_CANONICALIZATION_REASONING,
+        retry: options?.retry,
         buildPrompt,
     })
 }

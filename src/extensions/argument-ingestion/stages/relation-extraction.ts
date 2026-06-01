@@ -111,6 +111,7 @@ export function createRelationExtractionStage(
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort:
             options?.reasoningEffort ?? RELATION_EXTRACTION_REASONING,
+        retry: options?.retry,
         buildPrompt,
     })
 }

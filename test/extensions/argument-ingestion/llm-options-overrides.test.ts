@@ -29,7 +29,7 @@ import {
     SEGMENTATION_MAX_OUTPUT_TOKENS,
     SEGMENTATION_STAGE_DEFAULTS,
 } from "../../../src/extensions/argument-ingestion/stages/segmentation.js"
-import { createMockLlmProvider } from "../../mocks/llm.js"
+import { createMockLlmProvider, makeTransientError } from "../../mocks/llm.js"
 import type {
     TLlmProvider,
     TLlmRequest,
@@ -112,6 +112,36 @@ describe("resolveLlmStageOptions — precedence", () => {
                 },
             })
         ).toEqual({ model: "llama3:latest", maxOutputTokens: 100 })
+    })
+
+    it("threads a `retry` override: pipeline-default and per-stage both win over the internal default (straight pass-through, no DEFAULT_RETRY_POLICY merge)", () => {
+        // Internal default carries no retry knob (stages don't ship a
+        // per-stage retry default).
+        const internal = { model: "gpt-5.4-mini" }
+        // Pipeline default sets the retry override; resolver forwards it
+        // verbatim (the merge against DEFAULT_RETRY_POLICY is llmStage's
+        // job, not the resolver's).
+        expect(
+            resolveLlmStageOptions(STAGE_IDS.segmentation, internal, {
+                defaults: { retry: { retryOn: ["schema_validation"] } },
+            })
+        ).toEqual({
+            model: "gpt-5.4-mini",
+            retry: { retryOn: ["schema_validation"] },
+        })
+        // Per-stage override beats the pipeline default — last-writer-wins
+        // on the whole `retry` object, identical to the scalar knobs.
+        expect(
+            resolveLlmStageOptions(STAGE_IDS.segmentation, internal, {
+                defaults: { retry: { retryOn: ["schema_validation"] } },
+                overrides: {
+                    [STAGE_IDS.segmentation]: { retry: { maxAttempts: 3 } },
+                },
+            })
+        ).toEqual({
+            model: "gpt-5.4-mini",
+            retry: { maxAttempts: 3 },
+        })
     })
 })
 
@@ -392,5 +422,118 @@ describe("createIngestionV1Pipeline — LLM-options threading", () => {
         const rec = records.find((r) => r.stageId === V1_PARSE_STAGE_ID)
         expect(rec).toBeDefined()
         expect(rec!.maxOutputTokens).toBe(4096)
+    })
+})
+
+// -- retry-policy override threading (serves server slice C2) -----------
+//
+// C2's "no-auto-retry" toggle drops `"transient"` from a stage's
+// `retryOn`. These tests exercise the real C2 path: a caller sets
+// `llm.overrides[stageId].retry` on `createIngestionV2Pipeline`, and we
+// assert the override reaches the stage's retry policy by observing
+// retry behavior against the mock provider. We count only the
+// segmentation stage's calls (it is the root stage, so it always runs
+// first regardless of downstream stages failing for lack of canned
+// responses).
+
+describe("createIngestionV2Pipeline — retry-policy override threading (C2)", () => {
+    const goodSeg = {
+        segments: [
+            { segmentId: "s1", text: "Hi.", span: { start: 0, end: 3 } },
+        ],
+    }
+
+    it("a retry override dropping 'transient' makes a transient error fail-fast (no retry)", async () => {
+        let segCalls = 0
+        const mock = createMockLlmProvider({
+            responses: {
+                [STAGE_IDS.segmentation]: [
+                    { kind: "error", error: makeTransientError("boom") },
+                    // Queued but must NOT be consumed — proves no retry.
+                    { kind: "ok", output: goodSeg },
+                ],
+            },
+            onCall: (rec) => {
+                if (rec.stageId === STAGE_IDS.segmentation) segCalls += 1
+            },
+        })
+        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+            llm: {
+                overrides: {
+                    [STAGE_IDS.segmentation]: {
+                        retry: { retryOn: ["schema_validation"], backoffMs: 0 },
+                    },
+                },
+            },
+        })
+        const result = await executePipeline(
+            pipeline,
+            { text: "Hi." },
+            { llm: mock }
+        )
+        // `transient` is no longer in retryOn → the transient error stops
+        // at the retryOn gate after exactly one call.
+        expect(segCalls).toBe(1)
+        expect(result.stageOutcomes[STAGE_IDS.segmentation]).toBe("failed")
+    })
+
+    it("the same retry override STILL retries a schema_validation failure once", async () => {
+        let segCalls = 0
+        const mock = createMockLlmProvider({
+            responses: {
+                [STAGE_IDS.segmentation]: [
+                    {
+                        kind: "schema-invalid",
+                        output: { segments: "not-an-array" },
+                    },
+                    { kind: "ok", output: goodSeg },
+                ],
+            },
+            onCall: (rec) => {
+                if (rec.stageId === STAGE_IDS.segmentation) segCalls += 1
+            },
+        })
+        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+            llm: {
+                overrides: {
+                    [STAGE_IDS.segmentation]: {
+                        retry: { retryOn: ["schema_validation"], backoffMs: 0 },
+                    },
+                },
+            },
+        })
+        const result = await executePipeline(
+            pipeline,
+            { text: "Hi." },
+            { llm: mock }
+        )
+        // `schema_validation` is still in retryOn → one retry fires and
+        // the second (valid) response lands.
+        expect(segCalls).toBe(2)
+        expect(result.stageOutcomes[STAGE_IDS.segmentation]).toBe("completed")
+    })
+
+    it("default policy (no retry override) retries a transient error once", async () => {
+        let segCalls = 0
+        const mock = createMockLlmProvider({
+            responses: {
+                [STAGE_IDS.segmentation]: [
+                    { kind: "error", error: makeTransientError("boom") },
+                    { kind: "ok", output: goodSeg },
+                ],
+            },
+            onCall: (rec) => {
+                if (rec.stageId === STAGE_IDS.segmentation) segCalls += 1
+            },
+        })
+        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const result = await executePipeline(
+            pipeline,
+            { text: "Hi." },
+            { llm: mock }
+        )
+        // DEFAULT_RETRY_POLICY.retryOn includes "transient" → retried.
+        expect(segCalls).toBe(2)
+        expect(result.stageOutcomes[STAGE_IDS.segmentation]).toBe("completed")
     })
 })
