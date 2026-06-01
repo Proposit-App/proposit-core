@@ -16,6 +16,7 @@ export type { TExpressionManagerSnapshot } from "./core/expression-manager.js"
 export { VariableManager } from "./core/variable-manager.js"
 export type { TVariableManagerSnapshot } from "./core/variable-manager.js"
 export { ClaimLibrary } from "./core/claim-library.js"
+export type { TClaimCreateInput } from "./core/claim-library.js"
 export { VersionedLibrary } from "./core/versioned-library.js"
 export type { TVersionedEntity } from "./core/versioned-library.js"
 export { ClaimCitationLibrary } from "./core/claim-citation-library.js"
@@ -76,6 +77,12 @@ export {
 } from "./consts.js"
 export { parseFormula } from "./core/parser/formula.js"
 export type { TFormulaAST } from "./core/parser/formula.js"
+// The barrel exports the expression-manager *data* types (snapshot +
+// inputs), not the `ExpressionManager` class itself — it is internal
+// engine machinery referenced only by `PremiseEngine`'s protected
+// `expressions` member. typedoc's `intentionallyNotExported` suppresses
+// the "referenced but not documented" warning rather than leaking the
+// class (and its `ChangeCollector` dependency) into the public docs.
 export type {
     TExpressionInput,
     TExpressionWithoutPosition,
@@ -102,6 +109,7 @@ export type {
 } from "./grammar/types.js"
 export { validate as validateGrammar } from "./grammar/validate.js"
 export type { TValidatorContext } from "./grammar/validators/context.js"
+export type { TPopulateResult } from "./grammar/populate-from.js"
 export * from "./types/fork.js"
 export { forkArgumentEngine } from "./core/fork.js"
 export * from "./parsing/index.js"
@@ -166,7 +174,10 @@ export type {
 // for callers that prefer to tree-shake provider machinery out of
 // their builds.
 export { createOpenAiResponsesProvider } from "../extensions/openai/index.js"
-export type { TCreateOpenAiResponsesProviderOptions } from "../extensions/openai/index.js"
+export type {
+    TCreateOpenAiResponsesProviderOptions,
+    TOpenAiFetch,
+} from "../extensions/openai/index.js"
 export {
     NonRetryableLlmError,
     QuotaExhaustedLlmError,

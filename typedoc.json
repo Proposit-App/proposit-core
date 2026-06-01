@@ -9,5 +9,6 @@
     "name": "proposit-core",
     "readme": "none",
     "excludePrivate": true,
-    "excludeInternal": true
+    "excludeInternal": true,
+    "intentionallyNotExported": ["ExpressionManager"]
 }
