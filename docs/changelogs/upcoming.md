@@ -1,17 +1,3 @@
 # Upcoming changelog
 
-Commit range: `v1.7.1..HEAD`.
-
-## Fixed
-
-- Resolved all 4 TypeDoc `referenced but not included in the documentation`
-  warnings (the doc build is now warning-free). Three types that are part of the
-  public API surface — referenced by exported member signatures but not re-exported
-  from the `src/lib/index.ts` barrel — are now exported and documented:
-  `TClaimCreateInput` (`ClaimLibrary.create` input), `TPopulateResult`
-  (`ArgumentEngine.populateFromAxioms` return), and `TOpenAiFetch`
-  (`TCreateOpenAiResponsesProviderOptions.fetch`). The fourth, `ExpressionManager`
-  — internal engine machinery referenced only by `PremiseEngine`'s protected
-  `expressions` member — is deliberately kept out of the public barrel and added to
-  TypeDoc's `intentionallyNotExported` rather than leaked (with its `ChangeCollector`
-  dependency) into the docs.
+Commit range: `v1.7.2..HEAD`.
