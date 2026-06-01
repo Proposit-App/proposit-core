@@ -16,12 +16,20 @@
 //   * `reasoningEffort` is ignored (no Ollama analogue);
 //     `maxOutputTokens` maps to `options.num_predict` (positive values
 //     only — never 0; -1/-2 are Ollama sentinels we never emit).
-//   * Thinking is left ON (the SDK/model default) — a prior finding
-//     showed `think: false` degrades structured-output fidelity (the
-//     model drops the required object wrapper → bare array, failing
-//     `Value.Check`). This trades latency (thinking-on stages can run
-//     several minutes) for correctness; the generous `requestTimeoutMs`
-//     default (see below) accommodates the latency.
+//   * Thinking follows the model default (qwen3: ON) unless the consumer
+//     sets `TOllamaProviderConfig.think`; the `think` field is sent only
+//     when configured (a pure opt-in knob). There is NO safe global
+//     default: on qwen3.6 the thinking toggle's effect on structured-
+//     output fidelity cuts both ways by stage (verified empirically).
+//     With think ON, some stages emit their whole answer in the thinking
+//     channel and return an empty `content`; with think OFF, other stages
+//     (e.g. segmentation) drop the required object wrapper → a bare
+//     array. Ollama's `format` does NOT hard-enforce the envelope on this
+//     model. So consumers pick `think` per their stages, or run a non-
+//     thinking model for the whole pipeline. When think is ON and the
+//     model returns empty `content` alongside a thinking trace, the
+//     provider raises a deterministic `NonRetryableLlmError` (not the
+//     old retry-burning transient error).
 //   * A generous per-request timeout (`requestTimeoutMs`, default 20 min)
 //     is applied via a PER-PROVIDER undici `Agent` passed as the SDK
 //     client's `fetch` — never `setGlobalDispatcher`; a library must not
@@ -89,6 +97,7 @@ export class OllamaProvider implements TLlmProvider {
     private readonly numCtx: number
     private readonly requestTimeoutMs: number
     private readonly stream: boolean
+    private readonly think?: boolean
 
     constructor(config?: TOllamaProviderConfig) {
         this.config = config ?? {}
@@ -98,6 +107,10 @@ export class OllamaProvider implements TLlmProvider {
         this.requestTimeoutMs =
             this.config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
         this.stream = this.config.stream ?? true
+        // Pure opt-in: undefined means "leave it to the model default"
+        // (no `think` field on the wire). No safe global default exists —
+        // see TOllamaProviderConfig.think.
+        this.think = this.config.think
     }
 
     async respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>> {
@@ -164,6 +177,14 @@ export class OllamaProvider implements TLlmProvider {
             }
             if (tools) {
                 chatRequest.tools = tools
+            }
+            // Thinking is a pure opt-in knob: send `think` ONLY when the
+            // consumer configured it, otherwise leave it to the model
+            // default. There is no safe global default — on qwen3.6 the
+            // thinking toggle's effect on structured-output fidelity cuts
+            // both ways by stage (see TOllamaProviderConfig.think).
+            if (this.think !== undefined) {
+                chatRequest.think = this.think
             }
             // `temperature: 0` for deterministic structured output;
             // `num_ctx` set generously so Ollama doesn't silently
@@ -253,6 +274,22 @@ export class OllamaProvider implements TLlmProvider {
 
             const text = response.message.content
             if (text === undefined || text === "") {
+                const thinking = response.message.thinking
+                if (thinking !== undefined && thinking !== "") {
+                    // The model emitted its whole answer in the thinking
+                    // channel and left `content` empty — DETERMINISTIC for
+                    // this prompt/model. Surfacing it as the transient
+                    // SchemaValidationLlmError would burn a guaranteed-
+                    // failing retry on the same request, so fail fast with
+                    // actionable guidance and a thinking excerpt.
+                    throw new NonRetryableLlmError({
+                        message:
+                            `Ollama returned an empty assistant \`content\` alongside a ${thinking.length.toString()}-char ` +
+                            "thinking trace — the model emitted its answer in the thinking channel, which cannot be " +
+                            "consumed as structured output. Set `think: false` on the OllamaProvider config for this " +
+                            `stage (configurable via TOllamaProviderConfig.think). Thinking excerpt: ${thinking.slice(0, 200)}`,
+                    })
+                }
                 throw new SchemaValidationLlmError({
                     message:
                         "Ollama chat response carried no assistant text content.",
@@ -378,6 +415,7 @@ async function collectStream(
     iterable: AsyncIterable<TOllamaChatResponse>
 ): Promise<TOllamaChatResponse> {
     let content = ""
+    let thinking = ""
     let role = "assistant"
     let toolCalls: TOllamaChatToolCall[] | undefined
     let promptEvalCount = 0
@@ -386,6 +424,11 @@ async function collectStream(
         const msg = chunk.message
         if (msg) {
             content += msg.content ?? ""
+            // Accumulate the thinking channel too, so an empty `content`
+            // accompanied by a thinking trace is surfaced as a
+            // deterministic failure rather than the generic "no content"
+            // transient error. See runChatLoop's empty-content branch.
+            thinking += msg.thinking ?? ""
             if (msg.role) role = msg.role
             // Ollama emits tool_calls complete within a single chunk
             // (not OpenAI-style per-index deltas), so take the latest
@@ -411,7 +454,7 @@ async function collectStream(
         }
     }
     return {
-        message: { role, content, tool_calls: toolCalls },
+        message: { role, content, thinking, tool_calls: toolCalls },
         done: true,
         prompt_eval_count: promptEvalCount,
         eval_count: evalCount,

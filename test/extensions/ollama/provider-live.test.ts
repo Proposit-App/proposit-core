@@ -94,17 +94,18 @@ describeIf("OllamaProvider — live daemon (RUN_LOCAL_LLM_TESTS=1)", () => {
     )
 
     it(
-        "(b) structured-output gate — qwen3.6 honors `format` on an ingestion-stage-shaped schema",
-        // qwen3.6 is a 36B reasoning model; with its default thinking
-        // trace enabled (which the provider intentionally does NOT
-        // disable — disabling it measurably degrades structured-output
-        // fidelity, e.g. the model drops the object wrapper), a single
-        // call on this schema was observed to run 2-5+ min on the dev
-        // machine (the bulk is the thinking trace, not generation). The
-        // gate is CORRECTNESS — the output validates the source schema —
-        // not latency, so the timeout matches the e2e tier (600s) rather
-        // than trying to pin a tight bound on an inherently variable
-        // reasoning-model latency.
+        "(b) structured-output gate — qwen3.6 honors `format` under the model-default thinking trace",
+        // qwen3.6 is a 36B reasoning model. The provider leaves thinking
+        // at the model default (ON) unless `config.think` is set, so this
+        // gate runs WITH the thinking trace. Disabling it measurably
+        // degrades structured-output fidelity on this segmentation-shaped
+        // prompt — the model drops the object wrapper and returns a bare
+        // array (verified empirically) — which is why there is no safe
+        // global `think: false` default and why this gate asserts the
+        // object envelope, not a bare array. A single call was observed at
+        // 2-5+ min on the dev machine (the bulk is the thinking trace);
+        // the gate is CORRECTNESS not latency, so the timeout matches the
+        // e2e tier (600s).
         { timeout: 600_000 },
         async () => {
             // Mirrors the segmentation stage's output shape: an array of
@@ -147,6 +148,10 @@ describeIf("OllamaProvider — live daemon (RUN_LOCAL_LLM_TESTS=1)", () => {
                     result.output
                 )}`
             ).toBe(true)
+            // Under the model-default thinking trace the output is the
+            // object envelope, NOT a top-level array (the failure mode
+            // seen when thinking is disabled on this prompt).
+            expect(Array.isArray(result.output)).toBe(false)
             expect(result.output.segments.length).toBeGreaterThan(0)
             // The Union enum was respected (no value outside the enum).
             for (const seg of result.output.segments) {

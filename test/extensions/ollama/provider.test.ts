@@ -713,3 +713,167 @@ describe("OllamaProvider — abort handling", () => {
         expect(onChat).not.toHaveBeenCalled()
     })
 })
+
+describe("OllamaProvider — thinking control", () => {
+    it("sends no think field by default (leaves it to the model default — a pure opt-in knob)", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const provider = new OllamaProvider({
+            client: mockClient({
+                onChat: (req) => {
+                    captured.push(req)
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "hi" } })
+                    )
+                },
+            }),
+        })
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        // No safe global default: send `think` only when configured.
+        expect(captured[0].think).toBeUndefined()
+        expect("think" in captured[0]).toBe(false)
+    })
+
+    it("threads an explicit think:true config onto the request", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const provider = new OllamaProvider({
+            think: true,
+            client: mockClient({
+                onChat: (req) => {
+                    captured.push(req)
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "hi" } })
+                    )
+                },
+            }),
+        })
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(captured[0].think).toBe(true)
+    })
+
+    it("threads an explicit think:false config onto the request", async () => {
+        const captured: TOllamaChatRequest[] = []
+        const provider = new OllamaProvider({
+            think: false,
+            client: mockClient({
+                onChat: (req) => {
+                    captured.push(req)
+                    return Promise.resolve(
+                        okResponse({ body: { answer: "hi" } })
+                    )
+                },
+            }),
+        })
+        await provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        expect(captured[0].think).toBe(false)
+    })
+
+    it("raises a non-transient, actionable error when content is empty but a thinking trace was produced", async () => {
+        const provider = new OllamaProvider({
+            think: true,
+            client: mockClient({
+                onChat: () =>
+                    Promise.resolve({
+                        message: {
+                            role: "assistant",
+                            content: "",
+                            thinking:
+                                "Let me reason about the schema. The answer object is " +
+                                '`{"answer":"x"}`. Matches schema. Done.',
+                        },
+                        prompt_eval_count: 10,
+                        eval_count: 200,
+                    }),
+            }),
+        })
+        // Not the generic transient SchemaValidationLlmError that burns a
+        // guaranteed-failing retry — a deterministic, actionable failure.
+        const promise = provider.respond({
+            model: "qwen3.6:latest",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        await expect(promise).rejects.toBeInstanceOf(NonRetryableLlmError)
+        await expect(promise).rejects.toThrow(/think/i)
+    })
+
+    it("still raises SchemaValidationLlmError when content is empty and no thinking trace was produced", async () => {
+        const provider = new OllamaProvider({
+            client: mockClient({
+                onChat: () =>
+                    Promise.resolve({
+                        message: { role: "assistant", content: "" },
+                        prompt_eval_count: 1,
+                        eval_count: 1,
+                    }),
+            }),
+        })
+        await expect(
+            provider.respond({
+                model: "qwen3.6:latest",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(SchemaValidationLlmError)
+    })
+
+    it("accumulates the streamed thinking channel and raises a non-transient error when only thinking is produced", async () => {
+        const provider = new OllamaProvider({
+            think: true,
+            client: {
+                chat: () =>
+                    Promise.resolve(
+                        streamOf([
+                            {
+                                message: {
+                                    role: "assistant",
+                                    content: "",
+                                    thinking: "first half ",
+                                },
+                                done: false,
+                            },
+                            {
+                                message: {
+                                    role: "assistant",
+                                    content: "",
+                                    thinking: "second half",
+                                },
+                                done: true,
+                                prompt_eval_count: 5,
+                                eval_count: 9,
+                            },
+                        ])
+                    ),
+                abort: noop,
+            },
+            stream: true,
+        })
+        // If collectStream dropped msg.thinking, the synthesized response
+        // would carry no thinking and this would fall to the transient
+        // SchemaValidationLlmError path instead.
+        await expect(
+            provider.respond({
+                model: "qwen3.6:latest",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(NonRetryableLlmError)
+    })
+})

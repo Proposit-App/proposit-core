@@ -2,6 +2,31 @@
 
 Commit range: `v1.7.0..HEAD`.
 
+## Fixed
+
+- **`OllamaProvider`: thinking-model structured-output handling.** Added a
+  `think?: boolean` option to `TOllamaProviderConfig`, threaded onto the Ollama
+  chat request. It is a **pure opt-in knob** — when unset (the default) no `think`
+  field is sent and the model's own default applies — because empirical testing on
+  `qwen3.6:latest` showed the thinking toggle's effect on structured-output
+  fidelity is stage-dependent and has no safe global default: with `think: true`,
+  some stages (e.g. claim-mention-extraction) emit their whole answer in the
+  thinking channel and return an empty `content`; with `think: false`, others
+  (e.g. segmentation) drop the object wrapper and return a bare array (Ollama's
+  `format` does not hard-enforce the envelope on this model). `collectStream` now
+  accumulates the thinking channel, and an empty `content` accompanied by a
+  thinking trace is raised as a deterministic `NonRetryableLlmError` (advising
+  `think: false`) instead of the previous transient-tagged
+  `SchemaValidationLlmError` that burned a guaranteed-failing retry before aborting
+  the stage. Resolves the `docs/inbox/2026-06-01-ollama-thinking-empty-content.md`
+  report (filed by proposit-server); note the report's proposed default-`think:false`
+  was rejected — see the inbox archive for the evidence and rationale.
+
+## Tooling
+
+- Excluded `docs/inbox/` (freeform, consumer-authored request docs) from Prettier
+  via `.prettierignore`, so an unformatted inbox doc no longer fails `pnpm run check`.
+
 ## Documentation
 
 - Trimmed `AGENTS.md` (the `CLAUDE.md` symlink target) from a ~45 KB reference

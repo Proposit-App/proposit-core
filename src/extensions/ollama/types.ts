@@ -23,6 +23,14 @@ export type TOllamaChatToolCall = {
 export type TOllamaChatMessage = {
     role: string
     content: string
+    /**
+     * Thinking-model reasoning trace, present when `think` is enabled.
+     * A wire field on the Ollama chat message; read so an empty
+     * `content` accompanied by a thinking trace can be surfaced as a
+     * deterministic, actionable failure instead of a silently-discarded
+     * answer. See `OllamaProvider`'s empty-content handling.
+     */
+    thinking?: string
     tool_calls?: TOllamaChatToolCall[]
 }
 
@@ -48,6 +56,12 @@ export type TOllamaChatRequest = {
     model: string
     messages: TOllamaChatMessage[]
     format?: string | object
+    /**
+     * Toggle the model's thinking trace. Omitted → model default (ON for
+     * reasoning models like qwen3). The provider sends this only when the
+     * consumer configures `TOllamaProviderConfig.think`.
+     */
+    think?: boolean
     tools?: TOllamaToolWire[]
     stream?: boolean
     options?: {
@@ -192,6 +206,32 @@ export type TOllamaProviderConfig = {
      * single one-shot (`stream: false`) request.
      */
     stream?: boolean
+    /**
+     * Toggle Ollama's thinking trace (`think` on the chat request).
+     *
+     * **Opt-in.** When unset (the default) the provider sends no `think`
+     * field and the model's own default applies (ON for reasoning models
+     * like `qwen3.6:latest`, off for non-thinking models like `gemma2`).
+     *
+     * **There is no safe global default**, because on `qwen3.6:latest`
+     * the thinking toggle's effect on structured-output fidelity is
+     * stage-dependent and cuts both ways (verified empirically):
+     *
+     * - With `think: true`, some stages (e.g. claim-mention-extraction)
+     *   emit their entire answer in the thinking channel and return an
+     *   **empty `content`** — which the provider surfaces as a
+     *   deterministic {@link NonRetryableLlmError} (not a retry-burning
+     *   transient error) advising `think: false`.
+     * - With `think: false`, other stages (e.g. segmentation) drop the
+     *   required object wrapper and return a **bare array**, failing the
+     *   downstream schema check. Ollama's `format` does NOT hard-enforce
+     *   the object envelope on this model.
+     *
+     * So set `think` per the stages a given provider instance serves, or
+     * — simplest — run a non-thinking model (e.g. `gemma2:9b`) for the
+     * whole ingestion pipeline, which sidesteps the toggle entirely.
+     */
+    think?: boolean
     /**
      * Cap on function-tool agent-loop round-trips before throwing
      * `ToolLoopExhaustedError`. Defaults to 6, mirroring the OpenAI
