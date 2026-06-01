@@ -1317,6 +1317,20 @@ Constants, types, and a helper for midpoint-based position computation, exported
 
 ---
 
+## Hierarchical checksums
+
+Every hierarchical entity (expression, premise, argument) carries three checksum fields:
+
+| Field                | Meaning                                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `checksum`           | Meta hash of the entity's own data only, driven by `checksumConfig`.                                           |
+| `descendantChecksum` | Derived from children's `combinedChecksum` values; `null` for leaves.                                          |
+| `combinedChecksum`   | Equals `checksum` when `descendantChecksum` is `null`, otherwise `computeHash(checksum + descendantChecksum)`. |
+
+Dirty flags propagate bottom-up on mutation; recomputation is lazy via `flushChecksums()`. Variables are non-hierarchical (a single `checksum`). Argument role state is folded into the argument's meta `checksum`. Per-collection checksums are exposed via `getCollectionChecksum()`. `fromSnapshot` / `fromData` accept `checksumVerification?: "ignore" | "strict"` to verify or ignore stored checksums on load.
+
+---
+
 ## `ArgumentParser`
 
 ```typescript
