@@ -273,6 +273,26 @@ export function llmStage<TOutput>(config: {
                     signal: ctx.signal,
                 }
 
+                // Emit the pre-call stage-input event. Fires inside the
+                // retry loop after `attempt` is incremented and after the
+                // request is built, immediately before `respond()` — so a
+                // consumer can surface the as-sent prompts the instant the
+                // call starts, without waiting for the post-call
+                // `stage:llm-call`. On attempt 2+ `userMessage` already
+                // carries the retry-suffix appended by the prior attempt's
+                // schema-validation failure path, matching this attempt's
+                // eventual `stage:llm-call.prompts.user`.
+                ctx.emit({
+                    kind: "stage:llm-request",
+                    stageId: config.id,
+                    attempt,
+                    prompts: {
+                        system: prompt.system,
+                        user: userMessage,
+                    },
+                    at: now(),
+                })
+
                 try {
                     const response = await ctx.llm.respond<TOutput>(req)
                     const validationPassed = Value.Check(
@@ -520,7 +540,16 @@ function prefixSubPipelineEvent(
             return { ...event, stageId: prefix + event.stageId }
         case "stage:retry":
             return { ...event, stageId: prefix + event.stageId }
+        case "stage:llm-request":
+            return { ...event, stageId: prefix + event.stageId }
         case "stage:llm-call":
             return { ...event, stageId: prefix + event.stageId }
+        default: {
+            // Exhaustiveness guard: a new TPipelineEvent variant added
+            // without a case above fails compilation here (TS2322), so
+            // the sub-pipeline prefixing can never silently drop one.
+            const _exhaustive: never = event
+            return _exhaustive
+        }
     }
 }
