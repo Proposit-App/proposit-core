@@ -1,6 +1,6 @@
 // Live-LLM reproducer + regression for the v1.3.0 segmentation
-// truncation bug. The v2-multi-stage pipeline shipped by slice 2A.late
-// dispatched the segmentation stage with no `maxOutputTokens` cap;
+// truncation bug. The v2 multi-stage pipeline originally dispatched
+// the segmentation stage with no `maxOutputTokens` cap;
 // for inputs above ~10 KB the Responses API would emit a truncated
 // JSON payload that surfaced as a JSON-parse error in
 // `safeParseJson` ("Unterminated string in JSON at position 290 /

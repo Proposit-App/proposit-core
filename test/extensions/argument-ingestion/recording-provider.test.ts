@@ -1,7 +1,5 @@
 // Unit tests for `RecordingLlmProvider`.
 //
-// Covers slice 1C briefing's test plan §4:
-//
 //   - Record mode: writes `recorded-llm.json` with the expected
 //     shape; replay finds the entry by hash.
 //   - Replay mode: hash hit → recorded response.

@@ -20,8 +20,8 @@ import type { TRetryPolicy } from "../../../lib/pipelines/index.js"
 /**
  * Bundle of TypeBox schemas a caller hands to an ingestion pipeline
  * factory. Only `responseSchema` is consumed by v1; the per-entity
- * slots are forward-compat surface for v2's stage decomposition (see
- * Phase 2 / slice 2A).
+ * slots are forward-compat surface for a v2 pipeline's stage
+ * decomposition.
  *
  * `responseSchema` is the full `TParsedArgumentResponse` shape with
  * any caller extensions merged in — typically built via

@@ -1,11 +1,9 @@
 // AN rule set per-rule tests.
 //
-// Per the Phase D plan (`docs/superpowers/plans/grammar-tiers-core-plan.md`
-// D0a step 1): "Add unit tests per rule in test/grammar/an-rules.test.ts".
-// These assert the contract every `applyAN*` must honor — the eventual
-// native rewrite (D0b-D0e) must keep these green.
+// These assert the contract every `applyAN*` must honor — any future
+// native rewrite must keep these green.
 //
-// D0a scaffold: each `applyAN*` currently delegates to the legacy
+// Each `applyAN*` currently delegates to the legacy
 // `pe.normalizeExpressions()` full sweep, so an `applyAN2` call also
 // fires AN-1/3/4 — the rule-level isolation is a future state. Tests
 // here therefore check that the AN end-state is reached after the call,

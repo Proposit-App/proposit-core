@@ -70,7 +70,7 @@ export class ForkLibrary<
      *
      * Pre-v0.10.0 snapshots that contained a `sources` namespace are not
      * supported here — callers must convert them via the CLI migration
-     * (Phase 14) before invoking `fromSnapshot`. Any stray `sources` key on
+     * before invoking `fromSnapshot`. Any stray `sources` key on
      * an input snapshot is silently ignored.
      */
     public static fromSnapshot<

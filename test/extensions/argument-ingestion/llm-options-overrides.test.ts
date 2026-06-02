@@ -425,10 +425,10 @@ describe("createIngestionV1Pipeline — LLM-options threading", () => {
     })
 })
 
-// -- retry-policy override threading (serves server slice C2) -----------
+// -- retry-policy override threading -----------
 //
-// C2's "no-auto-retry" toggle drops `"transient"` from a stage's
-// `retryOn`. These tests exercise the real C2 path: a caller sets
+// A "no-auto-retry" toggle drops `"transient"` from a stage's
+// `retryOn`. These tests exercise that path: a caller sets
 // `llm.overrides[stageId].retry` on `createIngestionV2Pipeline`, and we
 // assert the override reaches the stage's retry policy by observing
 // retry behavior against the mock provider. We count only the

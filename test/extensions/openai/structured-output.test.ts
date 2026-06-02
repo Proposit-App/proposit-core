@@ -1,10 +1,10 @@
 // Unit tests for the TypeBox → OpenAI strict-mode JSON Schema
 // converter shipping with the `extensions/openai/` provider.
 //
-// Scope (per slice 1B): assert the converter produces strict-mode-
-// compatible JSON Schema for every supported TypeBox primitive listed
-// in the agenda, and throws with a clear message for unsupported
-// primitives. The strict-mode rules we encode here:
+// Scope: assert the converter produces strict-mode-compatible JSON
+// Schema for every supported TypeBox primitive, and throws with a
+// clear message for unsupported primitives. The strict-mode rules we
+// encode here:
 //
 //   - Every object lists `additionalProperties: false`.
 //   - Every object lists `required` with every declared key —

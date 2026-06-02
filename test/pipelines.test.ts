@@ -1,8 +1,6 @@
 // Framework unit tests for src/lib/pipelines.
 //
-// Coverage areas (one describe block each), matching the slice 1A
-// test plan in docs/superpowers/briefings/ingestion-pipeline-proposit-core-agenda.md
-// §test-plan and spec §11.1:
+// Coverage areas (one describe block each):
 //
 //   1. DAG validation at entry
 //   2. Concurrency
@@ -1267,9 +1265,7 @@ describe("LlmStageRetryExhaustedError", () => {
     })
 })
 
-// ---------------- Slice 1A.1 — reviewer fold ----------------
-
-// P2 #1 — Mid-flight abort surfaces as `skipped` with no ProcessingFailure.
+// Mid-flight abort surfaces as `skipped` with no ProcessingFailure.
 describe("slice 1A.1 — P2 #1: mid-flight abort surfaces as skipped", () => {
     it("aborted in-flight llmStage is `skipped`, not `failed`, with no failure recorded", async () => {
         const events: TPipelineEvent[] = []
@@ -1539,9 +1535,9 @@ describe("StageAbortedError class shape", () => {
     })
 })
 
-// ---------------- Slice 2C.A — stage:llm-call event ----------------
+// stage:llm-call event
 //
-// Tests for the new `stage:llm-call` event variant. The event must fire
+// Tests for the `stage:llm-call` event variant. The event must fire
 // from `llmStage` after every LLM-call attempt — including
 // schema-failed attempts whose retry is about to fire — carrying the
 // actual prompts sent, the raw provider output, the call's token usage,
@@ -1826,8 +1822,8 @@ describe("llmStage — stage:llm-call event", () => {
 // `at` timestamp. Per-attempt ordering is
 // `stage:start → stage:llm-request → stage:llm-call → stage:end`, with a
 // retried attempt firing a second `stage:llm-request`. Deterministic
-// stages emit none. Serves server slice A2 (stage Input viewable the
-// instant the stage starts its call, before the response lands).
+// stages emit none. This lets a consumer surface a stage's input the
+// instant the stage starts its call, before the response lands.
 
 describe("llmStage — stage:llm-request event", () => {
     const outputSchema = Type.Object({ value: Type.Number() })

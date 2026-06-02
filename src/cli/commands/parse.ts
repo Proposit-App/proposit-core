@@ -59,7 +59,7 @@ export function registerParseCommand(args: Command): void {
         .option("--model <model>", "Model override")
         .option(
             "--pipeline <version>",
-            "Ingestion pipeline version (v1 only in Phase 1; v2 lands in Phase 2)",
+            "Ingestion pipeline version (v1 or v2)",
             "v1"
         )
         .option(
@@ -82,15 +82,12 @@ export function registerParseCommand(args: Command): void {
                 }
             ) => {
                 // 1. Resolve pipeline version. v1 is the only
-                //    supported value in Phase 1; v2 lands in Phase 2
-                //    (slice 2A) and is wired as a clean rejection
-                //    until then so users discover the flag exists
-                //    without silent fallbacks.
+                //    supported value today; the v2 flag value is wired
+                //    as a clean rejection so users discover the flag
+                //    exists without silent fallbacks.
                 if (opts.pipeline !== "v1") {
                     if (opts.pipeline === "v2") {
-                        errorExit(
-                            "v2 pipeline not yet shipped — coming in Phase 2."
-                        )
+                        errorExit("v2 pipeline not yet shipped.")
                     }
                     errorExit(
                         `Unknown pipeline version "${opts.pipeline}". Supported: v1.`
@@ -152,11 +149,11 @@ export function registerParseCommand(args: Command): void {
                 // throws via `LlmStageRetryExhaustedError`, both of
                 // which surface here as a failures-non-empty + null
                 // output OR an outer `executePipeline` throw caught
-                // above). Slice 2A's v2 multi-stage pipeline will
-                // reach this branch when its finalize returns null
-                // on irresolvable-conclusion / empty-canonicalization
-                // outcomes (per spec §7.5). Leave the branch wired
-                // so the v2 cutover doesn't need to revisit the CLI.
+                // above). A v2 multi-stage pipeline would reach this
+                // branch when its finalize returns null on
+                // irresolvable-conclusion / empty-canonicalization
+                // outcomes. Leave the branch wired so a v2 cutover
+                // doesn't need to revisit the CLI.
                 if (pipelineResult.output === null) {
                     const failureSummary = pipelineResult.failures
                         .map((f) => `[${f.code}] ${f.message}`)

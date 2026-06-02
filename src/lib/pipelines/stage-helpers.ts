@@ -5,7 +5,8 @@
 //   and the framework retry policy (schema-validation + transient).
 // - `subPipelineStage` — recursively executes a nested pipeline as a
 //   single stage in the outer pipeline. Reserved for future
-//   composition; implemented + tested but unused by Phase 1 pipelines.
+//   composition; implemented + tested but not yet used by any shipped
+//   pipeline.
 
 import type { TSchema } from "typebox"
 import { Value } from "typebox/value"
@@ -91,7 +92,7 @@ function truncateValidationError(error: string, capBytes: number): string {
  * as `skipped` (not `failed`); no `ProcessingFailure` is recorded
  * because a caller-driven cancellation is not a stage failure to
  * report. Distinguishing abort from a genuine provider error matters
- * for server-side cancellation observability (slice 2C's SSE bridge
+ * for server-side cancellation observability (a server SSE bridge
  * routes these differently).
  */
 export class StageAbortedError extends Error {

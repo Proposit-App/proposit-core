@@ -1,7 +1,7 @@
 // Unit tests for `deriveRoles`.
 //
 // v1's implementation trusts the LLM's per-claim `role` assignment.
-// v2 (slice 2A) will derive roles from premise relations; these tests
+// A v2 pipeline would derive roles from premise relations; these tests
 // pin the v1 passthrough behavior + lay groundwork for the v2 cases.
 
 import { describe, expect, it } from "vitest"

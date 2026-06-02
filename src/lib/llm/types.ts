@@ -2,8 +2,8 @@
 //
 // The framework is provider-agnostic: stages depend only on the
 // `LlmProvider` interface in this file. Concrete providers (e.g.
-// the OpenAI Responses adapter shipping in slice 1B under
-// `src/extensions/openai/`) live outside `src/lib/` to keep the
+// the OpenAI Responses adapter under `src/extensions/openai/`) live
+// outside `src/lib/` to keep the
 // library free of third-party SDK imports.
 //
 // `LlmRequest<T>` carries a `_typeMarker` phantom: it has no runtime

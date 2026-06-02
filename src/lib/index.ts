@@ -189,8 +189,7 @@ export {
 // v1 argument-ingestion pipeline + default extension. Surfaced from
 // the lib barrel for ergonomic single-import access from server / CLI
 // consumers; the `@proposit/proposit-core/extensions/argument-ingestion`
-// subpath export (when added in slice 1D's package.json bump) gives
-// callers an alternate tree-shake-friendly path.
+// subpath export gives callers an alternate tree-shake-friendly path.
 export {
     createIngestionV1Pipeline,
     createIngestionV2Pipeline,

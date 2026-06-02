@@ -2,8 +2,8 @@
 //
 // v1's implementation is trivial — passes the LLM's response through
 // with an empty `processingFailures` slot attached. These tests pin
-// the v1 behavior so the v2 rewrite (slice 2A) doesn't accidentally
-// alter the v1 wire-shape.
+// the v1 behavior so a v2 rewrite doesn't accidentally alter the v1
+// wire-shape.
 
 import { describe, expect, it } from "vitest"
 import { finalizeResponse } from "../../../src/lib/index.js"

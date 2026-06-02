@@ -28,8 +28,7 @@
 // — consumers that want them read that field. The slot on the response
 // object is a forward-compat hook; the framework doesn't have a clean
 // way for `finalize.run` to consult the executor's accumulated failure
-// list (which would require widening `TStageContext` — out of scope
-// for slice 2A.late).
+// list (which would require widening `TStageContext`).
 
 import type { TParsedArgumentResponse } from "../../../lib/parsing/index.js"
 import type { TStageContext } from "../../../lib/pipelines/index.js"

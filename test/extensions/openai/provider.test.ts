@@ -434,7 +434,6 @@ describe("createOpenAiResponsesProvider — tool-call agent loop", () => {
         // function_call items in one response, the next request must
         // include all N original function_call items paired with
         // their N function_call_output companions — same order.
-        // Slice 1B.1 reviewer fold P1 #1 (multi-call assertion).
         const handler = vi
             .fn()
             .mockResolvedValueOnce({ tag: "first" })
@@ -636,8 +635,7 @@ describe("createOpenAiResponsesProvider — error classification", () => {
         // 400 from OpenAI typically signals a malformed request or
         // unsupported parameter — a code bug on our side, not
         // something a re-roll fixes. Classify as non-retryable so
-        // the framework surfaces immediately. Slice 1B.1 reviewer
-        // fold P2 #1.
+        // the framework surfaces immediately.
         const fetchMock: TFetchMock = vi
             .fn()
             .mockResolvedValue(buildErrorResponse(400, "bad request"))

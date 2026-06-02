@@ -8,20 +8,21 @@
 // response with an empty `processingFailures` slot via
 // `finalizeResponse`.
 //
-// **Parity with the pre-1C CLI path.** Behaviorally equivalent to the
-// pre-1C CLI path on schema-conformant LLM outputs (recorded-corpus
-// parity). The new framework adds a single schema-validation retry
-// per stage (default `RetryPolicy` from slice 1A — `maxAttempts: 2`,
-// `retryOn: ["schema_validation", "transient"]`); the pre-1C
-// direct-call path failed hard on the first schema-invalid response.
+// **Parity with the legacy direct-call CLI path.** Behaviorally
+// equivalent to the legacy direct-call CLI path on schema-conformant
+// LLM outputs (recorded-corpus parity). The framework adds a single
+// schema-validation retry per stage (default `RetryPolicy` —
+// `maxAttempts: 2`, `retryOn: ["schema_validation", "transient"]`);
+// the legacy direct-call path failed hard on the first schema-invalid
+// response.
 // This is a usability improvement, not a regression. The golden
 // corpus exercises only the happy path, so the parity guarantee
 // holds for any LLM response shape the corpus pins; off-corpus
 // schema-invalid responses now retry once before the stage fails.
 //
-// v2 (Phase 2 / slice 2A) replaces the single stage with a graph of
-// decomposed stages; the same `finalizeResponse` helper drives the
-// merge, hence its placement under `shared/`.
+// A v2 pipeline replaces the single stage with a graph of decomposed
+// stages; the same `finalizeResponse` helper drives the merge, hence
+// its placement under `shared/`.
 
 import Type from "typebox"
 import { llmStage } from "../../lib/pipelines/index.js"
@@ -121,10 +122,9 @@ export function createIngestionV1Pipeline(
         // intentional for V1: `outputSchema` advertises the *core*
         // output that downstream parsers (e.g. `ArgumentParser`)
         // consume, while `processingFailures` is a side-channel for
-        // observability that consumers read separately. A future
-        // slice (1G / 2C server wiring) may stitch the failure slot
-        // into the schema via `Type.Intersect`; for now a docstring
-        // is the contract.
+        // observability that consumers read separately. Future server
+        // wiring may stitch the failure slot into the schema via
+        // `Type.Intersect`; for now a docstring is the contract.
         outputSchema: extension.responseSchema,
         stages: [parseStage],
         finalize: {

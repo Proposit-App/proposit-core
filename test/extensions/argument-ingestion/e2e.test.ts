@@ -50,13 +50,13 @@
 //      before committing the new `expected.json`.
 //
 // Each `expected.json` carries a `parity` field declaring the
-// fixture's intent for the future v1↔v2 parity test (slice 2A):
+// fixture's intent for a future v1↔v2 parity test:
 // `"strict"` means v1 and v2 should match byte-for-byte;
 // `"v2-strict-upgrade"` means v1's behavior is being pinned for
 // historical reference but v2 is expected to upgrade the outcome
-// (e.g., `ambiguous-conclusion` should soft-fail under v2 per spec
-// §7.5). The e2e driver does not consume `parity` today; it's
-// metadata for slice 2A's reviewer.
+// (e.g., `ambiguous-conclusion` should soft-fail under v2). The e2e
+// driver does not consume `parity` today; it's metadata for a future
+// v2 reviewer.
 
 import fs from "node:fs"
 import path from "node:path"
@@ -161,10 +161,9 @@ function buildProviderForMode(fixtureDir: string): TLlmProvider {
 
 const mode = recordingMode()
 
-// Pin the `parity` field shape across all fixtures — metadata for
-// slice 2A's v1↔v2 parity test. Each fixture must declare its
-// intent so the future reviewer can read it without spelunking the
-// runtime output.
+// Pin the `parity` field shape across all fixtures — metadata for a
+// future v1↔v2 parity test. Each fixture must declare its intent so a
+// future reviewer can read it without spelunking the runtime output.
 describe("v1 ingestion pipeline — fixture parity labels", () => {
     const VALID_PARITY = new Set(["strict", "v2-strict-upgrade", "v2-only"])
     for (const name of FIXTURE_NAMES) {

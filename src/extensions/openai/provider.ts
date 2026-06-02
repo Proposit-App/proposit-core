@@ -1,7 +1,7 @@
 // Concrete `TLlmProvider` backed by the OpenAI Responses API.
 //
-// Slice 1B (per the agenda + spec §6) provides the V1 adapter: raw
-// `fetch` to `https://api.openai.com/v1/responses` with strict-mode
+// The V1 adapter: raw `fetch` to
+// `https://api.openai.com/v1/responses` with strict-mode
 // structured output via the inlined TypeBox → JSON Schema converter,
 // translation of the framework's `TToolSpec` discriminated union
 // into the Responses-API tool-shape, and a function-tool agent loop
@@ -11,7 +11,7 @@
 //
 // The provider deliberately uses raw `fetch` rather than the
 // `openai` npm SDK. `openai` is declared as an optional peer in
-// `package.json` for forward-looking insurance — future slices may
+// `package.json` for forward-looking insurance — a future version may
 // adopt it; V1 keeps the dependency surface minimal.
 //
 // Error classification routes HTTP-status families into framework-
@@ -736,7 +736,7 @@ function classifyHttpError(
         }
         return new RateLimitLlmError({ message, status })
     }
-    // 400 vs 422 split (slice 1B.1 reviewer fold P2 #1):
+    // 400 vs 422 split:
     //
     // OpenAI returns 400 for malformed requests — typically a
     // converter bug, an unsupported parameter, or a request shape

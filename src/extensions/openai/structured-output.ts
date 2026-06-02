@@ -1,7 +1,7 @@
 // TypeBox → OpenAI Responses-API strict-mode JSON Schema converter.
 //
-// Slice 1B (per the agenda + spec §14 item 2) inlines this converter
-// rather than pulling in the external `typebox-to-openai` package.
+// This converter is inlined rather than pulling in the external
+// `typebox-to-openai` package.
 // The supported subset covers the primitives actually used by the
 // parsing schema today plus the primitives we expect ingestion-
 // pipeline stages to need: Object, Array, String, Number, Integer,
@@ -28,7 +28,7 @@
 //     and our downstream TypeBox check tolerates the null/undefined
 //     equivalence for Optional members. Naively dropping Optional
 //     keys from `required` produces a schema OpenAI rejects with a
-//     400 strict-mode error (folded from slice 1B reviewer P1 #2).
+//     400 strict-mode error.
 //   * `Type.Union` of literals of one JSON-Schema type collapses to
 //     a single `enum`; general unions surface as `anyOf`.
 //

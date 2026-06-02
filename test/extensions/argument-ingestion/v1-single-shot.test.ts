@@ -1,7 +1,5 @@
 // Unit tests for `createIngestionV1Pipeline`.
 //
-// Covers the slice 1C briefing's test plan §1 (pipeline unit tests):
-//
 //   - The pipeline declares exactly one stage (`parse-argument`)
 //     with empty deps and `outputSchema === extension.responseSchema`.
 //   - Mock provider returns a known TParsedArgumentResponse-shaped

@@ -361,7 +361,7 @@ export async function executePipeline<TInput, TOutput>(
         if (signal.aborted) {
             // Pending stages don't start once aborted. Emit `stage:start`
             // before `stage:end` so consumers walking the event stream
-            // for symmetric pairs (e.g. the SSE bridge in slice 2C) see
+            // for symmetric pairs (e.g. a server SSE bridge) see
             // a balanced sequence — every `stage:end` is preceded by a
             // matching `stage:start`.
             emit({ kind: "stage:start", stageId: stage.id, at: stageStartAt })

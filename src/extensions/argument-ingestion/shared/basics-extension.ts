@@ -5,9 +5,9 @@
 // `BasicsParsingSchema` and the per-entity slots in this descriptor
 // stay structurally identical without manual duplication.
 //
-// Slice 2A's multi-stage pipeline will consume the per-entity slots
-// to wire decomposed stage outputs; for v1 only `responseSchema` is
-// consumed by the factory.
+// A multi-stage pipeline can consume the per-entity slots to wire
+// decomposed stage outputs; for v1 only `responseSchema` is consumed
+// by the factory.
 
 import {
     BasicsArgumentExtension,

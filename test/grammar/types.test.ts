@@ -6,10 +6,8 @@ import {
     ViolationSchema,
 } from "../../src/lib/grammar/types.js"
 
-// Schemas are inherited from proposit-shared-dev's grammar-tiers/shared
-// branch (Phase 2 commits 2b5d7f0, 0a05925, 5865d45 there); they're being
-// relocated to core to avoid a mutual peer-dep between core and shared.
-// Tests preserved character-for-character where the schema shape matches.
+// These schemas live in core (rather than shared) to avoid a mutual
+// peer-dep between core and shared.
 
 describe("GrammarTierSchema", () => {
     it("accepts each of the four canonical tier names", () => {

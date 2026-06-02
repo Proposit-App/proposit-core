@@ -1,7 +1,7 @@
 // CLI-side LLM factory.
 //
-// Slice 1B moved the concrete OpenAI provider into
-// `src/extensions/openai/`. This module now provides only the CLI's
+// The concrete OpenAI provider lives in
+// `src/extensions/openai/`. This module provides only the CLI's
 // API-key resolution + the named-provider factory; the provider
 // itself is constructed from `createOpenAiResponsesProvider` in the
 // extensions tree. Callers should depend on `TLlmProvider` (from
