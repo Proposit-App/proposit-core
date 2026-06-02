@@ -30,7 +30,7 @@ export function registerRepairCommand(
 
             // Hydrate engine — the assistive AN post-hook (default
             // behavior) inserts formula buffers between nested operators
-            // as part of any successful mutation. D2: replaces the
+            // as part of any successful mutation. This replaces the
             // pre-v1.0 `autoNormalize: true` grammar-config gating.
             const engine = await hydrateEngine(argumentId, version)
 

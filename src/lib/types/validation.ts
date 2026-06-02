@@ -29,9 +29,9 @@ export const EXPR_SELF_REFERENTIAL_PARENT = "EXPR_SELF_REFERENTIAL_PARENT"
 export const EXPR_PARENT_NOT_FOUND = "EXPR_PARENT_NOT_FOUND"
 export const EXPR_PARENT_NOT_CONTAINER = "EXPR_PARENT_NOT_CONTAINER"
 export const EXPR_ROOT_ONLY_VIOLATED = "EXPR_ROOT_ONLY_VIOLATED"
-// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` was deleted in Phase D2.
-// P-1 enforcement moved out of the legacy validate() invariant sweep
-// and into the grammar-tier validators in
+// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` has been removed. P-1
+// enforcement moved out of the legacy validate() invariant sweep and
+// into the grammar-tier validators in
 // `src/lib/grammar/validators/presentable.ts` (queryable via
 // `engine.validate('presentable')`).
 export const EXPR_CHILD_LIMIT_EXCEEDED = "EXPR_CHILD_LIMIT_EXCEEDED"
@@ -99,12 +99,12 @@ export const LEGACY_MISSING_AXIOM_SLOT = "LEGACY_MISSING_AXIOM_SLOT"
 // -- Derivation premise errors --
 // `DERIVATION_TYPE_MISMATCH`, `DERIVATION_CONSEQUENT_LOCKED`,
 // `DERIVATION_ROOT_OPERATOR_INVALID`, and `DERIVATION_ANTECEDENT_NON_EMPTY`
-// were deleted in Phase D2 as part of the v1.0 cleanup — they were
-// engine-error code constants that became orphaned when
-// `ManagedDerivationPremiseEngine` was removed in D1. The four
-// behaviors they powered are now surfaced via the Derivable-tier
-// validators (D-1..D-6) reachable through `engine.validate('derivable')`.
-// `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` was deleted in Phase D4
+// have been removed as part of the v1.0 cleanup — they were
+// engine-error code constants that became orphaned when the managed
+// derivation-premise engine was removed. The four behaviors they
+// powered are now surfaced via the Derivable-tier validators
+// (D-1..D-6) reachable through `engine.validate('derivable')`.
+// `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` has also been removed,
 // alongside the legacy `engine.validate()` no-arg overload — the
 // pre-1.0 evaluation throw on naked-Q is replaced by the
 // asEvaluationContext-level skip in `ArgumentEngine` (per spec §4.2);

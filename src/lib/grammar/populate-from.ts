@@ -1,6 +1,5 @@
-// C6: populateFromCitations / populateFromAxioms factory pattern.
+// populateFromCitations / populateFromAxioms factory pattern.
 //
-// Per briefing §7 (post-handoff refinement, 2026-05-14):
 //   - Each method is a factory operating on naked-Q derivation premises.
 //   - For 0 connections: no-op (naked-Q stays).
 //   - For 1 connection: IMPLIES(supporting-var, Q).
@@ -17,7 +16,7 @@
 //   - If no derivation premise exists for derivedClaimId: throws (entity-
 //     not-found is a legitimate Structural integrity check).
 //
-// **D2b — permissive-build + explicit normalize() pattern.** The
+// **Permissive-build + explicit normalize() pattern.** The
 // expression-tree build is incremental (`removeExpression(nakedRoot)`
 // → `addExpression(IMPLIES)` → antecedent children → consequent Q).
 // Under the post-mutation AN hook (assistive mode), AN-3 would
@@ -158,7 +157,7 @@ export function populateFromGrounding<
     const premiseId = pe.getId()
     const gen = engine.idGenerator
 
-    // D2b — permissive-build + explicit normalize() pattern. The
+    // Permissive-build + explicit normalize() pattern. The
     // incremental tree-build below (`removeExpression(nakedRoot)`,
     // then `addExpression(IMPLIES)`, then antecedent, then Q) passes
     // through transient states where parents have 0 children. Under

@@ -1,4 +1,4 @@
-// C7: Snapshot loading accepts any Structural state.
+// Snapshot loading accepts any Structural state.
 //
 // Per spec §7.2:
 //   - fromSnapshot / fromData load any snapshot whose Structural-tier
@@ -73,7 +73,7 @@ function varExpr(
     }
 }
 
-describe("ArgumentEngine.fromData / fromSnapshot — accepts any Structural state (C7)", () => {
+describe("ArgumentEngine.fromData / fromSnapshot — accepts any Structural state", () => {
     it("loads a snapshot with an E-1 violation (AND with 1 child) without throwing", () => {
         // Build via fromData so we don't need to round-trip a snapshot.
         const claimLib = new ClaimLibrary()
@@ -220,9 +220,8 @@ describe("ArgumentEngine.fromData / fromSnapshot — accepts any Structural stat
             varExpr("v-q-expr", "v-q", "and-1", "p-1", 1),
         ]
 
-        // Default config (assistive grammar enabled). Pre-C7 this would
-        // have auto-normalized at load and inserted a buffer; post-C7
-        // it should not.
+        // Default config (assistive grammar enabled). Load is
+        // non-mutating: it must not auto-normalize or insert a buffer.
         const eng = ArgumentEngine.fromData(
             argument,
             claimLib,

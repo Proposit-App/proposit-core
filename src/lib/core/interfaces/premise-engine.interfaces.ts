@@ -51,7 +51,7 @@ export interface TExpressionMutations<
      * root-only, child limits, position uniqueness, derivation root
      * operator) are enforced at mutation time.
      *
-     * As of v1.0 (D2) P-1 (non-not operator under operator) is **not**
+     * As of v1.0 P-1 (non-not operator under operator) is **not**
      * enforced at mutation time — the AN-1 post-hook in assistive
      * behavior inserts the formula buffer; in permissive behavior the
      * un-buffered state stays and surfaces via
@@ -131,7 +131,7 @@ export interface TExpressionMutations<
     /**
      * Removes an expression and optionally its entire descendant subtree.
      *
-     * As of v1.0 (D2) the pre-mutation 0/1-child collapse cascade is gone —
+     * As of v1.0 the pre-mutation 0/1-child collapse cascade is gone —
      * AN-3 (post-mutation hook in assistive mode) handles 0/1-child
      * operator/formula collapse on the surviving parent.
      *
@@ -151,7 +151,7 @@ export interface TExpressionMutations<
      * expression inherits the tree slot of the anchor node
      * (`leftNodeId ?? rightNodeId`).
      *
-     * As of v1.0 (D2) P-1 (non-not operator under operator) is **not**
+     * As of v1.0 P-1 (non-not operator under operator) is **not**
      * enforced at mutation time — the AN-1 post-hook in assistive
      * behavior inserts the formula buffer; in permissive behavior the
      * un-buffered state stays and surfaces via
@@ -181,7 +181,7 @@ export interface TExpressionMutations<
      * Exactly one of `leftNodeId` / `rightNodeId` must be provided — it
      * identifies the existing node and which child slot it occupies.
      *
-     * As of v1.0 (D2) P-1 (non-not operator under operator) is **not**
+     * As of v1.0 P-1 (non-not operator under operator) is **not**
      * enforced at mutation time — the AN-1 post-hook in assistive
      * behavior inserts the formula buffer; in permissive behavior the
      * un-buffered state stays and surfaces via
@@ -207,7 +207,7 @@ export interface TExpressionMutations<
      * NOT operator, removes the NOT (promoting the expression). Otherwise,
      * wraps the expression with a new NOT operator.
      *
-     * As of v1.0 (D2) P-1 (non-not operator under operator) and P-2
+     * As of v1.0 P-1 (non-not operator under operator) and P-2
      * (NOT(NOT(x)) double-negation) are **not** enforced at mutation
      * time. The post-mutation AN hook handles them in assistive
      * behavior: AN-1 inserts the formula buffer between NOT and a
@@ -356,7 +356,7 @@ export interface TVariableReferences<
     getReferencedVariableIds(): Set<string>
     /**
      * Deletes all expressions that reference the given variable ID,
-     * including their subtrees. As of v1.0 (D2) the pre-mutation operator
+     * including their subtrees. As of v1.0 the pre-mutation operator
      * collapse cascade is gone — AN-3 (post-mutation hook in assistive
      * behavior) handles 0/1-child operator/formula collapse on the
      * surviving parents.

@@ -1,4 +1,4 @@
-// C8: Evaluation no-op on naked-Q derivation premises.
+// Evaluation no-op on naked-Q derivation premises.
 //
 // Per CLAUDE.md "Key design rules" + spec §8: a derivation premise
 // whose tree is a single variable at the root (naked-Q form)
@@ -19,7 +19,7 @@ import { makeArgument } from "./fixtures.js"
 
 const ARG = makeArgument()
 
-describe("Evaluation no-op on naked-Q derivation premises (C8)", () => {
+describe("Evaluation no-op on naked-Q derivation premises", () => {
     it("evaluate() does not throw DERIVATION_STRUCTURE_INVALID_AT_EVALUATION on a naked-Q derivation supporting premise", () => {
         const claimLib = new ClaimLibrary()
         const derivedClaim = claimLib.create({

@@ -907,12 +907,12 @@ export class PremiseEngine<
         return false
     }
 
-    // D2 — `pe.normalizeExpressions()` was the per-premise wrapper for
-    // the legacy `ExpressionManager.normalize()` 5-pass sweep. Both
-    // methods are deleted in D2. The replacement is
-    // `engine.normalize(tier?)` (Phase C3) which routes through the
-    // native AN-1..AN-4 passes in `src/lib/grammar/an-rules.ts`. The
-    // post-mutation assistive hook covers the per-mutation use case.
+    // Normalization is reached via `engine.normalize(tier?)`, which
+    // routes through the native AN-1..AN-4 passes in
+    // `src/lib/grammar/an-rules.ts`; the post-mutation assistive hook
+    // covers the per-mutation use case. There is no per-premise
+    // `pe.normalizeExpressions()` wrapper and no legacy
+    // `ExpressionManager.normalize()` 5-pass sweep.
 
     public toggleNegation(
         expressionId: string,
@@ -972,15 +972,15 @@ export class PremiseEngine<
                     // Target is already NOT — toggling adds a second NOT and
                     // immediately collapses to the inner child. We express
                     // this directly by removing the existing NOT (promotes
-                    // its child into its slot). D2: the pre-v1.0 gate on
-                    // `collapseDoubleNegation` was deleted — `toggleNegation`
+                    // its child into its slot). The pre-v1.0 gate on
+                    // `collapseDoubleNegation` is gone — `toggleNegation`
                     // unconditionally toggles.
                     this.expressions.removeExpression(expressionId, false)
 
                     const changes = this.finalizeExpressionMutation(collector)
                     return { result: null, changes }
                 } else {
-                    // D2: the pre-v1.0 P-1 inline buffer-insertion branch
+                    // The pre-v1.0 P-1 inline buffer-insertion branch
                     // (gated on `grammarConfig.enforceFormulaBetweenOperators`
                     // + `resolveAutoNormalize(_, 'negationInsertFormula')`,
                     // which built `NOT(formula(target))` inline) is gone.

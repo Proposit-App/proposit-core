@@ -119,8 +119,8 @@ function writeExpected(
 // exception because its output is `{ argument: null, ... }` with no
 // minted ids).
 //
-// Approach (a) from the reviewer synthesis: inject a deterministic
-// counter-based `generateId` into the e2e test's `executePipeline`
+// Approach: inject a deterministic counter-based `generateId` into
+// the e2e test's `executePipeline`
 // call. Production behavior (and every other test path) keeps the
 // UUID default — only the golden-corpus harness gets the deterministic
 // version, used consistently across record + replay so the recorded

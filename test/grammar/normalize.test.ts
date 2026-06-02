@@ -1,4 +1,4 @@
-// C3: ArgumentEngine.normalize(tier?) global pass tests.
+// ArgumentEngine.normalize(tier?) global pass tests.
 //
 // Per spec §6 (and CLAUDE.md "Key design rules"):
 //   - normalize() is an explicit user-initiated global pass that runs the
@@ -10,7 +10,7 @@
 //   - Non-destructive in the logical-meaning sense: never deletes a
 //     variable, changes a claim reference, or modifies operator semantics.
 //   - Cannot recover from Evaluable / Derivable violations (those require
-//     user intent via repair primitives — Phase C4).
+//     user intent via repair primitives).
 //   - Bypasses `behavior`: a user clicking "Tidy" in a permissive-mode
 //     engine still expects cleanup to run.
 
@@ -188,7 +188,7 @@ describe("ArgumentEngine.normalize(tier?)", () => {
 
     it("does not throw on a trivially-violating tree (E-1: AND with 0 children)", () => {
         // normalize() handles whatever it can without crashing. Recovery
-        // from Evaluable violations is the repair primitives' job (C4).
+        // from Evaluable violations is the repair primitives' job.
         const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
             behavior: "permissive",
         })

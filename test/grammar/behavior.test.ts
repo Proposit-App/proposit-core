@@ -49,8 +49,8 @@ describe("ArgumentEngine.idGenerator", () => {
 
     it("uses the constructor's generateId option when supplied", () => {
         // Custom generator must be observable through the accessor; this
-        // is what the C6 factory relies on to mint deterministic IDs in
-        // tests / programmatic construction.
+        // is what the populate-from factory relies on to mint
+        // deterministic IDs in tests / programmatic construction.
         let counter = 0
         const customGen = () => `id-${++counter}`
         const engine = new ArgumentEngine(makeArgument(), EMPTY_CLAIM_LOOKUP, {

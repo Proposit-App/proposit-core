@@ -293,7 +293,7 @@ export interface TVariableManagement<
     /**
      * Removes a variable and cascade-deletes all expressions referencing it
      * across every premise (including their full subtrees). As of v1.0
-     * (D2) operator collapse on the surviving parents is the AN-3
+     * operator collapse on the surviving parents is the AN-3
      * post-mutation hook's responsibility in assistive behavior; in
      * permissive behavior the un-collapsed shape stays and surfaces via
      * `engine.validate('presentable')`.
@@ -524,8 +524,7 @@ export interface TArgumentEvaluation {
      * Naked-Q derivation premises (single-variable root) are **not** flagged
      * — they are a valid Derivable state per spec §4.2 and are skipped by
      * evaluation rather than throwing. The pre-1.0
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` code was removed in
-     * Phase D4.
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` code has been removed.
      *
      * @returns A validation result with any issues found.
      *
@@ -545,8 +544,8 @@ export interface TArgumentEvaluation {
      * `DERIVATION_STRUCTURE_INVALID`. Naked-Q (single-variable root) is
      * a valid Derivable state per spec §4.2 and is **not** flagged here —
      * it is skipped by evaluation rather than thrown. The pre-1.0
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed
-     * in Phase D4.
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override has been
+     * removed.
      *
      * @returns An `TInvariantValidationResult` — `ok: true` when all
      *   derivation premises are structurally valid, `ok: false` with
@@ -648,8 +647,7 @@ export interface TArgumentLifecycle<
      * outside the tier hierarchy.
      *
      * @since 1.0.0 — replaces the pre-1.0 `validate()` no-arg
-     *   overload removed in Phase D4 of the `grammar-tiers/core`
-     *   branch.
+     *   overload, which has been removed.
      */
     validateInvariants(): TInvariantValidationResult
     /**

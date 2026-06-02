@@ -7,7 +7,7 @@
 // `retryReason` tag and the `code` (a `src/lib/pipelines/failure-codes`
 // constant) for each Ollama failure mode.
 //
-// Critical mapping rules (reviewer P2):
+// Critical mapping rules:
 //   * Context-overflow / model-eval error → NonRetryableLlmError
 //     (deterministic; never SchemaValidationLlmError, which is tagged
 //     `transient` and WOULD be retried — a guaranteed-failing 2nd hit).

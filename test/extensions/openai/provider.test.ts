@@ -402,8 +402,7 @@ describe("createOpenAiResponsesProvider — tool-call agent loop", () => {
 
         // Second call should carry the original function_call AND
         // its matching function_call_output in input, in that order
-        // (per the Responses-API conversation-history contract — slice
-        // 1B.1 reviewer fold P1 #1).
+        // (per the Responses-API conversation-history contract).
         const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit]
         const secondBody = JSON.parse(secondInit.body as string) as {
             input: Record<string, unknown>[]

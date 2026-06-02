@@ -12,17 +12,16 @@
 //   AN-4  Absorb same-operator adjacency through a formula. Preserves
 //         P-5.
 //
-// This module is the **native home** of the rule set for v1.0. Phase D
-// owns this module: D0 (this file) lifts the rules out of
-// `ExpressionManager.normalize()` and into the grammar module so the AN
-// pass is no longer coupled to the legacy `grammarConfig` machinery; D2
-// removes the legacy plumbing entirely (the per-mutation AN inside
-// `ExpressionManager` mutation methods + the 11 P-1 throw sites — see
-// the plan's Phase D summary).
+// This module is the **native home** of the rule set for v1.0. The
+// rules live here, in the grammar module, rather than inside
+// `ExpressionManager.normalize()`, so the AN pass is not coupled to the
+// legacy `grammarConfig` machinery, and so the per-mutation AN inside
+// `ExpressionManager` mutation methods and the legacy P-1 throw sites
+// are no longer needed.
 //
-// **D0e — AN-1 + AN-2 + AN-3 + AN-4 all native.** `applyAN1`,
-// `applyAN2`, `applyAN3`, and `applyAN4` implement their rules
-// directly against the public `PremiseEngine` mutation API. AN-1 uses
+// **All four rules are native.** `applyAN1`, `applyAN2`, `applyAN3`,
+// and `applyAN4` implement their rules directly against the public
+// `PremiseEngine` mutation API. AN-1 uses
 // `pe.wrapInFormula(childOpId, formulaId)` to atomically insert a
 // formula buffer between an operator parent and a non-`not` operator
 // child (composing this from `addExpression` + `reparentExpression`
@@ -31,26 +30,18 @@
 // `wrapInFormula` JSDoc on PE for the full argument). AN-2 and AN-3
 // use `pe.removeExpression(id, false)`. AN-4 uses
 // `pe.reparentExpression(c_i, outerId, position_i)` + a final
-// `pe.removeExpression(formula, false)` cleanup. The four `applyAN*`
-// exports no longer delegate to the legacy `pe.normalizeExpressions()`
-// full sweep.
+// `pe.removeExpression(formula, false)` cleanup.
 //
-// **D0f.** `applyANToFixedPoint` switched from a `||` short-circuit
-// chain (one rule per outer iteration) to a reduce-or accumulator (all
-// four rules per outer iteration, OR'd into the changed flag) —
-// synthesis P2 #2 carry-over. The PERMISSIVE config-swap that disarms
-// the 11 legacy inline P-1 enforcement throws moved from `normalize.ts`
-// into `applyANToFixedPoint` itself so both `runAssistiveNormalization`
-// (post-mutation hook in assistive mode) and `normalizeArgument`
-// (`engine.normalize()`) benefit automatically. D2 removes the legacy
-// per-flag `grammarConfig` machinery and the 11 P-1 throw sites the
-// swap currently works around.
+// `applyANToFixedPoint` uses a reduce-or accumulator (all four rules
+// per outer iteration, OR'd into the changed flag) rather than a `||`
+// short-circuit chain (which would fire at most one rule per outer
+// iteration). The PERMISSIVE config swap that once disarmed the legacy
+// inline P-1 enforcement throws is gone — those throw sites and the
+// surrounding `grammarConfig` machinery have been removed — so AN-2 and
+// AN-3 can run unconditionally without tripping a P-1 throw mid-pass.
 //
 // The per-rule tests (`test/grammar/an-rules.test.ts`) assert behavior
-// the native implementation must preserve once it lands; today they
-// pass because the delegated implementation already produces that
-// behavior. Each test is a regression guard for the eventual native
-// rewrite.
+// the native implementation must preserve.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type { PremiseEngine } from "../core/premise-engine.js"
@@ -77,24 +68,17 @@ const MAX_AN_ITERATIONS = 10
  * Run AN-2 (collapse double negation) on every premise of `engine`.
  * Returns `true` iff any mutation occurred.
  *
- * **D0b: native rewrite.** Walks each premise's expression tree
- * looking for NOT(NOT(x)) — both the direct form (`NOT_outer →
- * NOT_inner → x`) and the buffered form (`NOT_outer → formula →
- * NOT_inner → x`). For each match issues two
- * `pe.removeExpression(id, false)` calls that promote the
- * grandchild (and, in the buffered case, the residual formula)
- * through the two NOT layers.
+ * Walks each premise's expression tree looking for NOT(NOT(x)) —
+ * both the direct form (`NOT_outer → NOT_inner → x`) and the
+ * buffered form (`NOT_outer → formula → NOT_inner → x`). For each
+ * match issues two `pe.removeExpression(id, false)` calls that
+ * promote the grandchild (and, in the buffered case, the residual
+ * formula) through the two NOT layers.
  *
  * The buffered case leaves an unjustified `formula(x)` residue
  * which AN-3 cleans up in a subsequent iteration of
  * `applyANToFixedPoint`. AN-2 stays focused on the NOT-NOT
  * collapse itself — no formula bookkeeping.
- *
- * Behavior parity with the legacy `ExpressionManager.normalize()`
- * pass 4 is asserted by the regression-guard tests in
- * `test/grammar/an-rules.test.ts` and the broader 1598-test
- * baseline (which exercises double-negation collapse via
- * `pe.normalizeExpressions()` and `engine.normalize()`).
  *
  * @since 1.0.0
  */
@@ -177,8 +161,8 @@ function collapseOneDoubleNegationInPremise<
  * Run AN-3 (collapse 0/1-child operator/formula) on every premise of
  * `engine`. Returns `true` iff any mutation occurred.
  *
- * **D0c: native rewrite.** Walks each premise's expression tree and
- * collapses four sub-cases via `pe.removeExpression(id, false)`:
+ * Walks each premise's expression tree and collapses four sub-cases
+ * via `pe.removeExpression(id, false)`:
  *
  *   1. Operator with 0 children → removed (leaf removal).
  *   2. Operator with 1 child (non-`not`) → child promoted into the
@@ -195,13 +179,11 @@ function collapseOneDoubleNegationInPremise<
  * `src/lib/grammar/bounded-subtree.ts` is used by both this rule and
  * the P-3 validator; AN-3 binds its lookup function to
  * `pe.getChildExpressions(id)` so it sees live mid-mutation reads,
- * while the validator binds to a snapshot `TChildMap`. The lift
- * resolves the pre-D0e duplication (D0a P2 #3 / D0d P2 #3).
+ * while the validator binds to a snapshot `TChildMap`. Sharing the
+ * one helper keeps the rule and its validator in lockstep.
  *
- * Behavior parity with the legacy `ExpressionManager.normalize()`
- * passes 1 + 2 is asserted by the regression-guard tests in
- * `test/grammar/an-rules.test.ts` and the broader 1603-test
- * baseline.
+ * Behavior is asserted by the regression-guard tests in
+ * `test/grammar/an-rules.test.ts`.
  *
  * @since 1.0.0
  */
@@ -284,8 +266,8 @@ function collapseOneAN3InPremise<
  * Run AN-4 (absorb same-operator through formula) on every premise of
  * `engine`. Returns `true` iff any mutation occurred.
  *
- * **D0e: native rewrite.** Walks each premise's expression tree for
- * the absorption shape `OUTER_OP → (..., ) formula → INNER_OP (same
+ * Walks each premise's expression tree for the absorption shape
+ * `OUTER_OP → (..., ) formula → INNER_OP (same
  * operator) → [c1, c2, …, cN]`, with both operators being `and` or
  * `or` (S-5 restricts `implies`/`iff` to roots, so they never appear in
  * AN-4-firing positions). For each match:
@@ -446,9 +428,9 @@ function absorbSameOperatorMatch<
     //   `leftPos + ((rightPos - leftPos) / (count + 1)) * (i + 1)`,
     // truncated to integer.
     //
-    // **D2 — D1 P2 #1 carry-over: forbidden-set walk.** A naive
-    // computed target can collide with two kinds of obstacles, both
-    // of which would trip S-9 inside `pe.reparentExpression`:
+    // **Forbidden-set walk.** A naive computed target can collide
+    // with two kinds of obstacles, both of which would trip S-9
+    // inside `pe.reparentExpression`:
     //
     //   (a) **The formula's current position.** The formula is still
     //       a child of `outerId` at this point — we only remove it
@@ -461,12 +443,12 @@ function absorbSameOperatorMatch<
     //       collide.
     //
     //   (b) **Already-placed inner-child target positions.** When
-    //       `gap = count + 1` (integer spacing 1) the D1 ±1 shift
-    //       moved a colliding target to the slot reserved for the
-    //       *next* planned target — the next iteration then tripped
-    //       S-9 against the just-placed inner child.
+    //       `gap = count + 1` (integer spacing 1) a simple ±1 shift
+    //       would move a colliding target to the slot reserved for the
+    //       *next* planned target, so the next iteration would then
+    //       trip S-9 against the just-placed inner child.
     //
-    // The fix tracks both obstacles in a single `forbidden` set: the
+    // To handle both, a single `forbidden` set is tracked: the
     // formula's current position seeds the set, and each chosen
     // target gets added as it's planned. For any computed target
     // already in `forbidden`, scan outward (±1, ±2, ...) for the
@@ -474,8 +456,7 @@ function absorbSameOperatorMatch<
     // effectiveRightPos)`. The band-exhaustion case (no free integer
     // anywhere in the band) is structurally reachable only when the
     // position keyspace is deeply pathological — throw with a
-    // diagnostic that names the forbidden set so the next dev can
-    // triage.
+    // diagnostic that names the forbidden set to aid triage.
     const refreshedFormula = pe.getExpression(formulaId)
     const formulaCurrentPosition = refreshedFormula
         ? refreshedFormula.position
@@ -561,12 +542,12 @@ function absorbSameOperatorMatch<
  * target. Scratch positions are picked by scanning from `max`
  * downward, skipping any position currently held by a child of
  * `parentId`. This is robust against the pathological case where some
- * children sit close to `POSITION_MAX` — the prior fixed-scratch range
+ * children sit close to `POSITION_MAX` — a fixed-scratch range
  * `[max - total, max - 1]` could collide with existing children near
- * the top, tripping the S-9 check inside `pe.reparentExpression`. The
- * D0e review (P2 #1) flagged this as the redistribute-fallback's own
- * raison d'être was pathological position-keyspace clustering, so the
- * collision case was structurally reachable.
+ * the top, tripping the S-9 check inside `pe.reparentExpression`. That
+ * collision case is structurally reachable precisely because the
+ * redistribute fallback's own raison d'être is pathological
+ * position-keyspace clustering.
  *
  * Edge case: total saturation (every position from `min` to `max`
  * occupied) is astronomical — `total > range` (≈ 4.3B) — and is not
@@ -606,11 +587,11 @@ function redistributeChildrenEvenly<
     //       still held by not-yet-moved children carrying scratch
     //       positions from phase 1.
     //
-    // The pre-D0f hard-coded scratch window `[max - total, max - 1]`
-    // happened to cover both concerns *only* when current positions
-    // were well below the top of the range — making the bug
-    // structurally reachable for clustered-near-max inputs (which is
-    // the redistribute-fallback's own raison d'être).
+    // A hard-coded scratch window `[max - total, max - 1]` would
+    // cover both concerns *only* when current positions were well
+    // below the top of the range — leaving clustered-near-max inputs
+    // (which is the redistribute fallback's own raison d'être)
+    // structurally exposed to a collision.
     const forbidden = new Set<number>()
     for (const c of children) {
         forbidden.add(c.position)
@@ -619,10 +600,10 @@ function redistributeChildrenEvenly<
         forbidden.add(t)
     }
 
-    // D1 — P2 #2: skip children that are already at their target
-    // position. The pre-D1 code unconditionally scratched and back-
-    // moved every child, emitting 2 reparent change records per
-    // already-at-target child. Skipping is correctness-equivalent:
+    // Skip children that are already at their target position.
+    // Unconditionally scratching and back-moving every child would
+    // emit 2 reparent change records per already-at-target child;
+    // skipping them is correctness-equivalent:
     // - The skipped child's current position equals its target, so it
     //   sits inside `forbidden` already (both via the `current` and
     //   the `targets` contributions) — phase-1 scratches still avoid
@@ -679,9 +660,9 @@ function redistributeChildrenEvenly<
  * Run AN-1 (insert formula buffer between operators) on every premise
  * of `engine`. Returns `true` iff any mutation occurred.
  *
- * **D0e: native rewrite.** Walks each premise's expression tree
- * looking for non-`not` operators whose parent is also an operator —
- * i.e., the P-1 violation shape `parent-op → child-op (non-not)`. For
+ * Walks each premise's expression tree looking for non-`not`
+ * operators whose parent is also an operator — i.e., the P-1
+ * violation shape `parent-op → child-op (non-not)`. For
  * each match, calls `pe.wrapInFormula(childOpId, formulaId)` which
  * atomically inserts a freshly-minted `formula` between parent and
  * child. The formula takes the child's original slot; the child
@@ -763,17 +744,17 @@ function insertOneFormulaBufferInPremise<
 /**
  * Run AN-1..AN-4 to fixed point on every premise of `engine`.
  *
- * **D0e state: all four rules are native.** The driver issues
- * single-rule passes in order — AN-2, AN-3, AN-4, AN-1 — so buffer
- * insertion sees the post-collapse tree (avoids inserting a buffer
- * that would then need to be collapsed by AN-3).
+ * All four rules are native. The driver issues single-rule passes in
+ * order — AN-2, AN-3, AN-4, AN-1 — so buffer insertion sees the
+ * post-collapse tree (avoids inserting a buffer that would then need
+ * to be collapsed by AN-3).
  *
- * **D0f state: reduce-or accumulator** (replaces the prior `||`
- * short-circuit chain). Every outer iteration fires all four rules
+ * The driver uses a reduce-or accumulator rather than a `||`
+ * short-circuit chain: every outer iteration fires all four rules
  * and records whether ANY produced a mutation. This reduces outer
  * iterations by ~4x in the worst case versus the short-circuit
  * pattern, and pulls the iteration count back well within
- * MAX_AN_ITERATIONS for previously-borderline inputs.
+ * MAX_AN_ITERATIONS for borderline inputs.
  *
  * Convergence cap: `MAX_AN_ITERATIONS = 10`. Typical convergence is ≤ 3
  * iterations (spec §5.1); the cap protects against pathological inputs
@@ -788,13 +769,13 @@ export function applyANToFixedPoint<
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
     TClaim extends TCoreClaim = TCoreClaim,
 >(engine: ArgumentEngine<TArg, TPremise, TExpr, TVar, TClaim>): void {
-    // D2: the PERMISSIVE swap that disarmed the legacy inline P-1
-    // enforcement throws is gone — the 11 P-1 throw sites + the
+    // The PERMISSIVE swap that disarmed the legacy inline P-1
+    // enforcement throws is gone — those P-1 throw sites and the
     // surrounding `grammarConfig.enforceFormulaBetweenOperators`
-    // machinery were deleted in D2. AN-2 and AN-3 can now run
+    // machinery have been removed. AN-2 and AN-3 can now run
     // unconditionally without tripping a P-1 throw mid-pass.
     //
-    // D2b: re-entrance guard. AN's own mutations
+    // Re-entrance guard: AN's own mutations
     // (`pe.removeExpression` / `pe.reparentExpression` /
     // `pe.wrapInFormula`) re-fire `setOnMutate` on the engine, which
     // calls `runAssistiveNormalization(this)` → `applyANToFixedPoint`
@@ -820,24 +801,24 @@ function applyANRulesToConvergence<
     for (let i = 0; i < MAX_AN_ITERATIONS; i++) {
         // Order: AN-2/3/4 before AN-1 so buffer insertion (AN-1)
         // sees the post-collapse tree (avoids inserting a buffer
-        // that AN-3 would then collapse). All four rules are now
-        // native single-rule passes (D0e).
+        // that AN-3 would then collapse). All four rules are native
+        // single-rule passes.
         //
-        // **D0f: reduce-or accumulator** (was `||` short-circuit
-        // pre-D0f). The short-circuit fired at most one rule per
-        // outer iteration — if AN-2 fired, AN-3/4/1 were skipped
-        // this iteration and the loop went back to the top. The
+        // Reduce-or accumulator rather than a `||` short-circuit: a
+        // short-circuit would fire at most one rule per outer
+        // iteration — if AN-2 fired, AN-3/4/1 would be skipped this
+        // iteration and the loop would go back to the top. The
         // accumulator runs ALL four rules per iteration and records
         // whether ANY made a change. This reduces outer iterations
         // by ~4x in the worst case where multiple rules have
         // independent firing sites in the same premise tree, and
         // pulls the outer loop's iteration count back well within
-        // MAX_AN_ITERATIONS for inputs that previously approached
+        // MAX_AN_ITERATIONS for inputs that would otherwise approach
         // the cap. `lastChangedRule` records the most recently
         // changed rule (kept stable across the iteration in
         // priority order AN-2 → AN-3 → AN-4 → AN-1 so the
-        // diagnostic still tells the next dev which rule was
-        // active last when the cap trips).
+        // diagnostic still reports which rule was active last when
+        // the cap trips).
         let changed = false
         if (applyAN2(engine)) {
             lastChangedRule = "AN-2"
@@ -858,12 +839,11 @@ function applyANRulesToConvergence<
         if (!changed) return
     }
     // Diagnostic context: include the iteration count and the
-    // last-changed rule + a representative premise id. Helps the
-    // next dev triage where the loop is oscillating when the cap
-    // trips. As of D0e the outer loop is the actual convergence
-    // driver — all four rules are native single-rule passes — so
-    // a cap-trip indicates a real oscillation, not a budgeting
-    // artifact of the prior delegation pattern.
+    // last-changed rule + a representative premise id to aid triage
+    // of where the loop is oscillating when the cap trips. The outer
+    // loop is the actual convergence driver — all four rules are
+    // native single-rule passes — so a cap-trip indicates a real
+    // oscillation in a malformed Structural state.
     const premises = engine.listPremises()
     const representativePremiseId =
         premises.length > 0 ? premises[0].getId() : "<no premises>"
@@ -875,15 +855,3 @@ function applyANRulesToConvergence<
             `investigate before re-running.`
     )
 }
-
-// `runLegacyNormalizeAndReportChange` lived here during D0a-D0d as a
-// shared delegation helper for applyAN1 / applyAN4. With AN-1 and AN-4
-// natively implemented in D0e, no caller remains and the helper was
-// removed in D0e. D0f converted the `||` short-circuit chain in
-// `applyANToFixedPoint` to a reduce-or accumulator (synthesis P2 #2)
-// so all four rules fire per outer iteration, and moved the PERMISSIVE
-// config swap inside `applyANToFixedPoint`. D2 then deleted the
-// PERMISSIVE swap entirely along with the legacy per-flag
-// `grammarConfig` machinery + the 11 P-1 throw sites the swap worked
-// around — `applyANToFixedPoint` is now a thin try-free wrapper around
-// the convergence loop.

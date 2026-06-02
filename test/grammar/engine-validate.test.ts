@@ -1,15 +1,15 @@
-// C4 prerequisite: ArgumentEngine.validate(tier?) overload.
+// ArgumentEngine.validate(tier) — four-tier grammar validation.
 //
-// The four-tier grammar API needs an engine method that returns the
+// The four-tier grammar API exposes an engine method that returns the
 // list of violations at or below a requested tier. This sits on top of
 // the standalone `validate(tier, ctx)` dispatcher in
 // `src/lib/grammar/validate.ts` and constructs the TValidatorContext
-// from the engine's live state.
+// from the engine's live state. `validate(tier)` takes a required
+// `TGrammarTier` argument and returns `readonly TViolation[]`.
 //
-// The pre-1.0 `validate()` (no-arg invariant validation returning
-// `TInvariantValidationResult`) is kept as a backward-compat overload
-// until Phase D removes it. The new tier-aware overload takes a
-// required `TGrammarTier` argument and returns `readonly TViolation[]`.
+// The pre-1.0 no-arg `validate()` (invariant validation returning
+// `TInvariantValidationResult`) has been renamed to
+// `validateInvariants()`.
 
 import { describe, it, expect } from "vitest"
 import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
@@ -107,7 +107,7 @@ describe("ArgumentEngine.validate(tier)", () => {
     })
 
     it("exposes the legacy invariant sweep via validateInvariants()", () => {
-        // D4: the pre-1.0 no-arg `validate()` overload was renamed to
+        // The pre-1.0 no-arg `validate()` overload was renamed to
         // `validateInvariants()` for unambiguous contrast with the
         // tier-aware `validate(tier)` grammar validator. The legacy
         // invariant sweep (schema conformance, reference integrity,

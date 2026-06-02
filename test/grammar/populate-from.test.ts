@@ -1,6 +1,5 @@
-// C6: populateFromCitations / populateFromAxioms factory tests.
+// populateFromCitations / populateFromAxioms factory tests.
 //
-// Per briefing §7 (post-handoff refinement, 2026-05-14):
 //   - Each method is a factory operating on naked-Q derivation premises.
 //   - Library-passing is method-arg (TClaimConnectionLookup passed in).
 //   - Tree shape:
@@ -76,7 +75,7 @@ function setupAxiomFixture(): {
     }
 }
 
-describe("ArgumentEngine.populateFromCitations (C6)", () => {
+describe("ArgumentEngine.populateFromCitations", () => {
     it("returns kind='no-op' when 0 citations exist (naked-Q stays)", () => {
         const { eng, citLib, derivedClaimId } = setupCitationFixture()
         const { result: pe } = eng.createPremise({
@@ -331,7 +330,7 @@ describe("ArgumentEngine.populateFromCitations (C6)", () => {
     })
 })
 
-describe("ArgumentEngine.populateFromAxioms (C6)", () => {
+describe("ArgumentEngine.populateFromAxioms", () => {
     it("returns kind='no-op' when 0 axiom connections exist", () => {
         const { eng, axLib, derivedClaimId } = setupAxiomFixture()
         const { result: pe } = eng.createPremise({

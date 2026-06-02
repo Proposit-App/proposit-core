@@ -262,7 +262,7 @@ const VAR_R = makeVar("var-r", "R")
 /**
  * Create a premise (via ArgumentEngine) with P, Q, R pre-loaded.
  *
- * **D2b — permissive build.** Under the v1.0 AN post-mutation hook
+ * **Permissive build.** Under the v1.0 AN post-mutation hook
  * (spec §5), assistive mode collapses 0-child operators eagerly (AN-3)
  * between consecutive `addExpression` calls. The test suite below
  * builds expression trees incrementally (`addExpression(op)` then
@@ -1388,15 +1388,15 @@ describe("formula", () => {
         ).toThrow(/is not an operator expression/)
     })
 
-    // D2b — deleted two formula-cascade tests ("collapses the formula
-    // when its only child is removed" + "cascades formula collapse up
-    // multiple levels"). They asserted on the pre-v1.0 inline AN
+    // No formula-cascade tests live here ("collapses the formula
+    // when its only child is removed" / "cascades formula collapse up
+    // multiple levels"). Those asserted on the pre-v1.0 inline AN
     // cascade fired from inside `removeExpression`. Under the v1.0
     // post-mutation hook the cascade is owned by AN-3 + AN-1 and is
-    // covered by `test/grammar/an-rules.test.ts`. These tests built
-    // their fixtures via `premiseWithVars` (now permissive, no AN),
-    // so the cascade was no longer observable; the assertion was
-    // testing legacy implementation details, not user-facing behavior.
+    // covered by `test/grammar/an-rules.test.ts`. Fixtures here build
+    // via `premiseWithVars` (permissive, no AN), so the cascade is not
+    // observable at this layer — asserting it would test legacy
+    // implementation details, not user-facing behavior.
 
     it("insertExpression wraps a node in a formula", () => {
         const premise = premiseWithVars()
@@ -1635,11 +1635,11 @@ describe("PremiseEngine — addExpression / removeExpression / insertExpression"
         expect(pm.toDisplayString()).toBe("¬(P)")
     })
 
-    // D2b — deleted "rootExpressionId updates when collapse promotes
-    // a new root". Same legacy-cascade rationale as above: the test
-    // asserts pre-v1.0 inline AN-3 1-child-promotion behavior fired
-    // from inside `removeExpression`. The v1.0 post-hook covers this
-    // contract; see `test/grammar/an-rules.test.ts` (AN-3 rule 2).
+    // No "rootExpressionId updates when collapse promotes a new root"
+    // test lives here. Same legacy-cascade rationale as above: it
+    // would assert pre-v1.0 inline AN-3 1-child-promotion behavior
+    // fired from inside `removeExpression`. The v1.0 post-hook covers
+    // this contract; see `test/grammar/an-rules.test.ts` (AN-3 rule 2).
 })
 
 describe("PremiseEngine — toDisplayString", () => {
@@ -4905,11 +4905,11 @@ describe("PremiseEngine — mutation changesets", () => {
         expect(changes.expressions?.removed).toEqual([])
     })
 
-    // D2b — deleted "removeExpression with collapse returns all
-    // affected expressions". The test asserted the changeset produced
-    // by the pre-v1.0 inline AN-3 1-child-promotion cascade fired
-    // from inside removeExpression. The v1.0 contract is: a single
-    // mutation produces a single changeset reflecting only that
+    // No "removeExpression with collapse returns all affected
+    // expressions" test lives here. It would assert the changeset
+    // produced by the pre-v1.0 inline AN-3 1-child-promotion cascade
+    // fired from inside removeExpression. The v1.0 contract is: a
+    // single mutation produces a single changeset reflecting only that
     // mutation; AN runs as a separate post-hook pass. The cascade
     // contract is covered by `test/grammar/an-rules.test.ts`.
 
@@ -6005,10 +6005,11 @@ describe("ArgumentEngine — variable management", () => {
         expect(pm2.getExpression("e-p2")).toBeUndefined()
     })
 
-    // D2b — deleted "removeVariable triggers operator collapse" +
-    // "removeVariable deletes subtrees when removing from implies".
-    // Both tests asserted that the pre-v1.0 inline AN cascade (fired
-    // from deep within removeVariable's cascade-delete loop) would
+    // No "removeVariable triggers operator collapse" or
+    // "removeVariable deletes subtrees when removing from implies"
+    // tests live here. Both would assert that the pre-v1.0 inline AN
+    // cascade (fired from deep within removeVariable's cascade-delete
+    // loop) would
     // collapse the resulting 1-child operator and promote the
     // surviving sibling. Under the v1.0 contract, removeVariable
     // still cascade-deletes referencing expressions Structurally,
@@ -6050,9 +6051,9 @@ describe("PremiseEngine — deleteExpressionsUsingVariable", () => {
         expect(changes.expressions?.removed.length).toBeGreaterThan(0)
     })
 
-    // D2b — deleted "deletes multiple expressions referencing the
-    // same variable" + "handles already-removed expressions from
-    // subtree cascade". Both asserted on the pre-v1.0 inline AN
+    // No "deletes multiple expressions referencing the same variable"
+    // or "handles already-removed expressions from subtree cascade"
+    // tests live here. Both would assert on the pre-v1.0 inline AN
     // cascade fired alongside deleteExpressionsUsingVariable. The
     // v1.0 contract is that deleteExpressionsUsingVariable cascade-
     // deletes only the matching expressions (and their subtrees);
@@ -6794,8 +6795,8 @@ describe("removeExpression — deleteSubtree parameter", () => {
         return { eng, pm }
     }
 
-    // D2b — deleted "deleteSubtree: true — same as original
-    // behavior (collapse promotes sibling)". The test asserted the
+    // No "deleteSubtree: true — same as original behavior (collapse
+    // promotes sibling)" test lives here. It would assert the
     // pre-v1.0 inline AN-3 1-child-promotion cascade fired from
     // removeExpression(_, deleteSubtree=true). Under v1.0, the
     // promotion is owned by the AN-3 post-hook (assistive mode); the
@@ -6880,9 +6881,9 @@ describe("removeExpression — deleteSubtree parameter", () => {
         expect(pm.getRootExpressionId()).toBe("op-and")
     })
 
-    // D2b — deleted "deleteSubtree: false — leaf node with collapse
-    // on parent". Same legacy-cascade rationale as the
-    // "deleteSubtree: true" sibling deleted above. The
+    // No "deleteSubtree: false — leaf node with collapse on parent"
+    // test lives here. Same legacy-cascade rationale as the
+    // "deleteSubtree: true" sibling above. The
     // removeExpression(_, false) primitive's own promotion semantics
     // for 1-child-after-removal cases are covered by the other
     // "deleteSubtree: false — promotes single child" tests in this
@@ -10071,8 +10072,8 @@ describe("wrapExpression", () => {
         expect(result2.rootValue).toBe(true)
     })
 
-    // D2b — deleted "wrap then remove operator triggers collapse".
-    // The test asserted that after wrapExpression + removeExpression
+    // No "wrap then remove operator triggers collapse" test lives
+    // here. It would assert that after wrapExpression + removeExpression
     // of one child, the pre-v1.0 inline AN-3 cascade promoted the
     // surviving child to root. Same legacy-cascade rationale as the
     // sibling tests above; AN-3's contract is covered by
@@ -10310,15 +10311,14 @@ describe("toggleNegation", () => {
         expect(premise.toDisplayString()).toBe("(P ∧ Q)")
     })
 
-    // D2b — deleted "works on operator expressions". The test
-    // asserted toggleNegation on a non-`not` operator inserts a
-    // formula buffer between the new NOT and the operator (the
-    // pre-v1.0 `negationInsertFormula` AN-flag behavior, deleted in
-    // D2). Under v1.0 toggleNegation wraps Structurally and any
-    // resulting P-1 violation is repaired by the AN-1 post-hook in
-    // assistive mode. The buffer-insertion contract is covered by
-    // `test/grammar/an-rules.test.ts`; toggleNegation's primitive
-    // wrap-with-NOT behavior is covered by the surviving "works on
+    // There is no "works on operator expressions" test: the pre-v1.0
+    // `negationInsertFormula` AN-flag behavior — toggleNegation on a
+    // non-`not` operator inserting a formula buffer between the new NOT
+    // and the operator — is gone. Under v1.0 toggleNegation wraps
+    // Structurally and any resulting P-1 violation is repaired by the
+    // AN-1 post-hook in assistive mode. The buffer-insertion contract
+    // is covered by `test/grammar/an-rules.test.ts`; toggleNegation's
+    // primitive wrap-with-NOT behavior is covered by the "works on
     // formula expressions" test below.
 
     it("works on formula expressions", () => {
@@ -14728,8 +14728,8 @@ describe("hierarchical checksum propagation", () => {
         expect(engine.checksum()).toBe(argMetaBefore)
     })
 
-    // D2b — deleted "operator collapse after removeExpression
-    // doesn't break flush". The test asserted that after the
+    // No "operator collapse after removeExpression doesn't break
+    // flush" test lives here. It would assert that after the
     // pre-v1.0 inline 1-child collapse cascade fired by
     // removeExpression, the engine's flushChecksums() still works
     // correctly. Under v1.0 the cascade no longer fires inside
@@ -15403,10 +15403,10 @@ describe("changeOperator", () => {
 
     // --- Merge (no longer triggers for 2-child operators) ---
 
-    // D2b — deleted two changeOperator absorb tests
-    // ("absorbs: OR(formula(AND(P, Q)), R) → change AND to OR yields
+    // No changeOperator absorb tests live here ("absorbs:
+    // OR(formula(AND(P, Q)), R) → change AND to OR yields
     // OR(P, Q, R)" and "absorbs: formula dissolved when inner
-    // operator changes to match parent"). Both asserted on the
+    // operator changes to match parent"). Both would assert on the
     // pre-v1.0 inline AN-4 same-operator absorption cascade fired
     // from inside changeOperator. Under v1.0 the absorption is
     // owned by the AN-4 post-hook; the contract is covered by
@@ -15602,10 +15602,10 @@ describe("changeOperator", () => {
 
     // --- No-merge for 2-child operators ---
 
-    // D2b — deleted "absorbs: AND(formula(OR(P, Q)), R) → change OR
-    // to AND yields AND(P, Q, R)". Same legacy-cascade rationale as
-    // the absorb tests deleted above; AN-4's same-operator
-    // absorption is owned by the post-hook and covered by
+    // No "absorbs: AND(formula(OR(P, Q)), R) → change OR to AND yields
+    // AND(P, Q, R)" test lives here. Same legacy-cascade rationale as
+    // the absorb tests above; AN-4's same-operator absorption is owned
+    // by the post-hook and covered by
     // `test/grammar/an-rules.test.ts`.
 
     it("no merge: OR(formula(OR(P, Q)), R) → change inner OR to AND yields OR(formula(AND(P, Q)), R)", () => {
@@ -15661,11 +15661,11 @@ describe("changeOperator", () => {
         expect(innerChildren).toHaveLength(2)
     })
 
-    // D2b — deleted "absorbs with tight positions: AND(P,
-    // formula(OR(Q, R)), S) at 0,1,2". Same legacy-cascade
-    // rationale; the tight-position AN-4 absorption + redistribute
-    // path is covered by `test/grammar/an-rules.test.ts`'s AN-4
-    // redistribute regression-guard tests.
+    // No "absorbs with tight positions: AND(P, formula(OR(Q, R)), S)
+    // at 0,1,2" test lives here. Same legacy-cascade rationale; the
+    // tight-position AN-4 absorption + redistribute path is covered by
+    // `test/grammar/an-rules.test.ts`'s AN-4 redistribute
+    // regression-guard tests.
 
     // --- Error cases ---
 
@@ -15702,16 +15702,16 @@ describe("toggleNegation extraFields", () => {
         expect((stored as Record<string, unknown>).creatorId).toBe("user-42")
     })
 
-    // D2b — deleted "merges extraFields into the NOT expression
-    // (operator target with formula buffer)". The test asserted
-    // that toggleNegation on an operator produces a formula buffer
-    // between the new NOT and the wrapped operator, and that
-    // extraFields propagate to that buffer. The buffer insertion
-    // was the pre-v1.0 `negationInsertFormula` AN-flag behavior
-    // (deleted in D2). Under v1.0 the buffer is owned by the AN-1
+    // There is no "merges extraFields into the NOT expression
+    // (operator target with formula buffer)" test. Such a test would
+    // assert that toggleNegation on an operator produces a formula
+    // buffer between the new NOT and the wrapped operator, and that
+    // extraFields propagate to that buffer. That buffer insertion
+    // was the pre-v1.0 `negationInsertFormula` AN-flag behavior, which
+    // is gone. Under v1.0 the buffer is owned by the AN-1
     // post-hook (which doesn't get extraFields — it operates on
     // already-mutated state). The extraFields propagation contract
-    // is still covered by the surviving extraFields tests in this
+    // is covered by the extraFields tests in this
     // describe block (variable-target + checksum variants).
 
     it("extraFields in changeset expressions have correct checksums", () => {
@@ -17302,7 +17302,7 @@ describe("PremiseEngine — validate", () => {
 })
 
 describe("ArgumentEngine — validateInvariants", () => {
-    // D4: the legacy no-arg `validate()` overload was renamed to
+    // The legacy no-arg `validate()` overload was renamed to
     // `validateInvariants()` for unambiguous contrast with the
     // tier-aware `validate(tier)` grammar validator. This describe
     // block exercises the invariant sweep (schema conformance,
@@ -17785,11 +17785,11 @@ describe("Library — withValidation brackets", () => {
 })
 
 describe("ArgumentEngine — bulk path validation", () => {
-    // C7: load no longer enforces caller-supplied grammarConfig at load
+    // Load no longer enforces caller-supplied grammarConfig at load
     // time — the load runs Structural-only validation via PERMISSIVE
     // grammar config internally. Lower-tier violations surface post-load
-    // via engine.validate(tier). Phase D removes these tests along with
-    // the grammarConfig parameter on fromData/fromSnapshot.
+    // via engine.validate(tier). There is no grammarConfig parameter on
+    // fromData/fromSnapshot.
     it("rollback validates and rejects invalid snapshot", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const { result: pm } = eng.createPremise()
@@ -23368,8 +23368,8 @@ describe("ArgumentEngine validateEvaluability with derivation pre-flight", () =>
         return { argumentEngine: engine }
     }
 
-    // D4: pre-1.0 these tests asserted on `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
-    // (the wrapper-overridden code). Phase D4 removed the override —
+    // Pre-1.0 these tests asserted on `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`
+    // (the wrapper-overridden code). That override is gone —
     // `validateEvaluability` / `validateDerivationStructures` now pass
     // through the underlying `DERIVATION_STRUCTURE_INVALID` code from
     // the derivation-validation utility. Naked-Q is a no-throw skip
@@ -23445,9 +23445,9 @@ describe("ArgumentEngine.validateDerivationStructures", () => {
         const { argumentEngine } = setupArgumentWithBrokenDerivation()
         const result = argumentEngine.validateDerivationStructures()
         expect(result.violations.length).toBeGreaterThan(0)
-        // D4: pre-1.0 the wrapper overrode this to
-        // `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`; D4 removed the
-        // override so the underlying `DERIVATION_STRUCTURE_INVALID`
+        // Pre-1.0 the wrapper overrode this to
+        // `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION`; that override is
+        // gone, so the underlying `DERIVATION_STRUCTURE_INVALID`
         // code (from `validateDerivationStructure`) flows through
         // unchanged.
         for (const v of result.violations) {
@@ -24055,7 +24055,7 @@ describe("ArgumentEngine.evaluate axiom force-true (v0.12)", () => {
         const argId = crypto.randomUUID()
         core.arguments.create({ id: argId, version: 0 })
         const engine = core.arguments.get(argId)!
-        // D2b — permissive build: this test builds AND(VAR, VAR)
+        // Permissive build: this test builds AND(VAR, VAR)
         // incrementally; assistive AN-3 would collapse the 0-child
         // AND between addExpression calls. Switch to permissive for
         // the build phase (no normalize() needed — the tree's final
@@ -24120,7 +24120,7 @@ describe("Propagator interaction with axiomatic variables (v0.12)", () => {
         const argId = crypto.randomUUID()
         core.arguments.create({ id: argId, version: 0 })
         const engine = core.arguments.get(argId)!
-        // D2b — permissive build: see the matching comment in the
+        // Permissive build: see the matching comment in the
         // `checkValidity excludes axiomatic-bound variables` test
         // above. The tree built here is Presentable in its final
         // shape, so no post-build normalize() is needed.
@@ -24192,9 +24192,9 @@ describe("PremiseEngine.reparentExpression", () => {
     // (formula-buffer insertion) and native AN-4 (multi-child
     // same-operator absorption) in `src/lib/grammar/an-rules.ts`.
     //
-    // Throws only on Structural rules + entity-not-found per the
-    // briefing §10 "throws stay" list: S-1 (FK soundness), S-4
-    // (no-cycles), S-9 (sibling-position uniqueness — only when a
+    // Throws only on Structural rules + entity-not-found: S-1 (FK
+    // soundness), S-4 (no-cycles), S-9 (sibling-position uniqueness —
+    // only when a
     // sibling other than the moved expression already occupies the
     // target slot; same-position no-op is tolerated).
 
@@ -24359,22 +24359,21 @@ describe("PremiseEngine.reparentExpression", () => {
         expect(result.position).toBe(0)
     })
 
-    // D0f — P1 fix: parent-type validation gap. The D0e review surfaced
-    // that `reparentExpression` did not enforce that `newParent` is an
-    // `operator` or `formula` — a caller could reparent under a
-    // variable (or any other non-container) and produce a malformed AST
-    // that no validator catches. `addExpression` enforces this at
-    // em.ts:418-422 and `reparentExpression` must reach parity. Same
-    // applies to the arity guards: reparenting under a unary `not`
-    // that already has its one child, or under a binary
-    // `implies`/`iff` that already has its two children, must throw
-    // (the move crosses parents — the new parent's child count
-    // increases by one).
+    // Parent-type validation gap: `reparentExpression` must enforce
+    // that `newParent` is an `operator` or `formula`. Otherwise a
+    // caller could reparent under a variable (or any other
+    // non-container) and produce a malformed AST that no validator
+    // catches. `addExpression` enforces this at em.ts:418-422 and
+    // `reparentExpression` must reach parity. The same applies to the
+    // arity guards: reparenting under a unary `not` that already has
+    // its one child, or under a binary `implies`/`iff` that already
+    // has its two children, must throw (the move crosses parents — the
+    // new parent's child count increases by one).
 
     it("throws when newParent is a variable expression (S-1 parent-type)", () => {
         // Setup: AND(P_var, Q_var). Try to reparent Q_var under P_var.
-        // P_var is a variable — invalid parent. Pre-D0f the call
-        // silently produced a malformed AST.
+        // P_var is a variable — invalid parent. Without the guard the
+        // call would silently produce a malformed AST.
         const pe = permissivePremise()
         pe.addExpression(makeOpExpr("and-root", "and"))
         pe.addExpression(
@@ -24453,14 +24452,13 @@ describe("PremiseEngine.reparentExpression", () => {
 })
 
 describe("PremiseEngine.wrapInFormula", () => {
-    // D0f — P2 #2 fix: S-10 enforcement gap.
+    // S-10 enforcement gap.
     //
-    // `wrapInFormula` previously routed through `registerFormulaBuffer`
-    // which calls `this.expressions.set(formulaId, ...)` without a
+    // `wrapInFormula` must not route through a `registerFormulaBuffer`
+    // that calls `this.expressions.set(formulaId, ...)` without a
     // `has()` check — a caller passing an already-existing id would
     // silently overwrite the prior expression, violating S-10 (entity
-    // ID uniqueness). The D0e review surfaced this as a public-API
-    // surface promise gap.
+    // ID uniqueness). This is a public-API surface promise gap.
 
     function permissivePremise(): PremiseEngine {
         const eng = new ArgumentEngine(ARG, aLib(), {

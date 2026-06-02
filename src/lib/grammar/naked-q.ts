@@ -12,12 +12,12 @@
 //   - `isNakedQTree(pe)` — checks tree shape only (`exprs.length === 1`
 //     and `root.type === 'variable'`). Used by callers that already know
 //     the premise is `type='derivation'`, e.g.
-//     `populateFromGrounding` inside the C6 factory after the derivation
-//     premise has been located by `derivedClaimId`.
+//     `populateFromGrounding` inside the populate-from factory after the
+//     derivation premise has been located by `derivedClaimId`.
 //
 //   - `isNakedQDerivationPremise(pe)` — additionally checks the
-//     premise's `type === 'derivation'`. Used by the evaluator's C8 skip
-//     filter, which scans all premises (any type) and must reject
+//     premise's `type === 'derivation'`. Used by the evaluator's naked-Q
+//     skip filter, which scans all premises (any type) and must reject
 //     non-derivation premises before checking the tree shape.
 //
 // The two share a single tree-shape helper; the second composes the

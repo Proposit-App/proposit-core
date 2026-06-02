@@ -18,7 +18,7 @@ export interface TForkArgumentOptions {
      * callers that want, for example, to fork a permissive editing state
      * into an assistive "publish-ready" copy.
      *
-     * @since 1.0.0 (Phase D5)
+     * @since 1.0.0
      */
     behavior?: "assistive" | "permissive"
 }

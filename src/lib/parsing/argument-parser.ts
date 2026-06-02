@@ -475,7 +475,7 @@ export class ArgumentParser<
 
         // 7. Create premises and build expression trees.
         //
-        // D2b — permissive-build + explicit normalize() pattern. The
+        // Permissive-build + explicit normalize() pattern. The
         // expression-tree build below is incremental (one
         // `pm.addExpression` per AST node, parents first). Under the
         // post-mutation AN hook (assistive mode), AN-3 would eagerly

@@ -15,13 +15,13 @@
 // operator children. It never deletes a variable, changes a claim
 // reference, or modifies an operator's semantics — even for Evaluable
 // or Derivable violations. Recovery from those requires user intent and
-// is exposed via the repair primitives (Phase C4).
+// is exposed via the repair primitives.
 //
 // Bypasses `engine.behavior`. `normalize()` is user-initiated (the UI
 // calls it after the user confirms a Tidy / Normalize action), so it
-// must do its job even when `behavior === 'permissive'`. D2 deleted
-// the legacy per-flag config + the 11 P-1 throw sites + the PERMISSIVE
-// swap that worked around them, so this bridge is now a tier-gate +
+// must do its job even when `behavior === 'permissive'`. There is no
+// legacy per-flag config, no inline P-1 throw sites, and no PERMISSIVE
+// swap to work around them, so this bridge is just a tier-gate +
 // unconditional delegation.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"

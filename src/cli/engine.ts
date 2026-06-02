@@ -134,12 +134,12 @@ export async function hydrateEngine(
         claimLibrary = ClaimLibrary.fromSnapshot(snapshot)
     }
 
-    // D2: the CLI no longer threads a `grammarConfig` through hydration —
+    // The CLI does not thread a `grammarConfig` through hydration —
     // engine behavior is controlled exclusively by the engine's
     // `behavior` setting (default `'assistive'`). The pre-v1.0
-    // `cliGrammarConfig` granular flags + `fromSnapshot` grammar-config
-    // parameter were deleted in D2 along with the rest of the legacy
-    // plumbing.
+    // `cliGrammarConfig` granular flags and `fromSnapshot`
+    // grammar-config parameter are gone, along with the rest of the
+    // legacy plumbing.
 
     // Build premise snapshots from disk data
     const premiseSnapshots: TPremiseEngineSnapshot[] = []

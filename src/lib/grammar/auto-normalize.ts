@@ -10,12 +10,11 @@
 //   AN-4  Absorb same-operator adjacency through a formula. Preserves P-5.
 //
 // This module exports `runAssistiveNormalization(engine)` — the
-// uniform AN post-hook for `assistive` mode. As of D2 all four AN
-// rules are native single-rule passes routed through
-// `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`; the legacy
-// per-flag `grammarConfig` machinery + the 11 P-1 throw sites are
-// gone, so this bridge is unconditional delegation gated only on
-// `engine.behavior`.
+// uniform AN post-hook for `assistive` mode. All four AN rules are
+// native single-rule passes routed through `applyANToFixedPoint` in
+// `src/lib/grammar/an-rules.ts`; there is no legacy per-flag
+// `grammarConfig` machinery and no inline P-1 throw sites, so this
+// bridge is unconditional delegation gated only on `engine.behavior`.
 
 import type { ArgumentEngine } from "../core/argument-engine.js"
 import type {

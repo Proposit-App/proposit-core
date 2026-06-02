@@ -174,7 +174,7 @@ export class ArgumentEngine<
     private engineBehavior: "assistive" | "permissive"
     private generateId: () => string
     private restoringFromSnapshot = false
-    // D2b — re-entrance guard for the AN post-mutation hook. The
+    // Re-entrance guard for the AN post-mutation hook. The
     // `setOnMutate` callbacks (3 sites: createPremise, fromSnapshot,
     // restoreFromSnapshot) fire `runAssistiveNormalization(this)` after
     // every successful mutation when `behavior === 'assistive'`. AN
@@ -577,7 +577,7 @@ export class ArgumentEngine<
      * UI is expected to prompt the user before invoking `normalize()`
      * explicitly.
      *
-     * As of v1.0 (Phase D2) behavior is enforced entirely via the AN
+     * As of v1.0 behavior is enforced entirely via the AN
      * post-mutation hook in `runAssistiveNormalization` — the legacy
      * per-flag `grammarConfig` plumbing that bridged behavior to
      * premise-level enforcement is gone. Switching `permissive →
@@ -945,7 +945,7 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(id)
                 this.notifySubscribers()
-                // D2b — AN post-mutation hook per spec §5. Skipped
+                // AN post-mutation hook per spec §5. Skipped
                 // during snapshot restoration (PE.fromSnapshot bypasses
                 // mutations anyway, but the guard is defensive).
                 // `runAssistiveNormalization` is a no-op in permissive
@@ -1708,8 +1708,7 @@ export class ArgumentEngine<
      * `normalize` is non-destructive in the logical-meaning sense — it
      * does not delete variables, change claim references, or modify
      * operator semantics. Recovery from Evaluable or Derivable violations
-     * requires user intent and is exposed via the repair primitives
-     * (Phase C4).
+     * requires user intent and is exposed via the repair primitives.
      *
      * In v1.0 every AN rule targets a Presentable invariant, so calls
      * with `tier` ∈ {'structural', 'evaluable', 'derivable'} are
@@ -1728,11 +1727,11 @@ export class ArgumentEngine<
         normalizeArgument(this, tier)
     }
 
-    // D2 — `normalizeAllExpressions` was the per-engine wrapper that
-    // delegated to `pe.normalizeExpressions()` on every premise.
-    // Both methods are deleted in D2. Callers migrate to
-    // `engine.normalize(tier?)` (Phase C3), which routes through the
-    // four native AN passes in `src/lib/grammar/an-rules.ts`.
+    // Normalization is reached via `engine.normalize(tier?)`, which
+    // routes through the four native AN passes in
+    // `src/lib/grammar/an-rules.ts`. There is no per-engine
+    // `normalizeAllExpressions` wrapper and no per-premise
+    // `pe.normalizeExpressions()`.
 
     public getRoleState(): TCoreArgumentRoleState {
         return {
@@ -1856,10 +1855,10 @@ export class ArgumentEngine<
                 // a restored engine defaults to `'assistive'`. The fork
                 // path (`forkArgumentEngine` / `PropositCore.forkArgument`)
                 // explicitly threads the source engine's `behavior` into
-                // the forked engine's config (see D5 — `fork.ts`), so
-                // fork callers don't lose the setting.
+                // the forked engine's config (see `fork.ts`), so fork
+                // callers don't lose the setting.
                 //
-                // D2: the legacy `grammarConfig` field is gone — all
+                // The legacy `grammarConfig` field is gone — all
                 // P-1 / AN behavior is driven by `engine.behavior` +
                 // the AN post-mutation hook.
             } as TLogicEngineOptions,
@@ -1919,7 +1918,7 @@ export class ArgumentEngine<
                 engine.markDirty()
                 engine.reactiveDirty.premiseIds.add(premiseId)
                 engine.notifySubscribers()
-                // D2b — AN post-mutation hook per spec §5. See the
+                // AN post-mutation hook per spec §5. See the
                 // matching comment in `createPremise`'s setOnMutate
                 // callback for the re-entrance / snapshot-restore
                 // rationale.
@@ -1955,7 +1954,7 @@ export class ArgumentEngine<
 
         engine.restoringFromSnapshot = false
 
-        // C7: No post-load normalization. The snapshot loads as-is; any
+        // No post-load normalization. The snapshot loads as-is; any
         // lower-tier (Evaluable / Derivable / Presentable) violations
         // are queryable post-load via `engine.validate(tier)`.
 
@@ -1964,15 +1963,14 @@ export class ArgumentEngine<
             ArgumentEngine.verifySnapshotChecksums(engine, snapshot)
         }
 
-        // D2: load-time invariant validation no longer needs the
+        // Load-time invariant validation no longer needs the
         // PERMISSIVE swap — the legacy `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-        // check was deleted alongside the rest of `grammarConfig`. P-1
+        // check was removed alongside the rest of `grammarConfig`. P-1
         // is now surfaced via `engine.validate('presentable')`
         // post-load. Non-grammar invariants (schema conformance,
         // reference integrity, conclusion ref, circularity, etc.)
-        // still throw at load time. D4 inlined the
-        // `runLoadTimeValidationCore` wrapper and routes through the
-        // public `validateInvariants()` method.
+        // still throw at load time, routed through the public
+        // `validateInvariants()` method.
         const loadValidation = engine.validateInvariants()
         if (!loadValidation.ok) {
             throw new InvariantViolationError(loadValidation.violations)
@@ -2101,10 +2099,10 @@ export class ArgumentEngine<
 
         engine.restoringFromSnapshot = false
 
-        // C7: No post-load normalization. See the matched note in
+        // No post-load normalization. See the matched note in
         // `fromSnapshot` above. Load is non-mutating; lower-tier
-        // violations surface via `engine.validate(tier)`. Phase D
-        // removes the legacy grammarConfig parameter entirely.
+        // violations surface via `engine.validate(tier)`. There is no
+        // legacy grammarConfig parameter.
 
         if (checksumVerification === "strict") {
             engine.flushChecksums()
@@ -2116,12 +2114,11 @@ export class ArgumentEngine<
             )
         }
 
-        // C7: PERMISSIVE-gated load-time validation (see matched comment
+        // PERMISSIVE-gated load-time validation (see matched comment
         // in `fromSnapshot` above). Non-grammar invariants still throw at
         // load; lower-tier grammar violations surface post-load via
-        // `engine.validate(tier)`. D4 inlined the
-        // `runLoadTimeValidationCore` wrapper and routes through the
-        // public `validateInvariants()` method.
+        // `engine.validate(tier)`, routed through the public
+        // `validateInvariants()` method.
         const loadValidation = engine.validateInvariants()
         if (!loadValidation.ok) {
             throw new InvariantViolationError(loadValidation.violations)
@@ -2342,7 +2339,7 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(premiseId)
                 this.notifySubscribers()
-                // D2b — AN post-mutation hook per spec §5. See the
+                // AN post-mutation hook per spec §5. See the
                 // matching comment in `createPremise`'s setOnMutate
                 // callback for the re-entrance / snapshot-restore
                 // rationale.
@@ -2524,7 +2521,7 @@ export class ArgumentEngine<
      * For the legacy pre-1.0 invariant sweep (schema conformance,
      * reference integrity, ownership, conclusion ref, circularity,
      * checksums) use {@link validateInvariants} instead. The pre-1.0
-     * no-arg overload of `validate()` was removed in Phase D4.
+     * no-arg overload of `validate()` has been removed.
      */
     public validate(tier: TGrammarTier): readonly TViolation[] {
         return validateGrammar(tier, this.asGrammarValidatorContext())
@@ -2545,8 +2542,8 @@ export class ArgumentEngine<
      * covers schema/reference/structural-bookkeeping invariants that
      * sit outside the tier hierarchy.
      *
-     * @since 1.0.0 — replaces the legacy `validate()` no-arg overload
-     *   removed in Phase D4 of the `grammar-tiers/core` branch.
+     * @since 1.0.0 — replaces the legacy `validate()` no-arg overload,
+     *   which has been removed.
      */
     public validateInvariants(): TInvariantValidationResult {
         return validateArgumentStandalone(this.asValidationContext())
@@ -2614,8 +2611,8 @@ export class ArgumentEngine<
      *
      * Violations carry the underlying `DERIVATION_STRUCTURE_INVALID` code
      * (per the derivation-validation utility). The pre-1.0
-     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed in
-     * Phase D4 alongside the legacy `validate()` no-arg overload — naked-Q
+     * `DERIVATION_STRUCTURE_INVALID_AT_EVALUATION` override was removed
+     * alongside the legacy `validate()` no-arg overload — naked-Q
      * is a valid Derivable state (per spec §4.2) and is skipped by
      * evaluation rather than thrown.
      *
@@ -2700,15 +2697,15 @@ export class ArgumentEngine<
     }
 
     private asEvaluationContext(): TArgumentEvaluationContext {
-        // C8: naked-Q derivation premises (single variable expression at
+        // Naked-Q derivation premises (single variable expression at
         // root, type='derivation') contribute nothing to evaluation. The
         // evaluator-context's premise listings filter them out so they
         // are entirely invisible to evaluate() and checkValidity(). This
         // replaces the pre-1.0 DERIVATION_STRUCTURE_INVALID_AT_EVALUATION
         // throw on naked-Q. Filter applies uniformly to conclusion,
         // supporting, and full premise listings. The predicate lives in
-        // `src/lib/grammar/naked-q.ts` so the C6 factory and this filter
-        // share one definition.
+        // `src/lib/grammar/naked-q.ts` so the populate-from factory and
+        // this filter share one definition.
         return {
             argumentId: this.argument.id,
             conclusionPremiseId: this.conclusionPremiseId,

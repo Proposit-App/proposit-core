@@ -436,7 +436,7 @@ describe("createIngestionV1Pipeline — LLM-options threading", () => {
 // first regardless of downstream stages failing for lack of canned
 // responses).
 
-describe("createIngestionV2Pipeline — retry-policy override threading (C2)", () => {
+describe("createIngestionV2Pipeline — retry-policy override threading", () => {
     const goodSeg = {
         segments: [
             { segmentId: "s1", text: "Hi.", span: { start: 0, end: 3 } },

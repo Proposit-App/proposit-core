@@ -323,8 +323,7 @@ export function createOpenAiResponsesProvider(
                 // `function_call_output`. Omitting the
                 // `function_call` items returns a 400 with a
                 // conversation-state error on round 2+. Order is
-                // preserved across all calls in the round (slice
-                // 1B.1 reviewer fold P1 #1).
+                // preserved across all calls in the round.
                 for (const call of functionCalls) {
                     const handler = findFunctionHandler(req.tools, call.name)
                     if (!handler) {

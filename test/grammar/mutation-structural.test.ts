@@ -1,4 +1,4 @@
-// C5: Mutations enforce Structural rules and throw on violation
+// Mutations enforce Structural rules and throw on violation
 // regardless of `behavior`. Per spec §4, Structural is the floor —
 // even permissive engines reject Structural violations at mutation
 // time. Only Evaluable / Derivable / Presentable violations are
@@ -55,8 +55,8 @@ function varExpr(
     }
 }
 
-describe("Mutations throw on Structural violations (C5)", () => {
-    // D2b — Test setup uses the permissive-build + setBehavior(assistive)
+describe("Mutations throw on Structural violations", () => {
+    // Test setup uses the permissive-build + setBehavior(assistive)
     // pattern. The Structural-rule contract is "mutations throw on
     // Structural violations regardless of `behavior`" (spec §8). With
     // the new AN post-mutation hook (assistive mode), the eager AN-3

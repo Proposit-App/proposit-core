@@ -374,7 +374,7 @@ export function importArgumentFromYaml(yamlString: string): {
         engine.addVariable(variable)
     }
 
-    // D2b — permissive-build + explicit normalize() pattern. The
+    // Permissive-build + explicit normalize() pattern. The
     // per-premise tree-build below is incremental (one
     // `pm.addExpression` per AST node, parents first). Under the
     // post-mutation AN hook (assistive mode), AN-3 would eagerly

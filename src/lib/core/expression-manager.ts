@@ -34,7 +34,7 @@ import {
     EXPR_POSITION_DUPLICATE,
     EXPR_CHECKSUM_MISMATCH,
 } from "../types/validation.js"
-// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` import deleted in D2 —
+// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` is no longer imported —
 // P-1 is now surfaced via the grammar-tier validators.
 
 // Distribute Omit across the union to preserve discriminated-union narrowing.
@@ -407,13 +407,13 @@ export class ExpressionManager<
                 )
             }
 
-            // D2: P-1 (non-not operator under operator) is no longer
+            // P-1 (non-not operator under operator) is no longer
             // enforced at mutation time. Assistive mode inserts the
             // formula buffer via AN-1 post-hook; permissive mode
             // leaves the un-buffered state and `validate('presentable')`
             // flags it. The pre-v1.0 inline buffer-insertion fallback +
             // throw both lived here under `grammarConfig.enforceFormula
-            // BetweenOperators` — deleted in D2.
+            // BetweenOperators` and are gone.
 
             if (parent.type === "operator") {
                 this.assertChildLimit(parent.operator, expression.parentId)
@@ -470,7 +470,7 @@ export class ExpressionManager<
         if (position === lastChild.position) {
             // Composite-mutation behavior (spec §8 / S-9): always shift
             // colliding siblings as part of the bundled op. The pre-v1.0
-            // `repositionOnCollision` flag gating is gone in D2 — composites
+            // `repositionOnCollision` flag gating is gone — composites
             // never leave a Structural violation by design.
             this.repositionSiblings(
                 parentId,
@@ -518,8 +518,7 @@ export class ExpressionManager<
             if (position === prevPosition || position === sibling.position) {
                 // Composite-mutation behavior (spec §8 / S-9): always shift
                 // colliding siblings as part of the bundled op. The
-                // pre-v1.0 `repositionOnCollision` flag gating is gone in
-                // D2.
+                // pre-v1.0 `repositionOnCollision` flag gating is gone.
                 this.repositionSiblings(
                     sibling.parentId,
                     siblingIndex > 0
@@ -690,7 +689,7 @@ export class ExpressionManager<
         // Mark the updated expression and its ancestors dirty for hierarchical checksum recomputation.
         this.markExpressionDirty(expressionId)
 
-        // D2: the pre-v1.0 same-operator absorption inline cascade
+        // The pre-v1.0 same-operator absorption inline cascade
         // (gated on `absorbSameOperator`) is gone. AN-4 (post-mutation
         // hook in assistive mode) handles same-operator absorption
         // through a formula buffer.
@@ -776,7 +775,7 @@ export class ExpressionManager<
             this.markExpressionDirty(parentId)
         }
 
-        // D2: the pre-v1.0 `collapseIfNeeded(parentId)` inline cascade
+        // The pre-v1.0 `collapseIfNeeded(parentId)` inline cascade
         // (gated on `collapseEmptyFormula`) is gone. AN-3 (post-mutation
         // hook in assistive mode) handles 0/1-child operator/formula
         // collapse.
@@ -808,7 +807,7 @@ export class ExpressionManager<
                 this.markExpressionDirty(parentId)
             }
 
-            // D2: AN-3 (post-mutation hook in assistive mode) handles
+            // AN-3 (post-mutation hook in assistive mode) handles
             // 0/1-child operator/formula collapse on the parent.
 
             return target
@@ -817,7 +816,7 @@ export class ExpressionManager<
         // Exactly 1 child — promote it into the target's slot.
         const child = children[0]
 
-        // D2: the P-1 promote-on-remove enforcement throw lived here under
+        // The P-1 promote-on-remove enforcement throw lived here under
         // `grammarConfig.enforceFormulaBetweenOperators`. AN-1 (post-mutation
         // hook in assistive mode) now inserts the buffer if the promotion
         // produced a non-not operator under operator; permissive mode leaves
@@ -875,20 +874,19 @@ export class ExpressionManager<
         this.dirtyExpressionIds.delete(expressionId)
         this.markExpressionDirty(child.id)
 
-        // D2: AN-3 (post-mutation hook in assistive mode) handles
+        // AN-3 (post-mutation hook in assistive mode) handles
         // formula collapse on the target's parent if the promoted child
         // makes the formula unjustified.
 
         return target
     }
 
-    // D2 — `promoteChild` was the helper for the pre-v1.0 inline
-    // collapse cascade (`collapseIfNeeded`) and the legacy
-    // `ExpressionManager.normalize()` sweep, both of which are gone in
-    // D2 (replaced by AN-3 / AN-4 / AN-2 / AN-1 post-mutation hooks in
-    // `src/lib/grammar/an-rules.ts`). The remaining
-    // `removeAndPromote` 1-child branch in `removeExpression` writes
-    // the promoted child directly (no shared helper is needed).
+    // There is no shared `promoteChild` helper: the inline collapse
+    // cascade (`collapseIfNeeded`) and the legacy
+    // `ExpressionManager.normalize()` sweep it once served are gone,
+    // replaced by the AN-1..AN-4 post-mutation hooks in
+    // `src/lib/grammar/an-rules.ts`. The `removeAndPromote` 1-child
+    // branch in `removeExpression` writes the promoted child directly.
 
     /**
      * Redistributes the minimal set of sibling positions to create room at
@@ -1019,20 +1017,15 @@ export class ExpressionManager<
         return modified
     }
 
-    // D2 — the inline AN cascades (`collapseIfNeeded` /
-    // `absorbSameOperatorIfNeeded` / `absorbSameOperator`), the legacy
-    // `ExpressionManager.normalize()` 5-pass sweep, the
-    // `promoteChild` helper, and the private
-    // `hasBinaryOperatorInBoundedSubtree` were all deleted here. The
-    // first three were gated on the legacy `collapseEmptyFormula` /
-    // `absorbSameOperator` flags and ran inline from
-    // `removeExpression` / `updateExpression`. The `normalize()` sweep
-    // was the underlying engine for `pe.normalizeExpressions()` /
-    // `engine.normalizeAllExpressions()`. All of these are subsumed by
-    // the four native AN passes in `src/lib/grammar/an-rules.ts`
-    // (AN-1..AN-4 — assistive-mode post-mutation hook +
-    // `engine.normalize(tier?)`'s explicit pass). The AN-3 module
-    // uses its own bounded-subtree helper bound to
+    // ExpressionManager carries no inline AN behavior: there are no
+    // `collapseIfNeeded` / `absorbSameOperatorIfNeeded` /
+    // `absorbSameOperator` cascades, no `ExpressionManager.normalize()`
+    // 5-pass sweep, no `promoteChild` helper, and no private
+    // `hasBinaryOperatorInBoundedSubtree`. All of that normalization
+    // behavior is subsumed by the four native AN passes in
+    // `src/lib/grammar/an-rules.ts` (AN-1..AN-4 — assistive-mode
+    // post-mutation hook + `engine.normalize(tier?)`'s explicit pass).
+    // The AN-3 module uses its own bounded-subtree helper bound to
     // `pe.getChildExpressions` (see `src/lib/grammar/bounded-subtree.ts`).
 
     /** Returns `true` if any expression in the tree references the given variable ID. */
@@ -1084,11 +1077,11 @@ export class ExpressionManager<
      * the only structural failure mode for `removeAndPromote`'s 1-child
      * branch is the root-only-operator promotion rule (S-5): an
      * `implies`/`iff` child cannot be promoted into a non-root slot. The
-     * pre-v1.0 P-1 promote-on-remove check was deleted in D2 along with
-     * the rest of the `grammarConfig.enforceFormulaBetweenOperators`
-     * machinery; the legacy `collapseEmptyFormula` cascade simulation
-     * (`simulateCollapseChain` / `simulatePostPromotionCollapse`) was
-     * deleted in lockstep — AN-3 (post-mutation hook in assistive mode)
+     * pre-v1.0 P-1 promote-on-remove check is gone, along with the rest
+     * of the `grammarConfig.enforceFormulaBetweenOperators` machinery;
+     * the legacy `collapseEmptyFormula` cascade simulation
+     * (`simulateCollapseChain` / `simulatePostPromotionCollapse`) is
+     * gone in lockstep — AN-3 (post-mutation hook in assistive mode)
      * handles every collapse case.
      */
     private assertRemovalSafe(
@@ -1109,7 +1102,7 @@ export class ExpressionManager<
     /**
      * Checks whether promoting `child` into a slot with the given `newParentId`
      * would violate the root-only rule (S-5). The pre-v1.0 nesting check
-     * (P-1 / `enforceFormulaBetweenOperators`) was deleted in D2.
+     * (P-1 / `enforceFormulaBetweenOperators`) is gone.
      */
     private assertPromotionSafe(
         child: TExpr,
@@ -1336,7 +1329,7 @@ export class ExpressionManager<
             )
         }
 
-        // D2: the pre-v1.0 P-1 inline buffer-insertion / throw branches
+        // The pre-v1.0 P-1 inline buffer-insertion / throw branches
         // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
         // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
         // sites — (1) new expression as child of anchor's parent;
@@ -1518,7 +1511,7 @@ export class ExpressionManager<
             )
         }
 
-        // D2: the pre-v1.0 P-1 inline buffer-insertion / throw branches
+        // The pre-v1.0 P-1 inline buffer-insertion / throw branches
         // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
         // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
         // sites — (1) new operator as child of existing node's parent;
@@ -1776,7 +1769,7 @@ export class ExpressionManager<
         } as unknown as TCorePropositionalExpression)
         this.markExpressionDirty(expressionId)
 
-        // D2: AN-4 (post-mutation hook in assistive mode) handles
+        // AN-4 (post-mutation hook in assistive mode) handles
         // same-operator absorption through a formula buffer if this
         // operator change produced one.
 
@@ -1914,13 +1907,13 @@ export class ExpressionManager<
                 })
             }
 
-            // D2: the pre-v1.0 3g `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
+            // The pre-v1.0 3g `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
             // legacy-validate() check (gated on
             // `grammarConfig.enforceFormulaBetweenOperators`) is gone.
             // P-1 is now surfaced via the grammar-tier validators —
             // call `engine.validate('presentable')` and look for the
             // `P-1` code. The `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-            // engine-error constant was deleted in lockstep.
+            // engine-error constant is gone in lockstep.
 
             // Collect positions for uniqueness check
             const parentKey = expr.parentId

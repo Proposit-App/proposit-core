@@ -1,4 +1,4 @@
-// C4: repair primitives tests.
+// Repair primitives tests.
 //
 // Each primitive resolves a specific Evaluable or Derivable violation
 // that `normalize()` cannot resolve (because resolution would change

@@ -18,9 +18,8 @@
 //
 // This module factors the traversal out behind a `(id) => readonly TExpr[]`
 // lookup-function parameter so both consumers can share one
-// implementation while binding the lookup to their own freshness story.
-// The dual-review syntheses (D0a P2 #3, D0d P2 #3) called out the
-// pre-D0e duplication; this is the shared landing place.
+// implementation while binding the lookup to their own freshness story,
+// rather than duplicating the bounded-subtree walk in each.
 
 import type { TCorePropositionalExpression } from "../schemata/index.js"
 

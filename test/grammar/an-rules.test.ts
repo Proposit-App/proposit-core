@@ -93,7 +93,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         expect(pe.getExpressions()).toHaveLength(0)
     })
 
-    // D0c — sub-case-specific guards. These exercise the four native
+    // Sub-case-specific guards. These exercise the four native
     // collapse paths (0-child operator, 1-child non-not operator,
     // 0-child formula, 1-child formula with no bounded-subtree binary)
     // and the keep case (1-child formula whose subtree DOES contain a
@@ -418,14 +418,13 @@ describe("applyAN2 — collapse double negation (native)", () => {
     })
 
     it("issues two PremiseEngine.removeExpression(_, false) calls per direct NOT-NOT collapse (native code path)", () => {
-        // Spy-style guard: the D0b native implementation must drive the
-        // collapse via the public `removeExpression(id, false)` API
-        // (per briefing §2 / plan D0b). The legacy delegation routed
-        // through `pe.normalizeExpressions()`, which would register zero
-        // removeExpression calls because it uses the private
-        // `promoteChild` primitive. This test fails loudly if AN-2 ever
-        // regresses to delegation, and locks down the
-        // `removeExpression(_, false)` semantic the plan calls out.
+        // Spy-style guard: the native implementation must drive the
+        // collapse via the public `removeExpression(id, false)` API.
+        // A delegation through `pe.normalizeExpressions()` would
+        // register zero removeExpression calls because it uses the
+        // private `promoteChild` primitive. This test fails loudly if
+        // AN-2 ever regresses to delegation, and locks down the
+        // `removeExpression(_, false)` semantic.
         const { eng, peB, varAId } = setupTwoPremisesWithCrossVar()
         peB.addExpression({
             id: "not-outer",
@@ -557,8 +556,8 @@ describe("applyAN2 — collapse double negation (native)", () => {
 describe("applyAN4 — absorb same-operator adjacency through a formula", () => {
     // Contract / regression-guard tests for AN-4 (P-5).
     //
-    // **Implementation state (D0e — native).** `applyAN4` is a
-    // native single-rule pass: it walks each premise's tree looking
+    // **Implementation: native single-rule pass.** `applyAN4`
+    // walks each premise's tree looking
     // for `OUTER_OP → formula → INNER_OP (same operator) → [c1,…,cN]`
     // and, for each match, uses `pe.reparentExpression(c_i, outerId,
     // position_i)` to move every inner child into the outer at
@@ -577,13 +576,13 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     // are root-only (S-5) and never absorb — only and/or pairs.
     //
     // **Per-rule isolation caveat (historical, now resolved at the
-    // AN-4 level).** Pre-D0e `applyAN4` delegated to the legacy full
-    // sweep, so a fixture with a 1-child outer-OR would also trigger
-    // AN-3 in the same call and confuse "no-firing" assertions. The
-    // multi-child outer operators (≥2 children) below were chosen to
-    // avoid that confusion under the delegated path. Native AN-4
-    // fires only on its specific pattern, so the same fixtures now
-    // assert genuinely per-rule behavior.
+    // AN-4 level).** A delegating `applyAN4` that routed through the
+    // legacy full sweep would also trigger AN-3 on a fixture with a
+    // 1-child outer-OR in the same call, confusing "no-firing"
+    // assertions. The multi-child outer operators (≥2 children) below
+    // were chosen to avoid that confusion under a delegated path.
+    // Native AN-4 fires only on its specific pattern, so the same
+    // fixtures now assert genuinely per-rule behavior.
 
     // Helper: build a four-premise setup so peB hosts the absorption
     // shape using peA, peC, and peD's auto-created premise-bound
@@ -694,10 +693,9 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         // ve-c + ve-d next to ve-a.
         expect(ids).toEqual(["or-outer", "ve-a", "ve-c", "ve-d"])
         // Identity preservation: each variable expression keeps its
-        // id through absorption (the legacy path uses the
-        // expression-manager's private `reparent`, so IDs survive).
-        // The eventual native rewrite via the D0e reparent primitive
-        // must keep this invariant.
+        // id through absorption. The native `reparentExpression`
+        // primitive mutates parentId/position in place without minting
+        // new ids, so this invariant must hold.
         const veA = after.find((e) => e.id === "ve-a")!
         const veC = after.find((e) => e.id === "ve-c")!
         const veD = after.find((e) => e.id === "ve-d")!
@@ -948,27 +946,27 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     })
 
     it("absorbs through the redistribute-fallback path when outer children sit near POSITION_MAX", () => {
-        // D0f — P2 #1: pre-D0f the redistribute scratch range was
-        // hard-coded to `[max - total, max - 1]`. With outer children
+        // A hard-coded redistribute scratch range of
+        // `[max - total, max - 1]` is unsafe: with outer children
         // clustered near `POSITION_MAX`, the phase-1 reparent in
         // `redistributeChildrenEvenly` could land a scratch position
         // on a different sibling's current slot — tripping S-9 from
-        // inside `pe.reparentExpression`. The D0f fix scans downward
-        // from `max`, skipping positions held by current children AND
-        // positions reserved for the phase-2 final targets, so neither
-        // phase reparents collides.
+        // inside `pe.reparentExpression`. The scan-downward approach
+        // scans from `max`, skipping positions held by current children
+        // AND positions reserved for the phase-2 final targets, so
+        // neither phase's reparents collide.
         //
         // Fixture: max=20 positionConfig; outer-OR has 5 children at
         // [ve-a@3, ve-sib1@15, formula@17, ve-sib2@18, ve-e@20].
         // formulaIdx=2; leftPos=15, rightPos=18 → gap=3. inner has
         // 3 children → count=3 → gap (3) ≤ count (3) triggers
-        // redistribute. Pre-D0f scratchBase = 20 - 5 = 15; phase-1
-        // move children[0] (ve-a at 3) → 15 collides with
-        // children[1] (ve-sib1 at 15). The D0f scan skips the
-        // forbidden set {current ∪ targets} = {3, 4, 8, 12, 15, 16,
-        // 17, 18, 20} (targets are evenly-spaced [4, 8, 12, 16, 20]
-        // by the trunc formula `min + range/(total+1) * (i+1)`) and
-        // returns valid scratches.
+        // redistribute. A fixed scratchBase = 20 - 5 = 15 would move
+        // children[0] (ve-a at 3) → 15 in phase 1, colliding with
+        // children[1] (ve-sib1 at 15). The scan skips the forbidden
+        // set {current ∪ targets} = {3, 4, 8, 12, 15, 16, 17, 18, 20}
+        // (targets are evenly-spaced [4, 8, 12, 16, 20] by the trunc
+        // formula `min + range/(total+1) * (i+1)`) and returns valid
+        // scratches.
         const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
             behavior: "permissive",
             positionConfig: { min: 0, max: 20, initial: 10 },
@@ -1007,9 +1005,9 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         // formula@17, ve-sib2@18, ve-e@20. formulaIdx=2;
         // leftPos=15 (ve-sib1), rightPos=18 (ve-sib2). gap=3. count=3
         // (inner has 3 children) → triggers redistribute.
-        // Pre-D0f scratchBase = max - total = 20 - 5 = 15. Phase-1
-        // move children[0] (ve-a at 3) → 15 collides with children[1]
-        // (ve-sib1 at 15). S-9 throws.
+        // A fixed scratchBase = max - total = 20 - 5 = 15 would move
+        // children[0] (ve-a at 3) → 15 in phase 1, colliding with
+        // children[1] (ve-sib1 at 15) and throwing S-9.
         peB.addExpression({
             id: "ve-a",
             argumentId: ARG.id,
@@ -1134,7 +1132,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     })
 
     it("absorbs when phase-2 inner-child targets collide with the formula's post-redistribute position", () => {
-        // D1 — P2 #1: after `redistributeChildrenEvenly` fires, the
+        // After `redistributeChildrenEvenly` fires, the
         // formula sits at one of the redistributed slots between
         // `effectiveLeftPos` and `effectiveRightPos`. The phase-2
         // inner-child reparents compute target positions in that same
@@ -1289,12 +1287,11 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     })
 
     it("absorbs at the gap = count + 1 non-redistribute boundary where the ±1 shift would have collided with the next planned target", () => {
-        // D2 — D1 review P2 #1 carry-over. The D1 fix used a ±1 shift
-        // when a phase-2 target collided with the formula's current
-        // position. The shift is unsound at the boundary `gap = count
-        // + 1` (integer spacing = 1): shifting by 1 lands on the slot
-        // reserved for the NEXT planned target, so the next iteration
-        // trips S-9 against the just-placed inner child.
+        // A naive ±1 shift (used when a phase-2 target collides with
+        // the formula's current position) is unsound at the boundary
+        // `gap = count + 1` (integer spacing = 1): shifting by 1 lands
+        // on the slot reserved for the NEXT planned target, so the next
+        // iteration trips S-9 against the just-placed inner child.
         //
         // Minimum reproducer (matches this fixture): positionConfig
         // min=0/max=4. Outer-OR has 3 children sorted by position:
@@ -1302,15 +1299,15 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         // rightPos=4 → gap=4 > count=2 → redistribute does NOT fire
         // (non-redistribute path). Computed targets =
         // `trunc(0 + 4/(2+1) * (i+1))` = `[1, 2]`. Formula sits at
-        // position 1 (= target[0]). The D1 ±1 shift would push
-        // target[0] from 1 → 2; then target[1] is computed as 2 → S-9
-        // collision with the just-placed inner-child[0].
+        // position 1 (= target[0]). A ±1 shift would push target[0]
+        // from 1 → 2; then target[1] is computed as 2 → S-9 collision
+        // with the just-placed inner-child[0].
         //
-        // The D2 fix replaces the ±1 shift with a forbidden-set walk
-        // that tracks all already-planned target positions plus the
-        // formula's position, scans outward for a free slot strictly
-        // inside `(effectiveLeftPos, effectiveRightPos)`, and throws
-        // only if the band is exhausted.
+        // The forbidden-set walk instead tracks all already-planned
+        // target positions plus the formula's position, scans outward
+        // for a free slot strictly inside `(effectiveLeftPos,
+        // effectiveRightPos)`, and throws only if the band is
+        // exhausted.
         const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
             behavior: "permissive",
             positionConfig: { min: 0, max: 4, initial: 2 },
@@ -1417,7 +1414,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
 describe("applyAN1 — insert formula buffer between operators (native)", () => {
     // Contract / regression-guard tests for AN-1 (P-1).
     //
-    // **Implementation state (D0e — native).** `applyAN1` walks each
+    // **Implementation: native.** `applyAN1` walks each
     // premise's expression tree looking for non-`not` operators whose
     // parent is also an operator (the P-1 violation shape) and calls
     // `pe.wrapInFormula(childOpId, formulaId)` to insert a freshly-
@@ -1945,7 +1942,7 @@ describe("applyANToFixedPoint — drives all four rules to convergence", () => {
     })
 })
 
-// D0a smoke test — exported names are callable and return booleans.
+// Smoke test — exported names are callable and return booleans.
 describe("an-rules module surface", () => {
     it("exports applyAN1 / applyAN2 / applyAN3 / applyAN4 / applyANToFixedPoint", () => {
         const eng = makePermissiveEngine()
