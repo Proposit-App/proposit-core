@@ -61,6 +61,7 @@ export function createCitationSourceDetectionStage(
         model: options?.model ?? CITATION_SOURCE_DETECTION_MODEL,
         maxOutputTokens: options?.maxOutputTokens,
         reasoningEffort: options?.reasoningEffort,
+        retry: options?.retry,
         buildPrompt,
     })
 }

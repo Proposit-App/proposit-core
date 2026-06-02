@@ -147,6 +147,20 @@ export type TPipelineEvent =
           at: number
       }
     | {
+          kind: "stage:llm-request"
+          stageId: string
+          /** 1, 2, ... — one event per LLM-call attempt, emitted
+           *  before the provider call resolves. Symmetric with the
+           *  post-call `stage:llm-call.attempt`. */
+          attempt: number
+          /** The prompts about to be sent for this attempt. The user
+           *  message includes any retry-suffix appended on attempt 2+
+           *  after a prior schema-validation failure — identical to
+           *  the same attempt's `stage:llm-call.prompts.user`. */
+          prompts: { system: string; user: string }
+          at: number
+      }
+    | {
           kind: "stage:llm-call"
           stageId: string
           /** 1, 2, ... — one event per LLM-call attempt. */

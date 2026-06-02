@@ -1515,9 +1515,11 @@ The executor validates `input` against `pipeline.inputSchema` and the DAG (cycle
 | `TStageContext`                 | Passed to each stage's `run`: `input`, `get<T>(stageId)`, `stageStatus(stageId)`, `llm`, `generateId`, `signal`, `emit(event)`, `addFailure(f)`.                                       |
 | `TProcessingFailure`            | `{ stage, code, message, severity: "warning" \| "error", context? }`. The structured failure record. `code` is a bare `string` — match it against the exported failure-code constants. |
 | `TPipelineResult<TOutput>`      | `{ output: TOutput \| null, failures, stageOutcomes, tokenUsage? }`. `output` is `null` when finalize was bypassed.                                                                    |
-| `TPipelineEvent`                | Discriminated union over `kind`: `pipeline:start` / `pipeline:end` / `stage:start` / `stage:end` / `stage:retry` / `stage:llm-call`.                                                   |
+| `TPipelineEvent`                | Discriminated union over `kind`: `pipeline:start` / `pipeline:end` / `stage:start` / `stage:end` / `stage:retry` / `stage:llm-request` / `stage:llm-call`.                             |
 | `TDepSpec` / `TOptionalDep`     | A dependency is a bare stage-id `string` or an `optional(id)` wrapper. `optional(id)`, `isOptionalDep`, `depId` are exported helpers.                                                  |
 | `TRetryPolicy` / `TRetryReason` | Retry configuration; `TRetryReason` is `"schema_validation" \| "transient" \| "rate_limit" \| "quota_exhausted"`.                                                                      |
+
+The `stage:llm-request` event (since v1.8.0) fires from `llmStage` **before** each LLM-call attempt resolves — emitted inside the retry loop after the attempt counter increments and the request is built, immediately before the provider call. It carries `{ stageId, attempt, prompts: { system, user }, at }`, where `prompts.user` is the message as-sent on this attempt (including any retry-suffix appended after a prior schema-validation failure). It lets a consumer surface a stage's Input the instant the call starts, without waiting for the post-call `stage:llm-call`. A retried attempt fires a second `stage:llm-request` with the incremented `attempt`; deterministic stages emit none. Per-attempt ordering is `stage:start → stage:llm-request → stage:llm-call → stage:end`.
 
 The `stage:llm-call` event (since v1.2.0) fires after every LLM-call attempt, carrying the actual `prompts` sent (including the retry-suffix appended on attempt 2+), the raw `output`, the call's `tokenUsage`, and an optional `validationError` set whenever the output failed `outputSchema` validation. Its presence is the validation-fail signal; the payload shape is otherwise identical on success and failure. Deterministic stages and the thrown-error branch do not emit it.
 
@@ -1633,10 +1635,11 @@ type TLlmStageOptionsOverride = {
     maxOutputTokens?: number
     reasoningEffort?: TReasoningEffort // OpenAI-specific; ignored by Ollama
     model?: string
+    retry?: Partial<TRetryPolicy> // since v1.8.0
 }
 ```
 
-The merge order is **stage-override > pipeline-default > the stage's built-in default**. The `model?` knob (added v1.6.0) is the load-bearing seam for retargeting a whole pipeline at a different backend in one line — e.g. pointing v2 at a local Ollama model for cost-free local development:
+The merge order is **stage-override > pipeline-default > the stage's built-in default**. The `retry?` knob (added v1.8.0) overrides a stage's framework retry policy; it is carried straight through to `llmStage`, which shallow-merges it over `DEFAULT_RETRY_POLICY` (the seam itself does not merge — last-writer-wins on the whole `retry` object, like the scalar knobs). Its primary use is a "no-auto-retry" toggle that drops `"transient"` from `retryOn`; note that doing so disables the retry for **all** transient causes — network/undici timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not timeouts alone. The `model?` knob (added v1.6.0) is the load-bearing seam for retargeting a whole pipeline at a different backend in one line — e.g. pointing v2 at a local Ollama model for cost-free local development:
 
 ```typescript
 import {

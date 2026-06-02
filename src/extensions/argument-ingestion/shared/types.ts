@@ -15,6 +15,7 @@
 
 import type { TSchema } from "typebox"
 import type { TReasoningEffort } from "../../../lib/llm/types.js"
+import type { TRetryPolicy } from "../../../lib/pipelines/index.js"
 
 /**
  * Bundle of TypeBox schemas a caller hands to an ingestion pipeline
@@ -74,6 +75,17 @@ export type TIngestionInput = {
  * default when no override is supplied, so production behavior is
  * unchanged.
  *
+ * `retry` overrides the stage's framework retry policy. It is a
+ * `Partial<TRetryPolicy>` carried straight through to `llmStage`,
+ * which shallow-merges it over `DEFAULT_RETRY_POLICY` (this surface
+ * does NOT merge it — see `resolveLlmStageOptions`). Its primary
+ * consumer is the server's "no-auto-retry" toggle, which drops
+ * `"transient"` from `retryOn`. Note that dropping `"transient"`
+ * disables the retry for ALL transient causes — network/undici
+ * timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not
+ * timeouts alone, because every non-Abort transport error and the
+ * truncation case both classify as `"transient"`.
+ *
  * The struct is forward-compatible — new knobs can land additively
  * without breaking callers.
  */
@@ -81,6 +93,7 @@ export type TLlmStageOptionsOverride = {
     maxOutputTokens?: number
     reasoningEffort?: TReasoningEffort
     model?: string
+    retry?: Partial<TRetryPolicy>
 }
 
 /**

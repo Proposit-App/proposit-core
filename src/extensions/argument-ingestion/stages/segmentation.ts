@@ -91,6 +91,7 @@ export function createSegmentationStage(
         maxOutputTokens:
             options?.maxOutputTokens ?? SEGMENTATION_MAX_OUTPUT_TOKENS,
         reasoningEffort: options?.reasoningEffort,
+        retry: options?.retry,
         buildPrompt: buildSegmentationPrompt,
     })
 }
