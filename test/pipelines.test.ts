@@ -690,7 +690,7 @@ describe("llmStage — retry policy", () => {
     })
 })
 
-// ---------------- 5b. Quota-exhaustion classification (CR 2026-05-27) ----------------
+// ---------------- Quota-exhaustion classification ----------------
 
 describe("llmStage — quota-exhaustion classification", () => {
     const outputSchema = Type.Object({ value: Type.Number() })
@@ -1266,7 +1266,7 @@ describe("LlmStageRetryExhaustedError", () => {
 })
 
 // Mid-flight abort surfaces as `skipped` with no ProcessingFailure.
-describe("slice 1A.1 — P2 #1: mid-flight abort surfaces as skipped", () => {
+describe("mid-flight abort surfaces as skipped", () => {
     it("aborted in-flight llmStage is `skipped`, not `failed`, with no failure recorded", async () => {
         const events: TPipelineEvent[] = []
         const controller = new AbortController()
@@ -1325,8 +1325,8 @@ describe("slice 1A.1 — P2 #1: mid-flight abort surfaces as skipped", () => {
     })
 })
 
-// P3 #1 — Abort fast-path emits paired stage:start / stage:end.
-describe("slice 1A.1 — P3 #1: abort fast-path emits paired start/end events", () => {
+// Abort fast-path emits paired stage:start / stage:end.
+describe("abort fast-path emits paired start/end events", () => {
     it("a stage that never starts because the signal was already aborted still emits stage:start before stage:end", async () => {
         const events: TPipelineEvent[] = []
         const controller = new AbortController()
@@ -1383,8 +1383,8 @@ describe("slice 1A.1 — P3 #1: abort fast-path emits paired start/end events", 
     })
 })
 
-// P3 #2 — Optional-dep cycle detection.
-describe("slice 1A.1 — P3 #2: optional-dep cycle detection", () => {
+// Optional-dep cycle detection.
+describe("optional-dep cycle detection", () => {
     it("DAG_CYCLE throws when the cycle edge is via optional(...)", async () => {
         const visited: string[] = []
         const aStage = deterministicStage({
@@ -1419,8 +1419,8 @@ describe("slice 1A.1 — P3 #2: optional-dep cycle detection", () => {
     })
 })
 
-// P3 #3 — ctx.stageStatus enforces the same dep allowlist as ctx.get.
-describe("slice 1A.1 — P3 #3: ctx.stageStatus enforces dep allowlist", () => {
+// ctx.stageStatus enforces the same dep allowlist as ctx.get.
+describe("ctx.stageStatus enforces dep allowlist", () => {
     it("throws PipelineConfigurationError when stage calls ctx.stageStatus on a non-dep", async () => {
         const aStage = deterministicStage({
             id: "a",
@@ -1454,8 +1454,8 @@ describe("slice 1A.1 — P3 #3: ctx.stageStatus enforces dep allowlist", () => {
     })
 })
 
-// P3 #5 — subPipelineStage null-output throws SubPipelineFailedError.
-describe("slice 1A.1 — P3 #5: subPipelineStage null-output throws SubPipelineFailedError", () => {
+// subPipelineStage null-output throws SubPipelineFailedError.
+describe("subPipelineStage null-output throws SubPipelineFailedError", () => {
     it("nested null output surfaces as SubPipelineFailedError (not LlmStageRetryExhaustedError)", async () => {
         // Build a nested pipeline whose required finalize dep fails so
         // the nested result is `output: null`. The outer wrapper must

@@ -1877,7 +1877,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
         )
     }
 
-    it("supports role APIs and auto-reassigns conclusion to lowest-id remaining premise when conclusion is deleted (cycle 1.0.2 invariant guard)", () => {
+    it("supports role APIs and auto-reassigns conclusion to lowest-id remaining premise when conclusion is deleted (1.0.2 invariant guard)", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -6189,10 +6189,10 @@ describe("ArgumentEngine — auto-conclusion on first premise", () => {
 
 // ---------------------------------------------------------------------------
 // E-7 invariant guard — engine refuses to leave non-empty argument without
-// conclusion (cycle 1.0.2)
+// conclusion (1.0.2)
 // ---------------------------------------------------------------------------
 //
-// Cycle 4f smoke-test on proposit-server v0.13.0 (Derivable gate
+// A smoke-test on proposit-server v0.13.0 (Derivable gate
 // activated for normal-mode users) exposed E-7 firing on the first
 // premise of a freshly-created argument. The trigger was the shared
 // `mutateCreatePremise` helper, which after `createPremiseWithId`
@@ -6302,7 +6302,7 @@ describe("ArgumentEngine — E-7 invariant guard on non-empty argument", () => {
     })
 
     // --- removePremise(conclusionPremiseId) — auto-reassign on
-    // multi-premise argument (cycle 1.0.2 invariant guard) ---
+    // multi-premise argument (1.0.2 invariant guard) ---
     //
     // Pre-1.0.2 behavior was "delete conclusion premise → clear
     // conclusionPremiseId", leaving E-7-violating state when other
@@ -17805,7 +17805,7 @@ describe("ArgumentEngine — bulk path validation", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Stale parent checksums in changeset (change-request 2026-03-27)
+// Stale parent checksums in changeset
 // ---------------------------------------------------------------------------
 
 describe("Changeset includes ancestor checksum updates", () => {
@@ -23457,7 +23457,7 @@ describe("ArgumentEngine.validateDerivationStructures", () => {
 })
 
 // ---------------------------------------------------------------------------
-// fromData premise-extras preservation (CR 2026-05-07)
+// fromData premise-extras preservation
 //
 // Regression coverage for the typed-bag misinterpretation: when a DB row
 // carries `type: "freeform"` (or `"derivation"`) plus sibling extras, the
@@ -24185,7 +24185,7 @@ describe("Propagator interaction with axiomatic variables (v0.12)", () => {
     })
 })
 
-describe("PremiseEngine.reparentExpression (D0e)", () => {
+describe("PremiseEngine.reparentExpression", () => {
     // Public bundled-composite mutation per spec §8. Atomically moves an
     // existing expression onto a new parent at a given position with no
     // externally observable transient orphan state. Used by native AN-1
@@ -24452,7 +24452,7 @@ describe("PremiseEngine.reparentExpression (D0e)", () => {
     })
 })
 
-describe("PremiseEngine.wrapInFormula (D0f)", () => {
+describe("PremiseEngine.wrapInFormula", () => {
     // D0f — P2 #2 fix: S-10 enforcement gap.
     //
     // `wrapInFormula` previously routed through `registerFormulaBuffer`
@@ -24498,7 +24498,7 @@ describe("PremiseEngine.wrapInFormula (D0f)", () => {
 // ---------------------------------------------------------------------------
 // Ingestion prompts — anti-attribution clause (no "The author claims…" frame)
 // ---------------------------------------------------------------------------
-// Regression guards for the change-request
+// Regression guards for
 // `docs/inbox/2026-05-29-strip-claim-attribution-prompts.md`: every in-code
 // prompt that authors user-facing claim prose must forbid the attributive
 // reporting wrapper ("The author claims X") while keeping the existing

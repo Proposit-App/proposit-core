@@ -1054,7 +1054,7 @@ export class ArgumentEngine<
             }
             this.premises.delete(premiseId)
             collector.removedPremise(data)
-            // Invariant guard (cycle 1.0.2): a non-empty argument always
+            // Invariant guard (1.0.2): a non-empty argument always
             // has a conclusion designated. When the removed premise was
             // the conclusion AND other premises remain, atomically
             // reassign the role to the lowest-id remaining premise
@@ -1776,7 +1776,7 @@ export class ArgumentEngine<
         TArg
     > {
         return this.withValidation(() => {
-            // Invariant guard (cycle 1.0.2): a non-empty argument always
+            // Invariant guard (1.0.2): a non-empty argument always
             // has a conclusion designated. If premises exist, this call
             // is a no-op rather than a state change — the caller's
             // intent ("remove the conclusion designation") is structurally
@@ -2038,7 +2038,7 @@ export class ArgumentEngine<
             // an entity-id or hierarchical-checksum field is a project extra.
             // Pull `type` / `derivedClaimId` out explicitly and pass the rest
             // under the typed-bag's `extras` slot so they survive the parser.
-            // Pre-CR-2026-05-07: passing the row directly tripped the
+            // Previously, passing the row directly tripped the
             // typed-bag heuristic on `type: string` and dropped every sibling.
             const {
                 id: _id,

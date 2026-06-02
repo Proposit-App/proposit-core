@@ -714,7 +714,7 @@ describe("createOpenAiResponsesProvider — 429 quota vs rate-limit classificati
     // structured `error.code` / `error.type`. The provider parses the
     // body and routes `insufficient_quota` to QuotaExhaustedLlmError,
     // leaving every other (and every unparseable) 429 on the transient
-    // RateLimitLlmError path. CR 2026-05-27.
+    // RateLimitLlmError path.
 
     function buildRawResponse(status: number, rawBody: string): Response {
         return new Response(rawBody, {

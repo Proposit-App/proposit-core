@@ -99,7 +99,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
     // and the keep case (1-child formula whose subtree DOES contain a
     // binary operator — must NOT collapse).
 
-    it("collapses a 1-child non-not operator by promoting its single child (D0c)", () => {
+    it("collapses a 1-child non-not operator by promoting its single child", () => {
         // Build peB: AND with a single variable child. AN-3 must
         // promote the variable into AND's slot, then remove AND.
         const eng = makePermissiveEngine()
@@ -141,7 +141,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         expect(after[0].parentId).toBe(null)
     })
 
-    it("does NOT collapse a 1-child not operator (NOT(x) is Presentable; D0c)", () => {
+    it("does NOT collapse a 1-child not operator (NOT(x) is Presentable)", () => {
         // NOT is unary — 1-child NOT is its canonical Presentable
         // form. AN-3 must not touch it.
         const eng = makePermissiveEngine()
@@ -189,7 +189,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         expect(afterIds).toEqual(beforeIds)
     })
 
-    it("preserves a 1-child formula whose bounded subtree contains a binary operator (D0c)", () => {
+    it("preserves a 1-child formula whose bounded subtree contains a binary operator", () => {
         // Build peB: formula → AND(a, b). The formula's bounded
         // subtree contains AND (binary), so the formula is justified
         // per P-3 and AN-3 must NOT collapse it. (a and b are two
@@ -260,7 +260,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         expect(afterIds).toEqual(beforeIds)
     })
 
-    it("issues PremiseEngine.removeExpression(_, false) calls for AN-3 collapses (native code path; D0c)", () => {
+    it("issues PremiseEngine.removeExpression(_, false) calls for AN-3 collapses (native code path)", () => {
         // Spy-style guard that locks down the public-API drive. A
         // 0-child AND collapses via a single removeExpression call;
         // the same fingerprint will hold for native AN-3 going forward.
@@ -288,7 +288,7 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
     })
 })
 
-describe("applyAN2 — collapse double negation (D0b native)", () => {
+describe("applyAN2 — collapse double negation (native)", () => {
     // Helper: build a two-premise setup where peB hosts the
     // double-negation shape and references peA's auto-created
     // premise-bound variable (avoids the circular-binding check that
@@ -947,7 +947,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         expect(afterIds).toEqual(beforeIds)
     })
 
-    it("absorbs through the redistribute-fallback path when outer children sit near POSITION_MAX (D0f)", () => {
+    it("absorbs through the redistribute-fallback path when outer children sit near POSITION_MAX", () => {
         // D0f — P2 #1: pre-D0f the redistribute scratch range was
         // hard-coded to `[max - total, max - 1]`. With outer children
         // clustered near `POSITION_MAX`, the phase-1 reparent in
@@ -1133,7 +1133,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         ])
     })
 
-    it("absorbs when phase-2 inner-child targets collide with the formula's post-redistribute position (D1 P2 #1)", () => {
+    it("absorbs when phase-2 inner-child targets collide with the formula's post-redistribute position", () => {
         // D1 — P2 #1: after `redistributeChildrenEvenly` fires, the
         // formula sits at one of the redistributed slots between
         // `effectiveLeftPos` and `effectiveRightPos`. The phase-2
@@ -1288,7 +1288,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         ])
     })
 
-    it("absorbs at the gap = count + 1 non-redistribute boundary where the ±1 shift would have collided with the next planned target (D2 P2 #1 carry-over)", () => {
+    it("absorbs at the gap = count + 1 non-redistribute boundary where the ±1 shift would have collided with the next planned target", () => {
         // D2 — D1 review P2 #1 carry-over. The D1 fix used a ±1 shift
         // when a phase-2 target collided with the formula's current
         // position. The shift is unsound at the boundary `gap = count
@@ -1414,7 +1414,7 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
     })
 })
 
-describe("applyAN1 — insert formula buffer between operators (D0e native)", () => {
+describe("applyAN1 — insert formula buffer between operators (native)", () => {
     // Contract / regression-guard tests for AN-1 (P-1).
     //
     // **Implementation state (D0e — native).** `applyAN1` walks each
@@ -1946,7 +1946,7 @@ describe("applyANToFixedPoint — drives all four rules to convergence", () => {
 })
 
 // D0a smoke test — exported names are callable and return booleans.
-describe("an-rules module surface (D0a)", () => {
+describe("an-rules module surface", () => {
     it("exports applyAN1 / applyAN2 / applyAN3 / applyAN4 / applyANToFixedPoint", () => {
         const eng = makePermissiveEngine()
         // Empty-engine smoke check: every rule returns `false` (no

@@ -308,7 +308,7 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
         expect(segRec!.model).toBe("gpt-5.4-mini")
     })
 
-    it("REGRESSION (P1 #2): a `model` override actually REACHES the built llmStage request", async () => {
+    it("REGRESSION: a `model` override actually REACHES the built llmStage request", async () => {
         // Guards the silent-no-op regression: the resolver computing the
         // right model but no stage factory reading it. Build a v2
         // pipeline with a pipeline-level model default and assert the
