@@ -296,6 +296,29 @@ export function llmStage<TOutput>(config: {
 
                 try {
                     const response = await ctx.llm.respond<TOutput>(req)
+
+                    // When the provider surfaces a response id, emit
+                    // the id-created event so consumers can persist
+                    // it as early as possible. In synchronous mode this
+                    // fires just after the call returns (completion-
+                    // time only); in background+stream mode the id is
+                    // available before any SSE bytes arrive, but the
+                    // provider surfaces it here at return time (the
+                    // background+stream branch inside the provider
+                    // has already awaited the full stream by then).
+                    // Either way the event fires before `stage:llm-call`
+                    // on the same attempt, preserving the ordering
+                    // guarantee for consumers.
+                    if (response.rawResponseId) {
+                        ctx.emit({
+                            kind: "stage:llm-response-created",
+                            stageId: config.id,
+                            attempt,
+                            responseId: response.rawResponseId,
+                            at: now(),
+                        })
+                    }
+
                     const validationPassed = Value.Check(
                         config.outputSchema,
                         response.output
@@ -331,6 +354,7 @@ export function llmStage<TOutput>(config: {
                         },
                         output: response.output,
                         tokenUsage: response.tokenUsage,
+                        rawResponseId: response.rawResponseId,
                         validationError,
                         at: now(),
                     })
@@ -542,6 +566,8 @@ function prefixSubPipelineEvent(
         case "stage:retry":
             return { ...event, stageId: prefix + event.stageId }
         case "stage:llm-request":
+            return { ...event, stageId: prefix + event.stageId }
+        case "stage:llm-response-created":
             return { ...event, stageId: prefix + event.stageId }
         case "stage:llm-call":
             return { ...event, stageId: prefix + event.stageId }

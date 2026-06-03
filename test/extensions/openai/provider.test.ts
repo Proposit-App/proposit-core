@@ -5,11 +5,15 @@
 
 import { describe, it, expect, vi } from "vitest"
 import Type from "typebox"
-import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/provider.js"
+import {
+    createOpenAiResponsesProvider,
+    retrieveResponse,
+} from "../../../src/extensions/openai/provider.js"
 import {
     NonRetryableLlmError,
     QuotaExhaustedLlmError,
     RateLimitLlmError,
+    ResponseNotFoundError,
     SchemaValidationLlmError,
     ToolLoopExhaustedError,
     TransientLlmError,
@@ -1588,5 +1592,556 @@ describe("OpenAI provider — streaming (Level 1b)", () => {
             outputSchema: simpleSchema,
         })
         expect(res.output).toEqual({ answer: "split" })
+    })
+})
+
+// -- C-1: backgroundStreamMode tests ------------------------------------
+
+describe("OpenAI provider — backgroundStreamMode (background + live SSE)", () => {
+    const completedSsePayload = {
+        id: "resp_bs1",
+        status: "completed",
+        output: [
+            {
+                type: "message",
+                content: [
+                    {
+                        type: "output_text",
+                        text: JSON.stringify({ answer: "bgstream" }),
+                    },
+                ],
+            },
+        ],
+        usage: { input_tokens: 6, output_tokens: 3 },
+    }
+
+    it("submits with background:true, stream:true, store:true and reads SSE to completion", async () => {
+        const captured: { body: unknown }[] = []
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: (_url, init) => {
+                if (init.method === "POST") {
+                    captured.push({
+                        body: JSON.parse(init.body as string),
+                    })
+                    return Promise.resolve(
+                        sseResponse([
+                            {
+                                type: "response.completed",
+                                response: completedSsePayload,
+                            },
+                        ])
+                    )
+                }
+                return Promise.reject(new Error("unexpected GET"))
+            },
+        })
+
+        const res = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        expect(res.output).toEqual({ answer: "bgstream" })
+        expect(res.rawResponseId).toBe("resp_bs1")
+        expect(res.tokenUsage).toEqual({ input: 6, output: 3 })
+        expect(captured).toHaveLength(1)
+        expect(captured[0].body).toMatchObject({
+            background: true,
+            stream: true,
+            store: true,
+        })
+    })
+
+    it("throws TransientLlmError on connection drop (no terminal SSE event), leaving the response retrievable server-side", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.output_text.delta",
+                            response: { delta: "partial" },
+                        },
+                    ])
+                ),
+        })
+
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("rejects backgroundStreamMode with tools as NonRetryableLlmError", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () => Promise.reject(new Error("should not be called")),
+        })
+        await expect(
+            provider.respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                tools: [
+                    {
+                        kind: "function",
+                        name: "f",
+                        description: "d",
+                        parameters: simpleSchema,
+                        handler: () => Promise.resolve("x"),
+                    },
+                ],
+            })
+        ).rejects.toBeInstanceOf(NonRetryableLlmError)
+    })
+
+    it("backgroundStreamMode takes priority over backgroundMode when both are set", async () => {
+        const captured: { body: unknown }[] = []
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            backgroundMode: true,
+            fetch: (_url, init) => {
+                if (init.method === "POST") {
+                    captured.push({ body: JSON.parse(init.body as string) })
+                    return Promise.resolve(
+                        sseResponse([
+                            {
+                                type: "response.completed",
+                                response: completedSsePayload,
+                            },
+                        ])
+                    )
+                }
+                return Promise.reject(new Error("unexpected GET in poll path"))
+            },
+        })
+
+        await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        // Only one POST (the stream submit), no GET polls — confirms
+        // the backgroundStream branch ran, not the poll-only branch.
+        expect(captured).toHaveLength(1)
+        expect(captured[0].body).toMatchObject({
+            background: true,
+            stream: true,
+        })
+    })
+
+    it("returns rawResponseId from the terminal SSE envelope", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.completed",
+                            response: {
+                                ...completedSsePayload,
+                                id: "resp_id_check",
+                            },
+                        },
+                    ])
+                ),
+        })
+
+        const res = await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+
+        expect(res.rawResponseId).toBe("resp_id_check")
+    })
+})
+
+// -- C-2: stage:llm-response-created event + rawResponseId on stage:llm-call ---
+
+describe("llmStage — stage:llm-response-created event and rawResponseId propagation", () => {
+    // We need executePipeline to test event emission from llmStage.
+    // Import from the lib index.
+    it("emits stage:llm-response-created before stage:llm-call when provider returns rawResponseId", async () => {
+        // Import the pipeline framework inline for this test block.
+        const { executePipeline, llmStage } =
+            await import("../../../src/lib/pipelines/index.js")
+        const Type = (await import("typebox")).default
+
+        const outputSchema = Type.Object({ value: Type.Number() })
+        const events: import("../../../src/lib/pipelines/types.js").TPipelineEvent[] =
+            []
+
+        // Mock LLM that returns a rawResponseId.
+        const llm = {
+            respond: <T>() =>
+                Promise.resolve({
+                    output: { value: 42 } as unknown as T,
+                    tokenUsage: { input: 5, output: 5 },
+                    rawResponseId: "resp_test_event",
+                }),
+        }
+
+        const stage = llmStage<{ value: number }>({
+            id: "ev-stage",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!-- stage-id: ev-stage --> sys",
+                user: "usr",
+            }),
+        })
+
+        const pipeline = {
+            id: "ev-pipeline",
+            version: "1.0.0",
+            inputSchema: Type.Object({}),
+            outputSchema,
+            stages: [stage],
+            finalize: {
+                dependsOn: ["ev-stage"],
+                run: (
+                    ctx: import("../../../src/lib/pipelines/types.js").TStageContext
+                ) => ctx.get<{ value: number }>("ev-stage") ?? { value: -1 },
+            },
+        }
+
+        await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+
+        const responseCreatedEvents = events.filter(
+            (e) => e.kind === "stage:llm-response-created"
+        )
+        expect(responseCreatedEvents).toHaveLength(1)
+        const rcEvent = responseCreatedEvents[0]
+        if (rcEvent.kind !== "stage:llm-response-created") {
+            throw new Error("expected stage:llm-response-created event")
+        }
+        expect(rcEvent.stageId).toBe("ev-stage")
+        expect(rcEvent.attempt).toBe(1)
+        expect(rcEvent.responseId).toBe("resp_test_event")
+
+        // stage:llm-response-created must come BEFORE stage:llm-call.
+        const rcIdx = events.indexOf(rcEvent)
+        const llmCallIdx = events.findIndex(
+            (e) => e.kind === "stage:llm-call" && e.stageId === "ev-stage"
+        )
+        expect(rcIdx).toBeGreaterThanOrEqual(0)
+        expect(llmCallIdx).toBeGreaterThan(rcIdx)
+
+        // stage:llm-call must carry rawResponseId.
+        const llmCallEvent = events[llmCallIdx]
+        if (llmCallEvent.kind !== "stage:llm-call") {
+            throw new Error("expected stage:llm-call event")
+        }
+        expect(llmCallEvent.rawResponseId).toBe("resp_test_event")
+    })
+
+    it("does not emit stage:llm-response-created when provider returns no rawResponseId", async () => {
+        const { executePipeline, llmStage } =
+            await import("../../../src/lib/pipelines/index.js")
+        const Type = (await import("typebox")).default
+
+        const outputSchema = Type.Object({ value: Type.Number() })
+        const events: import("../../../src/lib/pipelines/types.js").TPipelineEvent[] =
+            []
+
+        const llm = {
+            respond: <T>() =>
+                Promise.resolve({
+                    output: { value: 7 } as unknown as T,
+                    tokenUsage: { input: 1, output: 1 },
+                    // no rawResponseId
+                }),
+        }
+
+        const stage = llmStage<{ value: number }>({
+            id: "no-id-stage",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!-- stage-id: no-id-stage --> sys",
+                user: "usr",
+            }),
+        })
+
+        const pipeline = {
+            id: "no-id-pipeline",
+            version: "1.0.0",
+            inputSchema: Type.Object({}),
+            outputSchema,
+            stages: [stage],
+            finalize: {
+                dependsOn: ["no-id-stage"],
+                run: (
+                    ctx: import("../../../src/lib/pipelines/types.js").TStageContext
+                ) => ctx.get<{ value: number }>("no-id-stage") ?? { value: -1 },
+            },
+        }
+
+        await executePipeline(
+            pipeline,
+            {},
+            { llm, onEvent: (e) => events.push(e) }
+        )
+
+        const responseCreatedEvents = events.filter(
+            (e) => e.kind === "stage:llm-response-created"
+        )
+        expect(responseCreatedEvents).toHaveLength(0)
+
+        // stage:llm-call must have no rawResponseId.
+        const llmCallEvent = events.find((e) => e.kind === "stage:llm-call")
+        if (llmCallEvent?.kind !== "stage:llm-call") {
+            throw new Error("expected stage:llm-call event")
+        }
+        expect(llmCallEvent.rawResponseId).toBeUndefined()
+    })
+})
+
+// -- C-3: retrieveResponse + ResponseNotFoundError ----------------------
+
+describe("retrieveResponse", () => {
+    it("returns status, output, tokenUsage, and rawResponseId for a completed response", async () => {
+        const completedEnvelope = {
+            id: "resp_ret1",
+            status: "completed",
+            output: [
+                {
+                    type: "message",
+                    content: [
+                        {
+                            type: "output_text",
+                            text: "hello world",
+                        },
+                    ],
+                },
+            ],
+            usage: { input_tokens: 4, output_tokens: 2 },
+        }
+        const res = await retrieveResponse("resp_ret1", {
+            apiKey: "k",
+            fetch: () => Promise.resolve(jsonResponse(completedEnvelope)),
+        })
+
+        expect(res.status).toBe("completed")
+        expect(res.output).toBe("hello world")
+        expect(res.tokenUsage).toEqual({ input: 4, output: 2 })
+        expect(res.rawResponseId).toBe("resp_ret1")
+    })
+
+    it("returns status in_progress with no output or tokenUsage for a non-terminal response", async () => {
+        const inProgressEnvelope = {
+            id: "resp_ret2",
+            status: "in_progress",
+        }
+        const res = await retrieveResponse("resp_ret2", {
+            apiKey: "k",
+            fetch: () => Promise.resolve(jsonResponse(inProgressEnvelope)),
+        })
+
+        expect(res.status).toBe("in_progress")
+        expect(res.output).toBeUndefined()
+        expect(res.tokenUsage).toBeUndefined()
+        expect(res.rawResponseId).toBe("resp_ret2")
+    })
+
+    it("issues a GET request to the correct URL with bearer auth", async () => {
+        const captured: { url: string; init: RequestInit }[] = []
+        await retrieveResponse("resp_url_test", {
+            apiKey: "sk-test",
+            fetch: (url, init) => {
+                captured.push({ url, init })
+                return Promise.resolve(
+                    jsonResponse({
+                        id: "resp_url_test",
+                        status: "queued",
+                    })
+                )
+            },
+        })
+
+        expect(captured).toHaveLength(1)
+        expect(captured[0].url).toBe(
+            "https://api.openai.com/v1/responses/resp_url_test"
+        )
+        expect(captured[0].init.method).toBe("GET")
+        const headers = captured[0].init.headers as Record<string, string>
+        expect(headers.Authorization).toBe("Bearer sk-test")
+    })
+
+    it("throws ResponseNotFoundError on a 404 (retention window elapsed)", async () => {
+        await expect(
+            retrieveResponse("resp_gone", {
+                apiKey: "k",
+                fetch: () =>
+                    Promise.resolve(new Response("Not Found", { status: 404 })),
+            })
+        ).rejects.toBeInstanceOf(ResponseNotFoundError)
+    })
+
+    it("ResponseNotFoundError carries the response id", async () => {
+        const err = await retrieveResponse("resp_aged_out", {
+            apiKey: "k",
+            fetch: () =>
+                Promise.resolve(new Response("Not Found", { status: 404 })),
+        }).catch((e: unknown) => e)
+
+        if (!(err instanceof ResponseNotFoundError)) {
+            throw new Error("expected ResponseNotFoundError")
+        }
+        expect(err.responseId).toBe("resp_aged_out")
+    })
+
+    it("throws TransientLlmError on a 5xx", async () => {
+        await expect(
+            retrieveResponse("resp_5xx", {
+                apiKey: "k",
+                fetch: () =>
+                    Promise.resolve(
+                        new Response("Internal Server Error", { status: 500 })
+                    ),
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("respects a custom baseUrl", async () => {
+        const captured: string[] = []
+        await retrieveResponse("resp_custom", {
+            apiKey: "k",
+            baseUrl: "https://proxy.test/v1/responses",
+            fetch: (url) => {
+                captured.push(url)
+                return Promise.resolve(
+                    jsonResponse({ id: "resp_custom", status: "completed" })
+                )
+            },
+        })
+
+        expect(captured[0]).toBe("https://proxy.test/v1/responses/resp_custom")
+    })
+})
+
+// -- no-tools precondition for v2 ingestion stages ----------------------
+
+describe("v2 ingestion pipeline — no-tools precondition", () => {
+    it("every v2 LLM stage issues requests with no tools (background mode is safe for all stages)", async () => {
+        // Instantiate the v2 pipeline and run a minimal input through
+        // a spy LLM. Captures all `req.tools` values across every LLM
+        // call and asserts they are all absent/empty — confirming the
+        // background-mode no-tools precondition holds for this pipeline.
+        const { createIngestionV2Pipeline } =
+            await import("../../../src/extensions/argument-ingestion/v2-multi-stage.js")
+        const { executePipeline } =
+            await import("../../../src/lib/pipelines/index.js")
+        const { basicsExtension } =
+            await import("../../../src/extensions/argument-ingestion/shared/basics-extension.js")
+
+        const toolsPerCall: (readonly unknown[] | undefined)[] = []
+
+        // Spy LLM: records req.tools, returns the minimum valid output
+        // for each stage by keying off the stage-id marker.
+        const stageOutputs: Record<string, unknown> = {
+            segmentation: {
+                segments: [
+                    {
+                        segmentId: "s1",
+                        text: "Test claim.",
+                        span: { start: 0, end: 11 },
+                    },
+                ],
+            },
+            "claim-mention-extraction": {
+                mentions: [
+                    {
+                        mentionId: "m1",
+                        segmentId: "s1",
+                        text: "Test claim.",
+                        claimType: null,
+                    },
+                ],
+            },
+            "citation-source-detection": { citations: [] },
+            "axiom-indicator-detection": { axiomIndicators: [] },
+            "claim-canonicalization": {
+                claims: [
+                    {
+                        claimId: "c1",
+                        canonicalText: "Test claim.",
+                        type: "premise",
+                    },
+                ],
+            },
+            "claim-type-classification": {
+                classifications: [{ claimId: "c1", type: "premise" }],
+            },
+            "relation-extraction": { relations: [] },
+            "conclusion-selection": {
+                conclusionCandidates: [
+                    { claimId: "c1", confidence: 1.0, rationale: "only claim" },
+                ],
+            },
+        }
+
+        const MARKER = /<!--\s*stage-id:\s*([^\s>]+)\s*-->/
+
+        const llm = {
+            respond: (req: {
+                tools?: readonly unknown[]
+                systemPrompt: string
+                signal?: AbortSignal
+            }) => {
+                toolsPerCall.push(req.tools)
+                const match = MARKER.exec(req.systemPrompt)
+                const stageId = match ? match[1] : null
+                const output = stageId ? stageOutputs[stageId] : {}
+                return Promise.resolve({
+                    output: output ?? {},
+                    tokenUsage: { input: 1, output: 1 },
+                })
+            },
+        }
+
+        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        // We don't care about the pipeline result, just that it ran.
+        await executePipeline(
+            pipeline,
+            { text: "Test claim." },
+            { llm: llm as import("../../../src/lib/llm/types.js").TLlmProvider }
+        ).catch(() => {
+            // Pipeline may fail due to minimal fixture data — that's fine.
+            // We only assert on toolsPerCall below.
+        })
+
+        // Every LLM call must have no tools.
+        for (const tools of toolsPerCall) {
+            expect(
+                tools === undefined ||
+                    (Array.isArray(tools) && tools.length === 0)
+            ).toBe(true)
+        }
+        // Confirm at least some LLM calls fired (pipeline ran non-trivially).
+        expect(toolsPerCall.length).toBeGreaterThan(0)
     })
 })

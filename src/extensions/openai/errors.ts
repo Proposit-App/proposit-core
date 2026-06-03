@@ -121,3 +121,21 @@ export class ToolLoopExhaustedError extends Error {
         this.rounds = args.rounds
     }
 }
+
+/**
+ * Thrown by {@link retrieveResponse} when a stored response is not
+ * found (HTTP 404). This typically means the ~10-minute retention
+ * window has elapsed. Callers should clear the stored id, settle the
+ * associated stage as failed, and surface a retry prompt.
+ */
+export class ResponseNotFoundError extends Error {
+    public readonly responseId: string
+
+    constructor(args: { responseId: string }) {
+        super(
+            `OpenAI response "${args.responseId}" was not found (404). The ~10-minute retention window may have elapsed.`
+        )
+        this.name = "ResponseNotFoundError"
+        this.responseId = args.responseId
+    }
+}
