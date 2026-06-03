@@ -586,6 +586,74 @@ export async function reconnectStream(
     return envelopeToRetrievedResponse(envelope, id)
 }
 
+/**
+ * Cancel a stored, in-flight OpenAI response. Issues
+ * `POST /responses/{id}/cancel` and returns the resulting
+ * {@link TRetrievedResponse} (typically `status: "cancelled"`).
+ *
+ * Cancel is **idempotent** per the Responses API: cancelling twice, or
+ * cancelling an already-terminal response, simply returns the final
+ * `Response` object rather than erroring — so callers do not need to
+ * guard against double-cancel.
+ *
+ * Throws {@link ResponseNotFoundError} when the response is not found
+ * (HTTP 404 — typically the ~10-minute retention window elapsed).
+ * Honors `signal` (an abort propagates as an `AbortError`).
+ *
+ * Use this to stop an in-flight background response when a stage is
+ * abandoned (resync timeout) or an import is cancelled, so generation
+ * does not keep running (and billing) server-side after the consumer
+ * has given up on it.
+ *
+ * @param id - The OpenAI response id to cancel.
+ * @param options - `apiKey`, optional `baseUrl`, `fetch`, and `signal`.
+ */
+export async function cancelResponse(
+    id: string,
+    options: {
+        apiKey: string
+        baseUrl?: string
+        fetch?: TOpenAiFetch
+        signal?: AbortSignal
+    }
+): Promise<TRetrievedResponse> {
+    const fetchImpl = resolveFetch(options.fetch, "cancelResponse")
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+
+    let response: Response
+    try {
+        response = await fetchImpl(`${baseUrl}/${id}/cancel`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${options.apiKey}` },
+            signal: options.signal,
+        })
+    } catch (err) {
+        if (isAbortError(err)) throw err
+        throw new TransientLlmError({
+            message: `Network error cancelling OpenAI background response: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+    if (response.status === 404) {
+        throw new ResponseNotFoundError({ responseId: id })
+    }
+    if (!response.ok) {
+        const errorBody = await response.text().catch(() => "")
+        throw classifyHttpError(
+            response.status,
+            `OpenAI cancel ${response.status.toString()}: ${
+                errorBody || response.statusText
+            }`
+        )
+    }
+    const envelope = await parseJsonOrThrowTransient(
+        response,
+        "OpenAI cancel body was not valid JSON"
+    )
+    return envelopeToRetrievedResponse(envelope, id)
+}
+
 function resolveFetch(
     injected: TOpenAiFetch | undefined,
     fnName: string

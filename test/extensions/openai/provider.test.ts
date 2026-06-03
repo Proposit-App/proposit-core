@@ -9,6 +9,7 @@ import {
     createOpenAiResponsesProvider,
     retrieveResponse,
     reconnectStream,
+    cancelResponse,
 } from "../../../src/extensions/openai/provider.js"
 import {
     NonRetryableLlmError,
@@ -2558,6 +2559,128 @@ describe("reconnectStream", () => {
         expect(res.status).toBe("completed")
         expect(res.output).toBe("reconnected output")
         expect(res.rawResponseId).toBe("resp_survive")
+    })
+})
+
+// -- cancelResponse (stop an in-flight background response) -------------
+
+describe("cancelResponse", () => {
+    it("POSTs to the /cancel path with bearer auth and maps the returned status", async () => {
+        const captured: { url: string; init: RequestInit }[] = []
+        const res = await cancelResponse("resp_cancel", {
+            apiKey: "sk-test",
+            fetch: (url, init) => {
+                captured.push({ url, init })
+                return Promise.resolve(
+                    jsonResponse({ id: "resp_cancel", status: "cancelled" })
+                )
+            },
+        })
+
+        expect(res.status).toBe("cancelled")
+        expect(res.rawResponseId).toBe("resp_cancel")
+
+        expect(captured).toHaveLength(1)
+        expect(captured[0].url).toBe(
+            "https://api.openai.com/v1/responses/resp_cancel/cancel"
+        )
+        expect(captured[0].init.method).toBe("POST")
+        const headers = captured[0].init.headers as Record<string, string>
+        expect(headers.Authorization).toBe("Bearer sk-test")
+    })
+
+    it("surfaces output + tokenUsage when cancelling an already-completed response (idempotent — returns the final Response)", async () => {
+        // Cancel is idempotent: cancelling an already-terminal response
+        // just returns its final state. The mapping must still surface
+        // output + tokenUsage from that terminal envelope.
+        const res = await cancelResponse("resp_done", {
+            apiKey: "k",
+            fetch: () =>
+                Promise.resolve(
+                    jsonResponse({
+                        id: "resp_done",
+                        status: "completed",
+                        output: [
+                            {
+                                type: "message",
+                                content: [
+                                    {
+                                        type: "output_text",
+                                        text: "already finished",
+                                    },
+                                ],
+                            },
+                        ],
+                        usage: { input_tokens: 4, output_tokens: 2 },
+                    })
+                ),
+        })
+
+        expect(res.status).toBe("completed")
+        expect(res.output).toBe("already finished")
+        expect(res.tokenUsage).toEqual({ input: 4, output: 2 })
+        expect(res.rawResponseId).toBe("resp_done")
+    })
+
+    it("throws ResponseNotFoundError on a 404 (aged out)", async () => {
+        await expect(
+            cancelResponse("resp_gone", {
+                apiKey: "k",
+                fetch: () =>
+                    Promise.resolve(new Response("Not Found", { status: 404 })),
+            })
+        ).rejects.toBeInstanceOf(ResponseNotFoundError)
+    })
+
+    it("throws TransientLlmError on a 5xx", async () => {
+        await expect(
+            cancelResponse("resp_5xx", {
+                apiKey: "k",
+                fetch: () =>
+                    Promise.resolve(
+                        new Response("Internal Server Error", { status: 500 })
+                    ),
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("propagates an AbortError from the underlying fetch", async () => {
+        const controller = new AbortController()
+        controller.abort()
+        await expect(
+            cancelResponse("resp_abort", {
+                apiKey: "k",
+                signal: controller.signal,
+                fetch: (_url, init) => {
+                    if (init.signal?.aborted) {
+                        const err = new Error("aborted")
+                        err.name = "AbortError"
+                        return Promise.reject(err)
+                    }
+                    return Promise.resolve(
+                        jsonResponse({ id: "resp_abort", status: "cancelled" })
+                    )
+                },
+            })
+        ).rejects.toThrowError(/abort/i)
+    })
+
+    it("respects a custom baseUrl", async () => {
+        const captured: string[] = []
+        await cancelResponse("resp_custom", {
+            apiKey: "k",
+            baseUrl: "https://proxy.test/v1/responses",
+            fetch: (url) => {
+                captured.push(url)
+                return Promise.resolve(
+                    jsonResponse({ id: "resp_custom", status: "cancelled" })
+                )
+            },
+        })
+
+        expect(captured[0]).toBe(
+            "https://proxy.test/v1/responses/resp_custom/cancel"
+        )
     })
 })
 

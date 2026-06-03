@@ -1610,6 +1610,14 @@ await reconnectStream("resp_abc", {
 
 Reconnects to a stored background response via `GET /responses/{id}?stream=true&starting_after=<cursor>` and **consumes the SSE stream to its terminal event**, returning the same `TRetrievedResponse` shape. This is the operation that actually drives a dropped background response to completion: resuming the stream makes the server continue generation through to a terminal status, where a passive `retrieveResponse` GET would leave it sitting in `queued` / `in_progress`. Throws `ResponseNotFoundError` on 404 (aged out); `TransientLlmError` on 5xx, network errors, or a stream that ends with no terminal event (a second drop mid-reconnect — retry by reconnecting again). Honors `signal` (an abort propagates as an `AbortError`).
 
+#### `cancelResponse(id, options)` → `Promise<TRetrievedResponse>`
+
+```typescript
+await cancelResponse("resp_abc", { apiKey, fetch?, baseUrl?, signal? })
+```
+
+Cancels a stored, in-flight background response via `POST /responses/{id}/cancel`, returning the resulting `TRetrievedResponse` (typically `status: "cancelled"`). Use this to stop a response when a stage is abandoned (resync timeout) or an import is cancelled, so generation does not keep running — and billing — server-side after the consumer has given up on it. **Idempotent** per the Responses API: cancelling twice, or cancelling an already-terminal response, just returns the final `Response` (so callers need not guard against double-cancel). Throws `ResponseNotFoundError` on 404 (aged out); `TransientLlmError` on 5xx or network errors. Honors `signal` (an abort propagates as an `AbortError`).
+
 **Error classes** (re-exported from the package root and this subpath; `instanceof`-matchable for finer-grained observability): `NonRetryableLlmError`, `QuotaExhaustedLlmError`, `RateLimitLlmError`, `ResponseNotFoundError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`. `ResponseNotFoundError` **extends `NonRetryableLlmError`** (carries no `retryReason` tag → fail-fast, behavior-preserving for the prior generic-404 path; `status: 404`). The subpath also exports `typeboxToOpenAiSchema` (the strict-mode converter) and its `TOpenAiJsonSchema` type.
 
 ---
