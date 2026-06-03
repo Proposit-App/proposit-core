@@ -1771,6 +1771,156 @@ describe("OpenAI provider — backgroundStreamMode (background + live SSE)", () 
 
         expect(res.rawResponseId).toBe("resp_id_check")
     })
+
+    it("fires onResponseCreated with the id MID-FLIGHT — before respond() resolves", async () => {
+        // A faithful background-stream: the first SSE event is
+        // `response.created` (carrying the id), then the stream PAUSES
+        // (mimicking a long in-flight generation) before the terminal
+        // event arrives. We assert the id callback fired with the id
+        // while respond() is still pending — i.e. the id is available
+        // mid-flight, the load-bearing guarantee for crash recovery.
+
+        // A gate the test releases to deliver the terminal event.
+        let releaseTerminal: () => void = () => undefined
+        const terminalGate = new Promise<void>((resolve) => {
+            releaseTerminal = resolve
+        })
+
+        const createdEvent = `event: response.created\ndata: ${JSON.stringify({
+            type: "response.created",
+            response: { id: "resp_midflight", status: "in_progress" },
+        })}\n\n`
+        const terminalEvent = `event: response.completed\ndata: ${JSON.stringify(
+            {
+                type: "response.completed",
+                response: {
+                    id: "resp_midflight",
+                    status: "completed",
+                    output: [
+                        {
+                            type: "message",
+                            content: [
+                                {
+                                    type: "output_text",
+                                    text: JSON.stringify({ answer: "late" }),
+                                },
+                            ],
+                        },
+                    ],
+                    usage: { input_tokens: 1, output_tokens: 1 },
+                },
+            }
+        )}\n\n`
+
+        const pausingStream = new ReadableStream<Uint8Array>({
+            async start(controller) {
+                // Deliver the created event immediately.
+                controller.enqueue(new TextEncoder().encode(createdEvent))
+                // Pause until the test releases the gate, then deliver
+                // the terminal event and close.
+                await terminalGate
+                controller.enqueue(new TextEncoder().encode(terminalEvent))
+                controller.close()
+            },
+        })
+
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () =>
+                Promise.resolve(
+                    new Response(pausingStream, {
+                        status: 200,
+                        headers: { "Content-Type": "text/event-stream" },
+                    })
+                ),
+        })
+
+        const observedIds: string[] = []
+        let resolvedBeforeCallback = false
+        const respondPromise = provider
+            .respond({
+                model: "gpt-5.4",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+                onResponseCreated: (id) => {
+                    // If respond() had already resolved, the callback is
+                    // not mid-flight — flag the failure condition.
+                    if (resolvedBeforeCallback) {
+                        throw new Error(
+                            "onResponseCreated fired after respond() resolved"
+                        )
+                    }
+                    observedIds.push(id)
+                },
+            })
+            .then((r) => {
+                resolvedBeforeCallback = true
+                return r
+            })
+
+        // Give the stream-start microtasks a chance to run and deliver
+        // the created event WITHOUT releasing the terminal gate.
+        await new Promise((resolve) => setTimeout(resolve, 10))
+
+        // The id must already be observable while respond() is pending.
+        expect(observedIds).toEqual(["resp_midflight"])
+        expect(resolvedBeforeCallback).toBe(false)
+
+        // Now release the terminal event and let respond() finish.
+        releaseTerminal()
+        const res = await respondPromise
+        expect(res.output).toEqual({ answer: "late" })
+        expect(res.rawResponseId).toBe("resp_midflight")
+        // The callback fired exactly once.
+        expect(observedIds).toEqual(["resp_midflight"])
+    })
+
+    it("fires onResponseCreated at most once even across multiple created-like events", async () => {
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.created",
+                            response: {
+                                id: "resp_once",
+                                status: "in_progress",
+                            },
+                        },
+                        {
+                            type: "response.created",
+                            response: {
+                                id: "resp_once_dup",
+                                status: "in_progress",
+                            },
+                        },
+                        {
+                            type: "response.completed",
+                            response: {
+                                ...completedSsePayload,
+                                id: "resp_once",
+                            },
+                        },
+                    ])
+                ),
+        })
+
+        const observedIds: string[] = []
+        await provider.respond({
+            model: "gpt-5.4",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+            onResponseCreated: (id) => observedIds.push(id),
+        })
+
+        // Only the FIRST created event surfaces an id; later ones ignored.
+        expect(observedIds).toEqual(["resp_once"])
+    })
 })
 
 // -- C-2: stage:llm-response-created event + rawResponseId on stage:llm-call ---
@@ -1918,6 +2068,152 @@ describe("llmStage — stage:llm-response-created event and rawResponseId propag
         }
         expect(llmCallEvent.rawResponseId).toBeUndefined()
     })
+
+    it("emits stage:llm-response-created MID-CALL — observable before the stage's LLM call resolves (background-stream)", async () => {
+        // Acceptance test for the load-bearing mid-flight guarantee:
+        // wire the REAL OpenAI provider (background-stream) into
+        // executePipeline with a stream that delivers `response.created`
+        // then pauses before the terminal event. Assert
+        // `stage:llm-response-created` (carrying the id) is observed
+        // while the stage's call is still in flight — NOT only at
+        // completion. This is the property that lets a crashed mid-call
+        // stage be recovered from the upstream's stored response.
+        const { executePipeline, llmStage } =
+            await import("../../../src/lib/pipelines/index.js")
+        const Type = (await import("typebox")).default
+
+        const outputSchema = Type.Object({ answer: Type.String() })
+
+        let releaseTerminal: () => void = () => undefined
+        const terminalGate = new Promise<void>((resolve) => {
+            releaseTerminal = resolve
+        })
+
+        const createdFrame = `event: response.created\ndata: ${JSON.stringify({
+            type: "response.created",
+            response: { id: "resp_pipeline_midcall", status: "in_progress" },
+        })}\n\n`
+        const terminalFrame = `event: response.completed\ndata: ${JSON.stringify(
+            {
+                type: "response.completed",
+                response: {
+                    id: "resp_pipeline_midcall",
+                    status: "completed",
+                    output: [
+                        {
+                            type: "message",
+                            content: [
+                                {
+                                    type: "output_text",
+                                    text: JSON.stringify({ answer: "done" }),
+                                },
+                            ],
+                        },
+                    ],
+                    usage: { input_tokens: 2, output_tokens: 1 },
+                },
+            }
+        )}\n\n`
+
+        const pausingStream = new ReadableStream<Uint8Array>({
+            async start(controller) {
+                controller.enqueue(new TextEncoder().encode(createdFrame))
+                await terminalGate
+                controller.enqueue(new TextEncoder().encode(terminalFrame))
+                controller.close()
+            },
+        })
+
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "k",
+            backgroundStreamMode: true,
+            fetch: () =>
+                Promise.resolve(
+                    new Response(pausingStream, {
+                        status: 200,
+                        headers: { "Content-Type": "text/event-stream" },
+                    })
+                ),
+        })
+
+        const events: import("../../../src/lib/pipelines/types.js").TPipelineEvent[] =
+            []
+        const stage = llmStage<{ answer: string }>({
+            id: "mc-stage",
+            dependsOn: [],
+            outputSchema,
+            model: "gpt-5.4",
+            buildPrompt: () => ({
+                system: "<!-- stage-id: mc-stage --> sys",
+                user: "usr",
+            }),
+        })
+        const pipeline = {
+            id: "mc-pipeline",
+            version: "1.0.0",
+            inputSchema: Type.Object({}),
+            outputSchema,
+            stages: [stage],
+            finalize: {
+                dependsOn: ["mc-stage"],
+                run: (
+                    ctx: import("../../../src/lib/pipelines/types.js").TStageContext
+                ) => ctx.get<{ answer: string }>("mc-stage") ?? { answer: "" },
+            },
+        }
+
+        const runPromise = executePipeline(
+            pipeline,
+            {},
+            {
+                llm: provider,
+                onEvent: (e) => events.push(e),
+            }
+        )
+
+        // Let the stream-start microtasks deliver `response.created`
+        // WITHOUT releasing the terminal gate (the call is still
+        // in flight).
+        await new Promise((resolve) => setTimeout(resolve, 10))
+
+        // The id event must already be observable mid-call.
+        const midCall = events.filter(
+            (e) => e.kind === "stage:llm-response-created"
+        )
+        expect(midCall).toHaveLength(1)
+        const evt = midCall[0]
+        if (evt.kind !== "stage:llm-response-created") {
+            throw new Error("expected stage:llm-response-created event")
+        }
+        expect(evt.responseId).toBe("resp_pipeline_midcall")
+        // The stage's LLM call has NOT completed yet — no stage:llm-call.
+        expect(
+            events.some(
+                (e) => e.kind === "stage:llm-call" && e.stageId === "mc-stage"
+            )
+        ).toBe(false)
+
+        // Release the terminal event and finish the run.
+        releaseTerminal()
+        const result = await runPromise
+        expect(result.output).toEqual({ answer: "done" })
+
+        // After completion, stage:llm-call fired exactly once and the
+        // id event was NOT duplicated.
+        const finalCreated = events.filter(
+            (e) => e.kind === "stage:llm-response-created"
+        )
+        expect(finalCreated).toHaveLength(1)
+        const llmCall = events.find(
+            (e) => e.kind === "stage:llm-call" && e.stageId === "mc-stage"
+        )
+        if (llmCall?.kind !== "stage:llm-call") {
+            throw new Error("expected stage:llm-call event")
+        }
+        expect(llmCall.rawResponseId).toBe("resp_pipeline_midcall")
+        // Ordering still holds: created precedes call.
+        expect(events.indexOf(evt)).toBeLessThan(events.indexOf(llmCall))
+    })
 })
 
 // -- C-3: retrieveResponse + ResponseNotFoundError ----------------------
@@ -2012,6 +2308,23 @@ describe("retrieveResponse", () => {
             throw new Error("expected ResponseNotFoundError")
         }
         expect(err.responseId).toBe("resp_aged_out")
+    })
+
+    it("ResponseNotFoundError is a NonRetryableLlmError subclass with no retryReason tag (fail-fast, behavior-preserving)", async () => {
+        const err = await retrieveResponse("resp_classify", {
+            apiKey: "k",
+            fetch: () =>
+                Promise.resolve(new Response("Not Found", { status: 404 })),
+        }).catch((e: unknown) => e)
+
+        // Extends NonRetryableLlmError → callers that instanceof-match
+        // the base still match; the framework reads the (absent)
+        // retryReason tag and fails fast exactly as a generic
+        // NonRetryableLlmError did when a 404 surfaced mid-poll.
+        expect(err).toBeInstanceOf(NonRetryableLlmError)
+        expect(err).toBeInstanceOf(ResponseNotFoundError)
+        expect((err as { retryReason?: unknown }).retryReason).toBeUndefined()
+        expect((err as { status?: number }).status).toBe(404)
     })
 
     it("throws TransientLlmError on a 5xx", async () => {

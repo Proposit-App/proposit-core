@@ -184,6 +184,17 @@ export function createOpenAiResponsesProvider(
         let lastUsage: TLlmTokenUsage = { input: 0, output: 0 }
         let lastResponseId: string | undefined
 
+        // Fire the mid-flight id callback at most once across the whole
+        // call (background-stream mode is no-tools-only, so the loop runs
+        // a single round, but guard regardless of future loop behavior).
+        let responseIdNotified = false
+        const notifyResponseId = (responseId: string): void => {
+            lastResponseId = responseId
+            if (responseIdNotified) return
+            responseIdNotified = true
+            req.onResponseCreated?.(responseId)
+        }
+
         for (let round = 0; round < maxToolRounds; round += 1) {
             const body: TOpenAiResponsesRequestBody = {
                 model: req.model,
@@ -228,8 +239,12 @@ export function createOpenAiResponsesProvider(
                 background: useBackground,
                 backgroundStream: useBackgroundStream,
                 pollIntervalMs: backgroundPollIntervalMs,
+                onResponseId: notifyResponseId,
             })
 
+            // The mid-flight callback (background-stream mode) already set
+            // `lastResponseId`; fall back to the terminal envelope id for
+            // the synchronous / poll paths where no mid-flight id fires.
             lastResponseId = envelope.id ?? lastResponseId
             lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
 
@@ -534,6 +549,7 @@ async function fetchResponseEnvelope(args: {
     background: boolean
     backgroundStream: boolean
     pollIntervalMs: number
+    onResponseId?: (responseId: string) => void
 }): Promise<TOpenAiResponsesEnvelope> {
     if (args.backgroundStream) {
         return runBackgroundStream({
@@ -542,6 +558,7 @@ async function fetchResponseEnvelope(args: {
             body: args.body,
             fetchImpl: args.fetchImpl,
             signal: args.signal,
+            onResponseId: args.onResponseId,
         })
     }
     if (args.background) {
@@ -700,18 +717,26 @@ function isTerminalBackgroundStatus(status: string | undefined): boolean {
 }
 
 /**
- * Submit a request with `{ background: true, stream: true, store: true }`,
- * capture the response id from the POST body (available before any SSE
- * bytes), then consume the SSE stream live and return the terminal envelope.
+ * Submit a single request with `{ background: true, stream: true,
+ * store: true }` and consume the resulting SSE stream live, returning
+ * the terminal envelope.
  *
- * The id is threaded into the returned envelope so `rawResponseId` propagates
- * to the caller via the normal extraction path. The response keeps generating
- * server-side even if the connection drops during stream consumption, and can
- * be resumed via `retrieveResponse`.
+ * A background response can only be streamed if it was *created* with
+ * `stream: true` (a background-without-stream response is poll-only and
+ * cannot later be streamed), so this mode uses one streaming create
+ * call rather than a separate non-streaming submit POST. The response
+ * id is therefore not in a JSON POST body — it arrives in the first
+ * `response.created` SSE event. `onResponseId` fires the moment that
+ * event is parsed (before the terminal event), so the caller can
+ * persist the id while the call is still in flight.
  *
- * A connection drop mid-stream (no terminal event before stream end) is
- * classified as a `TransientLlmError` so the framework's retry policy applies.
- * The stored response remains retrievable for the ~10-minute retention window.
+ * The response keeps generating server-side even if the connection
+ * drops during stream consumption, and can be recovered via
+ * `retrieveResponse` within the ~10-minute retention window. A
+ * connection drop mid-stream (no terminal event before stream end) is
+ * classified as a `TransientLlmError` so the framework's retry policy
+ * applies — but because the id was already surfaced mid-flight, a
+ * crashed in-flight call can be recovered rather than blindly re-run.
  */
 async function runBackgroundStream(args: {
     url: string
@@ -719,16 +744,10 @@ async function runBackgroundStream(args: {
     body: TOpenAiResponsesRequestBody
     fetchImpl: TOpenAiFetch
     signal?: AbortSignal
+    onResponseId?: (responseId: string) => void
 }): Promise<TOpenAiResponsesEnvelope> {
     if (args.signal?.aborted) throw abortError()
 
-    // POST with background:true, stream:true, store:true.
-    // The API returns the response object (with `id` and initial `status`)
-    // as the first SSE event body — but the response body here is an SSE
-    // stream, not a JSON envelope. The id is embedded in the SSE events.
-    // We use a two-phase approach: POST → SSE stream. The id comes from
-    // the `response.created` SSE event (which the API emits first, before
-    // any output chunks).
     const httpResponse = await callOnce({
         url: args.url,
         apiKey: args.apiKey,
@@ -737,7 +756,7 @@ async function runBackgroundStream(args: {
         signal: args.signal,
     })
 
-    return readSseEnvelope(httpResponse)
+    return readSseEnvelope(httpResponse, args.onResponseId)
 }
 
 async function runBackground(args: {
@@ -961,14 +980,31 @@ const SSE_TERMINAL_EVENTS = new Set([
     "response.failed",
 ])
 
+// The lifecycle event the Responses API emits first, before any output
+// chunks. It carries the response object — including `.id` — so a
+// streaming consumer learns the id while the call is still in flight.
+const SSE_CREATED_EVENT = "response.created"
+
+type TParsedSseEvent =
+    | { kind: "terminal"; envelope: TOpenAiResponsesEnvelope }
+    | { kind: "created"; responseId: string }
+    | undefined
+
 /**
- * Parse one SSE event block. Returns the embedded full `response`
- * envelope when the event is a terminal Responses-API event
- * (`response.completed` / `.incomplete` / `.failed`); otherwise
- * `undefined`. The terminal events carry a `type` field inside the
- * data JSON, so we key off that and ignore the `event:` line.
+ * Parse one SSE event block. Returns:
+ *
+ *   * `{ kind: "terminal", envelope }` for a terminal Responses-API
+ *     event (`response.completed` / `.incomplete` / `.failed`),
+ *     carrying the embedded full `response` envelope;
+ *   * `{ kind: "created", responseId }` for the lifecycle
+ *     `response.created` event, surfacing the response id the moment
+ *     it is known (before any output);
+ *   * `undefined` for every intermediate / unrecognized event.
+ *
+ * The events carry a `type` field inside the data JSON, so we key off
+ * that and fall back to the SSE `event:` line.
  */
-function parseSseEvent(raw: string): TOpenAiResponsesEnvelope | undefined {
+function parseSseEvent(raw: string): TParsedSseEvent {
     let eventType: string | undefined
     const dataLines: string[] = []
     for (const line of raw.split("\n")) {
@@ -996,7 +1032,10 @@ function parseSseEvent(raw: string): TOpenAiResponsesEnvelope | undefined {
     // the Responses API does not emit.)
     const type = parsed.type ?? eventType
     if (type && SSE_TERMINAL_EVENTS.has(type) && parsed.response) {
-        return parsed.response
+        return { kind: "terminal", envelope: parsed.response }
+    }
+    if (type === SSE_CREATED_EVENT && parsed.response?.id) {
+        return { kind: "created", responseId: parsed.response.id }
     }
     return undefined
 }
@@ -1008,12 +1047,20 @@ function parseSseEvent(raw: string): TOpenAiResponsesEnvelope | undefined {
  * `AbortError` from the underlying reader propagates verbatim so
  * `llmStage` marks the stage `skipped`.
  *
+ * `onResponseId`, when supplied, fires the moment the `response.created`
+ * lifecycle event is parsed — i.e. while the call is still streaming,
+ * before the terminal event arrives. This is the load-bearing seam for
+ * background-stream mode: it lets a caller persist the response id
+ * mid-flight so an in-flight call interrupted before completion can be
+ * recovered from the upstream's stored copy. Invoked at most once.
+ *
  * Note: the event-separator scan assumes LF (`\n\n`) framing, which the
  * OpenAI Responses API emits. Reuse against a strict CRLF-only SSE
  * server would need the separator scan adjusted to `\r\n\r\n`.
  */
 async function readSseEnvelope(
-    response: Response
+    response: Response,
+    onResponseId?: (responseId: string) => void
 ): Promise<TOpenAiResponsesEnvelope> {
     const body = response.body
     if (!body) {
@@ -1025,6 +1072,20 @@ async function readSseEnvelope(
     const decoder = new TextDecoder()
     let buffer = ""
     let terminal: TOpenAiResponsesEnvelope | undefined
+    let idSurfaced = false
+    const handleEvent = (rawEvent: string): void => {
+        const parsedEvent = parseSseEvent(rawEvent)
+        if (!parsedEvent) return
+        if (parsedEvent.kind === "terminal") {
+            terminal = parsedEvent.envelope
+            return
+        }
+        // kind === "created": surface the id once, the moment it's known.
+        if (!idSurfaced) {
+            idSurfaced = true
+            onResponseId?.(parsedEvent.responseId)
+        }
+    }
     try {
         for (;;) {
             const chunk = await reader.read()
@@ -1034,8 +1095,7 @@ async function readSseEnvelope(
             while (sep !== -1) {
                 const rawEvent = buffer.slice(0, sep)
                 buffer = buffer.slice(sep + 2)
-                const env = parseSseEvent(rawEvent)
-                if (env) terminal = env
+                handleEvent(rawEvent)
                 sep = buffer.indexOf("\n\n")
             }
         }
@@ -1057,8 +1117,7 @@ async function readSseEnvelope(
     while (tailSep !== -1) {
         const rawEvent = buffer.slice(0, tailSep)
         buffer = buffer.slice(tailSep + 2)
-        const env = parseSseEvent(rawEvent)
-        if (env) terminal = env
+        handleEvent(rawEvent)
         tailSep = buffer.indexOf("\n\n")
     }
     if (!terminal) {

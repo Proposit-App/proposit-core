@@ -1467,6 +1467,7 @@ type TLlmRequest<T> = {
     tools?: readonly TToolSpec[]
     maxOutputTokens?: number
     signal?: AbortSignal
+    onResponseCreated?: (responseId: string) => void // fired the moment the id is known, before respond() resolves (mid-flight)
     _typeMarker?: T // phantom — always `undefined` at runtime
 }
 
@@ -1477,7 +1478,7 @@ type TLlmResponse<T> = {
 }
 ```
 
-`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local Ollama tag like `"qwen3.6:latest"` — without a core change. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
+`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local Ollama tag like `"qwen3.6:latest"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in background-stream mode from the first `response.created` SSE event so a caller can persist the id before a possible crash. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
 
 `TToolSpec` is a discriminated union over `kind`:
 
@@ -1521,7 +1522,7 @@ The executor validates `input` against `pipeline.inputSchema` and the DAG (cycle
 
 The `stage:llm-request` event (since v1.8.0) fires from `llmStage` **before** each LLM-call attempt resolves — emitted inside the retry loop after the attempt counter increments and the request is built, immediately before the provider call. It carries `{ stageId, attempt, prompts: { system, user }, at }`, where `prompts.user` is the message as-sent on this attempt (including any retry-suffix appended after a prior schema-validation failure). It lets a consumer surface a stage's Input the instant the call starts, without waiting for the post-call `stage:llm-call`. A retried attempt fires a second `stage:llm-request` with the incremented `attempt`; deterministic stages emit none. Per-attempt ordering is `stage:start → stage:llm-request → [stage:llm-response-created] → stage:llm-call → stage:end`.
 
-The `stage:llm-response-created` event (since v1.10.0) fires from `llmStage` **after** each LLM-call attempt returns, **before** `stage:llm-call`, only when the provider surfaces a `rawResponseId`. It carries `{ stageId, attempt, responseId, at }`. In background+stream mode the response keeps generating server-side even after a client disconnect, and the id can be persisted for later resync via `retrieveResponse`. In synchronous mode the id is only known at completion (same attempt, just before `stage:llm-call`). The event fires on every attempt that resolves — including schema-validation retries — with the id belonging to that specific attempt.
+The `stage:llm-response-created` event (since v1.10.0) carries `{ stageId, attempt, responseId, at }` and fires from `llmStage` as soon as a provider surfaces a response id, always **before** `stage:llm-call` on the same attempt. **In background+stream mode the event fires _mid-flight_ — while the LLM call is still streaming, before it resolves** — driven by the provider's `onResponseCreated` callback (wired from the first `response.created` SSE event; see the OpenAI provider below). This is the load-bearing recovery guarantee: a consumer persists the id _before_ a possible crash, so a call interrupted mid-generation can be re-fetched from the upstream's stored copy (`retrieveResponse`) rather than blindly re-run (which would double-spend). In synchronous / poll modes the provider does not invoke the mid-flight callback, so the id surfaces only at completion (still on the same attempt, just before `stage:llm-call`) — a strictly weaker guarantee: a sync call crashing mid-generation loses its id and must re-run. The event fires on every attempt whose id is learned — including schema-validation retries — with the id belonging to that specific attempt, at most once per attempt.
 
 The `stage:llm-call` event (since v1.2.0) fires after every LLM-call attempt, carrying the actual `prompts` sent (including the retry-suffix appended on attempt 2+), the raw `output`, the call's `tokenUsage`, an optional `validationError` set whenever the output failed `outputSchema` validation, and (since v1.10.0) an optional `rawResponseId` when the provider surfaces one. Its presence is the validation-fail signal; the payload shape is otherwise identical on success and failure. Deterministic stages and the thrown-error branch do not emit it.
 
@@ -1567,7 +1568,7 @@ type TCreateOpenAiResponsesProviderOptions = {
     maxToolCallRounds?: number // function-tool agent-loop cap; default 6
     stream?: boolean // stream response over SSE; default true; no data-retention implications
     backgroundMode?: boolean // submit-then-poll; requires store:true (NOT ZDR-compatible); no-tools V1 only; default false
-    backgroundStreamMode?: boolean // background + live SSE: submit with {background:true, stream:true, store:true}; response keeps running server-side after a connection drop and is resumable via retrieveResponse; no-tools V1 only; default false; takes priority over backgroundMode when both are set
+    backgroundStreamMode?: boolean // background + live SSE: a single create with {background:true, stream:true, store:true}; the id arrives in the first `response.created` SSE event and is surfaced mid-flight via TLlmRequest.onResponseCreated; response keeps running server-side after a connection drop and is resumable via retrieveResponse; no-tools V1 only; default false; takes priority over backgroundMode when both are set
     backgroundPollIntervalMs?: number // poll interval (ms) when backgroundMode is true; default 2000
 }
 ```
@@ -1591,9 +1592,9 @@ type TRetrievedResponse = {
 await retrieveResponse("resp_abc", { apiKey, fetch?, baseUrl?, signal? })
 ```
 
-Retrieves a stored OpenAI response by id. Throws `ResponseNotFoundError` (HTTP 404) when the response has aged out of the ~10-minute retention window — callers should clear the stored id, settle the stage as failed, and surface a retry. Throws `TransientLlmError` on 5xx or network errors.
+Retrieves a stored OpenAI response by id. Throws `ResponseNotFoundError` (HTTP 404) when the response has aged out of the ~10-minute retention window — callers should clear the stored id, settle the stage as failed, and surface a retry. Throws `TransientLlmError` on 5xx or network errors. A 404 surfacing inside the background poll loop also throws `ResponseNotFoundError`.
 
-**Error classes** (re-exported from the package root and this subpath; `instanceof`-matchable for finer-grained observability): `NonRetryableLlmError`, `QuotaExhaustedLlmError`, `RateLimitLlmError`, `ResponseNotFoundError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`. The subpath also exports `typeboxToOpenAiSchema` (the strict-mode converter) and its `TOpenAiJsonSchema` type.
+**Error classes** (re-exported from the package root and this subpath; `instanceof`-matchable for finer-grained observability): `NonRetryableLlmError`, `QuotaExhaustedLlmError`, `RateLimitLlmError`, `ResponseNotFoundError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`. `ResponseNotFoundError` **extends `NonRetryableLlmError`** (carries no `retryReason` tag → fail-fast, behavior-preserving for the prior generic-404 path; `status: 404`). The subpath also exports `typeboxToOpenAiSchema` (the strict-mode converter) and its `TOpenAiJsonSchema` type.
 
 ---
 

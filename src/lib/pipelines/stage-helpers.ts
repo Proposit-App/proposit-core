@@ -263,6 +263,31 @@ export function llmStage<TOutput>(config: {
                     throw new StageAbortedError({ stageId: config.id })
                 }
 
+                // Emit the `stage:llm-response-created` event the moment
+                // the provider surfaces a response id. In background-stream
+                // mode this fires MID-FLIGHT — before `respond()` resolves
+                // — from the provider's `onResponseCreated` callback (the
+                // first `response.created` SSE event). That early emit is
+                // load-bearing: a consumer persists the id before a
+                // possible crash, so a call interrupted mid-generation can
+                // be recovered from the upstream's stored copy rather than
+                // blindly re-run. In synchronous mode the callback never
+                // fires; the id is surfaced only at completion (below). The
+                // `responseIdEmitted` flag dedupes so the event fires at
+                // most once per attempt.
+                let responseIdEmitted = false
+                const emitResponseCreated = (responseId: string): void => {
+                    if (responseIdEmitted) return
+                    responseIdEmitted = true
+                    ctx.emit({
+                        kind: "stage:llm-response-created",
+                        stageId: config.id,
+                        attempt,
+                        responseId,
+                        at: now(),
+                    })
+                }
+
                 const req: TLlmRequest<TOutput> = {
                     model: config.model,
                     reasoningEffort: config.reasoningEffort,
@@ -272,6 +297,7 @@ export function llmStage<TOutput>(config: {
                     tools: config.tools,
                     maxOutputTokens: config.maxOutputTokens,
                     signal: ctx.signal,
+                    onResponseCreated: emitResponseCreated,
                 }
 
                 // Emit the pre-call stage-input event. Fires inside the
@@ -297,26 +323,12 @@ export function llmStage<TOutput>(config: {
                 try {
                     const response = await ctx.llm.respond<TOutput>(req)
 
-                    // When the provider surfaces a response id, emit
-                    // the id-created event so consumers can persist
-                    // it as early as possible. In synchronous mode this
-                    // fires just after the call returns (completion-
-                    // time only); in background+stream mode the id is
-                    // available before any SSE bytes arrive, but the
-                    // provider surfaces it here at return time (the
-                    // background+stream branch inside the provider
-                    // has already awaited the full stream by then).
-                    // Either way the event fires before `stage:llm-call`
-                    // on the same attempt, preserving the ordering
-                    // guarantee for consumers.
+                    // Completion-time fallback: if the provider surfaced an
+                    // id but did NOT fire the mid-flight callback (the
+                    // synchronous / poll paths), emit here so the event
+                    // still precedes `stage:llm-call` on this attempt.
                     if (response.rawResponseId) {
-                        ctx.emit({
-                            kind: "stage:llm-response-created",
-                            stageId: config.id,
-                            attempt,
-                            responseId: response.rawResponseId,
-                            at: now(),
-                        })
+                        emitResponseCreated(response.rawResponseId)
                     }
 
                     const validationPassed = Value.Check(

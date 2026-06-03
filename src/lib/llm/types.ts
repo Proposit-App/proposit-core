@@ -41,6 +41,21 @@ export type TLlmRequest<T> = {
     maxOutputTokens?: number
     signal?: AbortSignal
     /**
+     * Optional callback fired by a provider **as soon as the upstream
+     * response id is known — before the call resolves**. Lets a caller
+     * persist the id mid-flight so an interrupted in-flight call can be
+     * recovered from the upstream's stored copy.
+     *
+     * Only providers that can surface an id mid-flight invoke it (the
+     * OpenAI provider in background-stream mode, from the first
+     * `response.created` SSE event). Synchronous providers leave it
+     * uncalled and surface the id only at completion via
+     * {@link TLlmResponse.rawResponseId}. Optional + backward-compatible:
+     * callers that don't set it are unaffected. Invoked at most once per
+     * provider call (per attempt).
+     */
+    onResponseCreated?: (responseId: string) => void
+    /**
      * Phantom field that carries the structured-output type `T` from
      * `outputSchema` into the response. Always `undefined` at runtime.
      */
