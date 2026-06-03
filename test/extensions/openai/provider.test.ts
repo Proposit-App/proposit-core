@@ -8,6 +8,7 @@ import Type from "typebox"
 import {
     createOpenAiResponsesProvider,
     retrieveResponse,
+    reconnectStream,
 } from "../../../src/extensions/openai/provider.js"
 import {
     NonRetryableLlmError,
@@ -2353,6 +2354,210 @@ describe("retrieveResponse", () => {
         })
 
         expect(captured[0]).toBe("https://proxy.test/v1/responses/resp_custom")
+    })
+})
+
+// -- reconnectStream (resume a dropped background response to completion) ---
+
+describe("reconnectStream", () => {
+    const completedReconnectPayload = {
+        id: "resp_rc",
+        status: "completed",
+        output: [
+            {
+                type: "message",
+                content: [
+                    {
+                        type: "output_text",
+                        text: "reconnected output",
+                    },
+                ],
+            },
+        ],
+        usage: { input_tokens: 3, output_tokens: 2 },
+    }
+
+    it("GETs with stream=true&starting_after, consumes the SSE to completion, and returns the TRetrievedResponse shape", async () => {
+        const captured: { url: string; init: RequestInit }[] = []
+        const res = await reconnectStream("resp_rc", {
+            apiKey: "sk-test",
+            fetch: (url, init) => {
+                captured.push({ url, init })
+                return Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.completed",
+                            response: completedReconnectPayload,
+                        },
+                    ])
+                )
+            },
+        })
+
+        expect(res.status).toBe("completed")
+        expect(res.output).toBe("reconnected output")
+        expect(res.tokenUsage).toEqual({ input: 3, output: 2 })
+        expect(res.rawResponseId).toBe("resp_rc")
+
+        // Exactly one GET with stream=true & default starting_after=0.
+        expect(captured).toHaveLength(1)
+        expect(captured[0].url).toBe(
+            "https://api.openai.com/v1/responses/resp_rc?stream=true&starting_after=0"
+        )
+        expect(captured[0].init.method).toBe("GET")
+        const headers = captured[0].init.headers as Record<string, string>
+        expect(headers.Authorization).toBe("Bearer sk-test")
+    })
+
+    it("passes an explicit startingAfter cursor through the query string", async () => {
+        const captured: string[] = []
+        await reconnectStream("resp_cursor", {
+            apiKey: "k",
+            startingAfter: 42,
+            fetch: (url) => {
+                captured.push(url)
+                return Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.completed",
+                            response: {
+                                ...completedReconnectPayload,
+                                id: "resp_cursor",
+                            },
+                        },
+                    ])
+                )
+            },
+        })
+
+        expect(captured[0]).toBe(
+            "https://api.openai.com/v1/responses/resp_cursor?stream=true&starting_after=42"
+        )
+    })
+
+    it("throws ResponseNotFoundError on a 404 (aged out)", async () => {
+        await expect(
+            reconnectStream("resp_gone", {
+                apiKey: "k",
+                fetch: () =>
+                    Promise.resolve(new Response("Not Found", { status: 404 })),
+            })
+        ).rejects.toBeInstanceOf(ResponseNotFoundError)
+    })
+
+    it("throws TransientLlmError on a 5xx", async () => {
+        await expect(
+            reconnectStream("resp_5xx", {
+                apiKey: "k",
+                fetch: () =>
+                    Promise.resolve(
+                        new Response("Internal Server Error", { status: 500 })
+                    ),
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("throws TransientLlmError when the stream ends with no terminal event (a second drop mid-reconnect)", async () => {
+        await expect(
+            reconnectStream("resp_drop", {
+                apiKey: "k",
+                fetch: () =>
+                    Promise.resolve(
+                        sseResponse([
+                            {
+                                type: "response.output_text.delta",
+                                response: { delta: "partial" },
+                            },
+                        ])
+                    ),
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("propagates an AbortError from the underlying fetch", async () => {
+        const controller = new AbortController()
+        controller.abort()
+        await expect(
+            reconnectStream("resp_abort", {
+                apiKey: "k",
+                signal: controller.signal,
+                fetch: (_url, init) => {
+                    if (init.signal?.aborted) {
+                        const err = new Error("aborted")
+                        err.name = "AbortError"
+                        return Promise.reject(err)
+                    }
+                    return Promise.resolve(
+                        sseResponse([
+                            {
+                                type: "response.completed",
+                                response: completedReconnectPayload,
+                            },
+                        ])
+                    )
+                },
+            })
+        ).rejects.toThrowError(/abort/i)
+    })
+
+    it("respects a custom baseUrl", async () => {
+        const captured: string[] = []
+        await reconnectStream("resp_custom", {
+            apiKey: "k",
+            baseUrl: "https://proxy.test/v1/responses",
+            fetch: (url) => {
+                captured.push(url)
+                return Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.completed",
+                            response: {
+                                ...completedReconnectPayload,
+                                id: "resp_custom",
+                            },
+                        },
+                    ])
+                )
+            },
+        })
+
+        expect(captured[0]).toBe(
+            "https://proxy.test/v1/responses/resp_custom?stream=true&starting_after=0"
+        )
+    })
+
+    it("drives an initially in-progress stream to a terminal completed status (the disconnect-survival contract)", async () => {
+        // Mirrors the real disconnect-survival path: the reconnect
+        // stream replays from `response.created` (in_progress) and
+        // continues to the terminal `response.completed`. The returned
+        // status must be the TERMINAL one, not the intermediate
+        // in_progress — proving reconnect consumes to completion.
+        const res = await reconnectStream("resp_survive", {
+            apiKey: "k",
+            fetch: () =>
+                Promise.resolve(
+                    sseResponse([
+                        {
+                            type: "response.created",
+                            response: {
+                                id: "resp_survive",
+                                status: "in_progress",
+                            },
+                        },
+                        {
+                            type: "response.completed",
+                            response: {
+                                ...completedReconnectPayload,
+                                id: "resp_survive",
+                            },
+                        },
+                    ])
+                ),
+        })
+
+        expect(res.status).toBe("completed")
+        expect(res.output).toBe("reconnected output")
+        expect(res.rawResponseId).toBe("resp_survive")
     })
 })
 

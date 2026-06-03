@@ -1568,7 +1568,7 @@ type TCreateOpenAiResponsesProviderOptions = {
     maxToolCallRounds?: number // function-tool agent-loop cap; default 6
     stream?: boolean // stream response over SSE; default true; no data-retention implications
     backgroundMode?: boolean // submit-then-poll; requires store:true (NOT ZDR-compatible); no-tools V1 only; default false
-    backgroundStreamMode?: boolean // background + live SSE: a single create with {background:true, stream:true, store:true}; the id arrives in the first `response.created` SSE event and is surfaced mid-flight via TLlmRequest.onResponseCreated; response keeps running server-side after a connection drop and is resumable via retrieveResponse; no-tools V1 only; default false; takes priority over backgroundMode when both are set
+    backgroundStreamMode?: boolean // background + live SSE: a single create with {background:true, stream:true, store:true}; the id arrives in the first `response.created` SSE event and is surfaced mid-flight via TLlmRequest.onResponseCreated; response keeps running server-side after a connection drop and is resumable to completion via reconnectStream; no-tools V1 only; default false; takes priority over backgroundMode when both are set
     backgroundPollIntervalMs?: number // poll interval (ms) when backgroundMode is true; default 2000
 }
 ```
@@ -1593,6 +1593,22 @@ await retrieveResponse("resp_abc", { apiKey, fetch?, baseUrl?, signal? })
 ```
 
 Retrieves a stored OpenAI response by id. Throws `ResponseNotFoundError` (HTTP 404) when the response has aged out of the ~10-minute retention window — callers should clear the stored id, settle the stage as failed, and surface a retry. Throws `TransientLlmError` on 5xx or network errors. A 404 surfacing inside the background poll loop also throws `ResponseNotFoundError`.
+
+`retrieveResponse` is a **passive read**: it reports the current status but does **not** advance a still-generating background response — a `queued` / `in_progress` response left to passive polling can stall indefinitely (it is only driven forward by an active stream consumer). To finish a dropped response, use `reconnectStream` (below).
+
+#### `reconnectStream(id, options)` → `Promise<TRetrievedResponse>`
+
+```typescript
+await reconnectStream("resp_abc", {
+    apiKey,
+    startingAfter?, // SSE cursor; default 0 (replay from the start of the stored stream)
+    fetch?,
+    baseUrl?,
+    signal?,
+})
+```
+
+Reconnects to a stored background response via `GET /responses/{id}?stream=true&starting_after=<cursor>` and **consumes the SSE stream to its terminal event**, returning the same `TRetrievedResponse` shape. This is the operation that actually drives a dropped background response to completion: resuming the stream makes the server continue generation through to a terminal status, where a passive `retrieveResponse` GET would leave it sitting in `queued` / `in_progress`. Throws `ResponseNotFoundError` on 404 (aged out); `TransientLlmError` on 5xx, network errors, or a stream that ends with no terminal event (a second drop mid-reconnect — retry by reconnecting again). Honors `signal` (an abort propagates as an `AbortError`).
 
 **Error classes** (re-exported from the package root and this subpath; `instanceof`-matchable for finer-grained observability): `NonRetryableLlmError`, `QuotaExhaustedLlmError`, `RateLimitLlmError`, `ResponseNotFoundError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`. `ResponseNotFoundError` **extends `NonRetryableLlmError`** (carries no `retryReason` tag → fail-fast, behavior-preserving for the prior generic-404 path; `status: 404`). The subpath also exports `typeboxToOpenAiSchema` (the strict-mode converter) and its `TOpenAiJsonSchema` type.
 

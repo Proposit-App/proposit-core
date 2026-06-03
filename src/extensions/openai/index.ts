@@ -3,9 +3,14 @@
 // Public surface consumed by `proposit-server`, the CLI, and other
 // callers: the provider constructor + caller-facing config types +
 // the error classes that callers may want to `instanceof`-match for
-// finer-grained observability + the response retrieval API for resync.
+// finer-grained observability + the response retrieval + reconnect API
+// for resync.
 
-export { createOpenAiResponsesProvider, retrieveResponse } from "./provider.js"
+export {
+    createOpenAiResponsesProvider,
+    retrieveResponse,
+    reconnectStream,
+} from "./provider.js"
 export type {
     TCreateOpenAiResponsesProviderOptions,
     TRetrievedResponse,

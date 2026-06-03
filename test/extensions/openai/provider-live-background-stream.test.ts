@@ -23,11 +23,12 @@
 //   2. The streamed call completes and returns output + `rawResponseId`.
 //   3. `retrieveResponse(id)` on that id → `completed` with output +
 //      tokenUsage.
-//   4. DISCONNECT-SURVIVAL: start a background+stream call, capture the
-//      id mid-flight, ABORT the local stream, then poll
-//      `retrieveResponse(id)` → it reaches `completed` (NOT
-//      `cancelled`) — proving generation continued server-side after
-//      the local drop.
+//   4. DISCONNECT-SURVIVAL (the pre-publish go/no-go): start a
+//      background+stream call, capture the id mid-flight, ABORT the
+//      local stream, then `reconnectStream(id)` → it drives the
+//      response to `completed` (NOT `cancelled`) with usable output —
+//      proving generation continued server-side after the local drop
+//      and that reconnect-and-stream (not passive polling) finishes it.
 //   5. `retrieveResponse("resp_doesnotexist")` → throws
 //      `ResponseNotFoundError` (404).
 
@@ -38,9 +39,9 @@ import { Value } from "typebox/value"
 import {
     createOpenAiResponsesProvider,
     retrieveResponse,
+    reconnectStream,
     ResponseNotFoundError,
 } from "../../../src/extensions/openai/index.js"
-import type { TResponseStatus } from "../../../src/extensions/openai/index.js"
 
 const MODEL = process.env.OPENAI_LIVE_MODEL ?? "gpt-5.4"
 const optInEnabled = process.env.RUN_LIVE_LLM_TESTS === "1"
@@ -65,31 +66,6 @@ type TAnswer = Static<typeof Schema>
 const SYSTEM_PROMPT =
     "You answer with strict JSON matching the schema. No prose."
 const USER_MESSAGE = "Reply with the single word: ok"
-
-// Terminal background statuses (generation finished server-side).
-const TERMINAL_STATUSES: ReadonlySet<TResponseStatus> = new Set([
-    "completed",
-    "failed",
-    "incomplete",
-    "cancelled",
-])
-
-async function pollUntilTerminal(
-    id: string,
-    args: { capMs: number; intervalMs: number }
-): Promise<TResponseStatus> {
-    const deadline = Date.now() + args.capMs
-    for (;;) {
-        const retrieved = await retrieveResponse(id, { apiKey })
-        if (TERMINAL_STATUSES.has(retrieved.status)) {
-            return retrieved.status
-        }
-        if (Date.now() >= deadline) {
-            return retrieved.status
-        }
-        await new Promise((resolve) => setTimeout(resolve, args.intervalMs))
-    }
-}
 
 describeIf(
     "OpenAI background-stream provider — live calls (RUN_LIVE_LLM_TESTS=1)",
@@ -235,21 +211,19 @@ describeIf(
                 expect(capturedId).toBeDefined()
                 const id = capturedId!
 
-                // Poll the stored response. Background generation continues
-                // server-side after the local drop, so it must reach
-                // `completed` — NOT `cancelled`. Bound the poll to stay well
-                // inside the ~10-minute retention window.
-                const finalStatus = await pollUntilTerminal(id, {
-                    capMs: 120_000,
-                    intervalMs: 2_000,
-                })
+                // RECONNECT-AND-STREAM drives the dropped response to
+                // completion. A passive `retrieveResponse` GET only reads
+                // the current state and leaves a background response sitting
+                // in `queued` / `in_progress` (the earlier live run proved
+                // this stalled for 120s); reconnecting with `stream=true`
+                // resumes consumption so the response reaches a terminal
+                // status. It must be `completed` — NOT `cancelled` — proving
+                // generation continued server-side after the local drop.
+                const reconnected = await reconnectStream(id, { apiKey })
 
-                expect(finalStatus).toBe("completed")
-
-                // And the recovered output is usable.
-                const retrieved = await retrieveResponse(id, { apiKey })
-                expect(retrieved.status).toBe("completed")
-                expect((retrieved.output ?? "").length).toBeGreaterThan(0)
+                expect(reconnected.status).toBe("completed")
+                expect(reconnected.rawResponseId).toBe(id)
+                expect((reconnected.output ?? "").length).toBeGreaterThan(0)
             }
         )
 

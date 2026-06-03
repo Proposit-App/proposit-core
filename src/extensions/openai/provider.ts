@@ -507,26 +507,107 @@ export async function retrieveResponse(
         signal?: AbortSignal
     }
 ): Promise<TRetrievedResponse> {
-    const url = options.baseUrl ?? DEFAULT_BASE_URL
-    const fetchImpl =
-        options.fetch ?? (globalThis.fetch as TOpenAiFetch | undefined)
-    if (!fetchImpl) {
-        throw new Error(
-            "retrieveResponse: no fetch implementation available. Pass `fetch` explicitly or run in an environment that provides `globalThis.fetch` (Node ≥18, modern browsers, Expo)."
-        )
-    }
+    const fetchImpl = resolveFetch(options.fetch, "retrieveResponse")
     const envelope = await getResponseById({
-        url,
+        url: options.baseUrl ?? DEFAULT_BASE_URL,
         id,
         apiKey: options.apiKey,
         fetchImpl,
         signal: options.signal,
     })
+    return envelopeToRetrievedResponse(envelope, id)
+}
+
+/**
+ * Reconnect to a stored, still-generating background response and
+ * **stream it to completion**. This is what actually drives a dropped
+ * background response forward: a passive `retrieveResponse` GET only
+ * reads the current state and leaves a `queued` / `in_progress`
+ * response sitting where it is, whereas reconnecting with `stream=true`
+ * resumes consumption so the response reaches a terminal status.
+ *
+ * Issues `GET /responses/{id}?stream=true&starting_after=<cursor>` and
+ * consumes the SSE stream to its terminal event, returning the same
+ * {@link TRetrievedResponse} shape as {@link retrieveResponse}.
+ *
+ * Throws {@link ResponseNotFoundError} when the response is not found
+ * (HTTP 404 — typically the ~10-minute retention window elapsed).
+ * Honors `signal`: an abort propagates as an `AbortError` from the
+ * underlying stream read.
+ *
+ * @param id - The OpenAI response id to reconnect to.
+ * @param options - `apiKey`, optional `startingAfter` SSE cursor
+ *   (defaults to 0 — replay from the start of the stored stream),
+ *   optional `baseUrl`, `fetch`, and `signal`.
+ */
+export async function reconnectStream(
+    id: string,
+    options: {
+        apiKey: string
+        startingAfter?: number
+        baseUrl?: string
+        fetch?: TOpenAiFetch
+        signal?: AbortSignal
+    }
+): Promise<TRetrievedResponse> {
+    const fetchImpl = resolveFetch(options.fetch, "reconnectStream")
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+    const startingAfter = options.startingAfter ?? 0
+    const url = `${baseUrl}/${id}?stream=true&starting_after=${startingAfter.toString()}`
+
+    let response: Response
+    try {
+        response = await fetchImpl(url, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${options.apiKey}` },
+            signal: options.signal,
+        })
+    } catch (err) {
+        if (isAbortError(err)) throw err
+        throw new TransientLlmError({
+            message: `Network error reconnecting to OpenAI background response: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+    if (response.status === 404) {
+        throw new ResponseNotFoundError({ responseId: id })
+    }
+    if (!response.ok) {
+        const errorBody = await response.text().catch(() => "")
+        throw classifyHttpError(
+            response.status,
+            `OpenAI reconnect ${response.status.toString()}: ${
+                errorBody || response.statusText
+            }`
+        )
+    }
+    const envelope = await readSseEnvelope(response)
+    return envelopeToRetrievedResponse(envelope, id)
+}
+
+function resolveFetch(
+    injected: TOpenAiFetch | undefined,
+    fnName: string
+): TOpenAiFetch {
+    const fetchImpl = injected ?? (globalThis.fetch as TOpenAiFetch | undefined)
+    if (!fetchImpl) {
+        throw new Error(
+            `${fnName}: no fetch implementation available. Pass \`fetch\` explicitly or run in an environment that provides \`globalThis.fetch\` (Node ≥18, modern browsers, Expo).`
+        )
+    }
+    return fetchImpl
+}
+
+function envelopeToRetrievedResponse(
+    envelope: TOpenAiResponsesEnvelope,
+    id: string
+): TRetrievedResponse {
     const output = extractAssistantText(envelope.output)
     const usage = extractUsage(envelope)
     const result: TRetrievedResponse = {
         status: (envelope.status ?? "in_progress") as TResponseStatus,
-        rawResponseId: id,
+        rawResponseId: envelope.id ?? id,
     }
     if (output !== undefined) {
         result.output = output

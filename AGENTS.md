@@ -45,7 +45,7 @@ The OpenAI provider lives in `src/extensions/openai/`. When you need to verify O
 - `https://developers.openai.com/api/docs/llms.txt` — guides / concepts / tutorials only (how-to: background mode, streaming, structured outputs, migration). Smaller; use for "how does feature X work" without endpoint-reference noise.
 - `…/reference/llms.txt` is the reference-only index; the `…/llms-full.txt` variants are single-file full-content exports (use when you want everything inline rather than following links).
 
-Opt-in live integration suites exercise the provider against the real Responses API (and cost tokens). They are `describe.skip`-ed unless `RUN_LIVE_LLM_TESTS=1` AND `OPENAI_API_KEY` are both set — CI sets neither. Run them with: `RUN_LIVE_LLM_TESTS=1 OPENAI_API_KEY=sk-... pnpm exec vitest run test/extensions/openai/provider-live.test.ts test/extensions/openai/provider-live-background-stream.test.ts` (the background-stream suite covers mid-flight id + disconnect-survival via `retrieveResponse`).
+Opt-in live integration suites exercise the provider against the real Responses API (and cost tokens). They are `describe.skip`-ed unless `RUN_LIVE_LLM_TESTS=1` AND `OPENAI_API_KEY` are both set — CI sets neither. Run them with: `RUN_LIVE_LLM_TESTS=1 OPENAI_API_KEY=sk-... pnpm exec vitest run test/extensions/openai/provider-live.test.ts test/extensions/openai/provider-live-background-stream.test.ts` (the background-stream suite covers mid-flight id + disconnect-survival via `reconnectStream` — passive `retrieveResponse` polling does NOT drive a dropped background response to completion; only reconnect-and-stream does).
 
 ## Change requests
 
