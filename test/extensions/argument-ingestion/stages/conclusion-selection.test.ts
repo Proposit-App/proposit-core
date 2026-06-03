@@ -1,9 +1,8 @@
-// Unit tests for `conclusion-selection` — the wrapper that surfaces
-// `NO_SINGLE_CONCLUSION` as a `ProcessingFailure` whenever the LLM
-// returns `{ conclusionMiniId: null }` (spec §7.2 row 10). The
-// happy-path round trip + the spec-aligned dep wiring are covered by
-// `llm-stages.test.ts`; this file focuses on the wrapper's
-// addFailure-on-null contract added during lambda-fold 1.
+// Unit tests for `conclusion-selection` — the wrapper that resolves a
+// single `conclusionMiniId` from the model's confidence-ranked
+// `conclusionCandidates` list, falling back to the relation graph when
+// the model names none, and surfacing `NO_SINGLE_CONCLUSION` only when no
+// claim qualifies at all.
 
 import { describe, expect, it } from "vitest"
 import Type from "typebox"
@@ -15,6 +14,7 @@ import type { TPipeline } from "../../../../src/lib/pipelines/index.js"
 import {
     STAGE_IDS,
     type TClaimTypeClassificationOutput,
+    type TConclusionSelectionLlmOutput,
     type TConclusionSelectionOutput,
     type TRelationExtractionOutput,
 } from "../../../../src/extensions/argument-ingestion/stages/index.js"
@@ -60,94 +60,302 @@ function buildStandalonePipeline(
     }
 }
 
-describe("conclusionSelectionStage — failure emission", () => {
-    it("emits NO_SINGLE_CONCLUSION when LLM returns conclusionMiniId: null", async () => {
-        const llm = createMockLlmProvider({
-            responses: {
-                [STAGE_IDS.conclusionSelection]: [
-                    {
-                        kind: "ok",
-                        output: {
-                            conclusionMiniId: null,
-                            rationale:
-                                "Two terminals c2 and c3 are equally plausible.",
-                        } satisfies TConclusionSelectionOutput,
-                    },
-                ],
-            },
-        })
+function makeClassifications(
+    entries: readonly (readonly [string, "normal" | "citation" | "axiomatic"])[]
+): TClaimTypeClassificationOutput {
+    return {
+        classifications: entries.map(([miniId, type]) => ({
+            miniId,
+            type,
+            sourceString: null,
+        })),
+    }
+}
+
+function makeRelation(
+    relationId: string,
+    sources: string[],
+    target: string
+): TRelationExtractionOutput["relations"][number] {
+    return {
+        relationId,
+        type: "support",
+        sources,
+        target,
+        evidence: { segmentIds: [], quote: "" },
+    }
+}
+
+function llmReturning(candidates: string[], rationale = "Model rationale.") {
+    return createMockLlmProvider({
+        responses: {
+            [STAGE_IDS.conclusionSelection]: [
+                {
+                    kind: "ok",
+                    output: {
+                        conclusionCandidates: candidates,
+                        rationale,
+                    } satisfies TConclusionSelectionLlmOutput,
+                },
+            ],
+        },
+    })
+}
+
+function noConclusionFailure(result: {
+    failures: { code: string }[]
+}): { code: string } | undefined {
+    return result.failures.find(
+        (f) => f.code === CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE
+    )
+}
+
+describe("conclusionSelectionStage — model-ranked candidates", () => {
+    it("picks the model's top candidate when it is a valid normal claim", async () => {
         const pipeline = buildStandalonePipeline(
-            { classifications: [] },
+            makeClassifications([
+                ["c1", "normal"],
+                ["c2", "normal"],
+            ]),
             { relations: [] }
         )
-        const result = await executePipeline(pipeline, { text: "x" }, { llm })
-        // Stage itself completes (the wrapped stage returns the null
-        // output unchanged; the failure is an informational side-channel).
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning(["c2", "c1"], "c2 is the strongest.") }
+        )
         expect(result.stageOutcomes[STAGE_IDS.conclusionSelection]).toBe(
             "completed"
         )
-        const failure = result.failures.find(
-            (f) => f.code === CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE
+        expect(result.output?.conclusionMiniId).toBe("c2")
+        // The full ranked list rides along untouched for consumers.
+        expect(result.output?.conclusionCandidates).toEqual(["c2", "c1"])
+        // A clean model pick keeps the model's own rationale.
+        expect(result.output?.rationale).toBe("c2 is the strongest.")
+        expect(noConclusionFailure(result)).toBeUndefined()
+    })
+
+    it("prefers the model's pick over the graph fallback when they disagree", async () => {
+        // The model picks c1 (a normal non-terminal); the relation graph
+        // would pick c2 (the sink). The model's choice must win — the
+        // fallback is only consulted when the model names no valid pick.
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["c1", "normal"],
+                ["c2", "normal"],
+            ]),
+            { relations: [makeRelation("r1", ["c1"], "c2")] }
         )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning(["c1"], "c1 is the real point.") }
+        )
+        expect(result.output?.conclusionMiniId).toBe("c1")
+        expect(result.output?.rationale).toBe("c1 is the real point.")
+        expect(noConclusionFailure(result)).toBeUndefined()
+    })
+
+    it("skips a citation top candidate to the next valid normal one", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["cit1", "citation"],
+                ["c3", "normal"],
+            ]),
+            { relations: [] }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning(["cit1", "c3"]) }
+        )
+        expect(result.output?.conclusionMiniId).toBe("c3")
+        expect(noConclusionFailure(result)).toBeUndefined()
+    })
+
+    it("skips an unknown top candidate to the next valid one", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["c2", "normal"],
+                ["c3", "normal"],
+            ]),
+            { relations: [] }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning(["zz9", "c3"]) }
+        )
+        expect(result.output?.conclusionMiniId).toBe("c3")
+        expect(noConclusionFailure(result)).toBeUndefined()
+    })
+
+    it("falls back to the relation graph when every model candidate is invalid", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["cit1", "citation"],
+                ["c2", "normal"],
+                ["c3", "normal"],
+            ]),
+            { relations: [makeRelation("r1", ["c2"], "c3")] }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning(["cit1"]) }
+        )
+        // cit1 is a citation (rule 3) → graph fallback picks the lone
+        // normal terminal c3.
+        expect(result.output?.conclusionMiniId).toBe("c3")
+        expect(result.output?.rationale).toContain("Auto-selected")
+        expect(noConclusionFailure(result)).toBeUndefined()
+    })
+})
+
+describe("conclusionSelectionStage — relation-graph fallback when the model returns no candidates", () => {
+    it("auto-picks the earliest pure sink when terminals tie on in-degree", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["c1", "normal"],
+                ["c2", "normal"],
+                ["c3", "normal"],
+            ]),
+            {
+                relations: [
+                    makeRelation("r1", ["c2"], "c1"),
+                    makeRelation("r2", ["c2"], "c3"),
+                ],
+            }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning([]) }
+        )
+        expect(result.stageOutcomes[STAGE_IDS.conclusionSelection]).toBe(
+            "completed"
+        )
+        expect(result.output?.conclusionMiniId).toBe("c1")
+        expect(result.output?.rationale).toContain("Auto-selected")
+        expect(noConclusionFailure(result)).toBeUndefined()
+    })
+
+    it("prefers the higher in-degree terminal over an earlier lower-degree one", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["c1", "normal"],
+                ["c2", "normal"],
+                ["c3", "normal"],
+                ["c4", "normal"],
+                ["c5", "normal"],
+            ]),
+            {
+                relations: [
+                    makeRelation("r1", ["c2"], "c1"),
+                    makeRelation("r2", ["c3"], "c5"),
+                    makeRelation("r3", ["c4"], "c5"),
+                ],
+            }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning([]) }
+        )
+        expect(result.output?.conclusionMiniId).toBe("c5")
+    })
+
+    it("excludes citation terminals and non-sink normals, picking the lone normal sink", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["c1", "citation"],
+                ["c2", "normal"],
+                ["c3", "normal"],
+                ["c4", "normal"],
+            ]),
+            {
+                relations: [
+                    makeRelation("r1", ["c2"], "c1"),
+                    makeRelation("r2", ["c2"], "c4"),
+                    makeRelation("r3", ["c4"], "c3"),
+                ],
+            }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning([]) }
+        )
+        expect(result.output?.conclusionMiniId).toBe("c3")
+    })
+
+    it("relaxes to the highest in-degree target when a cycle leaves no pure sink", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["c1", "normal"],
+                ["c2", "normal"],
+            ]),
+            {
+                relations: [
+                    makeRelation("r1", ["c1"], "c2"),
+                    makeRelation("r2", ["c2"], "c1"),
+                ],
+            }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning([]) }
+        )
+        expect(result.output?.conclusionMiniId).toBe("c1")
+        expect(noConclusionFailure(result)).toBeUndefined()
+    })
+})
+
+describe("conclusionSelectionStage — no conclusion at all", () => {
+    it("emits NO_SINGLE_CONCLUSION when the model returns no candidates and the graph has none", async () => {
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([["c1", "normal"]]),
+            { relations: [] }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            {
+                llm: llmReturning(
+                    [],
+                    "No claim is supported by another; there is no argument."
+                ),
+            }
+        )
+        expect(result.stageOutcomes[STAGE_IDS.conclusionSelection]).toBe(
+            "completed"
+        )
+        expect(result.output?.conclusionMiniId).toBeNull()
+        const failure = noConclusionFailure(result) as
+            | { stage: string; severity: string; message: string }
+            | undefined
         expect(failure).toBeDefined()
         expect(failure?.stage).toBe(STAGE_IDS.conclusionSelection)
         expect(failure?.severity).toBe("warning")
-        // The LLM's rationale is propagated into the failure message.
         expect(failure?.message).toBe(
-            "Two terminals c2 and c3 are equally plausible."
-        )
-        expect(failure?.context?.rationale).toBe(
-            "Two terminals c2 and c3 are equally plausible."
+            "No claim is supported by another; there is no argument."
         )
     })
 
-    it("falls back to a canned message when the LLM's rationale is empty", async () => {
-        const llm = createMockLlmProvider({
-            responses: {
-                [STAGE_IDS.conclusionSelection]: [
-                    {
-                        kind: "ok",
-                        output: {
-                            conclusionMiniId: null,
-                            rationale: "",
-                        } satisfies TConclusionSelectionOutput,
-                    },
-                ],
-            },
-        })
+    it("falls back to a canned message when the rationale is empty", async () => {
         const pipeline = buildStandalonePipeline(
-            { classifications: [] },
+            makeClassifications([["c1", "normal"]]),
             { relations: [] }
         )
-        const result = await executePipeline(pipeline, { text: "x" }, { llm })
-        const failure = result.failures.find(
-            (f) => f.code === CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            { llm: llmReturning([], "") }
         )
+        const failure = noConclusionFailure(result) as
+            | { message: string }
+            | undefined
         expect(failure?.message).toBe("No single conclusion could be selected.")
-    })
-
-    it("does NOT emit NO_SINGLE_CONCLUSION on a successful conclusion pick", async () => {
-        const llm = createMockLlmProvider({
-            responses: {
-                [STAGE_IDS.conclusionSelection]: [
-                    {
-                        kind: "ok",
-                        output: {
-                            conclusionMiniId: "c3",
-                            rationale: "c3 is the only terminal.",
-                        } satisfies TConclusionSelectionOutput,
-                    },
-                ],
-            },
-        })
-        const pipeline = buildStandalonePipeline(
-            { classifications: [] },
-            { relations: [] }
-        )
-        const result = await executePipeline(pipeline, { text: "x" }, { llm })
-        const failure = result.failures.find(
-            (f) => f.code === CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE
-        )
-        expect(failure).toBeUndefined()
     })
 })

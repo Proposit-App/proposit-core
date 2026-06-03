@@ -244,8 +244,26 @@ export type TRelation = TRelationExtractionOutput["relations"][number]
 
 // -- Stage 10: conclusion-selection --
 
+// What the model returns: a confidence-ranked list of candidate
+// conclusion claim miniIds, best first. Ideally one; more when several
+// claims are plausibly the conclusion. Empty only when the input has no
+// argument structure to draw a conclusion from.
+export const ConclusionSelectionLlmOutputSchema = Type.Object({
+    conclusionCandidates: Type.Array(Type.String()),
+    rationale: Type.String(),
+})
+export type TConclusionSelectionLlmOutput = Static<
+    typeof ConclusionSelectionLlmOutputSchema
+>
+
+// The stage's downstream-visible output: `conclusionMiniId` is the
+// resolved single pick (the first viable candidate, a relation-graph
+// fallback when the model returns none, or null when no claim
+// qualifies), while `conclusionCandidates` carries the model's full
+// ranked list for consumers that want to offer alternates.
 export const ConclusionSelectionOutputSchema = Type.Object({
     conclusionMiniId: Type.Union([Type.String(), Type.Null()]),
+    conclusionCandidates: Type.Array(Type.String()),
     rationale: Type.String(),
 })
 export type TConclusionSelectionOutput = Static<
