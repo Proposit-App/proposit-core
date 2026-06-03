@@ -60,7 +60,11 @@ describe("compileFormulas — relation compilation rules", () => {
                     evidence: { segmentIds: ["s1"], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "A"],
                 ["c2", "B"],
@@ -83,7 +87,11 @@ describe("compileFormulas — relation compilation rules", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "A"],
                 ["c2", "B"],
@@ -106,7 +114,11 @@ describe("compileFormulas — relation compilation rules", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "A"],
                 ["c2", "B"],
@@ -129,7 +141,11 @@ describe("compileFormulas — relation compilation rules", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "A"],
                 ["c2", "B"],
@@ -151,7 +167,11 @@ describe("compileFormulas — relation compilation rules", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "Lightning"],
                 ["c2", "Thunder"],
@@ -166,6 +186,7 @@ describe("compileFormulas — conclusion premise minting", () => {
     it("mints exactly one conclusion premise (formula = symbol alone) when conclusionMiniId is set", () => {
         const conclusion: TConclusionSelectionOutput = {
             conclusionMiniId: "c2",
+            conclusionCandidates: ["c2"],
             rationale: "",
         }
         const result = compileFormulas({
@@ -199,7 +220,11 @@ describe("compileFormulas — conclusion premise minting", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "A"],
                 ["c2", "B"],
@@ -232,7 +257,11 @@ describe("compileFormulas — conclusion premise minting", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: "c3", rationale: "" },
+            conclusion: {
+                conclusionMiniId: "c3",
+                conclusionCandidates: ["c3"],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "A"],
                 ["c2", "B"],
@@ -256,7 +285,11 @@ describe("compileFormulas — conclusion premise minting", () => {
         const failures: { code: string }[] = []
         const result = compileFormulas({
             relations: [],
-            conclusion: { conclusionMiniId: "c2", rationale: "" },
+            conclusion: {
+                conclusionMiniId: "c2",
+                conclusionCandidates: ["c2"],
+                rationale: "",
+            },
             variables: buildVars([["c1", "A"]]),
             generateId: counterIdGen(),
             addFailure: (f) => failures.push({ code: f.code }),
@@ -285,7 +318,11 @@ describe("compileFormulas — symbol-resolution failures", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([["c1", "A"]]),
             generateId: counterIdGen(),
             addFailure: (f) => failures.push({ code: f.code }),
@@ -312,7 +349,11 @@ describe("compileFormulas — symbol-resolution failures", () => {
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([
                 ["c1", "A"],
                 ["c2", "B"],
@@ -343,7 +384,11 @@ describe("compileFormulas — symbol-resolution failures", () => {
         ]
         const result = compileFormulas({
             relations,
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: buildVars([["c1", "A"]]),
             generateId: counterIdGen(),
             addFailure: (f) => failures.push({ code: f.code }),
@@ -361,7 +406,11 @@ describe("compileFormulas — empty input", () => {
     it("returns empty premises + null conclusion id on empty everything", () => {
         const result = compileFormulas({
             relations: [],
-            conclusion: { conclusionMiniId: null, rationale: "" },
+            conclusion: {
+                conclusionMiniId: null,
+                conclusionCandidates: [],
+                rationale: "",
+            },
             variables: [],
             generateId: counterIdGen(),
         })

@@ -147,6 +147,7 @@ function buildHormuzOutputs(): Record<string, unknown> {
 
     const selection: TConclusionSelectionOutput = {
         conclusionMiniId: "c4",
+        conclusionCandidates: ["c4"],
         rationale: "c4 is the terminal of the support graph.",
     }
 

@@ -4,7 +4,7 @@
         "claims": [
             {
                 "miniId": "c1",
-                "title": "Rain makes the ground wet",
+                "title": "Rain wets the ground",
                 "body": "If it rains, the ground gets wet.",
                 "type": "normal",
                 "role": "premise"
@@ -27,7 +27,7 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "Rain_Implies_Wet",
+                "symbol": "Rain_Wets_Ground",
                 "claimMiniId": "c1"
             },
             {
@@ -44,8 +44,8 @@
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(Rain_Implies_Wet and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "If \"Rain makes the ground wet\" and \"It is raining\" then \"The ground is wet\""
+                "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
+                "title": "If \"Rain wets the ground\" and \"It is raining\" then \"The ground is wet\""
             },
             {
                 "miniId": "gid-5",
@@ -58,6 +58,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the sole supported terminal claim, with c1 and c2 jointly supporting it.",
+    "selectionRationale": "c3 is the sole target of the joint-support relation from c1 and c2 and is therefore the terminal supported claim.",
     "processingFailures": []
 }

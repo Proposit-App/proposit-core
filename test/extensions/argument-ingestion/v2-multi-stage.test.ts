@@ -9,9 +9,10 @@
 //     optional deps.
 //   - With a fully-mocked LLM, the pipeline produces a coherent
 //     argument response (the happy path).
-//   - With `conclusion-selection` returning `{conclusionMiniId: null}`,
-//     the response is `argument: null` + `failureText: "No single
-//     conclusion could be selected."` (spec §7.5).
+//   - With no claim supported by any relation (so the conclusion
+//     fallback has no terminal candidate to pick), the response is
+//     `argument: null` + `failureText: "No single conclusion could be
+//     selected."`.
 //   - With `claim-canonicalization` returning empty `canonicalClaims`,
 //     the response is `argument: null` + `failureText: "No claims
 //     could be extracted from the input."`.
@@ -29,7 +30,7 @@ import {
     type TClaimCanonicalizationOutput,
     type TClaimMentionExtractionOutput,
     type TClaimTypeClassificationOutput,
-    type TConclusionSelectionOutput,
+    type TConclusionSelectionLlmOutput,
     type TRelationExtractionOutput,
     type TSegmentationOutput,
 } from "../../../src/extensions/argument-ingestion/stages/index.js"
@@ -220,8 +221,8 @@ function buildHappyMockResponses(): Record<
         ],
     }
 
-    const selection: TConclusionSelectionOutput = {
-        conclusionMiniId: "c3",
+    const selection: TConclusionSelectionLlmOutput = {
+        conclusionCandidates: ["c3"],
         rationale: "c3 is the only terminal of the support graph.",
     }
 
@@ -299,15 +300,24 @@ describe("createIngestionV2Pipeline — happy path", () => {
 })
 
 describe("createIngestionV2Pipeline — failure paths", () => {
-    it("emits `argument: null` + 'No single conclusion could be selected.' when conclusion-selection returns null", async () => {
+    it("emits `argument: null` + 'No single conclusion could be selected.' when no claim is supported by a relation", async () => {
         const responses = buildHappyMockResponses()
+        // No support relations → nothing is terminal → the conclusion
+        // fallback has no candidate, so the pipeline reports the genuine
+        // no-conclusion outcome rather than auto-picking one.
+        responses[STAGE_IDS.relationExtraction] = [
+            {
+                kind: "ok",
+                output: { relations: [] } satisfies TRelationExtractionOutput,
+            },
+        ]
         responses[STAGE_IDS.conclusionSelection] = [
             {
                 kind: "ok",
                 output: {
-                    conclusionMiniId: null,
+                    conclusionCandidates: [],
                     rationale: "Multiple terminals.",
-                } satisfies TConclusionSelectionOutput,
+                } satisfies TConclusionSelectionLlmOutput,
             },
         ]
         const llm = createMockLlmProvider({ responses })
@@ -347,7 +357,7 @@ describe("createIngestionV2Pipeline — failure paths", () => {
             {
                 kind: "ok",
                 output: {
-                    conclusionMiniId: null,
+                    conclusionCandidates: [],
                     rationale: "No claims to choose from.",
                 },
             },

@@ -35,6 +35,7 @@ import type {
     TClaimCanonicalizationOutput,
     TClaimMentionExtractionOutput,
     TClaimTypeClassificationOutput,
+    TConclusionSelectionLlmOutput,
     TConclusionSelectionOutput,
     TRelationExtractionOutput,
     TSegmentationOutput,
@@ -644,14 +645,19 @@ describe("conclusionSelectionStage", () => {
                 },
             ],
         }
+        const llmOutput: TConclusionSelectionLlmOutput = {
+            conclusionCandidates: ["c2"],
+            rationale: "c2 is the only terminal of the support graph.",
+        }
         const selection: TConclusionSelectionOutput = {
             conclusionMiniId: "c2",
+            conclusionCandidates: ["c2"],
             rationale: "c2 is the only terminal of the support graph.",
         }
         const llm = createMockLlmProvider({
             responses: {
                 [STAGE_IDS.conclusionSelection]: [
-                    { kind: "ok", output: selection },
+                    { kind: "ok", output: llmOutput },
                 ],
             },
         })
@@ -687,14 +693,19 @@ describe("conclusionSelectionStage", () => {
     })
 
     it("can return a null conclusionMiniId", async () => {
+        const llmOutput: TConclusionSelectionLlmOutput = {
+            conclusionCandidates: [],
+            rationale: "Multiple candidates.",
+        }
         const selection: TConclusionSelectionOutput = {
             conclusionMiniId: null,
+            conclusionCandidates: [],
             rationale: "Multiple candidates.",
         }
         const llm = createMockLlmProvider({
             responses: {
                 [STAGE_IDS.conclusionSelection]: [
-                    { kind: "ok", output: selection },
+                    { kind: "ok", output: llmOutput },
                 ],
             },
         })

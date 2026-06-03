@@ -77,7 +77,7 @@
               "text": "Therefore, the ground is wet.",
               "span": {
                 "start": 49,
-                "end": 78
+                "end": 79
               }
             }
           ]
@@ -87,7 +87,7 @@
           "output": 95,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0efa91cf204ed605006a150475dc5881998981ddd20226f748"
+        "rawResponseId": "resp_0ba2145dc6624a7e006a203ad72e1881a1ba774d198458dd25"
       }
     },
     {
@@ -161,7 +161,7 @@
           "output": 19,
           "reasoning": 0
         },
-        "rawResponseId": "resp_03613b25769cf2e3006a1504772054819b8deb6558a8bb7f30"
+        "rawResponseId": "resp_0d0e90837b5d3dc9006a203ad8b9c881a2bd81f02a3a0eaf86"
       }
     },
     {
@@ -246,7 +246,7 @@
           "output": 17,
           "reasoning": 0
         },
-        "rawResponseId": "resp_01692eae3317da2c006a1504772708819ab1cf9327df1b665a"
+        "rawResponseId": "resp_0fd0ed1bff6dae8b006a203ad8b48881a294cf23134082affa"
       }
     },
     {
@@ -342,7 +342,7 @@
           "output": 108,
           "reasoning": 0
         },
-        "rawResponseId": "resp_06282f5db6d72ec6006a150477f8e4819baa6387ca1182c40d"
+        "rawResponseId": "resp_0d9018a67fca1cb2006a203ad8b6688191b8131c878d548d6c"
       }
     },
     {
@@ -522,8 +522,8 @@
               "mentionIds": [
                 "m1"
               ],
-              "suggestedSymbol": "Rain_Implies_Wet",
-              "title": "Rain makes the ground wet",
+              "suggestedSymbol": "Rain_Wets_Ground",
+              "title": "Rain wets the ground",
               "body": "If it rains, the ground gets wet.",
               "type": "normal"
             },
@@ -564,11 +564,11 @@
           ]
         },
         "tokenUsage": {
-          "input": 1040,
-          "output": 410,
-          "reasoning": 216
+          "input": 1188,
+          "output": 429,
+          "reasoning": 236
         },
-        "rawResponseId": "resp_07edfd34481bcc66006a15047a1a20819aa15ea74d2d5dc170"
+        "rawResponseId": "resp_06d5d9d20477964f006a203adb516481a29bb5dd3a09db68dd"
       }
     },
     {
@@ -805,6 +805,240 @@
           "reasoning": 14
         },
         "rawResponseId": "resp_07a8c0c9e68acb84006a15048aa97c81998a8d55c914e2db61"
+      }
+    },
+    {
+      "hash": "054c574d11a42a1f19ff5dbf7a4ba8ad8d1eef113e4d4af2325be1f7d3bb200e",
+      "stageId": "claim-type-classification",
+      "request": {
+        "model": "gpt-5.4",
+        "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
+        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=normal suggestedSymbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal suggestedSymbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal suggestedSymbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "classifications"
+          ],
+          "properties": {
+            "classifications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "miniId",
+                  "type",
+                  "sourceString"
+                ],
+                "properties": {
+                  "miniId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "normal"
+                      },
+                      {
+                        "type": "string",
+                        "const": "citation"
+                      },
+                      {
+                        "type": "string",
+                        "const": "axiomatic"
+                      }
+                    ]
+                  },
+                  "sourceString": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "classifications": [
+            {
+              "miniId": "c1",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c2",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c3",
+              "type": "normal",
+              "sourceString": null
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 530,
+          "output": 65,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0d49fd40c1ecbaa0006a203ae46ef481a18f21dcd167de2fe8"
+      }
+    },
+    {
+      "hash": "899f0ac5739e3b3f2f5c4b4d8e9bdf9a383603d2398b957a1a2e993f2b36d67c",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify support relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per supporting relationship. Return an object with a single key `relations` whose value is the array. There are three relation kinds:\n\n- `\"support\"` — a single claim S supports another claim T. Use this for ordinary \"P, therefore Q\" support edges where the supporting evidence is a single normal-typed proposition.\n- `\"joint-support\"` — multiple claims S1, S2, ... jointly support T. Use this when the author commits to a syllogistic step that requires ALL of the sources to hold (e.g. major premise + minor premise → conclusion).\n- `\"derivation-support\"` — a citation-typed or axiomatic-typed claim S supports a normal-typed claim T. Use this exclusively for relations whose source is \"citation\" or \"axiomatic\". The shape is otherwise identical to `\"support\"`.\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- the `type`\n- `sources` — an array of supporting claim miniIds (length 1 for support and derivation-support; length ≥ 2 for joint-support)\n- `target` — the supported claim's miniId\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from S to T, don't emit a relation between them.\n- Do not double-count. If two claims share an axiomatic backing, that's one derivation-support relation per claim, not a joint-support pair.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the support edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely in this MVP — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal symbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nSegments:\n  [s1] \"If it rains, the ground gets wet.\"\n  [s2] \"It is raining.\"\n  [s3] \"Therefore, the ground is wet.\"\n\nEmit every support relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "sources",
+                  "target",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "support"
+                      },
+                      {
+                        "type": "string",
+                        "const": "joint-support"
+                      },
+                      {
+                        "type": "string",
+                        "const": "derivation-support"
+                      }
+                    ]
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "joint-support",
+              "sources": [
+                "c1",
+                "c2"
+              ],
+              "target": "c3",
+              "evidence": {
+                "segmentIds": [
+                  "s1",
+                  "s2",
+                  "s3"
+                ],
+                "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet."
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 741,
+          "output": 461,
+          "reasoning": 374
+        },
+        "rawResponseId": "resp_0cb01b556c6e4b19006a203ae5c9c4819da31b183062f430ce"
+      }
+    },
+    {
+      "hash": "ddef100c16a15963bcb4956ad810db1b39c276aa9107243edb6dfd2554ba3f75",
+      "stageId": "conclusion-selection",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the support relation graph from `relation-extraction`\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
+        "userMessage": "Per-claim types:\n  [c1] type=normal\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] joint-support: sources=[c1,c2] target=c3\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "conclusionCandidates",
+            "rationale"
+          ],
+          "properties": {
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rationale": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "rationale": "c3 is the sole target of the joint-support relation from c1 and c2 and is therefore the terminal supported claim."
+        },
+        "tokenUsage": {
+          "input": 454,
+          "output": 69,
+          "reasoning": 15
+        },
+        "rawResponseId": "resp_01389ad354d79d79006a203aeefe64819d90c636cab5ff1622"
       }
     }
   ]

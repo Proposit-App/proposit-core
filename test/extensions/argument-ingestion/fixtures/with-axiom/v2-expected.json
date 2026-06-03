@@ -57,6 +57,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the normal claim targeted by the only support relation, while c1 and c2 function as supporting sources.",
+    "selectionRationale": "c3 is the sole supported terminal claim, jointly supported by c1 and c2, while c1 is axiomatic and c2 functions as a source.",
     "processingFailures": []
 }

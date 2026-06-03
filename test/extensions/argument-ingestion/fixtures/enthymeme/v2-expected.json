@@ -46,6 +46,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is the supported target of the only support relation, with c1 serving as its premise.",
+    "selectionRationale": "c2 is the only claim supported by another claim (c1) and is the terminal target of the argument, so it is the clear conclusion.",
     "processingFailures": []
 }
