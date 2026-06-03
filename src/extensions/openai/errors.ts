@@ -121,3 +121,33 @@ export class ToolLoopExhaustedError extends Error {
         this.rounds = args.rounds
     }
 }
+
+/**
+ * Thrown by {@link retrieveResponse} (and the background poll loop) when
+ * a stored response is not found (HTTP 404). This typically means the
+ * ~10-minute retention window has elapsed. Callers should clear the
+ * stored id, settle the associated stage as failed, and surface a retry
+ * prompt.
+ *
+ * Extends {@link NonRetryableLlmError} so it inherits the fail-fast
+ * disposition: a 404 is deterministic — re-fetching the same aged-out id
+ * will 404 again — so the framework must not burn a retry. Inheriting the
+ * base (which carries **no** `retryReason` tag) means `llmStage`
+ * classifies it as `non_retryable`, exactly as the prior generic
+ * `NonRetryableLlmError` did when a 404 surfaced mid-poll — so this is a
+ * strictly more specific, behavior-preserving subclass. Callers that
+ * `instanceof NonRetryableLlmError` still match; callers wanting the
+ * aged-out signal specifically can `instanceof ResponseNotFoundError`.
+ */
+export class ResponseNotFoundError extends NonRetryableLlmError {
+    public readonly responseId: string
+
+    constructor(args: { responseId: string }) {
+        super({
+            message: `OpenAI response "${args.responseId}" was not found (404). The ~10-minute retention window may have elapsed.`,
+            status: 404,
+        })
+        this.name = "ResponseNotFoundError"
+        this.responseId = args.responseId
+    }
+}

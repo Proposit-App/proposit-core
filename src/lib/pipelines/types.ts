@@ -161,6 +161,25 @@ export type TPipelineEvent =
           at: number
       }
     | {
+          /**
+           * Emitted by `llmStage` as soon as a response id is known.
+           * In background+stream mode the id is available from the
+           * initial submit POST response before any SSE bytes, making
+           * this event the earliest durable persistence point.
+           * In synchronous mode the id is only known at completion, so
+           * this event fires immediately before `stage:llm-call` on
+           * the same attempt; early-persistence is a background-mode-
+           * only guarantee.
+           */
+          kind: "stage:llm-response-created"
+          stageId: string
+          /** 1, 2, ... — the attempt index this id belongs to. */
+          attempt: number
+          /** The OpenAI response id for this attempt. */
+          responseId: string
+          at: number
+      }
+    | {
           kind: "stage:llm-call"
           stageId: string
           /** 1, 2, ... — one event per LLM-call attempt. */
@@ -176,5 +195,12 @@ export type TPipelineEvent =
           /** Set iff `outputSchema` rejected this output. When the
            *  schema accepted the output the field is `undefined`. */
           validationError?: string
+          /**
+           * The OpenAI response id for this attempt, when the provider
+           * surfaces one. Absent for providers that do not expose a
+           * response id (e.g. Ollama) and for attempts where the id
+           * could not be captured before completion.
+           */
+          rawResponseId?: string
           at: number
       }

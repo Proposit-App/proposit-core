@@ -47,6 +47,7 @@ import {
     NonRetryableLlmError,
     QuotaExhaustedLlmError,
     RateLimitLlmError,
+    ResponseNotFoundError,
     SchemaValidationLlmError,
     ToolLoopExhaustedError,
     TransientLlmError,
@@ -104,6 +105,25 @@ export type TCreateOpenAiResponsesProviderOptions = {
      */
     backgroundMode?: boolean
     /**
+     * Combine OpenAI **background mode** with **live SSE streaming**:
+     * the request is submitted with `{ background: true, stream: true,
+     * store: true }` so it keeps generating server-side even if the
+     * connection drops, and the SSE stream is consumed live while it
+     * runs. This is independent of the `stream` option (foreground-
+     * only streaming) and `backgroundMode` (poll-only).
+     *
+     * When `true`, `backgroundMode` is ignored for this provider
+     * instance. `stream` is also ignored (SSE is always used in this
+     * mode). V1 supports the **no-tools path only**: a request that
+     * sets `backgroundStreamMode` and carries `tools` throws
+     * `NonRetryableLlmError`.
+     *
+     * The response id is surfaced immediately from the submit POST
+     * body (before any SSE bytes), making it available for durable
+     * persistence by the caller. Defaults to **`false`**.
+     */
+    backgroundStreamMode?: boolean
+    /**
      * Poll interval (ms) for the background submit-then-poll loop.
      * Defaults to 2000. Ignored unless `backgroundMode` is `true`.
      */
@@ -123,16 +143,23 @@ export function createOpenAiResponsesProvider(
     }
     const maxToolRounds = options.maxToolCallRounds ?? DEFAULT_MAX_TOOL_ROUNDS
     const useStream = options.stream ?? true
-    const useBackground = options.backgroundMode ?? false
+    const useBackgroundStream = options.backgroundStreamMode ?? false
+    const useBackground = useBackgroundStream
+        ? false
+        : (options.backgroundMode ?? false)
     const backgroundPollIntervalMs = options.backgroundPollIntervalMs ?? 2000
 
     const respond = async <T>(
         req: TLlmRequest<T>
     ): Promise<TLlmResponse<T>> => {
-        if (useBackground && req.tools && req.tools.length > 0) {
+        if (
+            (useBackground || useBackgroundStream) &&
+            req.tools &&
+            req.tools.length > 0
+        ) {
             throw new NonRetryableLlmError({
                 message:
-                    "OpenAI background mode does not support function tools in V1. Disable backgroundMode for tool-using requests, or run the tools synchronously.",
+                    "OpenAI background mode does not support function tools in V1. Disable backgroundMode / backgroundStreamMode for tool-using requests, or run the tools synchronously.",
             })
         }
 
@@ -156,6 +183,17 @@ export function createOpenAiResponsesProvider(
 
         let lastUsage: TLlmTokenUsage = { input: 0, output: 0 }
         let lastResponseId: string | undefined
+
+        // Fire the mid-flight id callback at most once across the whole
+        // call (background-stream mode is no-tools-only, so the loop runs
+        // a single round, but guard regardless of future loop behavior).
+        let responseIdNotified = false
+        const notifyResponseId = (responseId: string): void => {
+            lastResponseId = responseId
+            if (responseIdNotified) return
+            responseIdNotified = true
+            req.onResponseCreated?.(responseId)
+        }
 
         for (let round = 0; round < maxToolRounds; round += 1) {
             const body: TOpenAiResponsesRequestBody = {
@@ -199,9 +237,14 @@ export function createOpenAiResponsesProvider(
                 signal: req.signal,
                 stream: useStream,
                 background: useBackground,
+                backgroundStream: useBackgroundStream,
                 pollIntervalMs: backgroundPollIntervalMs,
+                onResponseId: notifyResponseId,
             })
 
+            // The mid-flight callback (background-stream mode) already set
+            // `lastResponseId`; fall back to the terminal envelope id for
+            // the synchronous / poll paths where no mid-flight id fires.
             lastResponseId = envelope.id ?? lastResponseId
             lastUsage = mergeUsage(lastUsage, extractUsage(envelope))
 
@@ -409,6 +452,240 @@ export function createOpenAiResponsesProvider(
     return { respond }
 }
 
+// -- Public retrieval API --
+
+/**
+ * The status values the OpenAI Responses API reports for a stored
+ * response. `completed` / `failed` / `incomplete` / `cancelled` are
+ * terminal; `queued` / `in_progress` are transient.
+ */
+export type TResponseStatus =
+    | "queued"
+    | "in_progress"
+    | "completed"
+    | "failed"
+    | "incomplete"
+    | "cancelled"
+
+/**
+ * The structured result of a `retrieveResponse` call. All fields
+ * except `status` and `rawResponseId` are absent for non-terminal
+ * or failed responses.
+ */
+export type TRetrievedResponse = {
+    /** Current status of the stored response. */
+    status: TResponseStatus
+    /**
+     * Parsed text output, present when `status === "completed"` and
+     * the response carried a `message` output item.
+     */
+    output?: string
+    /** Token usage reported by OpenAI, when available. */
+    tokenUsage?: import("../../lib/llm/types.js").TLlmTokenUsage
+    /** The OpenAI response id that was retrieved. */
+    rawResponseId: string
+}
+
+/**
+ * Retrieve a stored OpenAI response by id. Surfaces the current
+ * status, output text (when completed), and token usage.
+ *
+ * Throws {@link ResponseNotFoundError} when the response is not found
+ * (HTTP 404), which typically means the ~10-minute retention window
+ * has elapsed. Callers should clear the stored id, settle the
+ * associated stage as failed, and surface a retry prompt.
+ *
+ * @param id - The OpenAI response id to retrieve.
+ * @param options - Provider configuration (apiKey, optional baseUrl and fetch).
+ */
+export async function retrieveResponse(
+    id: string,
+    options: {
+        apiKey: string
+        baseUrl?: string
+        fetch?: TOpenAiFetch
+        signal?: AbortSignal
+    }
+): Promise<TRetrievedResponse> {
+    const fetchImpl = resolveFetch(options.fetch, "retrieveResponse")
+    const envelope = await getResponseById({
+        url: options.baseUrl ?? DEFAULT_BASE_URL,
+        id,
+        apiKey: options.apiKey,
+        fetchImpl,
+        signal: options.signal,
+    })
+    return envelopeToRetrievedResponse(envelope, id)
+}
+
+/**
+ * Reconnect to a stored, still-generating background response and
+ * **stream it to completion**. This is what actually drives a dropped
+ * background response forward: a passive `retrieveResponse` GET only
+ * reads the current state and leaves a `queued` / `in_progress`
+ * response sitting where it is, whereas reconnecting with `stream=true`
+ * resumes consumption so the response reaches a terminal status.
+ *
+ * Issues `GET /responses/{id}?stream=true&starting_after=<cursor>` and
+ * consumes the SSE stream to its terminal event, returning the same
+ * {@link TRetrievedResponse} shape as {@link retrieveResponse}.
+ *
+ * Throws {@link ResponseNotFoundError} when the response is not found
+ * (HTTP 404 — typically the ~10-minute retention window elapsed).
+ * Honors `signal`: an abort propagates as an `AbortError` from the
+ * underlying stream read.
+ *
+ * @param id - The OpenAI response id to reconnect to.
+ * @param options - `apiKey`, optional `startingAfter` SSE cursor
+ *   (defaults to 0 — replay from the start of the stored stream),
+ *   optional `baseUrl`, `fetch`, and `signal`.
+ */
+export async function reconnectStream(
+    id: string,
+    options: {
+        apiKey: string
+        startingAfter?: number
+        baseUrl?: string
+        fetch?: TOpenAiFetch
+        signal?: AbortSignal
+    }
+): Promise<TRetrievedResponse> {
+    const fetchImpl = resolveFetch(options.fetch, "reconnectStream")
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+    const startingAfter = options.startingAfter ?? 0
+    const url = `${baseUrl}/${id}?stream=true&starting_after=${startingAfter.toString()}`
+
+    let response: Response
+    try {
+        response = await fetchImpl(url, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${options.apiKey}` },
+            signal: options.signal,
+        })
+    } catch (err) {
+        if (isAbortError(err)) throw err
+        throw new TransientLlmError({
+            message: `Network error reconnecting to OpenAI background response: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+    if (response.status === 404) {
+        throw new ResponseNotFoundError({ responseId: id })
+    }
+    if (!response.ok) {
+        const errorBody = await response.text().catch(() => "")
+        throw classifyHttpError(
+            response.status,
+            `OpenAI reconnect ${response.status.toString()}: ${
+                errorBody || response.statusText
+            }`
+        )
+    }
+    const envelope = await readSseEnvelope(response)
+    return envelopeToRetrievedResponse(envelope, id)
+}
+
+/**
+ * Cancel a stored, in-flight OpenAI response. Issues
+ * `POST /responses/{id}/cancel` and returns the resulting
+ * {@link TRetrievedResponse} (typically `status: "cancelled"`).
+ *
+ * Cancel is **idempotent** per the Responses API: cancelling twice, or
+ * cancelling an already-terminal response, simply returns the final
+ * `Response` object rather than erroring — so callers do not need to
+ * guard against double-cancel.
+ *
+ * Throws {@link ResponseNotFoundError} when the response is not found
+ * (HTTP 404 — typically the ~10-minute retention window elapsed).
+ * Honors `signal` (an abort propagates as an `AbortError`).
+ *
+ * Use this to stop an in-flight background response when a stage is
+ * abandoned (resync timeout) or an import is cancelled, so generation
+ * does not keep running (and billing) server-side after the consumer
+ * has given up on it.
+ *
+ * @param id - The OpenAI response id to cancel.
+ * @param options - `apiKey`, optional `baseUrl`, `fetch`, and `signal`.
+ */
+export async function cancelResponse(
+    id: string,
+    options: {
+        apiKey: string
+        baseUrl?: string
+        fetch?: TOpenAiFetch
+        signal?: AbortSignal
+    }
+): Promise<TRetrievedResponse> {
+    const fetchImpl = resolveFetch(options.fetch, "cancelResponse")
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+
+    let response: Response
+    try {
+        response = await fetchImpl(`${baseUrl}/${id}/cancel`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${options.apiKey}` },
+            signal: options.signal,
+        })
+    } catch (err) {
+        if (isAbortError(err)) throw err
+        throw new TransientLlmError({
+            message: `Network error cancelling OpenAI background response: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        })
+    }
+    if (response.status === 404) {
+        throw new ResponseNotFoundError({ responseId: id })
+    }
+    if (!response.ok) {
+        const errorBody = await response.text().catch(() => "")
+        throw classifyHttpError(
+            response.status,
+            `OpenAI cancel ${response.status.toString()}: ${
+                errorBody || response.statusText
+            }`
+        )
+    }
+    const envelope = await parseJsonOrThrowTransient(
+        response,
+        "OpenAI cancel body was not valid JSON"
+    )
+    return envelopeToRetrievedResponse(envelope, id)
+}
+
+function resolveFetch(
+    injected: TOpenAiFetch | undefined,
+    fnName: string
+): TOpenAiFetch {
+    const fetchImpl = injected ?? (globalThis.fetch as TOpenAiFetch | undefined)
+    if (!fetchImpl) {
+        throw new Error(
+            `${fnName}: no fetch implementation available. Pass \`fetch\` explicitly or run in an environment that provides \`globalThis.fetch\` (Node ≥18, modern browsers, Expo).`
+        )
+    }
+    return fetchImpl
+}
+
+function envelopeToRetrievedResponse(
+    envelope: TOpenAiResponsesEnvelope,
+    id: string
+): TRetrievedResponse {
+    const output = extractAssistantText(envelope.output)
+    const usage = extractUsage(envelope)
+    const result: TRetrievedResponse = {
+        status: (envelope.status ?? "in_progress") as TResponseStatus,
+        rawResponseId: envelope.id ?? id,
+    }
+    if (output !== undefined) {
+        result.output = output
+    }
+    if (usage.input > 0 || usage.output > 0) {
+        result.tokenUsage = usage
+    }
+    return result
+}
+
 // -- HTTP --
 
 async function fetchResponseEnvelope(args: {
@@ -419,8 +696,20 @@ async function fetchResponseEnvelope(args: {
     signal?: AbortSignal
     stream: boolean
     background: boolean
+    backgroundStream: boolean
     pollIntervalMs: number
+    onResponseId?: (responseId: string) => void
 }): Promise<TOpenAiResponsesEnvelope> {
+    if (args.backgroundStream) {
+        return runBackgroundStream({
+            url: args.url,
+            apiKey: args.apiKey,
+            body: args.body,
+            fetchImpl: args.fetchImpl,
+            signal: args.signal,
+            onResponseId: args.onResponseId,
+        })
+    }
     if (args.background) {
         return runBackground({
             url: args.url,
@@ -525,6 +814,12 @@ async function getResponseById(args: {
             }`,
         })
     }
+    if (response.status === 404) {
+        // Response has aged out of the ~10-minute retention window or
+        // was never stored. Surface as a typed error so callers can
+        // clear the stored id and settle the stage as failed.
+        throw new ResponseNotFoundError({ responseId: args.id })
+    }
     if (!response.ok) {
         const errorBody = await response.text().catch(() => "")
         throw classifyHttpError(
@@ -568,6 +863,49 @@ function isTerminalBackgroundStatus(status: string | undefined): boolean {
         status === "incomplete" ||
         status === "cancelled"
     )
+}
+
+/**
+ * Submit a single request with `{ background: true, stream: true,
+ * store: true }` and consume the resulting SSE stream live, returning
+ * the terminal envelope.
+ *
+ * A background response can only be streamed if it was *created* with
+ * `stream: true` (a background-without-stream response is poll-only and
+ * cannot later be streamed), so this mode uses one streaming create
+ * call rather than a separate non-streaming submit POST. The response
+ * id is therefore not in a JSON POST body — it arrives in the first
+ * `response.created` SSE event. `onResponseId` fires the moment that
+ * event is parsed (before the terminal event), so the caller can
+ * persist the id while the call is still in flight.
+ *
+ * The response keeps generating server-side even if the connection
+ * drops during stream consumption, and can be recovered via
+ * `retrieveResponse` within the ~10-minute retention window. A
+ * connection drop mid-stream (no terminal event before stream end) is
+ * classified as a `TransientLlmError` so the framework's retry policy
+ * applies — but because the id was already surfaced mid-flight, a
+ * crashed in-flight call can be recovered rather than blindly re-run.
+ */
+async function runBackgroundStream(args: {
+    url: string
+    apiKey: string
+    body: TOpenAiResponsesRequestBody
+    fetchImpl: TOpenAiFetch
+    signal?: AbortSignal
+    onResponseId?: (responseId: string) => void
+}): Promise<TOpenAiResponsesEnvelope> {
+    if (args.signal?.aborted) throw abortError()
+
+    const httpResponse = await callOnce({
+        url: args.url,
+        apiKey: args.apiKey,
+        body: { ...args.body, background: true, stream: true, store: true },
+        fetchImpl: args.fetchImpl,
+        signal: args.signal,
+    })
+
+    return readSseEnvelope(httpResponse, args.onResponseId)
 }
 
 async function runBackground(args: {
@@ -791,14 +1129,31 @@ const SSE_TERMINAL_EVENTS = new Set([
     "response.failed",
 ])
 
+// The lifecycle event the Responses API emits first, before any output
+// chunks. It carries the response object — including `.id` — so a
+// streaming consumer learns the id while the call is still in flight.
+const SSE_CREATED_EVENT = "response.created"
+
+type TParsedSseEvent =
+    | { kind: "terminal"; envelope: TOpenAiResponsesEnvelope }
+    | { kind: "created"; responseId: string }
+    | undefined
+
 /**
- * Parse one SSE event block. Returns the embedded full `response`
- * envelope when the event is a terminal Responses-API event
- * (`response.completed` / `.incomplete` / `.failed`); otherwise
- * `undefined`. The terminal events carry a `type` field inside the
- * data JSON, so we key off that and ignore the `event:` line.
+ * Parse one SSE event block. Returns:
+ *
+ *   * `{ kind: "terminal", envelope }` for a terminal Responses-API
+ *     event (`response.completed` / `.incomplete` / `.failed`),
+ *     carrying the embedded full `response` envelope;
+ *   * `{ kind: "created", responseId }` for the lifecycle
+ *     `response.created` event, surfacing the response id the moment
+ *     it is known (before any output);
+ *   * `undefined` for every intermediate / unrecognized event.
+ *
+ * The events carry a `type` field inside the data JSON, so we key off
+ * that and fall back to the SSE `event:` line.
  */
-function parseSseEvent(raw: string): TOpenAiResponsesEnvelope | undefined {
+function parseSseEvent(raw: string): TParsedSseEvent {
     let eventType: string | undefined
     const dataLines: string[] = []
     for (const line of raw.split("\n")) {
@@ -826,7 +1181,10 @@ function parseSseEvent(raw: string): TOpenAiResponsesEnvelope | undefined {
     // the Responses API does not emit.)
     const type = parsed.type ?? eventType
     if (type && SSE_TERMINAL_EVENTS.has(type) && parsed.response) {
-        return parsed.response
+        return { kind: "terminal", envelope: parsed.response }
+    }
+    if (type === SSE_CREATED_EVENT && parsed.response?.id) {
+        return { kind: "created", responseId: parsed.response.id }
     }
     return undefined
 }
@@ -838,12 +1196,20 @@ function parseSseEvent(raw: string): TOpenAiResponsesEnvelope | undefined {
  * `AbortError` from the underlying reader propagates verbatim so
  * `llmStage` marks the stage `skipped`.
  *
+ * `onResponseId`, when supplied, fires the moment the `response.created`
+ * lifecycle event is parsed — i.e. while the call is still streaming,
+ * before the terminal event arrives. This is the load-bearing seam for
+ * background-stream mode: it lets a caller persist the response id
+ * mid-flight so an in-flight call interrupted before completion can be
+ * recovered from the upstream's stored copy. Invoked at most once.
+ *
  * Note: the event-separator scan assumes LF (`\n\n`) framing, which the
  * OpenAI Responses API emits. Reuse against a strict CRLF-only SSE
  * server would need the separator scan adjusted to `\r\n\r\n`.
  */
 async function readSseEnvelope(
-    response: Response
+    response: Response,
+    onResponseId?: (responseId: string) => void
 ): Promise<TOpenAiResponsesEnvelope> {
     const body = response.body
     if (!body) {
@@ -855,6 +1221,20 @@ async function readSseEnvelope(
     const decoder = new TextDecoder()
     let buffer = ""
     let terminal: TOpenAiResponsesEnvelope | undefined
+    let idSurfaced = false
+    const handleEvent = (rawEvent: string): void => {
+        const parsedEvent = parseSseEvent(rawEvent)
+        if (!parsedEvent) return
+        if (parsedEvent.kind === "terminal") {
+            terminal = parsedEvent.envelope
+            return
+        }
+        // kind === "created": surface the id once, the moment it's known.
+        if (!idSurfaced) {
+            idSurfaced = true
+            onResponseId?.(parsedEvent.responseId)
+        }
+    }
     try {
         for (;;) {
             const chunk = await reader.read()
@@ -864,8 +1244,7 @@ async function readSseEnvelope(
             while (sep !== -1) {
                 const rawEvent = buffer.slice(0, sep)
                 buffer = buffer.slice(sep + 2)
-                const env = parseSseEvent(rawEvent)
-                if (env) terminal = env
+                handleEvent(rawEvent)
                 sep = buffer.indexOf("\n\n")
             }
         }
@@ -887,8 +1266,7 @@ async function readSseEnvelope(
     while (tailSep !== -1) {
         const rawEvent = buffer.slice(0, tailSep)
         buffer = buffer.slice(tailSep + 2)
-        const env = parseSseEvent(rawEvent)
-        if (env) terminal = env
+        handleEvent(rawEvent)
         tailSep = buffer.indexOf("\n\n")
     }
     if (!terminal) {

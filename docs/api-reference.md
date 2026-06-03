@@ -1467,6 +1467,7 @@ type TLlmRequest<T> = {
     tools?: readonly TToolSpec[]
     maxOutputTokens?: number
     signal?: AbortSignal
+    onResponseCreated?: (responseId: string) => void // fired the moment the id is known, before respond() resolves (mid-flight)
     _typeMarker?: T // phantom — always `undefined` at runtime
 }
 
@@ -1477,7 +1478,7 @@ type TLlmResponse<T> = {
 }
 ```
 
-`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local Ollama tag like `"qwen3.6:latest"` — without a core change. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
+`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local Ollama tag like `"qwen3.6:latest"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in background-stream mode from the first `response.created` SSE event so a caller can persist the id before a possible crash. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
 
 `TToolSpec` is a discriminated union over `kind`:
 
@@ -1508,20 +1509,22 @@ The executor validates `input` against `pipeline.inputSchema` and the DAG (cycle
 
 ### Framework types
 
-| Type                            | Description                                                                                                                                                                            |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TPipeline<TInput, TOutput>`    | `{ id, version, inputSchema, outputSchema, stages, finalize }`. The unit `executePipeline` runs.                                                                                       |
-| `TStage<TOutput>`               | `{ id, dependsOn, outputSchema, run(ctx) }`. A single DAG node. Build via `deterministicStage` / `llmStage` / `subPipelineStage`.                                                      |
-| `TStageContext`                 | Passed to each stage's `run`: `input`, `get<T>(stageId)`, `stageStatus(stageId)`, `llm`, `generateId`, `signal`, `emit(event)`, `addFailure(f)`.                                       |
-| `TProcessingFailure`            | `{ stage, code, message, severity: "warning" \| "error", context? }`. The structured failure record. `code` is a bare `string` — match it against the exported failure-code constants. |
-| `TPipelineResult<TOutput>`      | `{ output: TOutput \| null, failures, stageOutcomes, tokenUsage? }`. `output` is `null` when finalize was bypassed.                                                                    |
-| `TPipelineEvent`                | Discriminated union over `kind`: `pipeline:start` / `pipeline:end` / `stage:start` / `stage:end` / `stage:retry` / `stage:llm-request` / `stage:llm-call`.                             |
-| `TDepSpec` / `TOptionalDep`     | A dependency is a bare stage-id `string` or an `optional(id)` wrapper. `optional(id)`, `isOptionalDep`, `depId` are exported helpers.                                                  |
-| `TRetryPolicy` / `TRetryReason` | Retry configuration; `TRetryReason` is `"schema_validation" \| "transient" \| "rate_limit" \| "quota_exhausted"`.                                                                      |
+| Type                            | Description                                                                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TPipeline<TInput, TOutput>`    | `{ id, version, inputSchema, outputSchema, stages, finalize }`. The unit `executePipeline` runs.                                                                                          |
+| `TStage<TOutput>`               | `{ id, dependsOn, outputSchema, run(ctx) }`. A single DAG node. Build via `deterministicStage` / `llmStage` / `subPipelineStage`.                                                         |
+| `TStageContext`                 | Passed to each stage's `run`: `input`, `get<T>(stageId)`, `stageStatus(stageId)`, `llm`, `generateId`, `signal`, `emit(event)`, `addFailure(f)`.                                          |
+| `TProcessingFailure`            | `{ stage, code, message, severity: "warning" \| "error", context? }`. The structured failure record. `code` is a bare `string` — match it against the exported failure-code constants.    |
+| `TPipelineResult<TOutput>`      | `{ output: TOutput \| null, failures, stageOutcomes, tokenUsage? }`. `output` is `null` when finalize was bypassed.                                                                       |
+| `TPipelineEvent`                | Discriminated union over `kind`: `pipeline:start` / `pipeline:end` / `stage:start` / `stage:end` / `stage:retry` / `stage:llm-request` / `stage:llm-response-created` / `stage:llm-call`. |
+| `TDepSpec` / `TOptionalDep`     | A dependency is a bare stage-id `string` or an `optional(id)` wrapper. `optional(id)`, `isOptionalDep`, `depId` are exported helpers.                                                     |
+| `TRetryPolicy` / `TRetryReason` | Retry configuration; `TRetryReason` is `"schema_validation" \| "transient" \| "rate_limit" \| "quota_exhausted"`.                                                                         |
 
-The `stage:llm-request` event (since v1.8.0) fires from `llmStage` **before** each LLM-call attempt resolves — emitted inside the retry loop after the attempt counter increments and the request is built, immediately before the provider call. It carries `{ stageId, attempt, prompts: { system, user }, at }`, where `prompts.user` is the message as-sent on this attempt (including any retry-suffix appended after a prior schema-validation failure). It lets a consumer surface a stage's Input the instant the call starts, without waiting for the post-call `stage:llm-call`. A retried attempt fires a second `stage:llm-request` with the incremented `attempt`; deterministic stages emit none. Per-attempt ordering is `stage:start → stage:llm-request → stage:llm-call → stage:end`.
+The `stage:llm-request` event (since v1.8.0) fires from `llmStage` **before** each LLM-call attempt resolves — emitted inside the retry loop after the attempt counter increments and the request is built, immediately before the provider call. It carries `{ stageId, attempt, prompts: { system, user }, at }`, where `prompts.user` is the message as-sent on this attempt (including any retry-suffix appended after a prior schema-validation failure). It lets a consumer surface a stage's Input the instant the call starts, without waiting for the post-call `stage:llm-call`. A retried attempt fires a second `stage:llm-request` with the incremented `attempt`; deterministic stages emit none. Per-attempt ordering is `stage:start → stage:llm-request → [stage:llm-response-created] → stage:llm-call → stage:end`.
 
-The `stage:llm-call` event (since v1.2.0) fires after every LLM-call attempt, carrying the actual `prompts` sent (including the retry-suffix appended on attempt 2+), the raw `output`, the call's `tokenUsage`, and an optional `validationError` set whenever the output failed `outputSchema` validation. Its presence is the validation-fail signal; the payload shape is otherwise identical on success and failure. Deterministic stages and the thrown-error branch do not emit it.
+The `stage:llm-response-created` event (since v1.10.0) carries `{ stageId, attempt, responseId, at }` and fires from `llmStage` as soon as a provider surfaces a response id, always **before** `stage:llm-call` on the same attempt. **In background+stream mode the event fires _mid-flight_ — while the LLM call is still streaming, before it resolves** — driven by the provider's `onResponseCreated` callback (wired from the first `response.created` SSE event; see the OpenAI provider below). This is the load-bearing recovery guarantee: a consumer persists the id _before_ a possible crash, so a call interrupted mid-generation can be re-fetched from the upstream's stored copy (`retrieveResponse`) rather than blindly re-run (which would double-spend). In synchronous / poll modes the provider does not invoke the mid-flight callback, so the id surfaces only at completion (still on the same attempt, just before `stage:llm-call`) — a strictly weaker guarantee: a sync call crashing mid-generation loses its id and must re-run. The event fires on every attempt whose id is learned — including schema-validation retries — with the id belonging to that specific attempt, at most once per attempt.
+
+The `stage:llm-call` event (since v1.2.0) fires after every LLM-call attempt, carrying the actual `prompts` sent (including the retry-suffix appended on attempt 2+), the raw `output`, the call's `tokenUsage`, an optional `validationError` set whenever the output failed `outputSchema` validation, and (since v1.10.0) an optional `rawResponseId` when the provider surfaces one. Its presence is the validation-fail signal; the payload shape is otherwise identical on success and failure. Deterministic stages and the thrown-error branch do not emit it.
 
 ### `DEFAULT_RETRY_POLICY`
 
@@ -1564,14 +1567,58 @@ type TCreateOpenAiResponsesProviderOptions = {
     fetch?: TOpenAiFetch // defaults to globalThis.fetch; inject for tests / polyfills
     maxToolCallRounds?: number // function-tool agent-loop cap; default 6
     stream?: boolean // stream response over SSE; default true; no data-retention implications
-    backgroundMode?: boolean // submit-then-poll; requires store:true (NOT ZDR-compatible); no-tools V1 only; default false; takes precedence over `stream` when both set
+    backgroundMode?: boolean // submit-then-poll; requires store:true (NOT ZDR-compatible); no-tools V1 only; default false
+    backgroundStreamMode?: boolean // background + live SSE: a single create with {background:true, stream:true, store:true}; the id arrives in the first `response.created` SSE event and is surfaced mid-flight via TLlmRequest.onResponseCreated; response keeps running server-side after a connection drop and is resumable to completion via reconnectStream; no-tools V1 only; default false; takes priority over backgroundMode when both are set
     backgroundPollIntervalMs?: number // poll interval (ms) when backgroundMode is true; default 2000
 }
 ```
 
 Throws at construction if no `fetch` is available and none is injected. The provider routes HTTP 429s with a structured `insufficient_quota` body to `QuotaExhaustedLlmError` (`retryReason: "quota_exhausted"`, code `LLM_QUOTA_EXHAUSTED`); every other or unparseable 429 stays `RateLimitLlmError` (the safe default).
 
-**Error classes** (re-exported from the package root and this subpath; `instanceof`-matchable for finer-grained observability): `NonRetryableLlmError`, `QuotaExhaustedLlmError`, `RateLimitLlmError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`. The subpath also exports `typeboxToOpenAiSchema` (the strict-mode converter) and its `TOpenAiJsonSchema` type.
+#### `retrieveResponse(id, options)` → `Promise<TRetrievedResponse>`
+
+```typescript
+type TResponseStatus =
+    | "queued" | "in_progress" | "completed"
+    | "failed" | "incomplete" | "cancelled"
+
+type TRetrievedResponse = {
+    status: TResponseStatus
+    output?: string        // present when status === "completed" and a message item was returned
+    tokenUsage?: TLlmTokenUsage
+    rawResponseId: string  // the id that was retrieved
+}
+
+await retrieveResponse("resp_abc", { apiKey, fetch?, baseUrl?, signal? })
+```
+
+Retrieves a stored OpenAI response by id. Throws `ResponseNotFoundError` (HTTP 404) when the response has aged out of the ~10-minute retention window — callers should clear the stored id, settle the stage as failed, and surface a retry. Throws `TransientLlmError` on 5xx or network errors. A 404 surfacing inside the background poll loop also throws `ResponseNotFoundError`.
+
+`retrieveResponse` is a **passive read**: it reports the current status but does **not** advance a still-generating background response — a `queued` / `in_progress` response left to passive polling can stall indefinitely (it is only driven forward by an active stream consumer). To finish a dropped response, use `reconnectStream` (below).
+
+#### `reconnectStream(id, options)` → `Promise<TRetrievedResponse>`
+
+```typescript
+await reconnectStream("resp_abc", {
+    apiKey,
+    startingAfter?, // SSE cursor; default 0 (replay from the start of the stored stream)
+    fetch?,
+    baseUrl?,
+    signal?,
+})
+```
+
+Reconnects to a stored background response via `GET /responses/{id}?stream=true&starting_after=<cursor>` and **consumes the SSE stream to its terminal event**, returning the same `TRetrievedResponse` shape. This is the operation that actually drives a dropped background response to completion: resuming the stream makes the server continue generation through to a terminal status, where a passive `retrieveResponse` GET would leave it sitting in `queued` / `in_progress`. Throws `ResponseNotFoundError` on 404 (aged out); `TransientLlmError` on 5xx, network errors, or a stream that ends with no terminal event (a second drop mid-reconnect — retry by reconnecting again). Honors `signal` (an abort propagates as an `AbortError`).
+
+#### `cancelResponse(id, options)` → `Promise<TRetrievedResponse>`
+
+```typescript
+await cancelResponse("resp_abc", { apiKey, fetch?, baseUrl?, signal? })
+```
+
+Cancels a stored, in-flight background response via `POST /responses/{id}/cancel`, returning the resulting `TRetrievedResponse` (typically `status: "cancelled"`). Use this to stop a response when a stage is abandoned (resync timeout) or an import is cancelled, so generation does not keep running — and billing — server-side after the consumer has given up on it. **Idempotent** per the Responses API: cancelling twice, or cancelling an already-terminal response, just returns the final `Response` (so callers need not guard against double-cancel). Throws `ResponseNotFoundError` on 404 (aged out); `TransientLlmError` on 5xx or network errors. Honors `signal` (an abort propagates as an `AbortError`).
+
+**Error classes** (re-exported from the package root and this subpath; `instanceof`-matchable for finer-grained observability): `NonRetryableLlmError`, `QuotaExhaustedLlmError`, `RateLimitLlmError`, `ResponseNotFoundError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`. `ResponseNotFoundError` **extends `NonRetryableLlmError`** (carries no `retryReason` tag → fail-fast, behavior-preserving for the prior generic-404 path; `status: 404`). The subpath also exports `typeboxToOpenAiSchema` (the strict-mode converter) and its `TOpenAiJsonSchema` type.
 
 ---
 
