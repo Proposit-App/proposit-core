@@ -45,6 +45,8 @@ The OpenAI provider lives in `src/extensions/openai/`. When you need to verify O
 - `https://developers.openai.com/api/docs/llms.txt` — guides / concepts / tutorials only (how-to: background mode, streaming, structured outputs, migration). Smaller; use for "how does feature X work" without endpoint-reference noise.
 - `…/reference/llms.txt` is the reference-only index; the `…/llms-full.txt` variants are single-file full-content exports (use when you want everything inline rather than following links).
 
+Opt-in live integration suites exercise the provider against the real Responses API (and cost tokens). They are `describe.skip`-ed unless `RUN_LIVE_LLM_TESTS=1` AND `OPENAI_API_KEY` are both set — CI sets neither. Run them with: `RUN_LIVE_LLM_TESTS=1 OPENAI_API_KEY=sk-... pnpm exec vitest run test/extensions/openai/provider-live.test.ts test/extensions/openai/provider-live-background-stream.test.ts` (the background-stream suite covers mid-flight id + disconnect-survival via `retrieveResponse`).
+
 ## Change requests
 
 Detailed change requests and incoming work items live in `docs/inbox/` as markdown files. When the user mentions an inbox item or a change request, list the files in that folder and check if any filename pertains to the request. If a match looks likely, ask the user to confirm before reading the file. Once confirmed, read the file and use it as the specification for the work. After an inbox item is fully implemented, archive it to `docs/inbox/.archive/` (the convention used by the `skill-cefailures:process-inbox` skill). The legacy `docs/change-requests/` folder still contains historical specs from before this migration — read them when referenced, but do not create new files there.
