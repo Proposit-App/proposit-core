@@ -15,9 +15,10 @@
 //
 // All tests run against the mock LlmProvider in test/mocks/llm.ts.
 
-import { describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import Type from "typebox"
 import { Value } from "typebox/value"
+import { Settings } from "typebox/system"
 import {
     DEFAULT_RETRY_POLICY,
     LLM_QUOTA_EXHAUSTED,
@@ -2755,6 +2756,112 @@ describe("executeFinalize — single-finalize execution", () => {
         expect(result.failures.find((f) => f.stage === "finalize")?.code).toBe(
             "FINALIZE_UNCAUGHT_ERROR"
         )
+    })
+})
+
+// ---------------- input-parse transform: ctx.input is the Value.Parse result ----------------
+//
+// executeStage / executeFinalize seed ctx.input with the RESULT of
+// Value.Parse(inputSchema, input), exactly as executePipeline does. When
+// the inputSchema carries Default / Convert transforms AND corrective
+// parsing is enabled, Value.Parse applies them — so a defaulted/converted
+// field must appear in ctx.input. These cases exercise a genuinely
+// transforming schema (not just agreement on a pass-through value) so the
+// transform is demonstrated to fire, for both entry points. (correctiveParse
+// is off by default in this TypeBox build; Value.Parse is otherwise
+// validate-or-throw, applying transforms only via the corrective path —
+// the same pattern test/extensions/ieee.test.ts uses for EncodableDate.)
+
+describe("executeStage / executeFinalize — ctx.input reflects Value.Parse transforms", () => {
+    beforeAll(() => Settings.Set({ correctiveParse: true }))
+    afterAll(() => Settings.Set({ correctiveParse: false }))
+
+    // A schema that defaults `limit` (omitted in the raw input) and
+    // converts `count` from its string form to a number.
+    const transformingInputSchema = Type.Object({
+        text: Type.String(),
+        limit: Type.Number({ default: 7 }),
+        count: Type.Number(),
+    })
+    const rawInput = { text: "hi", count: "42" }
+    const expectedSeed = { text: "hi", limit: 7, count: 42 }
+
+    it("executeStage seeds ctx.input with the defaulted + converted value (identical to executePipeline)", async () => {
+        let stageSawInput: unknown = "unset"
+        const stage = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: (ctx) => {
+                stageSawInput = ctx.input
+                return 1
+            },
+        })
+        const pipeline: TPipeline<unknown, number> = {
+            id: "transform-pipe",
+            version: "0",
+            inputSchema: transformingInputSchema,
+            outputSchema: Type.Number(),
+            stages: [stage],
+            finalize: { dependsOn: ["a"], run: () => 0 },
+        }
+
+        // Reference: what executePipeline seeds for the same input.
+        let monolithicSawInput: unknown = "unset"
+        const stageForWhole = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: (ctx) => {
+                monolithicSawInput = ctx.input
+                return 1
+            },
+        })
+        await executePipeline(
+            { ...pipeline, stages: [stageForWhole] },
+            rawInput,
+            { llm: emptyMockLlm() }
+        )
+
+        await executeStage(pipeline, "a", {}, rawInput, {
+            llm: emptyMockLlm(),
+        })
+
+        // The transform fired: the default + conversion are present.
+        expect(stageSawInput).toEqual(expectedSeed)
+        // And it matches executePipeline's seed exactly.
+        expect(stageSawInput).toEqual(monolithicSawInput)
+    })
+
+    it("executeFinalize seeds ctx.input with the defaulted + converted value", async () => {
+        let finalizeSawInput: unknown = "unset"
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const pipeline: TPipeline<unknown, number> = {
+            id: "transform-pipe",
+            version: "0",
+            inputSchema: transformingInputSchema,
+            outputSchema: Type.Number(),
+            stages: [a],
+            finalize: {
+                dependsOn: ["a"],
+                run: (ctx) => {
+                    finalizeSawInput = ctx.input
+                    return 1
+                },
+            },
+        }
+        await executeFinalize(
+            pipeline,
+            { a: { outcome: "completed", output: 0 } },
+            rawInput,
+            { llm: emptyMockLlm() }
+        )
+        expect(finalizeSawInput).toEqual(expectedSeed)
     })
 })
 
