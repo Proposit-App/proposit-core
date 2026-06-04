@@ -78,3 +78,51 @@ export type TLlmResponse<T> = {
 export type TLlmProvider = {
     respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>>
 }
+
+/**
+ * Lifecycle status of a stored/background LLM response. `completed` /
+ * `failed` / `incomplete` / `cancelled` are terminal; `queued` /
+ * `in_progress` are transient.
+ *
+ * This is the framework-side mirror of the concrete provider's status
+ * union (the OpenAI extension exports a structurally-identical
+ * `TResponseStatus`). It lives here, in the SDK-free layer, so the
+ * pipeline's launch/complete entry points can reference a response
+ * status by its function/value type without importing the OpenAI
+ * extension — keeping `src/lib/` free of third-party SDK imports.
+ */
+export type TResponseStatus =
+    | "queued"
+    | "in_progress"
+    | "completed"
+    | "failed"
+    | "incomplete"
+    | "cancelled"
+
+/**
+ * Framework-side structural mirror of a retrieved background-response
+ * shape, consumed by `completeStage`. The OpenAI extension's
+ * `retrieveResponse` returns a structurally-compatible object (it
+ * carries every field below), so a consumer can pass its result
+ * straight into `completeStage` — without `src/lib/` importing the
+ * extension type. `output` is the **raw assistant text** (not a parsed
+ * object); `completeStage` parses it against the stage's schema.
+ */
+export type TRetrievedResponse = {
+    /** Current status of the stored response. */
+    status: TResponseStatus
+    /** Raw assistant text output, present when `status === "completed"`. */
+    output?: string
+    /** Token usage reported by the provider, when available. */
+    tokenUsage?: TLlmTokenUsage
+    /** The provider response id that was retrieved. */
+    rawResponseId: string
+    /**
+     * The provider's `incomplete_details.reason`, present when
+     * `status === "incomplete"` (e.g. `max_output_tokens`,
+     * `content_filter`). Drives `completeStage`'s classification.
+     */
+    incompleteReason?: string
+    /** The provider's error message, present when `status === "failed"`. */
+    errorMessage?: string
+}

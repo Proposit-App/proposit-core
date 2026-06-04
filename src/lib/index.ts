@@ -127,6 +127,10 @@ export type {
 export { InvariantViolationError } from "./core/invariant-violation-error.js"
 export {
     executePipeline,
+    executeStage,
+    executeFinalize,
+    launchStage,
+    completeStage,
     optional,
     deterministicStage,
     llmStage,
@@ -157,6 +161,11 @@ export type {
     TRetryPolicy,
     TRetryReason,
     TExecutePipelineDeps,
+    TStageOutcomeRecord,
+    TExecuteStageDeps,
+    TExecuteStageResult,
+    TExecuteFinalizeResult,
+    TLaunchStageResult,
 } from "./pipelines/index.js"
 export type {
     TLlmProvider,
@@ -166,6 +175,8 @@ export type {
     TLlmModel,
     TReasoningEffort,
     TToolSpec,
+    TResponseStatus,
+    TRetrievedResponse,
 } from "./llm/index.js"
 // Concrete OpenAI Responses-API provider, surfaced from the lib
 // barrel for ergonomic single-import access from consumers

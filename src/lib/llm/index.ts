@@ -8,4 +8,6 @@ export type {
     TLlmResponse,
     TLlmProvider,
     TLlmTokenUsage,
+    TResponseStatus,
+    TRetrievedResponse,
 } from "./types.js"
