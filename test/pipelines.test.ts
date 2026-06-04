@@ -27,10 +27,12 @@ import {
     QuotaExhaustedLlmError,
     StageAbortedError,
     SubPipelineFailedError,
+    completeStage,
     deterministicStage,
     executeFinalize,
     executePipeline,
     executeStage,
+    launchStage,
     llmStage,
     optional,
     subPipelineStage,
@@ -41,7 +43,16 @@ import type {
     TStage,
     TStageContext,
     TStageOutcomeRecord,
+    TExecuteStageDeps,
+    TRetrievedResponse,
 } from "../src/lib/index.js"
+// Package-internal seam fns — imported directly from stage-helpers (NOT
+// the public barrel) to test them without exporting them.
+import {
+    readLlmStageConfig,
+    buildLlmRequest,
+    validateLlmOutcome,
+} from "../src/lib/pipelines/stage-helpers.js"
 import {
     createMockLlmProvider,
     makeQuotaError,
@@ -2878,5 +2889,486 @@ describe("TStageOutcomeRecord", () => {
         expect(completed.outcome).toBe("completed")
         expect(skipped.output).toBeUndefined()
         expect(failed.output).toBeUndefined()
+    })
+})
+
+// ---------------- llmStage seam (package-internal) ----------------
+//
+// llmStage's body is factored into package-internal seam fns
+// (buildLlmRequest / validateLlmOutcome) read via the internal config
+// carrier (readLlmStageConfig). llmStage's PUBLIC return type stays
+// TStage (no widening). These tests reach the seam directly (the fns are
+// not exported from the barrel).
+
+describe("llmStage seam — package-internal config carrier + seam fns", () => {
+    const outputSchema = Type.Object({ value: Type.Number() })
+    const makeLlm = () =>
+        llmStage<{ value: number }>({
+            id: "seam-stage",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: seam-stage--> system",
+                user: "the-user-prompt",
+            }),
+        })
+
+    it("readLlmStageConfig recovers an llmStage's config and returns undefined for a non-LLM stage", () => {
+        const llm = makeLlm()
+        const cfg = readLlmStageConfig(llm)
+        expect(cfg).toBeDefined()
+        expect(cfg?.id).toBe("seam-stage")
+        expect(cfg?.model).toBe("mock")
+        expect(cfg?.retryPolicy.maxAttempts).toBe(
+            DEFAULT_RETRY_POLICY.maxAttempts
+        )
+
+        const det = deterministicStage({
+            id: "det",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        expect(readLlmStageConfig(det)).toBeUndefined()
+    })
+
+    it("the carrier is non-enumerable (not in Object.keys / JSON)", () => {
+        const llm = makeLlm()
+        expect(Object.keys(llm)).toEqual([
+            "id",
+            "dependsOn",
+            "outputSchema",
+            "run",
+        ])
+        expect(JSON.parse(JSON.stringify(llm))).not.toHaveProperty("model")
+    })
+
+    it("buildLlmRequest produces the request the in-process loop assembles", () => {
+        const cfg = readLlmStageConfig(makeLlm())!
+        const ctx = makeBareCtx()
+        const { req, prompts } = buildLlmRequest(cfg, ctx)
+        expect(req.model).toBe("mock")
+        expect(req.systemPrompt).toBe("<!--stage-id: seam-stage--> system")
+        expect(req.userMessage).toBe("the-user-prompt")
+        expect(req.outputSchema).toBe(outputSchema)
+        // The seam leaves onResponseCreated unset (the loop attaches its own).
+        expect(req.onResponseCreated).toBeUndefined()
+        expect(prompts).toEqual({
+            system: "<!--stage-id: seam-stage--> system",
+            user: "the-user-prompt",
+        })
+    })
+
+    it("buildLlmRequest honors a userMessage override (retry-suffixed message)", () => {
+        const cfg = readLlmStageConfig(makeLlm())!
+        const { req } = buildLlmRequest(cfg, makeBareCtx(), "overridden")
+        expect(req.userMessage).toBe("overridden")
+    })
+
+    it("validateLlmOutcome reproduces the in-process accept/reject for a completed response", () => {
+        const cfg = readLlmStageConfig(makeLlm())!
+        const ok = validateLlmOutcome(
+            cfg,
+            JSON.stringify({ value: 5 }),
+            "completed",
+            undefined
+        )
+        expect(ok.outcome).toBe("completed")
+        expect(ok.output).toEqual({ value: 5 })
+
+        const bad = validateLlmOutcome(
+            cfg,
+            JSON.stringify({ value: "not-a-number" }),
+            "completed",
+            undefined
+        )
+        expect(bad.outcome).toBe("failed")
+        expect(bad.failure?.reason).toBe("schema_validation")
+    })
+})
+
+// A minimal ctx for seam-fn tests that only call buildPrompt (no deps).
+function makeBareCtx(): TStageContext {
+    return {
+        input: {},
+        get: () => undefined,
+        stageStatus: () => "skipped",
+        llm: emptyMockLlm(),
+        generateId: () => "id",
+        signal: new AbortController().signal,
+        emit: () => undefined,
+        addFailure: () => undefined,
+    }
+}
+
+// ---------------- launchStage ----------------
+//
+// launchStage submits an LLM-background stage via the injected
+// submitBackgroundResponse dep and returns { responseId, status } WITHOUT
+// awaiting completion. It emits stage:start + stage:llm-request +
+// stage:llm-response-created (NO stage:llm-call / stage:end).
+
+function makeLlmPipeline(): TPipeline<unknown, { value: number }> {
+    const stage = llmStage<{ value: number }>({
+        id: "x",
+        dependsOn: [],
+        outputSchema: Type.Object({ value: Type.Number() }),
+        model: "mock",
+        buildPrompt: () => ({
+            system: "<!--stage-id: x--> system",
+            user: "base-user",
+        }),
+    })
+    return {
+        id: "llm-pipe",
+        version: "0",
+        inputSchema: Type.Object({}),
+        outputSchema: Type.Object({ value: Type.Number() }),
+        stages: [stage],
+        finalize: {
+            dependsOn: ["x"],
+            run: (ctx) => ctx.get<{ value: number }>("x") ?? { value: -1 },
+        },
+    }
+}
+
+describe("launchStage — submit-only", () => {
+    it("submits, returns { responseId, status }, emits start/request/response-created (NO llm-call/end), does NOT await", async () => {
+        const events: TPipelineEvent[] = []
+        const submitCalls: { user: string }[] = []
+        const deps: TExecuteStageDeps = {
+            llm: emptyMockLlm(),
+            onEvent: (e) => events.push(e),
+            submitBackgroundResponse: (req) => {
+                submitCalls.push({ user: req.userMessage })
+                return Promise.resolve({
+                    responseId: "resp_launch_1",
+                    status: "queued",
+                })
+            },
+        }
+        const result = await launchStage(makeLlmPipeline(), "x", {}, {}, deps)
+        expect(result).toEqual({
+            responseId: "resp_launch_1",
+            status: "queued",
+        })
+        expect(submitCalls.length).toBe(1)
+        expect(submitCalls[0].user).toBe("base-user")
+
+        const kinds = events
+            .filter((e) => "stageId" in e && e.stageId === "x")
+            .map((e) => e.kind)
+        expect(kinds).toEqual([
+            "stage:start",
+            "stage:llm-request",
+            "stage:llm-response-created",
+        ])
+        const created = events.find(
+            (e) => e.kind === "stage:llm-response-created"
+        )
+        if (created?.kind === "stage:llm-response-created") {
+            expect(created.responseId).toBe("resp_launch_1")
+        }
+        expect(events.some((e) => e.kind === "stage:llm-call")).toBe(false)
+        expect(events.some((e) => e.kind === "stage:end")).toBe(false)
+    })
+
+    it("throws a clear PipelineConfigurationError when submitBackgroundResponse dep is absent", async () => {
+        await expect(
+            launchStage(
+                makeLlmPipeline(),
+                "x",
+                {},
+                {},
+                {
+                    llm: emptyMockLlm(),
+                }
+            )
+        ).rejects.toBeInstanceOf(PipelineConfigurationError)
+    })
+
+    it("throws when stageId names a non-LLM (deterministic) stage", async () => {
+        const det = deterministicStage({
+            id: "d",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        const pipeline: TPipeline<unknown, number> = {
+            id: "p",
+            version: "0",
+            inputSchema: Type.Object({}),
+            outputSchema: Type.Number(),
+            stages: [det],
+            finalize: { dependsOn: ["d"], run: () => 0 },
+        }
+        await expect(
+            launchStage(
+                pipeline,
+                "d",
+                {},
+                {},
+                {
+                    llm: emptyMockLlm(),
+                    submitBackgroundResponse: () =>
+                        Promise.resolve({
+                            responseId: "x",
+                            status: "queued",
+                        }),
+                }
+            )
+        ).rejects.toBeInstanceOf(PipelineConfigurationError)
+    })
+
+    it("attempt 2+ appends the retry-suffix wrapper to the user message", async () => {
+        let sentUser = ""
+        const deps: TExecuteStageDeps = {
+            llm: emptyMockLlm(),
+            submitBackgroundResponse: (req) => {
+                sentUser = req.userMessage
+                return Promise.resolve({ responseId: "r", status: "queued" })
+            },
+        }
+        await launchStage(makeLlmPipeline(), "x", {}, {}, deps, 2)
+        expect(sentUser).toContain("base-user")
+        expect(sentUser).toContain(
+            "Your previous response failed schema validation"
+        )
+        expect(sentUser).toContain("Please retry conforming to the schema")
+    })
+})
+
+// ---------------- completeStage ----------------
+//
+// completeStage validates the RAW retrieved.output text against the
+// stage's schema, classifies a non-completed status per the table, and
+// emits stage:llm-call + stage:end (NO stage:start). retryReason is a
+// reason code, absent for completed / fail-fast / cancelled.
+
+function retrieved(
+    over: Partial<TRetrievedResponse> & { status: TRetrievedResponse["status"] }
+): TRetrievedResponse {
+    return { rawResponseId: "resp_c", ...over }
+}
+
+describe("completeStage — completion side", () => {
+    it("happy path: parses RAW text, validates, returns completed + output + tokenUsage; emits llm-call/end (no start); no retryReason", async () => {
+        const events: TPipelineEvent[] = []
+        const result = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({
+                status: "completed",
+                output: JSON.stringify({ value: 7 }),
+                tokenUsage: { input: 12, output: 34 },
+            }),
+            { llm: emptyMockLlm(), onEvent: (e) => events.push(e) }
+        )
+        expect(result.outcome).toBe("completed")
+        expect(result.output).toEqual({ value: 7 })
+        expect(result.tokenUsage).toEqual({ input: 12, output: 34 })
+        expect(result.retryReason).toBeUndefined()
+        expect(result.failures).toEqual([])
+
+        const kinds = events
+            .filter((e) => "stageId" in e && e.stageId === "x")
+            .map((e) => e.kind)
+        expect(kinds).toEqual(["stage:llm-call", "stage:end"])
+        expect(events.some((e) => e.kind === "stage:start")).toBe(false)
+    })
+
+    it("malformed JSON → failed + retryReason schema_validation", async () => {
+        const result = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({ status: "completed", output: "{not json" }),
+            { llm: emptyMockLlm() }
+        )
+        expect(result.outcome).toBe("failed")
+        expect(result.retryReason).toBe("schema_validation")
+        expect(result.output).toBeUndefined()
+        expect(result.failures[0]?.code).toBe("OUTPUT_SCHEMA_INVALID")
+    })
+
+    it("completed + schema-invalid → failed + retryReason schema_validation", async () => {
+        const result = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({
+                status: "completed",
+                output: JSON.stringify({ value: "nope" }),
+            }),
+            { llm: emptyMockLlm() }
+        )
+        expect(result.outcome).toBe("failed")
+        expect(result.retryReason).toBe("schema_validation")
+    })
+
+    it("incomplete/max_output_tokens → failed + retryReason transient", async () => {
+        const result = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({
+                status: "incomplete",
+                incompleteReason: "max_output_tokens",
+            }),
+            { llm: emptyMockLlm() }
+        )
+        expect(result.outcome).toBe("failed")
+        expect(result.retryReason).toBe("transient")
+    })
+
+    it("incomplete/content_filter → failed with NO retryReason (fail-fast)", async () => {
+        const result = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({
+                status: "incomplete",
+                incompleteReason: "content_filter",
+            }),
+            { llm: emptyMockLlm() }
+        )
+        expect(result.outcome).toBe("failed")
+        expect(result.retryReason).toBeUndefined()
+        expect(result.failures[0]?.code).toBe("LLM_NON_RETRYABLE_ERROR")
+    })
+
+    it("failed → failed with NO retryReason (fail-fast, NOT transient)", async () => {
+        const result = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({ status: "failed", errorMessage: "server_error" }),
+            { llm: emptyMockLlm() }
+        )
+        expect(result.outcome).toBe("failed")
+        expect(result.retryReason).toBeUndefined()
+        expect(result.failures[0]?.code).toBe("LLM_NON_RETRYABLE_ERROR")
+    })
+
+    it("cancelled → outcome skipped, NO retryReason, NO ProcessingFailure", async () => {
+        const events: TPipelineEvent[] = []
+        const result = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({ status: "cancelled" }),
+            { llm: emptyMockLlm(), onEvent: (e) => events.push(e) }
+        )
+        expect(result.outcome).toBe("skipped")
+        expect(result.retryReason).toBeUndefined()
+        expect(result.failures).toEqual([])
+        const end = events.find((e) => e.kind === "stage:end")
+        if (end?.kind === "stage:end") {
+            expect(end.status).toBe("skipped")
+        }
+    })
+
+    it("throws when stageId names a non-LLM stage", async () => {
+        const det = deterministicStage({
+            id: "d",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        const pipeline: TPipeline<unknown, number> = {
+            id: "p",
+            version: "0",
+            inputSchema: Type.Object({}),
+            outputSchema: Type.Number(),
+            stages: [det],
+            finalize: { dependsOn: ["d"], run: () => 0 },
+        }
+        await expect(
+            completeStage(
+                pipeline,
+                "d",
+                retrieved({ status: "completed", output: "1" }),
+                {
+                    llm: emptyMockLlm(),
+                }
+            )
+        ).rejects.toBeInstanceOf(PipelineConfigurationError)
+    })
+})
+
+// ---------------- launch + complete reuses the seam ----------------
+//
+// Driving a fixture through (a) the in-process executeStage with a sync
+// provider and (b) a launchStage→completeStage pair fed the equivalent
+// retrieved response yields the identical output and the same combined
+// per-stage event sequence (launch's start/request/response-created +
+// complete's llm-call/end == the whole in-process sequence).
+
+describe("launch + complete reuses the seam (parity with in-process executeStage)", () => {
+    it("produces identical output and the same combined per-stage event kinds", async () => {
+        // (a) In-process run-to-completion via a sync mock provider.
+        const inProcEvents: TPipelineEvent[] = []
+        const inProcResult = await executeStage(
+            makeLlmPipeline(),
+            "x",
+            {},
+            {},
+            {
+                llm: createMockLlmProvider({
+                    responses: {
+                        x: [
+                            {
+                                kind: "ok",
+                                output: { value: 9 },
+                                tokenUsage: { input: 3, output: 4 },
+                            },
+                        ],
+                    },
+                }),
+                onEvent: (e) => inProcEvents.push(e),
+            }
+        )
+        expect(inProcResult.outcome).toBe("completed")
+        expect(inProcResult.output).toEqual({ value: 9 })
+
+        // (b) launch → complete fed the equivalent retrieved response.
+        const launchEvents: TPipelineEvent[] = []
+        await launchStage(
+            makeLlmPipeline(),
+            "x",
+            {},
+            {},
+            {
+                llm: emptyMockLlm(),
+                onEvent: (e) => launchEvents.push(e),
+                submitBackgroundResponse: () =>
+                    Promise.resolve({
+                        responseId: "resp_x",
+                        status: "queued",
+                    }),
+            }
+        )
+        const completeEvents: TPipelineEvent[] = []
+        const completeResult = await completeStage(
+            makeLlmPipeline(),
+            "x",
+            retrieved({
+                status: "completed",
+                output: JSON.stringify({ value: 9 }),
+                tokenUsage: { input: 3, output: 4 },
+            }),
+            { llm: emptyMockLlm(), onEvent: (e) => completeEvents.push(e) }
+        )
+        expect(completeResult.outcome).toBe("completed")
+        expect(completeResult.output).toEqual(inProcResult.output)
+
+        // The combined launch+complete event kinds cover the same
+        // per-stage lifecycle the in-process path emits (start, request,
+        // response-created, llm-call, end), just split across two calls.
+        const splitKinds = [...launchEvents, ...completeEvents]
+            .filter((e) => "stageId" in e && e.stageId === "x")
+            .map((e) => e.kind)
+        expect(splitKinds).toEqual([
+            "stage:start",
+            "stage:llm-request",
+            "stage:llm-response-created",
+            "stage:llm-call",
+            "stage:end",
+        ])
     })
 })

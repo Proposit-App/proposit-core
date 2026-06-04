@@ -29,6 +29,8 @@ export {
     executePipeline,
     executeStage,
     executeFinalize,
+    launchStage,
+    completeStage,
     PipelineConfigurationError,
 } from "./execute.js"
 export type {
@@ -37,6 +39,7 @@ export type {
     TExecuteStageDeps,
     TExecuteStageResult,
     TExecuteFinalizeResult,
+    TLaunchStageResult,
 } from "./execute.js"
 
 export {

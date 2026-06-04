@@ -10,6 +10,7 @@ import {
     retrieveResponse,
     reconnectStream,
     cancelResponse,
+    submitBackgroundResponse,
 } from "../../../src/extensions/openai/provider.js"
 import {
     NonRetryableLlmError,
@@ -2784,5 +2785,163 @@ describe("v2 ingestion pipeline — no-tools precondition", () => {
         }
         // Confirm at least some LLM calls fired (pipeline ran non-trivially).
         expect(toolsPerCall.length).toBeGreaterThan(0)
+    })
+})
+
+// -- submitBackgroundResponse ----------------------------------------
+
+function buildSubmitEnvelope(args: { id: string; status: string }): Response {
+    return new Response(JSON.stringify({ id: args.id, status: args.status }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+    })
+}
+
+describe("submitBackgroundResponse", () => {
+    const req = {
+        model: "gpt-5.4",
+        systemPrompt: "sys",
+        userMessage: "u",
+        outputSchema: simpleSchema,
+    }
+
+    it("returns { responseId, status } at submit WITHOUT issuing a poll GET", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(
+                buildSubmitEnvelope({ id: "resp_bg_1", status: "queued" })
+            )
+        const result = await submitBackgroundResponse(req, {
+            apiKey: "k",
+            fetch: asFetch(fetchMock),
+        })
+        expect(result).toEqual({ responseId: "resp_bg_1", status: "queued" })
+        // Exactly one HTTP call (the submit POST); no poll loop.
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+        expect(init.method).toBe("POST")
+        const body = JSON.parse(init.body as string) as {
+            background?: boolean
+            store?: boolean
+        }
+        expect(body.background).toBe(true)
+        expect(body.store).toBe(true)
+    })
+
+    it("returns the terminal status on a terminal-on-submit envelope (no throw, no poll)", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(
+                buildSubmitEnvelope({ id: "resp_bg_2", status: "completed" })
+            )
+        const result = await submitBackgroundResponse(req, {
+            apiKey: "k",
+            fetch: asFetch(fetchMock),
+        })
+        expect(result).toEqual({
+            responseId: "resp_bg_2",
+            status: "completed",
+        })
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it("returns a cancelled terminal status without throwing (submit-only contract)", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(
+                buildSubmitEnvelope({ id: "resp_bg_3", status: "cancelled" })
+            )
+        const result = await submitBackgroundResponse(req, {
+            apiKey: "k",
+            fetch: asFetch(fetchMock),
+        })
+        expect(result.status).toBe("cancelled")
+        expect(result.responseId).toBe("resp_bg_3")
+    })
+
+    it("throws NonRetryableLlmError for a tool-bearing request (no-tools guard)", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(
+                buildSubmitEnvelope({ id: "x", status: "queued" })
+            )
+        await expect(
+            submitBackgroundResponse(
+                {
+                    ...req,
+                    tools: [{ kind: "web_search" }],
+                },
+                { apiKey: "k", fetch: asFetch(fetchMock) }
+            )
+        ).rejects.toBeInstanceOf(NonRetryableLlmError)
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it("throws TransientLlmError when the submit envelope carries no id", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ status: "queued" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            })
+        )
+        await expect(
+            submitBackgroundResponse(req, {
+                apiKey: "k",
+                fetch: asFetch(fetchMock),
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+})
+
+// -- retrieveResponse surfaces incompleteReason / errorMessage -------
+
+describe("retrieveResponse — incompleteReason / errorMessage fields", () => {
+    it("surfaces incomplete_details.reason as incompleteReason", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    id: "resp_inc",
+                    status: "incomplete",
+                    incomplete_details: { reason: "max_output_tokens" },
+                }),
+                {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                }
+            )
+        )
+        const result = await retrieveResponse("resp_inc", {
+            apiKey: "k",
+            fetch: asFetch(fetchMock),
+        })
+        expect(result.status).toBe("incomplete")
+        expect(result.incompleteReason).toBe("max_output_tokens")
+        expect(result.errorMessage).toBeUndefined()
+    })
+
+    it("surfaces error.message as errorMessage for a failed response", async () => {
+        const fetchMock: TFetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    id: "resp_fail",
+                    status: "failed",
+                    error: {
+                        message: "model exploded",
+                        code: "server_error",
+                    },
+                }),
+                {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                }
+            )
+        )
+        const result = await retrieveResponse("resp_fail", {
+            apiKey: "k",
+            fetch: asFetch(fetchMock),
+        })
+        expect(result.status).toBe("failed")
+        expect(result.errorMessage).toBe("model exploded")
+        expect(result.incompleteReason).toBeUndefined()
     })
 })

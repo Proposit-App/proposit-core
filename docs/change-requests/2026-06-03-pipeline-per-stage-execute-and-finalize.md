@@ -205,14 +205,19 @@ Plus, on `TRetrievedResponse` (additive — req 14) and the OpenAI extension bar
 // Handles the terminal-on-submit fast-path (req 15). Same no-tools precondition.
 export function submitBackgroundResponse<T>(
     req: TLlmRequest<T>,
-    options: { apiKey: string; baseUrl?: string; fetch?: TOpenAiFetch; signal?: AbortSignal }
+    options: {
+        apiKey: string
+        baseUrl?: string
+        fetch?: TOpenAiFetch
+        signal?: AbortSignal
+    }
 ): Promise<{ responseId: string; status: TResponseStatus }>
 ```
 
 Requirements:
 
 1. **Reuse, don't reimplement — explicit state threading.** `runOneStage(stage, ctx,
-   state)` + `runFinalize(pipeline, ctx, state)` extracted from `executePipeline`
+state)` + `runFinalize(pipeline, ctx, state)` extracted from `executePipeline`
    with an explicit `TStageRunState`. (Shipped 1484abc.)
 2. **Input-validation parity.** All rehydrating functions run
    `Value.Parse(pipeline.inputSchema, input)` and seed `ctx.input` with the parsed
@@ -230,98 +235,96 @@ Requirements:
 9. **Config-error disposition (single-stage path).** A `ctx.get`-on-non-dep throws
    OUT of `executeStage`, not swallowed into `failures`.
 10. **Boundary on required-failed upstream:** `executeStage` runs the stage's `run`
-   regardless of upstream outcomes; `executeFinalize` mirrors `executePipeline`
-   (required finalize dep not completed → `output: null`).
-> **Why a seam (reqs 11-12) — the original "front/back half of `runOneStage`"
-> framing was IMPOSSIBLE.** `runOneStage` sees only an opaque `TStage`
-> (`{id,dependsOn,outputSchema,run}`) and calls `stage.run(ctx)` as one black box.
-> ALL LLM machinery (`buildPrompt`, the `TLlmRequest` assembly, `ctx.llm.respond()`,
-> the `Value.Check`+`classifyError` decision, the events, the `policy`) is sealed in
-> the **`llmStage` factory closure** (`stage-helpers.ts:221-481`). So the seam must
-> be carved out of **`llmStage`**.
+    regardless of upstream outcomes; `executeFinalize` mirrors `executePipeline`
+    (required finalize dep not completed → `output: null`).
+
+    > **Why a seam (reqs 11-12) — the original "front/back half of `runOneStage`"
+    > framing was IMPOSSIBLE.** `runOneStage` sees only an opaque `TStage`
+    > (`{id,dependsOn,outputSchema,run}`) and calls `stage.run(ctx)` as one black box.
+    > ALL LLM machinery (`buildPrompt`, the `TLlmRequest` assembly, `ctx.llm.respond()`,
+    > the `Value.Check`+`classifyError` decision, the events, the `policy`) is sealed in
+    > the **`llmStage` factory closure** (`stage-helpers.ts:221-481`). So the seam must
+    > be carved out of **`llmStage`**.
 
 11. **Carve the PACKAGE-INTERNAL `llmStage` seam (single source of truth, scoped).**
-   Factor `llmStage`'s body so it calls two **package-internal** fns (NOT exported):
-   `buildLlmRequest(cfg, ctx, userMessage?)` (front: prompt-build + `TLlmRequest`
-   assembly) and `validateLlmOutcome(cfg, rawText, status, incompleteReason)` (back:
-   parse + `Value.Check` + the `lib/`-side mirror classification) — that the
-   in-process `llmStage.run` retry loop ALSO calls. **`llmStage`'s public return type
-   STAYS `TStage<TOutput>`** (it does NOT widen). Because `TStage` is opaque, the
-   config rides a **package-internal carrier** (an internal-symbol-keyed,
-   non-enumerable property) read by a package-internal accessor
-   `readLlmStageConfig(stage)`. `launchStage`/`completeStage` recover the config via
-   that accessor (clear throw if not an LLM stage). The seam fns + carrier/accessor
-   are **NOT in the barrel** — no consumer use case. Existing `llmStage` callers +
-   `executePipeline` are byte-identically unaffected.
+    Factor `llmStage`'s body so it calls two **package-internal** fns (NOT exported):
+    `buildLlmRequest(cfg, ctx, userMessage?)` (front: prompt-build + `TLlmRequest`
+    assembly) and `validateLlmOutcome(cfg, rawText, status, incompleteReason)` (back:
+    parse + `Value.Check` + the `lib/`-side mirror classification) — that the
+    in-process `llmStage.run` retry loop ALSO calls. **`llmStage`'s public return type
+    STAYS `TStage<TOutput>`** (it does NOT widen). Because `TStage` is opaque, the
+    config rides a **package-internal carrier** (an internal-symbol-keyed,
+    non-enumerable property) read by a package-internal accessor
+    `readLlmStageConfig(stage)`. `launchStage`/`completeStage` recover the config via
+    that accessor (clear throw if not an LLM stage). The seam fns + carrier/accessor
+    are **NOT in the barrel** — no consumer use case. Existing `llmStage` callers +
+    `executePipeline` are byte-identically unaffected.
 12. **`launchStage` (front) + `completeStage` (back) via the seam.**
-   - `launchStage`: `Value.Parse` input → build `ctx` from `upstream` → recover the
-     config via `readLlmStageConfig(stage)` (throws if not an LLM stage) → compute the
-     per-attempt `userMessage` (attempt 1 = `buildPrompt(ctx).user`; attempt 2+ = the
-     SAME retry-suffix the in-process loop appends, via a package-internal shared
-     helper) → `buildLlmRequest(cfg, ctx, userMessage)` → emit `stage:start` +
-     `stage:llm-request` → **submit-only** via `deps.submitBackgroundResponse` →
-     emit `stage:llm-response-created` → return `{ responseId, status }`. NO await,
-     NO output validation, NO `stage:llm-call`/`stage:end`. Throws clearly if the
-     submit dep is absent. (Minor: `req.onResponseCreated` is UNUSED here — the id
-     comes from the submit RETURN; `launchStage` erases `TOutput` at the
-     `TLlmRequest<unknown>` dep boundary, with the typed output recovered in
-     `completeStage` via the schema.)
-   - `completeStage`: recover `cfg` via `readLlmStageConfig(stage)`. **`retrieved.output`
-     is RAW assistant TEXT, not parsed** (`provider.ts:674`). So: if
-     `status==="completed"`, parse the raw text FIRST (a parse throw →
-     `retryReason:"schema_validation"`), THEN `Value.Check`; for a non-completed
-     status, classify `(status, incompleteReason)` per the TABLE below. Emit
-     `stage:llm-call` + `stage:end` (NO `stage:start`). Attach `retrieved.tokenUsage`
-     DIRECTLY (no `ctx`-WeakMap stash — it's per-`ctx` and cannot bridge the two
-     invocations). Return `{ outcome, output?, failures, tokenUsage, retryReason }`.
-   - **The parse + `Value.Check` half of `validateLlmOutcome` is shared** with the
-     in-process loop; but the **status/reason→outcome+retry mapping is a `lib/`-side
-     MIRROR** of the provider's classification (the provider's classifier lives in
-     `src/extensions/`, and `src/lib/` may not import it — the zero-SDK-import
-     invariant). The mirror is guarded against drift by a CONTRACT TEST.
 
-   **`completeStage` status/reason → outcome + `retryReason` TABLE:**
+- `launchStage`: `Value.Parse` input → build `ctx` from `upstream` → recover the
+  config via `readLlmStageConfig(stage)` (throws if not an LLM stage) → compute the
+  per-attempt `userMessage` (attempt 1 = `buildPrompt(ctx).user`; attempt 2+ = the
+  SAME retry-suffix the in-process loop appends, via a package-internal shared
+  helper) → `buildLlmRequest(cfg, ctx, userMessage)` → emit `stage:start` +
+  `stage:llm-request` → **submit-only** via `deps.submitBackgroundResponse` →
+  emit `stage:llm-response-created` → return `{ responseId, status }`. NO await,
+  NO output validation, NO `stage:llm-call`/`stage:end`. Throws clearly if the
+  submit dep is absent. (Minor: `req.onResponseCreated` is UNUSED here — the id
+  comes from the submit RETURN; `launchStage` erases `TOutput` at the
+  `TLlmRequest<unknown>` dep boundary, with the typed output recovered in
+  `completeStage` via the schema.)
+- `completeStage`: recover `cfg` via `readLlmStageConfig(stage)`. **`retrieved.output`
+  is RAW assistant TEXT, not parsed** (`provider.ts:674`). So: if
+  `status==="completed"`, parse the raw text FIRST (a parse throw →
+  `retryReason:"schema_validation"`), THEN `Value.Check`; for a non-completed
+  status, classify `(status, incompleteReason)` per the TABLE below. Emit
+  `stage:llm-call` + `stage:end` (NO `stage:start`). Attach `retrieved.tokenUsage`
+  DIRECTLY (no `ctx`-WeakMap stash — it's per-`ctx` and cannot bridge the two
+  invocations). Return `{ outcome, output?, failures, tokenUsage, retryReason }`.
+- **The parse + `Value.Check` half of `validateLlmOutcome` is shared** with the
+  in-process loop; but the **status/reason→outcome+retry mapping is a `lib/`-side
+  MIRROR** of the provider's classification (the provider's classifier lives in
+  `src/extensions/`, and `src/lib/` may not import it — the zero-SDK-import
+  invariant). The mirror is guarded against drift by a CONTRACT TEST.
 
-   | `retrieved.status` | `incompleteReason` | outcome | `retryReason` |
-   |---|---|---|---|
-   | `completed` + parses + schema-valid | — | `completed` | — |
-   | `completed` + parse throws (bad JSON) | — | `failed` | `schema_validation` |
-   | `completed` + schema-invalid | — | `failed` | `schema_validation` |
-   | `incomplete` | `max_output_tokens` | `failed` | `transient` |
-   | `incomplete` | `content_filter` | `failed` | **none — fail-fast** |
-   | `incomplete` | other / unspecified | `failed` | `transient` (conservative) |
-   | `failed` | — | `failed` | **none — fail-fast** (a terminal `failed` envelope is `NonRetryableLlmError` → `classifyError` → `non_retryable`; surface `errorMessage`. `transient` would be WRONG — it's in `DEFAULT_RETRY_POLICY.retryOn` and the workflow would retry it.) |
-   | `cancelled` | — | **`skipped`** | none (a `cancelled` background status → `StageAbortedError` → recorded `skipped` with NO `ProcessingFailure`; NOT `failed`. `TExecuteStageResult.outcome` admits `skipped`.) |
+**`completeStage` status/reason → outcome + `retryReason` TABLE:**
 
-   The `cancelled → skipped` row is the only non-`failed` non-completed outcome —
-   **SRV-2 treats a `skipped`-on-cancel completion as a SKIP** (optional-dep/skip
-   semantics, not failure — SRV-2 fold D).
-13. **Single-attempt; the workflow owns retries — reason CODE, not a bool.**
-   `launchStage`/`completeStage` do NOT loop. `completeStage` sets
-   **`result.retryReason`** on a retryable failure, and **NO `retryReason` for the
-   genuinely-non-retryable cases** (`failed`, `content_filter`, `cancelled`-which-is-
-   `skipped`). The workflow's re-launch predicate is `retryReason != null &&
+| `retrieved.status`                    | `incompleteReason`  | outcome       | `retryReason`                                                                                                                                                                                                                                   |
+| ------------------------------------- | ------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `completed` + parses + schema-valid   | —                   | `completed`   | —                                                                                                                                                                                                                                               |
+| `completed` + parse throws (bad JSON) | —                   | `failed`      | `schema_validation`                                                                                                                                                                                                                             |
+| `completed` + schema-invalid          | —                   | `failed`      | `schema_validation`                                                                                                                                                                                                                             |
+| `incomplete`                          | `max_output_tokens` | `failed`      | `transient`                                                                                                                                                                                                                                     |
+| `incomplete`                          | `content_filter`    | `failed`      | **none — fail-fast**                                                                                                                                                                                                                            |
+| `incomplete`                          | other / unspecified | `failed`      | `transient` (conservative)                                                                                                                                                                                                                      |
+| `failed`                              | —                   | `failed`      | **none — fail-fast** (a terminal `failed` envelope is `NonRetryableLlmError` → `classifyError` → `non_retryable`; surface `errorMessage`. `transient` would be WRONG — it's in `DEFAULT_RETRY_POLICY.retryOn` and the workflow would retry it.) |
+| `cancelled`                           | —                   | **`skipped`** | none (a `cancelled` background status → `StageAbortedError` → recorded `skipped` with NO `ProcessingFailure`; NOT `failed`. `TExecuteStageResult.outcome` admits `skipped`.)                                                                    |
+
+The `cancelled → skipped` row is the only non-`failed` non-completed outcome —
+**SRV-2 treats a `skipped`-on-cancel completion as a SKIP** (optional-dep/skip
+semantics, not failure — SRV-2 fold D). 13. **Single-attempt; the workflow owns retries — reason CODE, not a bool.**
+`launchStage`/`completeStage` do NOT loop. `completeStage` sets
+**`result.retryReason`** on a retryable failure, and **NO `retryReason` for the
+genuinely-non-retryable cases** (`failed`, `content_filter`, `cancelled`-which-is-
+`skipped`). The workflow's re-launch predicate is `retryReason != null &&
    retryCount < INGESTION_STAGE_MAX_ATTEMPTS`. This moves the per-attempt loop out of
-   core into the durable orchestrator.
-14. **Surface `incompleteReason` (+ `errorMessage`) on `TRetrievedResponse`
-   (additive).** `retrieveResponse` already reads `envelope.incomplete_details` /
-   `envelope.error` — carry `incompleteReason?: string` + `errorMessage?: string`
-   onto the returned shape. Additive + backward-compatible.
-15. **New provider capability — `submitBackgroundResponse` (submit-only) + a typed
-   dep.** Extract `runBackground`'s submit half + the terminal-on-submit fast-path
-   into a public OpenAI-extension fn that returns `{ responseId, status }` at submit
-   WITHOUT the poll loop; handle the already-terminal-on-submit envelope (return it).
-   Same no-tools precondition. **Inject it as a NEW optional, structurally-typed field
-   `submitBackgroundResponse?` on `TExecuteStageDeps`** (function-type only — `lib/`
-   takes NO openai import). `launchStage` requires it. **DESIGN DECISION (resolved at
-   human-check):** keep `submitBackgroundResponse` OpenAI-extension-only — the
-   launch/complete split is inherently an OpenAI-background concept; the typed-dep
-   shape implements this with NO `TLlmProvider` change.
-16. **Event-split is a cross-slice contract.** Across the split the per-stage events
-   are NOT a balanced start/end pair per invocation: `launchStage` emits
-   `stage:start`/`stage:llm-request`/`stage:llm-response-created` (NO end);
-   `completeStage` emits `stage:llm-call`/`stage:end` (NO start). The pair spans two
-   invocations, bridged by the persisted stage row.
+core into the durable orchestrator. 14. **Surface `incompleteReason` (+ `errorMessage`) on `TRetrievedResponse`
+(additive).** `retrieveResponse` already reads `envelope.incomplete_details` /
+`envelope.error` — carry `incompleteReason?: string` + `errorMessage?: string`
+onto the returned shape. Additive + backward-compatible. 15. **New provider capability — `submitBackgroundResponse` (submit-only) + a typed
+dep.** Extract `runBackground`'s submit half + the terminal-on-submit fast-path
+into a public OpenAI-extension fn that returns `{ responseId, status }` at submit
+WITHOUT the poll loop; handle the already-terminal-on-submit envelope (return it).
+Same no-tools precondition. **Inject it as a NEW optional, structurally-typed field
+`submitBackgroundResponse?` on `TExecuteStageDeps`** (function-type only — `lib/`
+takes NO openai import). `launchStage` requires it. **DESIGN DECISION (resolved at
+human-check):** keep `submitBackgroundResponse` OpenAI-extension-only — the
+launch/complete split is inherently an OpenAI-background concept; the typed-dep
+shape implements this with NO `TLlmProvider` change. 16. **Event-split is a cross-slice contract.** Across the split the per-stage events
+are NOT a balanced start/end pair per invocation: `launchStage` emits
+`stage:start`/`stage:llm-request`/`stage:llm-response-created` (NO end);
+`completeStage` emits `stage:llm-call`/`stage:end` (NO start). The pair spans two
+invocations, bridged by the persisted stage row.
 
 ## Serialize/rehydrate contract
 
@@ -366,7 +369,7 @@ Launch/complete delta (reqs 11-16):
   `executePipeline` over a v2 pipeline stays green; `readLlmStageConfig(stage)`
   recovers the config (undefined for non-LLM); `buildLlmRequest(cfg, ctx)` produces
   the same `TLlmRequest` the in-process loop assembles; `validateLlmOutcome(cfg,
-  rawText, "completed", undefined)` reproduces the in-process accept/reject.
+rawText, "completed", undefined)` reproduces the in-process accept/reject.
 - **drift-guard CONTRACT TEST (#12):** for each `(status, incompleteReason)`
   envelope in the TABLE, assert `validateLlmOutcome`'s `(outcome, retryReason)`
   matches what `provider.respond()` throws/classifies for the SAME envelope (drive

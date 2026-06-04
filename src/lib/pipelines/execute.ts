@@ -30,14 +30,26 @@ import {
     StageAbortedError,
     SubPipelineFailedError,
     readStashedTokenUsage,
+    readLlmStageConfig,
+    buildLlmRequest,
+    applyRetrySuffix,
+    validateLlmOutcome,
+    failureRetryReason,
 } from "./stage-helpers.js"
+import type { TRetryReason } from "./stage-helpers.js"
 import {
     debugPipelineEnd,
     debugPipelineStart,
     debugStageEnd,
     debugStageStart,
 } from "./debug-log.js"
-import type { TLlmProvider, TLlmTokenUsage } from "../llm/types.js"
+import type {
+    TLlmProvider,
+    TLlmRequest,
+    TLlmTokenUsage,
+    TResponseStatus,
+    TRetrievedResponse,
+} from "../llm/types.js"
 
 export type TExecutePipelineDeps = {
     llm: TLlmProvider
@@ -796,18 +808,35 @@ export type TStageOutcomeRecord = {
 }
 
 /**
- * Dependencies for a single-stage / single-finalize run. A subset of
- * `TExecutePipelineDeps`: no `concurrencyLimit` (one unit runs at a
- * time) and no run-level bookends.
+ * Dependencies for a single-stage / single-finalize / launch / complete
+ * run. A subset of `TExecutePipelineDeps`: no `concurrencyLimit` (one unit
+ * runs at a time) and no run-level bookends.
  */
 export type TExecuteStageDeps = {
     llm: TLlmProvider
     generateId?: () => string
     signal?: AbortSignal
     onEvent?: (event: TPipelineEvent) => void
+    /**
+     * Submit-only background-response capability — required by
+     * `launchStage`, ignored by `executeStage` / `executeFinalize` /
+     * `completeStage`. Referenced by **function type only** so `src/lib/`
+     * takes no OpenAI-extension import (the zero-SDK-import boundary
+     * holds); the consumer supplies the concrete
+     * `extensions/openai`#`submitBackgroundResponse` (apiKey-bound). It
+     * submits a background response and resolves with `{ responseId,
+     * status }` WITHOUT awaiting completion.
+     */
+    submitBackgroundResponse?: (
+        req: TLlmRequest<unknown>,
+        opts: { apiKey: string; baseUrl?: string; signal?: AbortSignal }
+    ) => Promise<{ responseId: string; status: TResponseStatus }>
 }
 
-/** The result of running one stage via `executeStage`. */
+/**
+ * The result of running one stage via `executeStage` (run-to-completion)
+ * or `completeStage` (the completion side of the launch/complete split).
+ */
 export type TExecuteStageResult = {
     /** The stage's own outcome after this single execution. */
     outcome: TStageStatus
@@ -817,6 +846,29 @@ export type TExecuteStageResult = {
     failures: TProcessingFailure[]
     /** Per-stage token usage, when the stage made an LLM call. */
     tokenUsage?: TLlmTokenUsage
+    /**
+     * The retry CLASSIFICATION when a `completeStage` result is `failed`
+     * for a RETRYABLE reason — a reason code, not a bare boolean, so a
+     * durable orchestrator can apply the same `retryOn` + bounded-attempt
+     * decision core would. Absent when `completed`, when the failure is
+     * non-retryable / fail-fast (`failed` envelope, `content_filter`), or
+     * when the outcome is `skipped` (a cancelled response). **Run-to-
+     * completion `executeStage` never sets this** (it owns its own retry
+     * loop); only `completeStage` does.
+     */
+    retryReason?: TRetryReason
+}
+
+/**
+ * The result of `launchStage`: the submitted background response's id +
+ * its submit-time status. The caller persists `responseId` and builds the
+ * durable hook token before suspending; `status` may already be terminal
+ * on a small/cached submit (the caller then proceeds straight to
+ * `completeStage` via `retrieveResponse`).
+ */
+export type TLaunchStageResult = {
+    responseId: string
+    status: TResponseStatus
 }
 
 /** The result of running the finalize via `executeFinalize`. */
@@ -986,4 +1038,241 @@ export async function executeFinalize<TOutput>(
 
     const output = runFinalize(pipeline, ctx, state)
     return { output, failures: state.failures }
+}
+
+// -- Launch / complete split for LLM-background stages -------------------
+//
+// A durable orchestrator (e.g. a server workflow) cannot block a single
+// step for an LLM call's full duration. `launchStage` submits the
+// background response and returns its `responseId` WITHOUT awaiting;
+// `completeStage` — in a later invocation, after the response completed —
+// validates the retrieved response into a `TExecuteStageResult`. Both
+// reuse the package-internal `llmStage` seam (`buildLlmRequest` /
+// `validateLlmOutcome`) so prompt assembly + output validation have a
+// single implementation shared with the in-process `llmStage` loop.
+
+// Resolve the LLM config carried by an `llmStage`-built stage, or throw a
+// clear error when the looked-up stage is not an LLM stage (no carrier).
+function requireLlmStage(
+    pipeline: TPipeline<unknown, unknown>,
+    stageId: string,
+    fnName: string
+): {
+    stage: TStage<unknown>
+    cfg: NonNullable<ReturnType<typeof readLlmStageConfig<unknown>>>
+} {
+    const stage = pipeline.stages.find((s) => s.id === stageId)
+    if (!stage) {
+        throw new PipelineConfigurationError({
+            code: "UNKNOWN_STAGE",
+            message: `Pipeline "${pipeline.id}" has no stage "${stageId}".`,
+            stageId,
+        })
+    }
+    const cfg = readLlmStageConfig(stage)
+    if (!cfg) {
+        throw new PipelineConfigurationError({
+            code: "UNKNOWN_STAGE",
+            message: `${fnName} requires an LLM stage, but stage "${stageId}" in pipeline "${pipeline.id}" is not one (it carries no LLM config). Run deterministic stages via executeStage.`,
+            stageId,
+        })
+    }
+    return { stage, cfg }
+}
+
+/**
+ * Launch an LLM-background stage: rehydrate `ctx` from `upstream` +
+ * parsed input, build the request via the shared seam, submit it via the
+ * injected `deps.submitBackgroundResponse`, and return
+ * `{ responseId, status }` WITHOUT awaiting completion.
+ *
+ * Emits `stage:start`, `stage:llm-request`, and `stage:llm-response-created`
+ * (from the submit's returned id) — but NO `stage:llm-call` / `stage:end`
+ * (the completion side emits those, in a later invocation). The
+ * per-stage event pair therefore spans two invocations; an `onEvent`
+ * consumer must NOT assume a balanced start↔end per call.
+ *
+ * `deps.submitBackgroundResponse` is REQUIRED; `launchStage` throws if it
+ * is absent. `stageId` must name an LLM stage (built by `llmStage`);
+ * a non-LLM stage throws. `attempt` (default 1) lets a re-launch rebuild
+ * the retry-suffixed user message for attempt 2+.
+ */
+export async function launchStage(
+    pipeline: TPipeline<unknown, unknown>,
+    stageId: string,
+    upstream: Readonly<Record<string, TStageOutcomeRecord>>,
+    input: unknown,
+    deps: TExecuteStageDeps,
+    attempt = 1
+): Promise<TLaunchStageResult> {
+    const submit = deps.submitBackgroundResponse
+    if (!submit) {
+        throw new PipelineConfigurationError({
+            code: "UNKNOWN_STAGE",
+            message: `launchStage requires deps.submitBackgroundResponse (the submit-only background-response capability), but it was not supplied.`,
+            stageId,
+        })
+    }
+    const { stage, cfg } = requireLlmStage(pipeline, stageId, "launchStage")
+
+    // Input-validation parity: parse + seed the parsed ctx.input. The
+    // stage's `ctx` reads its own dependsOn as allowed deps.
+    const parsedInput = Value.Parse(pipeline.inputSchema, input)
+    const allowedDeps = new Set(stage.dependsOn.map((d) => depId(d)))
+    const state = buildSingleShotState(upstream, allowedDeps, parsedInput, deps)
+    const ctx = makeStageContext(state, allowedDeps, stageId)
+
+    // Compute the per-attempt user message. Attempt 1 is the prompt's
+    // user message; attempt 2+ appends the same retry-suffix the
+    // in-process loop adds after a schema-validation failure (the shared
+    // `applyRetrySuffix` helper). The exact prior-attempt validation
+    // error does not cross the durable suspend, so the re-launch suffix
+    // carries a generic prior-error note — the wrapper text matches the
+    // in-process loop's phrasing.
+    const baseUser = cfg.buildPrompt(ctx).user
+    const userMessage =
+        attempt > 1
+            ? applyRetrySuffix(
+                  baseUser,
+                  "the previous attempt's output did not conform to the schema",
+                  cfg.retryPolicy.maxAppendedErrorBytes ?? 2048
+              )
+            : baseUser
+
+    const { req } = buildLlmRequest(cfg, ctx, userMessage)
+
+    state.emit({ kind: "stage:start", stageId, at: now() })
+    state.emit({
+        kind: "stage:llm-request",
+        stageId,
+        attempt,
+        prompts: { system: req.systemPrompt, user: req.userMessage },
+        at: now(),
+    })
+
+    // The req is already TLlmRequest<unknown> (the recovered config is
+    // generic-erased at the lookup boundary); the typed output is
+    // recovered in completeStage via the stage's outputSchema.
+    const submitResult = await submit(req, {
+        apiKey: resolveApiKey(deps),
+        signal: deps.signal,
+    })
+
+    state.emit({
+        kind: "stage:llm-response-created",
+        stageId,
+        attempt,
+        responseId: submitResult.responseId,
+        at: now(),
+    })
+
+    return submitResult
+}
+
+/**
+ * Complete an LLM-background stage from its retrieved response. Recovers
+ * the stage's LLM config, parses the RAW assistant text in
+ * `retrieved.output` against the stage's schema (via the shared seam),
+ * classifies a non-`completed` status per the launch/complete table, and
+ * returns the standard `TExecuteStageResult`.
+ *
+ * Emits `stage:llm-call` + `stage:end` (NO `stage:start` — that fired in
+ * the launch invocation). `tokenUsage` is taken directly from
+ * `retrieved.tokenUsage` (the per-`ctx` WeakMap cannot bridge the two
+ * invocations). On a RETRYABLE failure the result carries `retryReason`
+ * (the reason code); a fail-fast failure (`failed` envelope,
+ * `content_filter`) carries none; a `cancelled` response settles as
+ * `outcome: "skipped"` with no `ProcessingFailure`.
+ *
+ * `stageId` must name an LLM stage; a non-LLM stage throws.
+ */
+// eslint-disable-next-line @typescript-eslint/require-await
+export async function completeStage(
+    pipeline: TPipeline<unknown, unknown>,
+    stageId: string,
+    retrieved: TRetrievedResponse,
+    deps: TExecuteStageDeps,
+    attempt = 1
+): Promise<TExecuteStageResult> {
+    const { cfg } = requireLlmStage(pipeline, stageId, "completeStage")
+    const emit = deps.onEvent ?? noopEmit
+
+    const validated = validateLlmOutcome(
+        cfg,
+        retrieved.output,
+        retrieved.status,
+        retrieved.incompleteReason
+    )
+
+    // The output shown on stage:llm-call is the parsed value when the
+    // response parsed + validated; otherwise the raw assistant text (so a
+    // consumer's bridge can persist whatever the model returned).
+    const callOutput =
+        validated.output !== undefined ? validated.output : retrieved.output
+
+    emit({
+        kind: "stage:llm-call",
+        stageId,
+        attempt,
+        prompts: { system: "", user: "" },
+        output: callOutput,
+        tokenUsage: retrieved.tokenUsage ?? { input: 0, output: 0 },
+        rawResponseId: retrieved.rawResponseId,
+        validationError: validated.validationError,
+        at: now(),
+    })
+
+    const failures: TProcessingFailure[] = []
+    let retryReason: TRetryReason | undefined
+    if (validated.outcome === "failed" && validated.failure) {
+        // A cancelled response settled as `skipped` above (no failure);
+        // only genuine failures push a ProcessingFailure.
+        failures.push({
+            stage: stageId,
+            code: validated.failure.code,
+            message: validated.failure.message,
+            severity: "error",
+        })
+        retryReason = failureRetryReason(validated.failure)
+    }
+
+    const stageEndEvent: TPipelineEvent =
+        retrieved.tokenUsage !== undefined
+            ? {
+                  kind: "stage:end",
+                  stageId,
+                  status: validated.outcome,
+                  tokenUsage: retrieved.tokenUsage,
+                  at: now(),
+              }
+            : {
+                  kind: "stage:end",
+                  stageId,
+                  status: validated.outcome,
+                  at: now(),
+              }
+    emit(stageEndEvent)
+
+    const result: TExecuteStageResult = {
+        outcome: validated.outcome,
+        failures,
+    }
+    if (validated.outcome === "completed") {
+        result.output = validated.output
+    }
+    if (retrieved.tokenUsage !== undefined) {
+        result.tokenUsage = retrieved.tokenUsage
+    }
+    if (retryReason !== undefined) {
+        result.retryReason = retryReason
+    }
+    return result
+}
+
+// API-key resolution for the submit dep. The injected
+// `submitBackgroundResponse` is apiKey-bound by the consumer, so core
+// passes an empty key — the bound capability ignores it. (Kept as a seam
+// in case a future dep shape threads the key through deps.)
+function resolveApiKey(_deps: TExecuteStageDeps): string {
+    return ""
 }

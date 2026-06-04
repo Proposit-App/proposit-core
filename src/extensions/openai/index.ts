@@ -11,6 +11,7 @@ export {
     retrieveResponse,
     reconnectStream,
     cancelResponse,
+    submitBackgroundResponse,
 } from "./provider.js"
 export type {
     TCreateOpenAiResponsesProviderOptions,

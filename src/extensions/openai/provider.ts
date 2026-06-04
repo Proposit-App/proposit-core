@@ -484,6 +484,19 @@ export type TRetrievedResponse = {
     tokenUsage?: import("../../lib/llm/types.js").TLlmTokenUsage
     /** The OpenAI response id that was retrieved. */
     rawResponseId: string
+    /**
+     * The envelope's `incomplete_details.reason`, present when
+     * `status === "incomplete"` (e.g. `max_output_tokens`,
+     * `content_filter`). Lets a completion-side consumer classify an
+     * incomplete response without re-deriving it. Additive (since
+     * v1.11.0).
+     */
+    incompleteReason?: string
+    /**
+     * The envelope's `error.message`, present when `status === "failed"`.
+     * Additive (since v1.11.0).
+     */
+    errorMessage?: string
 }
 
 /**
@@ -654,6 +667,105 @@ export async function cancelResponse(
     return envelopeToRetrievedResponse(envelope, id)
 }
 
+/**
+ * Submit a background OpenAI response and return its `responseId` +
+ * submit-time `status` **without polling or streaming to completion**.
+ *
+ * This is the submit-only half of the existing `backgroundMode`
+ * (`runBackground`): it POSTs `{ background: true, store: true }`, parses
+ * the submit envelope, and returns immediately — the caller drives the
+ * response to completion later via {@link retrieveResponse} (typically
+ * after a durable suspend keyed on the returned `responseId`). It is the
+ * provider capability the pipeline's `launchStage` needs.
+ *
+ * **Terminal-on-submit fast-path:** a small/cached request can come back
+ * already terminal (`completed`/`failed`/`incomplete`/`cancelled`) on the
+ * submit POST. This function still returns `{ responseId, status }` for
+ * that case (no throw, no poll); the caller proceeds to
+ * `retrieveResponse(responseId)`, which sees the terminal state
+ * immediately.
+ *
+ * **No-tools precondition:** background mode does not support function
+ * tools in V1 — a tool-bearing request throws {@link NonRetryableLlmError},
+ * matching `respond`'s background guard.
+ *
+ * @param req - The structured-output request (system/user prompts +
+ *   `outputSchema` + model knobs). Tools are rejected.
+ * @param options - `apiKey`, optional `baseUrl`, `fetch`, and `signal`.
+ */
+export async function submitBackgroundResponse<T>(
+    req: TLlmRequest<T>,
+    options: {
+        apiKey: string
+        baseUrl?: string
+        fetch?: TOpenAiFetch
+        signal?: AbortSignal
+    }
+): Promise<{ responseId: string; status: TResponseStatus }> {
+    if (req.tools && req.tools.length > 0) {
+        throw new NonRetryableLlmError({
+            message:
+                "OpenAI background mode does not support function tools in V1. Disable backgroundMode / backgroundStreamMode for tool-using requests, or run the tools synchronously.",
+        })
+    }
+
+    const fetchImpl = resolveFetch(options.fetch, "submitBackgroundResponse")
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+
+    const schemaName = deriveSchemaName(req.outputSchema)
+    const convertedSchema = typeboxToOpenAiSchema(req.outputSchema)
+
+    const body: TOpenAiResponsesRequestBody = {
+        model: req.model,
+        input: [
+            { role: "system", content: req.systemPrompt },
+            { role: "user", content: req.userMessage },
+        ],
+        text: {
+            format: {
+                type: "json_schema",
+                name: schemaName,
+                strict: true,
+                schema: convertedSchema,
+            },
+        },
+        background: true,
+        store: true,
+    }
+    if (req.maxOutputTokens !== undefined) {
+        body.max_output_tokens = req.maxOutputTokens
+    }
+    if (req.reasoningEffort) {
+        body.reasoning = { effort: req.reasoningEffort }
+    }
+
+    const submit = await callOnce({
+        url: baseUrl,
+        apiKey: options.apiKey,
+        body,
+        fetchImpl,
+        signal: req.signal ?? options.signal,
+    })
+    const submitEnvelope = await parseJsonOrThrowTransient(
+        submit,
+        "OpenAI background submit body was not valid JSON"
+    )
+    const id = submitEnvelope.id
+    if (!id) {
+        throw new TransientLlmError({
+            message: "OpenAI background submit returned no response id.",
+        })
+    }
+    // Return at submit — including the terminal-on-submit fast-path. Unlike
+    // `runBackground`, a `cancelled` submit envelope is NOT thrown here: the
+    // submit-only contract returns every terminal status, and the caller's
+    // completion step classifies it (a cancelled response settles as a skip).
+    return {
+        responseId: id,
+        status: (submitEnvelope.status ?? "queued") as TResponseStatus,
+    }
+}
+
 function resolveFetch(
     injected: TOpenAiFetch | undefined,
     fnName: string
@@ -682,6 +794,16 @@ function envelopeToRetrievedResponse(
     }
     if (usage.input > 0 || usage.output > 0) {
         result.tokenUsage = usage
+    }
+    // Surface the incomplete reason / error message so a completion-side
+    // consumer (e.g. `completeStage`) can classify the outcome.
+    const incompleteReason = envelope.incomplete_details?.reason
+    if (incompleteReason !== undefined) {
+        result.incompleteReason = incompleteReason
+    }
+    const errorMessage = envelope.error?.message
+    if (errorMessage !== undefined) {
+        result.errorMessage = errorMessage
     }
     return result
 }
