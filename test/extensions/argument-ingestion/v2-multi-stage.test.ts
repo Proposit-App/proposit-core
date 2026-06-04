@@ -18,6 +18,8 @@
 //     could be extracted from the input."`.
 
 import { describe, expect, it } from "vitest"
+import { Value } from "typebox/value"
+import type { TSchema } from "typebox"
 import {
     basicsExtension,
     createIngestionV2Pipeline,
@@ -25,6 +27,17 @@ import {
 } from "../../../src/lib/index.js"
 import {
     STAGE_IDS,
+    SegmentationOutputSchema,
+    ClaimMentionExtractionOutputSchema,
+    CitationSourceDetectionOutputSchema,
+    AxiomIndicatorDetectionOutputSchema,
+    ClaimCanonicalizationOutputSchema,
+    ClaimTypeClassificationOutputSchema,
+    VariableAssignmentOutputSchema,
+    RelationExtractionOutputSchema,
+    ConclusionSelectionOutputSchema,
+    FormulaCompilationOutputSchema,
+    ValidationStageOutputSchema,
     type TAxiomIndicatorDetectionOutput,
     type TCitationSourceDetectionOutput,
     type TClaimCanonicalizationOutput,
@@ -374,5 +387,211 @@ describe("createIngestionV2Pipeline — failure paths", () => {
         expect(out.failureText).toBe(
             "No claims could be extracted from the input."
         )
+    })
+})
+
+// The serialize/rehydrate contract for the durable single-stage /
+// single-finalize execution model rests on every stage output (and the
+// pipeline's finalize output) being JSON round-trippable: a value persisted
+// as jsonb and read back must deep-equal the original. This pins the
+// "JSON serializable" half of the contract for the whole rehydration
+// surface — all 12 v2 stage outputs plus a finalize output. It is a VALUE
+// round-trip (`JSON.parse(JSON.stringify(v))` deep-equals `v`), NOT a
+// schema→JSON→schema check: the finalize output schema is intentionally
+// `additionalProperties: true`, so a schema-level round-trip would be
+// inaccurate. (For the stage schemas we additionally assert the round-
+// tripped value still satisfies the schema.)
+
+describe("v2 stage + finalize outputs are JSON round-trippable", () => {
+    const roundTrip = (v: unknown): unknown => JSON.parse(JSON.stringify(v))
+
+    // One representative, schema-conformant value per stage output. Two
+    // stages (claim-reference-validation, formula-validation) share
+    // ValidationStageOutputSchema; both are represented.
+    const stageOutputFixtures: readonly {
+        stageId: string
+        schema: TSchema
+        value: unknown
+    }[] = [
+        {
+            stageId: STAGE_IDS.segmentation,
+            schema: SegmentationOutputSchema,
+            value: {
+                segments: [
+                    {
+                        segmentId: "s1",
+                        text: "All men are mortal.",
+                        span: { start: 0, end: 19 },
+                    },
+                ],
+            } satisfies TSegmentationOutput,
+        },
+        {
+            stageId: STAGE_IDS.claimMentionExtraction,
+            schema: ClaimMentionExtractionOutputSchema,
+            value: {
+                mentions: [
+                    {
+                        mentionId: "m1",
+                        segmentId: "s1",
+                        text: "men are mortal",
+                        span: { start: 4, end: 18 },
+                    },
+                ],
+            } satisfies TClaimMentionExtractionOutput,
+        },
+        {
+            stageId: STAGE_IDS.citationSourceDetection,
+            schema: CitationSourceDetectionOutputSchema,
+            value: {
+                sources: [
+                    {
+                        sourceId: "src1",
+                        segmentIds: ["s1"],
+                        sourceString: "Aristotle, Prior Analytics",
+                        url: null,
+                        spans: [{ start: 0, end: 5 }],
+                    },
+                ],
+            } satisfies TCitationSourceDetectionOutput,
+        },
+        {
+            stageId: STAGE_IDS.axiomIndicatorDetection,
+            schema: AxiomIndicatorDetectionOutputSchema,
+            value: {
+                axioms: [
+                    {
+                        axiomId: "ax1",
+                        segmentIds: ["s1"],
+                        indicator: "by definition",
+                        spans: [{ start: 0, end: 13 }],
+                    },
+                ],
+            } satisfies TAxiomIndicatorDetectionOutput,
+        },
+        {
+            stageId: STAGE_IDS.claimCanonicalization,
+            schema: ClaimCanonicalizationOutputSchema,
+            value: {
+                canonicalClaims: [
+                    {
+                        miniId: "c1",
+                        mentionIds: ["m1"],
+                        suggestedSymbol: "men_mortal",
+                        type: "normal",
+                    },
+                ],
+                mentionToClaim: [{ mentionId: "m1", claimMiniId: "c1" }],
+            } satisfies TClaimCanonicalizationOutput,
+        },
+        {
+            stageId: STAGE_IDS.claimTypeClassification,
+            schema: ClaimTypeClassificationOutputSchema,
+            value: {
+                classifications: [
+                    { miniId: "c1", type: "normal", sourceString: null },
+                ],
+            } satisfies TClaimTypeClassificationOutput,
+        },
+        {
+            stageId: STAGE_IDS.claimReferenceValidation,
+            schema: ValidationStageOutputSchema,
+            value: [
+                {
+                    code: "REF_OK",
+                    message: "all references resolve",
+                    context: { checked: 3 },
+                },
+            ],
+        },
+        {
+            stageId: STAGE_IDS.variableAssignment,
+            schema: VariableAssignmentOutputSchema,
+            value: [{ miniId: "v1", symbol: "P", claimMiniId: "c1" }],
+        },
+        {
+            stageId: STAGE_IDS.relationExtraction,
+            schema: RelationExtractionOutputSchema,
+            value: {
+                relations: [
+                    {
+                        relationId: "r1",
+                        type: "support",
+                        sources: ["c1"],
+                        target: "c2",
+                        evidence: { segmentIds: ["s1"], quote: "therefore" },
+                    },
+                ],
+            } satisfies TRelationExtractionOutput,
+        },
+        {
+            stageId: STAGE_IDS.conclusionSelection,
+            schema: ConclusionSelectionOutputSchema,
+            value: {
+                conclusionMiniId: "c2",
+                conclusionCandidates: ["c2", "c3"],
+                rationale: "c2 is terminal in the support graph.",
+            },
+        },
+        {
+            stageId: STAGE_IDS.formulaCompilation,
+            schema: FormulaCompilationOutputSchema,
+            value: {
+                premises: [
+                    {
+                        premiseMiniId: "c1",
+                        formula: "P",
+                        roleHint: "support",
+                        sourceRelationId: "r1",
+                    },
+                    {
+                        premiseMiniId: "c2",
+                        formula: "Q",
+                        roleHint: "conclusion",
+                        sourceRelationId: null,
+                    },
+                ],
+                conclusionPremiseMiniId: "c2",
+            },
+        },
+        {
+            stageId: STAGE_IDS.formulaValidation,
+            schema: ValidationStageOutputSchema,
+            value: [{ code: "FORMULA_OK", message: "all formulas parse" }],
+        },
+    ]
+
+    it("covers all 12 v2 stages", () => {
+        const covered = stageOutputFixtures.map((f) => f.stageId).sort()
+        expect(covered).toEqual(Object.values(STAGE_IDS).sort())
+    })
+
+    for (const fixture of stageOutputFixtures) {
+        it(`stage output round-trips through JSON: ${fixture.stageId}`, () => {
+            const after = roundTrip(fixture.value)
+            expect(after).toEqual(fixture.value)
+            // The round-tripped value still satisfies the stage's schema.
+            expect(Value.Check(fixture.schema, after)).toBe(true)
+        })
+    }
+
+    it("finalize output (the pipeline output value) round-trips through JSON", async () => {
+        // Produce a real finalize output via a happy whole-run, then
+        // assert the value round-trips. The finalize outputSchema is
+        // additionalProperties:true, so this is a value round-trip only.
+        const llm = createMockLlmProvider({
+            responses: buildHappyMockResponses(),
+        })
+        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const result = await executePipeline(
+            pipeline,
+            {
+                text: "All men are mortal. Socrates is a man. Therefore Socrates is mortal.",
+            },
+            { llm }
+        )
+        expect(result.output).not.toBeNull()
+        const finalizeOutput = result.output!
+        expect(roundTrip(finalizeOutput)).toEqual(finalizeOutput)
     })
 })

@@ -127,6 +127,8 @@ export type {
 export { InvariantViolationError } from "./core/invariant-violation-error.js"
 export {
     executePipeline,
+    executeStage,
+    executeFinalize,
     optional,
     deterministicStage,
     llmStage,
@@ -157,6 +159,10 @@ export type {
     TRetryPolicy,
     TRetryReason,
     TExecutePipelineDeps,
+    TStageOutcomeRecord,
+    TExecuteStageDeps,
+    TExecuteStageResult,
+    TExecuteFinalizeResult,
 } from "./pipelines/index.js"
 export type {
     TLlmProvider,

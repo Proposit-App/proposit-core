@@ -25,8 +25,19 @@ export {
 } from "./stage-helpers.js"
 export type { TRetryPolicy, TRetryReason } from "./stage-helpers.js"
 
-export { executePipeline, PipelineConfigurationError } from "./execute.js"
-export type { TExecutePipelineDeps } from "./execute.js"
+export {
+    executePipeline,
+    executeStage,
+    executeFinalize,
+    PipelineConfigurationError,
+} from "./execute.js"
+export type {
+    TExecutePipelineDeps,
+    TStageOutcomeRecord,
+    TExecuteStageDeps,
+    TExecuteStageResult,
+    TExecuteFinalizeResult,
+} from "./execute.js"
 
 export {
     LLM_QUOTA_EXHAUSTED,

@@ -17,6 +17,7 @@
 
 import { describe, expect, it } from "vitest"
 import Type from "typebox"
+import { Value } from "typebox/value"
 import {
     DEFAULT_RETRY_POLICY,
     LLM_QUOTA_EXHAUSTED,
@@ -26,7 +27,9 @@ import {
     StageAbortedError,
     SubPipelineFailedError,
     deterministicStage,
+    executeFinalize,
     executePipeline,
+    executeStage,
     llmStage,
     optional,
     subPipelineStage,
@@ -36,6 +39,7 @@ import type {
     TPipelineEvent,
     TStage,
     TStageContext,
+    TStageOutcomeRecord,
 } from "../src/lib/index.js"
 import {
     createMockLlmProvider,
@@ -2015,5 +2019,757 @@ describe("llmStage — stage:llm-request event", () => {
         expect(result.output).toBe(42)
         const reqEvents = events.filter((e) => e.kind === "stage:llm-request")
         expect(reqEvents.length).toBe(0)
+    })
+})
+
+// ---------------- executeStage — single-stage execution ----------------
+//
+// `executeStage` runs ONE stage of a pipeline against a caller-supplied
+// map of upstream `{ outcome, output? }` records, reproducing the
+// monolithic run's `ctx.get` / `ctx.stageStatus` semantics without
+// re-running the DAG. It emits only the per-stage events (no
+// `pipeline:*` bookends), throws on an unknown stage id or a
+// ctx.get-on-non-dep caller bug, and normalizes away `output` for any
+// non-completed upstream.
+
+describe("executeStage — single-stage execution", () => {
+    it("runs one stage from fixed upstream completed outputs", async () => {
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 10,
+        })
+        let bSawA: unknown = "unset"
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: ["a"],
+            outputSchema: Type.Number(),
+            fn: (ctx) => {
+                bSawA = ctx.get<number>("a")
+                return (ctx.get<number>("a") ?? 0) + 1
+            },
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a, b],
+            finalize: {
+                dependsOn: ["b"],
+                run: (ctx) => ctx.get<number>("b") ?? -1,
+            },
+        })
+        const result = await executeStage(
+            pipeline,
+            "b",
+            { a: { outcome: "completed", output: 41 } },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(bSawA).toBe(41)
+        expect(result.outcome).toBe("completed")
+        expect(result.output).toBe(42)
+        expect(result.failures).toEqual([])
+    })
+
+    it("seeds ctx.input via Value.Parse(inputSchema, input), identical to what executePipeline seeds", async () => {
+        // The load-bearing parity invariant: the single-stage path must
+        // seed ctx.input with Value.Parse(inputSchema, input) — exactly
+        // what executePipeline seeds — so a stage reading ctx.input
+        // (e.g. segmentation, claim-canonicalization) sees the same value
+        // it would in the monolithic run.
+        const inputSchema = Type.Object({
+            text: Type.String(),
+            opts: Type.Object({ tag: Type.String() }),
+        })
+        const rawInput = { text: "hi", opts: { tag: "z" } }
+        const expectedSeed = Value.Parse(inputSchema, rawInput)
+
+        let stageSawInput: unknown = "unset"
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: (ctx) => {
+                stageSawInput = ctx.input
+                return 1
+            },
+        })
+        const pipeline: TPipeline<unknown, number> = {
+            id: "parse-pipe",
+            version: "0",
+            inputSchema,
+            outputSchema: Type.Number(),
+            stages: [a],
+            finalize: { dependsOn: ["a"], run: () => 0 },
+        }
+
+        // Capture what executePipeline seeds, for an exact comparison.
+        let monolithicSawInput: unknown = "unset"
+        const aForWhole = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: (ctx) => {
+                monolithicSawInput = ctx.input
+                return 1
+            },
+        })
+        await executePipeline({ ...pipeline, stages: [aForWhole] }, rawInput, {
+            llm: emptyMockLlm(),
+        })
+
+        await executeStage(pipeline, "a", {}, rawInput, {
+            llm: emptyMockLlm(),
+        })
+        expect(stageSawInput).toEqual(expectedSeed)
+        expect(stageSawInput).toEqual(monolithicSawInput)
+    })
+
+    it("throws PipelineConfigurationError (UNKNOWN_STAGE) for a stage id not in the pipeline", async () => {
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a],
+            finalize: { dependsOn: ["a"], run: () => 0 },
+        })
+        await expect(
+            executeStage(pipeline, "nope", {}, {}, { llm: emptyMockLlm() })
+        ).rejects.toMatchObject({
+            name: "PipelineConfigurationError",
+            code: "UNKNOWN_STAGE",
+            stageId: "nope",
+        })
+    })
+
+    it("throws inputSchema rejection out (caller bug), like executePipeline", async () => {
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        const pipeline: TPipeline<unknown, number> = {
+            id: "schema-pipe",
+            version: "0",
+            inputSchema: Type.Object({ x: Type.Number() }),
+            outputSchema: Type.Number(),
+            stages: [a],
+            finalize: { dependsOn: ["a"], run: () => 0 },
+        }
+        await expect(
+            executeStage(
+                pipeline,
+                "a",
+                {},
+                { x: "not-a-number" },
+                { llm: emptyMockLlm() }
+            )
+        ).rejects.toThrow()
+    })
+
+    it("a skipped optional upstream rehydrates to ctx.get undefined AND ctx.stageStatus 'skipped'", async () => {
+        let bGot: unknown = "unset"
+        let bStatus = ""
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: [optional("a")],
+            outputSchema: Type.String(),
+            fn: (ctx) => {
+                bGot = ctx.get<number>("a")
+                bStatus = ctx.stageStatus("a")
+                return "b-output"
+            },
+        })
+        const pipeline = buildPipeline<string>({
+            stages: [a, b],
+            finalize: {
+                dependsOn: ["b"],
+                run: (ctx) => ctx.get<string>("b") ?? "",
+            },
+        })
+        const result = await executeStage(
+            pipeline,
+            "b",
+            { a: { outcome: "skipped" } },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(bGot).toBeUndefined()
+        expect(bStatus).toBe("skipped")
+        expect(result.outcome).toBe("completed")
+        expect(result.output).toBe("b-output")
+    })
+
+    it("a failed REQUIRED upstream still runs the stage with ctx.get undefined (skip decision is the caller's)", async () => {
+        let bGot: unknown = "unset"
+        let bStatus = ""
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: ["a"],
+            outputSchema: Type.String(),
+            fn: (ctx) => {
+                bGot = ctx.get<number>("a")
+                bStatus = ctx.stageStatus("a")
+                return "ran-anyway"
+            },
+        })
+        const pipeline = buildPipeline<string>({
+            stages: [a, b],
+            finalize: {
+                dependsOn: ["b"],
+                run: (ctx) => ctx.get<string>("b") ?? "",
+            },
+        })
+        const result = await executeStage(
+            pipeline,
+            "b",
+            { a: { outcome: "failed" } },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(bGot).toBeUndefined()
+        expect(bStatus).toBe("failed")
+        expect(result.outcome).toBe("completed")
+        expect(result.output).toBe("ran-anyway")
+    })
+
+    it("rejects with PipelineConfigurationError (not a failed result) when a stage reads a non-dep", async () => {
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        const b: TStage<number> = deterministicStage({
+            id: "b",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: (ctx: TStageContext) => {
+                // 'a' is not in b's dependsOn — a caller bug.
+                return ctx.get<number>("a") ?? 0
+            },
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a, b],
+            finalize: { dependsOn: [optional("b")], run: () => 0 },
+        })
+        await expect(
+            executeStage(
+                pipeline,
+                "b",
+                { a: { outcome: "completed", output: 1 } },
+                {},
+                { llm: emptyMockLlm() }
+            )
+        ).rejects.toBeInstanceOf(PipelineConfigurationError)
+    })
+
+    it("normalizes a caller-supplied output away for a non-completed upstream", async () => {
+        // A skipped record carrying a stale output must not leak — the
+        // dependent must still see ctx.get(undefined).
+        let bGot: unknown = "unset"
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: [optional("a")],
+            outputSchema: Type.String(),
+            fn: (ctx) => {
+                bGot = ctx.get<number>("a")
+                return "ok"
+            },
+        })
+        const pipeline = buildPipeline<string>({
+            stages: [a, b],
+            finalize: {
+                dependsOn: ["b"],
+                run: (ctx) => ctx.get<string>("b") ?? "",
+            },
+        })
+        await executeStage(
+            pipeline,
+            "b",
+            // Inconsistent: skipped but with an output present.
+            { a: { outcome: "skipped", output: 999 } },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(bGot).toBeUndefined()
+    })
+
+    it("accepts a superset of upstream records and uses the stage's own dependsOn", async () => {
+        let bGot: unknown = "unset"
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: ["a"],
+            outputSchema: Type.Number(),
+            fn: (ctx) => {
+                bGot = ctx.get<number>("a")
+                return 1
+            },
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a, b],
+            finalize: { dependsOn: ["b"], run: () => 0 },
+        })
+        const result = await executeStage(
+            pipeline,
+            "b",
+            {
+                a: { outcome: "completed", output: 5 },
+                // An irrelevant extra record the stage does not depend on.
+                "some-other-stage": { outcome: "completed", output: 99 },
+            },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(bGot).toBe(5)
+        expect(result.outcome).toBe("completed")
+    })
+
+    it("emits per-stage events but NO pipeline:start / pipeline:end bookends", async () => {
+        const events: TPipelineEvent[] = []
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 1,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a],
+            finalize: { dependsOn: ["a"], run: () => 0 },
+        })
+        await executeStage(
+            pipeline,
+            "a",
+            {},
+            {},
+            { llm: emptyMockLlm(), onEvent: (e) => events.push(e) }
+        )
+        expect(events.some((e) => e.kind === "pipeline:start")).toBe(false)
+        expect(events.some((e) => e.kind === "pipeline:end")).toBe(false)
+        const stageEventKinds = events.map((e) => e.kind)
+        expect(stageEventKinds).toContain("stage:start")
+        expect(stageEventKinds).toContain("stage:end")
+    })
+
+    it("an llmStage replayed via executeStage emits the same per-stage event sequence as inside executePipeline, and surfaces tokenUsage", async () => {
+        const outputSchema = Type.Object({ value: Type.Number() })
+        const makeStage = () =>
+            llmStage<{ value: number }>({
+                id: "x",
+                dependsOn: [],
+                outputSchema,
+                model: "mock",
+                buildPrompt: () => ({
+                    system: "<!--stage-id: x--> system",
+                    user: "user-prompt",
+                }),
+                retry: { backoffMs: 0 },
+            })
+        const responseQueue = () => ({
+            x: [
+                { kind: "schema-invalid" as const, output: { value: "nope" } },
+                {
+                    kind: "ok" as const,
+                    output: { value: 5 },
+                    tokenUsage: { input: 11, output: 22 },
+                },
+            ],
+        })
+
+        // Whole-run reference sequence.
+        const wholeEvents: TPipelineEvent[] = []
+        const wholePipeline = buildPipeline<{ value: number }>({
+            stages: [makeStage()],
+            finalize: {
+                dependsOn: ["x"],
+                run: (ctx) => ctx.get<{ value: number }>("x") ?? { value: -1 },
+            },
+        })
+        await executePipeline(
+            wholePipeline,
+            {},
+            {
+                llm: createMockLlmProvider({ responses: responseQueue() }),
+                onEvent: (e) => wholeEvents.push(e),
+            }
+        )
+        const wholeXKinds = wholeEvents
+            .filter((e) => "stageId" in e && e.stageId === "x")
+            .map((e) => e.kind)
+
+        // Single-stage replay.
+        const stageEvents: TPipelineEvent[] = []
+        const singlePipeline = buildPipeline<{ value: number }>({
+            stages: [makeStage()],
+            finalize: { dependsOn: ["x"], run: () => ({ value: -1 }) },
+        })
+        const result = await executeStage(
+            singlePipeline,
+            "x",
+            {},
+            {},
+            {
+                llm: createMockLlmProvider({ responses: responseQueue() }),
+                onEvent: (e) => stageEvents.push(e),
+            }
+        )
+        const singleXKinds = stageEvents
+            .filter((e) => "stageId" in e && e.stageId === "x")
+            .map((e) => e.kind)
+
+        expect(singleXKinds).toEqual(wholeXKinds)
+        expect(singleXKinds).toEqual([
+            "stage:start",
+            "stage:llm-request",
+            "stage:llm-call",
+            "stage:retry",
+            "stage:llm-request",
+            "stage:llm-call",
+            "stage:end",
+        ])
+        expect(result.outcome).toBe("completed")
+        expect(result.output).toEqual({ value: 5 })
+        expect(result.tokenUsage).toEqual({ input: 11, output: 22 })
+    })
+
+    it("a failing llmStage surfaces a failed outcome + the failure, with no output/tokenUsage", async () => {
+        const outputSchema = Type.Object({ value: Type.Number() })
+        const stage = llmStage<{ value: number }>({
+            id: "x",
+            dependsOn: [],
+            outputSchema,
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: x--> system",
+                user: "u",
+            }),
+            retry: { backoffMs: 0 },
+        })
+        const pipeline = buildPipeline<{ value: number }>({
+            stages: [stage],
+            finalize: {
+                dependsOn: [optional("x")],
+                run: () => ({ value: -1 }),
+            },
+        })
+        const result = await executeStage(
+            pipeline,
+            "x",
+            {},
+            {},
+            {
+                llm: createMockLlmProvider({
+                    responses: {
+                        x: [
+                            {
+                                kind: "error",
+                                error: makeRateLimitError("429"),
+                            },
+                        ],
+                    },
+                }),
+            }
+        )
+        expect(result.outcome).toBe("failed")
+        expect(result.output).toBeUndefined()
+        expect(result.tokenUsage).toBeUndefined()
+        expect(result.failures.find((f) => f.stage === "x")?.code).toBe(
+            "LLM_RATE_LIMITED"
+        )
+    })
+})
+
+// ---------------- executeFinalize — single-finalize execution ----------------
+//
+// `executeFinalize` runs the pipeline's finalize against caller-supplied
+// upstream records, mirroring executePipeline's finalize semantics: the
+// finalizeRequiredOk() gate (null output when a required dep is not
+// completed), the FINALIZE_UNCAUGHT_ERROR capture, and the outcome-
+// carrying rehydration. It emits no events and is async only for
+// signature symmetry with executeStage.
+
+describe("executeFinalize — single-finalize execution", () => {
+    it("happy path: returns the finalize output from completed upstream records", async () => {
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a, b],
+            finalize: {
+                dependsOn: ["a", "b"],
+                run: (ctx) =>
+                    (ctx.get<number>("a") ?? 0) + (ctx.get<number>("b") ?? 0),
+            },
+        })
+        const result = await executeFinalize(
+            pipeline,
+            {
+                a: { outcome: "completed", output: 3 },
+                b: { outcome: "completed", output: 4 },
+            },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(result.output).toBe(7)
+        expect(result.failures).toEqual([])
+    })
+
+    it("seeds finalize ctx.input via Value.Parse(inputSchema, input)", async () => {
+        const inputSchema = Type.Object({
+            text: Type.String(),
+            opts: Type.Object({ tag: Type.String() }),
+        })
+        const rawInput = { text: "hi", opts: { tag: "z" } }
+        const expectedSeed = Value.Parse(inputSchema, rawInput)
+        let finalizeSawInput: unknown = "unset"
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const pipeline: TPipeline<unknown, number> = {
+            id: "parse-pipe",
+            version: "0",
+            inputSchema,
+            outputSchema: Type.Number(),
+            stages: [a],
+            finalize: {
+                dependsOn: ["a"],
+                run: (ctx) => {
+                    finalizeSawInput = ctx.input
+                    return 1
+                },
+            },
+        }
+        await executeFinalize(
+            pipeline,
+            { a: { outcome: "completed", output: 0 } },
+            rawInput,
+            { llm: emptyMockLlm() }
+        )
+        expect(finalizeSawInput).toEqual(expectedSeed)
+    })
+
+    it("required dep not completed → output null (the finalizeRequiredOk gate)", async () => {
+        let finalizeRan = false
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a],
+            finalize: {
+                dependsOn: ["a"],
+                run: () => {
+                    finalizeRan = true
+                    return 1
+                },
+            },
+        })
+        const result = await executeFinalize(
+            pipeline,
+            { a: { outcome: "failed" } },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(finalizeRan).toBe(false)
+        expect(result.output).toBeNull()
+    })
+
+    it("optional dep skipped → finalize runs with ctx.get(dep) undefined", async () => {
+        let finalizeAGot: unknown = "unset"
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a, b],
+            finalize: {
+                dependsOn: [optional("a"), "b"],
+                run: (ctx) => {
+                    finalizeAGot = ctx.get<number>("a")
+                    return ctx.get<number>("b") ?? -1
+                },
+            },
+        })
+        const result = await executeFinalize(
+            pipeline,
+            {
+                a: { outcome: "skipped" },
+                b: { outcome: "completed", output: 5 },
+            },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(result.output).toBe(5)
+        expect(finalizeAGot).toBeUndefined()
+    })
+
+    it("a throwing finalize → output null + FINALIZE_UNCAUGHT_ERROR failure", async () => {
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a],
+            finalize: {
+                dependsOn: ["a"],
+                run: () => {
+                    throw new Error("finalize boom")
+                },
+            },
+        })
+        const result = await executeFinalize(
+            pipeline,
+            { a: { outcome: "completed", output: 0 } },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(result.output).toBeNull()
+        const failure = result.failures.find((f) => f.stage === "finalize")
+        expect(failure?.code).toBe("FINALIZE_UNCAUGHT_ERROR")
+    })
+
+    it("emits no events at all", async () => {
+        const events: TPipelineEvent[] = []
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const pipeline = buildPipeline<number>({
+            stages: [a],
+            finalize: {
+                dependsOn: ["a"],
+                run: (ctx) => ctx.get<number>("a") ?? -1,
+            },
+        })
+        await executeFinalize(
+            pipeline,
+            { a: { outcome: "completed", output: 1 } },
+            {},
+            { llm: emptyMockLlm(), onEvent: (e) => events.push(e) }
+        )
+        expect(events).toEqual([])
+    })
+
+    it("a finalize that reads a non-dep yields output null + FINALIZE_UNCAUGHT_ERROR (mirroring executePipeline, which captures it rather than throwing out)", async () => {
+        // Finalize reuses executePipeline's finalize body verbatim: a
+        // ctx.get-on-non-dep raised inside finalize.run is caught as a
+        // FINALIZE_UNCAUGHT_ERROR failure (output null), NOT thrown out.
+        // (The throw-out disposition is specific to executeStage's
+        // single-stage path.) This asserts parity with executePipeline.
+        const a = deterministicStage({
+            id: "a",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const b = deterministicStage({
+            id: "b",
+            dependsOn: [],
+            outputSchema: Type.Number(),
+            fn: () => 0,
+        })
+        const finalize = {
+            // finalize depends only on 'a' but reads 'b'.
+            dependsOn: ["a"],
+            run: (ctx: TStageContext) => {
+                ctx.get<number>("b")
+                return 0
+            },
+        }
+
+        // executePipeline reference: the same config error is captured as
+        // a FINALIZE_UNCAUGHT_ERROR, not thrown.
+        const wholeResult = await executePipeline(
+            buildPipeline<number>({ stages: [a, b], finalize }),
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(wholeResult.output).toBeNull()
+        expect(
+            wholeResult.failures.find((f) => f.stage === "finalize")?.code
+        ).toBe("FINALIZE_UNCAUGHT_ERROR")
+
+        const result = await executeFinalize(
+            buildPipeline<number>({ stages: [a, b], finalize }),
+            {
+                a: { outcome: "completed", output: 0 },
+                b: { outcome: "completed", output: 0 },
+            },
+            {},
+            { llm: emptyMockLlm() }
+        )
+        expect(result.output).toBeNull()
+        expect(result.failures.find((f) => f.stage === "finalize")?.code).toBe(
+            "FINALIZE_UNCAUGHT_ERROR"
+        )
+    })
+})
+
+// ---------------- TStageOutcomeRecord type smoke ----------------
+
+describe("TStageOutcomeRecord", () => {
+    it("accepts both completed-with-output and skipped/failed-without-output shapes", () => {
+        const completed: TStageOutcomeRecord = {
+            outcome: "completed",
+            output: { any: "value" },
+        }
+        const skipped: TStageOutcomeRecord = { outcome: "skipped" }
+        const failed: TStageOutcomeRecord = { outcome: "failed" }
+        expect(completed.outcome).toBe("completed")
+        expect(skipped.output).toBeUndefined()
+        expect(failed.output).toBeUndefined()
     })
 })
