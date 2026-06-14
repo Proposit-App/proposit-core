@@ -59,15 +59,26 @@ If you need to express a nested conditional, introduce an intermediate claim and
 
 Your response must conform to the provided JSON schema. Key fields:
 
-- **argument**: The parsed argument object, or null if the text cannot be parsed as an argument
+- **argument**: The best-effort structured argument extracted from the text. Set to null ONLY when the input contains no extractable proposition at all (see "Best-Effort Extraction" below) — never merely because the argument is incomplete or not well-formed.
 - **uncategorizedText**: Any portions of the input text that do not fit into the argument structure, or null
 - **selectionRationale**: If the text contains multiple potential arguments, explain why you chose the one you did, or null
-- **failureText**: If the argument cannot be parsed, explain why here, or null
+- **failureText**: Set ONLY when \`argument\` is null — i.e. the input has no extractable proposition at all. Do NOT populate it because the argument is half-baked, one-sided, or missing premises. Otherwise null.
+
+## Best-Effort Extraction
+
+Always extract whatever propositional structure the text contains — never refuse a half-baked argument. The input may be a fully reasoned argument, or it may be just a conclusion with no supporting reasoning, a loose set of reflections, or a single assertion. In every case, produce the best structured argument you can from what is present:
+
+- A lone conclusion with no support → a valid argument with a single claim marked as the conclusion, declared as one variable, and referenced by a single conclusion premise.
+- A rambling or one-sided passage → extract the propositions you can identify; leave genuinely tangential text in uncategorizedText.
+
+Do NOT set \`argument\` to null or populate \`failureText\` because the argument is incomplete, missing premises, one-sided, or not a textbook well-formed argument. Completeness is judged by a separate review step, not here.
+
+Reserve \`argument: null\` + \`failureText\` for the single case where the input contains **no extractable proposition at all** — empty input, whitespace, or non-propositional garbage (random characters, a bare greeting, an unrelated list of nouns).
 
 ## Edge Cases
 
 - If the input text contains multiple distinct arguments, select the strongest or most complete one and explain your choice in selectionRationale.
-- If the input text cannot be reasonably interpreted as a propositional argument, set argument to null and provide an explanation in failureText.
+- Only when the input contains no extractable proposition at all (empty or non-propositional garbage) set argument to null and explain why in failureText — see "Best-Effort Extraction". Any input with at least one proposition yields a best-effort argument.
 - If portions of the text are tangential or do not contribute to the argument, capture them in uncategorizedText.
 
 ## Variable Symbols

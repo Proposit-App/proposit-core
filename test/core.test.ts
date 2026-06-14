@@ -24544,3 +24544,40 @@ describe("Ingestion prompts — anti-attribution clause", () => {
         )
     })
 })
+
+// The basics parse (CORE_PROMPT via buildParsingPrompt) must never refuse a
+// half-baked argument: a lone conclusion, a one-sided passage, or any input
+// with at least one proposition yields a best-effort structured argument.
+// `argument: null` / `failureText` is reserved for input with no extractable
+// proposition at all. The behavioral cases (conclusion-only → non-null) are
+// LLM-dependent and exercised by consumer/live suites; these are deterministic
+// substring assertions so a later prompt rewrite that silently re-introduces
+// refusal fails CI.
+describe("Basics parse — best-effort, never refuse half-baked", () => {
+    const BEST_EFFORT_ANCHOR = "never refuse a half-baked argument"
+
+    it("CORE_PROMPT instructs best-effort extraction over refusal", () => {
+        const prompt = buildParsingPrompt(ParsedArgumentResponseSchema)
+        expect(prompt).toContain("Best-Effort Extraction")
+        expect(prompt).toContain(BEST_EFFORT_ANCHOR)
+        // A lone conclusion must still produce a non-null argument.
+        expect(prompt).toContain("A lone conclusion with no support")
+        // Incompleteness is explicitly NOT a refusal trigger.
+        expect(prompt).toMatch(/Do NOT set `argument` to null[\s\S]*incomplete/)
+    })
+
+    it("CORE_PROMPT reserves null/failureText for no extractable proposition", () => {
+        const prompt = buildParsingPrompt(ParsedArgumentResponseSchema)
+        expect(prompt).toContain("no extractable proposition at all")
+        // failureText is gated on argument being null, not on incompleteness.
+        expect(prompt).toMatch(
+            /failureText\*\*: Set ONLY when `argument` is null/
+        )
+    })
+
+    it("buildParsingPrompt(BasicsParsingSchema) carries the best-effort clause", () => {
+        const prompt = buildParsingPrompt(BasicsParsingSchema)
+        expect(prompt).toContain(BEST_EFFORT_ANCHOR)
+        expect(prompt).toContain("no extractable proposition at all")
+    })
+})

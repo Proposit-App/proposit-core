@@ -1879,7 +1879,7 @@ type TParsedArgumentResponse = {
 }
 ```
 
-Top-level envelope returned by an LLM after structured-output parsing. `argument: null` is legal at the schema level but causes `build()` to throw with `"Cannot build: argument is null."`. The other three fields carry meta-commentary from the LLM and are not consumed by `build()`. The underlying TypeBox schema has `additionalProperties: true`, so extension fields survive `validate()`.
+Top-level envelope returned by an LLM after structured-output parsing. `argument: null` is legal at the schema level but causes `build()` to throw with `"Cannot build: argument is null."`. The other three fields carry meta-commentary from the LLM and are not consumed by `build()`. The underlying TypeBox schema has `additionalProperties: true`, so extension fields survive `validate()`. The shipped `buildParsingPrompt` (`CORE_PROMPT`) instructs the model to extract a best-effort argument from anything containing at least one proposition — a half-baked or one-sided input still yields a non-null `argument` — and to reserve `argument: null` + `failureText` for input with no extractable proposition (empty/garbage); completeness is judged by a separate review step, not refused at parse time.
 
 #### `TParsedArgument`
 
