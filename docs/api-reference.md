@@ -1554,6 +1554,12 @@ This mapping is a deliberate `lib/`-side **mirror** of the OpenAI provider's cla
 
 **Launch/complete event-split is a cross-invocation contract.** The per-stage events are NOT a balanced start/end pair within one invocation: `launchStage` emits `stage:start` + `stage:llm-request` + `stage:llm-response-created` (no end), and `completeStage` emits `stage:llm-call` + `stage:end` (no start). An `onEvent` consumer must NOT assume a start↔end pairing per invocation — the pair spans the launch + complete calls.
 
+### `isLlmStage(stage)` → `boolean` (since v1.11.1)
+
+The routing predicate for an out-of-process orchestrator driving a pipeline stage-by-stage. Returns `true` iff `stage` is an **LLM-background stage** — one built by `llmStage` that carries the resolved LLM config and is therefore driven by `launchStage` / `completeStage`; `false` for deterministic and sub-pipeline stages (drive those with `executeStage`). It **mirrors exactly** the guard `launchStage` / `completeStage` apply internally, so a consumer can route each stage to the right driver up front — `deterministic: !isLlmStage(stage)` — instead of maintaining a hand-written stage-id allowlist that drifts from the pipeline, or catching the thrown `PipelineConfigurationError` as control flow.
+
+The predicate keys on the **carrier of the returned stage**, not on whether a stage ever touches an LLM internally. A factory that builds an inner `llmStage` and invokes its `run` but returns a plain `{ id, dependsOn, outputSchema, run }` literal (the default `conclusion-selection` stage) carries no config, so `isLlmStage` returns `false` for it — agreeing with `launchStage`, which rejects it and requires `executeStage`.
+
 > The seam that backs the in-process `llmStage` loop and the launch/complete split (the prompt-build + parse/validate functions, and the internal config carrier on `llmStage`'s returned stage) is **package-internal**. `llmStage`'s public return type stays `TStage<TOutput>` — it does NOT widen.
 
 ---

@@ -135,6 +135,7 @@ export {
     deterministicStage,
     llmStage,
     subPipelineStage,
+    isLlmStage,
     DEFAULT_RETRY_POLICY,
     PipelineConfigurationError,
     LlmStageRetryExhaustedError,

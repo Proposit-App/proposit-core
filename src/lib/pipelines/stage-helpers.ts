@@ -277,6 +277,18 @@ export function readLlmStageConfig<TOutput>(
 }
 
 /**
+ * True iff `stage` is an LLM-background stage — one built by `llmStage` that
+ * carries the resolved LLM config and is therefore driven by `launchStage` /
+ * `completeStage`. False for deterministic and sub-pipeline stages (drive those
+ * with `executeStage`). Mirrors exactly the check `launchStage`/`completeStage`
+ * apply internally, so a consumer driving a pipeline out-of-process can route a
+ * stage to the right driver without catching a thrown `PipelineConfigurationError`.
+ */
+export function isLlmStage<TOutput>(stage: TStage<TOutput>): boolean {
+    return readLlmStageConfig(stage) != null
+}
+
+/**
  * Append the retry-suffix the in-process loop adds after a failed
  * schema-validation attempt. Shared by the loop and `launchStage` (so a
  * re-launched attempt 2+ rebuilds the identical `userMessage`).
