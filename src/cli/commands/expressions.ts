@@ -34,6 +34,142 @@ function typeSpecificInfo(expr: {
     return ""
 }
 
+export type TCreateExpressionOptions = {
+    type: string
+    id?: string
+    parentId?: string
+    position?: string
+    before?: string
+    after?: string
+    variableId?: string
+    operator?: string
+}
+
+/**
+ * Adds a single expression to a premise and persists the result, returning
+ * the new expression's id.
+ *
+ * The CLI builds an expression tree incrementally across many separate
+ * process invocations (create the operator, then create each child). Every
+ * intermediate state of that build is, by construction, not yet
+ * Presentable — a freshly-created operator has zero children, and a binary
+ * operator with one child so far is still under-filled. Under the engine's
+ * default `'assistive'` behavior the post-mutation AN hook would eagerly
+ * remove the empty operator (AN-3) or promote the single-child operator,
+ * discarding the node the very next invocation needs to attach a child to.
+ *
+ * So this mutation runs in `'permissive'` mode (the same permissive-build
+ * pattern `import.ts` uses): the partial tree is persisted as-is. Callers
+ * tidy the finished tree explicitly via the `repair` / `normalize`
+ * commands once all nodes are in place.
+ */
+export async function runCreateExpression(
+    argumentId: string,
+    version: number,
+    premiseId: string,
+    opts: TCreateExpressionOptions
+): Promise<string> {
+    await assertNotPublished(argumentId, version)
+    if (!(await premiseExists(argumentId, version, premiseId))) {
+        errorExit(`Premise "${premiseId}" not found.`)
+    }
+
+    const engine = await hydrateEngine(argumentId, version)
+    const pm = engine.getPremise(premiseId)
+    if (!pm) errorExit(`Premise "${premiseId}" not found in engine.`)
+
+    const id = opts.id ?? randomUUID()
+    const parentId = opts.parentId ?? null
+    const position =
+        opts.position !== undefined ? Number(opts.position) : POSITION_INITIAL
+
+    let expression: TExpressionInput
+    if (opts.type === "variable") {
+        if (!opts.variableId)
+            errorExit("--variable-id is required for type=variable")
+        expression = {
+            id,
+            argumentId,
+            argumentVersion: version,
+            premiseId,
+            parentId,
+            position,
+            type: "variable",
+            variableId: opts.variableId,
+        }
+    } else if (opts.type === "operator") {
+        if (!opts.operator)
+            errorExit("--operator is required for type=operator")
+        expression = {
+            id,
+            argumentId,
+            argumentVersion: version,
+            premiseId,
+            parentId,
+            position,
+            type: "operator",
+            operator: opts.operator as TCoreLogicalOperatorType,
+        }
+    } else if (opts.type === "formula") {
+        expression = {
+            id,
+            argumentId,
+            argumentVersion: version,
+            premiseId,
+            parentId,
+            position,
+            type: "formula",
+        }
+    } else {
+        errorExit(
+            `Unknown type "${opts.type}". Use variable, operator, or formula.`
+        )
+    }
+
+    const hasBefore = opts.before !== undefined
+    const hasAfter = opts.after !== undefined
+    const hasPosition = opts.position !== undefined
+
+    if ((hasBefore || hasAfter) && hasPosition) {
+        errorExit("Cannot combine --before/--after with --position.")
+    }
+    if (hasBefore && hasAfter) {
+        errorExit("Cannot combine --before and --after.")
+    }
+
+    // Build incrementally without the assistive AN hook eating partial
+    // intermediate trees — see the doc comment above.
+    engine.setBehavior("permissive")
+    try {
+        if (hasBefore) {
+            const { position: _p, ...exprWithoutPosition } = expression
+            pm.addExpressionRelative(
+                opts.before!,
+                "before",
+                exprWithoutPosition
+            )
+        } else if (hasAfter) {
+            const { position: _p, ...exprWithoutPosition } = expression
+            pm.addExpressionRelative(opts.after!, "after", exprWithoutPosition)
+        } else if (hasPosition) {
+            pm.addExpression(expression)
+        } else {
+            const { position: _p, ...exprWithoutPosition } = expression
+            pm.appendExpression(parentId, exprWithoutPosition)
+        }
+    } catch (e) {
+        errorExit(e instanceof Error ? e.message : "Failed to add expression.")
+    }
+
+    await writePremiseData(argumentId, version, premiseId, {
+        rootExpressionId: pm.getRootExpressionId(),
+        variables: [...pm.getReferencedVariableIds()].sort(),
+        expressions: pm.getExpressions(),
+    })
+
+    return id
+}
+
 export function registerExpressionCommands(
     versionedCmd: Command,
     argumentId: string,
@@ -69,133 +205,15 @@ export function registerExpressionCommands(
             "--operator <op>",
             "Operator (for type=operator): not,and,or,implies,iff"
         )
-        .action(
-            async (
-                premiseId: string,
-                opts: {
-                    type: string
-                    id?: string
-                    parentId?: string
-                    position?: string
-                    before?: string
-                    after?: string
-                    variableId?: string
-                    operator?: string
-                }
-            ) => {
-                await assertNotPublished(argumentId, version)
-                if (!(await premiseExists(argumentId, version, premiseId))) {
-                    errorExit(`Premise "${premiseId}" not found.`)
-                }
-
-                const engine = await hydrateEngine(argumentId, version)
-                const pm = engine.getPremise(premiseId)
-                if (!pm)
-                    errorExit(`Premise "${premiseId}" not found in engine.`)
-
-                const id = opts.id ?? randomUUID()
-                const parentId = opts.parentId ?? null
-                const position =
-                    opts.position !== undefined
-                        ? Number(opts.position)
-                        : POSITION_INITIAL
-
-                let expression: TExpressionInput
-                if (opts.type === "variable") {
-                    if (!opts.variableId)
-                        errorExit("--variable-id is required for type=variable")
-                    expression = {
-                        id,
-                        argumentId,
-                        argumentVersion: version,
-                        premiseId,
-                        parentId,
-                        position,
-                        type: "variable",
-                        variableId: opts.variableId,
-                    }
-                } else if (opts.type === "operator") {
-                    if (!opts.operator)
-                        errorExit("--operator is required for type=operator")
-                    expression = {
-                        id,
-                        argumentId,
-                        argumentVersion: version,
-                        premiseId,
-                        parentId,
-                        position,
-                        type: "operator",
-                        operator: opts.operator as TCoreLogicalOperatorType,
-                    }
-                } else if (opts.type === "formula") {
-                    expression = {
-                        id,
-                        argumentId,
-                        argumentVersion: version,
-                        premiseId,
-                        parentId,
-                        position,
-                        type: "formula",
-                    }
-                } else {
-                    errorExit(
-                        `Unknown type "${opts.type}". Use variable, operator, or formula.`
-                    )
-                }
-
-                const hasBefore = opts.before !== undefined
-                const hasAfter = opts.after !== undefined
-                const hasPosition = opts.position !== undefined
-
-                if ((hasBefore || hasAfter) && hasPosition) {
-                    errorExit(
-                        "Cannot combine --before/--after with --position."
-                    )
-                }
-                if (hasBefore && hasAfter) {
-                    errorExit("Cannot combine --before and --after.")
-                }
-
-                try {
-                    if (hasBefore) {
-                        const { position: _p, ...exprWithoutPosition } =
-                            expression
-                        pm.addExpressionRelative(
-                            opts.before!,
-                            "before",
-                            exprWithoutPosition
-                        )
-                    } else if (hasAfter) {
-                        const { position: _p, ...exprWithoutPosition } =
-                            expression
-                        pm.addExpressionRelative(
-                            opts.after!,
-                            "after",
-                            exprWithoutPosition
-                        )
-                    } else if (hasPosition) {
-                        pm.addExpression(expression)
-                    } else {
-                        const { position: _p, ...exprWithoutPosition } =
-                            expression
-                        pm.appendExpression(parentId, exprWithoutPosition)
-                    }
-                } catch (e) {
-                    errorExit(
-                        e instanceof Error
-                            ? e.message
-                            : "Failed to add expression."
-                    )
-                }
-
-                await writePremiseData(argumentId, version, premiseId, {
-                    rootExpressionId: pm.getRootExpressionId(),
-                    variables: [...pm.getReferencedVariableIds()].sort(),
-                    expressions: pm.getExpressions(),
-                })
-                printLine(id)
-            }
-        )
+        .action(async (premiseId: string, opts: TCreateExpressionOptions) => {
+            const id = await runCreateExpression(
+                argumentId,
+                version,
+                premiseId,
+                opts
+            )
+            printLine(id)
+        })
 
     exprs
         .command("insert <premise_id>")
@@ -291,6 +309,11 @@ export function registerExpressionCommands(
                     errorExit(`Unknown type "${opts.type}".`)
                 }
 
+                // Build incrementally without the assistive AN hook
+                // collapsing the partial wrapper before its second child
+                // arrives — same permissive-build rationale as
+                // `runCreateExpression`.
+                engine.setBehavior("permissive")
                 try {
                     pm.insertExpression(
                         expression,
