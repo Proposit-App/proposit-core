@@ -5,13 +5,13 @@
 
 import { describe, it, expect, vi } from "vitest"
 import Type from "typebox"
+import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/provider.js"
 import {
-    createOpenAiResponsesProvider,
     retrieveResponse,
     reconnectStream,
     cancelResponse,
     submitBackgroundResponse,
-} from "../../../src/extensions/openai/provider.js"
+} from "../../../src/extensions/openai/openai-retrieval.js"
 import {
     NonRetryableLlmError,
     QuotaExhaustedLlmError,

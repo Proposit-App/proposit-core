@@ -6,18 +6,15 @@
 // finer-grained observability + the response retrieval / reconnect /
 // cancel API for resync.
 
+export { createOpenAiResponsesProvider } from "./provider.js"
+export type { TCreateOpenAiResponsesProviderOptions } from "./provider.js"
 export {
-    createOpenAiResponsesProvider,
     retrieveResponse,
     reconnectStream,
     cancelResponse,
     submitBackgroundResponse,
-} from "./provider.js"
-export type {
-    TCreateOpenAiResponsesProviderOptions,
-    TRetrievedResponse,
-    TResponseStatus,
-} from "./provider.js"
+} from "./openai-retrieval.js"
+export type { TRetrievedResponse, TResponseStatus } from "./openai-retrieval.js"
 export type { TOpenAiFetch } from "./types.js"
 export {
     NonRetryableLlmError,
