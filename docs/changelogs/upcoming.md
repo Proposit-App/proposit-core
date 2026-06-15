@@ -15,3 +15,18 @@ Commit range: `v1.11.2..HEAD`.
   tidied explicitly via `repair` / `normalize`. Adds
   `test/integration/expressions-create.test.ts` and restores the
   `scripts/smoke-test.sh` step-5 build.
+
+## Refactors
+
+- **`refactor(openai)`** (`9c3ead1..de685a5`): Split the 1,589-line
+  `src/extensions/openai/provider.ts` into focused, dependency-layered
+  modules with no public-API or behavior change. SSE/response parsing
+  moved to `openai-parsing.ts`; HTTP-error classification
+  (`classifyHttpError`, `formatIncompleteMessage`) moved into `errors.ts`;
+  tool translation + schema-name derivation to `openai-tools.ts`; HTTP
+  transport to `openai-http.ts`; the public retrieval API
+  (`retrieveResponse`, `reconnectStream`, `cancelResponse`,
+  `submitBackgroundResponse` + `TRetrievedResponse`/`TResponseStatus`) to
+  `openai-retrieval.ts`. The shared `DEFAULT_BASE_URL` constant moved to
+  `types.ts`. The barrel (`index.ts`) re-exports the identical symbol set,
+  so consumers see no change; `provider.ts` is now ~457 lines.
