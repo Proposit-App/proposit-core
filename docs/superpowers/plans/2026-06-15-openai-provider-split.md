@@ -19,11 +19,11 @@
 - **The test suite must keep passing after every single commit.** Because each moved symbol is still imported by `provider.ts` (and siblings), every task leaves the build green on its own.
 - **ESM rule:** every relative import you add must end in `.js` (e.g. `"./openai-parsing.js"`).
 - **Symbol inventory** (current line ranges in `provider.ts`, for locating — line numbers drift as you cut, so locate by name):
-  - parsing (≈1246–1493): `parseSseEvent`, `readSseEnvelope`, `pickFunctionCalls`, `extractAssistantText`, `safeParseJson`, `extractUsage`, `mergeUsage`, type `TParsedSseEvent`
-  - classification (≈1179–1245): `classifyHttpError`, `formatIncompleteMessage`
-  - tools (≈1494–1589): `translateTools`, `findFunctionHandler`, `deriveSchemaName`, `sanitizeName`, `canonicalJson`, `shortHash`
-  - http (≈769–1228): `resolveFetch`, `fetchResponseEnvelope`, `envelopeToRetrievedResponse`, `parseJsonOrThrowTransient`, `abortError`, `abortableDelay`, `getResponseById`, `cancelBackground`, `isTerminalBackgroundStatus`, `runBackgroundStream`, `runBackground`, `callOnce`, `isAbortError`
-  - retrieval (≈455–810): `retrieveResponse`, `reconnectStream`, `cancelResponse`, `submitBackgroundResponse`, types `TResponseStatus`, `TRetrievedResponse`
+    - parsing (≈1246–1493): `parseSseEvent`, `readSseEnvelope`, `pickFunctionCalls`, `extractAssistantText`, `safeParseJson`, `extractUsage`, `mergeUsage`, type `TParsedSseEvent`
+    - classification (≈1179–1245): `classifyHttpError`, `formatIncompleteMessage`
+    - tools (≈1494–1589): `translateTools`, `findFunctionHandler`, `deriveSchemaName`, `sanitizeName`, `canonicalJson`, `shortHash`
+    - http (≈769–1228): `resolveFetch`, `fetchResponseEnvelope`, `envelopeToRetrievedResponse`, `parseJsonOrThrowTransient`, `abortError`, `abortableDelay`, `getResponseById`, `cancelBackground`, `isTerminalBackgroundStatus`, `runBackgroundStream`, `runBackground`, `callOnce`, `isAbortError`
+    - retrieval (≈455–810): `retrieveResponse`, `reconnectStream`, `cancelResponse`, `submitBackgroundResponse`, types `TResponseStatus`, `TRetrievedResponse`
 - **Before each cut**, grep for the symbol to find every call site you must keep wired:
   `grep -rn "<symbol>" src/extensions/openai test/extensions/openai`
 
@@ -32,6 +32,7 @@
 ## Task 1: Extract response/SSE parsing → `openai-parsing.ts`
 
 **Files:**
+
 - Create: `src/extensions/openai/openai-parsing.ts`
 - Modify: `src/extensions/openai/provider.ts` (remove the moved symbols; add an import)
 - Test: `test/extensions/openai/` (existing — no edits expected)
@@ -79,6 +80,7 @@ git commit -m "refactor(openai): extract SSE/response parsing to openai-parsing"
 ## Task 2: Move HTTP-error classification → `errors.ts`
 
 **Files:**
+
 - Modify: `src/extensions/openai/errors.ts` (add the two functions)
 - Modify: `src/extensions/openai/provider.ts` (remove them; import them back)
 
@@ -119,6 +121,7 @@ git commit -m "refactor(openai): move HTTP-error classification into errors modu
 ## Task 3: Extract tool translation + schema derivation → `openai-tools.ts`
 
 **Files:**
+
 - Create: `src/extensions/openai/openai-tools.ts`
 - Modify: `src/extensions/openai/provider.ts`
 
@@ -153,6 +156,7 @@ git commit -m "refactor(openai): extract tool translation + schema derivation to
 ## Task 4: Extract HTTP transport → `openai-http.ts`
 
 **Files:**
+
 - Create: `src/extensions/openai/openai-http.ts`
 - Modify: `src/extensions/openai/provider.ts`
 
@@ -178,11 +182,7 @@ import { classifyHttpError } from "./errors.js"
 Import the subset `provider.ts` still uses (the `respond` closure calls `callOnce`, `runBackground`, `runBackgroundStream`):
 
 ```ts
-import {
-    callOnce,
-    runBackground,
-    runBackgroundStream,
-} from "./openai-http.js"
+import { callOnce, runBackground, runBackgroundStream } from "./openai-http.js"
 ```
 
 (Add others if Step 1 shows `provider.ts` references them.)
@@ -204,6 +204,7 @@ git commit -m "refactor(openai): extract HTTP transport to openai-http"
 ## Task 5: Extract public retrieval API → `openai-retrieval.ts` + update barrel
 
 **Files:**
+
 - Create: `src/extensions/openai/openai-retrieval.ts`
 - Modify: `src/extensions/openai/provider.ts`
 - Modify: `src/extensions/openai/index.ts` (barrel)

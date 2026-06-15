@@ -10,14 +10,14 @@
 
 ## Module layout (all under `src/extensions/openai/`)
 
-| File | Source range in provider.ts | Contents |
-|------|-----------------------------|----------|
-| `provider.ts` (remains) | 1–454 | `createOpenAiResponsesProvider` factory + `respond` closure + `TCreateOpenAiResponsesProviderOptions` |
-| `openai-retrieval.ts` (new) | 455–810 | `retrieveResponse`, `reconnectStream`, `cancelResponse`, `submitBackgroundResponse`, `TResponseStatus`, `TRetrievedResponse` |
-| `openai-http.ts` (new) | 769–1228 | `resolveFetch`, `fetchResponseEnvelope`, `envelopeToRetrievedResponse`, `parseJsonOrThrowTransient`, `abortError`, `abortableDelay`, `getResponseById`, `cancelBackground`, `isTerminalBackgroundStatus`, `runBackgroundStream`, `runBackground`, `callOnce`, `isAbortError` |
-| `openai-parsing.ts` (new) | 1246–1493 | `parseSseEvent`, `readSseEnvelope`, `pickFunctionCalls`, `extractAssistantText`, `safeParseJson`, `extractUsage`, `mergeUsage`, `TParsedSseEvent` |
-| `openai-tools.ts` (new) | 1494–1589 | `translateTools`, `findFunctionHandler`, `deriveSchemaName`, `sanitizeName`, `canonicalJson`, `shortHash` |
-| `errors.ts` (existing) | 1179–1245 | `classifyHttpError`, `formatIncompleteMessage` move in alongside the existing error classes |
+| File                        | Source range in provider.ts | Contents                                                                                                                                                                                                                                                                     |
+| --------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider.ts` (remains)     | 1–454                       | `createOpenAiResponsesProvider` factory + `respond` closure + `TCreateOpenAiResponsesProviderOptions`                                                                                                                                                                        |
+| `openai-retrieval.ts` (new) | 455–810                     | `retrieveResponse`, `reconnectStream`, `cancelResponse`, `submitBackgroundResponse`, `TResponseStatus`, `TRetrievedResponse`                                                                                                                                                 |
+| `openai-http.ts` (new)      | 769–1228                    | `resolveFetch`, `fetchResponseEnvelope`, `envelopeToRetrievedResponse`, `parseJsonOrThrowTransient`, `abortError`, `abortableDelay`, `getResponseById`, `cancelBackground`, `isTerminalBackgroundStatus`, `runBackgroundStream`, `runBackground`, `callOnce`, `isAbortError` |
+| `openai-parsing.ts` (new)   | 1246–1493                   | `parseSseEvent`, `readSseEnvelope`, `pickFunctionCalls`, `extractAssistantText`, `safeParseJson`, `extractUsage`, `mergeUsage`, `TParsedSseEvent`                                                                                                                            |
+| `openai-tools.ts` (new)     | 1494–1589                   | `translateTools`, `findFunctionHandler`, `deriveSchemaName`, `sanitizeName`, `canonicalJson`, `shortHash`                                                                                                                                                                    |
+| `errors.ts` (existing)      | 1179–1245                   | `classifyHttpError`, `formatIncompleteMessage` move in alongside the existing error classes                                                                                                                                                                                  |
 
 (Ranges are approximate seams; the exact `resolveFetch`/`envelopeToRetrievedResponse` pair at 769–812 belongs with the HTTP layer even though it precedes the `-- HTTP --` banner.)
 
