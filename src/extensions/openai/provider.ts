@@ -44,11 +44,10 @@ import {
 } from "../../lib/pipelines/debug-log.js"
 import { typeboxToOpenAiSchema } from "./structured-output.js"
 import {
+    classifyHttpError,
+    formatIncompleteMessage,
     NonRetryableLlmError,
-    QuotaExhaustedLlmError,
-    RateLimitLlmError,
     ResponseNotFoundError,
-    SchemaValidationLlmError,
     ToolLoopExhaustedError,
     TransientLlmError,
 } from "./errors.js"
@@ -1182,65 +1181,6 @@ async function callOnce(args: {
         providerErrorCode = undefined
     }
     throw classifyHttpError(response.status, message, providerErrorCode)
-}
-
-function classifyHttpError(
-    status: number,
-    message: string,
-    providerErrorCode?: string
-): Error {
-    if (status >= 500) {
-        return new TransientLlmError({ message, status })
-    }
-    if (status === 429) {
-        // 429 splits on the body's structured error code: persistent
-        // budget exhaustion (`insufficient_quota`) is fail-fast, every
-        // other (and every unparseable) 429 stays the transient
-        // throttle. The safe default is always "transient + retryable"
-        // — never a false quota trip.
-        if (providerErrorCode === "insufficient_quota") {
-            return new QuotaExhaustedLlmError({ message, status })
-        }
-        return new RateLimitLlmError({ message, status })
-    }
-    // 400 vs 422 split:
-    //
-    // OpenAI returns 400 for malformed requests — typically a
-    // converter bug, an unsupported parameter, or a request shape
-    // the API doesn't accept. Retrying a 400 just burns the second
-    // attempt; classify as non-retryable so the framework surfaces
-    // the error immediately.
-    //
-    // OpenAI returns 422 when the model's structured-output reply
-    // failed server-side strict-mode validation. A re-roll can
-    // sometimes succeed, so we route 422 through the
-    // schema-validation class (which carries `retryReason:
-    // "transient"` as the V1 retry workaround until the framework
-    // grows a dedicated `schema_validation` retry tag).
-    if (status === 400) {
-        return new NonRetryableLlmError({ message, status })
-    }
-    if (status === 422) {
-        return new SchemaValidationLlmError({ message, status })
-    }
-    return new NonRetryableLlmError({ message, status })
-}
-
-// -- incomplete-reason → user-facing message ----------------------------
-//
-// Per-reason error messages for the `status: "incomplete"` branch.
-// The message is the dev's first read when a stage fails — keep it
-// actionable, name the cap reason verbatim, and (for the truncation
-// case specifically) point at the override knob that fixes it.
-
-function formatIncompleteMessage(reason: string): string {
-    if (reason === "max_output_tokens") {
-        return `OpenAI Responses API returned status: "incomplete" (reason: max_output_tokens). The model's output exceeded the per-call \`max_output_tokens\` cap (either an explicit value on the request or the model's default). Pass a larger \`maxOutputTokens\` to TLlmRequest, or set the stage-level \`maxOutputTokens\` on the llmStage factory (e.g., the \`createIngestionV2Pipeline({ llm: { overrides: { ... } } })\` surface).`
-    }
-    if (reason === "content_filter") {
-        return `OpenAI Responses API returned status: "incomplete" (reason: content_filter). OpenAI's content policy refused to complete this output; the input or generated content was flagged. Retrying will not succeed — review the input text or the stage's prompt and re-request.`
-    }
-    return `OpenAI Responses API returned status: "incomplete" (reason: ${reason}). The model stopped before completing the response. See OpenAI Responses API documentation for the complete \`incomplete_details.reason\` enumeration.`
 }
 
 // -- tool translation --
