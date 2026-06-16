@@ -24,7 +24,7 @@ import {
     formatSingleAuthor,
     formatCitationParts,
     type TIEEEReference,
-} from "../../src/extensions/ieee"
+} from "../../src/extensions/citations/ieee"
 
 describe("UnparsedURL removal", () => {
     it("ReferenceTypeSchema has 33 literals and excludes UnparsedURL", () => {
@@ -861,7 +861,7 @@ describe("IEEE extension", () => {
 describe("segment template config", () => {
     it("BOOK_TEMPLATE is a non-empty array", async () => {
         const { BOOK_TEMPLATE } =
-            await import("../../src/extensions/ieee/segment-templates.js")
+            await import("../../src/extensions/citations/ieee/segment-templates.js")
         expect(Array.isArray(BOOK_TEMPLATE)).toBe(true)
         expect(BOOK_TEMPLATE.length).toBeGreaterThan(0)
     })

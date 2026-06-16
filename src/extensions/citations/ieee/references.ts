@@ -2,7 +2,7 @@
 // https://journals.ieeeauthorcenter.ieee.org/wp-content/uploads/sites/7/IEEE_Reference_Guide.pdf
 
 import Type, { type Static, type TSchema } from "typebox"
-import { EncodableDate } from "../../lib/schemata/shared.js"
+import { EncodableDate } from "../../../lib/schemata/shared.js"
 
 // ---------------------------------------------------------------------------
 // Reference type discriminator
