@@ -260,6 +260,30 @@ export class PremiseEngine<
         }
     }
 
+    /**
+     * Wraps a single expression mutation: opens a ChangeCollector, binds it
+     * to the ExpressionManager for the duration of `body`, then finalizes
+     * (checksum flush + index sync + onMutate) and returns the standard
+     * `{ result, changes }` shape. The whole thing runs inside
+     * `withValidation`, so Structural violations roll back and throw while
+     * higher-tier issues surface via `validate(tier)`.
+     */
+    private withExpressionMutation<TResult>(
+        body: () => TResult
+    ): TCoreMutationResult<TResult, TExpr, TVar, TPremise, TArg> {
+        return this.withValidation(() => {
+            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
+            this.expressions.setCollector(collector)
+            try {
+                const result = body()
+                const changes = this.finalizeExpressionMutation(collector)
+                return { result, changes }
+            } finally {
+                this.expressions.setCollector(null)
+            }
+        })
+    }
+
     public deleteExpressionsUsingVariable(
         variableId: string
     ): TCoreMutationResult<TExpr[], TExpr, TVar, TPremise, TArg> {
@@ -319,7 +343,7 @@ export class PremiseEngine<
     public addExpression(
         expression: TExpressionInput<TExpr>
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        return this.withValidation(() => {
+        return this.withExpressionMutation(() => {
             this.assertBelongsToArgument(
                 expression.argumentId,
                 expression.argumentVersion
@@ -354,30 +378,16 @@ export class PremiseEngine<
                 }
             }
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                // Delegate structural validation (operator type checks, position
-                // uniqueness, child limits) to ExpressionManager.
-                this.expressions.addExpression(expression)
-
-                if (expression.parentId === null) {
-                    this.rootExpressionId = expression.id
-                }
-                if (expression.type === "variable") {
-                    this.expressionsByVariableId
-                        .get(expression.variableId)
-                        .add(expression.id)
-                }
-
-                const changes = this.finalizeExpressionMutation(collector)
-                return {
-                    result: this.expressions.getExpression(expression.id)!,
-                    changes,
-                }
-            } finally {
-                this.expressions.setCollector(null)
+            this.expressions.addExpression(expression)
+            if (expression.parentId === null) {
+                this.rootExpressionId = expression.id
             }
+            if (expression.type === "variable") {
+                this.expressionsByVariableId
+                    .get(expression.variableId)
+                    .add(expression.id)
+            }
+            return this.expressions.getExpression(expression.id)!
         })
     }
 
