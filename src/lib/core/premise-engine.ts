@@ -656,7 +656,7 @@ export class PremiseEngine<
         newParentId: string,
         newPosition: number
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        return this.withValidation(() => {
+        return this.withExpressionMutation(() => {
             const expression = this.expressions.getExpression(expressionId)
             if (!expression) {
                 throw new Error(
@@ -753,22 +753,12 @@ export class PremiseEngine<
                 }
             }
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                this.expressions.reparentExpression(
-                    expressionId,
-                    newParentId,
-                    newPosition
-                )
-                const changes = this.finalizeExpressionMutation(collector)
-                return {
-                    result: this.expressions.getExpression(expressionId)!,
-                    changes,
-                }
-            } finally {
-                this.expressions.setCollector(null)
-            }
+            this.expressions.reparentExpression(
+                expressionId,
+                newParentId,
+                newPosition
+            )
+            return this.expressions.getExpression(expressionId)!
         })
     }
 
@@ -804,7 +794,7 @@ export class PremiseEngine<
         childId: string,
         formulaId: string
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        return this.withValidation(() => {
+        return this.withExpressionMutation(() => {
             const child = this.expressions.getExpression(childId)
             if (!child) {
                 throw new Error(
@@ -817,18 +807,8 @@ export class PremiseEngine<
                 )
             }
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                this.expressions.wrapInFormula(childId, formulaId)
-                const changes = this.finalizeExpressionMutation(collector)
-                return {
-                    result: this.expressions.getExpression(formulaId)!,
-                    changes,
-                }
-            } finally {
-                this.expressions.setCollector(null)
-            }
+            this.expressions.wrapInFormula(childId, formulaId)
+            return this.expressions.getExpression(formulaId)!
         })
     }
 

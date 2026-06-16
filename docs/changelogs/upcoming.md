@@ -36,9 +36,11 @@ Commit range: `v1.11.2..HEAD`.
   wrapper (the repeated `ChangeCollector` setup + `setCollector` /
   `try`/`finally` + `finalizeExpressionMutation`, run inside
   `withValidation`) and an `indexVariableExpression` helper (the repeated
-  by-variable index update), then migrated the five identical-shape
+  by-variable index update), then migrated the seven identical-shape
   mutators — `addExpression`, `appendExpression`, `addExpressionRelative`,
-  `insertExpression`, `wrapExpression` — onto both. The intentionally
-  divergent methods (`updateExpression`, `removeExpression`, and the
-  bundled-composite `reparentExpression` / `wrapInFormula` /
-  `toggleNegation` / `changeOperator`) are left unchanged.
+  `insertExpression`, `wrapExpression`, `reparentExpression`,
+  `wrapInFormula` — onto the wrapper (the first five also onto the index
+  helper). The genuinely divergent methods (`updateExpression` and
+  `removeExpression` with conditional/early-return finalize semantics, and
+  `deleteExpressionsUsingVariable` / `toggleNegation` / `changeOperator`
+  with per-branch finalize and onMutate suppression) are left unchanged.
