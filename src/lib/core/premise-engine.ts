@@ -382,11 +382,7 @@ export class PremiseEngine<
             if (expression.parentId === null) {
                 this.rootExpressionId = expression.id
             }
-            if (expression.type === "variable") {
-                this.expressionsByVariableId
-                    .get(expression.variableId)
-                    .add(expression.id)
-            }
+            this.indexVariableExpression(expression)
             return this.expressions.getExpression(expression.id)!
         })
     }
@@ -2280,6 +2276,21 @@ export class PremiseEngine<
         }
         for (const expr of changes.expressions.removed) {
             this.expressionIndex.delete(expr.id)
+        }
+    }
+
+    /**
+     * Records a newly-added variable expression in the by-variable index.
+     * No-op for non-variable expressions. Mirrors the per-variable entry
+     * that `rebuildVariableIndex` produces on bulk load.
+     */
+    private indexVariableExpression(
+        expression: TExpressionInput<TExpr> | TExpressionWithoutPosition<TExpr>
+    ): void {
+        if (expression.type === "variable") {
+            this.expressionsByVariableId
+                .get(expression.variableId)
+                .add(expression.id)
         }
     }
 
