@@ -58,13 +58,11 @@ pnpm run typecheck   # tsc --noEmit
 pnpm run lint        # prettier --check + eslint
 pnpm run prettify    # prettier --write (auto-fix formatting)
 pnpm run test        # vitest run
-pnpm run build       # tsc -p tsconfig.build.json → dist/
+pnpm run build       # generate:parser (peggy) + tsc -p tsconfig.build.json → dist/ + typedoc
 pnpm run check       # all of the above in sequence
 pnpm cli -- --help   # run the local proposit-core CLI from the local build
 bash scripts/smoke-test.sh  # CLI smoke test (requires build first)
 ```
-
-Run `pnpm eslint . --fix` to auto-fix lint errors before checking manually.
 
 ## Invariants easy to violate
 
@@ -76,6 +74,7 @@ Non-obvious constraints the code enforces. Terse here — follow the route below
 - **`orderChangeset` (`src/lib/utils/changeset.ts`) emits FK-safe persistence ordering** — an invariant. Flag any change that touches entity relationships, adds entity types, or alters FK dependencies.
 - **Core owns no application metadata** (user IDs, timestamps, display text) — those are consumer concerns. Applications extend core types via generic parameters.
 - **Grammar-rule codes (`TGrammarRuleCode`) and engine-error codes are stable wire format** — renaming either requires a coordinated cross-repo publish. Core owns the codes; `@proposit/shared` re-exports the grammar wire format.
+- **The parser is generated.** `src/lib/core/parser/formula.peggy` compiles to `formula-gen.js` via `pnpm run generate:parser` (folded into `build`). Editing the `.peggy` grammar without regenerating ships a stale parser.
 
 For the full design detail, route by topic:
 
@@ -85,7 +84,7 @@ For the full design detail, route by topic:
 
 ## Testing
 
-Tests live in `test/core.test.ts`. Each `describe` block corresponds to a method or logical grouping. All tests build their own fixtures inline — no shared `beforeEach` state. When adding a test for a new feature, add a new `describe` block at the bottom.
+Tests live under `test/`: `core.test.ts` (the largest suite) plus per-area dirs — `test/grammar/` (per-tier suites), `test/extensions/<provider>/`, and `test/integration/`. All tests build their own fixtures inline — no shared `beforeEach` state. Add a new feature's tests to the matching file/dir, not by default to `core.test.ts`.
 
 ## Linting notes
 
