@@ -30,3 +30,15 @@ Commit range: `v1.11.2..HEAD`.
   `openai-retrieval.ts`. The shared `DEFAULT_BASE_URL` constant moved to
   `types.ts`. The barrel (`index.ts`) re-exports the identical symbol set,
   so consumers see no change; `provider.ts` is now ~457 lines.
+- **`refactor(premise-engine)`** (`7475e21..332a8ba`): De-duplicate the
+  expression-mutation boilerplate in `src/lib/core/premise-engine.ts` with
+  no public-API or behavior change. Extracted a `withExpressionMutation`
+  wrapper (the repeated `ChangeCollector` setup + `setCollector` /
+  `try`/`finally` + `finalizeExpressionMutation`, run inside
+  `withValidation`) and an `indexVariableExpression` helper (the repeated
+  by-variable index update), then migrated the five identical-shape
+  mutators — `addExpression`, `appendExpression`, `addExpressionRelative`,
+  `insertExpression`, `wrapExpression` — onto both. The intentionally
+  divergent methods (`updateExpression`, `removeExpression`, and the
+  bundled-composite `reparentExpression` / `wrapInFormula` /
+  `toggleNegation` / `changeOperator`) are left unchanged.
