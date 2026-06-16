@@ -9,6 +9,8 @@ import {
     PatentReferenceSchema,
     BlogReferenceSchema,
     DatasetReferenceSchema,
+    ReferenceTypeSchema,
+    IEEE_REFERENCE_TYPES,
     IEEEReferenceSchema,
     IEEEReferenceSchemaMap,
     RelaxedBookReferenceSchema,
@@ -23,6 +25,24 @@ import {
     formatCitationParts,
     type TIEEEReference,
 } from "../../src/extensions/ieee"
+
+describe("UnparsedURL removal", () => {
+    it("ReferenceTypeSchema has 33 literals and excludes UnparsedURL", () => {
+        expect(IEEE_REFERENCE_TYPES).toHaveLength(33)
+        expect(IEEE_REFERENCE_TYPES).not.toContain("UnparsedURL")
+        expect(Value.Check(ReferenceTypeSchema, "Book")).toBe(true)
+        expect(Value.Check(ReferenceTypeSchema, "UnparsedURL")).toBe(false)
+    })
+
+    it("IEEEReferenceSchema no longer validates an UnparsedURL shape", () => {
+        const unparsedUrlShape = {
+            type: "UnparsedURL",
+            url: "https://example.com",
+            text: "Example",
+        }
+        expect(Value.Check(IEEEReferenceSchema, unparsedUrlShape)).toBe(false)
+    })
+})
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -357,7 +377,7 @@ describe("IEEE extension", () => {
         })
 
         it("relaxed map has entry for every type", () => {
-            expect(Object.keys(IEEEReferenceSchemaMapRelaxed)).toHaveLength(34)
+            expect(Object.keys(IEEEReferenceSchemaMapRelaxed)).toHaveLength(33)
         })
 
         it("relaxed map Book entry accepts invalid ISBN", () => {
@@ -824,13 +844,8 @@ describe("IEEE extension", () => {
                     manufacturer: "Dell",
                     model: "XPS 15",
                 },
-                {
-                    type: "UnparsedURL" as const,
-                    url: "https://example.com/some-source",
-                    text: "Example Source",
-                },
             ]
-            expect(refs).toHaveLength(34)
+            expect(refs).toHaveLength(33)
             for (const ref of refs) {
                 const result = formatCitationParts(ref)
                 expect(result.type).toBe(ref.type)

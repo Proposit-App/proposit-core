@@ -93,7 +93,6 @@ const TEMPLATES: Record<TReferenceType, templates.TSegmentInstruction[]> = {
     GovernmentPublication: templates.GOVERNMENT_PUBLICATION_TEMPLATE,
     Datasheet: templates.DATASHEET_TEMPLATE,
     ProductManual: templates.PRODUCT_MANUAL_TEMPLATE,
-    UnparsedURL: templates.UNPARSED_URL_TEMPLATE,
 }
 
 /**

@@ -7,6 +7,12 @@ import { EncodableDate } from "../../lib/schemata/shared.js"
 // ---------------------------------------------------------------------------
 // Reference type discriminator
 // ---------------------------------------------------------------------------
+// The 33 well-formed IEEE reference types. The schema is an inline literal
+// tuple so that every concrete reference schema (which intersects
+// BaseReferenceSchema with its own `type` literal) keeps a precise static type
+// — a union built from a mapped array would degrade the intersection to
+// `never`. (The deferred "UnparsedURL" form is replaced by the separate
+// `extensions/citations/unparsed` family — see UnparsedCitationSchema.)
 export const ReferenceTypeSchema = Type.Union([
     Type.Literal("Book"),
     Type.Literal("Website"),
@@ -41,9 +47,31 @@ export const ReferenceTypeSchema = Type.Union([
     Type.Literal("GovernmentPublication"),
     Type.Literal("Datasheet"),
     Type.Literal("ProductManual"),
-    Type.Literal("UnparsedURL"),
 ])
 export type TReferenceType = Static<typeof ReferenceTypeSchema>
+
+// Single source of truth for the 33 type literals as a plain runtime array,
+// for callers that need to enumerate them (e.g. the unparsed citation
+// type-guess family). Constrained to the schema's literal set; the
+// exhaustiveness guard below fails to compile if the two ever drift apart.
+export const IEEE_REFERENCE_TYPES = [
+    "Book", "Website", "BookChapter", "Handbook", "TechnicalReport",
+    "Standard", "Thesis", "Patent", "Dictionary", "Encyclopedia",
+    "JournalArticle", "MagazineArticle", "NewspaperArticle",
+    "ConferencePaper", "ConferenceProceedings", "Dataset", "Software",
+    "OnlineDocument", "Blog", "SocialMedia", "Preprint", "Video",
+    "Podcast", "Course", "Presentation", "Interview",
+    "PersonalCommunication", "Email", "Law", "CourtCase",
+    "GovernmentPublication", "Datasheet", "ProductManual",
+] as const satisfies readonly TReferenceType[]
+
+// Compile-time guard: every TReferenceType literal must appear in the array
+// above (and vice-versa, via the `satisfies` constraint), keeping the schema
+// and the enumerable array in lockstep.
+type _AllReferenceTypesEnumerated =
+    TReferenceType extends (typeof IEEE_REFERENCE_TYPES)[number] ? true : never
+const _allReferenceTypesEnumerated: _AllReferenceTypesEnumerated = true
+void _allReferenceTypesEnumerated
 
 // ---------------------------------------------------------------------------
 // Base reference (shared by all types)
@@ -1025,29 +1053,6 @@ export type TProductManualReference = Static<
 >
 
 // ---------------------------------------------------------------------------
-// Unparsed / deferred
-// ---------------------------------------------------------------------------
-export const UnparsedURLReferenceSchema = Type.Intersect([
-    BaseReferenceSchema,
-    Type.Object({
-        type: Type.Literal("UnparsedURL"),
-        url: Type.String({
-            format: "uri",
-            minLength: 1,
-            description: "URL to be processed into a proper reference later",
-        }),
-        text: Type.Optional(
-            Type.String({
-                minLength: 1,
-                description:
-                    "Link text or description (e.g. from markdown anchor text)",
-            })
-        ),
-    }),
-])
-export type TUnparsedURLReference = Static<typeof UnparsedURLReferenceSchema>
-
-// ---------------------------------------------------------------------------
 // Discriminated union of all reference types
 // ---------------------------------------------------------------------------
 export const IEEEReferenceSchema = Type.Union([
@@ -1084,7 +1089,6 @@ export const IEEEReferenceSchema = Type.Union([
     GovernmentPublicationReferenceSchema,
     DatasheetReferenceSchema,
     ProductManualReferenceSchema,
-    UnparsedURLReferenceSchema,
 ])
 export type TIEEEReference = Static<typeof IEEEReferenceSchema>
 
@@ -1125,5 +1129,4 @@ export const IEEEReferenceSchemaMap = {
     GovernmentPublication: GovernmentPublicationReferenceSchema,
     Datasheet: DatasheetReferenceSchema,
     ProductManual: ProductManualReferenceSchema,
-    UnparsedURL: UnparsedURLReferenceSchema,
 } as const satisfies Record<TReferenceType, TSchema>

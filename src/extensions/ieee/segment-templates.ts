@@ -1685,31 +1685,3 @@ export const PRODUCT_MANUAL_TEMPLATE: TSegmentInstruction[] = [
     },
     { type: "separator", text: "." },
 ]
-
-// UnparsedURL: [text(quoted,title), ". "], "[Online]. Available: ", url(link)
-export const UNPARSED_URL_TEMPLATE: TSegmentInstruction[] = [
-    {
-        type: "conditional",
-        field: "text",
-        then: [
-            {
-                type: "segment",
-                source: { kind: "string", field: "text" },
-                role: "title",
-                style: "quoted",
-            },
-            { type: "separator", text: ". " },
-        ],
-    },
-    {
-        type: "segment",
-        source: { kind: "literal", text: "[Online]. Available: " },
-        role: "prefix",
-    },
-    {
-        type: "segment",
-        source: { kind: "string", field: "url" },
-        role: "url",
-        style: "link",
-    },
-]

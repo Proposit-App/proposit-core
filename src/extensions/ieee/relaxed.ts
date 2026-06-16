@@ -38,7 +38,6 @@ import {
     GovernmentPublicationReferenceSchema,
     DatasheetReferenceSchema,
     ProductManualReferenceSchema,
-    UnparsedURLReferenceSchema,
     type TReferenceType,
 } from "./references.js"
 
@@ -307,13 +306,6 @@ export type TRelaxedProductManualReference = Static<
     typeof RelaxedProductManualReferenceSchema
 >
 
-export const RelaxedUnparsedURLReferenceSchema = stripConstraints(
-    UnparsedURLReferenceSchema
-)
-export type TRelaxedUnparsedURLReference = Static<
-    typeof RelaxedUnparsedURLReferenceSchema
->
-
 // ---------------------------------------------------------------------------
 // Relaxed discriminated union
 // ---------------------------------------------------------------------------
@@ -352,7 +344,6 @@ export const IEEEReferenceSchemaRelaxed = Type.Union([
     RelaxedGovernmentPublicationReferenceSchema,
     RelaxedDatasheetReferenceSchema,
     RelaxedProductManualReferenceSchema,
-    RelaxedUnparsedURLReferenceSchema,
 ])
 export type TRelaxedIEEEReference = Static<typeof IEEEReferenceSchemaRelaxed>
 
@@ -394,5 +385,4 @@ export const IEEEReferenceSchemaMapRelaxed = {
     GovernmentPublication: RelaxedGovernmentPublicationReferenceSchema,
     Datasheet: RelaxedDatasheetReferenceSchema,
     ProductManual: RelaxedProductManualReferenceSchema,
-    UnparsedURL: RelaxedUnparsedURLReferenceSchema,
 } as const satisfies Record<TReferenceType, TSchema>
