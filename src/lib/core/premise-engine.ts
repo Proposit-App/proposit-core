@@ -391,7 +391,7 @@ export class PremiseEngine<
         parentId: string | null,
         expression: TExpressionWithoutPosition<TExpr>
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        return this.withValidation(() => {
+        return this.withExpressionMutation(() => {
             this.assertBelongsToArgument(
                 expression.argumentId,
                 expression.argumentVersion
@@ -412,25 +412,9 @@ export class PremiseEngine<
                 }
             }
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                this.expressions.appendExpression(parentId, expression)
-
-                if (expression.type === "variable") {
-                    this.expressionsByVariableId
-                        .get(expression.variableId)
-                        .add(expression.id)
-                }
-
-                const changes = this.finalizeExpressionMutation(collector)
-                return {
-                    result: this.expressions.getExpression(expression.id)!,
-                    changes,
-                }
-            } finally {
-                this.expressions.setCollector(null)
-            }
+            this.expressions.appendExpression(parentId, expression)
+            this.indexVariableExpression(expression)
+            return this.expressions.getExpression(expression.id)!
         })
     }
 
@@ -439,7 +423,7 @@ export class PremiseEngine<
         relativePosition: "before" | "after",
         expression: TExpressionWithoutPosition<TExpr>
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        return this.withValidation(() => {
+        return this.withExpressionMutation(() => {
             this.assertBelongsToArgument(
                 expression.argumentId,
                 expression.argumentVersion
@@ -452,29 +436,13 @@ export class PremiseEngine<
                 )
             }
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                this.expressions.addExpressionRelative(
-                    siblingId,
-                    relativePosition,
-                    expression
-                )
-
-                if (expression.type === "variable") {
-                    this.expressionsByVariableId
-                        .get(expression.variableId)
-                        .add(expression.id)
-                }
-
-                const changes = this.finalizeExpressionMutation(collector)
-                return {
-                    result: this.expressions.getExpression(expression.id)!,
-                    changes,
-                }
-            } finally {
-                this.expressions.setCollector(null)
-            }
+            this.expressions.addExpressionRelative(
+                siblingId,
+                relativePosition,
+                expression
+            )
+            this.indexVariableExpression(expression)
+            return this.expressions.getExpression(expression.id)!
         })
     }
 
@@ -602,36 +570,20 @@ export class PremiseEngine<
         leftNodeId?: string,
         rightNodeId?: string
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        return this.withValidation(() => {
+        return this.withExpressionMutation(() => {
             this.assertBelongsToArgument(
                 expression.argumentId,
                 expression.argumentVersion
             )
             this.assertVariableExpressionValid(expression)
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                this.expressions.insertExpression(
-                    expression,
-                    leftNodeId,
-                    rightNodeId
-                )
-
-                if (expression.type === "variable") {
-                    this.expressionsByVariableId
-                        .get(expression.variableId)
-                        .add(expression.id)
-                }
-
-                const changes = this.finalizeExpressionMutation(collector)
-                return {
-                    result: this.expressions.getExpression(expression.id)!,
-                    changes,
-                }
-            } finally {
-                this.expressions.setCollector(null)
-            }
+            this.expressions.insertExpression(
+                expression,
+                leftNodeId,
+                rightNodeId
+            )
+            this.indexVariableExpression(expression)
+            return this.expressions.getExpression(expression.id)!
         })
     }
 
@@ -641,7 +593,7 @@ export class PremiseEngine<
         leftNodeId?: string,
         rightNodeId?: string
     ): TCoreMutationResult<TExpr, TExpr, TVar, TPremise, TArg> {
-        return this.withValidation(() => {
+        return this.withExpressionMutation(() => {
             this.assertBelongsToArgument(
                 operator.argumentId,
                 operator.argumentVersion
@@ -652,30 +604,14 @@ export class PremiseEngine<
             )
             this.assertVariableExpressionValid(newSibling)
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            this.expressions.setCollector(collector)
-            try {
-                this.expressions.wrapExpression(
-                    operator,
-                    newSibling,
-                    leftNodeId,
-                    rightNodeId
-                )
-
-                if (newSibling.type === "variable") {
-                    this.expressionsByVariableId
-                        .get(newSibling.variableId)
-                        .add(newSibling.id)
-                }
-
-                const changes = this.finalizeExpressionMutation(collector)
-                return {
-                    result: this.expressions.getExpression(operator.id)!,
-                    changes,
-                }
-            } finally {
-                this.expressions.setCollector(null)
-            }
+            this.expressions.wrapExpression(
+                operator,
+                newSibling,
+                leftNodeId,
+                rightNodeId
+            )
+            this.indexVariableExpression(newSibling)
+            return this.expressions.getExpression(operator.id)!
         })
     }
 
