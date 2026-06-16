@@ -28,6 +28,11 @@
             "import": "./dist/extensions/citations/ieee/index.js",
             "default": "./dist/extensions/citations/ieee/index.js"
         },
+        "./extensions/citations/unparsed": {
+            "types": "./dist/extensions/citations/unparsed/index.d.ts",
+            "import": "./dist/extensions/citations/unparsed/index.js",
+            "default": "./dist/extensions/citations/unparsed/index.js"
+        },
         "./extensions/basics": {
             "types": "./dist/extensions/basics/index.d.ts",
             "import": "./dist/extensions/basics/index.js",
