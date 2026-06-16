@@ -55,23 +55,50 @@ export type TReferenceType = Static<typeof ReferenceTypeSchema>
 // type-guess family). Constrained to the schema's literal set; the
 // exhaustiveness guard below fails to compile if the two ever drift apart.
 export const IEEE_REFERENCE_TYPES = [
-    "Book", "Website", "BookChapter", "Handbook", "TechnicalReport",
-    "Standard", "Thesis", "Patent", "Dictionary", "Encyclopedia",
-    "JournalArticle", "MagazineArticle", "NewspaperArticle",
-    "ConferencePaper", "ConferenceProceedings", "Dataset", "Software",
-    "OnlineDocument", "Blog", "SocialMedia", "Preprint", "Video",
-    "Podcast", "Course", "Presentation", "Interview",
-    "PersonalCommunication", "Email", "Law", "CourtCase",
-    "GovernmentPublication", "Datasheet", "ProductManual",
+    "Book",
+    "Website",
+    "BookChapter",
+    "Handbook",
+    "TechnicalReport",
+    "Standard",
+    "Thesis",
+    "Patent",
+    "Dictionary",
+    "Encyclopedia",
+    "JournalArticle",
+    "MagazineArticle",
+    "NewspaperArticle",
+    "ConferencePaper",
+    "ConferenceProceedings",
+    "Dataset",
+    "Software",
+    "OnlineDocument",
+    "Blog",
+    "SocialMedia",
+    "Preprint",
+    "Video",
+    "Podcast",
+    "Course",
+    "Presentation",
+    "Interview",
+    "PersonalCommunication",
+    "Email",
+    "Law",
+    "CourtCase",
+    "GovernmentPublication",
+    "Datasheet",
+    "ProductManual",
 ] as const satisfies readonly TReferenceType[]
 
 // Compile-time guard: every TReferenceType literal must appear in the array
-// above (and vice-versa, via the `satisfies` constraint), keeping the schema
-// and the enumerable array in lockstep.
-type _AllReferenceTypesEnumerated =
+// above (the `satisfies` constraint already forbids extras, so together they
+// keep the schema and the enumerable array in lockstep). Resolves to `true`
+// when the array is exhaustive and `never` — a compile error on assignment —
+// if a type is missing.
+type TReferenceTypesAreExhaustive =
     TReferenceType extends (typeof IEEE_REFERENCE_TYPES)[number] ? true : never
-const _allReferenceTypesEnumerated: _AllReferenceTypesEnumerated = true
-void _allReferenceTypesEnumerated
+const referenceTypesAreExhaustive: TReferenceTypesAreExhaustive = true
+void referenceTypesAreExhaustive
 
 // ---------------------------------------------------------------------------
 // Base reference (shared by all types)

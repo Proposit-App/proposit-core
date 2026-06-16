@@ -33,9 +33,15 @@ describe("UnparsedCitationSchema", () => {
     })
 
     it("rejects a citationTypeGuess that is not an IEEE type or 'unknown'", () => {
-        expect(Value.Check(UnparsedCitationTypeGuessSchema, "CourtCase")).toBe(true)
-        expect(Value.Check(UnparsedCitationTypeGuessSchema, "unknown")).toBe(true)
-        expect(Value.Check(UnparsedCitationTypeGuessSchema, "UnparsedURL")).toBe(false)
+        expect(Value.Check(UnparsedCitationTypeGuessSchema, "CourtCase")).toBe(
+            true
+        )
+        expect(Value.Check(UnparsedCitationTypeGuessSchema, "unknown")).toBe(
+            true
+        )
+        expect(
+            Value.Check(UnparsedCitationTypeGuessSchema, "UnparsedURL")
+        ).toBe(false)
     })
 
     it("discriminates cleanly against IEEE in a IEEE|Unparsed union (on .type)", () => {
@@ -47,7 +53,11 @@ describe("UnparsedCitationSchema", () => {
             authors: [{ givenNames: "John Stuart", familyName: "Mill" }],
             publisher: "Parker",
         }
-        const unparsed = { type: "unparsed", text: "x", citationTypeGuess: "Book" }
+        const unparsed = {
+            type: "unparsed",
+            text: "x",
+            citationTypeGuess: "Book",
+        }
         expect(Value.Check(union, ieeeBook)).toBe(true)
         expect(Value.Check(union, unparsed)).toBe(true)
         // an unparsed shape must NOT validate as an IEEE reference and vice-versa
