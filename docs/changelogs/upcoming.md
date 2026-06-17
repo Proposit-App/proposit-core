@@ -11,6 +11,10 @@ Commit range: `v2.0.0..HEAD`.
 - **`createScribePipeline`** — a fast, two-LLM-call ingestion pipeline (`extract` → `structure`) that feeds scholar's four deterministic stages + `finalizeResponseV2` to emit the identical `TParsedArgumentResponse`. Each combined LLM stage is paired with deterministic adapter stages that republish its output under the canonicalization / classification (from `extract`) and relation-extraction / conclusion-selection (from `structure`) slots the shared backend reads. Cheap-model default `gpt-5.4-mini`, per-stage overridable via `llm`. New `STAGE_IDS.extract` / `STAGE_IDS.scribeStructure` entries.
 - Newly-public helpers (previously private), now exported from `./pipelines/base`: `buildResponseSchema(extension)` and `buildClaimRecordSchema(claimSchema)` (the per-extension canonicalization schema builders) and `selectFallbackConclusion(classifications, relations)` (the deterministic relation-graph conclusion pick). These let an alternate pipeline emit the same canonicalization shape and reproduce the same conclusion resolution.
 
+## Notes
+
+- `scribe` makes the existing public `isLlmStage(stage)` predicate (framework API since v1.11.1) load-bearing for out-of-process stage routing: scribe reuses scholar's stage ids (`claim-canonicalization`, `claim-type-classification`, `relation-extraction`, `conclusion-selection`) as **deterministic adapter** stages, so a router keying on a flat stage-id set would misroute them. `isLlmStage` keys on the resolved stage's LLM-config carrier and classifies them correctly (adapters → `false`, scribe's two cheap LLM stages → `true`); this contract is pinned by `test/extensions/pipelines/reuse-invariant.test.ts`. No API change — surfaced here because it is now a cross-repo routing dependency.
+
 ## Changed
 
 - **BREAKING:** relocated `src/extensions/argument-ingestion/` → `src/extensions/pipelines/` (`base/` = the shared contract + helpers + the 12 stages, as a cross-family sibling of `ingestion/{scholar,scribe}/`). A pure move — no prompt, `STAGE_IDS`-value, or schema change; the existing scholar golden corpus passes unchanged.
