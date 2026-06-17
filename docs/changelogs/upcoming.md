@@ -1,6 +1,6 @@
-# v3.0.0 changelog
+# v2.1.0 changelog
 
-> **BREAKING:** the argument-ingestion extension was relocated to `src/extensions/pipelines/` and now ships on two new package subpaths (`./pipelines/base`, `./pipelines/ingestion`) instead of the package root; the multi-stage factory was renamed `createScholarPipeline`; the single-shot pipeline + `finalizeResponse` were removed; and the pipeline-id wire strings changed.
+> **⚠️ BREAKING (shipped as a minor):** despite the minor version bump, this release breaks the ingestion public API. The argument-ingestion extension was relocated to `src/extensions/pipelines/` and now ships on two new package subpaths (`./pipelines/base`, `./pipelines/ingestion`) instead of the package root; the multi-stage factory was renamed `createScholarPipeline`; the single-shot pipeline + `finalizeResponse` were removed; and the pipeline-id wire strings changed. Consumers must update imports — see the release notes "Upgrading" section.
 
 Commit range: `v2.0.0..HEAD`.
 

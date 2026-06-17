@@ -1,6 +1,8 @@
-# v3.0.0 release notes
+# v2.1.0 release notes
 
-> **BREAKING:** the ingestion pipeline factories moved to two new import paths and were renamed, the old single-shot pipeline was removed, and the persisted pipeline identifiers changed. See "Upgrading" below.
+> ## ⚠️ Breaking changes (shipped as a minor)
+>
+> **This release contains breaking changes even though the version is a minor bump.** Update your imports before upgrading — the ingestion pipeline factories were renamed, moved off the package root onto new `./pipelines/*` subpaths, the old single-shot pipeline + its `finalizeResponse` helper were removed, and the persisted pipeline identifiers changed. See "Upgrading" below for the exact replacements.
 
 ## Ingestion
 
