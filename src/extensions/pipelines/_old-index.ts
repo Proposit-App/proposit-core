@@ -10,8 +10,8 @@ export {
     V1_PARSE_STAGE_ID,
 } from "./ingestion/_v1-single-shot.js"
 export type { TCreateIngestionV1PipelineOptions } from "./ingestion/_v1-single-shot.js"
-export { createIngestionV2Pipeline } from "./ingestion/scholar/scholar.js"
-export type { TCreateIngestionV2PipelineOptions } from "./ingestion/scholar/scholar.js"
+export { createScholarPipeline as createIngestionV2Pipeline } from "./ingestion/scholar/scholar.js"
+export type { TCreateScholarPipelineOptions as TCreateIngestionV2PipelineOptions } from "./ingestion/scholar/scholar.js"
 export { resolveLlmStageOptions } from "./base/resolve-llm-stage-options.js"
 export { basicsExtension } from "./base/basics-extension.js"
 export type {

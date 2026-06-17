@@ -330,4 +330,12 @@ export const STAGE_IDS = {
     conclusionSelection: "conclusion-selection",
     formulaCompilation: "formula-compilation",
     formulaValidation: "formula-validation",
+    // The two cheap LLM stages of the fast ingestion pipeline. Each
+    // makes one combined call; deterministic adapter stages then
+    // republish its parts under the canonicalization / classification
+    // (from `extract`) and relation / conclusion (from `scribeStructure`)
+    // slots above, so the deterministic backend + finalize are shared
+    // unchanged.
+    extract: "extract",
+    scribeStructure: "scribe-structure",
 } as const

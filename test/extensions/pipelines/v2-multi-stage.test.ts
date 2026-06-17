@@ -1,4 +1,4 @@
-// Unit tests for `createIngestionV2Pipeline`.
+// Unit tests for `createScholarPipeline`.
 //
 // Covers:
 //   - The factory constructs a pipeline whose DAG validates at
@@ -20,11 +20,9 @@
 import { describe, expect, it } from "vitest"
 import { Value } from "typebox/value"
 import type { TSchema } from "typebox"
-import {
-    basicsExtension,
-    createIngestionV2Pipeline,
-    executePipeline,
-} from "../../../src/lib/index.js"
+import { executePipeline } from "../../../src/lib/index.js"
+import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
+import { basicsExtension } from "../../../src/extensions/pipelines/base/basics-extension.js"
 import {
     STAGE_IDS,
     SegmentationOutputSchema,
@@ -50,9 +48,9 @@ import {
 import { createMockLlmProvider } from "../../mocks/llm.js"
 import type { TParsedArgumentResponse } from "../../../src/lib/parsing/index.js"
 
-describe("createIngestionV2Pipeline — shape", () => {
+describe("createScholarPipeline — shape", () => {
     it("constructs a pipeline with 12 stages + the spec-aligned ids", () => {
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         expect(pipeline.stages).toHaveLength(12)
         const ids = pipeline.stages.map((s) => s.id).sort()
         expect(ids).toEqual(
@@ -74,7 +72,7 @@ describe("createIngestionV2Pipeline — shape", () => {
     })
 
     it("declares the spec-aligned finalize.dependsOn (3 required + 5 optional)", () => {
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         const required = pipeline.finalize.dependsOn
             .filter((d) => typeof d === "string")
             .map((d) => d)
@@ -107,7 +105,7 @@ describe("createIngestionV2Pipeline — shape", () => {
         // check — if any stage's deps don't resolve, the executor
         // throws *before* any stage runs). Pre-empt the LLM-call
         // failures by feeding a happy queue to every stage.
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         const llm = createMockLlmProvider({
             responses: {},
             keyByCallOrder: false,
@@ -255,12 +253,12 @@ function buildHappyMockResponses(): Record<
     }
 }
 
-describe("createIngestionV2Pipeline — happy path", () => {
+describe("createScholarPipeline — happy path", () => {
     it("produces a coherent argument from a happy-path mock chain", async () => {
         const llm = createMockLlmProvider({
             responses: buildHappyMockResponses(),
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         const result = await executePipeline(
             pipeline,
             {
@@ -312,7 +310,7 @@ describe("createIngestionV2Pipeline — happy path", () => {
     })
 })
 
-describe("createIngestionV2Pipeline — failure paths", () => {
+describe("createScholarPipeline — failure paths", () => {
     it("emits `argument: null` + 'No single conclusion could be selected.' when no claim is supported by a relation", async () => {
         const responses = buildHappyMockResponses()
         // No support relations → nothing is terminal → the conclusion
@@ -334,7 +332,7 @@ describe("createIngestionV2Pipeline — failure paths", () => {
             },
         ]
         const llm = createMockLlmProvider({ responses })
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         const result = await executePipeline(
             pipeline,
             { text: "A. B. C." },
@@ -376,7 +374,7 @@ describe("createIngestionV2Pipeline — failure paths", () => {
             },
         ]
         const llm = createMockLlmProvider({ responses })
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         const result = await executePipeline(
             pipeline,
             { text: "Empty." },
@@ -561,9 +559,18 @@ describe("v2 stage + finalize outputs are JSON round-trippable", () => {
         },
     ]
 
-    it("covers all 12 v2 stages", () => {
+    it("covers all 12 scholar stages", () => {
         const covered = stageOutputFixtures.map((f) => f.stageId).sort()
-        expect(covered).toEqual(Object.values(STAGE_IDS).sort())
+        // `STAGE_IDS` also carries the two scribe-only stage ids
+        // (`extract`, `scribe-structure`); those have no scholar-stage
+        // output fixture, so exclude them from the coverage check.
+        const scholarStageIds = Object.values(STAGE_IDS)
+            .filter(
+                (id) =>
+                    id !== STAGE_IDS.extract && id !== STAGE_IDS.scribeStructure
+            )
+            .sort()
+        expect(covered).toEqual(scholarStageIds)
     })
 
     for (const fixture of stageOutputFixtures) {
@@ -582,7 +589,7 @@ describe("v2 stage + finalize outputs are JSON round-trippable", () => {
         const llm = createMockLlmProvider({
             responses: buildHappyMockResponses(),
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         const result = await executePipeline(
             pipeline,
             {

@@ -1,12 +1,13 @@
-// v2 multi-stage ingestion pipeline.
+// scholar — the thorough, multi-stage ingestion pipeline.
 //
-// Composes the 12 stages defined under `./stages/` into a single
+// Composes the 12 stages defined under `../../base/stages/` into a single
 // `TPipeline<TIngestionInput, TParsedArgumentResponse>` whose `finalize`
-// assembles the same response shape v1 emits. Same output shape +
-// extension parameterization as `createIngestionV1Pipeline` — consumers
-// can swap the two factories without changing downstream parsing.
+// assembles the parsed-argument response shape downstream parsing
+// consumes. The sibling `scribe` pipeline emits the same output shape
+// from a cheaper two-call front end, so consumers can swap the two
+// factories without changing downstream parsing.
 //
-// DAG (spec §7.2):
+// DAG:
 //
 //   segmentation
 //     ├── claim-mention-extraction ─→ claim-canonicalization ─┐
@@ -64,15 +65,20 @@ import type {
     TIngestionLlmOptions,
 } from "../../base/types.js"
 
-const PIPELINE_ID = "argument-ingestion-v2"
+const PIPELINE_ID = "argument-ingestion-scholar"
 const PIPELINE_VERSION = "1.0.0"
 
-const INGESTION_INPUT_SCHEMA = Type.Object({
+/**
+ * Input schema shared by every ingestion pipeline: a single non-empty
+ * raw argument text. Exported so sibling pipelines (e.g. the fast
+ * `scribe` pipeline) advertise the identical input contract.
+ */
+export const INGESTION_INPUT_SCHEMA = Type.Object({
     text: Type.String({ minLength: 1 }),
 })
 
 /**
- * Options for `createIngestionV2Pipeline`.
+ * Options for `createScholarPipeline`.
  *
  * `llm.defaults` applies to every LLM stage that doesn't have a
  * per-stage entry under `llm.overrides`; per-stage entries are keyed
@@ -81,7 +87,7 @@ const INGESTION_INPUT_SCHEMA = Type.Object({
  *
  * @example
  * ```ts
- * createIngestionV2Pipeline(basicsExtension, {
+ * createScholarPipeline(basicsExtension, {
  *     llm: {
  *         defaults: { maxOutputTokens: 16_384 },
  *         overrides: {
@@ -91,23 +97,24 @@ const INGESTION_INPUT_SCHEMA = Type.Object({
  * })
  * ```
  */
-export type TCreateIngestionV2PipelineOptions = {
+export type TCreateScholarPipelineOptions = {
     llm?: TIngestionLlmOptions
 }
 
 /**
- * Build the v2 multi-stage ingestion pipeline for the supplied
- * extension. Returns a `TPipeline` whose stages match the 12-stage
- * DAG defined in spec §7.2 and whose `finalize` assembles the same
- * `TParsedArgumentResponse` shape `ArgumentParser.build()` consumes.
+ * Build the scholar (thorough) ingestion pipeline for the supplied
+ * extension. Returns a `TPipeline` whose 12-stage DAG segments,
+ * extracts, canonicalizes, classifies, relates, and compiles the raw
+ * text, and whose `finalize` assembles the `TParsedArgumentResponse`
+ * shape `ArgumentParser.build()` consumes.
  *
  * The factory is pure: it constructs stage values + a pipeline
  * descriptor and returns immediately. Stage execution happens inside
  * `executePipeline`.
  */
-export function createIngestionV2Pipeline(
+export function createScholarPipeline(
     extension: TIngestionExtension,
-    options?: TCreateIngestionV2PipelineOptions
+    options?: TCreateScholarPipelineOptions
 ): TPipeline<TIngestionInput, TParsedArgumentResponse> {
     const llm = options?.llm
     const segmentationStage = createSegmentationStage(

@@ -35,11 +35,11 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import {
-    basicsExtension,
-    createIngestionV2Pipeline,
     createOpenAiResponsesProvider,
     executePipeline,
 } from "../../../src/lib/index.js"
+import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
+import { basicsExtension } from "../../../src/extensions/pipelines/base/basics-extension.js"
 import {
     createRecordingLlmProvider,
     recordingMode,
@@ -177,7 +177,7 @@ function inheritParityFromV1(
 
 const mode = recordingMode()
 
-describe("v2 ingestion pipeline — fixture parity labels", () => {
+describe("scholar ingestion pipeline — fixture parity labels", () => {
     const VALID_PARITY = new Set(["strict", "v2-strict-upgrade", "v2-only"])
     for (const name of FIXTURE_NAMES) {
         const fixtureDir = path.join(FIXTURES_ROOT, name)
@@ -195,7 +195,7 @@ describe("v2 ingestion pipeline — fixture parity labels", () => {
     }
 })
 
-describe(`v2 ingestion pipeline — golden corpus (${mode} mode)`, () => {
+describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
     for (const name of FIXTURE_NAMES) {
         const fixtureDir = path.join(FIXTURES_ROOT, name)
         const recordedPath = path.join(fixtureDir, V2_RECORDED_FILE)
@@ -217,7 +217,7 @@ describe(`v2 ingestion pipeline — golden corpus (${mode} mode)`, () => {
             { timeout: 300_000 },
             async () => {
                 const provider = buildProviderForMode(fixtureDir)
-                const pipeline = createIngestionV2Pipeline(basicsExtension)
+                const pipeline = createScholarPipeline(basicsExtension)
                 const input = { text: readInput(fixtureDir) }
                 const result = await executePipeline(pipeline, input, {
                     llm: provider,
