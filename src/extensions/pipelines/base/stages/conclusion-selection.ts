@@ -102,8 +102,14 @@ export const CONCLUSION_SELECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
  * by document order (earliest appearance in the claim-type list) so the
  * pick is stable across runs. Returns null when no candidate exists —
  * there is no argument to draw a conclusion from.
+ *
+ * Exported so a cheaper ingestion pipeline that produces conclusion
+ * candidates in one combined LLM call can reuse the identical
+ * resolution when adapting its output into the conclusion-selection
+ * slot — keeping the resolved `conclusionMiniId` contract uniform
+ * across pipelines.
  */
-function selectFallbackConclusion(
+export function selectFallbackConclusion(
     classifications: readonly TClaimTypeClassificationEntry[],
     relations: readonly TRelation[]
 ): string | null {

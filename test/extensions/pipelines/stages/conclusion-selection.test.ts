@@ -21,6 +21,7 @@ import {
 import {
     CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
     conclusionSelectionStage,
+    selectFallbackConclusion,
 } from "../../../../src/extensions/pipelines/base/stages/conclusion-selection.js"
 import { claimTypeClassificationStage } from "../../../../src/extensions/pipelines/base/stages/claim-type-classification.js"
 import { relationExtractionStage } from "../../../../src/extensions/pipelines/base/stages/relation-extraction.js"
@@ -357,5 +358,36 @@ describe("conclusionSelectionStage — no conclusion at all", () => {
             | { message: string }
             | undefined
         expect(failure?.message).toBe("No single conclusion could be selected.")
+    })
+})
+
+describe("selectFallbackConclusion (exported helper)", () => {
+    it("picks the pure-sink normal claim with the highest in-degree", () => {
+        const classifications = [
+            { miniId: "c1", type: "normal" as const, sourceString: null },
+            { miniId: "c2", type: "normal" as const, sourceString: null },
+            { miniId: "c3", type: "normal" as const, sourceString: null },
+        ]
+        const relations = [
+            {
+                relationId: "r1",
+                type: "support" as const,
+                sources: ["c1"],
+                target: "c3",
+                evidence: { segmentIds: [], quote: "" },
+            },
+            {
+                relationId: "r2",
+                type: "support" as const,
+                sources: ["c2"],
+                target: "c3",
+                evidence: { segmentIds: [], quote: "" },
+            },
+        ]
+        expect(selectFallbackConclusion(classifications, relations)).toBe("c3")
+    })
+
+    it("returns null when there are no relations", () => {
+        expect(selectFallbackConclusion([], [])).toBeNull()
     })
 })

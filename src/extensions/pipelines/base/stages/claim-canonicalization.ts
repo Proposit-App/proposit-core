@@ -76,7 +76,15 @@ When a mention is the antecedent of "according to X, P", split it into two claim
 
 Output ONLY the schema-shaped object. No prose.`
 
-function buildResponseSchema(extension: TIngestionExtension): TSchema {
+/**
+ * Build the per-extension canonicalization output schema: an object of
+ * `canonicalClaims` (each carrying the canonicalizer fields merged with
+ * the extension's claim fields) + `mentionToClaim`. Exported so a
+ * cheaper pipeline whose single combined LLM call emits canonical
+ * claims can request the identical extension-shaped output, keeping the
+ * canonicalization slot's schema uniform across pipelines.
+ */
+export function buildResponseSchema(extension: TIngestionExtension): TSchema {
     return Type.Object(
         {
             canonicalClaims: Type.Array(
@@ -92,7 +100,13 @@ function buildResponseSchema(extension: TIngestionExtension): TSchema {
     )
 }
 
-function buildClaimRecordSchema(claimSchema: TSchema): TSchema {
+/**
+ * Inject the canonicalizer-owned fields (miniId / mentionIds /
+ * suggestedSymbol) into the extension's claim shape (a `Type.Object` or
+ * a `Type.Union` of objects). Exported alongside `buildResponseSchema`
+ * for reuse by alternate ingestion pipelines.
+ */
+export function buildClaimRecordSchema(claimSchema: TSchema): TSchema {
     // claimSchema is the extension's claim shape — often a
     // discriminated union over `type`. We need to inject the
     // canonicalizer-owned fields (miniId / mentionIds / suggestedSymbol)
