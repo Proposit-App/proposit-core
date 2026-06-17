@@ -235,7 +235,7 @@ Both libraries implement a generic `TClaimConnectionLibraryManagement` interface
 
 Connections are immutable (create or delete, no update). Each connection pins both endpoints to specific claim versions. They live on `PropositCore` as `core.citations` and `core.axioms`.
 
-The `@proposit/proposit-core/extensions/ieee` subpath export provides `IEEECitationClaimSchema` — an extended citation-claim type with IEEE reference schemas covering 33 reference types.
+The `@proposit/proposit-core/extensions/citations/ieee` subpath export provides `IEEECitationClaimSchema` — an extended citation-claim type with IEEE reference schemas covering 33 reference types. The `@proposit/proposit-core/extensions/citations/unparsed` subpath export provides `UnparsedCitationSchema` — an extracted-but-not-yet-structured citation (`text` + a guessed reference type + optional `url`).
 
 ### Evaluation semantics by claim type
 

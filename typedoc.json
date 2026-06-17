@@ -1,7 +1,8 @@
 {
     "entryPoints": [
         "src/lib/index.ts",
-        "src/extensions/ieee/index.ts",
+        "src/extensions/citations/ieee/index.ts",
+        "src/extensions/citations/unparsed/index.ts",
         "src/extensions/basics/index.ts"
     ],
     "out": "docs/api",

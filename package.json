@@ -1,6 +1,6 @@
 {
     "name": "@proposit/proposit-core",
-    "version": "1.11.3",
+    "version": "2.0.0",
     "description": "Core engine for building and manipulating propositional logic arguments.",
     "license": "MIT",
     "keywords": [
@@ -23,10 +23,15 @@
             "import": "./dist/index.js",
             "default": "./dist/index.js"
         },
-        "./extensions/ieee": {
-            "types": "./dist/extensions/ieee/index.d.ts",
-            "import": "./dist/extensions/ieee/index.js",
-            "default": "./dist/extensions/ieee/index.js"
+        "./extensions/citations/ieee": {
+            "types": "./dist/extensions/citations/ieee/index.d.ts",
+            "import": "./dist/extensions/citations/ieee/index.js",
+            "default": "./dist/extensions/citations/ieee/index.js"
+        },
+        "./extensions/citations/unparsed": {
+            "types": "./dist/extensions/citations/unparsed/index.d.ts",
+            "import": "./dist/extensions/citations/unparsed/index.js",
+            "default": "./dist/extensions/citations/unparsed/index.js"
         },
         "./extensions/basics": {
             "types": "./dist/extensions/basics/index.d.ts",

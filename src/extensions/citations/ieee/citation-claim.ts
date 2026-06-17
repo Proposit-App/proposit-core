@@ -1,6 +1,6 @@
 import Type, { type Static } from "typebox"
-import { CoreClaimSchema } from "../../lib/schemata/index.js"
-import { Nullable } from "../../lib/schemata/shared.js"
+import { CoreClaimSchema } from "../../../lib/schemata/index.js"
+import { Nullable } from "../../../lib/schemata/shared.js"
 import { IEEEReferenceSchema } from "./references.js"
 
 export const IEEECitationClaimSchema = Type.Intersect([
