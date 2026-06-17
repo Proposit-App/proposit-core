@@ -327,14 +327,31 @@ export function finalizeResponseV2(
     })
 
     const claims: TClaimFinalForm[] = canon.canonicalClaims.map((c) => {
-        const refinedType = typeByMiniId.get(c.miniId)?.type ?? c.type
+        const role = roles[c.miniId]
+        const classifiedType = typeByMiniId.get(c.miniId)?.type ?? c.type
+        // A `citation` claim's only display text is its `url`. When such a
+        // claim also participates in the logic as a variable — a relation
+        // source/target ("premise") or the conclusion — a missing url leaves
+        // the proposition blank in every renderer (an empty antecedent /
+        // empty source). Demote *url-less* citation logical-nodes back to
+        // `normal` so the claim's authored title/body survive as its
+        // proposition text. A citation that carries a real url renders fine
+        // as an antecedent, so it is left intact; so are `axiomatic` logical
+        // nodes (they render from their axiom kind and are valid premises).
+        const isLogicalNode = role === "premise" || role === "conclusion"
+        const url = (c as Record<string, unknown>).url
+        const hasUrl = typeof url === "string" && url.trim().length > 0
+        const refinedType =
+            isLogicalNode && classifiedType === "citation" && !hasUrl
+                ? "normal"
+                : classifiedType
         const stripped = stripCanonicalizerOnlyFields(
             c as unknown as Record<string, unknown>
         )
         return {
             ...stripped,
             type: refinedType,
-            role: roles[c.miniId],
+            role,
         } as unknown as TClaimFinalForm
     })
 

@@ -263,3 +263,157 @@ describe("finalizeResponseV2 — natural-language premise titles", () => {
         )
     })
 })
+
+// Regression: a claim the type-classifier marked `citation` while it is
+// also a relation source/target (i.e. a propositional antecedent or
+// consequent). A `citation` claim carries no title/body — its only
+// display text is its `url` — so using one as a logical variable yields
+// an empty proposition in every renderer. Finalize must demote such a
+// claim back to `normal` so its authored title survives.
+//
+//   c1  "Pooley case reports imprisonment"  → citation (mis-typed), source of r1
+//   c2  "Footnotes support the argument"     → normal, conclusion
+//   r1  support  c1 → c2
+function buildCitationAntecedentOutputs(): Record<string, unknown> {
+    const canonicalization: TClaimCanonicalizationOutput = {
+        canonicalClaims: [
+            {
+                miniId: "c1",
+                mentionIds: ["m1"],
+                suggestedSymbol: "Pooley",
+                type: "citation",
+                ...({
+                    title: "Pooley case reports imprisonment",
+                    body: "",
+                    url: "",
+                } as Record<string, unknown>),
+            },
+            {
+                miniId: "c2",
+                mentionIds: ["m2"],
+                suggestedSymbol: "Footnotes",
+                type: "normal",
+                ...({
+                    title: "Footnotes support the argument",
+                    body: "The footnotes reinforce the case.",
+                } as Record<string, unknown>),
+            },
+        ],
+        mentionToClaim: [
+            { mentionId: "m1", claimMiniId: "c1" },
+            { mentionId: "m2", claimMiniId: "c2" },
+        ],
+    }
+
+    const typeMap: TClaimTypeClassificationOutput = {
+        classifications: [
+            { miniId: "c1", type: "citation", sourceString: "Pooley case" },
+            { miniId: "c2", type: "normal", sourceString: null },
+        ],
+    }
+
+    const variables: TVariableAssignmentOutput = [
+        { miniId: "v1", symbol: "Pooley", claimMiniId: "c1" },
+        { miniId: "v2", symbol: "Footnotes", claimMiniId: "c2" },
+    ]
+
+    const relations: TRelationExtractionOutput = {
+        relations: [
+            {
+                relationId: "r1",
+                type: "support",
+                sources: ["c1"],
+                target: "c2",
+                evidence: { segmentIds: ["s1"], quote: "the footnotes" },
+            },
+        ],
+    }
+
+    const selection: TConclusionSelectionOutput = {
+        conclusionMiniId: "c2",
+        conclusionCandidates: ["c2"],
+        rationale: "c2 is the terminal of the support graph.",
+    }
+
+    const compilation: TFormulaCompilationOutput = {
+        premises: [
+            {
+                premiseMiniId: "p1",
+                formula: "Pooley implies Footnotes",
+                roleHint: "support",
+                sourceRelationId: "r1",
+            },
+            {
+                premiseMiniId: "p2",
+                formula: "Footnotes",
+                roleHint: "conclusion",
+                sourceRelationId: null,
+            },
+        ],
+        conclusionPremiseMiniId: "p2",
+    }
+
+    return {
+        [STAGE_IDS.claimCanonicalization]: canonicalization,
+        [STAGE_IDS.claimTypeClassification]: typeMap,
+        [STAGE_IDS.variableAssignment]: variables,
+        [STAGE_IDS.relationExtraction]: relations,
+        [STAGE_IDS.conclusionSelection]: selection,
+        [STAGE_IDS.formulaCompilation]: compilation,
+    }
+}
+
+function finalizeClaims(outputs: Record<string, unknown>) {
+    const ctx = buildContextStub(outputs)
+    const out = finalizeResponseV2({ ctx, extension: basicsExtension })
+    return (
+        out.argument as unknown as {
+            claims: {
+                miniId: string
+                type: string
+                role: string
+                title?: string
+            }[]
+        }
+    ).claims
+}
+
+describe("finalizeResponseV2 — citation claims used as logical variables", () => {
+    it("demotes a citation-typed relation source to a normal claim", () => {
+        const claims = finalizeClaims(buildCitationAntecedentOutputs())
+        const antecedent = claims.find((c) => c.miniId === "c1")!
+        expect(antecedent.role).toBe("premise")
+        // A citation claim has no title/body — keeping it `citation` here
+        // would erase its proposition text. It must be `normal`.
+        expect(antecedent.type).toBe("normal")
+        expect(antecedent.title).toBe("Pooley case reports imprisonment")
+    })
+
+    it("never emits an url-less citation claim in a logical-node role", () => {
+        const claims = finalizeClaims(buildCitationAntecedentOutputs())
+        for (const c of claims) {
+            if (c.role === "premise" || c.role === "conclusion") {
+                expect(c.type).not.toBe("citation")
+            }
+        }
+    })
+
+    it("preserves a citation antecedent that carries a real url", () => {
+        // A url-bearing citation renders fine as an antecedent (the url is
+        // its display text), so it must stay `citation` — only url-less
+        // citations are demoted.
+        const outputs = buildCitationAntecedentOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        const c1 = canon.canonicalClaims.find(
+            (c) => c.miniId === "c1"
+        )! as Record<string, unknown>
+        c1.url = "https://example.com/pooley"
+
+        const antecedent = finalizeClaims(outputs).find(
+            (c) => c.miniId === "c1"
+        )!
+        expect(antecedent.type).toBe("citation")
+    })
+})
