@@ -18,12 +18,47 @@ import {
     RecordedPromptStaleError,
     createRecordingLlmProvider,
 } from "./recording-provider.js"
-import {
-    basicsExtension,
-    createIngestionV1Pipeline,
-    executePipeline,
-} from "../../../src/lib/index.js"
+import { executePipeline, llmStage } from "../../../src/lib/index.js"
+import type {
+    TPipeline,
+    TStageContext,
+} from "../../../src/lib/pipelines/index.js"
 import type { TLlmProvider } from "../../../src/lib/llm/types.js"
+
+// A minimal one-LLM-stage pipeline used only to drive the recording
+// provider's record → replay → drift path end-to-end without depending
+// on a concrete ingestion pipeline's multi-stage schemas. The stage's
+// system prompt carries the `<!-- stage-id -->` marker the recorder
+// keys on; the user message echoes the input text so a changed input
+// drifts the hash.
+const DriftProbeOutputSchema = Type.Object({ ok: Type.Boolean() })
+function buildDriftProbePipeline(): TPipeline<
+    { text: string },
+    { ok: boolean }
+> {
+    const stage = llmStage<{ ok: boolean }>({
+        id: "drift-probe",
+        dependsOn: [],
+        outputSchema: DriftProbeOutputSchema,
+        model: "test-model",
+        buildPrompt: (ctx: TStageContext) => ({
+            system: "<!-- stage-id: drift-probe -->\nProbe stage.",
+            user: (ctx.input as { text: string }).text,
+        }),
+    })
+    return {
+        id: "drift-probe-pipeline",
+        version: "1.0.0",
+        inputSchema: Type.Object({ text: Type.String() }),
+        outputSchema: DriftProbeOutputSchema,
+        stages: [stage],
+        finalize: {
+            dependsOn: ["drift-probe"],
+            run: (ctx) =>
+                ctx.get<{ ok: boolean }>("drift-probe") ?? { ok: false },
+        },
+    }
+}
 
 function makeFakeProvider(
     output: unknown,
@@ -229,14 +264,9 @@ describe("RecordingLlmProvider — prompt-drift guard end-to-end", () => {
     })
 
     it("catches prompt drift between record-time and replay-time pipelines", async () => {
-        // Step 1: record a v1-pipeline run against a fake underlying
-        // provider that returns a happy schema-shaped response.
-        const recordedOutput = {
-            argument: null,
-            uncategorizedText: null,
-            selectionRationale: null,
-            failureText: "synthetic record",
-        }
+        // Step 1: record a one-stage probe-pipeline run against a fake
+        // underlying provider that returns a happy schema-shaped response.
+        const recordedOutput = { ok: true }
         const fake: TLlmProvider = {
             // eslint-disable-next-line @typescript-eslint/require-await
             async respond<T>() {
@@ -252,7 +282,7 @@ describe("RecordingLlmProvider — prompt-drift guard end-to-end", () => {
             mode: "record",
             underlying: fake,
         })
-        const pipeline = createIngestionV1Pipeline(basicsExtension)
+        const pipeline = buildDriftProbePipeline()
         const result = await executePipeline(
             pipeline,
             { text: "A. Therefore B." },
@@ -260,10 +290,9 @@ describe("RecordingLlmProvider — prompt-drift guard end-to-end", () => {
         )
         expect(result.failures).toEqual([])
 
-        // Step 2: replay with the same input text + extension —
-        // should hit. Then mutate the input text to simulate
-        // upstream prompt drift; the next replay should miss and
-        // throw RecordedPromptStaleError.
+        // Step 2: replay with the same input text — should hit. Then
+        // mutate the input text to simulate upstream prompt drift; the
+        // next replay should miss and throw RecordedPromptStaleError.
         const replayer = createRecordingLlmProvider({
             fixtureDir: dir,
             mode: "replay",

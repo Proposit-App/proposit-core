@@ -1,5 +1,5 @@
-// Unit tests for the v1.3.1 caller-configurable LLM-options surface
-// on `createIngestionV1Pipeline` + `createIngestionV2Pipeline`.
+// Unit tests for the caller-configurable LLM-options surface on
+// `createScholarPipeline` (and shared by `createScribePipeline`).
 //
 // The surface lets a caller override `maxOutputTokens` and
 // `reasoningEffort` at two layers: a pipeline-level `defaults` plus
@@ -16,14 +16,12 @@
 
 import { describe, expect, it } from "vitest"
 import Type from "typebox"
+import { executePipeline } from "../../../src/lib/index.js"
+import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
 import {
     basicsExtension,
-    createIngestionV1Pipeline,
-    createIngestionV2Pipeline,
-    executePipeline,
     resolveLlmStageOptions,
-    V1_PARSE_STAGE_ID,
-} from "../../../src/lib/index.js"
+} from "../../../src/extensions/pipelines/base/index.js"
 import { STAGE_IDS } from "../../../src/extensions/pipelines/base/stages/index.js"
 import {
     SEGMENTATION_MAX_OUTPUT_TOKENS,
@@ -179,7 +177,7 @@ function recordingProvider(args: {
     }
 }
 
-describe("createIngestionV2Pipeline — LLM-options threading", () => {
+describe("createScholarPipeline — LLM-options threading", () => {
     it("ships segmentation with the internal default cap when no overrides given", async () => {
         // Schema for segmentation seed — we just need any valid one
         // for the mock; the LLM call assertion is the load-bearing
@@ -206,10 +204,10 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
 
         // Build a pipeline but only schedule segmentation by aborting
         // before downstream stages run — simpler: we reuse
-        // createIngestionV2Pipeline and feed only a segmentation
+        // createScholarPipeline and feed only a segmentation
         // response. Downstream stages will fail/skip and that's OK;
         // we're only asserting on the segmentation request.
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
 
         const segRec = records.find((r) => r.stageId === STAGE_IDS.segmentation)
@@ -238,7 +236,7 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
             onRecord: (r) => records.push(r),
         })
 
-        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+        const pipeline = createScholarPipeline(basicsExtension, {
             llm: { defaults: { maxOutputTokens: 16_384 } },
         })
         await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
@@ -270,7 +268,7 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
             onRecord: (r) => records.push(r),
         })
 
-        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+        const pipeline = createScholarPipeline(basicsExtension, {
             llm: {
                 defaults: { maxOutputTokens: 16_384 },
                 overrides: {
@@ -301,7 +299,7 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
             underlying: mock,
             onRecord: (r) => records.push(r),
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
         const segRec = records.find((r) => r.stageId === STAGE_IDS.segmentation)
         expect(segRec).toBeDefined()
@@ -328,7 +326,7 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
             underlying: mock,
             onRecord: (r) => records.push(r),
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+        const pipeline = createScholarPipeline(basicsExtension, {
             llm: { defaults: { model: "qwen3.6:latest" } },
         })
         await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
@@ -353,7 +351,7 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
             underlying: mock,
             onRecord: (r) => records.push(r),
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+        const pipeline = createScholarPipeline(basicsExtension, {
             llm: {
                 defaults: { model: "qwen3.6:latest" },
                 overrides: {
@@ -381,62 +379,18 @@ describe("createIngestionV2Pipeline — LLM-options threading", () => {
     })
 })
 
-describe("createIngestionV1Pipeline — LLM-options threading", () => {
-    it("threads maxOutputTokens through the single parse-argument stage", async () => {
-        // v1's single stage uses `extension.responseSchema` as its
-        // outputSchema. We build a tiny extension stub and a mock
-        // that responds to the V1_PARSE_STAGE_ID stage marker.
-        const tinyResponseSchema = Type.Object({
-            failures: Type.Optional(Type.Array(Type.Unknown())),
-            argument: Type.Optional(Type.Null()),
-        })
-        const tinyExtension = {
-            responseSchema: tinyResponseSchema,
-            claimSchema: Type.Object({}),
-            variableSchema: Type.Object({}),
-            premiseSchema: Type.Object({}),
-            argumentSchema: Type.Object({}),
-        }
-        const mock = createMockLlmProvider({
-            responses: {
-                [V1_PARSE_STAGE_ID]: [
-                    { kind: "ok", output: { argument: null } },
-                ],
-            },
-        })
-        const records: TRecordedRequest[] = []
-        const provider = recordingProvider({
-            underlying: mock,
-            onRecord: (r) => records.push(r),
-        })
-
-        const pipeline = createIngestionV1Pipeline(tinyExtension, {
-            llm: {
-                overrides: {
-                    [V1_PARSE_STAGE_ID]: { maxOutputTokens: 4096 },
-                },
-            },
-        })
-        await executePipeline(pipeline, { text: "x" }, { llm: provider })
-
-        const rec = records.find((r) => r.stageId === V1_PARSE_STAGE_ID)
-        expect(rec).toBeDefined()
-        expect(rec!.maxOutputTokens).toBe(4096)
-    })
-})
-
 // -- retry-policy override threading -----------
 //
 // A "no-auto-retry" toggle drops `"transient"` from a stage's
 // `retryOn`. These tests exercise that path: a caller sets
-// `llm.overrides[stageId].retry` on `createIngestionV2Pipeline`, and we
+// `llm.overrides[stageId].retry` on `createScholarPipeline`, and we
 // assert the override reaches the stage's retry policy by observing
 // retry behavior against the mock provider. We count only the
 // segmentation stage's calls (it is the root stage, so it always runs
 // first regardless of downstream stages failing for lack of canned
 // responses).
 
-describe("createIngestionV2Pipeline — retry-policy override threading", () => {
+describe("createScholarPipeline — retry-policy override threading", () => {
     const goodSeg = {
         segments: [
             { segmentId: "s1", text: "Hi.", span: { start: 0, end: 3 } },
@@ -457,7 +411,7 @@ describe("createIngestionV2Pipeline — retry-policy override threading", () => 
                 if (rec.stageId === STAGE_IDS.segmentation) segCalls += 1
             },
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+        const pipeline = createScholarPipeline(basicsExtension, {
             llm: {
                 overrides: {
                     [STAGE_IDS.segmentation]: {
@@ -493,7 +447,7 @@ describe("createIngestionV2Pipeline — retry-policy override threading", () => 
                 if (rec.stageId === STAGE_IDS.segmentation) segCalls += 1
             },
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension, {
+        const pipeline = createScholarPipeline(basicsExtension, {
             llm: {
                 overrides: {
                     [STAGE_IDS.segmentation]: {
@@ -526,7 +480,7 @@ describe("createIngestionV2Pipeline — retry-policy override threading", () => 
                 if (rec.stageId === STAGE_IDS.segmentation) segCalls += 1
             },
         })
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         const result = await executePipeline(
             pipeline,
             { text: "Hi." },

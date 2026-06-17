@@ -1,7 +1,8 @@
-// Golden-corpus e2e test driver for the v2 multi-stage ingestion
-// pipeline. Mirrors the v1 e2e driver (`e2e.test.ts`) but reads + writes
-// `v2-recorded-llm.json` + `v2-expected.json` per fixture, so v1 and
-// v2 recordings live side-by-side in each fixture directory.
+// Golden-corpus e2e test driver for the scholar (multi-stage)
+// ingestion pipeline. Reads + writes `v2-recorded-llm.json` +
+// `v2-expected.json` per fixture (the recorded-data filenames predate
+// the role rename and are kept as-is — the recordings are byte-identical
+// across the rename, which is the point).
 //
 // Mode is controlled by the `INGESTION_TEST_RECORD` env var:
 //
@@ -21,11 +22,10 @@
 // is missing — the dev records once (with a real API key) and commits
 // the file; subsequent CI runs find it and the skip clears.
 //
-// **Fixture rigidity is intentional** — see `e2e.test.ts` for the v1
-// version of this note. CI failures here fall into two buckets,
-// neither of which is flake:
+// **Fixture rigidity is intentional.** CI failures here fall into two
+// buckets, neither of which is flake:
 //
-//   1. Prompt-drift guard fires (RecordedPromptStaleError) — a v2
+//   1. Prompt-drift guard fires (RecordedPromptStaleError) — a scholar
 //      stage's prompt changed since the last recording. Re-record.
 //   2. `v2-expected.json` mismatch on re-record — the live model's
 //      behavior shifted (or the fixture's assumptions were too
@@ -162,19 +162,6 @@ function buildProviderForMode(fixtureDir: string): TLlmProvider {
     })
 }
 
-// Inherit parity labels from v1's expected.json when the v2 expected
-// hasn't been authored yet — the parity intent is a fixture-level
-// property, not per-pipeline. Reviewers should still hand-audit the
-// label when committing v2-expected.json.
-function inheritParityFromV1(
-    fixtureDir: string
-): TExpectedFile["parity"] | undefined {
-    const v1Path = path.join(fixtureDir, "expected.json")
-    if (!fs.existsSync(v1Path)) return undefined
-    const v1 = JSON.parse(fs.readFileSync(v1Path, "utf-8")) as TExpectedFile
-    return v1.parity
-}
-
 const mode = recordingMode()
 
 describe("scholar ingestion pipeline — fixture parity labels", () => {
@@ -262,8 +249,7 @@ describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
                     expect(result.output).not.toBeNull()
                     const actual = result.output as Record<string, unknown>
                     const prior = readExpected(fixtureDir)
-                    const parity =
-                        prior?.parity ?? inheritParityFromV1(fixtureDir)
+                    const parity = prior?.parity
                     writeExpected(fixtureDir, actual, parity)
                     return
                 }
@@ -284,8 +270,7 @@ describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 ) {
                     const actual = result.output as Record<string, unknown>
                     const prior = readExpected(fixtureDir)
-                    const parity =
-                        prior?.parity ?? inheritParityFromV1(fixtureDir)
+                    const parity = prior?.parity
                     writeExpected(fixtureDir, actual, parity)
                     return
                 }

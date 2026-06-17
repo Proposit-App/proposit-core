@@ -5,7 +5,7 @@
 // pin the v1 passthrough behavior + lay groundwork for the v2 cases.
 
 import { describe, expect, it } from "vitest"
-import { deriveRoles } from "../../../src/lib/index.js"
+import { deriveRoles } from "../../../src/extensions/pipelines/base/index.js"
 import type { TParsedClaim } from "../../../src/lib/parsing/index.js"
 
 function buildClaim(

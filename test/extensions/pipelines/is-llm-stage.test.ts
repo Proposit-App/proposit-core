@@ -6,13 +6,13 @@
 
 import { describe, expect, it } from "vitest"
 import {
-    createIngestionV2Pipeline,
-    basicsExtension,
     isLlmStage,
     launchStage,
     PipelineConfigurationError,
 } from "../../../src/lib/index.js"
 import type { TExecuteStageDeps } from "../../../src/lib/index.js"
+import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
+import { basicsExtension } from "../../../src/extensions/pipelines/base/basics-extension.js"
 import { STAGE_IDS } from "../../../src/extensions/pipelines/base/stages/index.js"
 import { createMockLlmProvider } from "../../mocks/llm.js"
 
@@ -31,7 +31,7 @@ const launchDeps: TExecuteStageDeps = {
 // resolved launch, or a later failure such as a missing upstream dep —
 // means the stage got PAST the guard, i.e. core treats it as an LLM stage.
 async function launchRejectsAsNonLlm(
-    pipeline: ReturnType<typeof createIngestionV2Pipeline>,
+    pipeline: ReturnType<typeof createScholarPipeline>,
     stageId: string
 ): Promise<boolean> {
     try {
@@ -46,7 +46,7 @@ async function launchRejectsAsNonLlm(
 }
 
 describe("isLlmStage", () => {
-    const pipeline = createIngestionV2Pipeline(basicsExtension)
+    const pipeline = createScholarPipeline(basicsExtension)
     const stageById = (id: string) => {
         const stage = pipeline.stages.find((s) => s.id === id)
         if (!stage) throw new Error(`no stage "${id}" in pipeline`)

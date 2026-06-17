@@ -12,7 +12,10 @@
 // 12-stage LLM-mocked pipeline.
 
 import { describe, expect, it } from "vitest"
-import { basicsExtension, finalizeResponseV2 } from "../../../src/lib/index.js"
+import {
+    basicsExtension,
+    finalizeResponseV2,
+} from "../../../src/extensions/pipelines/base/index.js"
 import {
     STAGE_IDS,
     type TClaimCanonicalizationOutput,
