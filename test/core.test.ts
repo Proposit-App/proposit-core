@@ -148,7 +148,7 @@ import type {
 } from "../src/lib/parsing/schemata"
 import { buildParsingPrompt } from "../src/lib/parsing/prompt-builder"
 import { BasicsParsingSchema } from "../src/extensions/basics/schemata"
-import { CLAIM_CANONICALIZATION_SYSTEM_PROMPT } from "../src/extensions/argument-ingestion/stages/claim-canonicalization"
+import { CLAIM_CANONICALIZATION_SYSTEM_PROMPT } from "../src/extensions/pipelines/base/stages/claim-canonicalization"
 import { ArgumentParser } from "../src/lib/parsing/argument-parser"
 import Type from "typebox"
 import { resolveApiKey, createLlmProvider } from "../src/cli/llm/index"

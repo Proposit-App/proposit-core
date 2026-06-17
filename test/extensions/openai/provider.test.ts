@@ -2694,11 +2694,11 @@ describe("v2 ingestion pipeline — no-tools precondition", () => {
         // call and asserts they are all absent/empty — confirming the
         // background-mode no-tools precondition holds for this pipeline.
         const { createIngestionV2Pipeline } =
-            await import("../../../src/extensions/argument-ingestion/v2-multi-stage.js")
+            await import("../../../src/extensions/pipelines/ingestion/scholar/scholar.js")
         const { executePipeline } =
             await import("../../../src/lib/pipelines/index.js")
         const { basicsExtension } =
-            await import("../../../src/extensions/argument-ingestion/shared/basics-extension.js")
+            await import("../../../src/extensions/pipelines/base/basics-extension.js")
 
         const toolsPerCall: (readonly unknown[] | undefined)[] = []
 

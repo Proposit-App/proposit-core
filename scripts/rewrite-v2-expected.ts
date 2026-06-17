@@ -26,7 +26,7 @@ import {
     createIngestionV2Pipeline,
     executePipeline,
 } from "../src/lib/index.js"
-import { createRecordingLlmProvider } from "../test/extensions/argument-ingestion/recording-provider.js"
+import { createRecordingLlmProvider } from "../test/extensions/pipelines/recording-provider.js"
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURES_ROOT = path.resolve(
@@ -34,7 +34,7 @@ const FIXTURES_ROOT = path.resolve(
     "..",
     "test",
     "extensions",
-    "argument-ingestion",
+    "pipelines",
     "fixtures"
 )
 const FIXTURE_NAMES = [

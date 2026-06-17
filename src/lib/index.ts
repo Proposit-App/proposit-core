@@ -212,7 +212,7 @@ export {
     deriveRoles,
     resolveLlmStageOptions,
     V1_PARSE_STAGE_ID,
-} from "../extensions/argument-ingestion/index.js"
+} from "../extensions/pipelines/_old-index.js"
 export type {
     TCreateIngestionV1PipelineOptions,
     TCreateIngestionV2PipelineOptions,
@@ -224,7 +224,7 @@ export type {
     TFinalizeResponseV2Input,
     TClaimRole,
     TDeriveRolesInput,
-} from "../extensions/argument-ingestion/index.js"
+} from "../extensions/pipelines/_old-index.js"
 export {
     InvalidArgumentStructureError,
     UnknownExpressionError,
