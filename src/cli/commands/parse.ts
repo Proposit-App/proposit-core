@@ -8,14 +8,14 @@ import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import { cliLog } from "../logging.js"
 import { errorExit, printJson, printLine, printWarning } from "../output.js"
 import { resolveApiKey, createLlmProvider } from "../llm/index.js"
+import { executePipeline } from "../../lib/index.js"
+import type { TPipelineResult } from "../../lib/index.js"
 import {
-    basicsExtension,
-    createIngestionV1Pipeline,
-    executePipeline,
-} from "../../lib/index.js"
+    createScholarPipeline,
+    createScribePipeline,
+} from "../../extensions/pipelines/ingestion/index.js"
+import { basicsExtension } from "../../extensions/pipelines/base/index.js"
 import type { TParsedArgumentResponse } from "../../lib/parsing/index.js"
-
-const DEFAULT_PARSE_MODEL = "gpt-5.4"
 
 class CliArgumentParser extends BasicsArgumentParser {
     private readonly cliTitle?: string
@@ -58,9 +58,9 @@ export function registerParseCommand(args: Command): void {
         .option("--api-key <key>", "API key (overrides env var)")
         .option("--model <model>", "Model override")
         .option(
-            "--pipeline <version>",
-            "Ingestion pipeline version (v1 or v2)",
-            "v1"
+            "--pipeline <name>",
+            "Ingestion pipeline (scholar = thorough, scribe = fast)",
+            "scholar"
         )
         .option(
             "--title <title>",
@@ -81,16 +81,13 @@ export function registerParseCommand(args: Command): void {
                     dryRun?: boolean
                 }
             ) => {
-                // 1. Resolve pipeline version. v1 is the only
-                //    supported value today; the v2 flag value is wired
-                //    as a clean rejection so users discover the flag
-                //    exists without silent fallbacks.
-                if (opts.pipeline !== "v1") {
-                    if (opts.pipeline === "v2") {
-                        errorExit("v2 pipeline not yet shipped.")
-                    }
+                // 1. Resolve the ingestion pipeline. `scholar` (thorough,
+                //    multi-stage) is the default; `scribe` (fast, two
+                //    cheap LLM calls) is opt-in. Both emit the same
+                //    parsed-argument response shape.
+                if (opts.pipeline !== "scholar" && opts.pipeline !== "scribe") {
                     errorExit(
-                        `Unknown pipeline version "${opts.pipeline}". Supported: v1.`
+                        `Unknown pipeline "${opts.pipeline}". Supported: scholar, scribe.`
                     )
                 }
 
@@ -120,16 +117,25 @@ export function registerParseCommand(args: Command): void {
                     errorExit("Input text is empty.")
                 }
 
-                // 4. Build the v1 ingestion pipeline and execute.
-                //    The pipeline owns the LLM call + structured-
+                // 4. Build the selected ingestion pipeline and execute.
+                //    The pipeline owns the LLM calls + structured-
                 //    output validation; the CLI is left with engine
-                //    construction + persistence.
+                //    construction + persistence. `--model`, when given,
+                //    overrides every stage's model via the pipeline-level
+                //    `llm.defaults`.
                 const provider = createLlmProvider(opts.llm, { apiKey })
-                const pipeline = createIngestionV1Pipeline(basicsExtension, {
-                    model: opts.model ?? DEFAULT_PARSE_MODEL,
-                })
+                const buildPipeline =
+                    opts.pipeline === "scribe"
+                        ? createScribePipeline
+                        : createScholarPipeline
+                const pipeline = buildPipeline(
+                    basicsExtension,
+                    opts.model
+                        ? { llm: { defaults: { model: opts.model } } }
+                        : undefined
+                )
 
-                let pipelineResult
+                let pipelineResult: TPipelineResult<TParsedArgumentResponse>
                 try {
                     pipelineResult = await executePipeline(
                         pipeline,
@@ -143,17 +149,12 @@ export function registerParseCommand(args: Command): void {
                     errorExit(msg)
                 }
 
-                // Forward-compatibility branch — `output === null` is
-                // not reachable under the v1 single-shot pipeline
-                // (the `parse-argument` stage either completes or
-                // throws via `LlmStageRetryExhaustedError`, both of
-                // which surface here as a failures-non-empty + null
-                // output OR an outer `executePipeline` throw caught
-                // above). A v2 multi-stage pipeline would reach this
-                // branch when its finalize returns null on
-                // irresolvable-conclusion / empty-canonicalization
-                // outcomes. Leave the branch wired so a v2 cutover
-                // doesn't need to revisit the CLI.
+                // A degraded import: the pipeline's finalize returned no
+                // argument. Both scholar and scribe reach this when
+                // finalize returns null — empty canonicalization (no
+                // claims extracted) or an irresolvable conclusion — with
+                // the reason carried on `failures`. Surface those and
+                // exit non-zero rather than printing a null argument.
                 if (pipelineResult.output === null) {
                     const failureSummary = pipelineResult.failures
                         .map((f) => `[${f.code}] ${f.message}`)
