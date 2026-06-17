@@ -1,4 +1,6 @@
-// Barrel for the 12 v2-multi-stage ingestion stages.
+// Barrel for the 12 shared ingestion stages + the per-extension
+// canonicalization schema builders and the fallback-conclusion helper
+// (reused by alternate pipelines that produce the same stage slots).
 
 export { STAGE_IDS } from "./schemas.js"
 export * from "./schemas.js"
@@ -27,6 +29,8 @@ export {
 export {
     createClaimCanonicalizationStage,
     CLAIM_CANONICALIZATION_STAGE_DEFAULTS,
+    buildResponseSchema,
+    buildClaimRecordSchema,
 } from "./claim-canonicalization.js"
 export {
     claimTypeClassificationStage,
@@ -51,7 +55,9 @@ export {
 export {
     conclusionSelectionStage,
     createConclusionSelectionStage,
+    selectFallbackConclusion,
     CONCLUSION_SELECTION_STAGE_DEFAULTS,
+    CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
 } from "./conclusion-selection.js"
 export {
     formulaCompilationStage,

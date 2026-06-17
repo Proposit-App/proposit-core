@@ -198,33 +198,13 @@ export {
     ToolLoopExhaustedError,
     TransientLlmError,
 } from "../extensions/openai/index.js"
-// v1 argument-ingestion pipeline + default extension. Surfaced from
-// the lib barrel for ergonomic single-import access from server / CLI
-// consumers; the `@proposit/proposit-core/extensions/argument-ingestion`
-// subpath export gives callers an alternate tree-shake-friendly path.
-export {
-    createIngestionV1Pipeline,
-    createIngestionV2Pipeline,
-    basicsExtension,
-    finalizeResponse,
-    finalizeResponseV2,
-    FINALIZE_V2_FAILURE_TEXTS,
-    deriveRoles,
-    resolveLlmStageOptions,
-    V1_PARSE_STAGE_ID,
-} from "../extensions/pipelines/_old-index.js"
-export type {
-    TCreateIngestionV1PipelineOptions,
-    TCreateIngestionV2PipelineOptions,
-    TIngestionExtension,
-    TIngestionInput,
-    TIngestionLlmOptions,
-    TLlmStageOptionsOverride,
-    TFinalizeResponseInput,
-    TFinalizeResponseV2Input,
-    TClaimRole,
-    TDeriveRolesInput,
-} from "../extensions/pipelines/_old-index.js"
+// NOTE: the ingestion pipelines + their task contract are NOT re-exported
+// from this root barrel. They ship as their own subpaths —
+// `@proposit/proposit-core/pipelines/base` (the shared contract +
+// helpers) and `@proposit/proposit-core/pipelines/ingestion` (the
+// `createScholarPipeline` / `createScribePipeline` factories). The root
+// barrel carries only the engine, the pipeline framework, and the
+// provider extensions.
 export {
     InvalidArgumentStructureError,
     UnknownExpressionError,

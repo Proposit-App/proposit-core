@@ -47,6 +47,16 @@
             "types": "./dist/extensions/ollama/index.d.ts",
             "import": "./dist/extensions/ollama/index.js",
             "default": "./dist/extensions/ollama/index.js"
+        },
+        "./pipelines/base": {
+            "types": "./dist/extensions/pipelines/base/index.d.ts",
+            "import": "./dist/extensions/pipelines/base/index.js",
+            "default": "./dist/extensions/pipelines/base/index.js"
+        },
+        "./pipelines/ingestion": {
+            "types": "./dist/extensions/pipelines/ingestion/index.d.ts",
+            "import": "./dist/extensions/pipelines/ingestion/index.js",
+            "default": "./dist/extensions/pipelines/ingestion/index.js"
         }
     },
     "bin": {
