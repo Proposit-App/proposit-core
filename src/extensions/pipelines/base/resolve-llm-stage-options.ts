@@ -1,7 +1,7 @@
 // Shared resolver for per-stage LLM-knob options.
 //
-// The ingestion pipelines (`createIngestionV1Pipeline`,
-// `createIngestionV2Pipeline`) expose a `TIngestionLlmOptions`
+// The ingestion pipelines (`createScholarPipeline`,
+// `createScholarPipeline`) expose a `TIngestionLlmOptions`
 // surface with pipeline-level `defaults` + per-stage `overrides`.
 // Each LLM stage in turn carries its own *internal default* — the
 // model + effort + token cap the stage author picked for typical

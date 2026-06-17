@@ -8,7 +8,7 @@
 // without reimplementing the pipelines.
 //
 // For v1 the descriptor is consumed in exactly one place:
-// `createIngestionV1Pipeline` reads `responseSchema` and hands it to
+// `createScholarPipeline` reads `responseSchema` and hands it to
 // the single `llmStage`'s `outputSchema` (and to `buildParsingPrompt`
 // for system-prompt construction). The per-entity slots are retained
 // in the descriptor so v2 stages can compose them.

@@ -15,7 +15,6 @@
 // the cap up further without forking the stage.
 
 import { describe, expect, it } from "vitest"
-import Type from "typebox"
 import { executePipeline } from "../../../src/lib/index.js"
 import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
 import {

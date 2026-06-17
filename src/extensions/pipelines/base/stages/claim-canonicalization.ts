@@ -11,7 +11,7 @@
 // canonical claim's miniId — useful for downstream stages (and
 // finalize) that want to trace evidence back to the text.
 //
-// Per spec §6.4 this is a strong-reasoning stage: `gpt-5.5` with
+// This is a strong-reasoning stage: `gpt-5.5` with
 // `reasoningEffort: 'medium'`.
 
 import Type, { type TSchema } from "typebox"
@@ -213,7 +213,7 @@ export const CLAIM_CANONICALIZATION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
  *
  * `options` overrides the stage's internal defaults
  * (`CLAIM_CANONICALIZATION_STAGE_DEFAULTS`). Threaded through by
- * `createIngestionV2Pipeline` per its `TIngestionLlmOptions` surface.
+ * `createScholarPipeline` per its `TIngestionLlmOptions` surface.
  */
 export function createClaimCanonicalizationStage(
     extension: TIngestionExtension,

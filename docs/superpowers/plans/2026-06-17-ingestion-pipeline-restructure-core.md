@@ -4,7 +4,7 @@
 
 **Goal:** Restructure core's argument-ingestion into `src/extensions/pipelines/{base,ingestion/{scholar,scribe}}`, rename the multi-stage factory to `createScholarPipeline`, add a new 2-LLM-call `createScribePipeline`, drop v1 single-shot + `finalizeResponse`, repoint the CLI, and ship per-dir subpath exports — all as core `3.0.0`.
 
-**Architecture:** `base/` holds the shared one-shot task contract (relocated `argument-ingestion/shared/*` + the 12 `stages/` + `STAGE_IDS`). `ingestion/scholar/` is the renamed v2 pipeline (byte-identical). `ingestion/scribe/` is new: two cheap LLM stages (`extract`, `structure`) whose outputs are reshaped by deterministic *adapter* stages into scholar's 6 standard stage-output slots, so scholar's 4 deterministic stages + `finalizeResponseV2` are reused verbatim. New `./pipelines/base` + `./pipelines/ingestion` package subpaths replace the root-barrel ingestion exports.
+**Architecture:** `base/` holds the shared one-shot task contract (relocated `argument-ingestion/shared/*` + the 12 `stages/` + `STAGE_IDS`). `ingestion/scholar/` is the renamed v2 pipeline (byte-identical). `ingestion/scribe/` is new: two cheap LLM stages (`extract`, `structure`) whose outputs are reshaped by deterministic _adapter_ stages into scholar's 6 standard stage-output slots, so scholar's 4 deterministic stages + `finalizeResponseV2` are reused verbatim. New `./pipelines/base` + `./pipelines/ingestion` package subpaths replace the root-barrel ingestion exports.
 
 **Tech Stack:** TypeScript (ESM, `.js` relative imports), TypeBox schemas, vitest, the in-house DAG pipeline framework (`src/lib/pipelines/`), `createRecordingLlmProvider` golden-fixture replay.
 
@@ -25,6 +25,7 @@
 ## File Structure (decomposition)
 
 **New tree** `src/extensions/pipelines/`:
+
 - `base/` — relocated `argument-ingestion/shared/*` (`finalize-response-v2.ts`, `types.ts`, `resolve-llm-stage-options.ts`, `basics-extension.ts`, `role-derivation.ts`) + `base/stages/` (the 12 stage files + `schemas.ts`) + `base/index.ts` (new barrel for the `./pipelines/base` subpath).
 - `ingestion/scholar/` — `scholar.ts` (was `v2-multi-stage.ts`) + `index.ts`.
 - `ingestion/scribe/` — `scribe.ts` (factory), `extract-stage.ts`, `structure-stage.ts`, `adapters.ts` (the 4 deterministic adapter stages), `schemas.ts` (scribe LLM output schemas) + `index.ts`.
@@ -41,6 +42,7 @@
 ## Task 1: Relocate the ingestion tree (pure move, byte-identity preserved)
 
 **Files:**
+
 - Move (git mv): `src/extensions/argument-ingestion/shared/*` → `src/extensions/pipelines/base/*` (5 files: `finalize-response-v2.ts`, `types.ts`, `resolve-llm-stage-options.ts`, `basics-extension.ts`, `role-derivation.ts`). NOTE: `finalize-response.ts` is moved too for now (deleted in Task 6).
 - Move: `src/extensions/argument-ingestion/stages/*` (13 files incl. `index.ts` + `schemas.ts`) → `src/extensions/pipelines/base/stages/*`.
 - Move: `src/extensions/argument-ingestion/v2-multi-stage.ts` → `src/extensions/pipelines/ingestion/scholar/scholar.ts`.
@@ -50,6 +52,7 @@
 - Modify (import-path fixups only): every moved file's relative imports + the 3 external importers (`src/cli/commands/parse.ts`, `src/lib/index.ts`, `test/core.test.ts:151`).
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces: the new directory layout. All symbol names, signatures, prompt strings, `STAGE_IDS` values UNCHANGED.
 
@@ -91,16 +94,17 @@ git mv test/extensions/argument-ingestion test/extensions/pipelines
 - [ ] **Step 5: Fix import paths in all moved + importing files**
 
 Mechanical depth-fixup. The relative-import depth changes for files that moved to a deeper level:
+
 - `base/stages/*` files import the framework via `../../../lib/pipelines/...` today (from `argument-ingestion/stages/`, depth 3). New location `pipelines/base/stages/` is **also depth 3** under `src/extensions/` → wait, verify: `src/extensions/argument-ingestion/stages/` and `src/extensions/pipelines/base/stages/` are BOTH 4 segments under `src/`. So `../../../lib/` (3 ups: stages→argument-ingestion→extensions→src... no: stages → up to argument-ingestion → up to extensions → up to src? that's `../../../` = stages's parent's parent's parent). For `pipelines/base/stages/`: stages → base → pipelines → extensions → src needs `../../../../lib/`. **The depth increased by one for stage files** (they gained the `base/` level). Fix all `../../../lib/` → `../../../../lib/` in `base/stages/*.ts`, and `../shared/` → `../` (shared collapsed into base) in `base/stages/*.ts`.
 - `base/*` (ex-shared) files: were at `argument-ingestion/shared/` (depth 3), now `pipelines/base/` (depth 3) — same depth. Their `../../../lib/` stays `../../../lib/`. Their intra-shared imports (`./types.js` etc.) stay. Their `../stages/` → `./stages/`.
 - `scholar.ts`: was `argument-ingestion/v2-multi-stage.ts` (depth 2), now `pipelines/ingestion/scholar/scholar.ts` (depth 4). `../../lib/` → `../../../../lib/`; `./stages/index.js` → `../../base/stages/index.js`; `./shared/finalize-response-v2.js` → `../../base/finalize-response-v2.js`; `./shared/resolve-llm-stage-options.js` → `../../base/resolve-llm-stage-options.js`; `./shared/types.js` → `../../base/types.js`.
 - `_v1-single-shot.ts`: was depth 2, now `pipelines/_v1-single-shot.ts` (depth 2) — same depth. `./shared/` → `./base/`; `./stages/` → `./base/stages/` (it imports `finalizeResponse`, `basicsExtension`, types, `V1_PARSE_STAGE_ID` const).
 - `_old-index.ts`: was `argument-ingestion/index.ts` (depth 2), now `pipelines/_old-index.ts` (depth 2). `./v1-single-shot.js` → `./_v1-single-shot.js`; `./v2-multi-stage.js` → `./ingestion/scholar/scholar.js`; `./shared/*` → `./base/*`; `./stages/index.js` → `./base/stages/index.js`.
 - External importers:
-  - `src/lib/index.ts:215,227` — `"../extensions/argument-ingestion/index.js"` → `"../extensions/pipelines/_old-index.js"` (temporary; rewired in Task 4).
-  - `src/cli/commands/parse.ts:13` — imports from `"../../lib/index.js"` (not the dir directly) → no path change needed here yet (rewired in Task 7).
-  - `test/core.test.ts:151` — `"../src/extensions/argument-ingestion/stages/claim-canonicalization"` → `"../src/extensions/pipelines/base/stages/claim-canonicalization"`.
-  - Every test file under the moved `test/extensions/pipelines/` that imports `../../../src/extensions/argument-ingestion/...` → `../../../src/extensions/pipelines/...` with corrected sub-paths (`shared/` → `base/`, `stages/` → `base/stages/`, `v2-multi-stage` → `ingestion/scholar/scholar`, `v1-single-shot` → `_v1-single-shot`). Also fix the relative depth: test files stay at `test/extensions/pipelines/` (same depth as `test/extensions/argument-ingestion/`), so only the path tail changes, not the `../` count — EXCEPT `test/extensions/pipelines/stages/*` which import `../../../../src/...` (depth unchanged).
+    - `src/lib/index.ts:215,227` — `"../extensions/argument-ingestion/index.js"` → `"../extensions/pipelines/_old-index.js"` (temporary; rewired in Task 4).
+    - `src/cli/commands/parse.ts:13` — imports from `"../../lib/index.js"` (not the dir directly) → no path change needed here yet (rewired in Task 7).
+    - `test/core.test.ts:151` — `"../src/extensions/argument-ingestion/stages/claim-canonicalization"` → `"../src/extensions/pipelines/base/stages/claim-canonicalization"`.
+    - Every test file under the moved `test/extensions/pipelines/` that imports `../../../src/extensions/argument-ingestion/...` → `../../../src/extensions/pipelines/...` with corrected sub-paths (`shared/` → `base/`, `stages/` → `base/stages/`, `v2-multi-stage` → `ingestion/scholar/scholar`, `v1-single-shot` → `_v1-single-shot`). Also fix the relative depth: test files stay at `test/extensions/pipelines/` (same depth as `test/extensions/argument-ingestion/`), so only the path tail changes, not the `../` count — EXCEPT `test/extensions/pipelines/stages/*` which import `../../../../src/...` (depth unchanged).
 
 Use the LSP/typecheck loop to drive these: run `pnpm run typecheck` and fix each unresolved-path error until clean. Do NOT edit any string literal inside a prompt template or `STAGE_IDS`.
 
@@ -127,15 +131,17 @@ git commit -m "refactor(pipelines): relocate argument-ingestion to extensions/pi
 ## Task 2: Export the three helpers scribe needs (still private today)
 
 **Files:**
+
 - Modify: `src/extensions/pipelines/base/stages/conclusion-selection.ts` — export `selectFallbackConclusion`.
 - Modify: `src/extensions/pipelines/base/stages/claim-canonicalization.ts` — export `buildResponseSchema` + `buildClaimRecordSchema`.
 - Test: `test/extensions/pipelines/stages/conclusion-selection.test.ts` (add a `selectFallbackConclusion` unit test); `test/extensions/pipelines/stages/claim-canonicalization-schema.test.ts` (new — a `buildResponseSchema` shape test).
 
 **Interfaces:**
+
 - Produces (consumed by Task 5 scribe adapters):
-  - `selectFallbackConclusion(classifications: readonly TClaimTypeClassificationEntry[], relations: readonly TRelation[]): string | null`
-  - `buildResponseSchema(extension: TIngestionExtension): TSchema`
-  - `buildClaimRecordSchema(claimSchema: TSchema): TSchema`
+    - `selectFallbackConclusion(classifications: readonly TClaimTypeClassificationEntry[], relations: readonly TRelation[]): string | null`
+    - `buildResponseSchema(extension: TIngestionExtension): TSchema`
+    - `buildClaimRecordSchema(claimSchema: TSchema): TSchema`
 
 - [ ] **Step 1: Write the failing test for the exported helpers**
 
@@ -152,8 +158,20 @@ describe("selectFallbackConclusion (exported helper)", () => {
             { miniId: "c3", type: "normal" as const, sourceString: null },
         ]
         const relations = [
-            { relationId: "r1", type: "support" as const, sources: ["c1"], target: "c3", evidence: { segmentIds: [], quote: "" } },
-            { relationId: "r2", type: "support" as const, sources: ["c2"], target: "c3", evidence: { segmentIds: [], quote: "" } },
+            {
+                relationId: "r1",
+                type: "support" as const,
+                sources: ["c1"],
+                target: "c3",
+                evidence: { segmentIds: [], quote: "" },
+            },
+            {
+                relationId: "r2",
+                type: "support" as const,
+                sources: ["c2"],
+                target: "c3",
+                evidence: { segmentIds: [], quote: "" },
+            },
         ]
         expect(selectFallbackConclusion(classifications, relations)).toBe("c3")
     })
@@ -169,7 +187,10 @@ Create `test/extensions/pipelines/stages/claim-canonicalization-schema.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest"
 import { Value } from "typebox/value"
-import { buildResponseSchema, buildClaimRecordSchema } from "../../../../src/extensions/pipelines/base/stages/claim-canonicalization.js"
+import {
+    buildResponseSchema,
+    buildClaimRecordSchema,
+} from "../../../../src/extensions/pipelines/base/stages/claim-canonicalization.js"
 import { basicsExtension } from "../../../../src/extensions/pipelines/base/basics-extension.js"
 
 describe("buildResponseSchema / buildClaimRecordSchema (exported)", () => {
@@ -177,7 +198,14 @@ describe("buildResponseSchema / buildClaimRecordSchema (exported)", () => {
         const schema = buildResponseSchema(basicsExtension)
         const ok = Value.Check(schema, {
             canonicalClaims: [
-                { miniId: "c1", mentionIds: ["m1"], suggestedSymbol: "Rain_Wets", type: "normal", title: "Rain wets the ground", body: "Rain makes the ground wet." },
+                {
+                    miniId: "c1",
+                    mentionIds: ["m1"],
+                    suggestedSymbol: "Rain_Wets",
+                    type: "normal",
+                    title: "Rain wets the ground",
+                    body: "Rain makes the ground wet.",
+                },
             ],
             mentionToClaim: [{ mentionId: "m1", claimMiniId: "c1" }],
         })
@@ -187,7 +215,11 @@ describe("buildResponseSchema / buildClaimRecordSchema (exported)", () => {
     it("buildClaimRecordSchema injects miniId/mentionIds/suggestedSymbol into the claim shape", () => {
         const recordSchema = buildClaimRecordSchema(basicsExtension.claimSchema)
         // base record must reject a claim missing the canonicalizer fields
-        const missingFields = Value.Check(recordSchema, { type: "normal", title: "x", body: "y" })
+        const missingFields = Value.Check(recordSchema, {
+            type: "normal",
+            title: "x",
+            body: "y",
+        })
         expect(missingFields).toBe(false)
     })
 })
@@ -221,16 +253,18 @@ git commit -m "feat(pipelines): export selectFallbackConclusion + canonicalizati
 ## Task 3: Add new STAGE_IDS for scribe + the scholar factory rename
 
 **Files:**
+
 - Modify: `src/extensions/pipelines/base/stages/schemas.ts` — add `extract` + `scribeStructure` to `STAGE_IDS`.
 - Modify: `src/extensions/pipelines/ingestion/scholar/scholar.ts` — rename `createIngestionV2Pipeline` → `createScholarPipeline`, `TCreateIngestionV2PipelineOptions` → `TCreateScholarPipelineOptions`, `PIPELINE_ID` → `"argument-ingestion-scholar"`. Refresh the v1/v2-referencing comments.
 - Create: `src/extensions/pipelines/ingestion/scholar/index.ts` — barrel.
 - Test: `test/extensions/pipelines/v2-multi-stage.test.ts` (rename references), `test/extensions/pipelines/v2-e2e.test.ts` (update factory import + name).
 
 **Interfaces:**
+
 - Produces:
-  - `STAGE_IDS.extract = "extract"`, `STAGE_IDS.scribeStructure = "scribe-structure"` (consumed by Task 5).
-  - `createScholarPipeline(extension: TIngestionExtension, options?: TCreateScholarPipelineOptions): TPipeline<TIngestionInput, TParsedArgumentResponse>`
-  - `TCreateScholarPipelineOptions = { llm?: TIngestionLlmOptions }`
+    - `STAGE_IDS.extract = "extract"`, `STAGE_IDS.scribeStructure = "scribe-structure"` (consumed by Task 5).
+    - `createScholarPipeline(extension: TIngestionExtension, options?: TCreateScholarPipelineOptions): TPipeline<TIngestionInput, TParsedArgumentResponse>`
+    - `TCreateScholarPipelineOptions = { llm?: TIngestionLlmOptions }`
 
 - [ ] **Step 1: Add the new STAGE_IDS (no test yet — consumed downstream)**
 
@@ -287,6 +321,7 @@ git commit -m "refactor(pipelines): rename v2 factory to createScholarPipeline +
 ## Task 4: New subpath barrels + package.json exports + typedoc + drop ingestion from root barrel
 
 **Files:**
+
 - Create: `src/extensions/pipelines/base/index.ts` (the `./pipelines/base` subpath barrel).
 - Create: `src/extensions/pipelines/ingestion/index.ts` (the `./pipelines/ingestion` subpath barrel — scholar now; scribe added in Task 5).
 - Delete: `src/extensions/pipelines/_old-index.ts`.
@@ -296,9 +331,10 @@ git commit -m "refactor(pipelines): rename v2 factory to createScholarPipeline +
 - Test: a subpath-resolution smoke check via typecheck + a small import test.
 
 **Interfaces:**
+
 - Produces the public import surface:
-  - `@proposit/proposit-core/pipelines/base` → `finalizeResponseV2`, `FINALIZE_V2_FAILURE_TEXTS`, `TIngestionExtension`/`TIngestionInput`/`TIngestionLlmOptions`/`TLlmStageOptionsOverride`, `resolveLlmStageOptions`, `basicsExtension`, `deriveRoles`/`TClaimRole`/`TDeriveRolesInput`, `selectFallbackConclusion`, `buildResponseSchema`, `buildClaimRecordSchema`, `STAGE_IDS` + all stage factories/consts/schemas, `TFinalizeResponseV2Input`.
-  - `@proposit/proposit-core/pipelines/ingestion` → `createScholarPipeline` + `TCreateScholarPipelineOptions` (+ scribe in Task 5).
+    - `@proposit/proposit-core/pipelines/base` → `finalizeResponseV2`, `FINALIZE_V2_FAILURE_TEXTS`, `TIngestionExtension`/`TIngestionInput`/`TIngestionLlmOptions`/`TLlmStageOptionsOverride`, `resolveLlmStageOptions`, `basicsExtension`, `deriveRoles`/`TClaimRole`/`TDeriveRolesInput`, `selectFallbackConclusion`, `buildResponseSchema`, `buildClaimRecordSchema`, `STAGE_IDS` + all stage factories/consts/schemas, `TFinalizeResponseV2Input`.
+    - `@proposit/proposit-core/pipelines/ingestion` → `createScholarPipeline` + `TCreateScholarPipelineOptions` (+ scribe in Task 5).
 
 - [ ] **Step 1: Write base/index.ts**
 
@@ -337,7 +373,7 @@ export type { TCreateScholarPipelineOptions } from "./scholar/index.js"
 // scribe exports added in the scribe task.
 ```
 
-- [ ] **Step 3: Delete _old-index.ts and remove ingestion re-exports from src/lib/index.ts**
+- [ ] **Step 3: Delete \_old-index.ts and remove ingestion re-exports from src/lib/index.ts**
 
 ```bash
 git rm src/extensions/pipelines/_old-index.ts
@@ -412,6 +448,7 @@ git commit -m "feat(pipelines): per-dir subpath exports (./pipelines/base, ./pip
 ## Task 5: Implement the scribe pipeline (the core new work)
 
 **Files:**
+
 - Create: `src/extensions/pipelines/ingestion/scribe/schemas.ts` — scribe LLM output schemas (`extract`, `structure`) + types.
 - Create: `src/extensions/pipelines/ingestion/scribe/extract-stage.ts` — the `extract` LLM stage (per-extension schema) + the two adapter `deterministicStage`s (canonicalization + classification slots).
 - Create: `src/extensions/pipelines/ingestion/scribe/structure-stage.ts` — the `structure` LLM stage + the two adapters (relation-extraction + conclusion-selection slots, the latter reproducing `selectFallbackConclusion` + the `NO_SINGLE_CONCLUSION` failure).
@@ -421,10 +458,11 @@ git commit -m "feat(pipelines): per-dir subpath exports (./pipelines/base, ./pip
 - Test: `test/extensions/pipelines/scribe.test.ts` (unit/edge — no live LLM).
 
 **Interfaces:**
+
 - Consumes: `STAGE_IDS.extract`/`.scribeStructure`/`.claimCanonicalization`/`.claimTypeClassification`/`.relationExtraction`/`.conclusionSelection` (Task 3); `selectFallbackConclusion`, `buildResponseSchema`, `buildClaimRecordSchema` (Task 2); `deterministicStage`, `llmStage` from `lib/pipelines`; scholar's deterministic stage consts (`claimReferenceValidationStage`, `variableAssignmentStage`, `formulaCompilationStage`, `formulaValidationStage`) + `finalizeResponseV2` + `resolveLlmStageOptions`.
 - Produces:
-  - `createScribePipeline(extension: TIngestionExtension, options?: { llm?: TIngestionLlmOptions }): TPipeline<TIngestionInput, TParsedArgumentResponse>`
-  - `EXTRACT_STAGE_DEFAULTS`, `STRUCTURE_STAGE_DEFAULTS` (model `gpt-5.4-mini`).
+    - `createScribePipeline(extension: TIngestionExtension, options?: { llm?: TIngestionLlmOptions }): TPipeline<TIngestionInput, TParsedArgumentResponse>`
+    - `EXTRACT_STAGE_DEFAULTS`, `STRUCTURE_STAGE_DEFAULTS` (model `gpt-5.4-mini`).
 
 ### Design detail (scribe stage graph)
 
@@ -457,27 +495,41 @@ import { executePipeline } from "../../../src/lib/index.js"
 describe("createScribePipeline", () => {
     it("produces a schema-valid TParsedArgumentResponse with a compiled, validated formula on a small fixture", async () => {
         // extract → 2 normal claims; structure → one support relation + conclusion = c2
-        const result = await executePipeline(createScribePipeline(basicsExtension), { text: "..." }, { llm: stub, generateId })
+        const result = await executePipeline(
+            createScribePipeline(basicsExtension),
+            { text: "..." },
+            { llm: stub, generateId }
+        )
         expect(result.output.argument).not.toBeNull()
         expect(result.output.argument.premises.length).toBeGreaterThan(0)
         expect(result.output.processingFailures).toEqual([])
     })
 
     it("structure on an empty claim list → empty-but-valid response (no throw)", async () => {
-        const result = await executePipeline(createScribePipeline(basicsExtension), { text: "" }, { llm: emptyStub, generateId })
+        const result = await executePipeline(
+            createScribePipeline(basicsExtension),
+            { text: "" },
+            { llm: emptyStub, generateId }
+        )
         expect(result.output.argument).toBeNull()
         expect(result.output.failureText).toBeTruthy()
     })
 
     it("a cheap-model structure output with an invalid formula surfaces a processingFailure, not a crash", async () => {
-        const result = await executePipeline(createScribePipeline(basicsExtension), { text: "..." }, { llm: badFormulaStub, generateId })
+        const result = await executePipeline(
+            createScribePipeline(basicsExtension),
+            { text: "..." },
+            { llm: badFormulaStub, generateId }
+        )
         expect(result.failures.some((f) => f.severity)).toBe(true) // formula-validation caught it
         // pipeline did not throw; output is a defined response
         expect(result.output).toBeDefined()
     })
 
     it("PIPELINE_ID is the cross-repo wire id", () => {
-        expect(createScribePipeline(basicsExtension).id).toBe("argument-ingestion-scribe")
+        expect(createScribePipeline(basicsExtension).id).toBe(
+            "argument-ingestion-scribe"
+        )
     })
 })
 ```
@@ -494,6 +546,7 @@ Expected: FAIL — `createScribePipeline` not found.
 - [ ] **Step 4: Implement extract-stage.ts (LLM + 2 adapters)**
 
 `createExtractStage(extension, options?)` = `llmStage<TClaimCanonicalizationOutput>({ id: STAGE_IDS.extract, dependsOn: [], outputSchema: buildResponseSchema(extension), model: options?.model ?? EXTRACT_STAGE_DEFAULTS.model, ..., buildPrompt })` where `buildPrompt` reads `ctx.input.text`. Plus:
+
 - `extractCanonAdapterStage = deterministicStage<TClaimCanonicalizationOutput>({ id: STAGE_IDS.claimCanonicalization, dependsOn: [STAGE_IDS.extract], outputSchema: <base ClaimCanonicalizationOutputSchema or extension schema>, fn: (ctx) => ctx.get(STAGE_IDS.extract) ?? {canonicalClaims:[], mentionToClaim:[]} })` (extract already emits the canon shape → passthrough; if extract carries extra fields, strip to canon shape).
 - `extractClassificationAdapterStage = deterministicStage<TClaimTypeClassificationOutput>({ id: STAGE_IDS.claimTypeClassification, dependsOn: [STAGE_IDS.extract], outputSchema: ClaimTypeClassificationOutputSchema, fn: (ctx) => ({ classifications: (ctx.get(STAGE_IDS.extract)?.canonicalClaims ?? []).map((c) => ({ miniId: c.miniId, type: c.type, sourceString: (c as any).url ?? null })) }) })`.
 
@@ -502,6 +555,7 @@ EXTRACT_STAGE_DEFAULTS = `{ model: "gpt-5.4-mini" }`.
 - [ ] **Step 5: Implement structure-stage.ts (LLM + 2 adapters, conclusion reproduces resolution)**
 
 `createStructureStage(options?)` = `llmStage<TStructureOutput>({ id: STAGE_IDS.scribeStructure, dependsOn: [STAGE_IDS.claimCanonicalization, STAGE_IDS.claimTypeClassification], ... })`. Plus:
+
 - `structureRelationAdapterStage = deterministicStage<TRelationExtractionOutput>({ id: STAGE_IDS.relationExtraction, dependsOn: [STAGE_IDS.scribeStructure], outputSchema: RelationExtractionOutputSchema, fn: (ctx) => ({ relations: ctx.get(STAGE_IDS.scribeStructure)?.relations ?? [] }) })`.
 - `structureConclusionAdapterStage = deterministicStage<TConclusionSelectionOutput>({ id: STAGE_IDS.conclusionSelection, dependsOn: [STAGE_IDS.scribeStructure, STAGE_IDS.claimTypeClassification, STAGE_IDS.relationExtraction], outputSchema: ConclusionSelectionOutputSchema, fn: (ctx) => { ...reproduce createConclusionSelectionStage's outer run: classifications from classification slot, relations from relation slot, modelPick = first candidate that is a normal claim, else selectFallbackConclusion(...), else null → ctx.addFailure({code: CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE, ...}); return {conclusionMiniId, conclusionCandidates, rationale} } })`.
 
@@ -552,6 +606,7 @@ git commit -m "feat(pipelines): add createScribePipeline (2 cheap LLM stages + a
 ## Task 6: Drop v1 single-shot + finalizeResponse + their tests/fixtures
 
 **Files:**
+
 - Delete: `src/extensions/pipelines/_v1-single-shot.ts`, `src/extensions/pipelines/base/finalize-response.ts`.
 - Delete: `test/extensions/pipelines/v1-single-shot.test.ts`, `test/extensions/pipelines/finalize-response.test.ts`, `test/extensions/pipelines/e2e.test.ts`.
 - Delete v1 fixtures: per case under `test/extensions/pipelines/fixtures/<case>/` remove `recorded-llm.json` + `expected.json` (KEEP `v2-recorded-llm.json` + `v2-expected.json` + `input.txt`).
@@ -560,6 +615,7 @@ git commit -m "feat(pipelines): add createScribePipeline (2 cheap LLM stages + a
 - Verify: no remaining references to dropped symbols anywhere.
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: a tree with zero v1/`finalizeResponse` references.
 
@@ -619,15 +675,18 @@ git commit -m "refactor(pipelines): drop v1 single-shot + finalizeResponse (dead
 ## Task 7: Repoint the CLI `parse` command to scholar
 
 **Files:**
+
 - Modify: `src/cli/commands/parse.ts`.
 - Verify: `scripts/smoke-test.sh` (CLI smoke — check the parse invocation still matches).
 
 **Interfaces:**
+
 - Consumes: `createScholarPipeline` (Task 3), `createScribePipeline` (Task 5), `basicsExtension` from `@proposit/proposit-core/pipelines/*` — but the CLI imports relatively from `src/`. Use `../../extensions/pipelines/ingestion/index.js` + `../../extensions/pipelines/base/index.js`.
 
 - [ ] **Step 1: Update imports + construction**
 
 In `parse.ts`:
+
 - Import line `:11-15`: replace `createIngestionV1Pipeline` (from `../../lib/index.js`, which no longer re-exports it) with `createScholarPipeline` (and `createScribePipeline`) from `../../extensions/pipelines/ingestion/index.js`; import `basicsExtension` from `../../extensions/pipelines/base/index.js`; keep `executePipeline` from `../../lib/index.js`.
 - Construction `:127-130`: `const pipeline = (opts.pipeline === "scribe" ? createScribePipeline : createScholarPipeline)(basicsExtension, { llm: { defaults: { model: opts.model ?? DEFAULT_PARSE_MODEL } } })`.
 
@@ -664,9 +723,11 @@ git commit -m "feat(cli): repoint parse to scholar/scribe; rework --pipeline fla
 ## Task 8: Invariant test — scribe reuses scholar's deterministic consts by reference
 
 **Files:**
+
 - Test: `test/extensions/pipelines/reuse-invariant.test.ts` (new).
 
 **Interfaces:**
+
 - Consumes: `createScholarPipeline`, `createScribePipeline`, the 4 deterministic stage consts.
 
 - [ ] **Step 1: Write the invariant test**
@@ -686,16 +747,31 @@ import {
 describe("scribe reuses scholar's deterministic stages by reference (the reuse invariant)", () => {
     const scholar = createScholarPipeline(basicsExtension)
     const scribe = createScribePipeline(basicsExtension)
-    const shared = [claimReferenceValidationStage, variableAssignmentStage, formulaCompilationStage, formulaValidationStage]
+    const shared = [
+        claimReferenceValidationStage,
+        variableAssignmentStage,
+        formulaCompilationStage,
+        formulaValidationStage,
+    ]
 
-    it.each(shared.map((s) => [s.id, s] as const))("both pipelines include the same %s stage const", (_id, stageConst) => {
-        expect(scholar.stages).toContain(stageConst)
-        expect(scribe.stages).toContain(stageConst)
-    })
+    it.each(shared.map((s) => [s.id, s] as const))(
+        "both pipelines include the same %s stage const",
+        (_id, stageConst) => {
+            expect(scholar.stages).toContain(stageConst)
+            expect(scribe.stages).toContain(stageConst)
+        }
+    )
 
     it("scribe populates the 6 finalize slots via its stage ids", () => {
         const ids = new Set(scribe.stages.map((s) => s.id))
-        for (const id of ["claim-canonicalization", "claim-type-classification", "variable-assignment", "relation-extraction", "conclusion-selection", "formula-compilation"]) {
+        for (const id of [
+            "claim-canonicalization",
+            "claim-type-classification",
+            "variable-assignment",
+            "relation-extraction",
+            "conclusion-selection",
+            "formula-compilation",
+        ]) {
             expect(ids.has(id)).toBe(true)
         }
     })
@@ -719,6 +795,7 @@ git commit -m "test(pipelines): pin scribe↔scholar deterministic-stage reuse i
 ## Task 9: scribe golden fixtures (LIVE LLM — flagged-deferrable)
 
 **Files:**
+
 - Create per case `test/extensions/pipelines/fixtures/<case>/scribe-recorded-llm.json` + `scribe-expected.json`.
 - Create: `test/extensions/pipelines/scribe-e2e.test.ts` (replay-mode golden driver, mirroring `v2-e2e.test.ts`).
 
@@ -752,6 +829,7 @@ git commit -m "test(pipelines): scribe golden e2e (replay) + recorded fixtures"
 ## Task 10: Docs + release-note content (no version cut)
 
 **Files:**
+
 - Modify: `docs/api-reference.md` — drop v1 + `finalizeResponse` sections; rename the v2 factory section → `createScholarPipeline`; add `createScribePipeline`; document the new subpaths + the 3 newly-public helpers.
 - Modify: `docs/release-notes/upcoming.md` — user-facing 3.0.0 notes.
 - Modify: `docs/changelogs/upcoming.md` — developer changelog with the commit-hash range of this branch.
@@ -819,7 +897,7 @@ Expected: no live code/spec references to the dropped/renamed symbols.
 - Factory rename + `TCreateScholarPipelineOptions` + `PIPELINE_ID` → Task 3.
 - scribe: 1 LLM + 2 adapters per call; conclusion adapter reproduces resolution + `NO_SINGLE_CONCLUSION`; per-extension schema; export the 3 helpers → Tasks 2 + 5.
 - Reuse the 4 det consts + `finalizeResponseV2` verbatim; invariant test → Tasks 5 + 8.
-- Drop v1 + `finalizeResponse` + 5 test files + v1 fixtures (keep v2-*) → Task 6.
+- Drop v1 + `finalizeResponse` + 5 test files + v1 fixtures (keep v2-\*) → Task 6.
 - CLI repoint incl. `:146-156` live null branch → Task 7.
 - Byte-identity acceptance (v2 goldens unchanged) → Task 1 Step 6, Task 3 Step 4, Task 11 Step 2.
 - scribe unit/edge + golden → Tasks 5 + 9.

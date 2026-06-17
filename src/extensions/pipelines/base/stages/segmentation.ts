@@ -37,7 +37,7 @@ export const SEGMENTATION_MODEL = "gpt-5.4-mini"
 // burning tokens on an over-spec'd cap.
 //
 // Callers that ingest larger inputs can raise the cap further via
-// `createIngestionV2Pipeline(extension, { llm: { overrides: {
+// `createScholarPipeline(extension, { llm: { overrides: {
 // segmentation: { maxOutputTokens: N } } } })` — see
 // `shared/types.ts`.
 export const SEGMENTATION_MAX_OUTPUT_TOKENS = 8192

@@ -22,7 +22,7 @@ import type { TIngestionExtension } from "./types.js"
  * Default ingestion extension composing the `basics` per-entity
  * fields. Matches what the CLI's `parse` command and the server's
  * argument-ingestion endpoint use today. Hand to
- * `createIngestionV1Pipeline(basicsExtension)` for a drop-in pipeline.
+ * `createScholarPipeline(basicsExtension)` for a drop-in pipeline.
  */
 export const basicsExtension: TIngestionExtension = {
     responseSchema: BasicsParsingSchema,
