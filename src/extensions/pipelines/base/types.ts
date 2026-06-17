@@ -1,17 +1,16 @@
-// Shared types for the argument-ingestion extension.
+// Shared types for the ingestion pipelines.
 //
-// The v1 single-shot pipeline and the (future) v2 multi-stage pipeline
-// both produce a `TParsedArgumentResponse`-shaped output that the
-// existing `ArgumentParser.build()` consumes. They share an extension
-// descriptor — `TIngestionExtension` — so callers can plug in custom
-// per-entity field shapes (titles, bodies, URLs, axiom labels, …)
+// The scholar (thorough, multi-stage) and scribe (fast, two-call)
+// pipelines both produce a `TParsedArgumentResponse`-shaped output that
+// the existing `ArgumentParser.build()` consumes. They share an
+// extension descriptor — `TIngestionExtension` — so callers can plug in
+// custom per-entity field shapes (titles, bodies, URLs, axiom labels, …)
 // without reimplementing the pipelines.
 //
-// For v1 the descriptor is consumed in exactly one place:
-// `createScholarPipeline` reads `responseSchema` and hands it to
-// the single `llmStage`'s `outputSchema` (and to `buildParsingPrompt`
-// for system-prompt construction). The per-entity slots are retained
-// in the descriptor so v2 stages can compose them.
+// The descriptor's per-entity slots (`claimSchema`/`variableSchema`/…)
+// are composed by the stages (e.g. canonicalization builds its
+// per-extension output schema from `claimSchema`); `responseSchema` is
+// the pipeline's advertised output schema.
 
 import type { TSchema } from "typebox"
 import type { TReasoningEffort } from "../../../lib/llm/types.js"

@@ -5,9 +5,10 @@
 // `BasicsParsingSchema` and the per-entity slots in this descriptor
 // stay structurally identical without manual duplication.
 //
-// A multi-stage pipeline can consume the per-entity slots to wire
-// decomposed stage outputs; for v1 only `responseSchema` is consumed
-// by the factory.
+// The multi-stage pipelines consume the per-entity slots to wire their
+// decomposed stage outputs (e.g. canonicalization builds its output
+// schema from `claimSchema`); `responseSchema` is the advertised
+// pipeline output schema.
 
 import {
     BasicsArgumentExtension,

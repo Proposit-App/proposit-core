@@ -19,7 +19,8 @@ describe("pipelines subpath barrels", () => {
         expect(base.STAGE_IDS.scribeStructure).toBe("scribe-structure")
     })
 
-    it("ingestion exports the scholar factory", () => {
+    it("ingestion exports the scholar + scribe factories", () => {
         expect(typeof ingestion.createScholarPipeline).toBe("function")
+        expect(typeof ingestion.createScribePipeline).toBe("function")
     })
 })
