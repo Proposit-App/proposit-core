@@ -1,0 +1,17 @@
+# upcoming release notes
+
+> ## ⚠️ Breaking changes (shipped as a minor)
+>
+> **This release removes a public import path even though the version is a minor bump.** The local-model provider extension changed: the Ollama provider was removed and replaced by a new chat-completions provider on a new import path. This is shipped as a minor because nothing imports the removed path. See "Upgrading" below.
+
+## Local-model provider
+
+- **The local-development model provider now talks to any OpenAI-compatible chat endpoint.** The previous provider drove a local Ollama daemon; the new **chat-completions** provider drives any OpenAI-compatible `/v1/chat/completions` server — a local `llama.cpp` `llama-server` by default — over plain HTTP, with no SDK and no new dependency. Production is unchanged: it stays on OpenAI, which remains the default everywhere. The local provider exists purely so a developer can run the whole LLM-backed stack against a self-hosted model at zero API cost.
+- It is synchronous and structured-output-only (one request per call), which is all the ingestion pipeline needs. It honors a generous per-request timeout (20 min by default) so a slow local generation isn't cut off, and classifies a down/slow server as a retryable transient failure.
+
+## Upgrading
+
+- Replace `new OllamaProvider(config)` with `createChatCompletionsProvider(config)`, imported from `@proposit/proposit-core/extensions/chat-completions` (the old `@proposit/proposit-core/extensions/ollama` path is gone).
+- Map the config: `baseUrl` now points at the OpenAI-compatible endpoint **including its `/v1` prefix** (default `http://127.0.0.1:46373/v1`), and `model` is the served model identifier (default `local-coder`). The Ollama-specific knobs (`numCtx`, `think`, `stream`, `client`, `maxToolCallRounds`) no longer exist; `requestTimeoutMs` carries over (now enforced via `AbortSignal.timeout`, with no `undici` dependency).
+- If you imported the Ollama extension's error classes or its `typeboxToJsonSchema` converter, the same names are exported from the new subpath (the converter is unchanged; the error set now uses `classifyHttpError` / `classifyFetchError` for status/network mapping).
+- The `ollama` and `undici` optional peer dependencies are no longer needed; you can remove them from your install.
