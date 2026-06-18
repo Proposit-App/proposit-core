@@ -17,7 +17,7 @@ export const DEFAULT_MODEL = "local-coder"
 export const DEFAULT_API_KEY = "local-llm-no-key"
 // Generous per-request timeout. Local generations on a large reasoning
 // model legitimately take minutes per structured-output stage; enforced
-// via `AbortSignal.timeout` (no `undici`).
+// via `AbortSignal.timeout` with no extra HTTP-stack dependency.
 export const DEFAULT_REQUEST_TIMEOUT_MS = 1_200_000
 
 export type TChatCompletionsFetch = (

@@ -3,7 +3,8 @@
 // timeout enforced via `AbortSignal.timeout` (composed with the caller's
 // abort signal so a mid-flight cancel still propagates), and non-2xx →
 // error-class classification. No SSE, no background poll — this provider
-// is synchronous. No `undici`: the timeout is a standard `AbortSignal`.
+// is synchronous. The timeout is a standard `AbortSignal.timeout` with
+// no extra HTTP-stack dependency.
 
 import {
     classifyFetchError,

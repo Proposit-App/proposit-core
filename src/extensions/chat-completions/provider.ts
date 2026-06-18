@@ -18,7 +18,7 @@
 //     structured-output ingestion path, which uses no tools, so there is
 //     no multi-round tool loop to port.
 //   * `requestTimeoutMs` is enforced via `AbortSignal.timeout` inside
-//     `requestJson` — no `undici`.
+//     `requestJson` — no extra HTTP-stack dependency.
 //
 // Error classification routes HTTP-status families + fetch failures into
 // the framework-recognized error classes (see `./errors.ts`). The

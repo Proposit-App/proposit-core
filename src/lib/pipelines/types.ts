@@ -198,8 +198,8 @@ export type TPipelineEvent =
           /**
            * The OpenAI response id for this attempt, when the provider
            * surfaces one. Absent for providers that do not expose a
-           * response id (e.g. Ollama) and for attempts where the id
-           * could not be captured before completion.
+           * response id (e.g. the chat-completions provider) and for
+           * attempts where the id could not be captured before completion.
            */
           rawResponseId?: string
           at: number
