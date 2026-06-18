@@ -43,6 +43,11 @@
             "import": "./dist/extensions/openai/index.js",
             "default": "./dist/extensions/openai/index.js"
         },
+        "./extensions/chat-completions": {
+            "types": "./dist/extensions/chat-completions/index.d.ts",
+            "import": "./dist/extensions/chat-completions/index.js",
+            "default": "./dist/extensions/chat-completions/index.js"
+        },
         "./extensions/ollama": {
             "types": "./dist/extensions/ollama/index.d.ts",
             "import": "./dist/extensions/ollama/index.js",
