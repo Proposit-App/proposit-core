@@ -65,7 +65,7 @@ describe("projectStringLengthHint", () => {
         ).toEqual({ type: "string" })
     })
 
-    it("does not shrink an exact-value String that declares a format (e.g. uri)", () => {
+    it("does not shrink an exact-value String that declares a format (e.g. uri), and does not project format to the wire object", () => {
         const projected = projectStringLengthHint(
             Type.String({
                 maxLength: 500,
@@ -73,14 +73,17 @@ describe("projectStringLengthHint", () => {
                 format: "uri",
             })
         )
-        // Original maxLength preserved; description not appended; format
-        // carried through.
+        // Original maxLength preserved; description not appended. `format`
+        // drives the exemption decision but is NOT projected onto the
+        // wire object — the converters strip non-structural metadata, and
+        // OpenAI strict mode rejects string formats outside its fixed set
+        // (uri is not in it).
         expect(projected).toEqual({
             type: "string",
             maxLength: 500,
             description: "The URL of the citation",
-            format: "uri",
         })
+        expect(projected).not.toHaveProperty("format")
     })
 
     it("does not shrink an exact-value String with a very small maxLength", () => {

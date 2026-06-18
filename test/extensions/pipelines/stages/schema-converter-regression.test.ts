@@ -243,7 +243,7 @@ describe("ingestion claim-record schema — free-text length steering", () => {
         expect(props.title.description).toMatch(/at most 45 characters$/)
     })
 
-    it("leaves the exact-value `url` at its original maxLength with no appended budget", () => {
+    it("leaves the exact-value `url` at its original maxLength with no appended budget and no `format` on the wire schema", () => {
         const props = (
             citationClaimBranch() as {
                 properties: { url: { maxLength: number; description: string } }
@@ -251,5 +251,9 @@ describe("ingestion claim-record schema — free-text length steering", () => {
         ).properties
         expect(props.url.maxLength).toBe(500)
         expect(props.url.description).not.toMatch(/at most \d+ characters/)
+        // The source `url` declares `format: "uri"`, but the converted
+        // strict-mode wire schema must not carry it — OpenAI strict mode
+        // rejects formats outside its fixed set.
+        expect(props.url).not.toHaveProperty("format")
     })
 })

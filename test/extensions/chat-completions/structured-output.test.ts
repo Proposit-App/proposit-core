@@ -191,7 +191,7 @@ describe("typeboxToJsonSchema", () => {
         expect(json.properties.note).toEqual({ type: "string" })
     })
 
-    it("does not shrink an exact-value String (format: uri) — original maxLength, no hint", () => {
+    it("does not shrink an exact-value String (format: uri) — original maxLength, no hint, and no `format` on the wire schema", () => {
         const schema = Type.Object({
             url: Type.String({
                 maxLength: 500,
@@ -204,6 +204,9 @@ describe("typeboxToJsonSchema", () => {
         }
         expect(json.properties.url.maxLength).toBe(500)
         expect(json.properties.url.description).toBe("The URL of the citation")
+        // `format` drives the exemption decision but is not projected —
+        // the converters emit only structural fields on the wire.
+        expect(json.properties.url).not.toHaveProperty("format")
     })
 
     it("throws on Type.Tuple (unsupported primitive)", () => {

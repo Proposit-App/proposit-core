@@ -113,7 +113,12 @@ export function projectStringLengthHint(
     }
 
     // Exact-value field: keep the real limit and any description as-is;
-    // no shrink, no hint.
+    // no shrink, no hint. `format` is read only to MAKE the exemption
+    // decision — it is never projected into the wire object: the
+    // converters strip all non-structural metadata, and OpenAI strict
+    // mode supports only a fixed string-`format` set (date-time, date,
+    // time, duration, email, hostname, ipv4, ipv6, uuid) — emitting an
+    // unsupported `format` like `uri` risks a 400 at generation time.
     if (isExactValueField(fields)) {
         const exact: Record<string, unknown> = {
             type: "string",
@@ -121,9 +126,6 @@ export function projectStringLengthHint(
         }
         if (fields.description !== undefined) {
             exact.description = fields.description
-        }
-        if (fields.format !== undefined) {
-            exact.format = fields.format
         }
         return exact
     }
