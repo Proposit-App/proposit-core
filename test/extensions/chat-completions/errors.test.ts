@@ -48,9 +48,11 @@ describe("chat-completions error classes — retryReason tags", () => {
     })
     it("NonRetryableLlmError carries no retryReason tag", () => {
         expect(
-            (new NonRetryableLlmError({ message: "x" }) as {
-                retryReason?: unknown
-            }).retryReason
+            (
+                new NonRetryableLlmError({ message: "x" }) as {
+                    retryReason?: unknown
+                }
+            ).retryReason
         ).toBeUndefined()
     })
 })

@@ -120,10 +120,14 @@ describe("createChatCompletionsProvider — request shape", () => {
         const body = JSON.parse(init.body as string) as Record<string, unknown>
         const msgs = body.messages as { role: string }[]
         expect(msgs.map((m) => m.role)).toEqual(["system", "user"])
+        // `json_schema` is the chat-completions wire field name (snake_case),
+        // exempt from the camelCase rule.
+        /* eslint-disable @typescript-eslint/naming-convention */
         const rf = body.response_format as {
             type: string
             json_schema: { schema: Record<string, unknown> }
         }
+        /* eslint-enable @typescript-eslint/naming-convention */
         expect(rf.type).toBe("json_schema")
         expect(rf.json_schema.schema).toMatchObject({
             type: "object",
@@ -138,7 +142,9 @@ describe("createChatCompletionsProvider — request shape", () => {
         // stream, so the two respond() calls below cannot share one.
         const fetchMock: TFetchMock = vi
             .fn()
-            .mockImplementation(() => Promise.resolve(okResponse({ answer: "ok" })))
+            .mockImplementation(() =>
+                Promise.resolve(okResponse({ answer: "ok" }))
+            )
         const provider = createChatCompletionsProvider({
             fetch: asFetch(fetchMock),
         })
@@ -150,10 +156,12 @@ describe("createChatCompletionsProvider — request shape", () => {
             maxOutputTokens: 4096,
         })
         expect(
-            (JSON.parse(
-                (fetchMock.mock.calls[0] as [string, RequestInit])[1]
-                    .body as string
-            ) as Record<string, unknown>).max_tokens
+            (
+                JSON.parse(
+                    (fetchMock.mock.calls[0] as [string, RequestInit])[1]
+                        .body as string
+                ) as Record<string, unknown>
+            ).max_tokens
         ).toBe(4096)
 
         fetchMock.mockClear()
@@ -165,10 +173,12 @@ describe("createChatCompletionsProvider — request shape", () => {
             maxOutputTokens: 0,
         })
         expect(
-            (JSON.parse(
-                (fetchMock.mock.calls[0] as [string, RequestInit])[1]
-                    .body as string
-            ) as Record<string, unknown>).max_tokens
+            (
+                JSON.parse(
+                    (fetchMock.mock.calls[0] as [string, RequestInit])[1]
+                        .body as string
+                ) as Record<string, unknown>
+            ).max_tokens
         ).toBeUndefined()
     })
 

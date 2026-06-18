@@ -1703,7 +1703,7 @@ The retrieval / lifecycle functions (`retrieveResponse`, `reconnectStream`, `can
 
 A second concrete `TLlmProvider` for running the LLM stack against any OpenAI-compatible `/v1/chat/completions` endpoint — a local [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` by default (model alias `local-coder` on `http://127.0.0.1:46373/v1`), the HF router, or any other OpenAI-compatible chat backend by swapping `baseUrl` + token. Runs at zero API cost against a local server. **Dev/test only — production stays on OpenAI, which remains the default everywhere.**
 
-Surfaced **only** at the `@proposit/proposit-core/extensions/chat-completions` subpath — never the package root — because its error classes intentionally share names with the OpenAI ones and would collide. It talks to the endpoint over **raw `fetch`** with no SDK and **no new dependency** (it is *not* SDK-coupled). It is synchronous and structured-output-only: one POST per call, no streaming/background/poll, no function-tool loop.
+Surfaced **only** at the `@proposit/proposit-core/extensions/chat-completions` subpath — never the package root — because its error classes intentionally share names with the OpenAI ones and would collide. It talks to the endpoint over **raw `fetch`** with no SDK and **no new dependency** (it is _not_ SDK-coupled). It is synchronous and structured-output-only: one POST per call, no streaming/background/poll, no function-tool loop.
 
 #### `createChatCompletionsProvider(config?)` → `TLlmProvider`
 

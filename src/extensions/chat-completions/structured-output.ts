@@ -73,7 +73,9 @@ function isOptional(schema: TSchema): boolean {
  * Throws `UnsupportedSchemaError` when the source schema contains a
  * TypeBox primitive outside the supported subset.
  */
-export function typeboxToJsonSchema(schema: TSchema): TChatCompletionsJsonSchema {
+export function typeboxToJsonSchema(
+    schema: TSchema
+): TChatCompletionsJsonSchema {
     const kind = kindOf(schema)
     switch (kind) {
         case "String":
