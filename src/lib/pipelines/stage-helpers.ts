@@ -9,7 +9,7 @@
 //   pipeline.
 
 import type { TSchema } from "typebox"
-import { Value } from "typebox/value"
+import { Pointer, Value } from "typebox/value"
 import type {
     TDepSpec,
     TPipeline,
@@ -350,10 +350,45 @@ export function buildLlmRequest<TOutput>(
 // against the stage schema and format the validation error. Used by both
 // the in-process loop (output already parsed by the provider) and
 // `validateLlmOutcome`'s completed branch (output parsed from raw text).
+// Truncate every string longer than its schema's `maxLength` to that cap,
+// mutating `value` in place. Driven off the validator's own `maxLength`
+// errors (which carry the JSON-pointer path + the limit), so it handles
+// nested objects, arrays, and discriminated unions without walking the
+// schema by hand. Re-runs because a union surfaces a failing variant's
+// inner errors only once its siblings are reconciled; truncation is
+// monotonic (strings only shrink) so the loop converges. The pass cap is a
+// backstop against a degenerate schema.
+// ponytail: silent truncate — ingestion output is human-proofread before
+// publish; emit a non-fatal warning here if clipped fields need surfacing.
+function clampMaxLengthStrings(schema: TSchema, value: unknown): void {
+    for (let pass = 0; pass < 16; pass++) {
+        let changed = false
+        for (const err of Value.Errors(schema, value)) {
+            if (err.keyword !== "maxLength") continue
+            const limit = err.params.limit
+            const current = Pointer.Get(value, err.instancePath)
+            if (typeof current === "string" && current.length > limit) {
+                Pointer.Set(value, err.instancePath, current.slice(0, limit))
+                changed = true
+            }
+        }
+        if (!changed) break
+    }
+}
+
 function checkLlmOutput<TOutput>(
     cfg: TLlmStageConfig<TOutput>,
     output: unknown
 ): { valid: boolean; validationError?: string } {
+    if (Value.Check(cfg.outputSchema, output)) {
+        return { valid: true }
+    }
+    // OpenAI strict structured-output IGNORES JSON-Schema string `maxLength`,
+    // so a model can return an over-long string the schema forbids — a
+    // recoverable issue that must NOT fail the whole stage. Truncate any
+    // over-long string to its declared cap (in place) and re-check, rather
+    // than rejecting the output and halting the pipeline.
+    clampMaxLengthStrings(cfg.outputSchema, output)
     if (Value.Check(cfg.outputSchema, output)) {
         return { valid: true }
     }
