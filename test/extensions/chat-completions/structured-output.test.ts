@@ -1,10 +1,10 @@
 // Unit tests for the TypeBox → standard JSON Schema converter shipping
-// with the `extensions/ollama/` provider.
+// with the `extensions/chat-completions/` provider.
 //
-// Scope: assert the converter produces a STANDARD JSON Schema (the
-// shape Ollama's `format` parameter accepts) for every supported
-// TypeBox primitive, and throws with a clear message for unsupported
-// primitives.
+// Scope: assert the converter produces a STANDARD JSON Schema (the shape
+// an OpenAI-compatible `/v1/chat/completions` `response_format:
+// { type: "json_schema" }` accepts) for every supported TypeBox
+// primitive, and throws with a clear message for unsupported primitives.
 //
 // The load-bearing divergence from the OpenAI strict converter
 // (`typeboxToOpenAiSchema`): `Type.Optional(T)` simply OMITS the key
@@ -15,7 +15,7 @@
 import { describe, it, expect } from "vitest"
 import Type from "typebox"
 import { Value } from "typebox/value"
-import { typeboxToJsonSchema } from "../../../src/extensions/ollama/structured-output.js"
+import { typeboxToJsonSchema } from "../../../src/extensions/chat-completions/structured-output.js"
 
 describe("typeboxToJsonSchema", () => {
     it("omits Optional keys from `required` and does NOT emit additionalProperties:false", () => {

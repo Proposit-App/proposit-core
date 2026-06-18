@@ -5,7 +5,7 @@
 //   * `RUN_LIVE_LLM_TESTS=1` is set, AND
 //   * `OPENAI_API_KEY` is a non-empty string.
 // (OpenAI calls cost money, so this suite uses a distinct flag from
-// the free local-Ollama `RUN_LOCAL_LLM_TESTS` gate.)
+// the free local-LLM `RUN_LOCAL_LLM_TESTS` gate.)
 // When either is false the suite is `describe.skip`-ed with a console
 // note. CI sets neither, so this file is inert there.
 //

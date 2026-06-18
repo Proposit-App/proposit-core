@@ -43,10 +43,10 @@
             "import": "./dist/extensions/openai/index.js",
             "default": "./dist/extensions/openai/index.js"
         },
-        "./extensions/ollama": {
-            "types": "./dist/extensions/ollama/index.d.ts",
-            "import": "./dist/extensions/ollama/index.js",
-            "default": "./dist/extensions/ollama/index.js"
+        "./extensions/chat-completions": {
+            "types": "./dist/extensions/chat-completions/index.d.ts",
+            "import": "./dist/extensions/chat-completions/index.js",
+            "default": "./dist/extensions/chat-completions/index.js"
         },
         "./pipelines/base": {
             "types": "./dist/extensions/pipelines/base/index.d.ts",
@@ -94,13 +94,11 @@
         "eslint-plugin-check-file": "^3.3.1",
         "eslint-plugin-n": "^17.24.0",
         "globals": "^17.4.0",
-        "ollama": "^0.6.3",
         "peggy": "^5.1.0",
         "prettier": "^3.8.1",
         "typedoc": "^0.28.18",
         "typescript": "^6.0.2",
         "typescript-eslint": "^8.58.0",
-        "undici": "^8.3.0",
         "vitest": "^4.1.2"
     },
     "packageManager": "pnpm@10.23.0",
@@ -110,18 +108,10 @@
         "yaml": "^2.8.3"
     },
     "peerDependencies": {
-        "ollama": ">=0.5.0",
-        "openai": ">=4.0.0",
-        "undici": ">=6.0.0"
+        "openai": ">=4.0.0"
     },
     "peerDependenciesMeta": {
-        "ollama": {
-            "optional": true
-        },
         "openai": {
-            "optional": true
-        },
-        "undici": {
             "optional": true
         }
     }

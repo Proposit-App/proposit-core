@@ -907,7 +907,7 @@ describe("createOpenAiResponsesProvider — incomplete-response detection", () =
 
     it("includes the max_output_tokens reason + override-knob guidance in the error message", async () => {
         // Each call gets a fresh `Response` because the Response body
-        // is single-use in undici; a second `.json()` on the same
+        // is a one-shot stream; a second `.json()` on the same
         // instance throws "Body is unusable".
         const fetchMock: TFetchMock = vi.fn().mockImplementation(() =>
             Promise.resolve(

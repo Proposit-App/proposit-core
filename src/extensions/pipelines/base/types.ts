@@ -63,13 +63,14 @@ export type TIngestionInput = {
  * `maxOutputTokens` (the output-budget cap; not setting one means the
  * model's default applies, which is what caused the v1.3.0 segmentation
  * truncation against the Singer fixture), `reasoningEffort` (effort
- * budget for reasoning models — OpenAI-specific; ignored by the Ollama
- * provider), and `model` (the provider model identifier).
+ * budget for reasoning models — OpenAI-specific; ignored by the
+ * chat-completions provider), and `model` (the provider model
+ * identifier).
  *
  * The `model` knob lets a caller retarget every LLM stage at a
  * different backend without forking the stages — e.g. pointing the
- * whole v2 pipeline at a local Ollama model
- * (`{ llm: { defaults: { model: "qwen3.6:latest" } } }`) for cost-free
+ * whole v2 pipeline at a local model
+ * (`{ llm: { defaults: { model: "local-coder" } } }`) for cost-free
  * local development. Each stage keeps its own hard-coded `gpt-5.x`
  * default when no override is supplied, so production behavior is
  * unchanged.
@@ -80,7 +81,7 @@ export type TIngestionInput = {
  * does NOT merge it — see `resolveLlmStageOptions`). Its primary
  * consumer is the server's "no-auto-retry" toggle, which drops
  * `"transient"` from `retryOn`. Note that dropping `"transient"`
- * disables the retry for ALL transient causes — network/undici
+ * disables the retry for ALL transient causes — network
  * timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not
  * timeouts alone, because every non-Abort transport error and the
  * truncation case both classify as `"transient"`.

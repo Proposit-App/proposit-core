@@ -35,9 +35,6 @@ importers:
             globals:
                 specifier: ^17.4.0
                 version: 17.4.0
-            ollama:
-                specifier: ^0.6.3
-                version: 0.6.3
             peggy:
                 specifier: ^5.1.0
                 version: 5.1.0
@@ -53,9 +50,6 @@ importers:
             typescript-eslint:
                 specifier: ^8.58.0
                 version: 8.58.0(eslint@9.39.4)(typescript@6.0.2)
-            undici:
-                specifier: ^8.3.0
-                version: 8.3.0
             vitest:
                 specifier: ^4.1.2
                 version: 4.1.2(@types/node@25.5.2)(vite@7.3.1(@types/node@25.5.2)(yaml@2.8.3))
@@ -462,7 +456,6 @@ packages:
             }
         cpu: [arm]
         os: [linux]
-        libc: [glibc]
 
     "@rollup/rollup-linux-arm-musleabihf@4.60.1":
         resolution:
@@ -471,7 +464,6 @@ packages:
             }
         cpu: [arm]
         os: [linux]
-        libc: [musl]
 
     "@rollup/rollup-linux-arm64-gnu@4.60.1":
         resolution:
@@ -480,7 +472,6 @@ packages:
             }
         cpu: [arm64]
         os: [linux]
-        libc: [glibc]
 
     "@rollup/rollup-linux-arm64-musl@4.60.1":
         resolution:
@@ -489,7 +480,6 @@ packages:
             }
         cpu: [arm64]
         os: [linux]
-        libc: [musl]
 
     "@rollup/rollup-linux-loong64-gnu@4.60.1":
         resolution:
@@ -498,7 +488,6 @@ packages:
             }
         cpu: [loong64]
         os: [linux]
-        libc: [glibc]
 
     "@rollup/rollup-linux-loong64-musl@4.60.1":
         resolution:
@@ -507,7 +496,6 @@ packages:
             }
         cpu: [loong64]
         os: [linux]
-        libc: [musl]
 
     "@rollup/rollup-linux-ppc64-gnu@4.60.1":
         resolution:
@@ -516,7 +504,6 @@ packages:
             }
         cpu: [ppc64]
         os: [linux]
-        libc: [glibc]
 
     "@rollup/rollup-linux-ppc64-musl@4.60.1":
         resolution:
@@ -525,7 +512,6 @@ packages:
             }
         cpu: [ppc64]
         os: [linux]
-        libc: [musl]
 
     "@rollup/rollup-linux-riscv64-gnu@4.60.1":
         resolution:
@@ -534,7 +520,6 @@ packages:
             }
         cpu: [riscv64]
         os: [linux]
-        libc: [glibc]
 
     "@rollup/rollup-linux-riscv64-musl@4.60.1":
         resolution:
@@ -543,7 +528,6 @@ packages:
             }
         cpu: [riscv64]
         os: [linux]
-        libc: [musl]
 
     "@rollup/rollup-linux-s390x-gnu@4.60.1":
         resolution:
@@ -552,7 +536,6 @@ packages:
             }
         cpu: [s390x]
         os: [linux]
-        libc: [glibc]
 
     "@rollup/rollup-linux-x64-gnu@4.60.1":
         resolution:
@@ -561,7 +544,6 @@ packages:
             }
         cpu: [x64]
         os: [linux]
-        libc: [glibc]
 
     "@rollup/rollup-linux-x64-musl@4.60.1":
         resolution:
@@ -570,7 +552,6 @@ packages:
             }
         cpu: [x64]
         os: [linux]
-        libc: [musl]
 
     "@rollup/rollup-openbsd-x64@4.60.1":
         resolution:
@@ -1458,12 +1439,6 @@ packages:
                 integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==,
             }
 
-    ollama@0.6.3:
-        resolution:
-            {
-                integrity: sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg==,
-            }
-
     openai@6.38.0:
         resolution:
             {
@@ -1791,13 +1766,6 @@ packages:
                 integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==,
             }
 
-    undici@8.3.0:
-        resolution:
-            {
-                integrity: sha512-TkUDgb6tl7KOGZ+7e8E3d2FYgUQgF6z5YypqjWmixVQSQERFcVrVg0ySADm2LVLRh5ljAaHTCR5Fmz3Q34rB7Q==,
-            }
-        engines: { node: ">=22.19.0" }
-
     uri-js@4.4.1:
         resolution:
             {
@@ -1884,12 +1852,6 @@ packages:
                 optional: true
             jsdom:
                 optional: true
-
-    whatwg-fetch@3.6.20:
-        resolution:
-            {
-                integrity: sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==,
-            }
 
     which@2.0.2:
         resolution:
@@ -2688,10 +2650,6 @@ snapshots:
 
     obug@2.1.1: {}
 
-    ollama@0.6.3:
-        dependencies:
-            whatwg-fetch: 3.6.20
-
     openai@6.38.0: {}
 
     optionator@0.9.4:
@@ -2864,8 +2822,6 @@ snapshots:
 
     undici-types@7.18.2: {}
 
-    undici@8.3.0: {}
-
     uri-js@4.4.1:
         dependencies:
             punycode: 2.3.1
@@ -2909,8 +2865,6 @@ snapshots:
             "@types/node": 25.5.2
         transitivePeerDependencies:
             - msw
-
-    whatwg-fetch@3.6.20: {}
 
     which@2.0.2:
         dependencies:

@@ -90,8 +90,8 @@ export type TCreateOpenAiResponsesProviderOptions = {
     /**
      * Stream the foreground response over SSE and accumulate to the
      * terminal envelope inside the provider. Defaults to **`true`** —
-     * gives connection-drop resilience and parity with the Ollama
-     * provider. No data-retention implications (unlike `backgroundMode`).
+     * gives connection-drop resilience. No data-retention implications
+     * (unlike `backgroundMode`).
      * Set `false` to restore the blocking `response.json()` path.
      */
     stream?: boolean

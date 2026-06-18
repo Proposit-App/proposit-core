@@ -1444,7 +1444,7 @@ _Since v1.1.0._
 
 The pipeline framework runs a DAG of processing stages — some deterministic, some backed by an LLM — and reports structured per-stage failures. It is **provider-agnostic**: stages depend only on the abstract `TLlmProvider` interface, and concrete providers are shipped as optional subpath extensions. `src/lib/` carries zero third-party SDK imports; the SDK-coupled providers live under `src/extensions/` and declare their SDKs as optional `peerDependencies`.
 
-The framework primitives, the `TLlmProvider` interface, the OpenAI provider, the failure-code constants, and the default ingestion-pipeline factories are all re-exported from the package root for single-import ergonomics. The two concrete providers additionally have dedicated subpath exports (`@proposit/proposit-core/extensions/openai`, `@proposit/proposit-core/extensions/ollama`) for callers that prefer to tree-shake provider machinery.
+The framework primitives, the `TLlmProvider` interface, the OpenAI provider, the failure-code constants, and the default ingestion-pipeline factories are all re-exported from the package root for single-import ergonomics. The two concrete providers additionally have dedicated subpath exports (`@proposit/proposit-core/extensions/openai`, `@proposit/proposit-core/extensions/chat-completions`) for callers that prefer to tree-shake provider machinery.
 
 ### `TLlmProvider`
 
@@ -1454,7 +1454,7 @@ type TLlmProvider = {
 }
 ```
 
-The single-method abstraction every stage calls. `respond<T>` takes a structured-output request and returns the parsed output plus token usage. The framework never depends on a concrete provider — pass any `TLlmProvider` implementation (production OpenAI, dev-only Ollama, or a test mock) as the `llm` dependency to `executePipeline`.
+The single-method abstraction every stage calls. `respond<T>` takes a structured-output request and returns the parsed output plus token usage. The framework never depends on a concrete provider — pass any `TLlmProvider` implementation (production OpenAI, the dev-only chat-completions provider, or a test mock) as the `llm` dependency to `executePipeline`.
 
 ```typescript
 type TLlmRequest<T> = {
@@ -1478,7 +1478,7 @@ type TLlmResponse<T> = {
 }
 ```
 
-`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local Ollama tag like `"qwen3.6:latest"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in background-stream mode from the first `response.created` SSE event so a caller can persist the id before a possible crash. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
+`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local model alias like `"local-coder"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in background-stream mode from the first `response.created` SSE event so a caller can persist the id before a possible crash. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
 
 `TToolSpec` is a discriminated union over `kind`:
 
@@ -1699,33 +1699,29 @@ The retrieval / lifecycle functions (`retrieveResponse`, `reconnectStream`, `can
 
 ---
 
-### `@proposit/proposit-core/extensions/ollama`
+### `@proposit/proposit-core/extensions/chat-completions`
 
-A second concrete `TLlmProvider` for running the LLM stack against a local [Ollama](https://ollama.com) daemon (e.g. `qwen3.6:latest`) at zero API cost. **Dev/test only — production stays on OpenAI, which remains the default everywhere.**
+A second concrete `TLlmProvider` for running the LLM stack against any OpenAI-compatible `/v1/chat/completions` endpoint — a local [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` by default (model alias `local-coder` on `http://127.0.0.1:46373/v1`), the HF router, or any other OpenAI-compatible chat backend by swapping `baseUrl` + token. Runs at zero API cost against a local server. **Dev/test only — production stays on OpenAI, which remains the default everywhere.**
 
-Surfaced **only** at the `@proposit/proposit-core/extensions/ollama` subpath — never the package root — because its error classes intentionally share names with the OpenAI ones and would collide. Uses the official `ollama` SDK (`>=0.5.0`) as an **optional `peerDependency`**; a missing package throws an actionable construction-time error. The per-request timeout (below) additionally uses `undici` (`>=6.0.0`) as a **second optional `peerDependency`**.
+Surfaced **only** at the `@proposit/proposit-core/extensions/chat-completions` subpath — never the package root — because its error classes intentionally share names with the OpenAI ones and would collide. It talks to the endpoint over **raw `fetch`** with no SDK and **no new dependency** (it is _not_ SDK-coupled). It is synchronous and structured-output-only: one POST per call, no streaming/background/poll, no function-tool loop.
 
-#### `new OllamaProvider(config?)` → `TLlmProvider`
+#### `createChatCompletionsProvider(config?)` → `TLlmProvider`
 
 ```typescript
-type TOllamaProviderConfig = {
-    baseUrl?: string // daemon URL, default http://localhost:11434
-    client?: TOllamaClient // pre-built SDK client; primarily a test seam
-    numCtx?: number // → options.num_ctx, default 32768
-    requestTimeoutMs?: number // per-provider HTTP timeout, default 1_200_000 (20 min)
-    stream?: boolean // stream chat() and accumulate chunks; default true; fixes ~300s non-streaming timeout
-    think?: boolean // toggle Ollama's thinking trace; opt-in (unset → model default); no safe global default — see below
-    maxToolCallRounds?: number // function-tool agent-loop cap, default 6
+type TChatCompletionsProviderConfig = {
+    baseUrl?: string // endpoint base (incl. /v1), default http://127.0.0.1:46373/v1
+    model?: string // model identifier, default local-coder
+    apiKey?: string // bearer token, default a throwaway (local servers ignore it)
+    requestTimeoutMs?: number // per-request timeout via AbortSignal.timeout, default 1_200_000 (20 min); 0 disables
+    fetch?: TChatCompletionsFetch // injectable fetch; default globalThis.fetch
 }
 ```
 
-**`numCtx` is set generously on purpose.** Ollama **silently truncates** any prompt longer than `num_ctx` — no error is raised; the model emits schema-valid JSON from the truncated prompt, which passes `Value.Check` and yields a quietly-wrong parse. Per-model defaults are often ~4096, well below a real multi-KB ingestion prompt, so the generous 32768 default keeps "run the whole pipeline locally on real text" honest. Behavioral differences from the OpenAI provider: `maxOutputTokens` maps to `num_predict` (positive only); `reasoningEffort` is ignored; `rawResponseId` is left undefined; `signal` is honored via the SDK client's `abort()`.
+The provider POSTs to `{baseUrl}/chat/completions` with the request's system + user messages and a `response_format: { type: "json_schema", json_schema: { name, schema } }` built from the request's `outputSchema` via the lax converter (below). Behavioral notes vs. the OpenAI Responses provider: `maxOutputTokens` maps to `max_tokens` (positive only); `reasoningEffort` is ignored (no chat-completions analogue); `temperature` is fixed at `0` for deterministic structured output; `rawResponseId` is left undefined (a chat-completions response carries no durable id we surface); `signal` is honored (composed with the timeout signal via `AbortSignal.any`). A request carrying `tools` fails fast with `NonRetryableLlmError` — this provider serves the structured-output ingestion path only.
 
-**`think` is an opt-in knob with no safe global default.** When unset (the default) the provider sends no `think` field and the model's own default applies (ON for reasoning models like `qwen3.6:latest`). On `qwen3.6:latest` the thinking toggle's effect on structured-output fidelity is **stage-dependent and cuts both ways** (verified empirically): with `think: true`, some stages (e.g. claim-mention-extraction) emit their whole answer in the thinking channel and return an **empty `content`** — which the provider now surfaces as a deterministic `NonRetryableLlmError` (not a retry-burning transient error) advising `think: false`; with `think: false`, other stages (e.g. segmentation) drop the required object wrapper and return a **bare array** that fails `Value.Check` (Ollama's `format` does **not** hard-enforce the object envelope on this model). Because no single `think` value satisfies every stage, set it per the stages a given provider instance serves, or — simplest — run a non-thinking model (e.g. `gemma2:9b`) for the whole ingestion pipeline. Thinking-on stages can take several minutes, which the generous `requestTimeoutMs` below accommodates.
+**`requestTimeoutMs` (default `1_200_000` = 20 min)** bounds a call via `AbortSignal.timeout(ms)` — local generations on a large reasoning model legitimately take minutes per structured-extraction stage. The timeout signal is composed with any caller `signal` (`AbortSignal.any`), so either one aborts the request. There is no `undici`/dispatcher machinery; set `requestTimeoutMs: 0` to disable the timeout entirely.
 
-**`requestTimeoutMs` (default `1_200_000` = 20 min)** raises the HTTP client timeout for long local generations. Local thinking models routinely take several minutes per structured-extraction stage; the underlying HTTP stack (undici) defaults to a 300s `headersTimeout`/`bodyTimeout` that would abort them mid-generation with a `UND_ERR_HEADERS_TIMEOUT` `fetch failed`. The provider applies the raised timeout via a **per-provider** undici `Agent` passed as the SDK client's `fetch` — it never calls `setGlobalDispatcher`, so no global state is mutated. This requires the optional `undici` peer (declared alongside `ollama`); if `undici` is not installed, the provider falls back to the SDK's default fetch and `classifyOllamaError` retries the resulting timeout (see below). Set `requestTimeoutMs: 0` to opt out of the custom dispatcher.
-
-**Error classes** are surfaced from this subpath only and mirror the OpenAI names as **distinct classes** (the framework classifies by the `retryReason` tag, not class identity): `NonRetryableLlmError`, `RateLimitLlmError`, `SchemaValidationLlmError`, `ToolLoopExhaustedError`, `TransientLlmError`, plus `classifyOllamaError`. `classifyOllamaError` maps `ECONNREFUSED` / 404 / context-overflow → `NonRetryableLlmError` (overflow is deterministic — never the transient-tagged `SchemaValidationLlmError`) and `ECONNRESET` / cold-VRAM-load 5xx → `TransientLlmError`. Undici timeout cause-codes (`UND_ERR_HEADERS_TIMEOUT` / `UND_ERR_BODY_TIMEOUT` / `UND_ERR_CONNECT_TIMEOUT`, including when surfaced as a `fetch failed` `.cause.code`) are also classified `TransientLlmError`, so the default `retryOn: ["transient"]` retries a timeout rather than failing it `LLM_NON_RETRYABLE_ERROR`. An **empty assistant `content` accompanied by a thinking trace** (the model answered in the discarded thinking channel) is thrown directly as a `NonRetryableLlmError` — deterministic, so it fails fast with guidance to set `think: false` rather than burning a retry; a genuinely empty response (no content, no thinking) remains a transient-tagged `SchemaValidationLlmError`. The subpath also exports `typeboxToJsonSchema` (a standard-JSON-schema converter — `Type.Optional` keys are omitted from `required`, with no forced `additionalProperties: false`) and its `TOllamaJsonSchema` type.
+**Error classes** are surfaced from this subpath only and mirror the OpenAI names as **distinct classes** (the framework classifies by the `retryReason` tag, not class identity): `NonRetryableLlmError`, `RateLimitLlmError`, `QuotaExhaustedLlmError`, `SchemaValidationLlmError`, `TransientLlmError`, plus `classifyHttpError` / `classifyFetchError`. `classifyHttpError` routes HTTP-status families: 5xx → `TransientLlmError`; 429 → `QuotaExhaustedLlmError` when the body code/type is `insufficient_quota` (fail-fast) else `RateLimitLlmError`; 400 / 401 / 403 / other 4xx → `NonRetryableLlmError`; 422 → `SchemaValidationLlmError` (the model's output failed server-side schema enforcement; a re-roll may succeed). `classifyFetchError` maps a low-level `fetch` failure (server unreachable, connection reset, the request timeout firing) to `TransientLlmError`, so the default `retryOn: ["transient"]` retries a down/slow local server rather than failing it. The subpath also exports `typeboxToJsonSchema` (a standard-JSON-schema converter — `Type.Optional` keys are omitted from `required`, with no forced `additionalProperties: false`) and its `TChatCompletionsJsonSchema` type.
 
 ---
 
@@ -1767,23 +1763,24 @@ type TIngestionLlmOptions = {
 
 type TLlmStageOptionsOverride = {
     maxOutputTokens?: number
-    reasoningEffort?: TReasoningEffort // OpenAI-specific; ignored by Ollama
+    reasoningEffort?: TReasoningEffort // OpenAI-specific; ignored by the chat-completions provider
     model?: string
     retry?: Partial<TRetryPolicy> // since v1.8.0
 }
 ```
 
-The merge order is **stage-override > pipeline-default > the stage's built-in default**. The `retry?` knob overrides a stage's framework retry policy; it is carried straight through to `llmStage`, which shallow-merges it over `DEFAULT_RETRY_POLICY` (the seam itself does not merge — last-writer-wins on the whole `retry` object, like the scalar knobs). Its primary use is a "no-auto-retry" toggle that drops `"transient"` from `retryOn`; note that doing so disables the retry for **all** transient causes — network/undici timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not timeouts alone. The `model?` knob is the load-bearing seam for retargeting a whole pipeline at a different backend in one line — e.g. pointing scholar at a local model for cost-free local development:
+The merge order is **stage-override > pipeline-default > the stage's built-in default**. The `retry?` knob overrides a stage's framework retry policy; it is carried straight through to `llmStage`, which shallow-merges it over `DEFAULT_RETRY_POLICY` (the seam itself does not merge — last-writer-wins on the whole `retry` object, like the scalar knobs). Its primary use is a "no-auto-retry" toggle that drops `"transient"` from `retryOn`; note that doing so disables the retry for **all** transient causes — network timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not timeouts alone. The `model?` knob is the load-bearing seam for retargeting a whole pipeline at a different backend in one line — e.g. pointing scholar at a local model for cost-free local development:
 
 ```typescript
 import { createScholarPipeline } from "@proposit/proposit-core/pipelines/ingestion"
 import { basicsExtension } from "@proposit/proposit-core/pipelines/base"
+import { createChatCompletionsProvider } from "@proposit/proposit-core/extensions/chat-completions"
 
 const pipeline = createScholarPipeline(basicsExtension, {
-    llm: { defaults: { model: "qwen3.6:latest" } },
+    llm: { defaults: { model: "local-coder" } },
 })
 // then run with a local provider as the `llm` dependency:
-// await executePipeline(pipeline, { text }, { llm: new OllamaProvider() })
+// await executePipeline(pipeline, { text }, { llm: createChatCompletionsProvider() })
 ```
 
 Each scholar stage keeps its own hard-coded `gpt-5.x` default, and each scribe stage defaults to `gpt-5.4-mini`, when no override is supplied — so production behavior is unchanged.

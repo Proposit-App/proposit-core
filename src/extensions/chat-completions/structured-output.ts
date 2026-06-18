@@ -1,9 +1,12 @@
-// TypeBox → standard JSON Schema converter for the Ollama provider.
+// TypeBox → standard JSON Schema converter for the chat-completions
+// provider.
 //
-// Ollama's `format` parameter accepts a *standard* JSON Schema (the
-// same shape `zodToJsonSchema` would emit). This converter deliberately
-// does NOT apply the OpenAI Responses-API strict-mode folds that
-// `typeboxToOpenAiSchema` (`../openai/structured-output.ts`) applies:
+// An OpenAI-compatible `/v1/chat/completions` endpoint with a
+// `response_format: { type: "json_schema", json_schema: { schema } }`
+// accepts a *standard* JSON Schema (the same shape `zodToJsonSchema`
+// would emit). This converter deliberately does NOT apply the OpenAI
+// Responses-API strict-mode folds that `typeboxToOpenAiSchema`
+// (`../openai/structured-output.ts`) applies:
 //
 //   * No forced `additionalProperties: false` on objects.
 //   * `Type.Optional(T)` → the key is simply OMITTED from `required`
@@ -11,8 +14,9 @@
 //     `{ anyOf: [T, { type: "null" }] }` and kept in `required`.
 //
 // Those strict folds are correct for OpenAI strict mode and harmful for
-// a standard `format` consumer, so the Ollama provider gets its own
-// converter rather than reusing/renaming the OpenAI one.
+// a standard `json_schema` consumer (a local llama-server compiling the
+// schema to a GBNF grammar, the HF router, etc.), so this provider gets
+// its own converter rather than reusing/renaming the OpenAI one.
 //
 // Supported TypeBox subset (same primitives the OpenAI converter
 // covers): Object, Array, String, Number, Integer, Boolean, Literal,
@@ -28,17 +32,17 @@ import type { TSchema } from "typebox"
 
 /**
  * The output shape is intentionally typed as a plain object literal
- * (not a full JSON-Schema TS type). Ollama's `format` accepts this
- * shape and we round-trip it through the SDK request body. Keeping the
- * return type loose avoids dragging a JSON-Schema dependency into the
- * converter.
+ * (not a full JSON-Schema TS type). The endpoint's `json_schema`
+ * `schema` slot accepts this shape and we round-trip it through the
+ * request body. Keeping the return type loose avoids dragging a
+ * JSON-Schema dependency into the converter.
  */
-export type TOllamaJsonSchema = Record<string, unknown>
+export type TChatCompletionsJsonSchema = Record<string, unknown>
 
 class UnsupportedSchemaError extends Error {
     constructor(kind: string) {
         super(
-            `TypeBox primitive "${kind}" is not supported by the Ollama structured-output converter. ` +
+            `TypeBox primitive "${kind}" is not supported by the chat-completions structured-output converter. ` +
                 `Supported subset: Object, Array, String, Number, Integer, Boolean, Literal, Union, Optional, Record, Null.`
         )
         this.name = "UnsupportedSchemaError"
@@ -64,12 +68,14 @@ function isOptional(schema: TSchema): boolean {
 
 /**
  * Convert a TypeBox schema into a standard JSON Schema document
- * suitable for Ollama's `format` parameter.
+ * suitable for an OpenAI-compatible `json_schema` response format.
  *
  * Throws `UnsupportedSchemaError` when the source schema contains a
  * TypeBox primitive outside the supported subset.
  */
-export function typeboxToJsonSchema(schema: TSchema): TOllamaJsonSchema {
+export function typeboxToJsonSchema(
+    schema: TSchema
+): TChatCompletionsJsonSchema {
     const kind = kindOf(schema)
     switch (kind) {
         case "String":
@@ -97,7 +103,7 @@ export function typeboxToJsonSchema(schema: TSchema): TOllamaJsonSchema {
     }
 }
 
-function convertLiteral(schema: TSchema): TOllamaJsonSchema {
+function convertLiteral(schema: TSchema): TChatCompletionsJsonSchema {
     const literal = schema as TKindedSchema & {
         const: unknown
         type?: string
@@ -125,7 +131,7 @@ function jsonSchemaTypeOf(value: unknown): string {
     }
 }
 
-function convertUnion(schema: TSchema): TOllamaJsonSchema {
+function convertUnion(schema: TSchema): TChatCompletionsJsonSchema {
     const union = schema as TKindedSchema & { anyOf: TSchema[] }
     const branches = union.anyOf
     if (branches.length === 0) {
@@ -158,7 +164,7 @@ function isLiteralKind(schema: TSchema): boolean {
     return kindOf(schema) === "Literal"
 }
 
-function convertArray(schema: TSchema): TOllamaJsonSchema {
+function convertArray(schema: TSchema): TChatCompletionsJsonSchema {
     const array = schema as TKindedSchema & { items: TSchema }
     return {
         type: "array",
@@ -166,18 +172,18 @@ function convertArray(schema: TSchema): TOllamaJsonSchema {
     }
 }
 
-function convertObject(schema: TSchema): TOllamaJsonSchema {
+function convertObject(schema: TSchema): TChatCompletionsJsonSchema {
     const object = schema as TKindedSchema & {
         properties: Record<string, TSchema>
     }
-    const properties: Record<string, TOllamaJsonSchema> = {}
+    const properties: Record<string, TChatCompletionsJsonSchema> = {}
     const required: string[] = []
     for (const [key, propSchema] of Object.entries(object.properties)) {
         // Standard JSON-schema optionality: an `Type.Optional(T)`
         // property is converted as its inner `T` and simply OMITTED
         // from `required`. No null-widening, no forced
         // `additionalProperties: false` — that is the OpenAI-strict
-        // fold the Ollama `format` consumer does not want.
+        // fold a standard `json_schema` consumer does not want.
         properties[key] = typeboxToJsonSchema(propSchema)
         if (!isOptional(propSchema)) {
             required.push(key)
@@ -190,7 +196,7 @@ function convertObject(schema: TSchema): TOllamaJsonSchema {
     }
 }
 
-function convertRecord(schema: TSchema): TOllamaJsonSchema {
+function convertRecord(schema: TSchema): TChatCompletionsJsonSchema {
     const record = schema as TKindedSchema & {
         patternProperties: Record<string, TSchema>
     }

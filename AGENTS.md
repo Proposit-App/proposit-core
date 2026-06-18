@@ -69,7 +69,7 @@ bash scripts/smoke-test.sh  # CLI smoke test (requires build first)
 Non-obvious constraints the code enforces. Terse here — follow the route below for the full rule, signature, or mechanism.
 
 - **Mutations throw only on Structural violations.** Evaluable / Derivable / Presentable issues never throw at mutation time; query them via `engine.validate(tier)`.
-- **`src/lib/` carries zero third-party SDK imports.** SDK-coupled providers (OpenAI, Ollama) live in `src/extensions/` behind optional `peerDependencies` — a grep-proof boundary; keep it that way.
+- **`src/lib/` carries zero third-party SDK imports.** Concrete LLM providers live in `src/extensions/` (the OpenAI provider keeps `openai` as an optional `peerDependency`; the chat-completions provider talks to an external OpenAI-compatible HTTP endpoint via raw `fetch` with no SDK) — a grep-proof boundary; keep it that way.
 - **Never `import { randomUUID } from "node:crypto"` in `src/lib/`.** Use the injected `generateId` from engine options (`TLogicEngineOptions` / `TPropositCoreConfig`). CLI files may use `node:crypto` directly.
 - **`orderChangeset` (`src/lib/utils/changeset.ts`) emits FK-safe persistence ordering** — an invariant. Flag any change that touches entity relationships, adds entity types, or alters FK dependencies.
 - **Core owns no application metadata** (user IDs, timestamps, display text) — those are consumer concerns. Applications extend core types via generic parameters.
