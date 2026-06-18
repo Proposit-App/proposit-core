@@ -9,6 +9,7 @@ import Type from "typebox"
 import { createChatCompletionsProvider } from "../../../src/extensions/chat-completions/provider.js"
 import {
     NonRetryableLlmError,
+    QuotaExhaustedLlmError,
     RateLimitLlmError,
     SchemaValidationLlmError,
     TransientLlmError,
@@ -101,6 +102,65 @@ describe("createChatCompletionsProvider — request shape", () => {
         expect((init.headers as Record<string, string>).Authorization).toBe(
             "Bearer sk-x"
         )
+    })
+
+    it("uses the request model when present (the configured model is only a fallback)", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(okResponse({ answer: "hi" }))
+        const provider = createChatCompletionsProvider({
+            model: "config-model",
+            fetch: asFetch(fetchMock),
+        })
+        await provider.respond({
+            model: "request-model",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        const body = JSON.parse(
+            (fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string
+        ) as Record<string, unknown>
+        expect(body.model).toBe("request-model")
+    })
+
+    it("falls back to the configured model when the request carries none", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(okResponse({ answer: "hi" }))
+        const provider = createChatCompletionsProvider({
+            model: "config-model",
+            fetch: asFetch(fetchMock),
+        })
+        await provider.respond({
+            model: "",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        const body = JSON.parse(
+            (fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string
+        ) as Record<string, unknown>
+        expect(body.model).toBe("config-model")
+    })
+
+    it("falls back to the default model (local-coder) when neither request nor config sets one", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(okResponse({ answer: "hi" }))
+        const provider = createChatCompletionsProvider({
+            fetch: asFetch(fetchMock),
+        })
+        await provider.respond({
+            model: "",
+            systemPrompt: "s",
+            userMessage: "u",
+            outputSchema: simpleSchema,
+        })
+        const body = JSON.parse(
+            (fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string
+        ) as Record<string, unknown>
+        expect(body.model).toBe("local-coder")
     })
 
     it("encodes messages (system+user) and a response_format json_schema (lax converter output)", async () => {
@@ -328,6 +388,65 @@ describe("createChatCompletionsProvider — error classification", () => {
             fetch: asFetch(
                 vi.fn().mockRejectedValue(new TypeError("fetch failed"))
             ),
+        })
+        await expect(
+            provider.respond({
+                model: "local-coder",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("429 with an insufficient_quota body code → QuotaExhaustedLlmError (the provider's body-parse split)", async () => {
+        const quota = new Response(
+            JSON.stringify({
+                error: { code: "insufficient_quota", message: "out of budget" },
+            }),
+            { status: 429, headers: { "Content-Type": "application/json" } }
+        )
+        const provider = createChatCompletionsProvider({
+            fetch: asFetch(vi.fn().mockResolvedValue(quota)),
+        })
+        await expect(
+            provider.respond({
+                model: "local-coder",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(QuotaExhaustedLlmError)
+    })
+
+    it("a request-timeout abort (TimeoutError, not a caller abort) → TransientLlmError (retryable)", async () => {
+        // The fetch impl rejects with a TimeoutError, which is what
+        // `AbortSignal.timeout` produces — distinct from a caller-abort
+        // `AbortError`, so it must classify transient (retryable), never
+        // surface as a raw abort that would mark the stage skipped.
+        const timeoutErr = new Error("The operation timed out")
+        timeoutErr.name = "TimeoutError"
+        const provider = createChatCompletionsProvider({
+            requestTimeoutMs: 5,
+            fetch: asFetch(vi.fn().mockRejectedValue(timeoutErr)),
+        })
+        await expect(
+            provider.respond({
+                model: "local-coder",
+                systemPrompt: "s",
+                userMessage: "u",
+                outputSchema: simpleSchema,
+            })
+        ).rejects.toBeInstanceOf(TransientLlmError)
+    })
+
+    it("a malformed top-level response body (not valid JSON) → TransientLlmError", async () => {
+        const garbled = new Response("<html>nope</html>", {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+        })
+        const provider = createChatCompletionsProvider({
+            fetch: asFetch(vi.fn().mockResolvedValue(garbled)),
         })
         await expect(
             provider.respond({

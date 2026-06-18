@@ -63,9 +63,12 @@ export async function requestJson(args: {
         })
     } catch (err) {
         // A caller-initiated abort propagates verbatim so `llmStage`'s
-        // mid-flight-abort detector marks the stage skipped. A timeout
-        // (the AbortSignal.timeout firing) or any other transport
-        // failure is transient.
+        // mid-flight-abort detector marks the stage skipped — gated on the
+        // caller's signal actually having fired (a caller abort surfaces as
+        // an `AbortError`). A timeout surfaces as a `TimeoutError` (not an
+        // `AbortError`), and every other transport failure surfaces with
+        // its own name — so both fall through to `classifyFetchError` and
+        // are retried as transient.
         if (isAbortError(err) && args.signal?.aborted) {
             throw err
         }

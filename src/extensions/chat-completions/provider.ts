@@ -43,6 +43,7 @@ import { NonRetryableLlmError, SchemaValidationLlmError } from "./errors.js"
 import {
     DEFAULT_API_KEY,
     DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
     DEFAULT_REQUEST_TIMEOUT_MS,
     type TChatCompletionsFetch,
     type TChatCompletionsProviderConfig,
@@ -79,6 +80,11 @@ export function createChatCompletionsProvider(
     const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL
     const url = `${baseUrl}/chat/completions`
     const apiKey = config.apiKey ?? DEFAULT_API_KEY
+    // The provider's configured model is a fallback: a per-request
+    // `req.model` (the framework's normal path) wins; the configured
+    // model (or the `local-coder` default) applies only when a request
+    // carries no model.
+    const configuredModel = config.model ?? DEFAULT_MODEL
     const timeoutMs = config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
     const fetchImpl =
         config.fetch ?? (globalThis.fetch as TChatCompletionsFetch | undefined)
@@ -104,9 +110,12 @@ export function createChatCompletionsProvider(
         const stageIdMatch = STAGE_ID_MARKER.exec(req.systemPrompt)
         const debugStageId = stageIdMatch ? stageIdMatch[1] : null
         const convertedSchema = typeboxToJsonSchema(req.outputSchema)
+        // Per-request model wins; the provider's configured model (or the
+        // `local-coder` default) is the fallback when a request carries none.
+        const model = req.model || configuredModel
 
         const body: TChatCompletionsRequestBody = {
-            model: req.model,
+            model,
             messages: [
                 { role: "system", content: req.systemPrompt },
                 { role: "user", content: req.userMessage },
@@ -128,7 +137,7 @@ export function createChatCompletionsProvider(
 
         debugLlmRequest({
             stageId: debugStageId,
-            model: req.model,
+            model,
             maxOutputTokens: req.maxOutputTokens,
             reasoningEffort: req.reasoningEffort,
             systemPromptLen: req.systemPrompt.length,
@@ -162,7 +171,7 @@ export function createChatCompletionsProvider(
                 err instanceof Error ? err : new Error(String(err))
             debugLlmFailure({
                 stageId: debugStageId,
-                model: req.model,
+                model,
                 errorName: classified.name,
                 errorMessage: classified.message,
                 tokenUsage: { input: 0, output: 0 },
@@ -176,9 +185,12 @@ export function createChatCompletionsProvider(
         }
         const text = response.choices?.[0]?.message?.content
         if (text === undefined || text === "") {
+            // Empty structured output is a schema-shaped failure — a re-roll
+            // can produce conforming output, so classify it (transient-
+            // tagged) `SchemaValidationLlmError`, not a generic transient.
             debugLlmFailure({
                 stageId: debugStageId,
-                model: req.model,
+                model,
                 errorName: "SchemaValidationLlmError",
                 errorMessage: "no assistant content",
                 tokenUsage,
@@ -194,7 +206,7 @@ export function createChatCompletionsProvider(
         } catch (err) {
             debugLlmFailure({
                 stageId: debugStageId,
-                model: req.model,
+                model,
                 errorName: "SchemaValidationLlmError",
                 errorMessage: err instanceof Error ? err.message : String(err),
                 rawText: text,
