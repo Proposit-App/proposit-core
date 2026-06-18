@@ -1,0 +1,361 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "hash": "db6ba71cb3c72d9da333d678a6fc320e4fd55d0bb1cc5861997d641b206e7f30",
+      "stageId": "extract",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — leave as a single synthetic id per claim (e.g. [\"c1-m\"]); scribe does not track sub-claim mentions.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per synthetic mention id you used.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Input text:\n\nWorking remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance.\n\nProduce the canonicalClaims + mentionToClaim object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "canonicalClaims",
+            "mentionToClaim"
+          ],
+          "properties": {
+            "canonicalClaims": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "body",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "body": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "A detailed description of the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "normal",
+                        "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "url",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "The URL of the citation supporting the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "citation",
+                        "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "axiom",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "axiom": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "The axiom supporting the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "axiomatic",
+                        "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "mentionToClaim": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mentionId",
+                  "claimMiniId"
+                ],
+                "properties": {
+                  "mentionId": {
+                    "type": "string"
+                  },
+                  "claimMiniId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "canonicalClaims": [
+            {
+              "miniId": "c1",
+              "mentionIds": [
+                "c1-m"
+              ],
+              "suggestedSymbol": "RemoteWorkImprovesProductivity",
+              "title": "Remote work improves productivity",
+              "body": "Working remotely improves productivity for many people.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c2",
+              "mentionIds": [
+                "c2-m"
+              ],
+              "suggestedSymbol": "RemoteWorkReducesCommute",
+              "title": "Remote work reduces commuting time",
+              "body": "Working remotely also reduces commuting time.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c3",
+              "mentionIds": [
+                "c3-m"
+              ],
+              "suggestedSymbol": "LessCommutingImprovesBalance",
+              "title": "Reducing commuting time improves work-life balance",
+              "body": "Reducing commuting time improves work-life balance.",
+              "type": "normal"
+            }
+          ],
+          "mentionToClaim": [
+            {
+              "mentionId": "c1-m",
+              "claimMiniId": "c1"
+            },
+            {
+              "mentionId": "c2-m",
+              "claimMiniId": "c2"
+            },
+            {
+              "mentionId": "c3-m",
+              "claimMiniId": "c3"
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 616,
+          "output": 215,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0b8acdd1a538beac006a3355589d9c819e94ef2936fe74dd22"
+      }
+    },
+    {
+      "hash": "473441f0f8e12bb8eaaa638bcfe61e764833dcb93e059adb60e8713cb6337095",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the support edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"support\" / \"joint-support\" / \"derivation-support\", a `sources` array of supporting claim miniIds, a single `target` claim miniId, and an `evidence` object ({ segmentIds: [], quote: \"\" } is acceptable when you have no span to cite).\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=RemoteWorkImprovesProductivity fields={\"title\":\"Remote work improves productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal symbol=RemoteWorkReducesCommute fields={\"title\":\"Remote work reduces commuting time\",\"body\":\"Working remotely also reduces commuting time.\"}\n  [c3] type=normal symbol=LessCommutingImprovesBalance fields={\"title\":\"Reducing commuting time improves work-life balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "sources",
+                  "target",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "support"
+                      },
+                      {
+                        "type": "string",
+                        "const": "joint-support"
+                      },
+                      {
+                        "type": "string",
+                        "const": "derivation-support"
+                      }
+                    ]
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "support",
+              "sources": [
+                "c1"
+              ],
+              "target": "c3",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "support",
+              "sources": [
+                "c2"
+              ],
+              "target": "c3",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "rationale": "c3 is the best conclusion because c1 and c2 both provide independent support for it, while c3 itself does not support any further claim."
+        },
+        "tokenUsage": {
+          "input": 509,
+          "output": 126,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0b41abb0b0afc8f1006a33555a92648192a096b9b399205aa7"
+      }
+    }
+  ]
+}

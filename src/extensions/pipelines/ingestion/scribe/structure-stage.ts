@@ -21,6 +21,7 @@ import {
     ConclusionSelectionOutputSchema,
     selectFallbackConclusion,
     CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
+    type TClaimCanonicalizationOutput,
     type TClaimTypeClassificationOutput,
     type TConclusionSelectionOutput,
     type TRelationExtractionOutput,
@@ -38,7 +39,7 @@ export const STRUCTURE_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
     model: STRUCTURE_MODEL,
 }
 
-export const STRUCTURE_SYSTEM_PROMPT = `You read a canonical claim set with per-claim types and emit the argument's structure.
+export const STRUCTURE_SYSTEM_PROMPT = `You read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.
 
 Emit:
 - \`relations\` — the support edges between claims. Each relation: a stable \`relationId\` (r1, r2, ...), a \`type\` of "support" / "joint-support" / "derivation-support", a \`sources\` array of supporting claim miniIds, a single \`target\` claim miniId, and an \`evidence\` object ({ segmentIds: [], quote: "" } is acceptable when you have no span to cite).
@@ -51,15 +52,37 @@ function buildStructurePrompt(ctx: TStageContext): {
     system: string
     user: string
 } {
+    const canon = ctx.get<TClaimCanonicalizationOutput>(
+        STAGE_IDS.claimCanonicalization
+    )
     const typeEnvelope = ctx.get<TClaimTypeClassificationOutput>(
         STAGE_IDS.claimTypeClassification
     )
-    const classifications = typeEnvelope?.classifications ?? []
-    const typeLines = classifications
-        .map((entry) => `  [${entry.miniId}] type=${entry.type}`)
+    const typeByMiniId = new Map<string, string>()
+    for (const entry of typeEnvelope?.classifications ?? []) {
+        typeByMiniId.set(entry.miniId, entry.type)
+    }
+    // Mirror scholar's relation-extraction prompt: the model needs each
+    // claim's content (title/body/url/axiom), not just its id + type, to
+    // infer support edges + a conclusion. Reading only the type slot here
+    // left the model with bare `[c1] type=normal` placeholders, so it
+    // emitted no relations and scribe degraded to `argument: null`.
+    const claimLines = (canon?.canonicalClaims ?? [])
+        .map((c) => {
+            const refinedType = typeByMiniId.get(c.miniId) ?? c.type
+            return `  [${c.miniId}] type=${refinedType} symbol=${c.suggestedSymbol} fields=${JSON.stringify(
+                {
+                    ...c,
+                    miniId: undefined,
+                    mentionIds: undefined,
+                    suggestedSymbol: undefined,
+                    type: undefined,
+                }
+            )}`
+        })
         .join("\n")
     const system = `<!-- stage-id: ${STAGE_IDS.scribeStructure} -->\n${STRUCTURE_SYSTEM_PROMPT}`
-    const user = `Per-claim types:\n${typeLines}\n\nEmit the relations + conclusionCandidates + rationale object.`
+    const user = `Canonical claims (with types + content fields):\n${claimLines}\n\nEmit the relations + conclusionCandidates + rationale object.`
     return { system, user }
 }
 

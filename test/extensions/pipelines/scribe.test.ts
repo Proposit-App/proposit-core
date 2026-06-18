@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest"
 import { executePipeline } from "../../../src/lib/index.js"
 import { createScribePipeline } from "../../../src/extensions/pipelines/ingestion/scribe/index.js"
 import { basicsExtension } from "../../../src/extensions/pipelines/base/index.js"
-import { createMockLlmProvider } from "../../mocks/llm.js"
+import { createMockLlmProvider, type TMockCallRecord } from "../../mocks/llm.js"
 import type { TParsedArgumentResponse } from "../../../src/lib/parsing/index.js"
 
 // Deterministic id generator (counter-based) so minted variable/premise
@@ -128,6 +128,36 @@ describe("createScribePipeline", () => {
             processingFailures: unknown[]
         }
         expect(response.processingFailures).toEqual([])
+    })
+
+    it("the structure stage prompt carries each claim's title/body, not just ids", async () => {
+        // Regression: the structure prompt was built from the type slot
+        // alone (`[c1] type=normal`), omitting the claim text. A real model
+        // then saw bare placeholders, emitted no relations/conclusion, and
+        // scribe degraded to `argument: null` on every multi-claim argument.
+        // The prompt MUST carry the canonical claim content from the
+        // canonicalization slot (mirrors scholar's relation-extraction).
+        const calls: TMockCallRecord[] = []
+        const llm = createMockLlmProvider({
+            responses: {
+                extract: [{ kind: "ok", output: happyExtractOutput() }],
+                "scribe-structure": [
+                    { kind: "ok", output: happyStructureOutput() },
+                ],
+            },
+            onCall: (record) => calls.push(record),
+        })
+        await executePipeline(
+            createScribePipeline(basicsExtension),
+            { text: "It is raining. Therefore the ground is wet." },
+            { llm, generateId: createDeterministicGenerateId() }
+        )
+        const structureCall = calls.find(
+            (c) => c.stageId === "scribe-structure"
+        )
+        expect(structureCall).toBeDefined()
+        expect(structureCall!.userMessage).toContain("It is raining")
+        expect(structureCall!.userMessage).toContain("The ground is wet")
     })
 
     it("an empty claim set yields a valid argument: null response (no throw)", async () => {

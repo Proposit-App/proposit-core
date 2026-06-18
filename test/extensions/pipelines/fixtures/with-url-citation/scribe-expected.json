@@ -1,0 +1,84 @@
+{
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "NASA climate report says temperatures rose",
+                "url": "https://climate.nasa.gov/evidence/",
+                "type": "citation",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "Global temperatures rise significantly",
+                "body": "Global temperatures have risen significantly over the past century.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "Rising temperatures increase extreme weather",
+                "body": "Rising global temperatures cause more frequent extreme weather events.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c4",
+                "title": "Extreme weather events are more frequent now",
+                "body": "More frequent extreme weather events are occurring.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "NasaClimateReportTempsRise",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "GlobalTempsRise",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "TempsIncreaseExtremeWeather",
+                "claimMiniId": "c3"
+            },
+            {
+                "miniId": "gid-4",
+                "symbol": "MoreExtremeWeatherNow",
+                "claimMiniId": "c4"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-5",
+                "formula": "NasaClimateReportTempsRise implies GlobalTempsRise",
+                "title": "If \"NASA climate report says temperatures rose\" then \"Global temperatures rise significantly\""
+            },
+            {
+                "miniId": "gid-6",
+                "formula": "GlobalTempsRise implies TempsIncreaseExtremeWeather",
+                "title": "If \"Global temperatures rise significantly\" then \"Rising temperatures increase extreme weather\""
+            },
+            {
+                "miniId": "gid-7",
+                "formula": "TempsIncreaseExtremeWeather implies MoreExtremeWeatherNow",
+                "title": "If \"Rising temperatures increase extreme weather\" then \"Extreme weather events are more frequent now\""
+            },
+            {
+                "miniId": "gid-8",
+                "formula": "MoreExtremeWeatherNow",
+                "title": "Extreme weather events are more frequent now"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-8",
+        "title": "Extreme weather events are more frequent now"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c4 is the best conclusion candidate because c2 supports c3, which in turn supports c4, and c4 does not support any further claim.",
+    "processingFailures": []
+}

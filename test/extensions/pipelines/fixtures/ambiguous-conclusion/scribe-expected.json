@@ -1,0 +1,67 @@
+{
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "Remote work improves productivity",
+                "body": "Working remotely improves productivity for many people.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "Remote work reduces commuting time",
+                "body": "Working remotely also reduces commuting time.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "Reducing commuting time improves work-life balance",
+                "body": "Reducing commuting time improves work-life balance.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "RemoteWorkImprovesProductivity",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "RemoteWorkReducesCommute",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "LessCommutingImprovesBalance",
+                "claimMiniId": "c3"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-4",
+                "formula": "RemoteWorkImprovesProductivity implies LessCommutingImprovesBalance",
+                "title": "If \"Remote work improves productivity\" then \"Reducing commuting time improves work-life balance\""
+            },
+            {
+                "miniId": "gid-5",
+                "formula": "RemoteWorkReducesCommute implies LessCommutingImprovesBalance",
+                "title": "If \"Remote work reduces commuting time\" then \"Reducing commuting time improves work-life balance\""
+            },
+            {
+                "miniId": "gid-6",
+                "formula": "LessCommutingImprovesBalance",
+                "title": "Reducing commuting time improves work-life balance"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-6",
+        "title": "Reducing commuting time improves work-life balance"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c3 is the best conclusion because c1 and c2 both provide independent support for it, while c3 itself does not support any further claim.",
+    "processingFailures": []
+}

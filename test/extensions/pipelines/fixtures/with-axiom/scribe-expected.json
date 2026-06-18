@@ -1,0 +1,62 @@
+{
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "A bachelor is an unmarried man",
+                "body": "A bachelor is an unmarried man.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "John is a bachelor",
+                "body": "John is a bachelor.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "John is unmarried",
+                "body": "John is unmarried.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "BachelorDefinition",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "JohnIsBachelor",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "JohnIsUnmarried",
+                "claimMiniId": "c3"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-4",
+                "formula": "BachelorDefinition and JohnIsBachelor implies JohnIsUnmarried",
+                "title": "If \"A bachelor is an unmarried man\" and \"John is a bachelor\" then \"John is unmarried\""
+            },
+            {
+                "miniId": "gid-5",
+                "formula": "JohnIsUnmarried",
+                "title": "John is unmarried"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-5",
+        "title": "John is unmarried"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "Claim c3 is the most plausible conclusion because it is supported by c1 and c2 via the definition that bachelors are unmarried men, while c1 and c2 function as premises.",
+    "processingFailures": []
+}

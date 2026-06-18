@@ -1,0 +1,50 @@
+{
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "Socrates is a man",
+                "body": "Socrates is a man.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "Socrates is mortal",
+                "body": "Socrates is mortal.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "SocratesIsMan",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "SocratesIsMortal",
+                "claimMiniId": "c2"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-3",
+                "formula": "SocratesIsMan implies SocratesIsMortal",
+                "title": "If \"Socrates is a man\" then \"Socrates is mortal\""
+            },
+            {
+                "miniId": "gid-4",
+                "formula": "SocratesIsMortal",
+                "title": "Socrates is mortal"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-4",
+        "title": "Socrates is mortal"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c2 is the only claim that is plausibly supported by another claim, so it best fits the role of the conclusion.",
+    "processingFailures": []
+}

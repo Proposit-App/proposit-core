@@ -1,0 +1,62 @@
+{
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "If it rains, the ground gets wet",
+                "body": "If it rains, the ground gets wet.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "It is raining",
+                "body": "It is raining.",
+                "type": "normal",
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "The ground is wet",
+                "body": "The ground is wet.",
+                "type": "normal",
+                "role": "conclusion"
+            }
+        ],
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "RainyWeatherImpliesWetGround",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "ItIsRaining",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "GroundIsWet",
+                "claimMiniId": "c3"
+            }
+        ],
+        "premises": [
+            {
+                "miniId": "gid-4",
+                "formula": "RainyWeatherImpliesWetGround and ItIsRaining implies GroundIsWet",
+                "title": "If \"If it rains, the ground gets wet\" and \"It is raining\" then \"The ground is wet\""
+            },
+            {
+                "miniId": "gid-5",
+                "formula": "GroundIsWet",
+                "title": "The ground is wet"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-5",
+        "title": "The ground is wet"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c3 is the most plausible conclusion because c1 and c2 together support it, and it is not itself used to support any further claim.",
+    "processingFailures": []
+}
