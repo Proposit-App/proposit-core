@@ -13,5 +13,5 @@ src/lib/core/parser/formula-gen.js
 # Machine-generated (`JSON.stringify(file, null, 2)` — 2-space
 # indent) and re-overwritten on every re-record; not worth gating
 # CI on prettier-format compliance.
-test/extensions/argument-ingestion/fixtures/**/recorded-llm.json
-test/extensions/argument-ingestion/fixtures/**/v2-recorded-llm.json
+test/extensions/pipelines/fixtures/**/v2-recorded-llm.json
+test/extensions/pipelines/fixtures/**/scribe-recorded-llm.json

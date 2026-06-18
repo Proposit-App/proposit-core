@@ -1729,21 +1729,31 @@ type TOllamaProviderConfig = {
 
 ---
 
-### Argument-ingestion factories
+### Ingestion pipelines
 
-The default ingestion pipelines that turn natural-language text into a `TParsedArgumentResponse` (consumable by `ArgumentParser.build()`, above). Re-exported from the package root and from `@proposit/proposit-core/extensions/argument-ingestion`.
+The pipelines that turn natural-language text into a `TParsedArgumentResponse` (consumable by `ArgumentParser.build()`, above). They ship on **two dedicated subpaths** (not the package root):
 
-#### `createIngestionV1Pipeline(extension, options?)` → `TPipeline<TIngestionInput, TParsedArgumentResponse>`
+- `@proposit/proposit-core/pipelines/ingestion` — the `createScholarPipeline` / `createScribePipeline` factories + their option types.
+- `@proposit/proposit-core/pipelines/base` — the shared task contract + helpers: `finalizeResponseV2`, `resolveLlmStageOptions`, `basicsExtension`, the stage factories + `STAGE_IDS`, `deriveRoles`, and the per-extension canonicalization schema builders + the fallback-conclusion helper (below).
 
-_Since v1.1.0._ Single-shot pipeline: one `llmStage` (`parse-argument`) calls the configured LLM with a system prompt built from `extension.responseSchema` and the raw input text, then `finalize` merges the response. `options` is `TCreateIngestionV1PipelineOptions`: `model?` (overrides the default `gpt-5.4`), `customInstructions?`, and `llm?: TIngestionLlmOptions`.
+Both factories take the same `extension: TIngestionExtension` and emit the same `TParsedArgumentResponse`, so a caller can swap them without changing downstream parsing.
 
-#### `createIngestionV2Pipeline(extension, options?)` → `TPipeline<TIngestionInput, TParsedArgumentResponse>`
+#### `createScholarPipeline(extension, options?)` → `TPipeline<TIngestionInput, TParsedArgumentResponse>`
 
-_Since v1.3.0._ Multi-stage pipeline: a 12-stage DAG (4 deterministic + 8 LLM) — `segmentation` → claim/citation/axiom detection → canonicalization → classification / reference-validation / variable-assignment → relation-extraction → conclusion-selection → formula-compilation → formula-validation → `finalize`. Same `extension` parameterization and same `TParsedArgumentResponse` output shape as v1, so downstream `ArgumentParser.build()` consumers don't change. `options` is `TCreateIngestionV2PipelineOptions` (`{ llm?: TIngestionLlmOptions }`).
+The thorough pipeline: a 12-stage DAG (4 deterministic + 8 LLM) — `segmentation` → claim/citation/axiom detection → canonicalization → classification / reference-validation / variable-assignment → relation-extraction → conclusion-selection → formula-compilation → formula-validation → `finalize`. `options` is `TCreateScholarPipelineOptions` (`{ llm?: TIngestionLlmOptions }`). Its `pipelineId` is `argument-ingestion-scholar`.
+
+#### `createScribePipeline(extension, options?)` → `TPipeline<TIngestionInput, TParsedArgumentResponse>`
+
+The fast, low-cost pipeline: two cheap LLM calls (`extract` → `structure`) feed scholar's deterministic backend + `finalizeResponseV2`, so it emits the identical output shape with ~2 LLM calls instead of ~8. `extract` produces the canonical claim set (the same per-extension shape scholar's canonicalizer emits) and `structure` produces the relation graph + conclusion candidates; deterministic adapter stages republish those under the six standard stage-output slots the shared backend reads. The cheap-model default is `gpt-5.4-mini`, overridable per stage via `llm`. `options` is `TCreateScribePipelineOptions` (`{ llm?: TIngestionLlmOptions }`). Its `pipelineId` is `argument-ingestion-scribe`.
 
 #### `basicsExtension`
 
-The default `TIngestionExtension` (the schema bundle a factory consumes). Pairs with `@proposit/proposit-core/extensions/basics` for the basic argument schemas. A `TIngestionExtension` carries `responseSchema` (the LLM's full output schema) plus per-entity extension slots (`claimSchema`, `variableSchema`, `premiseSchema`, `argumentSchema`) that the v2 stages compose.
+The default `TIngestionExtension` (the schema bundle a factory consumes). Pairs with `@proposit/proposit-core/extensions/basics` for the basic argument schemas. A `TIngestionExtension` carries `responseSchema` (the LLM's full output schema) plus per-entity extension slots (`claimSchema`, `variableSchema`, `premiseSchema`, `argumentSchema`) that the stages compose.
+
+#### Reusable stage helpers (on `@proposit/proposit-core/pipelines/base`)
+
+- `buildResponseSchema(extension)` / `buildClaimRecordSchema(claimSchema)` — build the **per-extension** canonicalization output schema (the canonical-claims envelope, and a single claim record with the canonicalizer fields injected into the extension's claim shape). The cheap `scribe.extract` stage uses these so its output carries the extension's claim fields; consumers building their own canonicalization-shaped stage can too.
+- `selectFallbackConclusion(classifications, relations)` — the deterministic relation-graph conclusion pick (highest in-degree pure-sink normal claim, document-order tiebreak; `null` when no candidate). Used to resolve a single `conclusionMiniId` when the model names none; exported so an alternate pipeline producing conclusion candidates in one call can reproduce the identical resolution.
 
 #### LLM-options seam — `TIngestionLlmOptions` / `TLlmStageOptionsOverride`
 
@@ -1763,22 +1773,20 @@ type TLlmStageOptionsOverride = {
 }
 ```
 
-The merge order is **stage-override > pipeline-default > the stage's built-in default**. The `retry?` knob (added v1.8.0) overrides a stage's framework retry policy; it is carried straight through to `llmStage`, which shallow-merges it over `DEFAULT_RETRY_POLICY` (the seam itself does not merge — last-writer-wins on the whole `retry` object, like the scalar knobs). Its primary use is a "no-auto-retry" toggle that drops `"transient"` from `retryOn`; note that doing so disables the retry for **all** transient causes — network/undici timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not timeouts alone. The `model?` knob (added v1.6.0) is the load-bearing seam for retargeting a whole pipeline at a different backend in one line — e.g. pointing v2 at a local Ollama model for cost-free local development:
+The merge order is **stage-override > pipeline-default > the stage's built-in default**. The `retry?` knob overrides a stage's framework retry policy; it is carried straight through to `llmStage`, which shallow-merges it over `DEFAULT_RETRY_POLICY` (the seam itself does not merge — last-writer-wins on the whole `retry` object, like the scalar knobs). Its primary use is a "no-auto-retry" toggle that drops `"transient"` from `retryOn`; note that doing so disables the retry for **all** transient causes — network/undici timeouts, 5xx, AND `incomplete/max_output_tokens` truncation — not timeouts alone. The `model?` knob is the load-bearing seam for retargeting a whole pipeline at a different backend in one line — e.g. pointing scholar at a local model for cost-free local development:
 
 ```typescript
-import {
-    createIngestionV2Pipeline,
-    basicsExtension,
-} from "@proposit/proposit-core"
+import { createScholarPipeline } from "@proposit/proposit-core/pipelines/ingestion"
+import { basicsExtension } from "@proposit/proposit-core/pipelines/base"
 
-const pipeline = createIngestionV2Pipeline(basicsExtension, {
+const pipeline = createScholarPipeline(basicsExtension, {
     llm: { defaults: { model: "qwen3.6:latest" } },
 })
-// then run with the Ollama provider as the `llm` dependency:
+// then run with a local provider as the `llm` dependency:
 // await executePipeline(pipeline, { text }, { llm: new OllamaProvider() })
 ```
 
-Each stage keeps its own hard-coded `gpt-5.x` default when no override is supplied, so production behavior is unchanged. (v1's independent `model?` on `TCreateIngestionV1PipelineOptions` predates this seam and remains separate by design.)
+Each scholar stage keeps its own hard-coded `gpt-5.x` default, and each scribe stage defaults to `gpt-5.4-mini`, when no override is supplied — so production behavior is unchanged.
 
 ---
 

@@ -21,12 +21,10 @@
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import {
-    basicsExtension,
-    createIngestionV2Pipeline,
-    executePipeline,
-} from "../src/lib/index.js"
-import { createRecordingLlmProvider } from "../test/extensions/argument-ingestion/recording-provider.js"
+import { executePipeline } from "../src/lib/index.js"
+import { createScholarPipeline } from "../src/extensions/pipelines/ingestion/scholar/index.js"
+import { basicsExtension } from "../src/extensions/pipelines/base/basics-extension.js"
+import { createRecordingLlmProvider } from "../test/extensions/pipelines/recording-provider.js"
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURES_ROOT = path.resolve(
@@ -34,7 +32,7 @@ const FIXTURES_ROOT = path.resolve(
     "..",
     "test",
     "extensions",
-    "argument-ingestion",
+    "pipelines",
     "fixtures"
 )
 const FIXTURE_NAMES = [
@@ -79,7 +77,7 @@ async function rewriteOne(name: string): Promise<void> {
         mode: "replay",
         fileName: V2_RECORDED_FILE,
     })
-    const pipeline = createIngestionV2Pipeline(basicsExtension)
+    const pipeline = createScholarPipeline(basicsExtension)
     const result = await executePipeline(pipeline, input, {
         llm: provider,
         generateId: createDeterministicGenerateId(),

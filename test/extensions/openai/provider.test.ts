@@ -2685,20 +2685,20 @@ describe("cancelResponse", () => {
     })
 })
 
-// -- no-tools precondition for v2 ingestion stages ----------------------
+// -- no-tools precondition for scholar ingestion stages -----------------
 
-describe("v2 ingestion pipeline — no-tools precondition", () => {
-    it("every v2 LLM stage issues requests with no tools (background mode is safe for all stages)", async () => {
-        // Instantiate the v2 pipeline and run a minimal input through
-        // a spy LLM. Captures all `req.tools` values across every LLM
-        // call and asserts they are all absent/empty — confirming the
+describe("scholar ingestion pipeline — no-tools precondition", () => {
+    it("every scholar LLM stage issues requests with no tools (background mode is safe for all stages)", async () => {
+        // Instantiate the scholar pipeline and run a minimal input
+        // through a spy LLM. Captures all `req.tools` values across every
+        // LLM call and asserts they are all absent/empty — confirming the
         // background-mode no-tools precondition holds for this pipeline.
-        const { createIngestionV2Pipeline } =
-            await import("../../../src/extensions/argument-ingestion/v2-multi-stage.js")
+        const { createScholarPipeline } =
+            await import("../../../src/extensions/pipelines/ingestion/scholar/scholar.js")
         const { executePipeline } =
             await import("../../../src/lib/pipelines/index.js")
         const { basicsExtension } =
-            await import("../../../src/extensions/argument-ingestion/shared/basics-extension.js")
+            await import("../../../src/extensions/pipelines/base/basics-extension.js")
 
         const toolsPerCall: (readonly unknown[] | undefined)[] = []
 
@@ -2765,7 +2765,7 @@ describe("v2 ingestion pipeline — no-tools precondition", () => {
             },
         }
 
-        const pipeline = createIngestionV2Pipeline(basicsExtension)
+        const pipeline = createScholarPipeline(basicsExtension)
         // We don't care about the pipeline result, just that it ran.
         await executePipeline(
             pipeline,

@@ -3,7 +3,9 @@
         "src/lib/index.ts",
         "src/extensions/citations/ieee/index.ts",
         "src/extensions/citations/unparsed/index.ts",
-        "src/extensions/basics/index.ts"
+        "src/extensions/basics/index.ts",
+        "src/extensions/pipelines/base/index.ts",
+        "src/extensions/pipelines/ingestion/index.ts"
     ],
     "out": "docs/api",
     "tsconfig": "tsconfig.json",

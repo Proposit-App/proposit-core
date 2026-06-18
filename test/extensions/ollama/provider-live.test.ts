@@ -14,7 +14,7 @@
 //       `qwen3.6` honor the `format` JSON schema on a representative
 //       ingestion-stage-shaped schema? If this fails, the Ollama
 //       converter may need a strict fold (flag it in the hand-back).
-//   (c) ONE e2e `createIngestionV2Pipeline` run on a short fixture with
+//   (c) ONE e2e `createScholarPipeline` run on a short fixture with
 //       every stage targeted at `qwen3.6:latest`, asserting a
 //       well-formed `TParsedArgumentResponse`.
 
@@ -23,11 +23,9 @@ import Type from "typebox"
 import type { Static } from "typebox"
 import { Value } from "typebox/value"
 import { OllamaProvider } from "../../../src/extensions/ollama/index.js"
-import {
-    basicsExtension,
-    createIngestionV2Pipeline,
-    executePipeline,
-} from "../../../src/lib/index.js"
+import { executePipeline } from "../../../src/lib/index.js"
+import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
+import { basicsExtension } from "../../../src/extensions/pipelines/base/basics-extension.js"
 
 const BASE_URL = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434"
 const MODEL = process.env.LOCAL_LLM_MODEL ?? "qwen3.6:latest"
@@ -161,10 +159,10 @@ describeIf("OllamaProvider — live daemon (RUN_LOCAL_LLM_TESTS=1)", () => {
     )
 
     it(
-        "(c) e2e — createIngestionV2Pipeline runs end-to-end on qwen3.6",
+        "(c) e2e — createScholarPipeline runs end-to-end on qwen3.6",
         { timeout: 600_000 },
         async () => {
-            const pipeline = createIngestionV2Pipeline(basicsExtension, {
+            const pipeline = createScholarPipeline(basicsExtension, {
                 llm: { defaults: { model: MODEL } },
             })
             const text =
