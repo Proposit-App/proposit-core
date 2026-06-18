@@ -25,10 +25,15 @@
 // Record, Null. Unsupported primitives throw a clear
 // `UnsupportedSchemaError` at conversion time.
 //
-// The converter ignores TypeBox `$id` / `description` / other metadata
-// on inner types — only structural fields are projected.
+// The converter ignores TypeBox `$id` and other metadata on inner
+// types — only structural fields are projected. The one exception is a
+// String field's length budget: a free-text String's `maxLength` /
+// `description` are projected (shrunk + a budget hint). On this path a
+// respected `maxLength` caps output strictly below the true limit —
+// see `projectStringLengthHint`.
 
 import type { TSchema } from "typebox"
+import { projectStringLengthHint } from "../structured-output/length-hint.js"
 
 /**
  * The output shape is intentionally typed as a plain object literal
@@ -79,7 +84,12 @@ export function typeboxToJsonSchema(
     const kind = kindOf(schema)
     switch (kind) {
         case "String":
-            return { type: "string" }
+            // Free-text String fields project a shrunk `maxLength` + a
+            // budget hint in `description`; exact-value fields keep
+            // their original limit. A GBNF-compiling consumer respects
+            // `maxLength`, so the shrunk cap keeps output below the true
+            // limit.
+            return projectStringLengthHint(schema)
         case "Number":
             return { type: "number" }
         case "Integer":

@@ -54,6 +54,7 @@ import {
     TransientLlmError,
 } from "./errors.js"
 import {
+    buildResponseTextBlock,
     DEFAULT_BASE_URL,
     type TOpenAiFetch,
     type TOpenAiInputMessage,
@@ -203,14 +204,10 @@ export function createOpenAiResponsesProvider(
             const body: TOpenAiResponsesRequestBody = {
                 model: req.model,
                 input,
-                text: {
-                    format: {
-                        type: "json_schema",
-                        name: schemaName,
-                        strict: true,
-                        schema: convertedSchema,
-                    },
-                },
+                text: buildResponseTextBlock({
+                    schemaName,
+                    schema: convertedSchema,
+                }),
             }
             if (req.maxOutputTokens !== undefined) {
                 body.max_output_tokens = req.maxOutputTokens

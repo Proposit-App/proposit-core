@@ -360,7 +360,7 @@
       }
     },
     {
-      "hash": "3cff34542b038c67d2cdb31e3b5f840329702dd69e01962c64179e881a69df03",
+      "hash": "998a0d3056190b6cce00f6c4a4e0279df8c8655c86183d7213dcc65f24071424",
       "stageId": "claim-canonicalization",
       "request": {
         "model": "gpt-5.5",
@@ -455,7 +455,8 @@
                       "url": {
                         "type": "string",
                         "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim"
+                        "description": "The URL of the citation supporting the claim",
+                        "format": "uri"
                       },
                       "type": {
                         "type": "string",
@@ -821,7 +822,7 @@
       }
     },
     {
-      "hash": "6ad51da0a26f16a737b46a571ba920577962d07a5aba1a158473b8d3789b97e1",
+      "hash": "452c06305324352e8159812d150ae7cb3691688bf68cba5b374c4a040e4803d9",
       "stageId": "claim-canonicalization",
       "request": {
         "model": "gpt-5.5",
@@ -916,7 +917,8 @@
                       "url": {
                         "type": "string",
                         "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim"
+                        "description": "The URL of the citation supporting the claim",
+                        "format": "uri"
                       },
                       "type": {
                         "type": "string",

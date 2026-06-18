@@ -32,10 +32,14 @@
 //   * `Type.Union` of literals of one JSON-Schema type collapses to
 //     a single `enum`; general unions surface as `anyOf`.
 //
-// The converter ignores TypeBox `$id` / `description` / other
-// metadata on inner types — only structural fields are projected.
+// The converter ignores TypeBox `$id` and other metadata on inner
+// types — only structural fields are projected. The one exception is a
+// String field's length budget: a free-text String's `maxLength` /
+// `description` are projected (shrunk + a budget hint) to steer the
+// model below its declared cap — see `projectStringLengthHint`.
 
 import type { TSchema } from "typebox"
+import { projectStringLengthHint } from "../structured-output/length-hint.js"
 
 /**
  * The output shape is intentionally typed as a plain object literal
@@ -84,7 +88,12 @@ export function typeboxToOpenAiSchema(schema: TSchema): TOpenAiJsonSchema {
     const kind = kindOf(schema)
     switch (kind) {
         case "String":
-            return { type: "string" }
+            // Free-text String fields project a shrunk `maxLength` + a
+            // budget hint in `description` so the model is steered below
+            // the declared cap; exact-value fields keep their original
+            // limit. Strict mode ignores `maxLength` (the `description`
+            // hint is what steers OpenAI), but the field is harmless.
+            return projectStringLengthHint(schema)
         case "Number":
             return { type: "number" }
         case "Integer":

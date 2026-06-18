@@ -168,6 +168,24 @@ export function debugLlmResponse(args: {
 }
 
 /**
+ * Surfaces when the last-resort safety net truncates an over-long
+ * field — i.e. the model overshot its declared `maxLength` and the
+ * length steering (shrunk wire `maxLength` + budget hint) did not keep
+ * it under the cap. Emits the field's JSON-pointer path, the limit, and
+ * the original length (not the value) so a dev can see whether steering
+ * is still letting overshoots through after it lands.
+ */
+export function debugMaxLengthTruncation(args: {
+    stageId: string | null
+    instancePath: string
+    limit: number
+    originalLength: number
+}): void {
+    if (!isDebugEnabled()) return
+    emit("output:truncated", args)
+}
+
+/**
  * Failure-branch dump. Surfaces when the provider catches a thrown
  * error after the HTTP roundtrip (e.g. JSON parse failure on a
  * truncated payload). The `rawText` is capped to

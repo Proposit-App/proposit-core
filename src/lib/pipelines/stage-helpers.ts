@@ -23,6 +23,7 @@ import type {
     TResponseStatus,
     TToolSpec,
 } from "../llm/types.js"
+import { debugMaxLengthTruncation } from "./debug-log.js"
 import { executePipeline } from "./execute.js"
 import {
     LLM_NON_RETRYABLE_ERROR,
@@ -358,9 +359,18 @@ export function buildLlmRequest<TOutput>(
 // inner errors only once its siblings are reconciled; truncation is
 // monotonic (strings only shrink) so the loop converges. The pass cap is a
 // backstop against a degenerate schema.
-// ponytail: silent truncate — ingestion output is human-proofread before
-// publish; emit a non-fatal warning here if clipped fields need surfacing.
-function clampMaxLengthStrings(schema: TSchema, value: unknown): void {
+//
+// Truncation is non-fatal (ingestion output is human-proofread before
+// publish), so it does not surface to the caller. It does emit a
+// debug-gated breadcrumb per clipped field — the only signal of whether
+// the upstream length steering (shrunk wire `maxLength` + budget hint)
+// is still letting overshoots through. `stageId` tags the breadcrumb so
+// it groups with the stage's other diagnostic lines.
+function clampMaxLengthStrings(
+    stageId: string,
+    schema: TSchema,
+    value: unknown
+): void {
     for (let pass = 0; pass < 16; pass++) {
         let changed = false
         for (const err of Value.Errors(schema, value)) {
@@ -368,6 +378,12 @@ function clampMaxLengthStrings(schema: TSchema, value: unknown): void {
             const limit = err.params.limit
             const current = Pointer.Get(value, err.instancePath)
             if (typeof current === "string" && current.length > limit) {
+                debugMaxLengthTruncation({
+                    stageId,
+                    instancePath: err.instancePath,
+                    limit,
+                    originalLength: current.length,
+                })
                 Pointer.Set(value, err.instancePath, current.slice(0, limit))
                 changed = true
             }
@@ -388,7 +404,7 @@ function checkLlmOutput<TOutput>(
     // recoverable issue that must NOT fail the whole stage. Truncate any
     // over-long string to its declared cap (in place) and re-check, rather
     // than rejecting the output and halting the pipeline.
-    clampMaxLengthStrings(cfg.outputSchema, output)
+    clampMaxLengthStrings(cfg.id, cfg.outputSchema, output)
     if (Value.Check(cfg.outputSchema, output)) {
         return { valid: true }
     }
