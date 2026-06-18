@@ -160,6 +160,32 @@ describe("createScribePipeline", () => {
         expect(structureCall!.userMessage).toContain("The ground is wet")
     })
 
+    it("an over-long claim title is truncated, not fatal — the import still produces an argument", async () => {
+        // Regression: the extension's claim `title` is maxLength: 50, but
+        // OpenAI strict structured-output IGNORES maxLength, so the cheap
+        // model emits longer titles (60–115 chars were observed in prod).
+        // Local schema validation then rejected every attempt → retryable
+        // schema_validation → the run failed on every real multi-claim
+        // import. An over-long string is a recoverable issue: clamp it to
+        // the cap and continue, never halt the whole pipeline.
+        const longTitle = "x".repeat(80)
+        const extract = happyExtractOutput() as {
+            canonicalClaims: { title: string }[]
+            mentionToClaim: unknown
+        }
+        extract.canonicalClaims[0].title = longTitle
+        const result = await runScribe(extract, happyStructureOutput())
+        expect(result.output).not.toBeNull()
+        expect(result.output!.argument).not.toBeNull()
+        const titles = (
+            result.output!.argument!.claims as { title?: string }[]
+        ).map((c) => c.title)
+        // Every title is within the 50-char cap...
+        expect(titles.every((t) => t == null || t.length <= 50)).toBe(true)
+        // ...and the clamped one preserves the original's 50-char prefix.
+        expect(titles).toContain(longTitle.slice(0, 50))
+    })
+
     it("an empty claim set yields a valid argument: null response (no throw)", async () => {
         const result = await runScribe(
             { canonicalClaims: [], mentionToClaim: [] },
