@@ -197,3 +197,63 @@ describe("v2 LLM stages — converted schema is strict-mode-compliant (recursive
         })
     }
 })
+
+// Length steering on the REAL ingestion claim-record schema, not a
+// synthetic string. The canonicalization output's `canonicalClaims`
+// items are the basics claim union; its citation branch carries
+// `title` (free text, maxLength 50) and `url` (an exact value,
+// maxLength 500, `format: "uri"`). After conversion the free-text
+// title must shrink toward its cap and restate the budget in its
+// description, while the URL must keep its full original limit and
+// gain no hint — the regression that motivated the steering (a claim
+// title cut off mid-word) against the actual field set ingestion ships.
+describe("ingestion claim-record schema — free-text length steering", () => {
+    function citationClaimBranch(): Record<string, unknown> {
+        const stage = createClaimCanonicalizationStage(basicsExtension)
+        const converted = typeboxToOpenAiSchema(stage.outputSchema) as {
+            properties: {
+                canonicalClaims: { items: { anyOf: Record<string, unknown>[] } }
+            }
+        }
+        const branches = converted.properties.canonicalClaims.items.anyOf
+        // The citation branch is the one declaring a `url` property.
+        const citation = branches.find((b) => {
+            const props = (b as { properties?: Record<string, unknown> })
+                .properties
+            return props !== undefined && "url" in props
+        })
+        if (citation === undefined) {
+            throw new Error(
+                "expected a claim-record branch carrying a `url` property"
+            )
+        }
+        return citation
+    }
+
+    it("shrinks the free-text `title` to 45 and appends the budget to its description", () => {
+        const props = (
+            citationClaimBranch() as {
+                properties: {
+                    title: { maxLength: number; description: string }
+                }
+            }
+        ).properties
+        // basics title maxLength 50 → floor(50 * 0.9) = 45.
+        expect(props.title.maxLength).toBe(45)
+        expect(props.title.description).toMatch(/at most 45 characters$/)
+    })
+
+    it("leaves the exact-value `url` at its original maxLength with no appended budget and no `format` on the wire schema", () => {
+        const props = (
+            citationClaimBranch() as {
+                properties: { url: { maxLength: number; description: string } }
+            }
+        ).properties
+        expect(props.url.maxLength).toBe(500)
+        expect(props.url.description).not.toMatch(/at most \d+ characters/)
+        // The source `url` declares `format: "uri"`, but the converted
+        // strict-mode wire schema must not carry it — OpenAI strict mode
+        // rejects formats outside its fixed set.
+        expect(props.url).not.toHaveProperty("format")
+    })
+})

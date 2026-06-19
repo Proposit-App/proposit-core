@@ -166,11 +166,16 @@ describe("createOpenAiResponsesProvider — request shape", () => {
         // `text.format`, not the chat-completions-era
         // `response_format`. `name`, `schema`, and `strict` are
         // siblings of `type` (not nested under a `json_schema` slot).
-        const textField = body.text as { format: Record<string, unknown> }
+        const textField = body.text as {
+            format: Record<string, unknown>
+            verbosity?: string
+        }
         expect(textField.format.type).toBe("json_schema")
         expect(textField.format.strict).toBe(true)
         expect(typeof textField.format.name).toBe("string")
         expect(textField.format.schema).toMatchObject({ type: "object" })
+        // Terse-output steering rides alongside the json_schema format.
+        expect(textField.verbosity).toBe("low")
         expect(body).not.toHaveProperty("response_format")
         // No max_output_tokens unless caller supplied it.
         expect(body).not.toHaveProperty("max_output_tokens")
@@ -2823,9 +2828,14 @@ describe("submitBackgroundResponse", () => {
         const body = JSON.parse(init.body as string) as {
             background?: boolean
             store?: boolean
+            text?: { verbosity?: string }
         }
         expect(body.background).toBe(true)
         expect(body.store).toBe(true)
+        // The retrieved/reconnected background body must carry the same
+        // terse-output steering as the initial request, or background
+        // ingestion would lose it.
+        expect(body.text?.verbosity).toBe("low")
     })
 
     it("returns the terminal status on a terminal-on-submit envelope (no throw, no poll)", async () => {

@@ -30,6 +30,7 @@ import {
     TransientLlmError,
 } from "./errors.js"
 import {
+    buildResponseTextBlock,
     DEFAULT_BASE_URL,
     type TOpenAiFetch,
     type TOpenAiResponsesEnvelope,
@@ -305,14 +306,7 @@ export async function submitBackgroundResponse<T>(
             { role: "system", content: req.systemPrompt },
             { role: "user", content: req.userMessage },
         ],
-        text: {
-            format: {
-                type: "json_schema",
-                name: schemaName,
-                strict: true,
-                schema: convertedSchema,
-            },
-        },
+        text: buildResponseTextBlock({ schemaName, schema: convertedSchema }),
         background: true,
         store: true,
     }

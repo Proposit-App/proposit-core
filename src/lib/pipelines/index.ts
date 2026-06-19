@@ -63,4 +63,5 @@ export {
     debugLlmRequest,
     debugLlmResponse,
     debugLlmFailure,
+    debugMaxLengthTruncation,
 } from "./debug-log.js"

@@ -63,10 +63,39 @@ export type TOpenAiTextFormat = {
     strict: true
 }
 
+/**
+ * Build the `text` block shared by every Responses request body
+ * (initial call + retrieved/reconnected background body). Pins
+ * `verbosity: "low"` so the model favors terser output, which keeps
+ * free-text fields nearer their declared length budgets.
+ *
+ * `verbosity` is set unconditionally because ingestion runs only
+ * GPT-5-family models, where it is a supported param. A future
+ * non-GPT-5 model would need a gate here (older models reject the
+ * field).
+ */
+export function buildResponseTextBlock(args: {
+    schemaName: string
+    schema: Record<string, unknown>
+}): { format: TOpenAiTextFormat; verbosity: "low" } {
+    return {
+        format: {
+            type: "json_schema",
+            name: args.schemaName,
+            strict: true,
+            schema: args.schema,
+        },
+        verbosity: "low",
+    }
+}
+
 export type TOpenAiResponsesRequestBody = {
     model: string
     input: TOpenAiInputMessage[]
-    text: { format: TOpenAiTextFormat }
+    // `verbosity` is a GPT-5-family Responses param that coexists with
+    // `text.format` json_schema; it nudges the model toward terser
+    // output (helping fields stay within their declared budgets).
+    text: { format: TOpenAiTextFormat; verbosity?: "low" | "medium" | "high" }
     tools?: TOpenAiTool[]
     max_output_tokens?: number
     reasoning?: { effort: "minimal" | "low" | "medium" | "high" }

@@ -36,6 +36,12 @@ export const BasicsCitationClaimExtension = Type.Object({
     }),
     url: Type.String({
         maxLength: 500,
+        // `format: "uri"` marks this as an exact value, not free text:
+        // structured-output length steering must not shrink a URL's cap
+        // (a shrunk maxLength would clip a long URL short). Inert at
+        // runtime — no TypeBox format registry is configured — but read
+        // by the converters' length-hint projection.
+        format: "uri",
         description: "The URL of the citation supporting the claim",
     }),
     type: CoreClaimCitationTypeSchema,

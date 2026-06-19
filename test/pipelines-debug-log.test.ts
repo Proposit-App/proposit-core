@@ -15,6 +15,7 @@ import { createOpenAiResponsesProvider } from "../src/extensions/openai/provider
 import {
     executePipeline,
     deterministicStage,
+    llmStage,
     debugLlmRequest,
     isDebugEnabled,
     PROPOSIT_PIPELINE_DEBUG_ENV_VAR,
@@ -254,6 +255,59 @@ describe("debug helpers emit on console.debug when env var is on", () => {
         expect(requestLine).toContain('"maxOutputTokens":1024')
         expect(responseLine).toContain('"status":"completed"')
         expect(responseLine).toContain('"tokenUsage":{"input":10,"output":3}')
+    })
+
+    it("emits output:truncated when the safety net clamps an over-long field", async () => {
+        // The model overshoots a field's declared maxLength; the
+        // safety-net clamp truncates it and the re-check then passes, so
+        // the stage completes. The breadcrumb is the only signal that an
+        // overshoot slipped past the upstream length steering.
+        const stage = llmStage<{ title: string }>({
+            id: "titler",
+            dependsOn: [],
+            outputSchema: Type.Object({ title: Type.String({ maxLength: 5 }) }),
+            model: "mock",
+            buildPrompt: () => ({
+                system: "<!--stage-id: titler--> system",
+                user: "u",
+            }),
+        })
+        const llm = createMockLlmProvider({
+            responses: {
+                // schema-invalid returns the over-long value as-is so the
+                // clamp path runs.
+                titler: [
+                    {
+                        kind: "schema-invalid",
+                        output: { title: "way too long" },
+                    },
+                ],
+            },
+        })
+        const pipeline: TPipeline<unknown, { title: string }> = {
+            id: "trunc",
+            version: "1.0.0",
+            inputSchema: Type.Object({}),
+            outputSchema: Type.Object({ title: Type.String() }),
+            stages: [stage],
+            finalize: {
+                dependsOn: ["titler"],
+                run: (ctx) =>
+                    ctx.get<{ title: string }>("titler") ?? { title: "" },
+            },
+        }
+        const result = await executePipeline(pipeline, {}, { llm })
+        // Clamp truncated "way too long" (12) → "way t" (5); stage passes.
+        expect(result.stageOutcomes).toMatchObject({ titler: "completed" })
+        expect(result.output).toEqual({ title: "way t" })
+
+        const truncLine = capture.lines
+            .filter((line) => line.startsWith(PROPOSIT_PIPELINE_DEBUG_PREFIX))
+            .find((m) => m.includes("[output:truncated]"))
+        expect(truncLine).toBeDefined()
+        expect(truncLine).toContain('"stageId":"titler"')
+        expect(truncLine).toContain('"limit":5')
+        expect(truncLine).toContain('"originalLength":12')
     })
 
     it("OpenAI provider emits llm:failure with the truncated rawText on status: incomplete", async () => {

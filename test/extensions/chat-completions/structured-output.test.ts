@@ -165,6 +165,50 @@ describe("typeboxToJsonSchema", () => {
         expect(typeboxToJsonSchema(Type.Null())).toEqual({ type: "null" })
     })
 
+    it("shrinks a free-text String's maxLength and appends the budget to its description", () => {
+        const schema = Type.Object({
+            title: Type.String({
+                maxLength: 100,
+                description: "A short title",
+            }),
+        })
+        const json = typeboxToJsonSchema(schema) as {
+            properties: { title: { maxLength: number; description: string } }
+        }
+        // A respected-maxLength consumer (local llama-server → GBNF)
+        // caps strictly below the true limit, so output lands under it.
+        expect(json.properties.title.maxLength).toBe(90)
+        expect(json.properties.title.description).toBe(
+            "A short title; at most 90 characters"
+        )
+    })
+
+    it("leaves a String with no maxLength as a bare string (no shrink, no hint)", () => {
+        const schema = Type.Object({ note: Type.String() })
+        const json = typeboxToJsonSchema(schema) as {
+            properties: { note: Record<string, unknown> }
+        }
+        expect(json.properties.note).toEqual({ type: "string" })
+    })
+
+    it("does not shrink an exact-value String (format: uri) — original maxLength, no hint, and no `format` on the wire schema", () => {
+        const schema = Type.Object({
+            url: Type.String({
+                maxLength: 500,
+                description: "The URL of the citation",
+                format: "uri",
+            }),
+        })
+        const json = typeboxToJsonSchema(schema) as {
+            properties: { url: { maxLength: number; description: string } }
+        }
+        expect(json.properties.url.maxLength).toBe(500)
+        expect(json.properties.url.description).toBe("The URL of the citation")
+        // `format` drives the exemption decision but is not projected —
+        // the converters emit only structural fields on the wire.
+        expect(json.properties.url).not.toHaveProperty("format")
+    })
+
     it("throws on Type.Tuple (unsupported primitive)", () => {
         const schema = Type.Tuple([Type.String(), Type.Number()])
         expect(() => typeboxToJsonSchema(schema)).toThrow(
