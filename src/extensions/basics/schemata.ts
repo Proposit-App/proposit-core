@@ -36,12 +36,14 @@ export const BasicsCitationClaimExtension = Type.Object({
     }),
     url: Type.String({
         maxLength: 500,
-        // `format: "uri"` marks this as an exact value, not free text:
-        // structured-output length steering must not shrink a URL's cap
-        // (a shrunk maxLength would clip a long URL short). Inert at
-        // runtime — no TypeBox format registry is configured — but read
-        // by the converters' length-hint projection.
-        format: "uri",
+        // No `format` here on purpose. This node is serialized straight
+        // into the OpenAI strict-mode response schema (the parse
+        // executor uses a raw `JSON.parse(JSON.stringify(...))`, not the
+        // converter), and OpenAI strict mode rejects any string `format`
+        // outside its fixed set — `uri` is not in it, so a declared
+        // `format: "uri"` here 400s the parse request. The field is
+        // treated as free text: the length steering may project a budget
+        // hint, and the post-hoc clamp still allows the full 500 chars.
         description: "The URL of the citation supporting the claim",
     }),
     type: CoreClaimCitationTypeSchema,

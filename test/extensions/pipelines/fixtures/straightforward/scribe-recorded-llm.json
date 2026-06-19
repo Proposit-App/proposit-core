@@ -2,7 +2,7 @@
   "version": 1,
   "records": [
     {
-      "hash": "8d53a2f5badef717a27cf8c750c1e452471e134ec8b4f19f8f7c6d8ebd7cd51f",
+      "hash": "2cc0c443143b005e81a11e8683d2b29f1b156755416687dd7e85ec0bfc6c66bc",
       "stageId": "extract",
       "request": {
         "model": "gpt-5.4-mini",
@@ -97,8 +97,7 @@
                       "url": {
                         "type": "string",
                         "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim",
-                        "format": "uri"
+                        "description": "The URL of the citation supporting the claim"
                       },
                       "type": {
                         "type": "string",

@@ -52,6 +52,8 @@
 import { describe, expect, it } from "vitest"
 import type { TSchema } from "typebox"
 import { typeboxToOpenAiSchema } from "../../../../src/extensions/openai/structured-output.js"
+import { getParsingResponseSchema } from "../../../../src/lib/parsing/schemata.js"
+import { BasicsParsingSchema } from "../../../../src/extensions/basics/schemata.js"
 import {
     AxiomIndicatorDetectionOutputSchema,
     CitationSourceDetectionOutputSchema,
@@ -201,12 +203,15 @@ describe("v2 LLM stages — converted schema is strict-mode-compliant (recursive
 // Length steering on the REAL ingestion claim-record schema, not a
 // synthetic string. The canonicalization output's `canonicalClaims`
 // items are the basics claim union; its citation branch carries
-// `title` (free text, maxLength 50) and `url` (an exact value,
-// maxLength 500, `format: "uri"`). After conversion the free-text
-// title must shrink toward its cap and restate the budget in its
-// description, while the URL must keep its full original limit and
-// gain no hint — the regression that motivated the steering (a claim
-// title cut off mid-word) against the actual field set ingestion ships.
+// `title` (free text, maxLength 50) and `url` (free text, maxLength
+// 500). After conversion both shrink toward their cap and restate the
+// budget in their description — the regression that motivated the
+// steering (a claim title cut off mid-word) against the actual field
+// set ingestion ships. The `url` field carries no `format`: it is
+// serialized straight into OpenAI strict mode, which rejects any
+// string `format` outside its fixed set. Length steering on a URL is
+// acceptable — the post-hoc clamp still allows the full 500 chars, so
+// the shrunk cap only nudges, it never truncates a valid URL.
 describe("ingestion claim-record schema — free-text length steering", () => {
     function citationClaimBranch(): Record<string, unknown> {
         const stage = createClaimCanonicalizationStage(basicsExtension)
@@ -243,17 +248,85 @@ describe("ingestion claim-record schema — free-text length steering", () => {
         expect(props.title.description).toMatch(/at most 45 characters$/)
     })
 
-    it("leaves the exact-value `url` at its original maxLength with no appended budget and no `format` on the wire schema", () => {
+    it("shrinks the free-text `url` to 450, appends the budget, and carries no `format` on the wire schema", () => {
         const props = (
             citationClaimBranch() as {
                 properties: { url: { maxLength: number; description: string } }
             }
         ).properties
-        expect(props.url.maxLength).toBe(500)
-        expect(props.url.description).not.toMatch(/at most \d+ characters/)
-        // The source `url` declares `format: "uri"`, but the converted
-        // strict-mode wire schema must not carry it — OpenAI strict mode
-        // rejects formats outside its fixed set.
+        // basics url maxLength 500 → floor(500 * 0.9) = 450.
+        expect(props.url.maxLength).toBe(450)
+        expect(props.url.description).toMatch(/at most 450 characters$/)
+        // The converted strict-mode wire schema must not carry a
+        // `format` — OpenAI strict mode rejects formats outside its
+        // fixed set.
         expect(props.url).not.toHaveProperty("format")
     })
+})
+
+// Collect every JSON-pointer path at which a `format` key appears,
+// recursing through `properties`, `items`, and `anyOf` branches.
+// OpenAI strict mode rejects any string `format` outside its fixed
+// set (date-time, date, time, duration, email, hostname, ipv4, ipv6,
+// uuid); `uri` is not in it, so a leaked `format: "uri"` → a 400 at
+// request time.
+function findFormatPaths(schema: unknown, path: readonly string[]): string[] {
+    if (schema === null || typeof schema !== "object") return []
+    const s = schema as Record<string, unknown>
+    const here = path.length === 0 ? "<root>" : path.join(".")
+    const hits: string[] = []
+    if (s.format !== undefined) {
+        hits.push(`${here} (format=${JSON.stringify(s.format)})`)
+    }
+    if (s.properties && typeof s.properties === "object") {
+        for (const [key, value] of Object.entries(
+            s.properties as Record<string, unknown>
+        )) {
+            hits.push(...findFormatPaths(value, [...path, key]))
+        }
+    }
+    if (Array.isArray(s.anyOf)) {
+        for (const [i, member] of (s.anyOf as unknown[]).entries()) {
+            hits.push(
+                ...findFormatPaths(member, [...path, `anyOf[${String(i)}]`])
+            )
+        }
+    }
+    if (s.items && typeof s.items === "object") {
+        hits.push(...findFormatPaths(s.items, [...path, "items"]))
+    }
+    return hits
+}
+
+// The OpenAI-bound ingestion parse schema is built two ways that both
+// reach the strict-mode `text.format.schema` slot, and NEITHER may
+// carry a string `format`:
+//
+//   1. `getParsingResponseSchema(BasicsParsingSchema)` — a raw
+//      `JSON.parse(JSON.stringify(...))` of the TypeBox node. This is
+//      the path the server's `argument_build_finalize` executor uses
+//      (`enforceStrictSchema(getParsingResponseSchema(...))`); it does
+//      NOT pass through `typeboxToOpenAiSchema`, so any `format` on a
+//      source String node serializes straight through to OpenAI.
+//   2. `typeboxToOpenAiSchema(<v2 stage schema>)` — the converter path
+//      used by core's own OpenAI provider.
+//
+// A leaked `format: "uri"` on the citation `url` field caused a 400
+// (`'uri' is not a valid format`) from OpenAI strict mode. The
+// leak-proof fix removes `format` at the source TypeBox node so no
+// derivation path can emit it. These tests guard both paths.
+describe("OpenAI-bound parse schema carries no string `format`", () => {
+    it("getParsingResponseSchema(BasicsParsingSchema) has no `format` anywhere", () => {
+        const raw = getParsingResponseSchema(BasicsParsingSchema)
+        const hits = findFormatPaths(raw, [])
+        expect(hits).toEqual([])
+    })
+
+    for (const [name, schema] of llmStageSchemas()) {
+        it(`${name}: converted schema has no \`format\` anywhere`, () => {
+            const converted = typeboxToOpenAiSchema(schema)
+            const hits = findFormatPaths(converted, [name])
+            expect(hits).toEqual([])
+        })
+    }
 })

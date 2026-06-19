@@ -346,7 +346,7 @@
       }
     },
     {
-      "hash": "810a5cb99bce030c135dbabcd2437cfd556b154e0db6338e3325a82bca6df4c2",
+      "hash": "17063d3ccdfa323eee0b595a32721a823dd8295a9954ad09e8e27ef9065ecebe",
       "stageId": "claim-canonicalization",
       "request": {
         "model": "gpt-5.5",
@@ -441,8 +441,7 @@
                       "url": {
                         "type": "string",
                         "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim",
-                        "format": "uri"
+                        "description": "The URL of the citation supporting the claim"
                       },
                       "type": {
                         "type": "string",

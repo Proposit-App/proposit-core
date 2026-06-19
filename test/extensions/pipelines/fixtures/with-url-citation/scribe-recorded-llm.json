@@ -2,11 +2,11 @@
   "version": 1,
   "records": [
     {
-      "hash": "e63619ac70e8422c2e5d010efe3d42b271b5af8997b4592dfa1198a1e6ecc27c",
+      "hash": "599dcb2cd49d7ff03cf51c91dde8eea9a3fc40068b93d2c8c30bb717526eaac4",
       "stageId": "extract",
       "request": {
         "model": "gpt-5.4-mini",
-        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — leave as a single synthetic id per claim (e.g. [\"c1-m\"]); scribe does not track sub-claim mentions.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per synthetic mention id you used.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEach canonical claim carries:\n- `miniId` \u2014 assign in order: c1, c2, c3, ...\n- `mentionIds` \u2014 leave as a single synthetic id per claim (e.g. [\"c1-m\"]); scribe does not track sub-claim mentions.\n- `type` \u2014 \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `suggestedSymbol` \u2014 a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom \u2014 whichever apply to the claim's type).\n- `mentionToClaim` \u2014 one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per synthetic mention id you used.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself \u2014 never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Input text:\n\nAccording to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century. Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events.\n\nProduce the canonicalClaims + mentionToClaim object.",
         "outputSchema": {
           "type": "object",
@@ -43,7 +43,7 @@
                       },
                       "suggestedSymbol": {
                         "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. \u2264 32 chars; letters / digits / underscores; starts with letter or underscore."
                       },
                       "title": {
                         "type": "string",
@@ -87,7 +87,7 @@
                       },
                       "suggestedSymbol": {
                         "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. \u2264 32 chars; letters / digits / underscores; starts with letter or underscore."
                       },
                       "title": {
                         "type": "string",
@@ -97,8 +97,7 @@
                       "url": {
                         "type": "string",
                         "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim",
-                        "format": "uri"
+                        "description": "The URL of the citation supporting the claim"
                       },
                       "type": {
                         "type": "string",
@@ -131,7 +130,7 @@
                       },
                       "suggestedSymbol": {
                         "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. \u2264 32 chars; letters / digits / underscores; starts with letter or underscore."
                       },
                       "axiom": {
                         "type": "string",
@@ -247,7 +246,7 @@
       "stageId": "scribe-structure",
       "request": {
         "model": "gpt-5.4-mini",
-        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the support edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"support\" / \"joint-support\" / \"derivation-support\", a `sources` array of supporting claim miniIds, a single `target` claim miniId, and an `evidence` object ({ segmentIds: [], quote: \"\" } is acceptable when you have no span to cite).\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set \u2014 each claim's id, type, and content fields (title/body) \u2014 and emit the argument's structure.\n\nEmit:\n- `relations` \u2014 the support edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"support\" / \"joint-support\" / \"derivation-support\", a `sources` array of supporting claim miniIds, a single `target` claim miniId, and an `evidence` object ({ segmentIds: [], quote: \"\" } is acceptable when you have no span to cite).\n- `conclusionCandidates` \u2014 the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `rationale` \u2014 one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=citation symbol=NasaClimateReportTempsRise fields={\"title\":\"NASA climate report says temperatures rose\",\"url\":\"https://climate.nasa.gov/evidence/\"}\n  [c2] type=normal symbol=GlobalTempsRise fields={\"title\":\"Global temperatures rise significantly\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal symbol=TempsIncreaseExtremeWeather fields={\"title\":\"Rising temperatures increase extreme weather\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c4] type=normal symbol=MoreExtremeWeatherNow fields={\"title\":\"Extreme weather events are more frequent now\",\"body\":\"More frequent extreme weather events are occurring.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
         "outputSchema": {
           "type": "object",
