@@ -4,4 +4,6 @@ title: lib/extensions decomposition — residual (ExpressionManager, pipelines/e
 phase: ''
 created: '2026-06-21'
 resolution: null
-priority: null
+priority: 10
+blocked_by:
+- slug: 2026-06-21-ponytail-lean-scan-residual-deletions-structuredclone-swap

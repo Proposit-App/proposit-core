@@ -3,4 +3,4 @@ title: 'Public engine API: patchExpressionAppFields (stop reaching into engine i
 phase: ''
 created: '2026-06-21'
 resolution: null
-priority: null
+priority: 20
