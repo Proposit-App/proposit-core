@@ -1,3 +1,11 @@
+# Ponytail lean-scan — residual deletions + structuredClone swap
+
+## Product changes
+
+## Technical changes
+
+## Meta changes
+
 # ponytail-audit: proposit-core — Repo-Wide Lean Scan
 
 **Date:** 2026-06-17
@@ -126,3 +134,4 @@ Exported from validator files but only called by their parent validator. No exte
 3. **delete (internal):** all zero-callers and validator dead functions — safe to remove immediately
 4. **yagni:** inline interfaces into their classes, delete interface files — internal refactoring
 5. **delete (barrel-reach):** grep proposit-server + proposit-mobile first, then remove
+

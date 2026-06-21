@@ -1,3 +1,11 @@
+# lib/extensions decomposition — residual (ExpressionManager, pipelines/execute, stage grouping)
+
+## Product changes
+
+## Technical changes
+
+## Meta changes
+
 # Architecture Review: `src/lib` + `src/extensions`
 
 **Date:** 2026-06-15
@@ -86,3 +94,4 @@ The `core/` directory has **29 files** and carries the entire argument engine, p
 
 1. **Split OpenAI provider** into HTTP/agent-retrieval submodules — medium effort, improves testability of each mode.
 2. **Extract structural validation helpers** from `ExpressionManager` methods — medium effort, would reduce 10 methods by ~60% each.
+
