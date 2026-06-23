@@ -1,0 +1,1 @@
+A leaf expression binding a human-readable symbol to a claim or a premise. It is the bridge between an argument's internal logic and external propositional content.

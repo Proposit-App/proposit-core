@@ -1,0 +1,1 @@
+A global propositional statement with identity, version, and type, independent of any single argument. Variables bind to claims by ID and version.

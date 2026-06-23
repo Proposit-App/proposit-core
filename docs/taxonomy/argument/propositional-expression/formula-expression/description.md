@@ -1,0 +1,1 @@
+A transparent buffer expression wrapping children for structural purposes. In Proposit, a concrete entity with its own ID, checksum, and position — used for P-1 formula buffers and derivation premise antecedents.

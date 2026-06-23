@@ -1,0 +1,1 @@
+A premise holding arbitrary propositional content (the default type).
