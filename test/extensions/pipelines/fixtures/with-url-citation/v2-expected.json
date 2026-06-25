@@ -7,7 +7,13 @@
                 "title": "NASA reports temperature rise",
                 "url": "https://climate.nasa.gov/evidence/",
                 "type": "citation",
-                "role": "premise"
+                "role": "premise",
+                "citation": {
+                    "type": "unparsed",
+                    "text": "NASA reports temperature rise",
+                    "citationTypeGuess": "Website",
+                    "url": "https://climate.nasa.gov/evidence/"
+                }
             },
             {
                 "miniId": "c2",

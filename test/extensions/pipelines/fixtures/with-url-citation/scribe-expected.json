@@ -6,7 +6,13 @@
                 "title": "NASA climate report says temperatures rose",
                 "url": "https://climate.nasa.gov/evidence/",
                 "type": "citation",
-                "role": "premise"
+                "role": "premise",
+                "citation": {
+                    "type": "unparsed",
+                    "text": "NASA climate report says temperatures rose",
+                    "citationTypeGuess": "Website",
+                    "url": "https://climate.nasa.gov/evidence/"
+                }
             },
             {
                 "miniId": "c2",

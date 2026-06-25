@@ -8,6 +8,7 @@ import {
 } from "../../lib/schemata/claim.js"
 import { CorePremiseSchema } from "../../lib/schemata/propositional.js"
 import { buildParsingResponseSchema } from "../../lib/parsing/schemata.js"
+import { UnparsedCitationTypeGuessSchema } from "../citations/unparsed/index.js"
 
 // Parsing response extensions.
 //
@@ -46,6 +47,11 @@ export const BasicsCitationClaimExtension = Type.Object({
         // hint, and the post-hoc clamp still allows the full 500 chars.
         description: "The URL of the citation supporting the claim",
     }),
+    // Best-guess IEEE reference type for the as-yet-unstructured
+    // citation (or "unknown"). Optional so older recorded data that
+    // predates the guess still validates against this schema; finalize
+    // sanitizes whatever the model emits back into the enum.
+    citationTypeGuess: Type.Optional(UnparsedCitationTypeGuessSchema),
     type: CoreClaimCitationTypeSchema,
 })
 

@@ -2,11 +2,11 @@
   "version": 1,
   "records": [
     {
-      "hash": "db6ba71cb3c72d9da333d678a6fc320e4fd55d0bb1cc5861997d641b206e7f30",
+      "hash": "8e3817b62d5965d1361e3d78501ecb5f095dd352fed1d137ef47b204b8199d88",
       "stageId": "extract",
       "request": {
         "model": "gpt-5.4-mini",
-        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — leave as a single synthetic id per claim (e.g. [\"c1-m\"]); scribe does not track sub-claim mentions.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per synthetic mention id you used.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — leave as a single synthetic id per claim (e.g. [\"c1-m\"]); scribe does not track sub-claim mentions.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per synthetic mention id you used.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Input text:\n\nWorking remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance.\n\nProduce the canonicalClaims + mentionToClaim object.",
         "outputSchema": {
           "type": "object",
@@ -98,6 +98,150 @@
                         "type": "string",
                         "maxLength": 500,
                         "description": "The URL of the citation supporting the claim"
+                      },
+                      "citationTypeGuess": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "Book"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Website"
+                              },
+                              {
+                                "type": "string",
+                                "const": "BookChapter"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Handbook"
+                              },
+                              {
+                                "type": "string",
+                                "const": "TechnicalReport"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Standard"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Thesis"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Patent"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dictionary"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Encyclopedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "JournalArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "MagazineArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "NewspaperArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferencePaper"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferenceProceedings"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dataset"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Software"
+                              },
+                              {
+                                "type": "string",
+                                "const": "OnlineDocument"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Blog"
+                              },
+                              {
+                                "type": "string",
+                                "const": "SocialMedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Preprint"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Video"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Podcast"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Course"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Presentation"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Interview"
+                              },
+                              {
+                                "type": "string",
+                                "const": "PersonalCommunication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Email"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Law"
+                              },
+                              {
+                                "type": "string",
+                                "const": "CourtCase"
+                              },
+                              {
+                                "type": "string",
+                                "const": "GovernmentPublication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Datasheet"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ProductManual"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "const": "unknown"
+                          }
+                        ]
                       },
                       "type": {
                         "type": "string",
@@ -223,8 +367,7 @@
           "input": 616,
           "output": 215,
           "reasoning": 0
-        },
-        "rawResponseId": "resp_0b8acdd1a538beac006a3355589d9c819e94ef2936fe74dd22"
+        }
       }
     },
     {
@@ -353,8 +496,7 @@
           "input": 509,
           "output": 126,
           "reasoning": 0
-        },
-        "rawResponseId": "resp_0b41abb0b0afc8f1006a33555a92648192a096b9b399205aa7"
+        }
       }
     }
   ]

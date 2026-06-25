@@ -39,7 +39,8 @@ For each distinct proposition the author makes, emit one canonical claim. Two ph
 Each canonical claim carries:
 - \`miniId\` — assign in order: c1, c2, c3, ...
 - \`mentionIds\` — leave as a single synthetic id per claim (e.g. ["c1-m"]); scribe does not track sub-claim mentions.
-- \`type\` — "normal" (a primary proposition), "citation" (content is "the cited source asserts X"; populate \`url\` + \`title\`), or "axiomatic" (invoked as self-evident; populate \`axiom\`).
+- \`type\` — "normal" (a primary proposition), "citation" (content is "the cited source asserts X"; populate \`url\` + \`title\`, and set \`citationTypeGuess\`), or "axiomatic" (invoked as self-evident; populate \`axiom\`).
+- \`citationTypeGuess\` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. "JournalArticle", "NewspaperArticle", "Book", "Website", "GovernmentPublication", …). Use "unknown" when no IEEE type fits or you cannot tell.
 - \`suggestedSymbol\` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.
 - the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).
 - \`mentionToClaim\` — one \`{ "mentionId": "...", "claimMiniId": "..." }\` entry per synthetic mention id you used.

@@ -25,9 +25,13 @@
 import {
     STAGE_IDS,
     FormulaCompilationOutputSchema,
+    type TClaimCanonicalizationOutput,
+    type TClaimTypeClassificationEntry,
+    type TClaimTypeClassificationOutput,
     type TConclusionSelectionOutput,
     type TFormulaCompilationOutput,
     type TFormulaPremiseRoleHint,
+    type TRelation,
     type TRelationExtractionOutput,
     type TVariableAssignmentOutput,
 } from "./schemas.js"
@@ -40,6 +44,112 @@ export const FORMULA_COMPILATION_FAILURE_CODES = {
     unresolvedConclusion: "FORMULA_COMPILATION_CONCLUSION_UNRESOLVED",
     emptySources: "FORMULA_COMPILATION_SOURCES_EMPTY",
 } as const
+
+// Claim types that may only back a derivation premise — never a freeform
+// (support / joint-support) premise. A relation whose source carries one
+// of these types is rerouted to a derivation premise; if it can't be, the
+// relation is dropped.
+const DERIVATION_ONLY_SOURCE_CLAIM_TYPES = new Set<
+    TClaimTypeClassificationEntry["type"]
+>(["citation", "axiomatic"])
+
+export const RELATION_PLACEMENT_FAILURE_CODES = {
+    droppedNoncompliantRelation: "RELATION_PLACEMENT_DROPPED_NONCOMPLIANT",
+} as const
+
+type TAddFailure = NonNullable<TCompileFormulasInput["addFailure"]>
+
+/**
+ * Resolve each claim's effective type into a `miniId → type` map,
+ * preferring the `claim-type-classification` entry and falling back to
+ * the canonicalizer's drafted `type` when the classifier omitted a
+ * claim. This matches `finalizeResponseV2`'s `classification ?? c.type`
+ * resolution so the relation pre-pass and finalize never disagree on
+ * whether a claim is a citation/axiomatic — a disagreement would let a
+ * citation slip into a freeform premise.
+ */
+export function resolveClaimTypes(input: {
+    classifications: TClaimTypeClassificationEntry[]
+    canonicalClaims: {
+        miniId: string
+        type: TClaimTypeClassificationEntry["type"]
+    }[]
+}): Map<string, TClaimTypeClassificationEntry["type"]> {
+    const byMiniId = new Map<string, TClaimTypeClassificationEntry["type"]>()
+    for (const claim of input.canonicalClaims) {
+        byMiniId.set(claim.miniId, claim.type)
+    }
+    for (const entry of input.classifications) {
+        byMiniId.set(entry.miniId, entry.type)
+    }
+    return byMiniId
+}
+
+/**
+ * Keep citation/axiomatic claims out of freeform premises: a
+ * `citation`/`axiomatic` claim may only sit in a derivation premise's
+ * antecedent (grammar rules D-4 / D-5), never in a `support` /
+ * `joint-support` (freeform) premise.
+ *
+ * A single-source freeform relation whose source is such a claim is
+ * relabeled to `derivation-support` — its antecedent is the lone typed
+ * claim, a valid derivation antecedent. A multi-source freeform relation
+ * with a derivation-only source cannot be made compliant: a derivation
+ * antecedent admits only a single claim variable (or an OR of
+ * same-grounding variables), not an AND across mixed grounding, so there
+ * is no compliant single premise to reroute it to. Such a relation is
+ * dropped and recorded as a warning rather than emitted — a single bad
+ * relation degrades to "premise omitted", never to a failed import.
+ *
+ * This runs as a deterministic pre-pass *before* `compileFormulas`,
+ * which has no claim-type map. The claim-type map (`typeByClaimMiniId`)
+ * is the input that lets this pass decide placement.
+ */
+export function rerouteDerivationOnlyRelations(input: {
+    relations: TRelation[]
+    typeByClaimMiniId: Map<string, TClaimTypeClassificationEntry["type"]>
+    addFailure?: TAddFailure
+}): TRelation[] {
+    const emit = input.addFailure ?? (() => undefined)
+    const compliant: TRelation[] = []
+    for (const relation of input.relations) {
+        const derivationOnlySources = relation.sources.filter((src) =>
+            DERIVATION_ONLY_SOURCE_CLAIM_TYPES.has(
+                input.typeByClaimMiniId.get(src) ?? "normal"
+            )
+        )
+        if (derivationOnlySources.length === 0) {
+            compliant.push(relation)
+            continue
+        }
+        if (relation.type === "derivation-support") {
+            // Already a derivation premise — compliant as-is.
+            compliant.push(relation)
+            continue
+        }
+        // A single-source freeform relation reroutes cleanly to a
+        // derivation premise (antecedent = the typed claim, consequent =
+        // the target).
+        if (relation.sources.length === 1) {
+            compliant.push({ ...relation, type: "derivation-support" })
+            continue
+        }
+        // A multi-source freeform relation with a derivation-only source
+        // can't become a compliant derivation premise: the antecedent
+        // would be an AND across mixed grounding, which a derivation
+        // antecedent does not admit. Drop it rather than emit a violation.
+        emit({
+            code: RELATION_PLACEMENT_FAILURE_CODES.droppedNoncompliantRelation,
+            message: `Relation "${relation.relationId}" places a citation/axiomatic source in a freeform premise and cannot be rerouted; dropping the premise.`,
+            severity: "warning",
+            context: {
+                relationId: relation.relationId,
+                derivationOnlySources,
+            },
+        })
+    }
+    return compliant
+}
 
 export type TCompileFormulasInput = {
     /** Bare relations array (unwrapped from the stage's envelope). */
@@ -194,6 +304,7 @@ export const formulaCompilationStage: TStage<TFormulaCompilationOutput> =
             STAGE_IDS.conclusionSelection,
             STAGE_IDS.variableAssignment,
             STAGE_IDS.claimTypeClassification,
+            STAGE_IDS.claimCanonicalization,
         ],
         outputSchema: FormulaCompilationOutputSchema,
         fn: (ctx: TStageContext) => {
@@ -208,8 +319,24 @@ export const formulaCompilationStage: TStage<TFormulaCompilationOutput> =
                 ctx.get<TVariableAssignmentOutput>(
                     STAGE_IDS.variableAssignment
                 ) ?? []
-            return compileFormulas({
+            const typeEnvelope = ctx.get<TClaimTypeClassificationOutput>(
+                STAGE_IDS.claimTypeClassification
+            )
+            const canon = ctx.get<TClaimCanonicalizationOutput>(
+                STAGE_IDS.claimCanonicalization
+            )
+            // Pre-pass (claim-type-aware): keep citation/axiomatic claims
+            // out of freeform premises before the type-blind compile.
+            const placedRelations = rerouteDerivationOnlyRelations({
                 relations,
+                typeByClaimMiniId: resolveClaimTypes({
+                    classifications: typeEnvelope?.classifications ?? [],
+                    canonicalClaims: canon?.canonicalClaims ?? [],
+                }),
+                addFailure: ctx.addFailure,
+            })
+            return compileFormulas({
+                relations: placedRelations,
                 conclusion,
                 variables,
                 generateId: ctx.generateId,
