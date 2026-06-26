@@ -8,6 +8,9 @@ coverage/
 # `pnpm run check` on their prettier-format compliance. Covers the live
 # inbox and its `.archive/`.
 docs/inbox/
+# Planning docs under docs/work/ are freeform artifacts — not maintained
+# project source. Don't gate `pnpm run check` on their prettier compliance.
+docs/work/
 src/lib/core/parser/formula-gen.js
 # Recording-provider outputs from `INGESTION_TEST_RECORD=1` runs.
 # Machine-generated (`JSON.stringify(file, null, 2)` — 2-space

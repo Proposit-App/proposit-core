@@ -11,18 +11,21 @@ Introduce a `conversation` primitive in core for interactive, user-driven multi-
 ## Scope (per epic spec §4–§6, §9)
 
 ### Layer 1 — provider support
+
 - Add `previousResponseId?: TResponseId` to `TLlmRequest<T>` (additive, non-breaking)
 - Brand `TResponseId = string` in `src/lib/llm/types.ts`
 - OpenAI provider: pass `previousResponseId` as `previous_response_id`
 - chat-completions provider: ignore it (synchronous, no response-IDs)
 
 ### Layer 2 — `executeTurn`
+
 - New `src/lib/conversation/turn.ts`
 - Stateless wrapper: runs one stage, threads `previousResponseId` in, surfaces `responseId` out
 - Reuses existing single-stage execution path (retry, validation, events, token accounting)
 - Types: `TTurnInput`, `TTurnResult<TOut>`, `TExecuteTurnDeps`
 
 ### Layer 3 — `createConversation`
+
 - New `src/lib/conversation/conversation.ts`
 - Stateful object: holds response-ID chain + cumulative tokens
 - Methods: `.turn(stage, input, opts?)`, `.close()`
@@ -30,20 +33,24 @@ Introduce a `conversation` primitive in core for interactive, user-driven multi-
 - `.turn` after `.close()` throws
 
 ### Contract types
+
 - `MultiTurnInput<I>` / `MultiTurnOutput<O>` in `src/lib/conversation/contract.ts`
 
 ### Three builder turns
+
 - `src/extensions/builder/` — turn factories: `review`, `simulate`, `finalize`
 - Each is a `TStage` factory
 - `finalize` produces `TParsedArgumentResponse` (same output as ingestion)
 - `finalize` calls `.close()` on the conversation
 
 ### CLI — terminal Argument Builder
+
 - Minimal `readline` REPL — core's first interactive command
 - `/simulate`, `/finalize`, `/quit` commands
 - Holds a single `createConversation` for process lifetime
 
 ### Out of scope (per epic spec §14)
+
 - Durable/cross-restart response-ID persistence (Group D)
 - Moving `provider.tsx` into core
 - Local-LLM multi-turn parity beyond transcript-carry fallback

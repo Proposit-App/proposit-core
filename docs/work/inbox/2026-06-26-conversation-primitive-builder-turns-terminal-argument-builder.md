@@ -4,5 +4,3 @@ initiative: 2026-06-21-builder-pipeline-family-socratic-argument-builder-into-co
 ---
 
 # Conversation primitive, builder turns, terminal Argument Builder
-
-
