@@ -9,10 +9,7 @@ import type {
     TCoreClaim,
     TCoreClaimConnection,
 } from "../schemata/index.js"
-import {
-    isClaimBound,
-    type TClaimBoundVariable,
-} from "../schemata/propositional.js"
+import { type TClaimBoundVariable } from "../schemata/propositional.js"
 import { parseFormula } from "../core/parser/formula.js"
 import type { TFormulaAST } from "../core/parser/formula.js"
 import type { TExpressionInput } from "../core/expression-manager.js"
@@ -84,22 +81,6 @@ function validateRootOnly(
             validateRootOnly(ast.left, false, premiseMiniId)
             validateRootOnly(ast.right, false, premiseMiniId)
             break
-    }
-}
-
-/** Collect all variable IDs reachable in a subtree, traversing through and/or/not/formula/implies/iff. */
-function collectVariableIdsInSubtree(
-    rootExpression: TCorePropositionalExpression,
-    expressionsByParent: Map<string | null, TCorePropositionalExpression[]>,
-    out: Set<string>
-): void {
-    if (rootExpression.type === "variable") {
-        out.add(rootExpression.variableId)
-        return
-    }
-    const children = expressionsByParent.get(rootExpression.id) ?? []
-    for (const child of children) {
-        collectVariableIdsInSubtree(child, expressionsByParent, out)
     }
 }
 
@@ -558,11 +539,12 @@ export class ArgumentParser<
             engine.setConclusionPremise(conclusionId)
         }
 
-        // 9. Formula-inferred support edges
-        //    Walk each implies/iff-rooted premise; right-hand operand is the
-        //    consequent claim, left-hand subtree contributes antecedent variables.
-        //    Citation-typed antecedent vars → ClaimCitationLibrary edge;
-        //    axiomatic-typed antecedent vars → ClaimAxiomLibrary edge.
+        // 9. Derivation backing edges
+        //    The pipeline's deterministic relation sort extracted
+        //    citation/axiomatic antecedents out of freeform premises into
+        //    `derivationBacking` (each backed claim → its citation/axiomatic
+        //    supporters). Materialize each as a ClaimCitationLibrary /
+        //    ClaimAxiomLibrary edge.
         const citationEdgeKeys = new Set<string>()
         const axiomEdgeKeys = new Set<string>()
 
@@ -624,69 +606,29 @@ export class ArgumentParser<
             }
         }
 
-        for (const premise of engine.listPremises()) {
-            const root = premise.getRootExpression()
-            if (!root) continue
-            if (root.type !== "operator") continue
-            if (root.operator !== "implies" && root.operator !== "iff") continue
-
-            const allExpressions = premise.getExpressions()
-            const expressionsByParent = new Map<
-                string | null,
-                TCorePropositionalExpression[]
-            >()
-            for (const expr of allExpressions) {
-                const bucket = expressionsByParent.get(expr.parentId) ?? []
-                bucket.push(expr)
-                expressionsByParent.set(expr.parentId, bucket)
-            }
-            // Children of the root, sorted by position. Right-hand operand is at
-            // position 1 (consequent); position-0 subtree is the antecedent.
-            const rootChildren = (expressionsByParent.get(root.id) ?? [])
-                .slice()
-                .sort((a, b) => a.position - b.position)
-            if (rootChildren.length !== 2) continue
-            const antecedentRoot = rootChildren[0]
-            const consequentRoot = rootChildren[1]
-
-            // Consequent must be a variable expression for the edge model to apply.
-            if (consequentRoot.type !== "variable") continue
-            const consequentVariable = engine.getVariable(
-                consequentRoot.variableId
+        for (const backing of arg.derivationBacking ?? []) {
+            const consequentRef = claimMiniIdToId.get(
+                backing.derivedClaimMiniId
             )
-            if (!consequentVariable) continue
-            if (!isClaimBound(consequentVariable)) continue
-            const consequentClaimId = consequentVariable.claimId
-            const consequentClaimVersion = consequentVariable.claimVersion
-
-            const antecedentVariableIds = new Set<string>()
-            collectVariableIdsInSubtree(
-                antecedentRoot,
-                expressionsByParent,
-                antecedentVariableIds
+            if (!consequentRef) continue
+            const consequentParsed = arg.claims.find(
+                (pc) => pc.miniId === backing.derivedClaimMiniId
             )
-
-            // Find which parsed claim corresponds to the consequent — we need the
-            // parsed-claim form for mapClaimCitation/mapClaimAxiom mapping hooks.
-            const consequentParsed = arg.claims.find((pc) => {
-                const ref = claimMiniIdToId.get(pc.miniId)
-                return ref?.id === consequentClaimId
-            })
             if (!consequentParsed) continue
+            const consequentClaimId = consequentRef.id
+            const consequentClaimVersion = consequentRef.version
 
-            for (const variableId of antecedentVariableIds) {
-                const antecedentVariable = engine.getVariable(variableId)
-                if (!antecedentVariable) continue
-                if (!isClaimBound(antecedentVariable)) continue
+            for (const supporterMiniId of backing.supportingClaimMiniIds) {
+                const supporterRef = claimMiniIdToId.get(supporterMiniId)
+                if (!supporterRef) continue
                 const supportingClaim = claimLibrary.get(
-                    antecedentVariable.claimId,
-                    antecedentVariable.claimVersion
+                    supporterRef.id,
+                    supporterRef.version
                 )
                 if (!supportingClaim) continue
-                const supportingParsed = arg.claims.find((pc) => {
-                    const ref = claimMiniIdToId.get(pc.miniId)
-                    return ref?.id === supportingClaim.id
-                })
+                const supportingParsed = arg.claims.find(
+                    (pc) => pc.miniId === supporterMiniId
+                )
                 if (!supportingParsed) continue
 
                 const edgeKey = `${consequentClaimId}|${supportingClaim.id}`

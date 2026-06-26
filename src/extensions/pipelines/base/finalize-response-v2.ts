@@ -401,10 +401,10 @@ export function finalizeResponseV2(
         // A claim classified `citation` stays `citation` and carries an
         // explicit `UnparsedCitation` (its `text` is the display text, so
         // a url-less reference no longer renders blank). Premise
-        // placement is handled upstream by the relation pre-pass, which
-        // keeps citation claims out of freeform premises — so a citation
-        // never lands as a freeform antecedent here, and there is no
-        // url-presence demotion to do.
+        // placement is handled upstream by the deterministic relation
+        // sort, which keeps citation claims out of freeform premises — so a
+        // citation never lands as a freeform antecedent here, and there is
+        // no url-presence demotion to do.
         if (classifiedType === "citation") {
             const unparsedCitation = buildUnparsedCitation({
                 title: firstNonEmptyString(stripped.title),
@@ -461,6 +461,9 @@ export function finalizeResponseV2(
         variables: finalVariables,
         premises: finalPremises,
         conclusionPremiseMiniId: compilation.conclusionPremiseMiniId,
+        // Citation/axiomatic backing the sort extracted from inference
+        // antecedents; the parser materializes it into derivation edges.
+        derivationBacking: compilation.derivationBacking,
         title: buildArgumentTitle(canon.canonicalClaims, conclusionMiniId),
     }
 

@@ -40,12 +40,27 @@ export const ParsedPremiseSchema = Type.Object(
 )
 export type TParsedPremise = Static<typeof ParsedPremiseSchema>
 
+// Citation/axiomatic backing extracted from inference antecedents during
+// formula compilation: each entry grounds `derivedClaimMiniId` with the
+// listed citation/axiomatic supporting claims. The parser materializes
+// these into derivation edges (claim-citation / claim-axiom links).
+export const ParsedDerivationBackingSchema = Type.Object({
+    derivedClaimMiniId: Type.String(),
+    supportingClaimMiniIds: Type.Array(Type.String()),
+})
+export type TParsedDerivationBacking = Static<
+    typeof ParsedDerivationBackingSchema
+>
+
 export const ParsedArgumentSchema = Type.Object(
     {
         claims: Type.Array(ParsedClaimSchema, { minItems: 1 }),
         variables: Type.Array(ParsedVariableSchema, { minItems: 1 }),
         premises: Type.Array(ParsedPremiseSchema, { minItems: 1 }),
         conclusionPremiseMiniId: Type.String(),
+        derivationBacking: Type.Optional(
+            Type.Array(ParsedDerivationBackingSchema)
+        ),
     },
     { additionalProperties: true }
 )
@@ -120,6 +135,9 @@ export function buildParsingResponseSchema(
         variables: Type.Array(variableSch, { minItems: 1 }),
         premises: Type.Array(premiseSch, { minItems: 1 }),
         conclusionPremiseMiniId: Type.String(),
+        derivationBacking: Type.Optional(
+            Type.Array(ParsedDerivationBackingSchema)
+        ),
     }
 
     const argSch = options.parsedArgumentSchema
