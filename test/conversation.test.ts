@@ -17,7 +17,6 @@
 //   14. previousResponseId round-trips through the mock provider
 
 import { describe, expect, it } from "vitest"
-import Type from "typebox"
 import {
     deterministicStage,
     llmStage,
@@ -28,13 +27,7 @@ import {
     createSimulateTurn,
     createFinalizeTurn,
 } from "../src/lib/index.js"
-import type { TStage } from "../src/lib/index.js"
-import type {
-    TTurnInput,
-    TTurnResult,
-    TExecuteTurnDeps,
-} from "../src/lib/conversation/turn.js"
-import type { TResponseId } from "../src/lib/llm/types.js"
+import type { TExecuteTurnDeps } from "../src/lib/conversation/turn.js"
 import { createMockLlmProvider, type TMockResponse } from "./mocks/llm.js"
 import { ParsedArgumentResponseSchema } from "../src/lib/parsing/schemata.js"
 
@@ -113,12 +106,6 @@ describe("executeTurn", () => {
     })
 
     it("threads previousResponseId into the LLM provider", async () => {
-        const calls: { previousResponseId?: TResponseId }[] = []
-        const llm = createMockLlmProvider({
-            responses: { __byOrder: [{ kind: "ok", output: mockOutput() }] },
-            keyByCallOrder: true,
-        })
-
         // We can't easily intercept the call, but we can verify the wrapper
         // sets the field by checking that the wrapped provider receives it.
         // For this test, we verify the behavior indirectly: if previousResponseId
@@ -140,7 +127,6 @@ describe("executeTurn", () => {
     })
 
     it("calls onComplete after the stage completes", async () => {
-        let completed = false
         const stage = deterministicStage({
             id: "test-stage",
             dependsOn: [],
@@ -318,9 +304,9 @@ describe("createConversation", () => {
             fn: () => mockOutput(),
         })
 
-        expect(async () => {
-            await convo.turn(stage, { userMessage: "after close" })
-        }).rejects.toThrow(ConversationClosedError)
+        await expect(
+            convo.turn(stage, { userMessage: "after close" })
+        ).rejects.toThrow(ConversationClosedError)
     })
 
     it(".close() sets closed = true", () => {
@@ -351,6 +337,7 @@ describe("builder turns", () => {
     it("createFinalizeTurn produces a stage with correct id", () => {
         const stage = createFinalizeTurn({
             model: "gpt-5.5",
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClose: () => {},
         })
         expect(stage.id).toBe("builder:finalize")
@@ -364,23 +351,25 @@ describe("builder turns", () => {
 describe("contract types", () => {
     it("TMultiTurnInput extends I with previousResponseId", () => {
         // TypeScript-level test: the type should accept previousResponseId
-        type Input = { name: string }
-        type Extended =
-            import("../src/lib/conversation/contract.js").TMultiTurnInput<Input>
+        type TInput = { name: string }
+        type TExtended =
+            import("../src/lib/conversation/contract.js").TMultiTurnInput<TInput>
 
-        const input: Extended = { name: "test", previousResponseId: "resp-1" }
-        expect(input.name).toBe("test")
-        expect(input.previousResponseId).toBe("resp-1")
+        const input: TExtended = { name: "test", previousResponseId: "resp-1" }
+        const _input = input as unknown as { name: string; previousResponseId: string }
+        expect(_input.name).toBe("test")
+        expect(_input.previousResponseId).toBe("resp-1")
     })
 
     it("TMultiTurnOutput extends O with responseId", () => {
-        type Output = { message: string }
-        type Extended =
-            import("../src/lib/conversation/contract.js").TMultiTurnOutput<Output>
+        type TOutput = { message: string }
+        type TExtended =
+            import("../src/lib/conversation/contract.js").TMultiTurnOutput<TOutput>
 
-        const output: Extended = { message: "hello", responseId: "resp-1" }
-        expect(output.message).toBe("hello")
-        expect(output.responseId).toBe("resp-1")
+        const output: TExtended = { message: "hello", responseId: "resp-1" }
+        const _output = output as unknown as { message: string; responseId: string }
+        expect(_output.message).toBe("hello")
+        expect(_output.responseId).toBe("resp-1")
     })
 })
 
