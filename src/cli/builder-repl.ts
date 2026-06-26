@@ -21,7 +21,8 @@ import type { TExecuteTurnDeps } from "../lib/conversation/turn.js"
 import type { TStage } from "../lib/pipelines/types.js"
 
 const DEFAULT_MODEL = "gpt-5.5"
-const DEFAULT_API_KEY = process.env.PROPOSIT_API_KEY ?? process.env.OPENAI_API_KEY
+const DEFAULT_API_KEY =
+    process.env.PROPOSIT_API_KEY ?? process.env.OPENAI_API_KEY
 
 function parseArgs(): { provider: string; apiKey?: string } {
     const args: string[] = []
@@ -40,10 +41,7 @@ function parseArgs(): { provider: string; apiKey?: string } {
     return { provider, apiKey }
 }
 
-function buildDeps(
-    provider: string,
-    apiKey: string
-): TExecuteTurnDeps {
+function buildDeps(provider: string, apiKey: string): TExecuteTurnDeps {
     let llm: import("../lib/llm/types.js").TLlmProvider
     switch (provider) {
         case "openai":
@@ -87,7 +85,9 @@ function printResult<TOut>(result: TTurnResult<TOut>, turnName: string): void {
             }
             if (arg.premises) {
                 console.log("\nPremises:")
-                for (const p of arg.premises as Array<Record<string, unknown>>) {
+                for (const p of arg.premises as Array<
+                    Record<string, unknown>
+                >) {
                     const miniId = p.miniId as string
                     const formula = p.formula as string
                     console.log(`  ${miniId}: ${formula}`)
@@ -121,7 +121,9 @@ async function main(): Promise<void> {
     const { provider, apiKey } = parseArgs()
     const key = apiKey ?? DEFAULT_API_KEY
     if (!key) {
-        console.error("No API key provided. Set PROPOSIT_API_KEY or use --api-key.")
+        console.error(
+            "No API key provided. Set PROPOSIT_API_KEY or use --api-key."
+        )
         process.exit(1)
     }
 
@@ -136,7 +138,11 @@ async function main(): Promise<void> {
     })
 
     const doReview = buildTurnFactory(conversation, "review", createReviewTurn)
-    const doSimulate = buildTurnFactory(conversation, "simulate", createSimulateTurn)
+    const doSimulate = buildTurnFactory(
+        conversation,
+        "simulate",
+        createSimulateTurn
+    )
 
     const review = doReview(model)
     const simulate = doSimulate(model)
@@ -146,9 +152,13 @@ async function main(): Promise<void> {
             model,
             onClose: () => {},
         })
-        const result = await conversation.turn(stage, {
-            userMessage: "[conversation transcript]",
-        }, { onComplete: () => conversation.close() })
+        const result = await conversation.turn(
+            stage,
+            {
+                userMessage: "[conversation transcript]",
+            },
+            { onComplete: () => conversation.close() }
+        )
         printResult(result, "finalize")
         conversation.close()
     }

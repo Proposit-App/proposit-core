@@ -61,9 +61,7 @@ export class ConversationClosedError extends Error {
  * conversation primitive's execution path, threading `previousResponseId`
  * so the provider can chain against the upstream response.
  */
-export function createConversation(
-    deps: TExecuteTurnDeps
-): TConversation {
+export function createConversation(deps: TExecuteTurnDeps): TConversation {
     let closed = false
     let lastResponseId: TResponseId | null = null
     let cumulativeTokens: TLlmTokenUsage = { input: 0, output: 0 }
@@ -80,7 +78,8 @@ export function createConversation(
 
             const turnInput: TTurnInput = {
                 userMessage: input.userMessage,
-                previousResponseId: opts?.branchFrom ?? lastResponseId ?? undefined,
+                previousResponseId:
+                    opts?.branchFrom ?? lastResponseId ?? undefined,
             }
 
             const result = await executeTurn(stage, turnInput, {

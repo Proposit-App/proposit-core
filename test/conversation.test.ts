@@ -35,10 +35,7 @@ import type {
     TExecuteTurnDeps,
 } from "../src/lib/conversation/turn.js"
 import type { TResponseId } from "../src/lib/llm/types.js"
-import {
-    createMockLlmProvider,
-    type TMockResponse,
-} from "./mocks/llm.js"
+import { createMockLlmProvider, type TMockResponse } from "./mocks/llm.js"
 import { ParsedArgumentResponseSchema } from "../src/lib/parsing/schemata.js"
 
 // ---------------- helpers ----------------------------------------------------
@@ -84,7 +81,11 @@ describe("executeTurn", () => {
             fn: () => mockOutput(),
         })
 
-        const result = await executeTurn(stage, { userMessage: "hello" }, mockDeps({}))
+        const result = await executeTurn(
+            stage,
+            { userMessage: "hello" },
+            mockDeps({})
+        )
 
         expect(result.output).toEqual(mockOutput())
         expect(result.responseId).toBeNull()
@@ -292,9 +293,13 @@ describe("createConversation", () => {
         const branchPoint = convo.lastResponseId
 
         // Branch from a specific point
-        await convo.turn(stage, { userMessage: "branch" }, {
-            branchFrom: branchPoint ?? undefined,
-        })
+        await convo.turn(
+            stage,
+            { userMessage: "branch" },
+            {
+                branchFrom: branchPoint ?? undefined,
+            }
+        )
 
         // Main line continues
         await convo.turn(stage, { userMessage: "main2" })
@@ -360,7 +365,8 @@ describe("contract types", () => {
     it("MultiTurnInput extends I with previousResponseId", () => {
         // TypeScript-level test: the type should accept previousResponseId
         type Input = { name: string }
-        type Extended = import("../src/lib/conversation/contract.js").MultiTurnInput<Input>
+        type Extended =
+            import("../src/lib/conversation/contract.js").MultiTurnInput<Input>
 
         const input: Extended = { name: "test", previousResponseId: "resp-1" }
         expect(input.name).toBe("test")
@@ -369,7 +375,8 @@ describe("contract types", () => {
 
     it("MultiTurnOutput extends O with responseId", () => {
         type Output = { message: string }
-        type Extended = import("../src/lib/conversation/contract.js").MultiTurnOutput<Output>
+        type Extended =
+            import("../src/lib/conversation/contract.js").MultiTurnOutput<Output>
 
         const output: Extended = { message: "hello", responseId: "resp-1" }
         expect(output.message).toBe("hello")

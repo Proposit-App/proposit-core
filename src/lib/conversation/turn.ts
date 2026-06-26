@@ -11,7 +11,11 @@
 //     from the client-supplied `lastResponseId`)
 //   - the CLI's stateful conversation object (accumulates the chain)
 
-import type { TStage, TProcessingFailure, TPipelineEvent } from "../pipelines/types.js"
+import type {
+    TStage,
+    TProcessingFailure,
+    TPipelineEvent,
+} from "../pipelines/types.js"
 import type { TLlmProvider, TLlmTokenUsage, TResponseId } from "../llm/types.js"
 import { executeStage } from "../pipelines/execute.js"
 import type { TStageOutcomeRecord } from "../pipelines/execute.js"
@@ -132,7 +136,11 @@ export async function executeTurn<TOut>(
 
     // Wrap the LLM provider to inject `previousResponseId` and capture
     // the response id.
-    const wrapped = wrapProviderForTurn(deps.llm, input.previousResponseId, captured)
+    const wrapped = wrapProviderForTurn(
+        deps.llm,
+        input.previousResponseId,
+        captured
+    )
 
     // Bridge the user message to the provider wrapper.
     CURRENT_TURN_INPUT = input
@@ -142,7 +150,9 @@ export async function executeTurn<TOut>(
     const pipeline: import("../pipelines/types.js").TPipeline<unknown, TOut> = {
         id: "turn",
         version: "0.0.0",
-        inputSchema: Value.Check(TypeAnySchema, {}) ? TypeAnySchema : (Type.Object({}) as TSchema),
+        inputSchema: Value.Check(TypeAnySchema, {})
+            ? TypeAnySchema
+            : (Type.Object({}) as TSchema),
         outputSchema: stage.outputSchema,
         stages: [stage],
         finalize: {
@@ -173,7 +183,7 @@ export async function executeTurn<TOut>(
 
     return {
         output: (result.outcome === "completed"
-            ? (result.output as TOut | null | undefined) ?? null
+            ? ((result.output as TOut | null | undefined) ?? null)
             : null) as TOut | null,
         responseId: captured.responseId,
         tokenUsage: result.tokenUsage ?? { input: 0, output: 0 },
