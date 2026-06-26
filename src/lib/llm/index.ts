@@ -4,6 +4,7 @@ export type {
     TLlmModel,
     TReasoningEffort,
     TToolSpec,
+    TResponseId,
     TLlmRequest,
     TLlmResponse,
     TLlmProvider,

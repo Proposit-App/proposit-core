@@ -14,6 +14,10 @@
 
 import type { TSchema } from "typebox"
 
+/** Opaque provider response identifier. Carried across turns so a
+ * downstream request can be chained to a specific upstream response. */
+export type TResponseId = string
+
 export type TLlmModel = "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"
 
 export type TReasoningEffort = "minimal" | "low" | "medium" | "high"
@@ -55,6 +59,16 @@ export type TLlmRequest<T> = {
      * provider call (per attempt).
      */
     onResponseCreated?: (responseId: string) => void
+    /**
+     * The provider response id to chain this request against. When set,
+     * the provider should continue from the specified prior response
+     * rather than starting a fresh conversation. Only meaningful for
+     * providers that support response chaining (e.g. the OpenAI
+     * Responses API). Synchronous providers (e.g. chat-completions)
+     * ignore this field — the caller folds the transcript into
+     * `userMessage` instead. Optional + backward-compatible.
+     */
+    previousResponseId?: TResponseId
     /**
      * Phantom field that carries the structured-output type `T` from
      * `outputSchema` into the response. Always `undefined` at runtime.

@@ -209,6 +209,9 @@ export function createOpenAiResponsesProvider(
                     schema: convertedSchema,
                 }),
             }
+            if (req.previousResponseId) {
+                body.previous_response_id = req.previousResponseId
+            }
             if (req.maxOutputTokens !== undefined) {
                 body.max_output_tokens = req.maxOutputTokens
             }

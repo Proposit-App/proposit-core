@@ -102,6 +102,8 @@ export type TOpenAiResponsesRequestBody = {
     stream?: boolean
     background?: boolean
     store?: boolean
+    /** Continue from a prior stored response (conversation chaining). */
+    previous_response_id?: string
 }
 
 export type TOpenAiOutputContentBlock = {

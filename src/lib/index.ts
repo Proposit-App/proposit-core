@@ -215,3 +215,27 @@ export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
 export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
 export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"
 export type { TCanonicalizeOperatorAssignmentsInput } from "./core/review-helpers.js"
+// Conversation primitive — multi-turn LLM exchange support.
+// Subpath: @proposit/proposit-core/conversation
+export {
+    executeTurn,
+    createConversation,
+    ConversationClosedError,
+} from "./conversation/index.js"
+export type {
+    TTurnInput,
+    TTurnResult,
+    TExecuteTurnDeps,
+    TConversation,
+    MultiTurnInput,
+    MultiTurnOutput,
+    TResponseId,
+} from "./conversation/index.js"
+// Builder extension — Argument Builder turn factories.
+// Subpath: @proposit/proposit-core/builder
+export {
+    createReviewTurn,
+    createSimulateTurn,
+    createFinalizeTurn,
+} from "../extensions/builder/index.js"
+export type { TFinalizeTurnOptions } from "../extensions/builder/index.js"

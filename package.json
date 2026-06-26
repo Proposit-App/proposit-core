@@ -57,6 +57,16 @@
             "types": "./dist/extensions/pipelines/ingestion/index.d.ts",
             "import": "./dist/extensions/pipelines/ingestion/index.js",
             "default": "./dist/extensions/pipelines/ingestion/index.js"
+        },
+        "./conversation": {
+            "types": "./dist/lib/conversation/index.d.ts",
+            "import": "./dist/lib/conversation/index.js",
+            "default": "./dist/lib/conversation/index.js"
+        },
+        "./builder": {
+            "types": "./dist/extensions/builder/index.d.ts",
+            "import": "./dist/extensions/builder/index.js",
+            "default": "./dist/extensions/builder/index.js"
         }
     },
     "bin": {
