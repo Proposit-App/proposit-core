@@ -198,4 +198,3 @@ The cycle 3 helper currently works against `@proposit/proposit-core@1.0.0`
 on the server (proven by 753 passing unit tests + green
 `pnpm run check:full`). The change-request is about long-term API
 ergonomics, not a bug blocking the v0.13.0 cut.
-

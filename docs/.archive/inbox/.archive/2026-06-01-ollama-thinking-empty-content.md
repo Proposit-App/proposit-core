@@ -21,10 +21,10 @@ This reproduces deterministically on the v2 `claim-mention-extraction` stage wit
 
 A standalone script replicating the provider's exact request — the `claim-mention-extraction` system prompt, the `ClaimMentionExtractionOutputSchema` run through `typeboxToJsonSchema`, `temperature: 0`, `num_ctx: 32768`, `stream: true`, against a 2-segment input — produced:
 
-| Variant | `think` | wall time | `thinkingChars` | `contentChars` | result |
-|--------|---------|-----------|-----------------|----------------|--------|
-| A (faithful, provider default) | on (model default) | ~15–17 min | very large | **0** | ❌ empty content → "no assistant text content" |
-| B | `false` | **12 s** | 0 | 483 | ✅ valid `{ "mentions": [ … ] }` object |
+| Variant                        | `think`            | wall time  | `thinkingChars` | `contentChars` | result                                         |
+| ------------------------------ | ------------------ | ---------- | --------------- | -------------- | ---------------------------------------------- |
+| A (faithful, provider default) | on (model default) | ~15–17 min | very large      | **0**          | ❌ empty content → "no assistant text content" |
+| B                              | `false`            | **12 s**   | 0               | 483            | ✅ valid `{ "mentions": [ … ] }` object        |
 
 Variant B's output was schema-perfect (object envelope with `mentions[]`, each `{ mentionId, segmentId, text, span:{start,end} }`) — **not** a bare array.
 
@@ -34,7 +34,7 @@ Two compounding facts in `OllamaProvider`:
 
 1. **Thinking is left ON deliberately.** `runChatLoop` builds the chat request with no `think` field, so Ollama uses the model default (ON for qwen3). The code comment cites a prior finding that `think: false` "degrades structured-output fidelity (the model drops the required object wrapper → bare array, failing `Value.Check`)". **That finding does not reproduce when a `format` schema is set** (see Variant B): the Ollama structured-output grammar enforces the object envelope, so `think: false` yields a valid object. The prior finding was likely observed without `format`, or on a different model/version.
 
-2. **`collectStream` drops the thinking channel.** It accumulates `content += msg.content ?? ""` but never reads `msg.thinking`. `respond()` then throws when `content === ""`. So even when the model *did* produce the answer (in the thinking channel), the provider discards it.
+2. **`collectStream` drops the thinking channel.** It accumulates `content += msg.content ?? ""` but never reads `msg.thinking`. `respond()` then throws when `content === ""`. So even when the model _did_ produce the answer (in the thinking channel), the provider discards it.
 
 There is also **no way for a consumer to disable thinking** — `TOllamaProviderConfig` exposes `baseUrl`, `client`, `importOllama`, `importUndici`, `requestTimeoutMs`, `numCtx`, `stream`, `maxToolCallRounds`, but **no `think`**. The only consumer workaround is to inject a wrapped SDK `client` or switch models.
 
@@ -46,7 +46,7 @@ There is also **no way for a consumer to disable thinking** — `TOllamaProvider
 
 ## Secondary finding (streaming does not cover single-GPU serialization)
 
-The `1.7.0` notes say streaming + per-chunk `bodyTimeout` reset means "a long generation never hits the ceiling even when multiple stages run concurrently." On a single local GPU this isn't sufficient: a single Ollama daemon **serializes** concurrent generations, so when the v2 DAG fans out (e.g. `claim-mention-extraction` / `citation-source-detection` / `axiom-indicator-detection` after `segmentation`), the *queued* requests receive **no body chunk at all** and trip `UND_ERR_BODY_TIMEOUT` even at the 20-min ceiling — observed with `qwen3.6:latest` (two of the three fan-out stages body-timed-out while the solo `segmentation` succeeded). Streaming only resets the timeout while chunks are *arriving*; it can't help a request the daemon hasn't started.
+The `1.7.0` notes say streaming + per-chunk `bodyTimeout` reset means "a long generation never hits the ceiling even when multiple stages run concurrently." On a single local GPU this isn't sufficient: a single Ollama daemon **serializes** concurrent generations, so when the v2 DAG fans out (e.g. `claim-mention-extraction` / `citation-source-detection` / `axiom-indicator-detection` after `segmentation`), the _queued_ requests receive **no body chunk at all** and trip `UND_ERR_BODY_TIMEOUT` even at the 20-min ceiling — observed with `qwen3.6:latest` (two of the three fan-out stages body-timed-out while the solo `segmentation` succeeded). Streaming only resets the timeout while chunks are _arriving_; it can't help a request the daemon hasn't started.
 
 Not necessarily a core bug, but worth either documenting (the "concurrency is safe" claim is hardware-dependent) or offering a provider/runtime hint. The consumer worked around it with an e2e-scoped `executePipeline({ concurrencyLimit: 1 })` clamp.
 
@@ -59,5 +59,5 @@ Not necessarily a core bug, but worth either documenting (the "concurrency is sa
 ## Suggested test cases (core)
 
 - `OllamaProvider` with `think: false` (or auto-disabled under `format`) returns parsed structured output for a thinking model; assert non-empty `output`.
-- Empty-`content`-with-thinking response: provider either parses the thinking channel or raises a *non-transient*, clearly-messaged error (not the current generic "no assistant text content" that masquerades as transient and burns retries).
+- Empty-`content`-with-thinking response: provider either parses the thinking channel or raises a _non-transient_, clearly-messaged error (not the current generic "no assistant text content" that masquerades as transient and burns retries).
 - Regression: `think: false` + a `format` object schema still yields the object envelope (not a bare array) — pin the behavior that contradicts the old comment.

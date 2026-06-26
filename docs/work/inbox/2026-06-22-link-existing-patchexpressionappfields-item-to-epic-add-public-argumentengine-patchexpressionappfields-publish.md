@@ -14,8 +14,8 @@ The full design already exists as the backlog item
 processing this doc:
 
 1. **Link, don't duplicate.** `tcw work edit
-   2026-06-21-public-engine-api-patchexpressionappfields-stop-reaching-into-engine-internals
-   --initiative 2026-06-22-public-engine-api-patchexpressionappfields-core-api-server-adoption`.
+2026-06-21-public-engine-api-patchexpressionappfields-stop-reaching-into-engine-internals
+--initiative 2026-06-22-public-engine-api-patchexpressionappfields-core-api-server-adoption`.
 2. Implement `ArgumentEngine.patchExpressionAppFields(expressionId, fields)`
    per that item + the epic spec at
    `../docs/work/backlog/2026-06-22-public-engine-api-patchexpressionappfields-core-api-server-adoption/spec.md`
@@ -25,4 +25,3 @@ processing this doc:
 4. **Do not publish yet** — publish is gated on consumer-side validation (the
    server validates the candidate tarball first, per ORCHESTRATOR-AGENTS.md).
    Land code + docs + tests; the orchestrator runs the gate, then core publishes.
-
