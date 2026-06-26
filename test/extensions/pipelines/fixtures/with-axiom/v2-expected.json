@@ -43,7 +43,7 @@
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(Bachelor_Unmarried and John_Bachelor) implies John_Unmarried",
+                "formula": "John_Bachelor implies John_Unmarried",
                 "title": "If \"A bachelor is an unmarried man by definition.\" and \"John is a bachelor\" then \"John is unmarried\""
             },
             {
@@ -53,10 +53,16 @@
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
+        "derivationBacking": [
+            {
+                "derivedClaimMiniId": "c3",
+                "supportingClaimMiniIds": ["c1"]
+            }
+        ],
         "title": "John is unmarried"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the sole supported terminal claim, jointly supported by c1 and c2, while c1 is axiomatic and c2 functions as a source.",
+    "selectionRationale": "c3 is the supported consequent of the only inference relation, while c1 is axiomatic and c2 serves as support, so c3 is the clear terminal conclusion.",
     "processingFailures": []
 }

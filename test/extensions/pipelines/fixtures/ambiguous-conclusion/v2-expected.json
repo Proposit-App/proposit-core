@@ -3,6 +3,6 @@
     "argument": null,
     "failureText": "No single conclusion could be selected.",
     "uncategorizedText": null,
-    "selectionRationale": "There are no support relations, so no claim is supported by any relation and the input has no argument structure from which to select a conclusion.",
+    "selectionRationale": "There are no support relations, so the input has no argument structure from which to select a conclusion.",
     "processingFailures": []
 }

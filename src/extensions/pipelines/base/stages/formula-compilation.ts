@@ -1,33 +1,39 @@
-// `formula-compilation` — deterministic stage that compiles each
-// `relation-extraction` output into a `parseFormula`-consumable
-// formula string, and mints one dedicated "conclusion premise" whose
-// formula is just the conclusion claim's variable symbol.
+// `formula-compilation` — deterministic stage that turns each `inference`
+// relation into a `parseFormula`-consumable formula string for a freeform
+// premise, sorts citation/axiomatic antecedents out into derivation
+// backing, and mints one dedicated "conclusion premise" whose formula is
+// just the conclusion claim's variable symbol.
 //
-// Compilation rules (spec §7.3):
-//   support           s         → t   ⇒  s_symbol IMPLIES t_symbol
-//   joint-support     s1..sn    → t   ⇒  (s1 AND s2 AND ...) IMPLIES t_symbol
-//   derivation-support s        → t   ⇒  s_symbol IMPLIES t_symbol
+// Inference relations compile to:
+//   antecedents a1..an → consequent c  ⇒  (a1 AND ... AND an) IMPLIES c
+//   (a single antecedent drops the parentheses: a1 IMPLIES c)
+//
+// Citation/axiomatic claims may not sit in a freeform premise (grammar
+// rules D-4 / D-5) — they ground a derivation premise instead.
+// `sortInferenceRelations` extracts any citation/axiomatic antecedent into
+// `derivationBacking` (consumed by the parser to build derivation premises)
+// and keeps only the normal antecedents in the freeform implication. A
+// relation left with no normal antecedents is fully captured by the backing
+// and emits no freeform premise. A relation whose consequent is itself
+// citation/axiomatic, or whose antecedent can't be resolved to a known
+// claim type, is dropped with a recorded warning — a bad relation degrades
+// to "premise omitted", never to a failed import.
 //
 // The conclusion-premise mapping rule:
-//   - When `conclusion-selection.conclusionMiniId` is non-null:
-//     exactly one premise is minted with `roleHint: "conclusion"` and
-//     `formula: <conclusion claim's variable symbol>`.
-//   - When `conclusion-selection.conclusionMiniId` is null OR the
-//     conclusion claim has no resolvable variable symbol:
-//     `conclusionPremiseMiniId` is null and the conclusion premise is
-//     not emitted. The relation premises are still emitted.
-//
-// We emit a `ProcessingFailure` (severity `error`) when a relation's
-// `sources` or `target` cannot be resolved to a variable symbol. The
-// failing relation's premise is dropped from the output (we can't
-// compile it without symbols).
+//   - When `conclusion-selection.conclusionMiniId` is non-null AND the
+//     claim resolves to a variable symbol: one premise is minted with
+//     `roleHint: "conclusion"` and `formula: <the claim's symbol>`.
+//   - Otherwise `conclusionPremiseMiniId` is null.
 
 import {
     STAGE_IDS,
     FormulaCompilationOutputSchema,
+    type TClaimCanonicalizationOutput,
+    type TClaimTypeClassificationEntry,
+    type TClaimTypeClassificationOutput,
     type TConclusionSelectionOutput,
     type TFormulaCompilationOutput,
-    type TFormulaPremiseRoleHint,
+    type TInferenceRelation,
     type TRelationExtractionOutput,
     type TVariableAssignmentOutput,
 } from "./schemas.js"
@@ -35,24 +41,193 @@ import { deterministicStage } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 
 export const FORMULA_COMPILATION_FAILURE_CODES = {
-    unresolvedSource: "FORMULA_COMPILATION_SOURCE_UNRESOLVED",
-    unresolvedTarget: "FORMULA_COMPILATION_TARGET_UNRESOLVED",
+    unresolvedAntecedent: "FORMULA_COMPILATION_ANTECEDENT_UNRESOLVED",
+    unresolvedConsequent: "FORMULA_COMPILATION_CONSEQUENT_UNRESOLVED",
     unresolvedConclusion: "FORMULA_COMPILATION_CONCLUSION_UNRESOLVED",
-    emptySources: "FORMULA_COMPILATION_SOURCES_EMPTY",
+    emptyAntecedents: "FORMULA_COMPILATION_ANTECEDENTS_EMPTY",
 } as const
 
+// Claim types that may only ground a derivation premise — never sit in a
+// freeform premise. An inference antecedent of one of these types is
+// extracted into derivation backing instead of the freeform formula.
+const DERIVATION_ONLY_CLAIM_TYPES = new Set<
+    TClaimTypeClassificationEntry["type"]
+>(["citation", "axiomatic"])
+
+export const RELATION_PLACEMENT_FAILURE_CODES = {
+    droppedTypedConsequent: "RELATION_PLACEMENT_DROPPED_TYPED_CONSEQUENT",
+    droppedUnresolvedClaim: "RELATION_PLACEMENT_DROPPED_UNRESOLVED_CLAIM",
+    droppedEmptyAntecedents: "RELATION_PLACEMENT_DROPPED_EMPTY_ANTECEDENTS",
+} as const
+
+type TAddFailure = (failure: {
+    code: string
+    message: string
+    severity: "warning" | "error"
+    context?: Record<string, unknown>
+}) => void
+
+/**
+ * Resolve each claim's effective type into a `miniId → type` map,
+ * preferring the `claim-type-classification` entry and falling back to the
+ * canonicalizer's drafted `type`. This is the SAME resolution
+ * `finalizeResponseV2` uses, so the sort and finalize never disagree on
+ * whether a claim is citation/axiomatic — a disagreement is exactly what
+ * would let a citation slip into a freeform premise.
+ */
+export function resolveClaimTypes(input: {
+    classifications: TClaimTypeClassificationEntry[]
+    canonicalClaims: {
+        miniId: string
+        type: TClaimTypeClassificationEntry["type"]
+    }[]
+}): Map<string, TClaimTypeClassificationEntry["type"]> {
+    const byMiniId = new Map<string, TClaimTypeClassificationEntry["type"]>()
+    for (const claim of input.canonicalClaims) {
+        byMiniId.set(claim.miniId, claim.type)
+    }
+    for (const entry of input.classifications) {
+        byMiniId.set(entry.miniId, entry.type)
+    }
+    return byMiniId
+}
+
+/**
+ * A freeform relation after the citation/axiomatic sort: only normal
+ * antecedents remain.
+ */
+export type TFreeformRelation = {
+    relationId: string
+    antecedents: string[]
+    consequent: string
+}
+
+export type TSortInferenceRelationsResult = {
+    freeformRelations: TFreeformRelation[]
+    /** consequent claim miniId → its citation/axiomatic supporting claim miniIds. */
+    derivationBacking: Map<string, string[]>
+}
+
+/**
+ * Deterministically sort inference relations into freeform premises and
+ * derivation backing. For each relation:
+ *  - drop (warn) if the consequent is citation/axiomatic — a typed claim
+ *    cannot be the consequent of an implication;
+ *  - dedupe antecedents and drop a self-referential antecedent;
+ *  - drop (warn) the whole relation if any antecedent's type can't be
+ *    resolved — never silently treat an unresolved id as `normal`;
+ *  - route citation/axiomatic antecedents into `derivationBacking`;
+ *  - keep the normal antecedents as the freeform implication; if none
+ *    remain, the relation is fully captured by the backing and yields no
+ *    freeform premise.
+ */
+export function sortInferenceRelations(input: {
+    relations: TInferenceRelation[]
+    typeByClaimMiniId: Map<string, TClaimTypeClassificationEntry["type"]>
+    addFailure?: TAddFailure
+}): TSortInferenceRelationsResult {
+    const emit = input.addFailure ?? (() => undefined)
+    const freeformRelations: TFreeformRelation[] = []
+    const derivationBacking = new Map<string, string[]>()
+
+    const addBacking = (consequent: string, supporter: string) => {
+        const list = derivationBacking.get(consequent) ?? []
+        if (!list.includes(supporter)) list.push(supporter)
+        derivationBacking.set(consequent, list)
+    }
+
+    for (const relation of input.relations) {
+        const consequentType = input.typeByClaimMiniId.get(relation.consequent)
+        if (consequentType === undefined) {
+            emit({
+                code: RELATION_PLACEMENT_FAILURE_CODES.droppedUnresolvedClaim,
+                message: `Relation "${relation.relationId}" consequent "${relation.consequent}" has no resolvable claim type; dropping.`,
+                severity: "warning",
+                context: {
+                    relationId: relation.relationId,
+                    claimMiniId: relation.consequent,
+                },
+            })
+            continue
+        }
+        if (DERIVATION_ONLY_CLAIM_TYPES.has(consequentType)) {
+            emit({
+                code: RELATION_PLACEMENT_FAILURE_CODES.droppedTypedConsequent,
+                message: `Relation "${relation.relationId}" has a ${consequentType} consequent; citation/axiomatic claims cannot be an implication's consequent. Dropping.`,
+                severity: "warning",
+                context: {
+                    relationId: relation.relationId,
+                    consequent: relation.consequent,
+                    consequentType,
+                },
+            })
+            continue
+        }
+
+        // Dedupe antecedents and drop any self-reference to the consequent.
+        const antecedents = [...new Set(relation.antecedents)].filter(
+            (a) => a !== relation.consequent
+        )
+        if (antecedents.length === 0) {
+            emit({
+                code: RELATION_PLACEMENT_FAILURE_CODES.droppedEmptyAntecedents,
+                message: `Relation "${relation.relationId}" has no usable antecedents; dropping.`,
+                severity: "warning",
+                context: { relationId: relation.relationId },
+            })
+            continue
+        }
+
+        const normalAntecedents: string[] = []
+        const typedAntecedents: string[] = []
+        let unresolved = false
+        for (const antecedent of antecedents) {
+            const type = input.typeByClaimMiniId.get(antecedent)
+            if (type === undefined) {
+                emit({
+                    code: RELATION_PLACEMENT_FAILURE_CODES.droppedUnresolvedClaim,
+                    message: `Relation "${relation.relationId}" antecedent "${antecedent}" has no resolvable claim type; dropping the relation rather than treating it as normal.`,
+                    severity: "warning",
+                    context: {
+                        relationId: relation.relationId,
+                        claimMiniId: antecedent,
+                    },
+                })
+                unresolved = true
+                break
+            }
+            if (DERIVATION_ONLY_CLAIM_TYPES.has(type)) {
+                typedAntecedents.push(antecedent)
+            } else {
+                normalAntecedents.push(antecedent)
+            }
+        }
+        if (unresolved) continue
+
+        for (const supporter of typedAntecedents) {
+            addBacking(relation.consequent, supporter)
+        }
+
+        if (normalAntecedents.length === 0) {
+            // Fully captured by derivation backing; no freeform premise.
+            continue
+        }
+        freeformRelations.push({
+            relationId: relation.relationId,
+            antecedents: normalAntecedents,
+            consequent: relation.consequent,
+        })
+    }
+
+    return { freeformRelations, derivationBacking }
+}
+
 export type TCompileFormulasInput = {
-    /** Bare relations array (unwrapped from the stage's envelope). */
-    relations: TRelationExtractionOutput["relations"]
+    freeformRelations: TFreeformRelation[]
     conclusion: TConclusionSelectionOutput | undefined
     variables: TVariableAssignmentOutput
     generateId: () => string
-    addFailure?: (failure: {
-        code: string
-        message: string
-        severity: "warning" | "error"
-        context?: Record<string, unknown>
-    }) => void
+    addFailure?: TAddFailure
 }
 
 function buildClaimToSymbol(
@@ -65,101 +240,78 @@ function buildClaimToSymbol(
     return m
 }
 
-function relationToRoleHint(
-    type: "support" | "joint-support" | "derivation-support"
-): TFormulaPremiseRoleHint {
-    switch (type) {
-        case "support":
-            return "support"
-        case "joint-support":
-            return "joint-support"
-        case "derivation-support":
-            return "derivation"
-    }
-}
-
 /**
- * Pure helper exposed for direct testing.
+ * Compile freeform relations into premise formulas, and mint the
+ * conclusion premise. Pure helper exposed for direct testing. The stage's
+ * `derivationBacking` is added by the stage wrapper, not here.
  */
 export function compileFormulas(
     input: TCompileFormulasInput
-): TFormulaCompilationOutput {
+): Omit<TFormulaCompilationOutput, "derivationBacking"> {
     const claimToSymbol = buildClaimToSymbol(input.variables)
-    const noopEmit: NonNullable<TCompileFormulasInput["addFailure"]> = () => {
-        // intentionally empty — tests can supply addFailure to capture emits
-    }
-    const emit = input.addFailure ?? noopEmit
+    const emit = input.addFailure ?? (() => undefined)
 
     const premises: TFormulaCompilationOutput["premises"] = []
 
-    // Compile each relation into a premise.
-    for (const relation of input.relations) {
-        if (relation.sources.length === 0) {
+    for (const relation of input.freeformRelations) {
+        if (relation.antecedents.length === 0) {
             emit({
-                code: FORMULA_COMPILATION_FAILURE_CODES.emptySources,
-                message: `Relation "${relation.relationId}" has no sources; cannot compile.`,
+                code: FORMULA_COMPILATION_FAILURE_CODES.emptyAntecedents,
+                message: `Relation "${relation.relationId}" has no antecedents; cannot compile.`,
                 severity: "warning",
                 context: { relationId: relation.relationId },
             })
             continue
         }
-        const targetSymbol = claimToSymbol.get(relation.target)
-        if (!targetSymbol) {
+        const consequentSymbol = claimToSymbol.get(relation.consequent)
+        if (!consequentSymbol) {
             emit({
-                code: FORMULA_COMPILATION_FAILURE_CODES.unresolvedTarget,
-                message: `Relation "${relation.relationId}" target claim "${relation.target}" has no variable assignment; dropping.`,
+                code: FORMULA_COMPILATION_FAILURE_CODES.unresolvedConsequent,
+                message: `Relation "${relation.relationId}" consequent claim "${relation.consequent}" has no variable assignment; dropping.`,
                 severity: "error",
                 context: {
                     relationId: relation.relationId,
-                    targetClaimMiniId: relation.target,
+                    consequentClaimMiniId: relation.consequent,
                 },
             })
             continue
         }
-        const sourceSymbols: string[] = []
-        let sourcesOk = true
-        for (const src of relation.sources) {
-            const sym = claimToSymbol.get(src)
+        const antecedentSymbols: string[] = []
+        let antecedentsOk = true
+        for (const antecedent of relation.antecedents) {
+            const sym = claimToSymbol.get(antecedent)
             if (!sym) {
                 emit({
-                    code: FORMULA_COMPILATION_FAILURE_CODES.unresolvedSource,
-                    message: `Relation "${relation.relationId}" source claim "${src}" has no variable assignment; dropping.`,
+                    code: FORMULA_COMPILATION_FAILURE_CODES.unresolvedAntecedent,
+                    message: `Relation "${relation.relationId}" antecedent claim "${antecedent}" has no variable assignment; dropping.`,
                     severity: "error",
                     context: {
                         relationId: relation.relationId,
-                        sourceClaimMiniId: src,
+                        antecedentClaimMiniId: antecedent,
                     },
                 })
-                sourcesOk = false
+                antecedentsOk = false
                 break
             }
-            sourceSymbols.push(sym)
+            antecedentSymbols.push(sym)
         }
-        if (!sourcesOk) continue
+        if (!antecedentsOk) continue
 
-        let formula: string
-        if (relation.type === "joint-support" && sourceSymbols.length > 1) {
-            formula = `(${sourceSymbols.join(" and ")}) implies ${targetSymbol}`
-        } else if (sourceSymbols.length === 1) {
-            formula = `${sourceSymbols[0]} implies ${targetSymbol}`
-        } else {
-            // joint-support with exactly one source — degenerate; still
-            // compile as a plain support implication (the parens would
-            // be redundant). joint-support with zero sources is caught
-            // by the emptySources guard above.
-            formula = `${sourceSymbols.join(" and ")} implies ${targetSymbol}`
-        }
+        const formula =
+            antecedentSymbols.length > 1
+                ? `(${antecedentSymbols.join(" and ")}) implies ${consequentSymbol}`
+                : `${antecedentSymbols[0]} implies ${consequentSymbol}`
 
         premises.push({
             premiseMiniId: input.generateId(),
             formula,
-            roleHint: relationToRoleHint(relation.type),
+            roleHint: "freeform",
             sourceRelationId: relation.relationId,
         })
     }
 
-    // Mint the conclusion premise iff conclusion-selection chose a
-    // claim AND the claim resolves to a known variable symbol.
+    // Mint the conclusion premise iff conclusion-selection chose a claim
+    // AND the claim resolves to a known variable symbol.
     let conclusionPremiseMiniId: string | null = null
     const conclusionClaimMiniId = input.conclusion?.conclusionMiniId ?? null
     if (conclusionClaimMiniId !== null) {
@@ -194,6 +346,7 @@ export const formulaCompilationStage: TStage<TFormulaCompilationOutput> =
             STAGE_IDS.conclusionSelection,
             STAGE_IDS.variableAssignment,
             STAGE_IDS.claimTypeClassification,
+            STAGE_IDS.claimCanonicalization,
         ],
         outputSchema: FormulaCompilationOutputSchema,
         fn: (ctx: TStageContext) => {
@@ -208,12 +361,36 @@ export const formulaCompilationStage: TStage<TFormulaCompilationOutput> =
                 ctx.get<TVariableAssignmentOutput>(
                     STAGE_IDS.variableAssignment
                 ) ?? []
-            return compileFormulas({
-                relations,
+            const typeEnvelope = ctx.get<TClaimTypeClassificationOutput>(
+                STAGE_IDS.claimTypeClassification
+            )
+            const canon = ctx.get<TClaimCanonicalizationOutput>(
+                STAGE_IDS.claimCanonicalization
+            )
+            const { freeformRelations, derivationBacking } =
+                sortInferenceRelations({
+                    relations,
+                    typeByClaimMiniId: resolveClaimTypes({
+                        classifications: typeEnvelope?.classifications ?? [],
+                        canonicalClaims: canon?.canonicalClaims ?? [],
+                    }),
+                    addFailure: ctx.addFailure,
+                })
+            const compiled = compileFormulas({
+                freeformRelations,
                 conclusion,
                 variables,
                 generateId: ctx.generateId,
                 addFailure: ctx.addFailure,
             })
+            return {
+                ...compiled,
+                derivationBacking: [...derivationBacking.entries()].map(
+                    ([derivedClaimMiniId, supportingClaimMiniIds]) => ({
+                        derivedClaimMiniId,
+                        supportingClaimMiniIds,
+                    })
+                ),
+            }
         },
     })

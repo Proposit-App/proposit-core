@@ -42,10 +42,11 @@
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
+        "derivationBacking": [],
         "title": "Socrates is mortal"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is the only claim supported by another claim (c1) and is the terminal target of the argument, so it is the clear conclusion.",
+    "selectionRationale": "c2 is the sole normal claim supported by an inference relation, with c1 serving as its antecedent, so c2 is the terminal conclusion.",
     "processingFailures": []
 }

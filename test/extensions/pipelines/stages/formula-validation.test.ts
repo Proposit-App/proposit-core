@@ -31,13 +31,13 @@ describe("validateFormulas — happy path", () => {
                 {
                     premiseMiniId: "p1",
                     formula: "A implies B",
-                    roleHint: "support",
+                    roleHint: "freeform",
                     sourceRelationId: "r1",
                 },
                 {
                     premiseMiniId: "p2",
                     formula: "(A and B) implies C",
-                    roleHint: "joint-support",
+                    roleHint: "freeform",
                     sourceRelationId: "r2",
                 },
                 {
@@ -48,6 +48,7 @@ describe("validateFormulas — happy path", () => {
                 },
             ],
             conclusionPremiseMiniId: "p3",
+            derivationBacking: [],
         }
         const result = validateFormulas({
             compilation,
@@ -68,11 +69,12 @@ describe("validateFormulas — parse errors", () => {
                 {
                     premiseMiniId: "p1",
                     formula: "A implies",
-                    roleHint: "support",
+                    roleHint: "freeform",
                     sourceRelationId: "r1",
                 },
             ],
             conclusionPremiseMiniId: null,
+            derivationBacking: [],
         }
         const result = validateFormulas({
             compilation,
@@ -91,11 +93,12 @@ describe("validateFormulas — parse errors", () => {
                 {
                     premiseMiniId: "p1",
                     formula: "",
-                    roleHint: "support",
+                    roleHint: "freeform",
                     sourceRelationId: "r1",
                 },
             ],
             conclusionPremiseMiniId: null,
+            derivationBacking: [],
         }
         const result = validateFormulas({
             compilation,
@@ -114,11 +117,12 @@ describe("validateFormulas — parse errors", () => {
                 {
                     premiseMiniId: "p1",
                     formula: "A and",
-                    roleHint: "support",
+                    roleHint: "freeform",
                     sourceRelationId: "r1",
                 },
             ],
             conclusionPremiseMiniId: null,
+            derivationBacking: [],
         }
         const result = validateFormulas({
             compilation,
@@ -139,11 +143,12 @@ describe("validateFormulas — symbol-resolution errors", () => {
                 {
                     premiseMiniId: "p1",
                     formula: "A implies Mystery",
-                    roleHint: "support",
+                    roleHint: "freeform",
                     sourceRelationId: "r1",
                 },
             ],
             conclusionPremiseMiniId: null,
+            derivationBacking: [],
         }
         const result = validateFormulas({
             compilation,
@@ -162,11 +167,12 @@ describe("validateFormulas — symbol-resolution errors", () => {
                 {
                     premiseMiniId: "p1",
                     formula: "(Mystery and Unknown) implies B",
-                    roleHint: "joint-support",
+                    roleHint: "freeform",
                     sourceRelationId: "r1",
                 },
             ],
             conclusionPremiseMiniId: null,
+            derivationBacking: [],
         }
         const result = validateFormulas({
             compilation,

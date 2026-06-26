@@ -12873,6 +12873,12 @@ describe("Parsing — response schemas", () => {
                         { miniId: "P2", formula: "P" },
                     ],
                     conclusionPremiseMiniId: "P1",
+                    derivationBacking: [
+                        {
+                            derivedClaimMiniId: "C2",
+                            supportingClaimMiniIds: ["S1"],
+                        },
+                    ],
                 },
                 uncategorizedText: null,
                 selectionRationale: null,
@@ -13196,6 +13202,12 @@ describe("Parsing — response schemas", () => {
                         citationMiniIds: string[]
                     }
                 ).citationMiniIds = ["S1", "BOGUS"]
+                resp.argument!.derivationBacking = [
+                    {
+                        derivedClaimMiniId: "C2",
+                        supportingClaimMiniIds: ["S1"],
+                    },
+                ]
                 const result = parser.build(resp, { strict: false })
                 // 2 normal claims + 1 citation claim; one citation edge from
                 // the formula's antecedent.

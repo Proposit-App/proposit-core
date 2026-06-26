@@ -133,16 +133,16 @@ function buildHormuzOutputs(): Record<string, unknown> {
         relations: [
             {
                 relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
+                type: "inference",
+                antecedents: ["c1"],
+                consequent: "c2",
                 evidence: { segmentIds: ["s1"], quote: "too risky" },
             },
             {
                 relationId: "r2",
-                type: "joint-support",
-                sources: ["c2", "c3"],
-                target: "c4",
+                type: "inference",
+                antecedents: ["c2", "c3"],
+                consequent: "c4",
                 evidence: { segmentIds: ["s2"], quote: "therefore" },
             },
         ],
@@ -159,13 +159,13 @@ function buildHormuzOutputs(): Record<string, unknown> {
             {
                 premiseMiniId: "p1",
                 formula: "Hormuz_Too_Risky implies No_Offramp",
-                roleHint: "support",
+                roleHint: "freeform",
                 sourceRelationId: "r1",
             },
             {
                 premiseMiniId: "p2",
                 formula: "(No_Offramp and Diplomacy_Wins) implies No_Strike",
-                roleHint: "joint-support",
+                roleHint: "freeform",
                 sourceRelationId: "r2",
             },
             {
@@ -176,6 +176,7 @@ function buildHormuzOutputs(): Record<string, unknown> {
             },
         ],
         conclusionPremiseMiniId: "p3",
+        derivationBacking: [],
     }
 
     return {
@@ -267,14 +268,14 @@ describe("finalizeResponseV2 — natural-language premise titles", () => {
     })
 })
 
-// Regression: a claim the type-classifier marked `citation` while it is
-// also a relation source/target (i.e. a propositional antecedent or
-// consequent). A `citation` claim carries no title/body — its only
-// display text is its `url` — so using one as a logical variable yields
-// an empty proposition in every renderer. Finalize must demote such a
-// claim back to `normal` so its authored title survives.
+// A claim the type-classifier marked `citation` that is also a relation
+// source/target (a propositional antecedent or consequent). The claim
+// stays typed `citation` and finalize attaches an explicit
+// `UnparsedCitation` whose `text` carries the display string — so a
+// url-less reference no longer renders blank — instead of being demoted
+// to `normal`.
 //
-//   c1  "Pooley case reports imprisonment"  → citation (mis-typed), source of r1
+//   c1  "Pooley case reports imprisonment"  → citation, source of r1
 //   c2  "Footnotes support the argument"     → normal, conclusion
 //   r1  support  c1 → c2
 function buildCitationAntecedentOutputs(): Record<string, unknown> {
@@ -324,9 +325,9 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
         relations: [
             {
                 relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
+                type: "inference",
+                antecedents: ["c1"],
+                consequent: "c2",
                 evidence: { segmentIds: ["s1"], quote: "the footnotes" },
             },
         ],
@@ -343,7 +344,7 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
             {
                 premiseMiniId: "p1",
                 formula: "Pooley implies Footnotes",
-                roleHint: "support",
+                roleHint: "freeform",
                 sourceRelationId: "r1",
             },
             {
@@ -354,6 +355,7 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
             },
         ],
         conclusionPremiseMiniId: "p2",
+        derivationBacking: [],
     }
 
     return {
@@ -366,45 +368,90 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
     }
 }
 
-function finalizeClaims(outputs: Record<string, unknown>) {
-    const ctx = buildContextStub(outputs)
-    const out = finalizeResponseV2({ ctx, extension: basicsExtension })
-    return (
-        out.argument as unknown as {
-            claims: {
-                miniId: string
-                type: string
-                role: string
-                title?: string
-            }[]
-        }
-    ).claims
+type TFinalCitation = {
+    type: string
+    text: string
+    citationTypeGuess: string
+    url?: string
 }
 
-describe("finalizeResponseV2 — citation claims used as logical variables", () => {
-    it("demotes a citation-typed relation source to a normal claim", () => {
+type TFinalClaim = {
+    miniId: string
+    type: string
+    role: string
+    title?: string
+    citation?: TFinalCitation
+    citationTypeGuess?: unknown
+}
+
+function finalizeClaims(outputs: Record<string, unknown>): TFinalClaim[] {
+    const ctx = buildContextStub(outputs)
+    const out = finalizeResponseV2({ ctx, extension: basicsExtension })
+    return (out.argument as unknown as { claims: TFinalClaim[] }).claims
+}
+
+describe("finalizeResponseV2 — citation claims carry an unparsed citation", () => {
+    it("keeps a citation-typed relation source typed citation", () => {
         const claims = finalizeClaims(buildCitationAntecedentOutputs())
         const antecedent = claims.find((c) => c.miniId === "c1")!
         expect(antecedent.role).toBe("premise")
-        // A citation claim has no title/body — keeping it `citation` here
-        // would erase its proposition text. It must be `normal`.
-        expect(antecedent.type).toBe("normal")
+        // The claim stays `citation`; its proposition text is preserved on
+        // the attached unparsed citation rather than by demoting the type.
+        expect(antecedent.type).toBe("citation")
         expect(antecedent.title).toBe("Pooley case reports imprisonment")
     })
 
-    it("never emits an url-less citation claim in a logical-node role", () => {
+    it("emits a well-formed unparsed citation for a url-less reference", () => {
         const claims = finalizeClaims(buildCitationAntecedentOutputs())
-        for (const c of claims) {
-            if (c.role === "premise" || c.role === "conclusion") {
-                expect(c.type).not.toBe("citation")
-            }
-        }
+        const antecedent = claims.find((c) => c.miniId === "c1")!
+        expect(antecedent.citation).toBeDefined()
+        expect(antecedent.citation!.type).toBe("unparsed")
+        // The display text falls back to the claim title; no url present.
+        expect(antecedent.citation!.text).toBe(
+            "Pooley case reports imprisonment"
+        )
+        expect(antecedent.citation!.url).toBeUndefined()
     })
 
-    it("preserves a citation antecedent that carries a real url", () => {
-        // A url-bearing citation renders fine as an antecedent (the url is
-        // its display text), so it must stay `citation` — only url-less
-        // citations are demoted.
+    it('clamps an absent citation-type guess to "unknown"', () => {
+        const claims = finalizeClaims(buildCitationAntecedentOutputs())
+        const antecedent = claims.find((c) => c.miniId === "c1")!
+        expect(antecedent.citation!.citationTypeGuess).toBe("unknown")
+    })
+
+    it('clamps an out-of-enum citation-type guess to "unknown"', () => {
+        const outputs = buildCitationAntecedentOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        const c1 = canon.canonicalClaims.find(
+            (c) => c.miniId === "c1"
+        )! as Record<string, unknown>
+        c1.citationTypeGuess = "DefinitelyNotAnIeeeType"
+
+        const antecedent = finalizeClaims(outputs).find(
+            (c) => c.miniId === "c1"
+        )!
+        expect(antecedent.citation!.citationTypeGuess).toBe("unknown")
+    })
+
+    it("carries a valid model citation-type guess through verbatim", () => {
+        const outputs = buildCitationAntecedentOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        const c1 = canon.canonicalClaims.find(
+            (c) => c.miniId === "c1"
+        )! as Record<string, unknown>
+        c1.citationTypeGuess = "CourtCase"
+
+        const antecedent = finalizeClaims(outputs).find(
+            (c) => c.miniId === "c1"
+        )!
+        expect(antecedent.citation!.citationTypeGuess).toBe("CourtCase")
+    })
+
+    it("carries the url onto the unparsed citation when present", () => {
         const outputs = buildCitationAntecedentOutputs()
         const canon = outputs[
             STAGE_IDS.claimCanonicalization
@@ -418,5 +465,64 @@ describe("finalizeResponseV2 — citation claims used as logical variables", () 
             (c) => c.miniId === "c1"
         )!
         expect(antecedent.type).toBe("citation")
+        expect(antecedent.citation!.url).toBe("https://example.com/pooley")
+    })
+
+    it("does not leave a loose citationTypeGuess field on the claim", () => {
+        const outputs = buildCitationAntecedentOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        const c1 = canon.canonicalClaims.find(
+            (c) => c.miniId === "c1"
+        )! as Record<string, unknown>
+        c1.citationTypeGuess = "CourtCase"
+
+        const antecedent = finalizeClaims(outputs).find(
+            (c) => c.miniId === "c1"
+        )!
+        expect(antecedent.citationTypeGuess).toBeUndefined()
+    })
+
+    it('clamps a non-string citation-type guess to "unknown"', () => {
+        const outputs = buildCitationAntecedentOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        const c1 = canon.canonicalClaims.find(
+            (c) => c.miniId === "c1"
+        )! as Record<string, unknown>
+        c1.citationTypeGuess = 42
+
+        const antecedent = finalizeClaims(outputs).find(
+            (c) => c.miniId === "c1"
+        )!
+        expect(antecedent.citation!.citationTypeGuess).toBe("unknown")
+    })
+
+    it("falls back to the classifier source string, then the id, for the citation text", () => {
+        const outputs = buildCitationAntecedentOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        const c1 = canon.canonicalClaims.find(
+            (c) => c.miniId === "c1"
+        )! as Record<string, unknown>
+        // Blank the title so the text falls back to the classifier's
+        // recorded source string ("Pooley case").
+        c1.title = ""
+        const withSource = finalizeClaims(outputs).find(
+            (c) => c.miniId === "c1"
+        )!
+        expect(withSource.citation!.text).toBe("Pooley case")
+
+        // Drop the source string too → final fallback is the claim id.
+        const typeMap = outputs[
+            STAGE_IDS.claimTypeClassification
+        ] as TClaimTypeClassificationOutput
+        typeMap.classifications.find((e) => e.miniId === "c1")!.sourceString =
+            null
+        const withId = finalizeClaims(outputs).find((c) => c.miniId === "c1")!
+        expect(withId.citation!.text).toBe("c1")
     })
 })

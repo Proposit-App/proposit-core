@@ -12,6 +12,10 @@ function buildResponse(parts: {
     variables: TParsedVariable[]
     premises: TParsedPremise[]
     conclusionPremiseMiniId: string
+    derivationBacking?: {
+        derivedClaimMiniId: string
+        supportingClaimMiniIds: string[]
+    }[]
 }): TParsedArgumentResponse {
     return {
         argument: {
@@ -19,6 +23,9 @@ function buildResponse(parts: {
             variables: parts.variables,
             premises: parts.premises,
             conclusionPremiseMiniId: parts.conclusionPremiseMiniId,
+            ...(parts.derivationBacking
+                ? { derivationBacking: parts.derivationBacking }
+                : {}),
         },
         uncategorizedText: null,
         selectionRationale: null,
@@ -26,36 +33,30 @@ function buildResponse(parts: {
     }
 }
 
-describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
-    it("extracts a single citation edge from IMPLIES(citation_var, normal_var)", () => {
+// In the inference relation model, citation/axiomatic claims never appear in
+// freeform premises. Their support is carried in `derivationBacking`
+// (consequent claim → its citation/axiomatic supporters); the parser
+// materializes each backing entry into a ClaimCitationLibrary /
+// ClaimAxiomLibrary edge. Premise formula structure no longer drives edges.
+describe("ArgumentParser — derivation-backing citation/axiom edges", () => {
+    it("extracts a single citation edge from derivation backing", () => {
         const response = buildResponse({
             claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "citation",
-                },
-                {
-                    miniId: "c2",
-                    role: "conclusion",
-                    type: "normal",
-                },
+                { miniId: "c1", role: "premise", type: "citation" },
+                { miniId: "c2", role: "conclusion", type: "normal" },
             ],
-            variables: [
-                { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Concl", claimMiniId: "c2" },
-            ],
-            premises: [{ miniId: "p1", formula: "Cite implies Concl" }],
+            variables: [{ miniId: "v2", symbol: "Concl", claimMiniId: "c2" }],
+            premises: [{ miniId: "p1", formula: "Concl" }],
             conclusionPremiseMiniId: "p1",
+            derivationBacking: [
+                { derivedClaimMiniId: "c2", supportingClaimMiniIds: ["c1"] },
+            ],
         })
 
-        const parser = new ArgumentParser()
-        const result = parser.build(response)
-
+        const result = new ArgumentParser().build(response)
         const claims = result.claimLibrary.getAll()
         const citationClaim = claims.find((c) => c.type === "citation")!
         const normalClaim = claims.find((c) => c.type === "normal")!
-
         const edges = result.claimCitationLibrary.getConnectionsForClaim(
             normalClaim.id
         )
@@ -65,64 +66,22 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
         expect(result.warnings).toEqual([])
     })
 
-    it("emits two citation edges for OR antecedent with two citation vars", () => {
+    it("emits two citation edges for two supporting citations", () => {
         const response = buildResponse({
             claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "citation",
-                },
-                {
-                    miniId: "c2",
-                    role: "premise",
-                    type: "citation",
-                },
-                {
-                    miniId: "c3",
-                    role: "conclusion",
-                    type: "normal",
-                },
+                { miniId: "c1", role: "premise", type: "citation" },
+                { miniId: "c2", role: "premise", type: "citation" },
+                { miniId: "c3", role: "conclusion", type: "normal" },
             ],
-            variables: [
-                { miniId: "v1", symbol: "A", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "B", claimMiniId: "c2" },
-                { miniId: "v3", symbol: "C", claimMiniId: "c3" },
-            ],
-            premises: [{ miniId: "p1", formula: "(A or B) implies C" }],
+            variables: [{ miniId: "v3", symbol: "C", claimMiniId: "c3" }],
+            premises: [{ miniId: "p1", formula: "C" }],
             conclusionPremiseMiniId: "p1",
-        })
-
-        const result = new ArgumentParser().build(response)
-        const normalClaim = result.claimLibrary
-            .getAll()
-            .find((c) => c.type === "normal")!
-        const edges = result.claimCitationLibrary.getConnectionsForClaim(
-            normalClaim.id
-        )
-        expect(edges).toHaveLength(2)
-    })
-
-    it("emits a citation edge even for negated antecedent variables", () => {
-        const response = buildResponse({
-            claims: [
+            derivationBacking: [
                 {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "citation",
-                },
-                {
-                    miniId: "c2",
-                    role: "conclusion",
-                    type: "normal",
+                    derivedClaimMiniId: "c3",
+                    supportingClaimMiniIds: ["c1", "c2"],
                 },
             ],
-            variables: [
-                { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Concl", claimMiniId: "c2" },
-            ],
-            premises: [{ miniId: "p1", formula: "not Cite implies Concl" }],
-            conclusionPremiseMiniId: "p1",
         })
 
         const result = new ArgumentParser().build(response)
@@ -131,93 +90,32 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
             .find((c) => c.type === "normal")!
         expect(
             result.claimCitationLibrary.getConnectionsForClaim(normalClaim.id)
-        ).toHaveLength(1)
+        ).toHaveLength(2)
     })
 
-    it("treats the right-hand operand of iff as the consequent", () => {
+    it("emits a citation edge and an axiom edge from mixed backing", () => {
         const response = buildResponse({
             claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "citation",
-                },
-                {
-                    miniId: "c2",
-                    role: "conclusion",
-                    type: "normal",
-                },
+                { miniId: "c1", role: "premise", type: "citation" },
+                { miniId: "c2", role: "premise", type: "axiomatic" },
+                { miniId: "c3", role: "conclusion", type: "normal" },
             ],
-            variables: [
-                { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Concl", claimMiniId: "c2" },
-            ],
-            premises: [{ miniId: "p1", formula: "Cite iff Concl" }],
+            variables: [{ miniId: "v3", symbol: "Concl", claimMiniId: "c3" }],
+            premises: [{ miniId: "p1", formula: "Concl" }],
             conclusionPremiseMiniId: "p1",
+            derivationBacking: [
+                {
+                    derivedClaimMiniId: "c3",
+                    supportingClaimMiniIds: ["c1", "c2"],
+                },
+            ],
         })
 
         const result = new ArgumentParser().build(response)
-        const normalClaim = result.claimLibrary
-            .getAll()
-            .find((c) => c.type === "normal")!
-        const citationClaim = result.claimLibrary
-            .getAll()
-            .find((c) => c.type === "citation")!
-        const edges = result.claimCitationLibrary.getConnectionsForClaim(
-            normalClaim.id
-        )
-        expect(edges).toHaveLength(1)
-        expect(edges[0].supportingClaimId).toBe(citationClaim.id)
-    })
-
-    it("emits one citation edge, one axiom edge, and no edge for normal antecedent", () => {
-        const response = buildResponse({
-            claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "citation",
-                },
-                {
-                    miniId: "c2",
-                    role: "premise",
-                    type: "axiomatic",
-                },
-                {
-                    miniId: "c3",
-                    role: "premise",
-                    type: "normal",
-                },
-                {
-                    miniId: "c4",
-                    role: "conclusion",
-                    type: "normal",
-                },
-            ],
-            variables: [
-                { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Ax", claimMiniId: "c2" },
-                { miniId: "v3", symbol: "Norm", claimMiniId: "c3" },
-                { miniId: "v4", symbol: "Concl", claimMiniId: "c4" },
-            ],
-            premises: [
-                {
-                    miniId: "p1",
-                    formula: "(Cite and Ax and Norm) implies Concl",
-                },
-            ],
-            conclusionPremiseMiniId: "p1",
-        })
-
-        const result = new ArgumentParser().build(response)
-        // claimLibrary.getAll() preserves insertion order (Map iteration), so
-        // claims appear in the same order as arg.claims in the fixture:
-        // [citation, axiomatic, normal-supporting, normal-conclusion].
-        const [citationClaim, axiomClaim, , conclClaim] =
+        const [citationClaim, axiomClaim, conclClaim] =
             result.claimLibrary.getAll()
         expect(citationClaim.type).toBe("citation")
         expect(axiomClaim.type).toBe("axiomatic")
-        expect(conclClaim.type).toBe("normal")
 
         const citationEdges =
             result.claimCitationLibrary.getConnectionsForClaim(conclClaim.id)
@@ -231,67 +129,18 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
         expect(axiomEdges[0].supportingClaimId).toBe(axiomClaim.id)
     })
 
-    it("dedupes identical (claim, supporting) pairs across premises", () => {
+    it("emits no edge for a normal supporter in backing", () => {
         const response = buildResponse({
             claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "citation",
-                },
-                {
-                    miniId: "c2",
-                    role: "premise",
-                    type: "normal",
-                },
-                {
-                    miniId: "c3",
-                    role: "conclusion",
-                    type: "normal",
-                },
+                { miniId: "c1", role: "premise", type: "normal" },
+                { miniId: "c2", role: "conclusion", type: "normal" },
             ],
-            variables: [
-                { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Intermediate", claimMiniId: "c2" },
-                { miniId: "v3", symbol: "Concl", claimMiniId: "c3" },
-            ],
-            premises: [
-                { miniId: "p1", formula: "Cite implies Concl" },
-                {
-                    miniId: "p2",
-                    formula: "(Cite and Intermediate) implies Concl",
-                },
-            ],
+            variables: [{ miniId: "v2", symbol: "Concl", claimMiniId: "c2" }],
+            premises: [{ miniId: "p1", formula: "Concl" }],
             conclusionPremiseMiniId: "p1",
-        })
-
-        const result = new ArgumentParser().build(response)
-        const conclClaim = result.claimLibrary.getAll()[2]
-        expect(
-            result.claimCitationLibrary.getConnectionsForClaim(conclClaim.id)
-        ).toHaveLength(1)
-    })
-
-    it("emits no edge when a citation appears only in the consequent slot", () => {
-        const response = buildResponse({
-            claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "normal",
-                },
-                {
-                    miniId: "c2",
-                    role: "conclusion",
-                    type: "citation",
-                },
+            derivationBacking: [
+                { derivedClaimMiniId: "c2", supportingClaimMiniIds: ["c1"] },
             ],
-            variables: [
-                { miniId: "v1", symbol: "Norm", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Cite", claimMiniId: "c2" },
-            ],
-            premises: [{ miniId: "p1", formula: "Norm implies Cite" }],
-            conclusionPremiseMiniId: "p1",
         })
 
         const result = new ArgumentParser().build(response)
@@ -299,46 +148,43 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
         expect(result.claimAxiomLibrary.getAll()).toEqual([])
     })
 
-    it("emits no edge from constraint premises (AND-rooted root)", () => {
+    it("dedupes a supporter listed twice for the same consequent", () => {
         const response = buildResponse({
             claims: [
+                { miniId: "c1", role: "premise", type: "citation" },
+                { miniId: "c2", role: "conclusion", type: "normal" },
+            ],
+            variables: [{ miniId: "v2", symbol: "Concl", claimMiniId: "c2" }],
+            premises: [{ miniId: "p1", formula: "Concl" }],
+            conclusionPremiseMiniId: "p1",
+            derivationBacking: [
                 {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "citation",
+                    derivedClaimMiniId: "c2",
+                    supportingClaimMiniIds: ["c1", "c1"],
                 },
-                {
-                    miniId: "c2",
-                    role: "conclusion",
-                    type: "normal",
-                },
+            ],
+        })
+
+        const result = new ArgumentParser().build(response)
+        const normalClaim = result.claimLibrary
+            .getAll()
+            .find((c) => c.type === "normal")!
+        expect(
+            result.claimCitationLibrary.getConnectionsForClaim(normalClaim.id)
+        ).toHaveLength(1)
+    })
+
+    it("ignores premise formula structure: a citation in a premise creates no edge without backing", () => {
+        const response = buildResponse({
+            claims: [
+                { miniId: "c1", role: "premise", type: "citation" },
+                { miniId: "c2", role: "conclusion", type: "normal" },
             ],
             variables: [
                 { miniId: "v1", symbol: "Cite", claimMiniId: "c1" },
                 { miniId: "v2", symbol: "Concl", claimMiniId: "c2" },
             ],
-            premises: [
-                { miniId: "p1", formula: "Cite and Concl" },
-                { miniId: "p2", formula: "Concl" },
-            ],
-            conclusionPremiseMiniId: "p2",
-        })
-
-        const result = new ArgumentParser().build(response)
-        expect(result.claimCitationLibrary.getAll()).toEqual([])
-    })
-
-    it("returns empty libraries when no implies/iff premise exists", () => {
-        const response = buildResponse({
-            claims: [
-                {
-                    miniId: "c1",
-                    role: "conclusion",
-                    type: "normal",
-                },
-            ],
-            variables: [{ miniId: "v1", symbol: "X", claimMiniId: "c1" }],
-            premises: [{ miniId: "p1", formula: "X" }],
+            premises: [{ miniId: "p1", formula: "Cite implies Concl" }],
             conclusionPremiseMiniId: "p1",
         })
 
@@ -347,26 +193,18 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
         expect(result.claimAxiomLibrary.getAll()).toEqual([])
     })
 
-    it("emits AXIOM_EDGE_REJECTED in non-strict mode for IMPLIES(axiom, citation)", () => {
+    it("emits AXIOM_EDGE_REJECTED in non-strict mode when backing a citation with an axiom", () => {
         const response = buildResponse({
             claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "axiomatic",
-                },
-                {
-                    miniId: "c2",
-                    role: "conclusion",
-                    type: "citation",
-                },
+                { miniId: "c1", role: "premise", type: "axiomatic" },
+                { miniId: "c2", role: "conclusion", type: "citation" },
             ],
-            variables: [
-                { miniId: "v1", symbol: "Ax", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Cite", claimMiniId: "c2" },
-            ],
-            premises: [{ miniId: "p1", formula: "Ax implies Cite" }],
+            variables: [{ miniId: "v2", symbol: "Cite", claimMiniId: "c2" }],
+            premises: [{ miniId: "p1", formula: "Cite" }],
             conclusionPremiseMiniId: "p1",
+            derivationBacking: [
+                { derivedClaimMiniId: "c2", supportingClaimMiniIds: ["c1"] },
+            ],
         })
 
         const result = new ArgumentParser().build(response, { strict: false })
@@ -383,23 +221,15 @@ describe("ArgumentParser — formula-inferred citation/axiom edges", () => {
     it("throws on the same scenario in strict mode", () => {
         const response = buildResponse({
             claims: [
-                {
-                    miniId: "c1",
-                    role: "premise",
-                    type: "axiomatic",
-                },
-                {
-                    miniId: "c2",
-                    role: "conclusion",
-                    type: "citation",
-                },
+                { miniId: "c1", role: "premise", type: "axiomatic" },
+                { miniId: "c2", role: "conclusion", type: "citation" },
             ],
-            variables: [
-                { miniId: "v1", symbol: "Ax", claimMiniId: "c1" },
-                { miniId: "v2", symbol: "Cite", claimMiniId: "c2" },
-            ],
-            premises: [{ miniId: "p1", formula: "Ax implies Cite" }],
+            variables: [{ miniId: "v2", symbol: "Cite", claimMiniId: "c2" }],
+            premises: [{ miniId: "p1", formula: "Cite" }],
             conclusionPremiseMiniId: "p1",
+            derivationBacking: [
+                { derivedClaimMiniId: "c2", supportingClaimMiniIds: ["c1"] },
+            ],
         })
 
         expect(() => new ArgumentParser().build(response)).toThrow(

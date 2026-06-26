@@ -3,82 +3,84 @@
         "claims": [
             {
                 "miniId": "c1",
-                "title": "NASA climate report says temperatures rose",
-                "url": "https://climate.nasa.gov/evidence/",
-                "type": "citation",
-                "role": "premise"
-            },
-            {
-                "miniId": "c2",
                 "title": "Global temperatures rise significantly",
                 "body": "Global temperatures have risen significantly over the past century.",
                 "type": "normal",
                 "role": "premise"
             },
             {
-                "miniId": "c3",
+                "miniId": "c2",
                 "title": "Rising temperatures increase extreme weather",
                 "body": "Rising global temperatures cause more frequent extreme weather events.",
                 "type": "normal",
                 "role": "premise"
             },
             {
-                "miniId": "c4",
-                "title": "Extreme weather events are more frequent now",
-                "body": "More frequent extreme weather events are occurring.",
+                "miniId": "c3",
+                "title": "Extreme weather events are more frequent",
+                "body": "More frequent extreme weather events are being seen.",
                 "type": "normal",
                 "role": "conclusion"
+            },
+            {
+                "miniId": "c4",
+                "title": "NASA climate report on warming",
+                "url": "https://climate.nasa.gov/evidence/",
+                "type": "citation",
+                "role": "intermediate",
+                "citation": {
+                    "type": "unparsed",
+                    "text": "NASA climate report on warming",
+                    "citationTypeGuess": "Website",
+                    "url": "https://climate.nasa.gov/evidence/"
+                }
             }
         ],
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "NasaClimateReportTempsRise",
+                "symbol": "GlobalTempsRise",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "GlobalTempsRise",
+                "symbol": "TempsCauseExtremeWeather",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "TempsIncreaseExtremeWeather",
+                "symbol": "MoreExtremeWeatherObserved",
                 "claimMiniId": "c3"
             },
             {
                 "miniId": "gid-4",
-                "symbol": "MoreExtremeWeatherNow",
+                "symbol": "NASAClimateReportGlobalTemps",
                 "claimMiniId": "c4"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-5",
-                "formula": "NasaClimateReportTempsRise implies GlobalTempsRise",
-                "title": "If \"NASA climate report says temperatures rose\" then \"Global temperatures rise significantly\""
-            },
-            {
-                "miniId": "gid-6",
-                "formula": "GlobalTempsRise implies TempsIncreaseExtremeWeather",
+                "formula": "GlobalTempsRise implies TempsCauseExtremeWeather",
                 "title": "If \"Global temperatures rise significantly\" then \"Rising temperatures increase extreme weather\""
             },
             {
-                "miniId": "gid-7",
-                "formula": "TempsIncreaseExtremeWeather implies MoreExtremeWeatherNow",
-                "title": "If \"Rising temperatures increase extreme weather\" then \"Extreme weather events are more frequent now\""
+                "miniId": "gid-6",
+                "formula": "TempsCauseExtremeWeather implies MoreExtremeWeatherObserved",
+                "title": "If \"Rising temperatures increase extreme weather\" then \"Extreme weather events are more frequent\""
             },
             {
-                "miniId": "gid-8",
-                "formula": "MoreExtremeWeatherNow",
-                "title": "Extreme weather events are more frequent now"
+                "miniId": "gid-7",
+                "formula": "MoreExtremeWeatherObserved",
+                "title": "Extreme weather events are more frequent"
             }
         ],
-        "conclusionPremiseMiniId": "gid-8",
-        "title": "Extreme weather events are more frequent now"
+        "conclusionPremiseMiniId": "gid-7",
+        "derivationBacking": [],
+        "title": "Extreme weather events are more frequent"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c4 is the best conclusion candidate because c2 supports c3, which in turn supports c4, and c4 does not support any further claim.",
+    "selectionRationale": "c3 is the best conclusion because it is supported by earlier claims and does not itself support any further claim; c2 is an intermediate inference.",
     "processingFailures": []
 }

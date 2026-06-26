@@ -61,23 +61,23 @@
               "text": "By definition, a bachelor is an unmarried man.",
               "span": {
                 "start": 0,
-                "end": 46
+                "end": 47
               }
             },
             {
               "segmentId": "s2",
               "text": "John is a bachelor.",
               "span": {
-                "start": 47,
-                "end": 66
+                "start": 48,
+                "end": 67
               }
             },
             {
               "segmentId": "s3",
               "text": "Therefore, John is unmarried.",
               "span": {
-                "start": 67,
-                "end": 96
+                "start": 68,
+                "end": 97
               }
             }
           ]
@@ -87,7 +87,103 @@
           "output": 96,
           "reasoning": 0
         },
-        "rawResponseId": "resp_08b02d8b06a09bfc006a203b154aa8819e87e02d37432fec45"
+        "rawResponseId": "resp_0439708d3f1468d2006a3e7292d55081a3ac383b45e43c72c8"
+      }
+    },
+    {
+      "hash": "e4f48e41d0bf50c1f700036032233668cd427cab4a66d5e30238ddec529d957f",
+      "stageId": "claim-mention-extraction",
+      "request": {
+        "model": "gpt-5.4",
+        "systemPrompt": "<!-- stage-id: claim-mention-extraction -->\nYou extract textual \"claim mentions\" from segments of an argument. A mention is any contiguous span of text that asserts a proposition the author is making — a sentence-or-clause-sized chunk that a reader would read as a single assertion.\n\nReturn an object with a single key `mentions` whose value is the array of extracted mentions. For each mention emit:\n- a fresh \"mentionId\" (m1, m2, ...; unique across all segments)\n- the \"segmentId\" the mention belongs to\n- the verbatim \"text\" of the mention (copy from the input — do not rewrite)\n- the character \"span\" (an object with \"start\" inclusive, \"end\" exclusive) relative to the SEGMENT'S TEXT (not the original input)\n\nA single segment can produce multiple mentions when it asserts multiple things. Most segments produce one mention. Do NOT deduplicate — if the same proposition is reasserted in a later segment, emit it as a separate mention there too. Do NOT classify the mention. Do NOT include connectives, hedges, or discourse markers in the span when they are not part of the asserted proposition.\n\nIf a segment is purely a discourse marker (e.g., \"Therefore,\" or \"Moreover,\"), emit no mention for it. If there are no mentions at all, return `{ \"mentions\": [] }`.",
+        "userMessage": "Segments:\n\n[s1] \"By definition, a bachelor is an unmarried man.\"\n[s2] \"John is a bachelor.\"\n[s3] \"Therefore, John is unmarried.\"\n\nExtract every claim mention.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "mentions"
+          ],
+          "properties": {
+            "mentions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mentionId",
+                  "segmentId",
+                  "text",
+                  "span"
+                ],
+                "properties": {
+                  "mentionId": {
+                    "type": "string"
+                  },
+                  "segmentId": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "span": {
+                    "type": "object",
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "start": {
+                        "type": "number",
+                        "description": "Inclusive character offset where the span begins (relative to the parent text)."
+                      },
+                      "end": {
+                        "type": "number",
+                        "description": "Exclusive character offset where the span ends (relative to the parent text)."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "mentions": [
+            {
+              "mentionId": "m1",
+              "segmentId": "s1",
+              "text": "a bachelor is an unmarried man.",
+              "span": {
+                "start": 15,
+                "end": 48
+              }
+            },
+            {
+              "mentionId": "m2",
+              "segmentId": "s2",
+              "text": "John is a bachelor.",
+              "span": {
+                "start": 0,
+                "end": 20
+              }
+            },
+            {
+              "mentionId": "m3",
+              "segmentId": "s3",
+              "text": "John is unmarried.",
+              "span": {
+                "start": 11,
+                "end": 30
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 418,
+          "output": 110,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_015022b14c8dcf5b006a3e729406a4819e97e806081aed5ef3"
       }
     },
     {
@@ -172,7 +268,7 @@
           "output": 17,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0d7aaef8d8a34562006a203b16ba4081a199a193dcdee6243d"
+        "rawResponseId": "resp_00d21f0ce68d1708006a3e729408dc819f9db642fd72a7733c"
       }
     },
     {
@@ -249,7 +345,7 @@
               "spans": [
                 {
                   "start": 0,
-                  "end": 13
+                  "end": 14
                 }
               ]
             }
@@ -260,112 +356,16 @@
           "output": 52,
           "reasoning": 0
         },
-        "rawResponseId": "resp_08d85b33d28402a1006a203b16bfcc81918c93ad7d75adaf01"
+        "rawResponseId": "resp_07fdacb359f7818e006a3e729407d481a1ab201a02ec4f50e5"
       }
     },
     {
-      "hash": "e4f48e41d0bf50c1f700036032233668cd427cab4a66d5e30238ddec529d957f",
-      "stageId": "claim-mention-extraction",
-      "request": {
-        "model": "gpt-5.4",
-        "systemPrompt": "<!-- stage-id: claim-mention-extraction -->\nYou extract textual \"claim mentions\" from segments of an argument. A mention is any contiguous span of text that asserts a proposition the author is making — a sentence-or-clause-sized chunk that a reader would read as a single assertion.\n\nReturn an object with a single key `mentions` whose value is the array of extracted mentions. For each mention emit:\n- a fresh \"mentionId\" (m1, m2, ...; unique across all segments)\n- the \"segmentId\" the mention belongs to\n- the verbatim \"text\" of the mention (copy from the input — do not rewrite)\n- the character \"span\" (an object with \"start\" inclusive, \"end\" exclusive) relative to the SEGMENT'S TEXT (not the original input)\n\nA single segment can produce multiple mentions when it asserts multiple things. Most segments produce one mention. Do NOT deduplicate — if the same proposition is reasserted in a later segment, emit it as a separate mention there too. Do NOT classify the mention. Do NOT include connectives, hedges, or discourse markers in the span when they are not part of the asserted proposition.\n\nIf a segment is purely a discourse marker (e.g., \"Therefore,\" or \"Moreover,\"), emit no mention for it. If there are no mentions at all, return `{ \"mentions\": [] }`.",
-        "userMessage": "Segments:\n\n[s1] \"By definition, a bachelor is an unmarried man.\"\n[s2] \"John is a bachelor.\"\n[s3] \"Therefore, John is unmarried.\"\n\nExtract every claim mention.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "mentions"
-          ],
-          "properties": {
-            "mentions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "mentionId",
-                  "segmentId",
-                  "text",
-                  "span"
-                ],
-                "properties": {
-                  "mentionId": {
-                    "type": "string"
-                  },
-                  "segmentId": {
-                    "type": "string"
-                  },
-                  "text": {
-                    "type": "string"
-                  },
-                  "span": {
-                    "type": "object",
-                    "required": [
-                      "start",
-                      "end"
-                    ],
-                    "properties": {
-                      "start": {
-                        "type": "number",
-                        "description": "Inclusive character offset where the span begins (relative to the parent text)."
-                      },
-                      "end": {
-                        "type": "number",
-                        "description": "Exclusive character offset where the span ends (relative to the parent text)."
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "mentions": [
-            {
-              "mentionId": "m1",
-              "segmentId": "s1",
-              "text": "a bachelor is an unmarried man.",
-              "span": {
-                "start": 15,
-                "end": 50
-              }
-            },
-            {
-              "mentionId": "m2",
-              "segmentId": "s2",
-              "text": "John is a bachelor.",
-              "span": {
-                "start": 0,
-                "end": 20
-              }
-            },
-            {
-              "mentionId": "m3",
-              "segmentId": "s3",
-              "text": "John is unmarried.",
-              "span": {
-                "start": 11,
-                "end": 30
-              }
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 418,
-          "output": 110,
-          "reasoning": 0
-        },
-        "rawResponseId": "resp_0d7892dac40186df006a203b16b19481a3a3c7bc8697dc01a2"
-      }
-    },
-    {
-      "hash": "3cff34542b038c67d2cdb31e3b5f840329702dd69e01962c64179e881a69df03",
+      "hash": "cb0488089419b875946c36a9f745fc09cb182a6ec760c7e9faa258e34670e989",
       "stageId": "claim-canonicalization",
       "request": {
         "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present) and `title` (a short human-readable label).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here.\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
-        "userMessage": "Input text:\n\nBy definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.\n\nClaim mentions:\n  [m1 @ s1] \"a bachelor is an unmarried man\"\n  [m2 @ s2] \"John is a bachelor.\"\n  [m3 @ s3] \"John is unmarried.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  [ax1 @ s1] \"By definition\"\n\nProduce the canonicalClaims + mentionToClaim object.",
+        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here.\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Input text:\n\nBy definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.\n\nClaim mentions:\n  [m1 @ s1] \"a bachelor is an unmarried man.\"\n  [m2 @ s2] \"John is a bachelor.\"\n  [m3 @ s3] \"John is unmarried.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  [ax1 @ s1] \"By definition\"\n\nProduce the canonicalClaims + mentionToClaim object.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -456,6 +456,150 @@
                         "type": "string",
                         "maxLength": 500,
                         "description": "The URL of the citation supporting the claim"
+                      },
+                      "citationTypeGuess": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "Book"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Website"
+                              },
+                              {
+                                "type": "string",
+                                "const": "BookChapter"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Handbook"
+                              },
+                              {
+                                "type": "string",
+                                "const": "TechnicalReport"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Standard"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Thesis"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Patent"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dictionary"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Encyclopedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "JournalArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "MagazineArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "NewspaperArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferencePaper"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferenceProceedings"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dataset"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Software"
+                              },
+                              {
+                                "type": "string",
+                                "const": "OnlineDocument"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Blog"
+                              },
+                              {
+                                "type": "string",
+                                "const": "SocialMedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Preprint"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Video"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Podcast"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Course"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Presentation"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Interview"
+                              },
+                              {
+                                "type": "string",
+                                "const": "PersonalCommunication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Email"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Law"
+                              },
+                              {
+                                "type": "string",
+                                "const": "CourtCase"
+                              },
+                              {
+                                "type": "string",
+                                "const": "GovernmentPublication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Datasheet"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ProductManual"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "const": "unknown"
+                          }
+                        ]
                       },
                       "type": {
                         "type": "string",
@@ -577,11 +721,11 @@
           ]
         },
         "tokenUsage": {
-          "input": 1051,
-          "output": 237,
-          "reasoning": 51
+          "input": 1458,
+          "output": 225,
+          "reasoning": 41
         },
-        "rawResponseId": "resp_0c80061f3df58608006a1504ae0bd481989a6025c48f655f79"
+        "rawResponseId": "resp_0169c6b30c0b6b97006a3e7296857881919f310b9fe323e2c4"
       }
     },
     {
@@ -667,7 +811,7 @@
           "output": 66,
           "reasoning": 0
         },
-        "rawResponseId": "resp_04aa6db383decabc006a203b1c718881a2875d95c5769b0833"
+        "rawResponseId": "resp_0d093acc8ab9b3ec006a3e729ad96c819f9dc60ae51e6ef1d1"
       }
     },
     {
@@ -773,276 +917,7 @@
           "input": 735,
           "output": 604,
           "reasoning": 516
-        },
-        "rawResponseId": "resp_097010265818ad8d006a203b1e069081a2b7db46b47fb079a5"
-      }
-    },
-    {
-      "hash": "a47422c286f7b1fdb138a6284ff3e4713778320fdb29be5b66148a70e8658b1b",
-      "stageId": "conclusion-selection",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the single conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the support relation graph from `relation-extraction`\n\nEmit:\n- `conclusionMiniId` — the canonical claim miniId of the conclusion, OR `null` when no single claim is clearly the conclusion\n- `rationale` — a one-sentence explanation of your pick (or your inability to pick one)\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim.\n2. If multiple distinct claims are each terminal AND each could plausibly be THE point of the argument (genuinely ambiguous), return null with a rationale naming the contenders.\n3. Citation-typed and axiomatic-typed claims are never conclusions — they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return null; there is no argument to select a conclusion from.\n\nThe default disposition is \"select\"; only return null when ambiguity is genuine. Forcing a wrong choice is worse than admitting \"no single conclusion could be selected\" — downstream stages handle the null cleanly.",
-        "userMessage": "Per-claim types:\n  [c1] type=axiomatic\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] joint-support: sources=[c1,c2] target=c3\n\nSelect the conclusion (or return null).",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "conclusionMiniId",
-            "rationale"
-          ],
-          "properties": {
-            "conclusionMiniId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "rationale": {
-              "type": "string"
-            }
-          }
         }
-      },
-      "response": {
-        "output": {
-          "conclusionMiniId": "c3",
-          "rationale": "c3 is the normal claim targeted by the only support relation, while c1 and c2 function as supporting sources."
-        },
-        "tokenUsage": {
-          "input": 404,
-          "output": 80,
-          "reasoning": 25
-        },
-        "rawResponseId": "resp_0a6b2a49123047bc006a1504c6bb788199b265bbb48928ac63"
-      }
-    },
-    {
-      "hash": "6ad51da0a26f16a737b46a571ba920577962d07a5aba1a158473b8d3789b97e1",
-      "stageId": "claim-canonicalization",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present) and `title` (a short human-readable label).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here.\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
-        "userMessage": "Input text:\n\nBy definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.\n\nClaim mentions:\n  [m1 @ s1] \"a bachelor is an unmarried man.\"\n  [m2 @ s2] \"John is a bachelor.\"\n  [m3 @ s3] \"John is unmarried.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  [ax1 @ s1] \"By definition\"\n\nProduce the canonicalClaims + mentionToClaim object.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "canonicalClaims",
-            "mentionToClaim"
-          ],
-          "properties": {
-            "canonicalClaims": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "title",
-                      "body",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "title": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "A short title summarizing the claim"
-                      },
-                      "body": {
-                        "type": "string",
-                        "maxLength": 500,
-                        "description": "A detailed description of the claim"
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "normal",
-                        "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "title",
-                      "url",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "title": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "A short title summarizing the claim"
-                      },
-                      "url": {
-                        "type": "string",
-                        "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim"
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "citation",
-                        "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "axiom",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "axiom": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "The axiom supporting the claim"
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "axiomatic",
-                        "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                ]
-              }
-            },
-            "mentionToClaim": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "mentionId",
-                  "claimMiniId"
-                ],
-                "properties": {
-                  "mentionId": {
-                    "type": "string"
-                  },
-                  "claimMiniId": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "response": {
-        "output": {
-          "canonicalClaims": [
-            {
-              "miniId": "c1",
-              "mentionIds": [
-                "m1"
-              ],
-              "suggestedSymbol": "Bachelor_Unmarried",
-              "axiom": "A bachelor is an unmarried man by definition.",
-              "type": "axiomatic"
-            },
-            {
-              "miniId": "c2",
-              "mentionIds": [
-                "m2"
-              ],
-              "suggestedSymbol": "John_Bachelor",
-              "title": "John is a bachelor",
-              "body": "John is a bachelor.",
-              "type": "normal"
-            },
-            {
-              "miniId": "c3",
-              "mentionIds": [
-                "m3"
-              ],
-              "suggestedSymbol": "John_Unmarried",
-              "title": "John is unmarried",
-              "body": "John is unmarried.",
-              "type": "normal"
-            }
-          ],
-          "mentionToClaim": [
-            {
-              "mentionId": "m1",
-              "claimMiniId": "c1"
-            },
-            {
-              "mentionId": "m2",
-              "claimMiniId": "c2"
-            },
-            {
-              "mentionId": "m3",
-              "claimMiniId": "c3"
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 1199,
-          "output": 223,
-          "reasoning": 37
-        },
-        "rawResponseId": "resp_0545b254ea0c253f006a203b190bd881918939599fff740359"
       }
     },
     {
@@ -1082,8 +957,143 @@
           "input": 455,
           "output": 94,
           "reasoning": 33
+        }
+      }
+    },
+    {
+      "hash": "4e1e41175cfaf390b0d1dc872e26752d97f903db8750b4fa4c3f9a2cf7a0bbb4",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=axiomatic symbol=Bachelor_Unmarried fields={\"axiom\":\"A bachelor is an unmarried man by definition.\"}\n  [c2] type=normal symbol=John_Bachelor fields={\"title\":\"John is a bachelor\",\"body\":\"John is a bachelor.\"}\n  [c3] type=normal symbol=John_Unmarried fields={\"title\":\"John is unmarried\",\"body\":\"John is unmarried.\"}\n\nSegments:\n  [s1] \"By definition, a bachelor is an unmarried man.\"\n  [s2] \"John is a bachelor.\"\n  [s3] \"Therefore, John is unmarried.\"\n\nEmit every inference relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1",
+                "c2"
+              ],
+              "consequent": "c3",
+              "evidence": {
+                "segmentIds": [
+                  "s1",
+                  "s2",
+                  "s3"
+                ],
+                "quote": "By definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried."
+              }
+            }
+          ]
         },
-        "rawResponseId": "resp_0ba0f53421cf3d6c006a203b29743c819194ac72e86f85f8d7"
+        "tokenUsage": {
+          "input": 723,
+          "output": 221,
+          "reasoning": 132
+        },
+        "rawResponseId": "resp_080fab757f006a39006a3e729bdd7481918575b7cb47e4e0d0"
+      }
+    },
+    {
+      "hash": "db5b7b517d416adea360659650850f0d6c58bb19fa6c94e6cd379598cb697f13",
+      "stageId": "conclusion-selection",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the inference relation graph from `relation-extraction` (each relation's antecedents jointly imply its consequent)\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
+        "userMessage": "Per-claim types:\n  [c1] type=axiomatic\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] antecedents=[c1,c2] consequent=c3\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "conclusionCandidates",
+            "rationale"
+          ],
+          "properties": {
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rationale": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "rationale": "c3 is the supported consequent of the only inference relation, while c1 is axiomatic and c2 serves as support, so c3 is the clear terminal conclusion."
+        },
+        "tokenUsage": {
+          "input": 464,
+          "output": 61,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_04564dcbb48ad46a006a3e72a2e44081a0b98a55f3a3438911"
       }
     }
   ]

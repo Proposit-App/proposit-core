@@ -1,11 +1,12 @@
 // `relation-extraction` — strong-reasoning stage that identifies the
-// supporting relationships between canonical claims. MVP relation
-// types: support, joint-support, derivation-support.
+// inference relationships between canonical claims. Each relation is an
+// `inference`: its `antecedents` claims, taken together, imply its
+// `consequent` claim.
 //
-// Per spec §6.4 this stage uses gpt-5.5 with reasoning_effort=high —
-// it's the most subtle judgement call in the pipeline. The output is
-// a graph; the conclusion + the support graph drive the
-// formula-compilation stage that comes next.
+// This stage uses gpt-5.5 with reasoning_effort=high — it's the most
+// subtle judgement call in the pipeline. The output is a graph; the
+// conclusion + the inference graph drive the formula-compilation stage
+// that comes next.
 
 import {
     STAGE_IDS,
@@ -27,28 +28,28 @@ export const RELATION_EXTRACTION_REASONING:
     | "medium"
     | "high" = "high"
 
-export const RELATION_EXTRACTION_SYSTEM_PROMPT = `You identify support relationships between canonical claims in an argument.
+export const RELATION_EXTRACTION_SYSTEM_PROMPT = `You identify inference relationships between canonical claims in an argument.
 
-Given the canonical claim set, the per-claim type map, and the original segments, emit one entry per supporting relationship. Return an object with a single key \`relations\` whose value is the array. There are three relation kinds:
+Given the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key \`relations\` whose value is the array.
 
-- \`"support"\` — a single claim S supports another claim T. Use this for ordinary "P, therefore Q" support edges where the supporting evidence is a single normal-typed proposition.
-- \`"joint-support"\` — multiple claims S1, S2, ... jointly support T. Use this when the author commits to a syllogistic step that requires ALL of the sources to hold (e.g. major premise + minor premise → conclusion).
-- \`"derivation-support"\` — a citation-typed or axiomatic-typed claim S supports a normal-typed claim T. Use this exclusively for relations whose source is "citation" or "axiomatic". The shape is otherwise identical to \`"support"\`.
+An \`inference\` relation says: the claims in \`antecedents\`, taken together, imply the claim in \`consequent\`. Use a SINGLE antecedent for an ordinary "P, therefore Q" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).
 
 For each relation emit:
 - a fresh \`relationId\` (r1, r2, ...)
-- the \`type\`
-- \`sources\` — an array of supporting claim miniIds (length 1 for support and derivation-support; length ≥ 2 for joint-support)
-- \`target\` — the supported claim's miniId
+- \`type\` — always \`"inference"\`
+- \`antecedents\` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent
+- \`consequent\` — the implied claim's miniId
 - \`evidence.segmentIds\` — the segments that ground the relation (often a single segment containing a "therefore", "so", "because")
 - \`evidence.quote\` — a short verbatim quote from the input that justifies the relation
 
+\`antecedents\` and \`consequent\` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in \`antecedents\` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a \`consequent\`.
+
 ## Conservatism rules
 
-- Do not invent relations. If the author doesn't actually argue from S to T, don't emit a relation between them.
-- Do not double-count. If two claims share an axiomatic backing, that's one derivation-support relation per claim, not a joint-support pair.
-- The conclusion of the argument is identified in a separate stage; do NOT emit a special "conclusion" relation here. Just emit the support edges you see; the conclusion stage selects from your output.
-- Avoid attack/rebuttal relations entirely in this MVP — the pipeline does not yet handle them.
+- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.
+- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.
+- The conclusion of the argument is identified in a separate stage; do NOT emit a special "conclusion" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.
+- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.
 
 If there are no relations to emit, return \`{ "relations": [] }\`.`
 
@@ -85,7 +86,7 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
         .join("\n")
 
     const markedSystem = `<!-- stage-id: ${STAGE_IDS.relationExtraction} -->\n${RELATION_EXTRACTION_SYSTEM_PROMPT}`
-    const user = `Canonical claims (with refined types):\n${claimLines}\n\nSegments:\n${segmentLines}\n\nEmit every support relationship as a relations array.`
+    const user = `Canonical claims (with refined types):\n${claimLines}\n\nSegments:\n${segmentLines}\n\nEmit every inference relationship as a relations array.`
     return { system: markedSystem, user }
 }
 

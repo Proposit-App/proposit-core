@@ -216,20 +216,15 @@ export type TAssignedVariable = TVariableAssignmentOutput[number]
 
 // -- Stage 9: relation-extraction --
 
-export const RelationKindSchema = Type.Union([
-    Type.Literal("support"),
-    Type.Literal("joint-support"),
-    Type.Literal("derivation-support"),
-])
-export type TRelationKind = Static<typeof RelationKindSchema>
-
 export const RelationExtractionOutputSchema = Type.Object({
     relations: Type.Array(
         Type.Object({
             relationId: Type.String(),
-            type: RelationKindSchema,
-            sources: Type.Array(Type.String()),
-            target: Type.String(),
+            // `type` stays a discriminator so further relation kinds can
+            // be added as union members without reshaping the object.
+            type: Type.Literal("inference"),
+            antecedents: Type.Array(Type.String()),
+            consequent: Type.String(),
             evidence: Type.Object({
                 segmentIds: Type.Array(Type.String()),
                 quote: Type.String(),
@@ -240,7 +235,7 @@ export const RelationExtractionOutputSchema = Type.Object({
 export type TRelationExtractionOutput = Static<
     typeof RelationExtractionOutputSchema
 >
-export type TRelation = TRelationExtractionOutput["relations"][number]
+export type TInferenceRelation = TRelationExtractionOutput["relations"][number]
 
 // -- Stage 10: conclusion-selection --
 
@@ -273,9 +268,7 @@ export type TConclusionSelectionOutput = Static<
 // -- Stage 11: formula-compilation --
 
 export const FormulaPremiseRoleHintSchema = Type.Union([
-    Type.Literal("support"),
-    Type.Literal("joint-support"),
-    Type.Literal("derivation"),
+    Type.Literal("freeform"),
     Type.Literal("conclusion"),
 ])
 export type TFormulaPremiseRoleHint = Static<
@@ -295,6 +288,16 @@ export const FormulaCompilationOutputSchema = Type.Object({
         })
     ),
     conclusionPremiseMiniId: Type.Union([Type.String(), Type.Null()]),
+    // Citation/axiomatic backing extracted from inference antecedents:
+    // each entry records that claim `derivedClaimMiniId` is grounded by
+    // the listed citation/axiomatic supporting claims. The parser
+    // materializes these into derivation premises.
+    derivationBacking: Type.Array(
+        Type.Object({
+            derivedClaimMiniId: Type.String(),
+            supportingClaimMiniIds: Type.Array(Type.String()),
+        })
+    ),
 })
 export type TFormulaCompilationOutput = Static<
     typeof FormulaCompilationOutputSchema

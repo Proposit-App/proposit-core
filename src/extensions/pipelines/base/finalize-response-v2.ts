@@ -40,11 +40,77 @@ import {
     type TCompiledPremise,
     type TConclusionSelectionOutput,
     type TFormulaCompilationOutput,
-    type TRelation,
+    type TInferenceRelation,
     type TRelationExtractionOutput,
     type TVariableAssignmentOutput,
 } from "./stages/schemas.js"
 import type { TIngestionExtension } from "./types.js"
+import { IEEE_REFERENCE_TYPES } from "../../citations/ieee/references.js"
+import type {
+    TUnparsedCitation,
+    TUnparsedCitationTypeGuess,
+} from "../../citations/unparsed/index.js"
+
+// The valid `citationTypeGuess` values — the 33 IEEE reference types
+// plus the explicit "unknown" fallback. Built from the IEEE list so the
+// sanitizer stays in lockstep with the reference-type schema.
+const VALID_CITATION_TYPE_GUESSES = new Set<TUnparsedCitationTypeGuess>([
+    ...IEEE_REFERENCE_TYPES,
+    "unknown",
+])
+
+/**
+ * Coerce an LLM-emitted citation-type guess into the valid guess enum,
+ * clamping anything absent or out-of-enum to "unknown". The model is
+ * never trusted to stay in-enum, so its raw value is validated here
+ * rather than relied upon.
+ */
+function sanitizeCitationTypeGuess(raw: unknown): TUnparsedCitationTypeGuess {
+    if (
+        typeof raw === "string" &&
+        VALID_CITATION_TYPE_GUESSES.has(raw as TUnparsedCitationTypeGuess)
+    ) {
+        return raw as TUnparsedCitationTypeGuess
+    }
+    return "unknown"
+}
+
+/**
+ * Build the `UnparsedCitation` attached to a claim that finalize keeps
+ * typed `citation`. The display `text` is the claim's authored title,
+ * falling back to the type-classifier's recorded `sourceString` and
+ * finally the claim miniId so the text is never empty. The guess is
+ * sanitized; a present, non-empty url is carried, else omitted.
+ */
+function buildUnparsedCitation(args: {
+    title: string | undefined
+    sourceString: string | null | undefined
+    rawGuess: unknown
+    url: unknown
+    fallbackText: string
+}): TUnparsedCitation {
+    const text =
+        firstNonEmptyString(args.title) ??
+        firstNonEmptyString(args.sourceString) ??
+        args.fallbackText
+    const citation: TUnparsedCitation = {
+        type: "unparsed",
+        text,
+        citationTypeGuess: sanitizeCitationTypeGuess(args.rawGuess),
+    }
+    const url = firstNonEmptyString(args.url)
+    if (url !== undefined) {
+        citation.url = url
+    }
+    return citation
+}
+
+/** Return a trimmed non-empty string, or undefined for anything else. */
+function firstNonEmptyString(value: unknown): string | undefined {
+    if (typeof value !== "string") return undefined
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : undefined
+}
 
 export const FINALIZE_V2_FAILURE_TEXTS = {
     noClaims: "No claims could be extracted from the input.",
@@ -87,8 +153,9 @@ function buildClaimToRole(args: {
     // are "intermediate" (per spec §7.4). The conclusion overrides.
     const claimsInRelations = new Set<string>()
     for (const rel of args.relations) {
-        for (const s of rel.sources) claimsInRelations.add(s)
-        claimsInRelations.add(rel.target)
+        for (const antecedent of rel.antecedents)
+            claimsInRelations.add(antecedent)
+        claimsInRelations.add(rel.consequent)
     }
     for (const claim of args.canonicalClaims) {
         if (claim.miniId === args.conclusionMiniId) {
@@ -127,7 +194,7 @@ function stripCanonicalizerOnlyFields(
 //
 // **Structure-walk, not string-substitution.** Each relation-derived
 // premise (support / joint-support / derivation) is composed by walking
-// the *relation* that produced it (`sources` → `target`, both claim
+// the *relation* that produced it (`antecedents` → `consequent`, both claim
 // miniIds, with the relation `type` giving the connective shape) rather
 // than by parsing the `formula` string. The relation is the semantic
 // origin of the premise and carries the logical structure directly, so
@@ -152,7 +219,7 @@ type TTitleComposerMaps = {
     /** claim miniId → assigned variable symbol (defensive fallback). */
     symbolByClaimMiniId: Map<string, string>
     /** relationId → the relation that produced a premise. */
-    relationById: Map<string, TRelation>
+    relationById: Map<string, TInferenceRelation>
 }
 
 /**
@@ -207,10 +274,10 @@ function buildPremiseTitle(
         return premise.formula
     }
 
-    const antecedent = relation.sources
+    const antecedent = relation.antecedents
         .map((src) => quotedClaimTitle(src, maps))
         .join(" and ")
-    const consequent = quotedClaimTitle(relation.target, maps)
+    const consequent = quotedClaimTitle(relation.consequent, maps)
     return `If ${antecedent} then ${consequent}`
 }
 
@@ -329,28 +396,39 @@ export function finalizeResponseV2(
     const claims: TClaimFinalForm[] = canon.canonicalClaims.map((c) => {
         const role = roles[c.miniId]
         const classifiedType = typeByMiniId.get(c.miniId)?.type ?? c.type
-        // A `citation` claim's only display text is its `url`. When such a
-        // claim also participates in the logic as a variable — a relation
-        // source/target ("premise") or the conclusion — a missing url leaves
-        // the proposition blank in every renderer (an empty antecedent /
-        // empty source). Demote *url-less* citation logical-nodes back to
-        // `normal` so the claim's authored title/body survive as its
-        // proposition text. A citation that carries a real url renders fine
-        // as an antecedent, so it is left intact; so are `axiomatic` logical
-        // nodes (they render from their axiom kind and are valid premises).
-        const isLogicalNode = role === "premise" || role === "conclusion"
-        const url = (c as Record<string, unknown>).url
-        const hasUrl = typeof url === "string" && url.trim().length > 0
-        const refinedType =
-            isLogicalNode && classifiedType === "citation" && !hasUrl
-                ? "normal"
-                : classifiedType
-        const stripped = stripCanonicalizerOnlyFields(
-            c as unknown as Record<string, unknown>
-        )
+        const record = c as unknown as Record<string, unknown>
+        const stripped = stripCanonicalizerOnlyFields(record)
+        // A claim classified `citation` stays `citation` and carries an
+        // explicit `UnparsedCitation` (its `text` is the display text, so
+        // a url-less reference no longer renders blank). Premise
+        // placement is handled upstream by the deterministic relation
+        // sort, which keeps citation claims out of freeform premises — so a
+        // citation never lands as a freeform antecedent here, and there is
+        // no url-presence demotion to do.
+        if (classifiedType === "citation") {
+            const unparsedCitation = buildUnparsedCitation({
+                title: firstNonEmptyString(stripped.title),
+                sourceString: typeByMiniId.get(c.miniId)?.sourceString,
+                rawGuess: record.citationTypeGuess,
+                url: record.url,
+                fallbackText: c.miniId,
+            })
+            // The raw `citationTypeGuess` field rides into finalize on the
+            // canonical claim; it is folded into the `citation` object's
+            // `citationTypeGuess`, so drop the loose copy from the output.
+            const { citationTypeGuess: _rawGuess, ...withoutRawGuess } =
+                stripped
+            void _rawGuess
+            return {
+                ...withoutRawGuess,
+                type: classifiedType,
+                role,
+                citation: unparsedCitation,
+            } as unknown as TClaimFinalForm
+        }
         return {
             ...stripped,
-            type: refinedType,
+            type: classifiedType,
             role,
         } as unknown as TClaimFinalForm
     })
@@ -383,6 +461,9 @@ export function finalizeResponseV2(
         variables: finalVariables,
         premises: finalPremises,
         conclusionPremiseMiniId: compilation.conclusionPremiseMiniId,
+        // Citation/axiomatic backing the sort extracted from inference
+        // antecedents; the parser materializes it into derivation edges.
+        derivationBacking: compilation.derivationBacking,
         title: buildArgumentTitle(canon.canonicalClaims, conclusionMiniId),
     }
 
