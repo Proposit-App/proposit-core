@@ -41,10 +41,11 @@
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
+        "derivationBacking": [],
         "title": "Socrates is mortal"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is the only claim that is plausibly supported by another claim, so it best fits the role of the conclusion.",
+    "selectionRationale": "c2 is the best conclusion candidate because it is the only claim plausibly supported by the other claim.",
     "processingFailures": []
 }

@@ -61,15 +61,15 @@
               "text": "Socrates is a man.",
               "span": {
                 "start": 0,
-                "end": 18
+                "end": 19
               }
             },
             {
               "segmentId": "s2",
               "text": "Therefore, Socrates is mortal.",
               "span": {
-                "start": 19,
-                "end": 49
+                "start": 20,
+                "end": 50
               }
             }
           ]
@@ -78,7 +78,8 @@
           "input": 326,
           "output": 70,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_0786c3bd9acac15d006a3e72b12fcc819db934f4f4ae55f1ba"
       }
     },
     {
@@ -164,7 +165,8 @@
           "input": 407,
           "output": 82,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_03cf57d437ddf769006a3e72b216bc81a2a3a0e67a4346ab53"
       }
     },
     {
@@ -248,7 +250,8 @@
           "input": 442,
           "output": 17,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_023a49587a195629006a3e72b22118819d8e7a3eef9e9a9256"
       }
     },
     {
@@ -321,7 +324,8 @@
           "input": 395,
           "output": 19,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_0582d864f8bdbc74006a3e72b21db0819fb1d45f9eb5fac881"
       }
     },
     {
@@ -673,10 +677,11 @@
           ]
         },
         "tokenUsage": {
-          "input": 1172,
-          "output": 143,
+          "input": 1431,
+          "output": 141,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_0eae29a7b74e9458006a3e72b3839081a18db7b63a3e29171d"
       }
     },
     {
@@ -756,7 +761,8 @@
           "input": 501,
           "output": 50,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_08088009d5289c70006a3e72b576f881a085a679a14bbcf693"
       }
     },
     {
@@ -901,6 +907,139 @@
           "output": 78,
           "reasoning": 19
         }
+      }
+    },
+    {
+      "hash": "090041f5f16a3307d171079e8f50541171c967807b2692a6d952fb86b10c1077",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Socrates_Man fields={\"title\":\"Socrates is a man\",\"body\":\"Socrates is a man.\"}\n  [c2] type=normal symbol=Socrates_Mortal fields={\"title\":\"Socrates is mortal\",\"body\":\"Socrates is mortal.\"}\n\nSegments:\n  [s1] \"Socrates is a man.\"\n  [s2] \"Therefore, Socrates is mortal.\"\n\nEmit every inference relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "evidence": {
+                "segmentIds": [
+                  "s2"
+                ],
+                "quote": "Therefore, Socrates is mortal."
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 689,
+          "output": 204,
+          "reasoning": 138
+        },
+        "rawResponseId": "resp_096e044166a9f68a006a3e72b67988819dac27e978661e874c"
+      }
+    },
+    {
+      "hash": "151ce5bc6a72f2d7a1f233bbacf67b3f5cb2e078ad90881460dfc9a3a3635629",
+      "stageId": "conclusion-selection",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the inference relation graph from `relation-extraction` (each relation's antecedents jointly imply its consequent)\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
+        "userMessage": "Per-claim types:\n  [c1] type=normal\n  [c2] type=normal\n\nRelations:\n  [r1] antecedents=[c1] consequent=c2\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "conclusionCandidates",
+            "rationale"
+          ],
+          "properties": {
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rationale": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "conclusionCandidates": [
+            "c2"
+          ],
+          "rationale": "c2 is the sole normal claim supported by an inference relation, with c1 serving as its antecedent, so c2 is the terminal conclusion."
+        },
+        "tokenUsage": {
+          "input": 452,
+          "output": 77,
+          "reasoning": 18
+        },
+        "rawResponseId": "resp_01e1bf8354ea684e006a3e72bac6a8819e890e64682a73f6b6"
       }
     }
   ]

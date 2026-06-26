@@ -54,10 +54,11 @@
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
+        "derivationBacking": [],
         "title": "The ground is wet"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the sole target of the joint-support relation from c1 and c2 and is therefore the terminal supported claim.",
+    "selectionRationale": "c3 is the sole normal claim supported by the only inference relation, with c1 and c2 serving jointly as premises.",
     "processingFailures": []
 }

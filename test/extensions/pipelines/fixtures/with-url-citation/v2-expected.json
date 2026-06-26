@@ -24,15 +24,15 @@
             },
             {
                 "miniId": "c3",
-                "title": "Warming causes extreme weather",
-                "body": "Rising global temperatures cause extreme weather events to occur more frequently.",
+                "title": "Warming increases extreme weather",
+                "body": "Rising global temperatures cause more frequent extreme weather events.",
                 "type": "normal",
                 "role": "premise"
             },
             {
                 "miniId": "c4",
                 "title": "Extreme weather is more frequent",
-                "body": "Extreme weather events are occurring more frequently.",
+                "body": "People are seeing more frequent extreme weather events.",
                 "type": "normal",
                 "role": "conclusion"
             }
@@ -50,37 +50,38 @@
             },
             {
                 "miniId": "gid-3",
-                "symbol": "Warming_Causes_Extreme",
+                "symbol": "Temp_Rise_Extreme_Weather",
                 "claimMiniId": "c3"
             },
             {
                 "miniId": "gid-4",
-                "symbol": "Extreme_Weather_Frequent",
+                "symbol": "Extreme_Weather_More_Frequent",
                 "claimMiniId": "c4"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-5",
-                "formula": "NASA_Temp_Rise implies Global_Temp_Rise",
-                "title": "If \"NASA reports temperature rise\" then \"Global temperatures have risen\""
+                "formula": "(Global_Temp_Rise and Temp_Rise_Extreme_Weather) implies Extreme_Weather_More_Frequent",
+                "title": "If \"Global temperatures have risen\" and \"Warming increases extreme weather\" then \"Extreme weather is more frequent\""
             },
             {
                 "miniId": "gid-6",
-                "formula": "(Global_Temp_Rise and Warming_Causes_Extreme) implies Extreme_Weather_Frequent",
-                "title": "If \"Global temperatures have risen\" and \"Warming causes extreme weather\" then \"Extreme weather is more frequent\""
-            },
-            {
-                "miniId": "gid-7",
-                "formula": "Extreme_Weather_Frequent",
+                "formula": "Extreme_Weather_More_Frequent",
                 "title": "Extreme weather is more frequent"
             }
         ],
-        "conclusionPremiseMiniId": "gid-7",
+        "conclusionPremiseMiniId": "gid-6",
+        "derivationBacking": [
+            {
+                "derivedClaimMiniId": "c2",
+                "supportingClaimMiniIds": ["c1"]
+            }
+        ],
         "title": "Extreme weather is more frequent"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c4 is the terminal normal claim supported by the joint support from c2 and c3, while c2 is only an intermediate claim and c1 is a citation source.",
+    "selectionRationale": "c4 is the terminal supported claim, while c2 functions as an intermediate premise supported by c1 and then used with c3 to support c4.",
     "processingFailures": []
 }

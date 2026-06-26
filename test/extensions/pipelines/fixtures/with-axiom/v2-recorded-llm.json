@@ -61,23 +61,23 @@
               "text": "By definition, a bachelor is an unmarried man.",
               "span": {
                 "start": 0,
-                "end": 46
+                "end": 47
               }
             },
             {
               "segmentId": "s2",
               "text": "John is a bachelor.",
               "span": {
-                "start": 47,
-                "end": 66
+                "start": 48,
+                "end": 67
               }
             },
             {
               "segmentId": "s3",
               "text": "Therefore, John is unmarried.",
               "span": {
-                "start": 67,
-                "end": 96
+                "start": 68,
+                "end": 97
               }
             }
           ]
@@ -86,7 +86,8 @@
           "input": 333,
           "output": 96,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_0439708d3f1468d2006a3e7292d55081a3ac383b45e43c72c8"
       }
     },
     {
@@ -154,7 +155,7 @@
               "text": "a bachelor is an unmarried man.",
               "span": {
                 "start": 15,
-                "end": 50
+                "end": 48
               }
             },
             {
@@ -181,7 +182,8 @@
           "input": 418,
           "output": 110,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_015022b14c8dcf5b006a3e729406a4819e97e806081aed5ef3"
       }
     },
     {
@@ -265,7 +267,8 @@
           "input": 453,
           "output": 17,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_00d21f0ce68d1708006a3e729408dc819f9db642fd72a7733c"
       }
     },
     {
@@ -342,7 +345,7 @@
               "spans": [
                 {
                   "start": 0,
-                  "end": 13
+                  "end": 14
                 }
               ]
             }
@@ -352,7 +355,8 @@
           "input": 406,
           "output": 52,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_07fdacb359f7818e006a3e729407d481a1ab201a02ec4f50e5"
       }
     },
     {
@@ -717,10 +721,11 @@
           ]
         },
         "tokenUsage": {
-          "input": 1199,
-          "output": 223,
-          "reasoning": 37
-        }
+          "input": 1458,
+          "output": 225,
+          "reasoning": 41
+        },
+        "rawResponseId": "resp_0169c6b30c0b6b97006a3e7296857881919f310b9fe323e2c4"
       }
     },
     {
@@ -805,7 +810,8 @@
           "input": 531,
           "output": 66,
           "reasoning": 0
-        }
+        },
+        "rawResponseId": "resp_0d093acc8ab9b3ec006a3e729ad96c819f9dc60ae51e6ef1d1"
       }
     },
     {
@@ -952,6 +958,142 @@
           "output": 94,
           "reasoning": 33
         }
+      }
+    },
+    {
+      "hash": "4e1e41175cfaf390b0d1dc872e26752d97f903db8750b4fa4c3f9a2cf7a0bbb4",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=axiomatic symbol=Bachelor_Unmarried fields={\"axiom\":\"A bachelor is an unmarried man by definition.\"}\n  [c2] type=normal symbol=John_Bachelor fields={\"title\":\"John is a bachelor\",\"body\":\"John is a bachelor.\"}\n  [c3] type=normal symbol=John_Unmarried fields={\"title\":\"John is unmarried\",\"body\":\"John is unmarried.\"}\n\nSegments:\n  [s1] \"By definition, a bachelor is an unmarried man.\"\n  [s2] \"John is a bachelor.\"\n  [s3] \"Therefore, John is unmarried.\"\n\nEmit every inference relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1",
+                "c2"
+              ],
+              "consequent": "c3",
+              "evidence": {
+                "segmentIds": [
+                  "s1",
+                  "s2",
+                  "s3"
+                ],
+                "quote": "By definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried."
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 723,
+          "output": 221,
+          "reasoning": 132
+        },
+        "rawResponseId": "resp_080fab757f006a39006a3e729bdd7481918575b7cb47e4e0d0"
+      }
+    },
+    {
+      "hash": "db5b7b517d416adea360659650850f0d6c58bb19fa6c94e6cd379598cb697f13",
+      "stageId": "conclusion-selection",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the inference relation graph from `relation-extraction` (each relation's antecedents jointly imply its consequent)\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
+        "userMessage": "Per-claim types:\n  [c1] type=axiomatic\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] antecedents=[c1,c2] consequent=c3\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "conclusionCandidates",
+            "rationale"
+          ],
+          "properties": {
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rationale": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "rationale": "c3 is the supported consequent of the only inference relation, while c1 is axiomatic and c2 serves as support, so c3 is the clear terminal conclusion."
+        },
+        "tokenUsage": {
+          "input": 464,
+          "output": 61,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_04564dcbb48ad46a006a3e72a2e44081a0b98a55f3a3438911"
       }
     }
   ]
