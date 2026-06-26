@@ -356,7 +356,10 @@ describe("contract types", () => {
             import("../src/lib/conversation/contract.js").TMultiTurnInput<TInput>
 
         const input: TExtended = { name: "test", previousResponseId: "resp-1" }
-        const _input = input as unknown as { name: string; previousResponseId: string }
+        const _input = input as unknown as {
+            name: string
+            previousResponseId: string
+        }
         expect(_input.name).toBe("test")
         expect(_input.previousResponseId).toBe("resp-1")
     })
@@ -367,7 +370,10 @@ describe("contract types", () => {
             import("../src/lib/conversation/contract.js").TMultiTurnOutput<TOutput>
 
         const output: TExtended = { message: "hello", responseId: "resp-1" }
-        const _output = output as unknown as { message: string; responseId: string }
+        const _output = output as unknown as {
+            message: string
+            responseId: string
+        }
         expect(_output.message).toBe("hello")
         expect(_output.responseId).toBe("resp-1")
     })
