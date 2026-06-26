@@ -1576,6 +1576,37 @@ export class ArgumentEngine<
     }
 
     /**
+     * Patches application-specific fields onto an expression across all
+     * premises, then marks the expression and its ancestors dirty so the
+     * next checksum flush recomputes from the patched values.
+     *
+     * This is the public API for consumers that need to attach app-level
+     * metadata (e.g. `creatorId`, `createdOn`) to expressions synthesized
+     * by the engine's auto-normalization. It resolves the owning premise
+     * internally, applies the patch in place via `Object.assign`, and
+     * marks the expression dirty — callers cannot patch without marking
+     * (stale checksum) or mark without patching (no-op).
+     *
+     * @param expressionId - The ID of the expression to patch.
+     * @param fields - Fields to merge into the expression.
+     * @throws If no expression with the given ID exists.
+     *
+     * @since 2.3.1
+     */
+    public patchExpressionAppFields(
+        expressionId: string,
+        fields: Partial<TExpr>
+    ): void {
+        const pm = this.findPremiseByExpressionId(expressionId)
+        if (!pm) {
+            throw new Error(
+                `Expression "${expressionId}" not found in any premise.`
+            )
+        }
+        pm.patchAndMarkExpression(expressionId, fields)
+    }
+
+    /**
      * Construct (or no-op on) the per-claim derivation premise's
      * antecedent from a citation lookup. Factory + naked-Q-only:
      *

@@ -60,6 +60,7 @@ import {
     createChecksumConfig,
 } from "../src/lib/consts"
 import type { TOptionalChecksum } from "../src/lib/schemata/shared"
+import type { TCoreChecksumConfig } from "../src/lib/types/checksum"
 import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
 import type { TCoreChangeset } from "../src/lib/types/mutation"
 import {
@@ -24591,5 +24592,211 @@ describe("Basics parse — best-effort, never refuse half-baked", () => {
         const prompt = buildParsingPrompt(BasicsParsingSchema)
         expect(prompt).toContain(BEST_EFFORT_ANCHOR)
         expect(prompt).toContain("no extractable proposition at all")
+    })
+})
+
+// patchExpressionAppFields
+// ---------------------------------------------------------------------------
+
+describe("patchExpressionAppFields", () => {
+    // Expression type extended with app-level fields, mirroring how the
+    // server instantiates the engine with a consumer-supplied expression type.
+    type TAppExpression = TCorePropositionalExpression & {
+        creatorId?: string
+        createdOn?: string
+    }
+
+    const APP_ARG: TOptionalChecksum<TCoreArgument> = {
+        id: "arg-app",
+        version: 1,
+    }
+
+    // Extended checksum config that includes app-level fields, matching
+    // how the server configures the engine so that creatorId / createdOn
+    // are included in expression entity checksums.
+    const APP_CHECKSUM_CONFIG: TCoreChecksumConfig = {
+        expressionFields: new Set([
+            "type",
+            "parentId",
+            "position",
+            "argumentId",
+            "argumentVersion",
+            "premiseId",
+            "variableId",
+            "operator",
+            "creatorId",
+            "createdOn",
+        ]),
+        variableFields: DEFAULT_CHECKSUM_CONFIG.variableFields!,
+        premiseFields: DEFAULT_CHECKSUM_CONFIG.premiseFields!,
+        argumentFields: DEFAULT_CHECKSUM_CONFIG.argumentFields!,
+    }
+
+    function makeAppEngine() {
+        return new ArgumentEngine<
+            TCoreArgument,
+            TCorePremise,
+            TAppExpression,
+            TCorePropositionalVariable
+        >(APP_ARG, aLib(), {
+            behavior: "permissive",
+            checksumConfig: APP_CHECKSUM_CONFIG,
+        })
+    }
+
+    it("patches a checksum-bearing field and the expression checksum changes", () => {
+        const engine = makeAppEngine()
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            claimId: "claim-default",
+            claimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise()
+        pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            premiseId: pm.getId(),
+            parentId: null,
+            position: 1,
+        } as TExpressionInput<TAppExpression>)
+        engine.flushChecksums()
+
+        const beforeSnap = engine.snapshot()
+        const exprBefore = beforeSnap.premises[0].expressions.expressions.find(
+            (e) => e.id === "e1"
+        )
+        expect(exprBefore).toBeDefined()
+
+        // Patch with a checksum-bearing field (creatorId is in expressionFields).
+        engine.patchExpressionAppFields("e1", { creatorId: "user-42" })
+
+        engine.flushChecksums()
+
+        const afterSnap = engine.snapshot()
+        const exprAfter = afterSnap.premises[0].expressions.expressions.find(
+            (e) => e.id === "e1"
+        )
+        expect(exprAfter?.creatorId).toBe("user-42")
+        // The expression checksum must differ because creatorId is checksum-bearing.
+        expect(exprAfter?.checksum).not.toBe(exprBefore?.checksum)
+    })
+
+    it("dirty propagates: parent combinedChecksum recomputes after patch", () => {
+        const engine = makeAppEngine()
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            claimId: "claim-default",
+            claimVersion: 0,
+        })
+        engine.addVariable({
+            id: "v2",
+            symbol: "Q",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            claimId: "claim-default",
+            claimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise()
+
+        // Build P → Q (implies): e4 = P implies Q (root), e2 = P (left child), e3 = Q (right child)
+        pm.addExpression({
+            id: "e4",
+            type: "operator",
+            operator: "implies",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            premiseId: pm.getId(),
+            parentId: null,
+            position: 1,
+        } as TExpressionInput<TAppExpression>)
+        pm.addExpression({
+            id: "e2",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            premiseId: pm.getId(),
+            parentId: "e4",
+            position: 1,
+        } as TExpressionInput<TAppExpression>)
+        pm.addExpression({
+            id: "e3",
+            type: "variable",
+            variableId: "v2",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            premiseId: pm.getId(),
+            parentId: "e4",
+            position: 2,
+        } as TExpressionInput<TAppExpression>)
+
+        engine.flushChecksums()
+        const beforeParentCs = pm.combinedChecksum()
+
+        // Patch the child expression with a checksum-bearing field.
+        engine.patchExpressionAppFields("e3", { createdOn: "2026-01-01" })
+
+        engine.flushChecksums()
+        const afterParentCs = pm.combinedChecksum()
+
+        // Parent's combined checksum must have changed because a child's
+        // entity checksum changed.
+        expect(afterParentCs).not.toBe(beforeParentCs)
+    })
+
+    it("throws on unknown expression id", () => {
+        const engine = makeAppEngine()
+        expect(() =>
+            engine.patchExpressionAppFields("nonexistent", { creatorId: "x" })
+        ).toThrow('Expression "nonexistent" not found in any premise.')
+    })
+
+    it("snapshot() reflects patched value and post-patch checksum", () => {
+        const engine = makeAppEngine()
+        engine.addVariable({
+            id: "v1",
+            symbol: "P",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            claimId: "claim-default",
+            claimVersion: 0,
+        })
+        const { result: pm } = engine.createPremise()
+        pm.addExpression({
+            id: "e1",
+            type: "variable",
+            variableId: "v1",
+            argumentId: "arg-app",
+            argumentVersion: 1,
+            premiseId: pm.getId(),
+            parentId: null,
+            position: 1,
+        } as TExpressionInput<TAppExpression>)
+        engine.flushChecksums()
+
+        engine.patchExpressionAppFields("e1", {
+            creatorId: "user-99",
+            createdOn: "2026-06-26T00:00:00Z",
+        })
+        engine.flushChecksums()
+
+        const snap = engine.snapshot()
+        const expr = snap.premises[0].expressions.expressions.find(
+            (e) => e.id === "e1"
+        )
+
+        expect(expr?.creatorId).toBe("user-99")
+        expect(expr?.createdOn).toBe("2026-06-26T00:00:00Z")
+        expect(expr?.checksum).toBeDefined()
+        expect(expr?.checksum).not.toBeUndefined()
     })
 })

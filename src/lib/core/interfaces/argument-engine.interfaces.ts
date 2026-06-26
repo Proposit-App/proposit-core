@@ -435,6 +435,28 @@ export interface TArgumentExpressionQueries<
             { variableIds: string[]; premiseIds: string[] }
         >
     }
+    /**
+     * Patches application-specific fields onto an expression across all
+     * premises, then marks the expression and its ancestors dirty so the
+     * next checksum flush recomputes from the patched values.
+     *
+     * This is the public API for consumers that need to attach app-level
+     * metadata (e.g. `creatorId`, `createdOn`) to expressions synthesized
+     * by the engine's auto-normalization. It resolves the owning premise
+     * internally, applies the patch in place, and marks the expression
+     * dirty — callers cannot patch without marking or mark without
+     * patching (atomic patch-and-mark).
+     *
+     * @param expressionId - The ID of the expression to patch.
+     * @param fields - Fields to merge into the expression via `Object.assign`.
+     *   The generic `Partial<TExpr>` ensures type compatibility with the
+     *   engine's expression type (which includes app-specific fields when
+     *   the engine is instantiated with a consumer-supplied expression type).
+     * @throws `NotFoundError` if no expression with the given ID exists.
+     *
+     * @since 2.3.1
+     */
+    patchExpressionAppFields(expressionId: string, fields: Partial<TExpr>): void
 }
 
 /**

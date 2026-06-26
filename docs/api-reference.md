@@ -225,6 +225,25 @@ Returns the root expression from each premise that has one.
 
 ---
 
+### `patchExpressionAppFields(expressionId, fields)` → `void`
+
+Patches application-specific fields onto an expression across all premises,
+then marks the expression and its ancestors dirty so the next checksum flush
+recomputes from the patched values. Resolves the owning premise internally,
+applies the patch in place via `Object.assign`, and marks the expression dirty
+— callers cannot patch without marking (stale checksum) or mark without
+patching (no-op). Throws if `expressionId` is unknown.
+
+The `fields` parameter is typed as `Partial<TExpr>`, generic over the engine's
+expression type parameter (which consumers extend with app-level fields like
+`creatorId` / `createdOn`). Only fields present in the engine's
+`checksumConfig.expressionFields` will affect the entity checksum on the
+next `flushChecksums()` call.
+
+Added in **2.3.1**.
+
+---
+
 ### `setConclusionPremise(premiseId)` → `TCoreMutationResult<TCoreArgumentRoleState>`
 
 Designates a premise as the conclusion. Throws if the premise does not exist.

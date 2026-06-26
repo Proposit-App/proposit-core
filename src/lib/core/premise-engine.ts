@@ -1204,6 +1204,23 @@ export class PremiseEngine<
         return this.expressions.getExpression(id)
     }
 
+    /**
+     * Internal helper: mutates an expression in place and marks it dirty.
+     * Used by `ArgumentEngine.patchExpressionAppFields` to implement the
+     * atomic patch-and-mark contract without reaching into internals from
+     * outside the engine.
+     *
+     * @internal
+     */
+    patchAndMarkExpression(expressionId: string, fields: Partial<TExpr>): void {
+        const expr = this.expressions.getExpression(expressionId)
+        if (expr) {
+            Object.assign(expr, fields)
+        }
+        this.expressions.markExpressionDirty(expressionId)
+        this.markDirty()
+    }
+
     public getId(): string {
         return this.premise.id
     }
