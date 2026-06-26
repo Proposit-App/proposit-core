@@ -291,7 +291,7 @@ describe("createConversation", () => {
         await convo.turn(stage, { userMessage: "main2" })
     })
 
-    it("throws on .turn after .close()", () => {
+    it("throws on .turn after .close()", async () => {
         const convo = createConversation(mockDeps({}))
         convo.close()
 
