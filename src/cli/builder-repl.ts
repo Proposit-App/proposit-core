@@ -76,7 +76,7 @@ function printResult<TOut>(result: TTurnResult<TOut>, turnName: string): void {
             const arg = output.argument as Record<string, unknown>
             if (arg.claims) {
                 console.log("\nClaims:")
-                for (const c of arg.claims as Array<Record<string, unknown>>) {
+                for (const c of arg.claims as Record<string, unknown>[]) {
                     const role = c.role as string
                     const type = c.type as string
                     const miniId = c.miniId as string
@@ -85,9 +85,7 @@ function printResult<TOut>(result: TTurnResult<TOut>, turnName: string): void {
             }
             if (arg.premises) {
                 console.log("\nPremises:")
-                for (const p of arg.premises as Array<
-                    Record<string, unknown>
-                >) {
+                for (const p of arg.premises as Record<string, unknown>[]) {
                     const miniId = p.miniId as string
                     const formula = p.formula as string
                     console.log(`  ${miniId}: ${formula}`)
@@ -117,6 +115,7 @@ function buildTurnFactory(
     }
 }
 
+// eslint-disable-next-line @typescript-eslint/require-await
 async function main(): Promise<void> {
     const { provider, apiKey } = parseArgs()
     const key = apiKey ?? DEFAULT_API_KEY
@@ -150,6 +149,7 @@ async function main(): Promise<void> {
     const doFinalize = async (): Promise<void> => {
         const stage = createFinalizeTurn({
             model,
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClose: () => {},
         })
         const result = await conversation.turn(
@@ -169,7 +169,8 @@ async function main(): Promise<void> {
 
     rl.prompt()
 
-    rl.on("line", async (line: string) => {
+    rl.on("line", (line: string) => {
+        // Fire-and-forget async handler: the REPL keeps running regardless.
         const trimmed = line.trim()
         if (!trimmed) {
             rl.prompt()
@@ -177,15 +178,15 @@ async function main(): Promise<void> {
         }
 
         if (trimmed === "/simulate") {
-            await simulate()
-            rl.prompt()
+            void simulate().then(() => rl.prompt())
             return
         }
 
         if (trimmed === "/finalize") {
-            await doFinalize()
-            console.log("Conversation finalized. Goodbye.")
-            rl.close()
+            void doFinalize().then(() => {
+                console.log("Conversation finalized. Goodbye.")
+                rl.close()
+            })
             return
         }
 
@@ -195,8 +196,7 @@ async function main(): Promise<void> {
             return
         }
 
-        await review()
-        rl.prompt()
+        void review().then(() => rl.prompt())
     })
 
     rl.on("close", () => {

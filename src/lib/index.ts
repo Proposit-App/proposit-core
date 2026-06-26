@@ -227,8 +227,8 @@ export type {
     TTurnResult,
     TExecuteTurnDeps,
     TConversation,
-    MultiTurnInput,
-    MultiTurnOutput,
+    TMultiTurnInput,
+    TMultiTurnOutput,
     TResponseId,
 } from "./conversation/index.js"
 // Builder extension — Argument Builder turn factories.

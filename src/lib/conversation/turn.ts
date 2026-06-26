@@ -77,7 +77,7 @@ export type TExecuteTurnDeps = {
 // The variable is set synchronously before `executeStage` and cleared
 // after it resolves, so it's safe for sequential (non-concurrent) use.
 
-let CURRENT_TURN_INPUT: TTurnInput | null = null
+let currentTurnInput: TTurnInput | null = null
 
 // -- Internal: LLM provider wrapper ----------------------------------------
 //
@@ -97,8 +97,8 @@ function wrapProviderForTurn(
             // Inject `previousResponseId` into the request.
             req.previousResponseId = previousResponseId
             // Override user message via the module-level bridge.
-            if (CURRENT_TURN_INPUT) {
-                req.userMessage = CURRENT_TURN_INPUT.userMessage
+            if (currentTurnInput) {
+                req.userMessage = currentTurnInput.userMessage
             }
             const response = await underlying.respond(req)
             // Capture the response id if surfaced.
@@ -143,7 +143,7 @@ export async function executeTurn<TOut>(
     )
 
     // Bridge the user message to the provider wrapper.
-    CURRENT_TURN_INPUT = input
+    currentTurnInput = input
 
     // Create a synthetic pipeline containing just this stage.
     const stageId = stage.id
@@ -176,7 +176,7 @@ export async function executeTurn<TOut>(
     )
 
     // Clear the user message bridge.
-    CURRENT_TURN_INPUT = null
+    currentTurnInput = null
 
     // Call the completion callback (for terminal turns like finalize).
     deps.onComplete?.()

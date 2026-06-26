@@ -362,21 +362,21 @@ describe("builder turns", () => {
 // ---------------- contract types ---------------------------------------------
 
 describe("contract types", () => {
-    it("MultiTurnInput extends I with previousResponseId", () => {
+    it("TMultiTurnInput extends I with previousResponseId", () => {
         // TypeScript-level test: the type should accept previousResponseId
         type Input = { name: string }
         type Extended =
-            import("../src/lib/conversation/contract.js").MultiTurnInput<Input>
+            import("../src/lib/conversation/contract.js").TMultiTurnInput<Input>
 
         const input: Extended = { name: "test", previousResponseId: "resp-1" }
         expect(input.name).toBe("test")
         expect(input.previousResponseId).toBe("resp-1")
     })
 
-    it("MultiTurnOutput extends O with responseId", () => {
+    it("TMultiTurnOutput extends O with responseId", () => {
         type Output = { message: string }
         type Extended =
-            import("../src/lib/conversation/contract.js").MultiTurnOutput<Output>
+            import("../src/lib/conversation/contract.js").TMultiTurnOutput<Output>
 
         const output: Extended = { message: "hello", responseId: "resp-1" }
         expect(output.message).toBe("hello")

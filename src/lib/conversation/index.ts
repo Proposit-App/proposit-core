@@ -9,5 +9,5 @@ export { createConversation } from "./conversation.js"
 export type { TConversation } from "./conversation.js"
 export { ConversationClosedError } from "./conversation.js"
 
-export type { MultiTurnInput, MultiTurnOutput } from "./contract.js"
+export type { TMultiTurnInput, TMultiTurnOutput } from "./contract.js"
 export type { TResponseId } from "../llm/types.js"

@@ -8,7 +8,6 @@ import type { TStage } from "../../lib/pipelines/types.js"
 import type { TReasoningEffort } from "../../lib/llm/types.js"
 import { ParsedArgumentResponseSchema } from "../../lib/parsing/schemata.js"
 import { llmStage } from "../../lib/pipelines/stage-helpers.js"
-import { resolveLlmStageOptions } from "../pipelines/base/resolve-llm-stage-options.js"
 
 /**
  * Create a review turn stage.

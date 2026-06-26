@@ -8,7 +8,7 @@
 // A conversation is NOT a pipeline. It is a thin, builder-agnostic
 // stateful object that threads response-IDs and tallies tokens.
 
-import type { TStage, TPipelineEvent } from "../pipelines/types.js"
+import type { TStage } from "../pipelines/types.js"
 import type { TLlmTokenUsage, TResponseId } from "../llm/types.js"
 import type { TExecuteTurnDeps, TTurnInput, TTurnResult } from "./turn.js"
 import { executeTurn } from "./turn.js"

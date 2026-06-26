@@ -6,7 +6,6 @@
 
 import type { TStage } from "../../lib/pipelines/types.js"
 import type { TReasoningEffort } from "../../lib/llm/types.js"
-import type { TConversation } from "../../lib/conversation/conversation.js"
 import { ParsedArgumentResponseSchema } from "../../lib/parsing/schemata.js"
 import { buildParsingPrompt } from "../../lib/parsing/prompt-builder.js"
 import { llmStage } from "../../lib/pipelines/stage-helpers.js"
