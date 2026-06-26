@@ -22,7 +22,7 @@ import {
     type TClaimTypeClassificationOutput,
     type TConclusionSelectionLlmOutput,
     type TConclusionSelectionOutput,
-    type TRelation,
+    type TInferenceRelation,
     type TRelationExtractionOutput,
 } from "./schemas.js"
 import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
@@ -43,7 +43,7 @@ export const CONCLUSION_SELECTION_SYSTEM_PROMPT = `You select the conclusion cla
 
 You receive:
 - the per-claim type map (normal / citation / axiomatic)
-- the support relation graph from \`relation-extraction\`
+- the inference relation graph from \`relation-extraction\` (each relation's antecedents jointly imply its consequent)
 
 Emit:
 - \`conclusionCandidates\` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.
@@ -76,7 +76,7 @@ function buildPrompt(ctx: TStageContext): { system: string; user: string } {
             ? relations
                   .map(
                       (r) =>
-                          `  [${r.relationId}] ${r.type}: sources=[${r.sources.join(",")}] target=${r.target}`
+                          `  [${r.relationId}] antecedents=[${r.antecedents.join(",")}] consequent=${r.consequent}`
                   )
                   .join("\n")
             : "  (no relations)"
@@ -111,7 +111,7 @@ export const CONCLUSION_SELECTION_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
  */
 export function selectFallbackConclusion(
     classifications: readonly TClaimTypeClassificationEntry[],
-    relations: readonly TRelation[]
+    relations: readonly TInferenceRelation[]
 ): string | null {
     if (relations.length === 0) return null
 
@@ -130,8 +130,12 @@ export function selectFallbackConclusion(
     const sourceMiniIds = new Set<string>()
     const inDegree = new Map<string, number>()
     for (const relation of relations) {
-        for (const source of relation.sources) sourceMiniIds.add(source)
-        inDegree.set(relation.target, (inDegree.get(relation.target) ?? 0) + 1)
+        for (const antecedent of relation.antecedents)
+            sourceMiniIds.add(antecedent)
+        inDegree.set(
+            relation.consequent,
+            (inDegree.get(relation.consequent) ?? 0) + 1
+        )
     }
 
     const supportedNormals = [...inDegree.keys()].filter((miniId) =>

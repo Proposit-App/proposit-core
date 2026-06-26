@@ -224,9 +224,9 @@ function buildHappyMockResponses(): Record<
         relations: [
             {
                 relationId: "r1",
-                type: "joint-support",
-                sources: ["c1", "c2"],
-                target: "c3",
+                type: "inference",
+                antecedents: ["c1", "c2"],
+                consequent: "c3",
                 evidence: { segmentIds: ["s3"], quote: "Therefore" },
             },
         ],
@@ -514,9 +514,9 @@ describe("v2 stage + finalize outputs are JSON round-trippable", () => {
                 relations: [
                     {
                         relationId: "r1",
-                        type: "support",
-                        sources: ["c1"],
-                        target: "c2",
+                        type: "inference",
+                        antecedents: ["c1"],
+                        consequent: "c2",
                         evidence: { segmentIds: ["s1"], quote: "therefore" },
                     },
                 ],
@@ -539,7 +539,7 @@ describe("v2 stage + finalize outputs are JSON round-trippable", () => {
                     {
                         premiseMiniId: "c1",
                         formula: "P",
-                        roleHint: "support",
+                        roleHint: "freeform",
                         sourceRelationId: "r1",
                     },
                     {
@@ -550,6 +550,7 @@ describe("v2 stage + finalize outputs are JSON round-trippable", () => {
                     },
                 ],
                 conclusionPremiseMiniId: "c2",
+                derivationBacking: [],
             },
         },
         {

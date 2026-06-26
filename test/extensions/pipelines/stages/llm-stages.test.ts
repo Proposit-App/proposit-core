@@ -562,9 +562,9 @@ describe("relationExtractionStage", () => {
             relations: [
                 {
                     relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
+                    type: "inference",
+                    antecedents: ["c1"],
+                    consequent: "c2",
                     evidence: { segmentIds: ["s1"], quote: "therefore" },
                 },
             ],
@@ -638,10 +638,10 @@ describe("conclusionSelectionStage", () => {
             relations: [
                 {
                     relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: ["s1"], quote: "" },
+                    type: "inference",
+                    antecedents: ["c1"],
+                    consequent: "c2",
+                    evidence: { segmentIds: ["s1"], quote: "therefore" },
                 },
             ],
         }

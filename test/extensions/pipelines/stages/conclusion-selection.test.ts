@@ -80,9 +80,9 @@ function makeRelation(
 ): TRelationExtractionOutput["relations"][number] {
     return {
         relationId,
-        type: "support",
-        sources,
-        target,
+        type: "inference",
+        antecedents: sources,
+        consequent: target,
         evidence: { segmentIds: [], quote: "" },
     }
 }
@@ -371,16 +371,16 @@ describe("selectFallbackConclusion (exported helper)", () => {
         const relations = [
             {
                 relationId: "r1",
-                type: "support" as const,
-                sources: ["c1"],
-                target: "c3",
+                type: "inference" as const,
+                antecedents: ["c1"],
+                consequent: "c3",
                 evidence: { segmentIds: [], quote: "" },
             },
             {
                 relationId: "r2",
-                type: "support" as const,
-                sources: ["c2"],
-                target: "c3",
+                type: "inference" as const,
+                antecedents: ["c2"],
+                consequent: "c3",
                 evidence: { segmentIds: [], quote: "" },
             },
         ]

@@ -133,16 +133,16 @@ function buildHormuzOutputs(): Record<string, unknown> {
         relations: [
             {
                 relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
+                type: "inference",
+                antecedents: ["c1"],
+                consequent: "c2",
                 evidence: { segmentIds: ["s1"], quote: "too risky" },
             },
             {
                 relationId: "r2",
-                type: "joint-support",
-                sources: ["c2", "c3"],
-                target: "c4",
+                type: "inference",
+                antecedents: ["c2", "c3"],
+                consequent: "c4",
                 evidence: { segmentIds: ["s2"], quote: "therefore" },
             },
         ],
@@ -159,13 +159,13 @@ function buildHormuzOutputs(): Record<string, unknown> {
             {
                 premiseMiniId: "p1",
                 formula: "Hormuz_Too_Risky implies No_Offramp",
-                roleHint: "support",
+                roleHint: "freeform",
                 sourceRelationId: "r1",
             },
             {
                 premiseMiniId: "p2",
                 formula: "(No_Offramp and Diplomacy_Wins) implies No_Strike",
-                roleHint: "joint-support",
+                roleHint: "freeform",
                 sourceRelationId: "r2",
             },
             {
@@ -176,6 +176,7 @@ function buildHormuzOutputs(): Record<string, unknown> {
             },
         ],
         conclusionPremiseMiniId: "p3",
+        derivationBacking: [],
     }
 
     return {
@@ -324,9 +325,9 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
         relations: [
             {
                 relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
+                type: "inference",
+                antecedents: ["c1"],
+                consequent: "c2",
                 evidence: { segmentIds: ["s1"], quote: "the footnotes" },
             },
         ],
@@ -343,7 +344,7 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
             {
                 premiseMiniId: "p1",
                 formula: "Pooley implies Footnotes",
-                roleHint: "support",
+                roleHint: "freeform",
                 sourceRelationId: "r1",
             },
             {
@@ -354,6 +355,7 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
             },
         ],
         conclusionPremiseMiniId: "p2",
+        derivationBacking: [],
     }
 
     return {

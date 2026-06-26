@@ -64,9 +64,9 @@ function happyStructureOutput(): unknown {
         relations: [
             {
                 relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
+                type: "inference",
+                antecedents: ["c1"],
+                consequent: "c2",
                 evidence: { segmentIds: [], quote: "" },
             },
         ],

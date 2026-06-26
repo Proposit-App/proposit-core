@@ -40,7 +40,7 @@ import {
     type TCompiledPremise,
     type TConclusionSelectionOutput,
     type TFormulaCompilationOutput,
-    type TRelation,
+    type TInferenceRelation,
     type TRelationExtractionOutput,
     type TVariableAssignmentOutput,
 } from "./stages/schemas.js"
@@ -153,8 +153,9 @@ function buildClaimToRole(args: {
     // are "intermediate" (per spec §7.4). The conclusion overrides.
     const claimsInRelations = new Set<string>()
     for (const rel of args.relations) {
-        for (const s of rel.sources) claimsInRelations.add(s)
-        claimsInRelations.add(rel.target)
+        for (const antecedent of rel.antecedents)
+            claimsInRelations.add(antecedent)
+        claimsInRelations.add(rel.consequent)
     }
     for (const claim of args.canonicalClaims) {
         if (claim.miniId === args.conclusionMiniId) {
@@ -193,7 +194,7 @@ function stripCanonicalizerOnlyFields(
 //
 // **Structure-walk, not string-substitution.** Each relation-derived
 // premise (support / joint-support / derivation) is composed by walking
-// the *relation* that produced it (`sources` → `target`, both claim
+// the *relation* that produced it (`antecedents` → `consequent`, both claim
 // miniIds, with the relation `type` giving the connective shape) rather
 // than by parsing the `formula` string. The relation is the semantic
 // origin of the premise and carries the logical structure directly, so
@@ -218,7 +219,7 @@ type TTitleComposerMaps = {
     /** claim miniId → assigned variable symbol (defensive fallback). */
     symbolByClaimMiniId: Map<string, string>
     /** relationId → the relation that produced a premise. */
-    relationById: Map<string, TRelation>
+    relationById: Map<string, TInferenceRelation>
 }
 
 /**
@@ -273,10 +274,10 @@ function buildPremiseTitle(
         return premise.formula
     }
 
-    const antecedent = relation.sources
+    const antecedent = relation.antecedents
         .map((src) => quotedClaimTitle(src, maps))
         .join(" and ")
-    const consequent = quotedClaimTitle(relation.target, maps)
+    const consequent = quotedClaimTitle(relation.consequent, maps)
     return `If ${antecedent} then ${consequent}`
 }
 

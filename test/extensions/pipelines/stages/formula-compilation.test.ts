@@ -21,16 +21,12 @@ import { describe, expect, it } from "vitest"
 import {
     compileFormulas,
     formulaCompilationStage,
-    rerouteDerivationOnlyRelations,
     resolveClaimTypes,
     FORMULA_COMPILATION_FAILURE_CODES,
-    RELATION_PLACEMENT_FAILURE_CODES,
 } from "../../../../src/extensions/pipelines/base/stages/formula-compilation.js"
 import { STAGE_IDS } from "../../../../src/extensions/pipelines/base/stages/schemas.js"
 import type {
-    TClaimTypeClassificationEntry,
     TConclusionSelectionOutput,
-    TRelation,
     TRelationExtractionOutput,
     TVariableAssignmentOutput,
 } from "../../../../src/extensions/pipelines/base/stages/schemas.js"
@@ -56,13 +52,11 @@ function buildVars(
 describe("compileFormulas — relation compilation rules", () => {
     it("compiles a single `support` relation as `s implies t`", () => {
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: ["s1"], quote: "" },
+                    antecedents: ["c1"],
+                    consequent: "c2",
                 },
             ],
             conclusion: {
@@ -78,18 +72,16 @@ describe("compileFormulas — relation compilation rules", () => {
         })
         expect(result.premises).toHaveLength(1)
         expect(result.premises[0].formula).toBe("A implies B")
-        expect(result.premises[0].roleHint).toBe("support")
+        expect(result.premises[0].roleHint).toBe("freeform")
     })
 
     it("compiles a `joint-support` relation with multiple sources as parenthesized AND", () => {
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "joint-support",
-                    sources: ["c1", "c2"],
-                    target: "c3",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1", "c2"],
+                    consequent: "c3",
                 },
             ],
             conclusion: {
@@ -105,18 +97,16 @@ describe("compileFormulas — relation compilation rules", () => {
             generateId: counterIdGen(),
         })
         expect(result.premises[0].formula).toBe("(A and B) implies C")
-        expect(result.premises[0].roleHint).toBe("joint-support")
+        expect(result.premises[0].roleHint).toBe("freeform")
     })
 
     it("compiles `joint-support` with 3+ sources with all conjuncts in parens", () => {
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "joint-support",
-                    sources: ["c1", "c2", "c3"],
-                    target: "c4",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1", "c2", "c3"],
+                    consequent: "c4",
                 },
             ],
             conclusion: {
@@ -137,13 +127,11 @@ describe("compileFormulas — relation compilation rules", () => {
 
     it("compiles `derivation-support` the same shape as `support`", () => {
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "derivation-support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1"],
+                    consequent: "c2",
                 },
             ],
             conclusion: {
@@ -158,18 +146,16 @@ describe("compileFormulas — relation compilation rules", () => {
             generateId: counterIdGen(),
         })
         expect(result.premises[0].formula).toBe("A implies B")
-        expect(result.premises[0].roleHint).toBe("derivation")
+        expect(result.premises[0].roleHint).toBe("freeform")
     })
 
     it("uses the variable's `symbol` field, not the claim's miniId", () => {
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1"],
+                    consequent: "c2",
                 },
             ],
             conclusion: {
@@ -195,7 +181,7 @@ describe("compileFormulas — conclusion premise minting", () => {
             rationale: "",
         }
         const result = compileFormulas({
-            relations: [],
+            freeformRelations: [],
             conclusion,
             variables: buildVars([
                 ["c1", "A"],
@@ -216,13 +202,11 @@ describe("compileFormulas — conclusion premise minting", () => {
 
     it("returns null `conclusionPremiseMiniId` when conclusionMiniId is null", () => {
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1"],
+                    consequent: "c2",
                 },
             ],
             conclusion: {
@@ -238,7 +222,7 @@ describe("compileFormulas — conclusion premise minting", () => {
         })
         // Relation premise still emitted; no conclusion premise.
         expect(result.premises).toHaveLength(1)
-        expect(result.premises[0].roleHint).toBe("support")
+        expect(result.premises[0].roleHint).toBe("freeform")
         expect(result.conclusionPremiseMiniId).toBeNull()
     })
 
@@ -246,20 +230,16 @@ describe("compileFormulas — conclusion premise minting", () => {
         // Two relations target c3 (the conclusion), but only one
         // dedicated `roleHint: "conclusion"` premise must be minted.
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c3",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1"],
+                    consequent: "c3",
                 },
                 {
                     relationId: "r2",
-                    type: "support",
-                    sources: ["c2"],
-                    target: "c3",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c2"],
+                    consequent: "c3",
                 },
             ],
             conclusion: {
@@ -282,14 +262,14 @@ describe("compileFormulas — conclusion premise minting", () => {
         // The two relation premises still exist with their own
         // role hints.
         expect(
-            result.premises.filter((p) => p.roleHint === "support")
+            result.premises.filter((p) => p.roleHint === "freeform")
         ).toHaveLength(2)
     })
 
     it("emits a failure and leaves conclusionPremiseMiniId null when the conclusion claim has no variable", () => {
         const failures: { code: string }[] = []
         const result = compileFormulas({
-            relations: [],
+            freeformRelations: [],
             conclusion: {
                 conclusionMiniId: "c2",
                 conclusionCandidates: ["c2"],
@@ -314,13 +294,11 @@ describe("compileFormulas — symbol-resolution failures", () => {
     it("drops a relation whose target has no variable assignment", () => {
         const failures: { code: string }[] = []
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c99",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1"],
+                    consequent: "c99",
                 },
             ],
             conclusion: {
@@ -337,7 +315,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
             failures.find(
                 (f) =>
                     f.code ===
-                    FORMULA_COMPILATION_FAILURE_CODES.unresolvedTarget
+                    FORMULA_COMPILATION_FAILURE_CODES.unresolvedConsequent
             )
         ).toBeDefined()
     })
@@ -345,13 +323,11 @@ describe("compileFormulas — symbol-resolution failures", () => {
     it("drops a relation when any source has no variable assignment", () => {
         const failures: { code: string }[] = []
         const result = compileFormulas({
-            relations: [
+            freeformRelations: [
                 {
                     relationId: "r1",
-                    type: "joint-support",
-                    sources: ["c1", "c99"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
+                    antecedents: ["c1", "c99"],
+                    consequent: "c2",
                 },
             ],
             conclusion: {
@@ -371,24 +347,26 @@ describe("compileFormulas — symbol-resolution failures", () => {
             failures.find(
                 (f) =>
                     f.code ===
-                    FORMULA_COMPILATION_FAILURE_CODES.unresolvedSource
+                    FORMULA_COMPILATION_FAILURE_CODES.unresolvedAntecedent
             )
         ).toBeDefined()
     })
 
     it("emits FORMULA_COMPILATION_SOURCES_EMPTY when a relation has no sources", () => {
         const failures: { code: string }[] = []
-        const relations: TRelationExtractionOutput["relations"] = [
+        const relations: {
+            relationId: string
+            antecedents: string[]
+            consequent: string
+        }[] = [
             {
                 relationId: "r1",
-                type: "support",
-                sources: [],
-                target: "c1",
-                evidence: { segmentIds: [], quote: "" },
+                antecedents: [],
+                consequent: "c1",
             },
         ]
         const result = compileFormulas({
-            relations,
+            freeformRelations: relations,
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
@@ -401,7 +379,9 @@ describe("compileFormulas — symbol-resolution failures", () => {
         expect(result.premises).toHaveLength(0)
         expect(
             failures.find(
-                (f) => f.code === FORMULA_COMPILATION_FAILURE_CODES.emptySources
+                (f) =>
+                    f.code ===
+                    FORMULA_COMPILATION_FAILURE_CODES.emptyAntecedents
             )
         ).toBeDefined()
     })
@@ -410,7 +390,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
 describe("compileFormulas — empty input", () => {
     it("returns empty premises + null conclusion id on empty everything", () => {
         const result = compileFormulas({
-            relations: [],
+            freeformRelations: [],
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
@@ -421,194 +401,6 @@ describe("compileFormulas — empty input", () => {
         })
         expect(result.premises).toEqual([])
         expect(result.conclusionPremiseMiniId).toBeNull()
-    })
-})
-
-// The relation pre-pass keeps citation/axiomatic claims out of freeform
-// (support / joint-support) premises: it relabels a single-source
-// freeform relation whose source is such a claim to `derivation-support`,
-// and drops a relation it can't make compliant — recording a warning so
-// the import still succeeds.
-function buildClaimTypeMap(
-    pairs: [claimMiniId: string, type: TClaimTypeClassificationEntry["type"]][]
-): Map<string, TClaimTypeClassificationEntry["type"]> {
-    return new Map(pairs)
-}
-
-describe("rerouteDerivationOnlyRelations — citation/axiomatic placement", () => {
-    it("relabels a `support` relation whose source is a citation to `derivation-support`", () => {
-        const relations: TRelation[] = [
-            {
-                relationId: "r1",
-                type: "support",
-                sources: ["c1"],
-                target: "c2",
-                evidence: { segmentIds: [], quote: "" },
-            },
-        ]
-        const placed = rerouteDerivationOnlyRelations({
-            relations,
-            typeByClaimMiniId: buildClaimTypeMap([
-                ["c1", "citation"],
-                ["c2", "normal"],
-            ]),
-        })
-        expect(placed).toHaveLength(1)
-        expect(placed[0].type).toBe("derivation-support")
-    })
-
-    it("relabels a `support` relation whose source is axiomatic to `derivation-support`", () => {
-        const placed = rerouteDerivationOnlyRelations({
-            relations: [
-                {
-                    relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
-                },
-            ],
-            typeByClaimMiniId: buildClaimTypeMap([
-                ["c1", "axiomatic"],
-                ["c2", "normal"],
-            ]),
-        })
-        expect(placed[0].type).toBe("derivation-support")
-    })
-
-    it("leaves a freeform relation with only normal sources untouched", () => {
-        const placed = rerouteDerivationOnlyRelations({
-            relations: [
-                {
-                    relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
-                },
-            ],
-            typeByClaimMiniId: buildClaimTypeMap([
-                ["c1", "normal"],
-                ["c2", "normal"],
-            ]),
-        })
-        expect(placed[0].type).toBe("support")
-    })
-
-    it("drops an irreparable multi-source citation-in-freeform relation and records a warning", () => {
-        const failures: { code: string; severity: string }[] = []
-        const placed = rerouteDerivationOnlyRelations({
-            relations: [
-                {
-                    relationId: "r1",
-                    type: "joint-support",
-                    sources: ["c1", "c2"],
-                    target: "c3",
-                    evidence: { segmentIds: [], quote: "" },
-                },
-            ],
-            typeByClaimMiniId: buildClaimTypeMap([
-                ["c1", "citation"],
-                ["c2", "normal"],
-                ["c3", "normal"],
-            ]),
-            addFailure: (f) =>
-                failures.push({ code: f.code, severity: f.severity }),
-        })
-        expect(placed).toHaveLength(0)
-        const dropped = failures.find(
-            (f) =>
-                f.code ===
-                RELATION_PLACEMENT_FAILURE_CODES.droppedNoncompliantRelation
-        )
-        expect(dropped).toBeDefined()
-        expect(dropped!.severity).toBe("warning")
-    })
-
-    it("keeps the other relations when one is dropped (import is not aborted)", () => {
-        const failures: { code: string }[] = []
-        const placed = rerouteDerivationOnlyRelations({
-            relations: [
-                // Irreparable — dropped.
-                {
-                    relationId: "r1",
-                    type: "joint-support",
-                    sources: ["c1", "c2"],
-                    target: "c3",
-                    evidence: { segmentIds: [], quote: "" },
-                },
-                // Fine — survives.
-                {
-                    relationId: "r2",
-                    type: "support",
-                    sources: ["c2"],
-                    target: "c3",
-                    evidence: { segmentIds: [], quote: "" },
-                },
-            ],
-            typeByClaimMiniId: buildClaimTypeMap([
-                ["c1", "citation"],
-                ["c2", "normal"],
-                ["c3", "normal"],
-            ]),
-            addFailure: (f) => failures.push({ code: f.code }),
-        })
-        expect(placed.map((r) => r.relationId)).toEqual(["r2"])
-    })
-
-    it("leaves an already-`derivation-support` citation relation as-is", () => {
-        const placed = rerouteDerivationOnlyRelations({
-            relations: [
-                {
-                    relationId: "r1",
-                    type: "derivation-support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
-                },
-            ],
-            typeByClaimMiniId: buildClaimTypeMap([
-                ["c1", "citation"],
-                ["c2", "normal"],
-            ]),
-        })
-        expect(placed[0].type).toBe("derivation-support")
-    })
-
-    it("a rerouted citation `support` relation compiles to a derivation premise", () => {
-        // End-to-end through the pre-pass + compile: the freeform support
-        // relation becomes a derivation premise rather than a support one.
-        const placed = rerouteDerivationOnlyRelations({
-            relations: [
-                {
-                    relationId: "r1",
-                    type: "support",
-                    sources: ["c1"],
-                    target: "c2",
-                    evidence: { segmentIds: [], quote: "" },
-                },
-            ],
-            typeByClaimMiniId: buildClaimTypeMap([
-                ["c1", "citation"],
-                ["c2", "normal"],
-            ]),
-        })
-        const result = compileFormulas({
-            relations: placed,
-            conclusion: {
-                conclusionMiniId: null,
-                conclusionCandidates: [],
-                rationale: "",
-            },
-            variables: buildVars([
-                ["c1", "Citation"],
-                ["c2", "Claim"],
-            ]),
-            generateId: counterIdGen(),
-        })
-        expect(result.premises).toHaveLength(1)
-        expect(result.premises[0].roleHint).toBe("derivation")
-        expect(result.premises[0].formula).toBe("Citation implies Claim")
     })
 })
 
@@ -652,16 +444,16 @@ describe("formulaCompilationStage — TStage wiring", () => {
 
     it("runs the placement pre-pass off the stage's claim-type input", async () => {
         // Drive the stage's `run` with a context that supplies a citation
-        // source on a `support` relation; the stage must reroute it to a
-        // derivation premise using the claim-type classification it reads.
+        // source on an inference relation; the stage must extract it into
+        // derivation backing using the claim-type classification it reads.
         const outputs: Record<string, unknown> = {
             [STAGE_IDS.relationExtraction]: {
                 relations: [
                     {
                         relationId: "r1",
-                        type: "support",
-                        sources: ["c1"],
-                        target: "c2",
+                        type: "inference",
+                        antecedents: ["c1"],
+                        consequent: "c2",
                         evidence: { segmentIds: [], quote: "" },
                     },
                 ],
@@ -696,10 +488,14 @@ describe("formulaCompilationStage — TStage wiring", () => {
             addFailure: () => undefined,
         }
         const result = await formulaCompilationStage.run(ctx as never)
-        const relationPremise = result.premises.find(
-            (p) => p.sourceRelationId === "r1"
-        )!
-        expect(relationPremise.roleHint).toBe("derivation")
+        // Citation source extracted into derivationBacking; no freeform
+        // premise for the relation.
+        expect(result.derivationBacking).toEqual([
+            { derivedClaimMiniId: "c2", supportingClaimMiniIds: ["c1"] },
+        ])
+        expect(
+            result.premises.find((p) => p.sourceRelationId === "r1")
+        ).toBeUndefined()
     })
 
     it("reroutes a citation source the classifier omitted, using the drafted type", async () => {
@@ -711,9 +507,9 @@ describe("formulaCompilationStage — TStage wiring", () => {
                 relations: [
                     {
                         relationId: "r1",
-                        type: "support",
-                        sources: ["c1"],
-                        target: "c2",
+                        type: "inference",
+                        antecedents: ["c1"],
+                        consequent: "c2",
                         evidence: { segmentIds: [], quote: "" },
                     },
                 ],
@@ -764,9 +560,12 @@ describe("formulaCompilationStage — TStage wiring", () => {
             addFailure: () => undefined,
         }
         const result = await formulaCompilationStage.run(ctx as never)
-        const relationPremise = result.premises.find(
-            (p) => p.sourceRelationId === "r1"
-        )!
-        expect(relationPremise.roleHint).toBe("derivation")
+        // Same behavior: citation antecedent extracted into derivationBacking.
+        expect(result.derivationBacking).toEqual([
+            { derivedClaimMiniId: "c2", supportingClaimMiniIds: ["c1"] },
+        ])
+        expect(
+            result.premises.find((p) => p.sourceRelationId === "r1")
+        ).toBeUndefined()
     })
 })
