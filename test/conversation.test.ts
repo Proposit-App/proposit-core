@@ -348,7 +348,11 @@ describe("builder turns", () => {
         expect(stage.id).toBe("builder:distill")
         expect(stage.dependsOn).toEqual([])
         // Distill emits { argumentText: string } — NOT ParsedArgumentResponseSchema
-        const schemaJson = JSON.parse(JSON.stringify(stage.outputSchema))
+        // JSON.parse returns unknown; cast to TypeBox schema shape for inspection
+        const schemaJson = JSON.parse(JSON.stringify(stage.outputSchema)) as {
+            type: string
+            properties: Record<string, unknown>
+        }
         expect(schemaJson.type).toBe("object")
         expect(Object.keys(schemaJson.properties ?? {})).toContain(
             "argumentText"
@@ -479,6 +483,7 @@ describe("e2e: distill → scribe pipeline", () => {
         const convo = createConversation({ llm })
         const distillStage = createDistillTurn({
             model: "gpt-5.5",
+            // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClose: () => {},
         })
 
@@ -497,7 +502,7 @@ describe("e2e: distill → scribe pipeline", () => {
         const pipelineResult = await executePipeline(
             pipeline,
             { text: distillOutput.argumentText },
-            { llm: llm as any }
+            { llm }
         )
 
         // Pipeline should succeed (output is not null)
