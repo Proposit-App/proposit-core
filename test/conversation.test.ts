@@ -29,9 +29,7 @@ import {
     createDistillTurn,
     executePipeline,
 } from "../src/lib/index.js"
-import {
-    createScribePipeline,
-} from "../src/extensions/pipelines/ingestion/scribe/index.js"
+import { createScribePipeline } from "../src/extensions/pipelines/ingestion/scribe/index.js"
 import { basicsExtension } from "../src/extensions/pipelines/base/index.js"
 import type { TExecuteTurnDeps } from "../src/lib/conversation/turn.js"
 import { createMockLlmProvider, type TMockResponse } from "./mocks/llm.js"
@@ -352,7 +350,9 @@ describe("builder turns", () => {
         // Distill emits { argumentText: string } — NOT ParsedArgumentResponseSchema
         const schemaJson = JSON.parse(JSON.stringify(stage.outputSchema))
         expect(schemaJson.type).toBe("object")
-        expect(Object.keys(schemaJson.properties ?? {})).toContain("argumentText")
+        expect(Object.keys(schemaJson.properties ?? {})).toContain(
+            "argumentText"
+        )
     })
 })
 
@@ -417,7 +417,10 @@ describe("previousResponseId through OpenAI provider", () => {
 describe("e2e: distill → scribe pipeline", () => {
     it("produces ingestion-valid TParsedArgumentResponse", async () => {
         // Mock: distill turn returns clean prose
-        const distillOutput = { argumentText: "Running for a third term violates the Constitution. The Constitution limits presidents to two terms. Therefore, considering a third term violates the Constitution." }
+        const distillOutput = {
+            argumentText:
+                "Running for a third term violates the Constitution. The Constitution limits presidents to two terms. Therefore, considering a third term violates the Constitution.",
+        }
 
         // Scribe's internal LLM stages (extract + structure) each need a response.
         // The extract stage returns a canonicalClaims + mentionToClaim shape;
@@ -488,7 +491,9 @@ describe("e2e: distill → scribe pipeline", () => {
 
         // Run scribe pipeline on distill output — verifies the prose format
         // is accepted as valid ingestion input
-        const pipeline = createScribePipeline(basicsExtension, { llm: { defaults: { model: "gpt-5.5" } } })
+        const pipeline = createScribePipeline(basicsExtension, {
+            llm: { defaults: { model: "gpt-5.5" } },
+        })
         const pipelineResult = await executePipeline(
             pipeline,
             { text: distillOutput.argumentText },
@@ -498,6 +503,8 @@ describe("e2e: distill → scribe pipeline", () => {
         // Pipeline should succeed (output is not null)
         expect(pipelineResult.output).not.toBeNull()
         // Output should conform to the parsed argument schema
-        expect(Value.Check(ParsedArgumentResponseSchema, pipelineResult.output)).toBe(true)
+        expect(
+            Value.Check(ParsedArgumentResponseSchema, pipelineResult.output)
+        ).toBe(true)
     })
 })
