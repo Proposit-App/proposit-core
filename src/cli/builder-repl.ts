@@ -5,7 +5,7 @@
 //
 // Commands:
 //   /simulate   — run a simulate turn (play-the-user)
-//   /finalize   — run a finalize turn and exit
+//   /distill    — run a distill turn and exit
 //   /quit       — exit
 //   any other   — runs a review turn with your input as the user message
 
@@ -15,7 +15,7 @@ import { createConversation } from "../lib/conversation/conversation.js"
 import type { TConversation } from "../lib/conversation/conversation.js"
 import { createReviewTurn } from "../extensions/builder/review.js"
 import { createSimulateTurn } from "../extensions/builder/simulate.js"
-import { createFinalizeTurn } from "../extensions/builder/finalize.js"
+import { createDistillTurn } from "../extensions/builder/distill.js"
 import type { TTurnResult } from "../lib/conversation/turn.js"
 import type { TExecuteTurnDeps } from "../lib/conversation/turn.js"
 import type { TStage } from "../lib/pipelines/types.js"
@@ -146,8 +146,8 @@ async function main(): Promise<void> {
     const review = doReview(model)
     const simulate = doSimulate(model)
 
-    const doFinalize = async (): Promise<void> => {
-        const stage = createFinalizeTurn({
+    const doDistill = async (): Promise<void> => {
+        const stage = createDistillTurn({
             model,
             // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClose: () => {},
@@ -159,12 +159,12 @@ async function main(): Promise<void> {
             },
             { onComplete: () => conversation.close() }
         )
-        printResult(result, "finalize")
+        printResult(result, "distill")
         conversation.close()
     }
 
     console.log("Terminal Argument Builder")
-    console.log("Commands: /simulate, /finalize, /quit")
+    console.log("Commands: /simulate, /distill, /quit")
     console.log("Enter your text to start a review turn.\n")
 
     rl.prompt()
@@ -182,9 +182,9 @@ async function main(): Promise<void> {
             return
         }
 
-        if (trimmed === "/finalize") {
-            void doFinalize().then(() => {
-                console.log("Conversation finalized. Goodbye.")
+        if (trimmed === "/distill") {
+            void doDistill().then(() => {
+                console.log("Argument distilled. Goodbye.")
                 rl.close()
             })
             return

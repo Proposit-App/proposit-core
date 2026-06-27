@@ -12,9 +12,10 @@
 //   9. executeTurn calls onComplete after the stage completes
 //   10. review turn produces a stage with the correct id
 //   11. simulate turn produces a stage with the correct id
-//   12. finalize turn produces a stage with the correct id
+//   12. distill turn produces a stage with the correct id
 //   13. contract types compose correctly
 //   14. previousResponseId round-trips through the mock provider
+//   15. e2e: distill → scribe pipeline produces ingestion-valid output
 
 import { describe, expect, it } from "vitest"
 import {
@@ -25,11 +26,17 @@ import {
     ConversationClosedError,
     createReviewTurn,
     createSimulateTurn,
-    createFinalizeTurn,
+    createDistillTurn,
+    executePipeline,
 } from "../src/lib/index.js"
+import {
+    createScribePipeline,
+} from "../src/extensions/pipelines/ingestion/scribe/index.js"
+import { basicsExtension } from "../src/extensions/pipelines/base/index.js"
 import type { TExecuteTurnDeps } from "../src/lib/conversation/turn.js"
 import { createMockLlmProvider, type TMockResponse } from "./mocks/llm.js"
 import { ParsedArgumentResponseSchema } from "../src/lib/parsing/schemata.js"
+import { Value } from "typebox/value"
 
 // ---------------- helpers ----------------------------------------------------
 
@@ -334,15 +341,18 @@ describe("builder turns", () => {
         expect(stage.outputSchema).toBe(ParsedArgumentResponseSchema)
     })
 
-    it("createFinalizeTurn produces a stage with correct id", () => {
-        const stage = createFinalizeTurn({
+    it("createDistillTurn produces a stage with correct id", () => {
+        const stage = createDistillTurn({
             model: "gpt-5.5",
             // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClose: () => {},
         })
-        expect(stage.id).toBe("builder:finalize")
+        expect(stage.id).toBe("builder:distill")
         expect(stage.dependsOn).toEqual([])
-        expect(stage.outputSchema).toBe(ParsedArgumentResponseSchema)
+        // Distill emits { argumentText: string } — NOT ParsedArgumentResponseSchema
+        const schemaJson = JSON.parse(JSON.stringify(stage.outputSchema))
+        expect(schemaJson.type).toBe("object")
+        expect(Object.keys(schemaJson.properties ?? {})).toContain("argumentText")
     })
 })
 
@@ -399,5 +409,95 @@ describe("previousResponseId through OpenAI provider", () => {
         )
 
         expect(result.output).toEqual(mockOutput())
+    })
+})
+
+// ---------------- e2e: distill → scribe pipeline ---------------------------
+
+describe("e2e: distill → scribe pipeline", () => {
+    it("produces ingestion-valid TParsedArgumentResponse", async () => {
+        // Mock: distill turn returns clean prose
+        const distillOutput = { argumentText: "Running for a third term violates the Constitution. The Constitution limits presidents to two terms. Therefore, considering a third term violates the Constitution." }
+
+        // Scribe's internal LLM stages (extract + structure) each need a response.
+        // The extract stage returns a canonicalClaims + mentionToClaim shape;
+        // the structure stage returns relations + conclusionCandidates.
+        // These match the shapes used by the deterministic adapters + finalize.
+        const scribeExtractOutput = {
+            canonicalClaims: [
+                {
+                    miniId: "c1",
+                    mentionIds: ["c1-m"],
+                    suggestedSymbol: "ThirdTerm_Violates",
+                    type: "normal",
+                    title: "Third-term violation",
+                    body: "Running for a third term violates the Constitution.",
+                },
+                {
+                    miniId: "c2",
+                    mentionIds: ["c2-m"],
+                    suggestedSymbol: "Two_Term_Limit",
+                    type: "normal",
+                    title: "Two-term limit",
+                    body: "The Constitution limits presidents to two terms.",
+                },
+            ],
+            mentionToClaim: [
+                { mentionId: "c1-m", claimMiniId: "c1" },
+                { mentionId: "c2-m", claimMiniId: "c2" },
+            ],
+        }
+        const scribeStructureOutput = {
+            relations: [
+                {
+                    relationId: "r1",
+                    type: "inference",
+                    antecedents: ["c1"],
+                    consequent: "c2",
+                    evidence: { segmentIds: [], quote: "" },
+                },
+            ],
+            conclusionCandidates: ["c2"],
+            rationale: "c2 is supported by c1 and supports nothing further.",
+        }
+
+        const llm = createMockLlmProvider({
+            responses: {
+                __byOrder: [
+                    { kind: "ok", output: distillOutput },
+                    { kind: "ok", output: scribeExtractOutput },
+                    { kind: "ok", output: scribeStructureOutput },
+                ],
+            },
+            keyByCallOrder: true,
+        })
+
+        // Run distill turn
+        const convo = createConversation({ llm })
+        const distillStage = createDistillTurn({
+            model: "gpt-5.5",
+            onClose: () => {},
+        })
+
+        const distillResult = await convo.turn(distillStage, {
+            userMessage: "transcript",
+        })
+
+        expect(distillResult.output).toEqual(distillOutput)
+        convo.close()
+
+        // Run scribe pipeline on distill output — verifies the prose format
+        // is accepted as valid ingestion input
+        const pipeline = createScribePipeline(basicsExtension, { llm: { defaults: { model: "gpt-5.5" } } })
+        const pipelineResult = await executePipeline(
+            pipeline,
+            { text: distillOutput.argumentText },
+            { llm: llm as any }
+        )
+
+        // Pipeline should succeed (output is not null)
+        expect(pipelineResult.output).not.toBeNull()
+        // Output should conform to the parsed argument schema
+        expect(Value.Check(ParsedArgumentResponseSchema, pipelineResult.output)).toBe(true)
     })
 })

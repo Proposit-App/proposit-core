@@ -101,13 +101,21 @@ When formulating claims, write in third person, present tense, active voice. Eac
 
 State the proposition itself — never prepend an author-attributive reporting frame such as "The author claims that…", "The author argues…", "The writer believes…", or "According to the author…". Write *what is asserted*, not *that someone asserts it*: emit "Rain wets the ground," not "The author claims that rain wets the ground." (This applies only to author-attribution of the argument's own claims. Citation claims that summarize what an external **cited source** asserts — e.g. "NASA reports a temperature rise" — keep that source attribution; it is intentional and not the target here.)
 
-## Claim Types
+## Claim: \`type\` vs \`role\` — Do Not Confuse
 
-Every claim has a \`type\` field, which is one of:
+Every claim has **two** independent fields — they describe different things:
 
-- **\`"normal"\`**: a claim authored as part of the argument's primary reasoning (the propositions being argued for or from). Most claims are normal.
-- **\`"citation"\`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** \`claims\` array as normal claims; they are NOT a separate array.
-- **\`"axiomatic"\`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: "true by definition," "logically required," "historically established." Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied. Apps using this library may extend axiomatic claims with a \`reasonCode\` field describing the category of self-evidence, and may constrain that field to a closed enum of allowed values via their schema extension; the core parser does not require any such field.
+1. **\`type\`**: the *kind* of claim. One of:
+   - **\`"normal"\`**: a proposition authored as part of the argument's primary reasoning (the claims being argued for or from). Most claims are normal.
+   - **\`"citation"\`**: a claim representing **cited evidence** — an external reference, source, or citation that another claim relies on for support. Citation claims live in the **same** \`claims\` array as normal claims; they are NOT a separate array.
+   - **\`"axiomatic"\`**: a self-evident claim invoked as the bottom-level justification of a normal claim. Examples: "true by definition," "logically required," "historically established." Like citations, axiomatic claims appear on the supporting side of derivation premises, but their truth is taken as given rather than evidentially supplied.
+
+2. **\`role\`**: the *logical function* of the claim within the argument's reasoning chain. One of:
+   - **\`"premise"\`**: a claim that supports other claims. This is the most common role.
+   - **\`"intermediate"\`**: a claim that both receives support and provides support (a bridge in a reasoning chain). It is derived from other claims and in turn supports further claims.
+   - **\`"conclusion"\`**: the claim that the argument is trying to establish. Only one claim should have this role.
+
+**Critical: \`type\` and \`role\` are orthogonal.** A normal claim can have any role: \`{ "type": "normal", "role": "conclusion" }\` is perfectly valid. A citation claim always has \`type: "citation"\` regardless of its role. Never set \`type\` to "premise", "conclusion", or "intermediate" — those values belong only in \`role\`.
 
 A citation claim is just a claim whose propositional content is "the cited material says/shows X". Logical relationships between all claim kinds — normal, citation, axiomatic — are expressed through variables, formulas, and premises. The parser derives the citation and axiom support graphs from those formulas; you do not list supports as a separate field.
 

@@ -236,6 +236,6 @@ export type {
 export {
     createReviewTurn,
     createSimulateTurn,
-    createFinalizeTurn,
+    createDistillTurn,
 } from "../extensions/builder/index.js"
-export type { TFinalizeTurnOptions } from "../extensions/builder/index.js"
+export type { TDistillTurnOptions } from "../extensions/builder/index.js"
