@@ -1,5 +1,8 @@
 # Initial request
 
+**Parent epic (cross-node):** `docs/work/active/2026-06-21-builder-pipeline-family-socratic-argument-builder-into-core`
+**Node:** proposit-core — scope is the proposit-core deliverable; the server adoption is a sibling task under the epic.
+
 ## Requested outcome
 
 Replace the Argument Builder's **finalize** step. Today finalize is a single
@@ -66,3 +69,27 @@ transcript --(distill: 1 LLM call, prose→prose)--> clean single-author argumen
 - Server adoption (`finalize-chain.ts` re-rooting inversion) is consumer-side —
   scope here is the core deliverable; the server adoption is a sibling task
   under the parent epic.
+
+## Product / capability impact
+
+No new or removed capability. The builder's finalized argument now flows through
+the **same ingestion pipeline** as ingested arguments, so it gains the same
+enrichment (titles, `UnparsedCitation` objects, derived `role`) and improved
+reliability. Report this parity note when the parent epic reconciles
+capabilities.
+
+## Resolutions
+
+- **Distill output schema:** a minimal `{ argumentText }` object (not a bare
+  string).
+- **Naming:** the terminal builder turn is renamed `createFinalizeTurn` →
+  `createDistillTurn` and emits clean single-author prose — no
+  `buildParsingPrompt`, no `ParsedArgumentResponseSchema` — while still sealing
+  the conversation. The consumer owns the "distill → ingest" sequence.
+- **Consumer (server) adoption:** feed `argumentText` to the existing
+  `createScribePipeline(basicsExtension)` → `TParsedArgumentResponse`, identical
+  to ingestion; delete/invert the `finalize-chain.ts` re-rooting because distill
+  wants the full conversation, not the pre-review response. One parser, one new
+  prose prompt; Scribe consumed unchanged.
+- **`prompt-builder.ts` type/role edit** is kept but decoupled from finalize.
+- See `spec.md` / `plan.md` for full detail.
