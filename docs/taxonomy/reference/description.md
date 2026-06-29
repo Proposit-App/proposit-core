@@ -1,0 +1,1 @@
+The structured bibliographic record of a source, following IEEE reference styling — one of 33 well-formed types (Book, JournalArticle, Website, Patent, Thesis, Standard, Dataset, …), each with the fields that type requires. The works-cited entry that a citation-claim cites; a source that couldn't be parsed into one of the 33 types is held in the separate unparsed-citation form.

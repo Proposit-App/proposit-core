@@ -1,0 +1,1 @@
+A single infraction of an argument-grammar rule, identified by a tier (Structural, Evaluable, Derivable, Presentable) and a rule code, with a human-readable message and optional locators pointing at the offending premise, expression, variable, or claim.
