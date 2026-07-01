@@ -5,3 +5,5 @@ phase: ''
 created: '2026-06-28'
 resolution: null
 priority: null
+effort: low
+complexity: medium

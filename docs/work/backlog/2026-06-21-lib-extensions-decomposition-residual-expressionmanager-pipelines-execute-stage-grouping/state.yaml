@@ -6,3 +6,5 @@ created: '2026-06-21'
 resolution: null
 priority: 10
 blocked_by: []
+effort: high
+complexity: medium
