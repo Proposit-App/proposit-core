@@ -1,0 +1,8 @@
+name: Argument Rendering
+kind: Feature
+relatesTo: []
+vocabulary:
+- argument
+- argument/premise
+- argument/propositional-expression
+- argument/claim

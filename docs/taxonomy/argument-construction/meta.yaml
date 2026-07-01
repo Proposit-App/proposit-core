@@ -1,0 +1,10 @@
+name: Argument Construction
+kind: Feature
+relatesTo: []
+vocabulary:
+- argument
+- argument/claim
+- argument/premise
+- argument/propositional-expression
+- argument/propositional-expression/propositional-variable
+- claim-connection

@@ -1,0 +1,1 @@
+Automatically normalizing an argument's repairable structural defects.

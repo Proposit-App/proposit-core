@@ -1,0 +1,1 @@
+A claim-connection whose support is a citation-typed supporting claim.
