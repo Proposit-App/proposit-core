@@ -2,7 +2,6 @@ import type {
     TCoreLogicalOperatorType,
     TCorePropositionalExpression,
 } from "../schemata/index.js"
-import { CorePropositionalExpressionSchema } from "../schemata/index.js"
 import type { ChangeCollector } from "./change-collector.js"
 import { getOrCreate } from "../utils/collections.js"
 import {
@@ -17,25 +16,22 @@ import {
     normalizeChecksumConfig,
     serializeChecksumConfig,
 } from "../consts.js"
-import { entityChecksum, computeHash, canonicalSerialize } from "./checksum.js"
-import { Value } from "typebox/value"
-import type {
-    TInvariantViolation,
-    TInvariantValidationResult,
-} from "../types/validation.js"
+import { entityChecksum } from "./checksum.js"
 import {
-    EXPR_SCHEMA_INVALID,
-    EXPR_DUPLICATE_ID,
-    EXPR_SELF_REFERENTIAL_PARENT,
-    EXPR_PARENT_NOT_FOUND,
-    EXPR_PARENT_NOT_CONTAINER,
-    EXPR_ROOT_ONLY_VIOLATED,
-    EXPR_CHILD_LIMIT_EXCEEDED,
-    EXPR_POSITION_DUPLICATE,
-    EXPR_CHECKSUM_MISMATCH,
-} from "../types/validation.js"
-// `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED` is no longer imported —
-// P-1 is now surfaced via the grammar-tier validators.
+    markExpressionDirty,
+    flushExpressionChecksums,
+    pruneDeletedFromDirtySet,
+} from "./expression-manager-dirty-set.js"
+import { validateExpressionManagerInvariants } from "./expression-manager-invariants.js"
+import {
+    validateInsertExpression,
+    validateWrapExpression,
+    validateRepositionSiblings,
+    validateUpdateExpression,
+    validateRemoveAndPromote,
+    validateAddExpressionRelative,
+} from "./expression-manager-checks.js"
+import type { TInvariantValidationResult } from "../types/validation.js"
 
 // Distribute Omit across the union to preserve discriminated-union narrowing.
 export type TExpressionInput<
@@ -72,13 +68,6 @@ export type TExpressionUpdate = {
     position?: number
     variableId?: string
     operator?: TCoreLogicalOperatorType
-}
-
-const PERMITTED_OPERATOR_SWAPS: Record<string, string | undefined> = {
-    and: "or",
-    or: "and",
-    implies: "iff",
-    iff: "implies",
 }
 
 /**
@@ -251,13 +240,7 @@ export class ExpressionManager<
      * already in the dirty set (since its ancestors are already marked).
      */
     public markExpressionDirty(exprId: string): void {
-        let current: string | null = exprId
-        while (current !== null) {
-            if (this.dirtyExpressionIds.has(current)) break // ancestors already dirty
-            this.dirtyExpressionIds.add(current)
-            const expr = this.expressions.get(current)
-            current = expr ? expr.parentId : null
-        }
+        markExpressionDirty(exprId, this.dirtyExpressionIds, this.expressions)
     }
 
     /**
@@ -266,80 +249,13 @@ export class ExpressionManager<
      * are up-to-date before their parents are computed.
      */
     public flushExpressionChecksums(): void {
-        if (this.dirtyExpressionIds.size === 0) return
-
-        // Sort dirty expressions by depth (deepest first) for bottom-up processing
-        const dirtyIds = [...this.dirtyExpressionIds]
-        const depthOf = (id: string): number => {
-            let depth = 0
-            let current = this.expressions.get(id)
-            while (current && current.parentId !== null) {
-                depth++
-                current = this.expressions.get(current.parentId)
-            }
-            return depth
-        }
-        dirtyIds.sort((a, b) => depthOf(b) - depthOf(a))
-
-        const fields =
-            this.config?.checksumConfig?.expressionFields ??
-            DEFAULT_CHECKSUM_CONFIG.expressionFields!
-
-        for (const id of dirtyIds) {
-            const expr = this.expressions.get(id)
-            if (!expr) continue
-
-            const oldChecksum = expr.checksum
-            const oldDescendantChecksum = expr.descendantChecksum
-            const oldCombinedChecksum = expr.combinedChecksum
-
-            const metaChecksum = entityChecksum(
-                expr as unknown as Record<string, unknown>,
-                fields
-            )
-
-            const childIds = this.childExpressionIdsByParentId.get(id)
-            let descendantChecksum: string | null = null
-            if (childIds && childIds.size > 0) {
-                const childMap: Record<string, string> = {}
-                for (const childId of childIds) {
-                    const child = this.expressions.get(childId)
-                    if (child) {
-                        childMap[childId] = child.combinedChecksum
-                    }
-                }
-                descendantChecksum = computeHash(canonicalSerialize(childMap))
-            }
-
-            const combinedChecksum =
-                descendantChecksum === null
-                    ? metaChecksum
-                    : computeHash(metaChecksum + descendantChecksum)
-
-            this.expressions.set(id, {
-                ...expr,
-                checksum: metaChecksum,
-                descendantChecksum,
-                combinedChecksum,
-            } as TExpr)
-
-            if (
-                this.collector &&
-                !this.collector.isExpressionAdded(expr.id) &&
-                (metaChecksum !== oldChecksum ||
-                    descendantChecksum !== oldDescendantChecksum ||
-                    combinedChecksum !== oldCombinedChecksum)
-            ) {
-                this.collector.modifiedExpression({
-                    ...expr,
-                    checksum: metaChecksum,
-                    descendantChecksum,
-                    combinedChecksum,
-                } as TExpr)
-            }
-        }
-
-        this.dirtyExpressionIds.clear()
+        flushExpressionChecksums(
+            this.dirtyExpressionIds,
+            this.expressions,
+            this.childExpressionIdsByParentId,
+            this.config,
+            this.collector
+        )
     }
 
     /**
@@ -347,9 +263,7 @@ export class ExpressionManager<
      * doesn't attempt to process expressions that no longer exist.
      */
     public pruneDeletedFromDirtySet(deletedIds: Set<string>): void {
-        for (const id of deletedIds) {
-            this.dirtyExpressionIds.delete(id)
-        }
+        pruneDeletedFromDirtySet(deletedIds, this.dirtyExpressionIds)
     }
 
     /** Returns all expressions sorted by ID for deterministic output. */
@@ -499,10 +413,10 @@ export class ExpressionManager<
         relativePosition: "before" | "after",
         expression: TExpressionWithoutPosition<TExpr>
     ): void {
-        const sibling = this.expressions.get(siblingId)
-        if (!sibling) {
-            throw new Error(`Expression "${siblingId}" not found.`)
-        }
+        const sibling = validateAddExpressionRelative(
+            siblingId,
+            this.expressions
+        )
 
         const children = this.getChildExpressions(sibling.parentId)
         const siblingIndex = children.findIndex((c) => c.id === siblingId)
@@ -598,23 +512,12 @@ export class ExpressionManager<
             throw new Error(`Expression "${expressionId}" not found.`)
         }
 
-        // Reject forbidden fields passed via `as any`.
-        const FORBIDDEN_KEYS = [
-            "id",
-            "argumentId",
-            "argumentVersion",
-            "premiseId",
-            "checksum",
-            "parentId",
-            "type",
-        ]
-        for (const key of FORBIDDEN_KEYS) {
-            if (key in updates) {
-                throw new Error(
-                    `Field "${key}" is forbidden in expression updates.`
-                )
-            }
-        }
+        validateUpdateExpression(
+            expressionId,
+            expression,
+            updates,
+            this.childPositionsByParentId
+        )
 
         // If no actual mutable fields are set, return the expression as-is.
         if (
@@ -623,48 +526,6 @@ export class ExpressionManager<
             updates.operator === undefined
         ) {
             return expression
-        }
-
-        // Validate operator change.
-        if (updates.operator !== undefined) {
-            if (expression.type !== "operator") {
-                throw new Error(
-                    `Expression "${expressionId}" is not an operator expression; cannot update operator.`
-                )
-            }
-            const permitted = PERMITTED_OPERATOR_SWAPS[expression.operator]
-            if (permitted !== updates.operator) {
-                throw new Error(
-                    `Changing operator from "${expression.operator}" to "${updates.operator}" is not a permitted operator change. Permitted: and↔or, implies↔iff.`
-                )
-            }
-        }
-
-        // Validate variableId change.
-        if (updates.variableId !== undefined) {
-            if (expression.type !== "variable") {
-                throw new Error(
-                    `Expression "${expressionId}" is not a variable expression; cannot update variableId.`
-                )
-            }
-        }
-
-        // Validate position change.
-        if (updates.position !== undefined) {
-            const positionSet = this.childPositionsByParentId.get(
-                expression.parentId
-            )
-            if (positionSet) {
-                positionSet.delete(expression.position)
-                if (positionSet.has(updates.position)) {
-                    // Restore old position before throwing.
-                    positionSet.add(expression.position)
-                    throw new Error(
-                        `Position ${updates.position} is already used under parent "${expression.parentId}".`
-                    )
-                }
-                positionSet.add(updates.position)
-            }
         }
 
         // Build an updated copy and replace in the map.
@@ -785,14 +646,9 @@ export class ExpressionManager<
 
     private removeAndPromote(expressionId: string, target: TExpr): TExpr {
         const children = this.getChildExpressions(expressionId)
+        const child = validateRemoveAndPromote(expressionId, target, children)
 
-        if (children.length > 1) {
-            throw new Error(
-                `Cannot promote: expression "${expressionId}" has multiple children (${children.length}). Use deleteSubtree: true or remove children first.`
-            )
-        }
-
-        if (children.length === 0) {
+        if (child === undefined) {
             // Leaf removal.
             const parentId = target.parentId
 
@@ -814,24 +670,6 @@ export class ExpressionManager<
         }
 
         // Exactly 1 child — promote it into the target's slot.
-        const child = children[0]
-
-        // The P-1 promote-on-remove enforcement throw lived here under
-        // `grammarConfig.enforceFormulaBetweenOperators`. AN-1 (post-mutation
-        // hook in assistive mode) now inserts the buffer if the promotion
-        // produced a non-not operator under operator; permissive mode leaves
-        // the un-buffered state and `validate('presentable')` flags it.
-
-        // Validate: root-only operators cannot be promoted into a non-root position.
-        if (
-            child.type === "operator" &&
-            (child.operator === "implies" || child.operator === "iff") &&
-            target.parentId !== null
-        ) {
-            throw new Error(
-                `Cannot promote: child "${child.id}" is a root-only operator ("${child.operator}") and would be placed in a non-root position.`
-            )
-        }
 
         // Promote child into the target's slot.
         const promoted = this.attachChecksum({
@@ -903,94 +741,19 @@ export class ExpressionManager<
         const children = this.getChildExpressions(parentId)
         if (children.length === 0) return []
 
-        const positions = children.map((c) => c.position)
-
-        const leftIdx = positions.indexOf(leftPos)
-        const rightIdx = positions.indexOf(rightPos)
-
-        // Scan left from leftIdx: expand while consecutive gaps <= 1.
-        let scanLeft: number
-        let leftBound: number
-        let leftCount: number
-        if (leftIdx === -1) {
-            // leftPos is a boundary (positionConfig.min), not a real node.
-            scanLeft = 0
-            leftBound = leftPos
-            leftCount = 0
-        } else {
-            scanLeft = leftIdx
-            while (
-                scanLeft > 0 &&
-                positions[scanLeft] - positions[scanLeft - 1] <= 1
-            ) {
-                scanLeft--
-            }
-            leftBound =
-                scanLeft > 0 ? positions[scanLeft - 1] : this.positionConfig.min
-            leftCount = leftIdx - scanLeft + 1
-        }
-
-        // Scan right from rightIdx: expand while consecutive gaps <= 1.
-        let scanRight: number
-        let rightBound: number
-        let rightCount: number
-        if (rightIdx === -1) {
-            // rightPos is a boundary (positionConfig.max), not a real node.
-            scanRight = positions.length - 1
-            rightBound = rightPos
-            rightCount = 0
-        } else {
-            scanRight = rightIdx
-            while (
-                scanRight < positions.length - 1 &&
-                positions[scanRight + 1] - positions[scanRight] <= 1
-            ) {
-                scanRight++
-            }
-            rightBound =
-                scanRight < positions.length - 1
-                    ? positions[scanRight + 1]
-                    : this.positionConfig.max
-            rightCount = scanRight - rightIdx + 1
-        }
-
-        // Pick direction with fewer nodes. Tie-break: right.
-        let startIdx: number
-        let endIdx: number
-        let lowerBound: number
-        let upperBound: number
-
-        if (leftCount > 0 && leftCount < rightCount) {
-            startIdx = scanLeft
-            endIdx = leftIdx
-            lowerBound = leftBound
-            upperBound = rightPos
-        } else if (rightCount > 0) {
-            startIdx = rightIdx
-            endIdx = scanRight
-            lowerBound = leftPos
-            upperBound = rightBound
-        } else {
-            // leftCount > 0, rightCount === 0: must pick left.
-            startIdx = scanLeft
-            endIdx = leftIdx
-            lowerBound = leftBound
-            upperBound = rightPos
-        }
-
-        const count = endIdx - startIdx + 1
-        const range = upperBound - lowerBound
-        if (range <= count) {
-            throw new Error(
-                `Cannot reposition: not enough space in range (${lowerBound}, ${upperBound}) for ${count} expressions.`
+        const { startIdx, endIdx, lowerBound, upperBound, count } =
+            validateRepositionSiblings(
+                children,
+                leftPos,
+                rightPos,
+                this.positionConfig
             )
-        }
 
         const modified: TExpr[] = []
 
         const positionSet = this.childPositionsByParentId.get(parentId)
         for (let i = startIdx; i <= endIdx; i++) {
-            positionSet?.delete(positions[i])
+            positionSet?.delete(children[i].position)
         }
 
         for (let i = startIdx; i <= endIdx; i++) {
@@ -1210,138 +973,12 @@ export class ExpressionManager<
         leftNodeId?: string,
         rightNodeId?: string
     ): void {
-        // 1. At least one child node must be provided.
-        if (leftNodeId === undefined && rightNodeId === undefined) {
-            throw new Error(
-                `insertExpression requires at least one of leftNodeId or rightNodeId.`
-            )
-        }
-
-        // 2. The new expression's ID must not already exist.
-        if (this.expressions.has(expression.id)) {
-            throw new Error(
-                `Expression with ID "${expression.id}" already exists.`
-            )
-        }
-
-        // 3. An expression cannot be its own parent.
-        if (expression.parentId === expression.id) {
-            throw new Error(
-                `Expression "${expression.id}" cannot be its own parent.`
-            )
-        }
-
-        // 4. Left and right nodes must be distinct.
-        if (
-            leftNodeId !== undefined &&
-            rightNodeId !== undefined &&
-            leftNodeId === rightNodeId
-        ) {
-            throw new Error(`leftNodeId and rightNodeId must be different.`)
-        }
-
-        // 5. The left node must exist if provided.
-        // Cast to base TExpressionInput for validation access — deferred conditional
-        // types (TExpressionInput<TExpr>) cannot be narrowed by TS control flow.
-        const leftNode: TExpressionInput | undefined =
-            leftNodeId !== undefined
-                ? (this.expressions.get(leftNodeId) as
-                      | TExpressionInput
-                      | undefined)
-                : undefined
-        if (leftNodeId !== undefined && !leftNode) {
-            throw new Error(`Expression "${leftNodeId}" does not exist.`)
-        }
-
-        // 6. The right node must exist if provided.
-        const rightNode: TExpressionInput | undefined =
-            rightNodeId !== undefined
-                ? (this.expressions.get(rightNodeId) as
-                      | TExpressionInput
-                      | undefined)
-                : undefined
-        if (rightNodeId !== undefined && !rightNode) {
-            throw new Error(`Expression "${rightNodeId}" does not exist.`)
-        }
-
-        // 7a. A variable expression cannot have children.
-        if (expression.type === "variable") {
-            throw new Error(
-                `Variable expression "${expression.id}" cannot have children.`
-            )
-        }
-
-        // 7. The "not" operator is unary and cannot take two children.
-        if (
-            expression.type === "operator" &&
-            expression.operator === "not" &&
-            leftNodeId !== undefined &&
-            rightNodeId !== undefined
-        ) {
-            throw new Error(
-                `Operator expression "${expression.id}" with "not" can only have one child.`
-            )
-        }
-
-        // 7b. A formula expression is also unary and cannot take two children.
-        if (
-            expression.type === "formula" &&
-            leftNodeId !== undefined &&
-            rightNodeId !== undefined
-        ) {
-            throw new Error(
-                `Formula expression "${expression.id}" can only have one child.`
-            )
-        }
-
-        // 8. The left node must not be an implies/iff expression (which must remain a root).
-        if (
-            leftNode?.type === "operator" &&
-            (leftNode.operator === "implies" || leftNode.operator === "iff")
-        ) {
-            throw new Error(
-                `Expression "${leftNodeId}" with "${leftNode.operator}" cannot be subordinated (it must remain a root expression).`
-            )
-        }
-
-        // 9. The right node must not be an implies/iff expression (which must remain a root).
-        if (
-            rightNode?.type === "operator" &&
-            (rightNode.operator === "implies" || rightNode.operator === "iff")
-        ) {
-            throw new Error(
-                `Expression "${rightNodeId}" with "${rightNode.operator}" cannot be subordinated (it must remain a root expression).`
-            )
-        }
-
-        // The anchor is the node whose current tree slot the new expression will inherit.
-        const anchor = (leftNode ?? rightNode)!
-
-        // 10. implies/iff expressions may only be inserted at the root of the tree.
-        if (
-            expression.type === "operator" &&
-            (expression.operator === "implies" ||
-                expression.operator === "iff") &&
-            anchor.parentId !== null
-        ) {
-            throw new Error(
-                `Operator expression "${expression.id}" with "${expression.operator}" must be a root expression (parentId must be null).`
-            )
-        }
-
-        // The pre-v1.0 P-1 inline buffer-insertion / throw branches
-        // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
-        // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
-        // sites — (1) new expression as child of anchor's parent;
-        // (2) left node as child of new expression; (3) right node as
-        // child of new expression — were deleted. AN-1 (post-mutation
-        // hook in assistive mode) inserts the buffer when any of these
-        // sites produces a non-not operator under operator;
-        // permissive mode leaves the un-buffered state and
-        // `validate('presentable')` flags it.
-
-        const anchorParentId = anchor.parentId
-        const anchorPosition = anchor.position
+        const { anchorParentId, anchorPosition } = validateInsertExpression(
+            expression,
+            leftNodeId,
+            rightNodeId,
+            this.expressions
+        )
 
         // Compute child positions (midpoint-spaced for future bisection),
         // matching the pattern used by wrapExpression. As of core 1.0.2
@@ -1424,107 +1061,14 @@ export class ExpressionManager<
         leftNodeId?: string,
         rightNodeId?: string
     ): void {
-        // 1. Exactly one of leftNodeId / rightNodeId must be provided.
-        if (leftNodeId === undefined && rightNodeId === undefined) {
-            throw new Error(
-                `wrapExpression requires exactly one of leftNodeId or rightNodeId.`
+        const { existingNodeId, anchorParentId, anchorPosition } =
+            validateWrapExpression(
+                operator,
+                newSibling,
+                leftNodeId,
+                rightNodeId,
+                this.expressions
             )
-        }
-        if (leftNodeId !== undefined && rightNodeId !== undefined) {
-            throw new Error(
-                `wrapExpression requires exactly one of leftNodeId or rightNodeId, not both.`
-            )
-        }
-
-        // 2. Operator expression ID must not already exist.
-        if (this.expressions.has(operator.id)) {
-            throw new Error(
-                `Expression with ID "${operator.id}" already exists.`
-            )
-        }
-
-        // 3. New sibling expression ID must not already exist.
-        if (this.expressions.has(newSibling.id)) {
-            throw new Error(
-                `Expression with ID "${newSibling.id}" already exists.`
-            )
-        }
-
-        // 4. Operator and sibling IDs must be different.
-        if (operator.id === newSibling.id) {
-            throw new Error(
-                `Operator and sibling expression IDs must be different.`
-            )
-        }
-
-        // 5. The existing node must exist.
-        const existingNodeId = (leftNodeId ?? rightNodeId)!
-        const existingNode: TExpressionInput | undefined = this.expressions.get(
-            existingNodeId
-        ) as TExpressionInput | undefined
-        if (!existingNode) {
-            throw new Error(`Expression "${existingNodeId}" does not exist.`)
-        }
-
-        // 6. Operator expression must have type "operator".
-        if (operator.type !== "operator") {
-            throw new Error(
-                `Wrap operator expression "${operator.id}" must have type "operator", got "${operator.type}".`
-            )
-        }
-
-        // 7. Operator must not be unary ("not").
-        if (operator.operator === "not") {
-            throw new Error(
-                `Operator expression "${operator.id}" with "not" cannot wrap (it is unary and wrapping always produces two children).`
-            )
-        }
-
-        // 8. implies/iff operator only allowed if existing node is at root.
-        if (
-            (operator.operator === "implies" || operator.operator === "iff") &&
-            existingNode.parentId !== null
-        ) {
-            throw new Error(
-                `Operator expression "${operator.id}" with "${operator.operator}" must be a root expression (parentId must be null).`
-            )
-        }
-
-        // 9. Existing node must not be implies/iff (cannot be subordinated).
-        if (
-            existingNode.type === "operator" &&
-            (existingNode.operator === "implies" ||
-                existingNode.operator === "iff")
-        ) {
-            throw new Error(
-                `Expression "${existingNodeId}" with "${existingNode.operator}" cannot be subordinated (it must remain a root expression).`
-            )
-        }
-
-        // 10. New sibling must not be implies/iff (cannot be subordinated).
-        if (
-            newSibling.type === "operator" &&
-            (newSibling.operator === "implies" || newSibling.operator === "iff")
-        ) {
-            throw new Error(
-                `Sibling expression "${newSibling.id}" with "${newSibling.operator}" cannot be subordinated (it must remain a root expression).`
-            )
-        }
-
-        // The pre-v1.0 P-1 inline buffer-insertion / throw branches
-        // (gated on `grammarConfig.enforceFormulaBetweenOperators` +
-        // `resolveAutoNormalize(_, 'wrapInsertFormula')`) for three
-        // sites — (1) new operator as child of existing node's parent;
-        // (2) existing node as child of new operator;
-        // (3) new sibling as child of new operator — were deleted.
-        // AN-1 (post-mutation hook in assistive mode) inserts the
-        // buffer when any of these sites produces a non-not operator
-        // under operator; permissive mode leaves the un-buffered state
-        // and `validate('presentable')` flags it.
-
-        // Save the existing node's slot (the operator will inherit it).
-        const anchorParentId = existingNode.parentId
-        const anchorPosition = existingNode.position
 
         // Determine child positions (midpoint-spaced for future bisection).
         // As of core 1.0.2 S-8 is arity-only — `implies`/`iff` siblings
@@ -1789,206 +1333,17 @@ export class ExpressionManager<
      *
      * Collects ALL violations rather than failing on the first one. Checks:
      * schema validity, duplicate IDs, self-referential parents, parent
-     * existence, parent container type, root-only operators, formula-between-
-     * operators (when enabled), child limits, position uniqueness, and
-     * checksum integrity.
+     * existence, parent container type, root-only operators, child limits,
+     * position uniqueness, and checksum integrity.
      */
     public validate(): TInvariantValidationResult {
-        const violations: TInvariantViolation[] = []
-        const seenIds = new Set<string>()
-
-        // ── 1. Save pre-flush checksums for later comparison ──
-        const preFlushChecksums = new Map<
-            string,
-            {
-                checksum: string
-                descendantChecksum: string | null
-                combinedChecksum: string
-            }
-        >()
-        for (const [id, expr] of this.expressions) {
-            if (expr.checksum != null) {
-                preFlushChecksums.set(id, {
-                    checksum: expr.checksum,
-                    descendantChecksum: expr.descendantChecksum,
-                    combinedChecksum: expr.combinedChecksum,
-                })
-            }
-        }
-
-        // ── 2. Flush checksums to get fresh values ──
-        // Mark all expressions dirty so flush recomputes everything
-        for (const id of this.expressions.keys()) {
-            this.dirtyExpressionIds.add(id)
-        }
-        this.flushExpressionChecksums()
-
-        // ── 3. Per-expression checks ──
-        // Build a sibling-position map for position uniqueness checks
-        const positionsByParent = new Map<
-            string | null,
-            Map<number, string[]>
-        >()
-
-        for (const [id, expr] of this.expressions) {
-            // 3a. Schema check
-            if (
-                !Value.Check(
-                    CorePropositionalExpressionSchema,
-                    expr as unknown as TCorePropositionalExpression
-                )
-            ) {
-                violations.push({
-                    code: EXPR_SCHEMA_INVALID,
-                    message: `Expression "${id}" does not conform to CorePropositionalExpressionSchema.`,
-                    entityType: "expression",
-                    entityId: id,
-                })
-            }
-
-            // 3b. Duplicate ID
-            if (seenIds.has(id)) {
-                violations.push({
-                    code: EXPR_DUPLICATE_ID,
-                    message: `Duplicate expression ID "${id}".`,
-                    entityType: "expression",
-                    entityId: id,
-                })
-            }
-            seenIds.add(id)
-
-            // 3c. Self-referential parent
-            if (expr.parentId === id) {
-                violations.push({
-                    code: EXPR_SELF_REFERENTIAL_PARENT,
-                    message: `Expression "${id}" references itself as parent.`,
-                    entityType: "expression",
-                    entityId: id,
-                })
-            }
-
-            // 3d. Parent existence
-            if (
-                expr.parentId !== null &&
-                !this.expressions.has(expr.parentId)
-            ) {
-                violations.push({
-                    code: EXPR_PARENT_NOT_FOUND,
-                    message: `Expression "${id}" references non-existent parent "${expr.parentId}".`,
-                    entityType: "expression",
-                    entityId: id,
-                })
-            }
-
-            // 3e. Parent is container (operator or formula)
-            if (expr.parentId !== null && this.expressions.has(expr.parentId)) {
-                const parent = this.expressions.get(expr.parentId)!
-                if (parent.type !== "operator" && parent.type !== "formula") {
-                    violations.push({
-                        code: EXPR_PARENT_NOT_CONTAINER,
-                        message: `Expression "${id}" has parent "${expr.parentId}" of type "${parent.type}" (expected operator or formula).`,
-                        entityType: "expression",
-                        entityId: id,
-                    })
-                }
-            }
-
-            // 3f. Root-only: implies/iff must have parentId === null
-            if (
-                expr.type === "operator" &&
-                (expr.operator === "implies" || expr.operator === "iff") &&
-                expr.parentId !== null
-            ) {
-                violations.push({
-                    code: EXPR_ROOT_ONLY_VIOLATED,
-                    message: `Root-only operator "${expr.operator}" expression "${id}" has non-null parentId "${expr.parentId}".`,
-                    entityType: "expression",
-                    entityId: id,
-                })
-            }
-
-            // The pre-v1.0 3g `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-            // legacy-validate() check (gated on
-            // `grammarConfig.enforceFormulaBetweenOperators`) is gone.
-            // P-1 is now surfaced via the grammar-tier validators —
-            // call `engine.validate('presentable')` and look for the
-            // `P-1` code. The `EXPR_FORMULA_BETWEEN_OPERATORS_VIOLATED`
-            // engine-error constant is gone in lockstep.
-
-            // Collect positions for uniqueness check
-            const parentKey = expr.parentId
-            let parentPositions = positionsByParent.get(parentKey)
-            if (!parentPositions) {
-                parentPositions = new Map()
-                positionsByParent.set(parentKey, parentPositions)
-            }
-            const idsAtPosition = parentPositions.get(expr.position)
-            if (idsAtPosition) {
-                idsAtPosition.push(id)
-            } else {
-                parentPositions.set(expr.position, [id])
-            }
-
-            // 3j. Checksum comparison
-            const pre = preFlushChecksums.get(id)
-            if (pre) {
-                const fresh = this.expressions.get(id)!
-                if (
-                    pre.checksum !== fresh.checksum ||
-                    pre.descendantChecksum !== fresh.descendantChecksum ||
-                    pre.combinedChecksum !== fresh.combinedChecksum
-                ) {
-                    violations.push({
-                        code: EXPR_CHECKSUM_MISMATCH,
-                        message: `Expression "${id}" checksum mismatch: stored does not match recomputed.`,
-                        entityType: "expression",
-                        entityId: id,
-                    })
-                }
-            }
-        }
-
-        // ── 4. Child limit checks (not/formula: max 1 child) ──
-        for (const [id, expr] of this.expressions) {
-            if (
-                (expr.type === "operator" && expr.operator === "not") ||
-                expr.type === "formula"
-            ) {
-                const childIds = this.childExpressionIdsByParentId.get(id)
-                const childCount = childIds?.size ?? 0
-                if (childCount > 1) {
-                    const label =
-                        expr.type === "formula" ? "Formula" : `Operator "not"`
-                    violations.push({
-                        code: EXPR_CHILD_LIMIT_EXCEEDED,
-                        message: `${label} expression "${id}" has ${childCount} children (max 1).`,
-                        entityType: "expression",
-                        entityId: id,
-                    })
-                }
-            }
-        }
-
-        // ── 5. Position uniqueness ──
-        for (const [, posMap] of positionsByParent) {
-            for (const [position, ids] of posMap) {
-                if (ids.length > 1) {
-                    for (const id of ids) {
-                        violations.push({
-                            code: EXPR_POSITION_DUPLICATE,
-                            message: `Position ${position} is shared by expressions [${ids.join(", ")}].`,
-                            entityType: "expression",
-                            entityId: id,
-                        })
-                    }
-                }
-            }
-        }
-
-        return {
-            ok: violations.length === 0,
-            violations,
-        }
+        return validateExpressionManagerInvariants(
+            this.expressions,
+            this.childExpressionIdsByParentId,
+            this.dirtyExpressionIds,
+            this.config,
+            this.collector
+        )
     }
 
     /** Returns a serializable snapshot of the current state. */
