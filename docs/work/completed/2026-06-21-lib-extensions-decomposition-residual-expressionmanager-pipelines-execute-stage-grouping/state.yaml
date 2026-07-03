@@ -3,8 +3,14 @@ title: lib/extensions decomposition — residual (ExpressionManager, pipelines/e
   stage grouping)
 phase: ''
 created: '2026-06-21'
-resolution: null
+resolution: done
 priority: 10
 blocked_by: []
 effort: high
 complexity: medium
+dod:
+- tests pass
+- docs synced
+- capabilities reconciled
+- reviewed
+- version offered
