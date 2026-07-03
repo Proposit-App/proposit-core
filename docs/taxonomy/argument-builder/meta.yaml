@@ -2,4 +2,4 @@ name: Argument Builder
 kind: Feature
 relatesTo: []
 vocabulary:
-- argument
+    - argument

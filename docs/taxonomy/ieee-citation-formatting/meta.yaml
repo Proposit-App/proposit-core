@@ -2,5 +2,5 @@ name: IEEE Citation Formatting
 kind: Feature
 relatesTo: []
 vocabulary:
-- reference
-- argument/claim/citation-claim
+    - reference
+    - argument/claim/citation-claim

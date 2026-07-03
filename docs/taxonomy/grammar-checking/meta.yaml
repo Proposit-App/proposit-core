@@ -2,7 +2,7 @@ name: Grammar Checking
 kind: Feature
 relatesTo: []
 vocabulary:
-- argument
-- argument/premise
-- argument/propositional-expression
-- grammar-violation
+    - argument
+    - argument/premise
+    - argument/propositional-expression
+    - grammar-violation

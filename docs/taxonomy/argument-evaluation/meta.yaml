@@ -2,8 +2,8 @@ name: Argument Evaluation
 kind: Feature
 relatesTo: []
 vocabulary:
-- argument
-- argument/premise
-- argument/propositional-expression/propositional-variable
-- argument/propositional-expression/operator-expression
-- analysis
+    - argument
+    - argument/premise
+    - argument/propositional-expression/propositional-variable
+    - argument/propositional-expression/operator-expression
+    - analysis

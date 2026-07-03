@@ -2,6 +2,6 @@ name: Grammar Repair
 kind: Feature
 relatesTo: []
 vocabulary:
-- argument/propositional-expression
-- argument/propositional-expression/formula-expression
-- grammar-violation
+    - argument/propositional-expression
+    - argument/propositional-expression/formula-expression
+    - grammar-violation

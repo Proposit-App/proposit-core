@@ -2,4 +2,4 @@ name: Command-Line Interface
 kind: Feature
 relatesTo: []
 vocabulary:
-- argument
+    - argument
