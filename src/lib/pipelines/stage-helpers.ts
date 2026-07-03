@@ -24,7 +24,7 @@ import type {
     TToolSpec,
 } from "../llm/types.js"
 import { debugMaxLengthTruncation } from "./debug-log.js"
-import { executePipeline } from "./execute.js"
+import { executePipeline } from "./scheduler.js"
 import {
     LLM_NON_RETRYABLE_ERROR,
     LLM_QUOTA_EXHAUSTED,

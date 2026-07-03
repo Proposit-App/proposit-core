@@ -26,22 +26,22 @@ export {
 } from "./stage-helpers.js"
 export type { TRetryPolicy, TRetryReason } from "./stage-helpers.js"
 
+export { executePipeline, PipelineConfigurationError } from "./scheduler.js"
+export type { TExecutePipelineDeps } from "./scheduler.js"
+
 export {
-    executePipeline,
     executeStage,
     executeFinalize,
     launchStage,
     completeStage,
-    PipelineConfigurationError,
-} from "./execute.js"
+} from "./single-stage.js"
 export type {
-    TExecutePipelineDeps,
     TStageOutcomeRecord,
     TExecuteStageDeps,
     TExecuteStageResult,
     TExecuteFinalizeResult,
     TLaunchStageResult,
-} from "./execute.js"
+} from "./single-stage.js"
 
 export {
     LLM_QUOTA_EXHAUSTED,

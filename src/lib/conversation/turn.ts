@@ -17,8 +17,8 @@ import type {
     TPipelineEvent,
 } from "../pipelines/types.js"
 import type { TLlmProvider, TLlmTokenUsage, TResponseId } from "../llm/types.js"
-import { executeStage } from "../pipelines/execute.js"
-import type { TStageOutcomeRecord } from "../pipelines/execute.js"
+import { executeStage } from "../pipelines/single-stage.js"
+import type { TStageOutcomeRecord } from "../pipelines/single-stage.js"
 import type { TSchema } from "typebox"
 import { Value } from "typebox/value"
 import Type from "typebox"
