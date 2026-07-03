@@ -18,3 +18,13 @@
   `completeStage`). The public barrel (`src/lib/pipelines/index.ts`)
   re-exports the same names from the new files — no import path, public
   API, or behavior change for consumers.
+- `src/lib/pipelines/stage-helpers.ts` (924 → 238 lines): the LLM-specific
+  implementation (`llmStage`, `readLlmStageConfig`, `isLlmStage`,
+  `applyRetrySuffix`, `buildLlmRequest`, `validateLlmOutcome`,
+  `failureRetryReason`, `LlmStageRetryExhaustedError`) moved to a new
+  `llm-stage-helpers.ts`; `stage-helpers.ts` re-exports all of it and keeps
+  the generic remainder (`deterministicStage`, `subPipelineStage`, retry
+  types, `StageAbortedError`, `SubPipelineFailedError`,
+  `readStashedTokenUsage`) as local code. No import path changes anywhere
+  — the ~20 direct-import call sites under `src/extensions/` and the two
+  tests that import `stage-helpers.js` directly are untouched.
