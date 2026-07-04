@@ -175,5 +175,5 @@ export function getParsingResponseSchema(
     schema?: TSchema
 ): Record<string, unknown> {
     const target = schema ?? ParsedArgumentResponseSchema
-    return JSON.parse(JSON.stringify(target)) as Record<string, unknown>
+    return structuredClone(target) as Record<string, unknown>
 }

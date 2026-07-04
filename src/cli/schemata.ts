@@ -1,11 +1,6 @@
 import Type, { type Static } from "typebox"
 import { CoreLogicalOperatorType } from "../lib/schemata/propositional.js"
 import { EncodableDate, Nullable, UUID } from "../lib/schemata/shared.js"
-import {
-    CoreClaimAxiomaticTypeSchema,
-    CoreClaimCitationTypeSchema,
-    CoreClaimNormalTypeSchema,
-} from "../lib/index.js"
 
 // ---------------------------------------------------------------------------
 // Argument meta (stored in arguments/<id>/meta.json)
@@ -34,24 +29,6 @@ export const CliArgumentVersionMetaSchema = Type.Object({
 export type TCliArgumentVersionMeta = Static<
     typeof CliArgumentVersionMetaSchema
 >
-
-// ---------------------------------------------------------------------------
-// Full CLI argument (core identity + CLI-specific flat fields)
-// Uses optional checksum for backward-compatible disk reads.
-// ---------------------------------------------------------------------------
-export const CliArgumentSchema = Type.Object({
-    id: UUID,
-    version: Type.Number(),
-    checksum: Type.Optional(Type.String()),
-    descendantChecksum: Type.Optional(Nullable(Type.String())),
-    combinedChecksum: Type.Optional(Type.String()),
-    title: Type.String(),
-    description: Type.Optional(Type.String()),
-    createdAt: EncodableDate,
-    published: Type.Boolean(),
-    publishedAt: Type.Optional(EncodableDate),
-})
-export type TCliArgument = Static<typeof CliArgumentSchema>
 
 // ---------------------------------------------------------------------------
 // Premise meta (stored in premises/<id>/meta.json)
@@ -131,30 +108,3 @@ export const CLI_AXIOM_REASON_CODES: readonly TCliAxiomReasonCode[] = [
     "historically-established",
     "logically-required",
 ]
-
-// ---------------------------------------------------------------------------
-// CLI claim schema — discriminated union over claim type. Axiomatic claims
-// require a reasonCode at the CLI layer; core remains permissive.
-// ---------------------------------------------------------------------------
-const CliClaimBase = Type.Object({
-    id: UUID,
-    version: Type.Number(),
-    frozen: Type.Boolean(),
-    checksum: Type.String(),
-    title: Type.Optional(Type.String()),
-    body: Type.Optional(Type.String()),
-})
-
-export const CliClaimSchema = Type.Union([
-    Type.Interface([CliClaimBase], {
-        type: CoreClaimNormalTypeSchema,
-    }),
-    Type.Interface([CliClaimBase], {
-        type: CoreClaimCitationTypeSchema,
-    }),
-    Type.Interface([CliClaimBase], {
-        type: CoreClaimAxiomaticTypeSchema,
-        reasonCode: CliAxiomReasonCode,
-    }),
-])
-export type TCliClaim = Static<typeof CliClaimSchema>

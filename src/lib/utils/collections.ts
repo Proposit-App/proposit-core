@@ -19,9 +19,7 @@ export function getOrCreate<K, V>(
 
 /** Returns a shallow-copied array of items sorted by `id` in lexicographic order. */
 export function sortedCopyById<T extends { id: string }>(items: T[]): T[] {
-    return [...items]
-        .map((item) => ({ ...item }))
-        .sort((a, b) => a.id.localeCompare(b.id))
+    return [...items].sort((a, b) => a.id.localeCompare(b.id))
 }
 
 /** Deduplicates and sorts an iterable of strings. */

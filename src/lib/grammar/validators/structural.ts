@@ -314,7 +314,7 @@ export function validateS6(ctx: TValidatorContext): readonly TViolation[] {
         // additionalProperties extension slot.
         if (!("derivedClaimId" in p)) continue
         const stray = (p as { derivedClaimId?: unknown }).derivedClaimId
-        if (stray !== null && stray !== undefined && stray !== "") {
+        if (stray != null && stray !== "") {
             violations.push({
                 tier: "structural",
                 code: "S-6",

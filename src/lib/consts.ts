@@ -1,5 +1,16 @@
 import type { TCoreChecksumConfig } from "./types/checksum.js"
 
+const CHECKSUM_CONFIG_KEYS = [
+    "expressionFields",
+    "variableFields",
+    "premiseFields",
+    "argumentFields",
+    "roleFields",
+    "claimFields",
+    "claimCitationFields",
+    "claimAxiomFields",
+] as const
+
 export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
     expressionFields: new Set([
         "type",
@@ -54,18 +65,8 @@ export function normalizeChecksumConfig(
     config: TCoreChecksumConfig | undefined
 ): TCoreChecksumConfig | undefined {
     if (config === undefined) return undefined
-    const keys = [
-        "expressionFields",
-        "variableFields",
-        "premiseFields",
-        "argumentFields",
-        "roleFields",
-        "claimFields",
-        "claimCitationFields",
-        "claimAxiomFields",
-    ] as const
     const result: TCoreChecksumConfig = {}
-    for (const key of keys) {
+    for (const key of CHECKSUM_CONFIG_KEYS) {
         const value = config[key]
         if (value === undefined) continue
         result[key] =
@@ -87,18 +88,8 @@ export function serializeChecksumConfig(
     config: TCoreChecksumConfig | undefined
 ): Record<string, string[]> | undefined {
     if (config === undefined) return undefined
-    const keys = [
-        "expressionFields",
-        "variableFields",
-        "premiseFields",
-        "argumentFields",
-        "roleFields",
-        "claimFields",
-        "claimCitationFields",
-        "claimAxiomFields",
-    ] as const
     const result: Record<string, string[]> = {}
-    for (const key of keys) {
+    for (const key of CHECKSUM_CONFIG_KEYS) {
         const value = config[key]
         if (value === undefined) continue
         result[key] = Array.from(value)
@@ -113,18 +104,8 @@ export function serializeChecksumConfig(
 export function createChecksumConfig(
     additional: TCoreChecksumConfig
 ): TCoreChecksumConfig {
-    const keys = [
-        "expressionFields",
-        "variableFields",
-        "premiseFields",
-        "argumentFields",
-        "roleFields",
-        "claimFields",
-        "claimCitationFields",
-        "claimAxiomFields",
-    ] as const
     const result: TCoreChecksumConfig = {}
-    for (const key of keys) {
+    for (const key of CHECKSUM_CONFIG_KEYS) {
         const base = DEFAULT_CHECKSUM_CONFIG[key]!
         const extra = additional[key]
         result[key] = extra ? new Set([...base, ...extra]) : new Set(base)

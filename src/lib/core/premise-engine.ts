@@ -18,6 +18,7 @@ import {
     type TCorePositionConfig,
 } from "../utils/position.js"
 import { sortedCopyById, sortedUnique } from "../utils/collections.js"
+import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import type {
     TCoreExpressionAssignment,
     TCorePremiseEvaluationResult,
@@ -100,6 +101,7 @@ export class PremiseEngine<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
 >
+    extends HierarchicalChecksumCache
     implements
         TExpressionMutations<TArg, TPremise, TExpr, TVar>,
         TExpressionQueries<TExpr>,
@@ -119,10 +121,6 @@ export class PremiseEngine<
     private expressionsByVariableId: DefaultMap<string, Set<string>>
     private argument: TOptionalChecksum<TArg>
     private checksumConfig?: TCoreChecksumConfig
-    private checksumDirty = true
-    private cachedMetaChecksum: string | undefined
-    private cachedDescendantChecksum: string | null | undefined
-    private cachedCombinedChecksum: string | undefined
     private expressionIndex?: Map<string, string>
     private generateId: () => string
     private onMutate?: () => void
@@ -144,6 +142,7 @@ export class PremiseEngine<
         },
         config?: TLogicEngineOptions
     ) {
+        super()
         this.premise = { ...premise }
         this.argument = deps.argument
         this.checksumConfig = config?.checksumConfig
@@ -1761,27 +1760,6 @@ export class PremiseEngine<
             descendantChecksum: this.cachedDescendantChecksum!,
             combinedChecksum: this.cachedCombinedChecksum!,
         } as TPremise
-    }
-
-    public checksum(): string {
-        if (this.checksumDirty || this.cachedMetaChecksum === undefined) {
-            this.flushChecksums()
-        }
-        return this.cachedMetaChecksum!
-    }
-
-    public descendantChecksum(): string | null {
-        if (this.checksumDirty || this.cachedDescendantChecksum === undefined) {
-            this.flushChecksums()
-        }
-        return this.cachedDescendantChecksum!
-    }
-
-    public combinedChecksum(): string {
-        if (this.checksumDirty || this.cachedCombinedChecksum === undefined) {
-            this.flushChecksums()
-        }
-        return this.cachedCombinedChecksum!
     }
 
     public getCollectionChecksum(_name: "expressions"): string | null {
