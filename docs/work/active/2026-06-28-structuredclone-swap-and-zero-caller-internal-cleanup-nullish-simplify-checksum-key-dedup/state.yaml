@@ -7,3 +7,5 @@ resolution: null
 priority: null
 effort: low
 complexity: low
+worktree: .worktrees/2026-06-28-structuredclone-swap-and-zero-caller-internal-cleanup-nullish-simplify-checksum-key-dedup
+branch: work/2026-06-28-structuredclone-swap-and-zero-caller-internal-cleanup-nullish-simplify-checksum-key-dedup
