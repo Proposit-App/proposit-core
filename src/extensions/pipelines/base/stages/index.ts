@@ -47,6 +47,7 @@ export {
     assignVariables,
     isValidVariableSymbol,
 } from "./variable-assignment.js"
+export type { TAssignVariablesInput } from "./variable-assignment.js"
 export {
     relationExtractionStage,
     createRelationExtractionStage,
@@ -64,8 +65,13 @@ export {
     compileFormulas,
     FORMULA_COMPILATION_FAILURE_CODES,
 } from "./formula-compilation.js"
+export type {
+    TCompileFormulasInput,
+    TFreeformRelation,
+} from "./formula-compilation.js"
 export {
     formulaValidationStage,
     validateFormulas,
     FORMULA_VALIDATION_FAILURE_CODES,
 } from "./formula-validation.js"
+export type { TValidateFormulasInput } from "./formula-validation.js"

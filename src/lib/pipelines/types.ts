@@ -19,7 +19,7 @@
 // Helper functions (`optional`, `executePipeline`, …) keep their
 // spec-spelled camelCase names since they are values, not types.
 
-import type { TSchema } from "typebox"
+import Type, { type Static, type TSchema } from "typebox"
 import type { TLlmProvider, TLlmTokenUsage } from "../llm/types.js"
 
 // -- Dependency-specification union --
@@ -99,13 +99,14 @@ export type TPipeline<TInput, TOutput> = {
 
 // -- Failures --
 
-export type TProcessingFailure = {
-    stage: string
-    code: string
-    message: string
-    severity: "warning" | "error"
-    context?: Record<string, unknown>
-}
+export const ProcessingFailureSchema = Type.Object({
+    stage: Type.String(),
+    code: Type.String(),
+    message: Type.String(),
+    severity: Type.Union([Type.Literal("warning"), Type.Literal("error")]),
+    context: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+})
+export type TProcessingFailure = Static<typeof ProcessingFailureSchema>
 
 // -- Result --
 

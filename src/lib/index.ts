@@ -108,6 +108,7 @@ export type {
     TViolation,
 } from "./grammar/types.js"
 export { validate as validateGrammar } from "./grammar/validate.js"
+export { isNakedQTree, isNakedQDerivationPremise } from "./grammar/naked-q.js"
 export type { TValidatorContext } from "./grammar/validators/context.js"
 export type { TPopulateResult } from "./grammar/populate-from.js"
 export * from "./types/fork.js"
@@ -147,6 +148,7 @@ export {
     LLM_NON_RETRYABLE_ERROR,
     LLM_UNKNOWN_ERROR,
     OUTPUT_SCHEMA_INVALID,
+    ProcessingFailureSchema,
 } from "./pipelines/index.js"
 export type {
     TStage,
@@ -168,6 +170,7 @@ export type {
     TExecuteFinalizeResult,
     TLaunchStageResult,
 } from "./pipelines/index.js"
+export { LlmTokenUsageSchema } from "./llm/index.js"
 export type {
     TLlmProvider,
     TLlmRequest,
@@ -238,4 +241,7 @@ export {
     createSimulateTurn,
     createDistillTurn,
 } from "../extensions/builder/index.js"
-export type { TDistillTurnOptions } from "../extensions/builder/index.js"
+export type {
+    TDistillTurnOptions,
+    TDistillOutput,
+} from "../extensions/builder/index.js"

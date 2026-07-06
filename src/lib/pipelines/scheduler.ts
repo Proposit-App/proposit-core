@@ -477,82 +477,21 @@ export function runFinalize<TOutput>(
     }
 }
 
-export async function executePipeline<TInput, TOutput>(
-    pipeline: TPipeline<TInput, TOutput>,
-    input: TInput,
-    deps: TExecutePipelineDeps
-): Promise<TPipelineResult<TOutput>> {
-    // 1. Input validation. A schema mismatch is a caller bug; we throw.
-    // Value.Parse infers its return type from the schema; since
-    // pipeline.inputSchema is typed as TSchema, that inference comes
-    // out broad — we re-narrow to TInput, which is the caller's
-    // declared input type for the pipeline.
-    const parsedInput = Value.Parse(pipeline.inputSchema, input)
-    const validatedInput = parsedInput as TInput
-
-    // 2. DAG validation. All before any stage runs.
-    const { stageById } = validateDag(
-        pipeline as unknown as TPipeline<unknown, unknown>
-    )
-
-    const emit = deps.onEvent ?? noopEmit
-    const signal = deps.signal ?? new AbortController().signal
-    const generateId = deps.generateId ?? defaultGenerateId
-    const concurrencyLimit = deps.concurrencyLimit ?? 4
-
-    const startAt = now()
-    emit({
-        kind: "pipeline:start",
-        pipelineId: pipeline.id,
-        pipelineVersion: pipeline.version,
-        at: startAt,
-    })
-    debugPipelineStart({
-        pipelineId: pipeline.id,
-        pipelineVersion: pipeline.version,
-        stageCount: pipeline.stages.length,
-        rootStages: pipeline.stages
-            .filter((s) => s.dependsOn.length === 0)
-            .map((s) => s.id),
-    })
-
-    const failures: TProcessingFailure[] = []
-    const records = new Map<string, TStageRecord>()
-    // A PipelineConfigurationError raised inside a stage's `run`
-    // (i.e. a `ctx.get` called on a non-dependency stage id) is a
-    // caller bug, not a recoverable runtime failure. We capture the
-    // first one and re-throw after the scheduler drains so the
-    // executor still emits the bookend events.
-    let capturedConfigError: PipelineConfigurationError | null = null
-
-    // The explicit run state shared with the extracted `runOneStage` /
-    // `runFinalize` bodies. The scheduler's disposition for a
-    // `ctx.get`-on-non-dep config error is "capture the first, re-throw
-    // after the bookends" (see the drain-end re-throw below).
-    const state: TStageRunState = {
-        records,
-        failures,
-        signal,
-        emit,
-        generateId,
-        llm: deps.llm,
-        input: validatedInput,
-        setConfigError: (error) => {
-            capturedConfigError ??= error
-        },
-    }
-
-    // Build per-stage `ctx.get` dep sets up front so we can throw on
-    // out-of-deps access.
-    const stageDepIds = new Map<string, Set<string>>()
-    for (const stage of pipeline.stages) {
-        stageDepIds.set(stage.id, new Set(stage.dependsOn.map((d) => depId(d))))
-    }
-    const finalizeDepIds = new Set(
-        pipeline.finalize.dependsOn.map((d) => depId(d))
-    )
-
-    // -- Helpers --
+// Drive every stage of `pipeline` to completion against the shared `state`,
+// honoring `concurrencyLimit`. Mutates `state.records` / `state.failures` (and,
+// via `state.setConfigError`, the caller's captured config error) as stages
+// settle; returns once every stage has a final outcome. Extracted from
+// `executePipeline` — the scheduler loop and its eligibility helpers are the
+// single largest chunk of that function's body.
+async function runSchedulerLoop(
+    pipeline: TPipeline<unknown, unknown>,
+    stageById: Map<string, TStage<unknown>>,
+    stageDepIds: Map<string, Set<string>>,
+    state: TStageRunState,
+    emit: (event: TPipelineEvent) => void,
+    concurrencyLimit: number
+): Promise<void> {
+    const { records } = state
 
     const isStageEligible = (stage: TStage<unknown>): boolean => {
         for (const dep of stage.dependsOn) {
@@ -577,8 +516,6 @@ export async function executePipeline<TInput, TOutput>(
         }
         return false
     }
-
-    // -- Stage execution --
 
     const runStage = async (stage: TStage<unknown>): Promise<void> => {
         const ctx = makeStageContext(
@@ -691,6 +628,91 @@ export async function executePipeline<TInput, TOutput>(
     // Wait for the pool to drain (race exits at the first settled
     // promise; we want them all settled).
     await Promise.allSettled(pool.map((p) => p.promise))
+}
+
+export async function executePipeline<TInput, TOutput>(
+    pipeline: TPipeline<TInput, TOutput>,
+    input: TInput,
+    deps: TExecutePipelineDeps
+): Promise<TPipelineResult<TOutput>> {
+    // 1. Input validation. A schema mismatch is a caller bug; we throw.
+    // Value.Parse infers its return type from the schema; since
+    // pipeline.inputSchema is typed as TSchema, that inference comes
+    // out broad — we re-narrow to TInput, which is the caller's
+    // declared input type for the pipeline.
+    const parsedInput = Value.Parse(pipeline.inputSchema, input)
+    const validatedInput = parsedInput as TInput
+
+    // 2. DAG validation. All before any stage runs.
+    const { stageById } = validateDag(
+        pipeline as unknown as TPipeline<unknown, unknown>
+    )
+
+    const emit = deps.onEvent ?? noopEmit
+    const signal = deps.signal ?? new AbortController().signal
+    const generateId = deps.generateId ?? defaultGenerateId
+    const concurrencyLimit = deps.concurrencyLimit ?? 4
+
+    const startAt = now()
+    emit({
+        kind: "pipeline:start",
+        pipelineId: pipeline.id,
+        pipelineVersion: pipeline.version,
+        at: startAt,
+    })
+    debugPipelineStart({
+        pipelineId: pipeline.id,
+        pipelineVersion: pipeline.version,
+        stageCount: pipeline.stages.length,
+        rootStages: pipeline.stages
+            .filter((s) => s.dependsOn.length === 0)
+            .map((s) => s.id),
+    })
+
+    const failures: TProcessingFailure[] = []
+    const records = new Map<string, TStageRecord>()
+    // A PipelineConfigurationError raised inside a stage's `run`
+    // (i.e. a `ctx.get` called on a non-dependency stage id) is a
+    // caller bug, not a recoverable runtime failure. We capture the
+    // first one and re-throw after the scheduler drains so the
+    // executor still emits the bookend events.
+    let capturedConfigError: PipelineConfigurationError | null = null
+
+    // The explicit run state shared with the extracted `runOneStage` /
+    // `runFinalize` bodies. The scheduler's disposition for a
+    // `ctx.get`-on-non-dep config error is "capture the first, re-throw
+    // after the bookends" (see the drain-end re-throw below).
+    const state: TStageRunState = {
+        records,
+        failures,
+        signal,
+        emit,
+        generateId,
+        llm: deps.llm,
+        input: validatedInput,
+        setConfigError: (error) => {
+            capturedConfigError ??= error
+        },
+    }
+
+    // Build per-stage `ctx.get` dep sets up front so we can throw on
+    // out-of-deps access.
+    const stageDepIds = new Map<string, Set<string>>()
+    for (const stage of pipeline.stages) {
+        stageDepIds.set(stage.id, new Set(stage.dependsOn.map((d) => depId(d))))
+    }
+    const finalizeDepIds = new Set(
+        pipeline.finalize.dependsOn.map((d) => depId(d))
+    )
+
+    await runSchedulerLoop(
+        pipeline as unknown as TPipeline<unknown, unknown>,
+        stageById,
+        stageDepIds,
+        state,
+        emit,
+        concurrencyLimit
+    )
 
     // If a stage observed a configuration violation (ctx.get on a
     // non-dep), surface that as a thrown error after emitting the

@@ -462,6 +462,210 @@ export function failureRetryReason(failure: {
 
 // -- LLM stage --
 
+type TLastError = {
+    reason: TRetryReason
+    code: string
+    message: string
+    context?: Record<string, unknown>
+}
+
+type TAttemptResult<TOutput> =
+    | { kind: "success"; output: TOutput }
+    | { kind: "retry"; lastError: TLastError; nextUserMessage: string }
+    | { kind: "exhausted"; lastError: TLastError }
+
+// Run one attempt of `llmStage`'s retry loop: build + emit the request,
+// call the provider, validate/classify the outcome, and (on a retryable
+// failure) sleep out the backoff. Extracted from `llmStage` — the retry
+// loop's single attempt body was the bulk of that function.
+async function runLlmStageAttempt<TOutput>(
+    cfg: TLlmStageConfig<TOutput>,
+    ctx: TStageContext,
+    prompt: { system: string; user: string },
+    policy: TRetryPolicy,
+    errorCap: number,
+    attempt: number,
+    userMessage: string
+): Promise<TAttemptResult<TOutput>> {
+    if (ctx.signal.aborted) {
+        // Loop-top abort: caller cancelled before (or between) attempts.
+        // Surface as a `skipped` stage rather than a failure.
+        throw new StageAbortedError({ stageId: cfg.id })
+    }
+
+    // Emit the `stage:llm-response-created` event the moment the provider
+    // surfaces a response id. In background-stream mode this fires
+    // MID-FLIGHT — before `respond()` resolves — from the provider's
+    // `onResponseCreated` callback (the first `response.created` SSE
+    // event). That early emit is load-bearing: a consumer persists the id
+    // before a possible crash, so a call interrupted mid-generation can be
+    // recovered from the upstream's stored copy rather than blindly
+    // re-run. In synchronous mode the callback never fires; the id is
+    // surfaced only at completion (below). The `responseIdEmitted` flag
+    // dedupes so the event fires at most once per attempt.
+    let responseIdEmitted = false
+    const emitResponseCreated = (responseId: string): void => {
+        if (responseIdEmitted) return
+        responseIdEmitted = true
+        ctx.emit({
+            kind: "stage:llm-response-created",
+            stageId: cfg.id,
+            attempt,
+            responseId,
+            at: now(),
+        })
+    }
+
+    // Build the request via the shared seam, then attach this attempt's
+    // mid-flight id emitter (the seam leaves `onResponseCreated` unset —
+    // the launch path uses the submit return value instead).
+    const { req } = buildLlmRequest(cfg, ctx, userMessage)
+    req.onResponseCreated = emitResponseCreated
+
+    // Emit the pre-call stage-input event. Fires inside the retry loop
+    // after `attempt` is incremented and after the request is built,
+    // immediately before `respond()` — so a consumer can surface the
+    // as-sent prompts the instant the call starts, without waiting for the
+    // post-call `stage:llm-call`. On attempt 2+ `userMessage` already
+    // carries the retry-suffix appended by the prior attempt's
+    // schema-validation failure path, matching this attempt's eventual
+    // `stage:llm-call.prompts.user`.
+    ctx.emit({
+        kind: "stage:llm-request",
+        stageId: cfg.id,
+        attempt,
+        prompts: {
+            system: prompt.system,
+            user: userMessage,
+        },
+        at: now(),
+    })
+
+    try {
+        const response = await ctx.llm.respond<TOutput>(req)
+
+        // Completion-time fallback: if the provider surfaced an id but did
+        // NOT fire the mid-flight callback (the synchronous / poll paths),
+        // emit here so the event still precedes `stage:llm-call` on this
+        // attempt.
+        if (response.rawResponseId) {
+            emitResponseCreated(response.rawResponseId)
+        }
+
+        // Shared validation core (same check the launch/complete path
+        // runs via validateLlmOutcome's completed branch).
+        const checked = checkLlmOutput(cfg, response.output)
+        const validationPassed = checked.valid
+        const validationError = checked.validationError
+
+        // Emit per-attempt LLM-call event. Fires after the call returns
+        // and after schema validation has run, before retry/return
+        // branching. `validationError` is `undefined` when the schema
+        // accepted the output, a string when it rejected. `prompts.user`
+        // is the as-sent message — on attempt 2+ this includes any
+        // retry-suffix appended by the prior attempt's schema-validation
+        // failure path.
+        ctx.emit({
+            kind: "stage:llm-call",
+            stageId: cfg.id,
+            attempt,
+            prompts: {
+                system: prompt.system,
+                user: userMessage,
+            },
+            output: response.output,
+            tokenUsage: response.tokenUsage,
+            rawResponseId: response.rawResponseId,
+            validationError,
+            at: now(),
+        })
+
+        if (!validationPassed) {
+            // validationError is defined here because validationPassed is
+            // false.
+            const validationMessage = validationError!
+            const lastError: TLastError = {
+                reason: "schema_validation",
+                code: OUTPUT_SCHEMA_INVALID,
+                message: validationMessage,
+            }
+            const retryable = policy.retryOn.includes("schema_validation")
+            if (!retryable || attempt >= policy.maxAttempts) {
+                return { kind: "exhausted", lastError }
+            }
+            emitRetry(ctx, cfg.id, attempt, "schema_validation")
+            const nextUserMessage = applyRetrySuffix(
+                prompt.user,
+                validationMessage,
+                errorCap
+            )
+            await sleep(policy.backoffMs, ctx.signal)
+            return { kind: "retry", lastError, nextUserMessage }
+        }
+
+        // Token usage emission is handled by the executor at stage:end
+        // time; we return the response output and attach the usage onto a
+        // side channel via failure-free path. We stash token usage on a
+        // per-stage well-known key recognized by the executor.
+        stashTokenUsage(ctx, cfg.id, response.tokenUsage)
+        return { kind: "success", output: response.output }
+    } catch (err) {
+        if (
+            err instanceof LlmStageRetryExhaustedError &&
+            err.stageId === cfg.id
+        ) {
+            // Re-throw our own marker; the catch below shouldn't see it.
+            // Defensive.
+            throw err
+        }
+        if (err instanceof StageAbortedError) {
+            throw err
+        }
+        // Mid-flight abort surfaces here when the provider honored the
+        // signal and threw. Recognize it before classifying as a generic
+        // non-retryable failure so the executor can mark this stage
+        // `skipped`, not `failed` with `LLM_NON_RETRYABLE_ERROR`.
+        if (ctx.signal.aborted) {
+            throw new StageAbortedError({ stageId: cfg.id })
+        }
+        const reason = classifyError(err)
+        const message = err instanceof Error ? err.message : String(err)
+        if (reason === "non_retryable") {
+            return {
+                kind: "exhausted",
+                lastError: {
+                    reason: "transient",
+                    code: LLM_NON_RETRYABLE_ERROR,
+                    message,
+                },
+            }
+        }
+        const lastError: TLastError = {
+            reason,
+            code:
+                reason === "quota_exhausted"
+                    ? LLM_QUOTA_EXHAUSTED
+                    : reason === "rate_limit"
+                      ? LLM_RATE_LIMITED
+                      : LLM_TRANSIENT_ERROR,
+            message,
+        }
+        // Fail-fast for any reason not opted into `retryOn`.
+        // `quota_exhausted` is absent from every default policy, so a
+        // quota 429 breaks here on attempt 1 — same control flow
+        // `rate_limit` already takes.
+        if (!policy.retryOn.includes(reason)) {
+            return { kind: "exhausted", lastError }
+        }
+        if (attempt >= policy.maxAttempts) {
+            return { kind: "exhausted", lastError }
+        }
+        emitRetry(ctx, cfg.id, attempt, reason)
+        await sleep(policy.backoffMs, ctx.signal)
+        return { kind: "retry", lastError, nextUserMessage: userMessage }
+    }
+}
+
 export function llmStage<TOutput>(config: {
     id: string
     dependsOn: readonly TDepSpec[]
@@ -499,200 +703,27 @@ export function llmStage<TOutput>(config: {
             const prompt = config.buildPrompt(ctx)
             let userMessage = prompt.user
             let attempt = 0
-            let lastError: {
-                reason: TRetryReason
-                code: string
-                message: string
-                context?: Record<string, unknown>
-            } | null = null
+            let lastError: TLastError | null = null
 
             while (attempt < policy.maxAttempts) {
                 attempt += 1
-                if (ctx.signal.aborted) {
-                    // Loop-top abort: caller cancelled before (or
-                    // between) attempts. Surface as a `skipped` stage
-                    // rather than a failure.
-                    throw new StageAbortedError({ stageId: config.id })
-                }
-
-                // Emit the `stage:llm-response-created` event the moment
-                // the provider surfaces a response id. In background-stream
-                // mode this fires MID-FLIGHT — before `respond()` resolves
-                // — from the provider's `onResponseCreated` callback (the
-                // first `response.created` SSE event). That early emit is
-                // load-bearing: a consumer persists the id before a
-                // possible crash, so a call interrupted mid-generation can
-                // be recovered from the upstream's stored copy rather than
-                // blindly re-run. In synchronous mode the callback never
-                // fires; the id is surfaced only at completion (below). The
-                // `responseIdEmitted` flag dedupes so the event fires at
-                // most once per attempt.
-                let responseIdEmitted = false
-                const emitResponseCreated = (responseId: string): void => {
-                    if (responseIdEmitted) return
-                    responseIdEmitted = true
-                    ctx.emit({
-                        kind: "stage:llm-response-created",
-                        stageId: config.id,
-                        attempt,
-                        responseId,
-                        at: now(),
-                    })
-                }
-
-                // Build the request via the shared seam, then attach this
-                // attempt's mid-flight id emitter (the seam leaves
-                // `onResponseCreated` unset — the launch path uses the
-                // submit return value instead).
-                const { req } = buildLlmRequest(cfg, ctx, userMessage)
-                req.onResponseCreated = emitResponseCreated
-
-                // Emit the pre-call stage-input event. Fires inside the
-                // retry loop after `attempt` is incremented and after the
-                // request is built, immediately before `respond()` — so a
-                // consumer can surface the as-sent prompts the instant the
-                // call starts, without waiting for the post-call
-                // `stage:llm-call`. On attempt 2+ `userMessage` already
-                // carries the retry-suffix appended by the prior attempt's
-                // schema-validation failure path, matching this attempt's
-                // eventual `stage:llm-call.prompts.user`.
-                ctx.emit({
-                    kind: "stage:llm-request",
-                    stageId: config.id,
+                const result = await runLlmStageAttempt(
+                    cfg,
+                    ctx,
+                    prompt,
+                    policy,
+                    errorCap,
                     attempt,
-                    prompts: {
-                        system: prompt.system,
-                        user: userMessage,
-                    },
-                    at: now(),
-                })
-
-                try {
-                    const response = await ctx.llm.respond<TOutput>(req)
-
-                    // Completion-time fallback: if the provider surfaced an
-                    // id but did NOT fire the mid-flight callback (the
-                    // synchronous / poll paths), emit here so the event
-                    // still precedes `stage:llm-call` on this attempt.
-                    if (response.rawResponseId) {
-                        emitResponseCreated(response.rawResponseId)
-                    }
-
-                    // Shared validation core (same check the launch/complete
-                    // path runs via validateLlmOutcome's completed branch).
-                    const checked = checkLlmOutput(cfg, response.output)
-                    const validationPassed = checked.valid
-                    const validationError = checked.validationError
-
-                    // Emit per-attempt LLM-call event. Fires after the
-                    // call returns and after schema validation has run,
-                    // before retry/return branching. `validationError`
-                    // is `undefined` when the schema accepted the
-                    // output, a string when it rejected. `prompts.user`
-                    // is the as-sent message — on attempt 2+ this
-                    // includes any retry-suffix appended by the prior
-                    // attempt's schema-validation failure path.
-                    ctx.emit({
-                        kind: "stage:llm-call",
-                        stageId: config.id,
-                        attempt,
-                        prompts: {
-                            system: prompt.system,
-                            user: userMessage,
-                        },
-                        output: response.output,
-                        tokenUsage: response.tokenUsage,
-                        rawResponseId: response.rawResponseId,
-                        validationError,
-                        at: now(),
-                    })
-
-                    if (!validationPassed) {
-                        // validationError is defined here because
-                        // validationPassed is false.
-                        const validationMessage = validationError!
-                        lastError = {
-                            reason: "schema_validation",
-                            code: OUTPUT_SCHEMA_INVALID,
-                            message: validationMessage,
-                        }
-                        const retryable =
-                            policy.retryOn.includes("schema_validation")
-                        if (!retryable || attempt >= policy.maxAttempts) {
-                            break
-                        }
-                        emitRetry(ctx, config.id, attempt, "schema_validation")
-                        userMessage = applyRetrySuffix(
-                            prompt.user,
-                            validationMessage,
-                            errorCap
-                        )
-                        await sleep(policy.backoffMs, ctx.signal)
-                        continue
-                    }
-
-                    // Token usage emission is handled by the executor at
-                    // stage:end time; we return the response output and
-                    // attach the usage onto a side channel via failure-free
-                    // path.
-                    // We stash token usage on a per-stage well-known key
-                    // recognized by the executor.
-                    stashTokenUsage(ctx, config.id, response.tokenUsage)
-                    return response.output
-                } catch (err) {
-                    if (
-                        err instanceof LlmStageRetryExhaustedError &&
-                        err.stageId === config.id
-                    ) {
-                        // Re-throw our own marker; the catch below shouldn't
-                        // see it. Defensive.
-                        throw err
-                    }
-                    if (err instanceof StageAbortedError) {
-                        throw err
-                    }
-                    // Mid-flight abort surfaces here when the provider
-                    // honored the signal and threw. Recognize it before
-                    // classifying as a generic non-retryable failure so
-                    // the executor can mark this stage `skipped`, not
-                    // `failed` with `LLM_NON_RETRYABLE_ERROR`.
-                    if (ctx.signal.aborted) {
-                        throw new StageAbortedError({ stageId: config.id })
-                    }
-                    const reason = classifyError(err)
-                    const message =
-                        err instanceof Error ? err.message : String(err)
-                    if (reason === "non_retryable") {
-                        lastError = {
-                            reason: "transient",
-                            code: LLM_NON_RETRYABLE_ERROR,
-                            message,
-                        }
-                        break
-                    }
-                    lastError = {
-                        reason,
-                        code:
-                            reason === "quota_exhausted"
-                                ? LLM_QUOTA_EXHAUSTED
-                                : reason === "rate_limit"
-                                  ? LLM_RATE_LIMITED
-                                  : LLM_TRANSIENT_ERROR,
-                        message,
-                    }
-                    // Fail-fast for any reason not opted into `retryOn`.
-                    // `quota_exhausted` is absent from every default
-                    // policy, so a quota 429 breaks here on attempt 1 —
-                    // same control flow `rate_limit` already takes.
-                    if (!policy.retryOn.includes(reason)) {
-                        break
-                    }
-                    if (attempt >= policy.maxAttempts) {
-                        break
-                    }
-                    emitRetry(ctx, config.id, attempt, reason)
-                    await sleep(policy.backoffMs, ctx.signal)
+                    userMessage
+                )
+                if (result.kind === "success") {
+                    return result.output
                 }
+                lastError = result.lastError
+                if (result.kind === "exhausted") {
+                    break
+                }
+                userMessage = result.nextUserMessage
             }
 
             const failure = lastError ?? {

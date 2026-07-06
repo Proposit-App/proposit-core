@@ -1,6 +1,11 @@
 // Public barrel for the pipeline framework.
 
-export { optional, isOptionalDep, depId } from "./types.js"
+export {
+    optional,
+    isOptionalDep,
+    depId,
+    ProcessingFailureSchema,
+} from "./types.js"
 export type {
     TDepSpec,
     TOptionalDep,

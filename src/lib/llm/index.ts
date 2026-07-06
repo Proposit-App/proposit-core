@@ -1,5 +1,6 @@
 // Barrel for the abstract LLM provider surface.
 
+export { LlmTokenUsageSchema } from "./types.js"
 export type {
     TLlmModel,
     TReasoningEffort,

@@ -13,5 +13,5 @@
     "readme": "none",
     "excludePrivate": true,
     "excludeInternal": true,
-    "intentionallyNotExported": ["ExpressionManager"]
+    "intentionallyNotExported": ["ExpressionManager", "TAddFailure"]
 }

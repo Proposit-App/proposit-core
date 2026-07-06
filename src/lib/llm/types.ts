@@ -12,7 +12,7 @@
 // introducing a runtime-visible cast. Providers and the mock
 // implementation ignore this field.
 
-import type { TSchema } from "typebox"
+import Type, { type Static, type TSchema } from "typebox"
 
 /** Opaque provider response identifier. Carried across turns so a
  * downstream request can be chained to a specific upstream response. */
@@ -77,11 +77,12 @@ export type TLlmRequest<T> = {
     _typeMarker?: T
 }
 
-export type TLlmTokenUsage = {
-    input: number
-    output: number
-    reasoning?: number
-}
+export const LlmTokenUsageSchema = Type.Object({
+    input: Type.Number(),
+    output: Type.Number(),
+    reasoning: Type.Optional(Type.Number()),
+})
+export type TLlmTokenUsage = Static<typeof LlmTokenUsageSchema>
 
 export type TLlmResponse<T> = {
     output: T
