@@ -2,8 +2,14 @@ slug: 2026-06-21-proposit-core-batched-public-api-exports-cleanup-follow-ups
 title: proposit-core — batched public-API exports + cleanup follow-ups
 phase: ''
 created: '2026-06-21'
-resolution: null
+resolution: done
 priority: 10
 effort: medium
 complexity: low
 initiative: 2026-06-22-post-initiative-carried-cleanups-cross-repo
+dod:
+- tests pass
+- docs synced
+- capabilities reconciled
+- reviewed
+- version offered
