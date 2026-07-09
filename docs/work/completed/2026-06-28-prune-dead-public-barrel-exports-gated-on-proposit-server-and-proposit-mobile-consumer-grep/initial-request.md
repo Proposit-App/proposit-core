@@ -112,3 +112,31 @@ the `S-`/`E-`/`D-`/`P-` codes are stable wire format and must NOT change).
   `[Public-API]` + the relevant `[Public-Engine-API]` interface JSDoc, and a `minor`/`major`
   version bump per the consumer-gated release process (do not self-publish).
 - `pnpm run check` green.
+
+---
+
+## GATE RESULT (2026-07-09) — resolution: wontfix
+
+Cross-repo grep run across proposit-server, proposit-mobile, and proposit-shared
+(`src`/`app`/`lib`, node_modules excluded).
+
+**Live external API — kept (removal would break consumers):**
+`PremiseEngine`, `evaluateArgument`, `createChecksumConfig`, `mergeChangesets`,
+`createLookup`, `collectArgumentReferencedClaims`, `canonicalizeOperatorAssignments`,
+`defaultCompareVariable` (barrel); `IEEEReferenceSchema`, `IEEEReferenceSchemaMap`,
+`ReferenceTypeSchema`, `formatNamesInCitation` (citation subpath). `orderChangeset`
+held by invariant regardless.
+
+**Zero external hits — technically removable:** `TPremiseEngineSnapshot`,
+`checkArgumentValidity`, `emptyClaimConnectionLookup`, `propagateOperatorConstraints`;
+all 31 validators `validateS1`–`validateP5`; 34 relaxed schemas; 33 IEEE templates;
+4 unparsed-citation symbols; 34 per-type `*ReferenceSchema` (internal building blocks
+of the live `ReferenceTypeSchema`/map). Note: consumers ship their own `*_TEMPLATE`
+and `UnparsedCitation*` copies in `proposit-shared` — not core imports.
+
+**Decision — wontfix.** The gate proved every high-value export is live and must
+stay. The remaining removable set is ~106 internal-but-exported symbols; un-exporting
+them deletes essentially no code (symbols stay, only `export`/barrel lines go) yet is a
+breaking semver change forcing a minor bump + the coordinated consumer-gated release.
+Negative trade for a published library — consumers tree-shake unused exports at zero
+cost. Not worth a breaking release to hide internal plumbing.

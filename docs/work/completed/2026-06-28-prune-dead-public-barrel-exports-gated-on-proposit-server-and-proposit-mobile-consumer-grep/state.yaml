@@ -3,7 +3,13 @@ title: Prune dead public barrel exports (gated on proposit-server and proposit-m
   consumer grep)
 phase: ''
 created: '2026-06-28'
-resolution: null
+resolution: wontfix
 priority: null
 effort: low
 complexity: medium
+dod:
+- tests pass
+- docs synced
+- capabilities reconciled
+- reviewed
+- version offered

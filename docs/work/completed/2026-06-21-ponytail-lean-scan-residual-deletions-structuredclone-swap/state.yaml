@@ -2,7 +2,13 @@ slug: 2026-06-21-ponytail-lean-scan-residual-deletions-structuredclone-swap
 title: Ponytail lean-scan — residual deletions + structuredClone swap
 phase: ''
 created: '2026-06-21'
-resolution: null
+resolution: done
 priority: 15
 effort: medium
 complexity: medium
+dod:
+- tests pass
+- docs synced
+- capabilities reconciled
+- reviewed
+- version offered
