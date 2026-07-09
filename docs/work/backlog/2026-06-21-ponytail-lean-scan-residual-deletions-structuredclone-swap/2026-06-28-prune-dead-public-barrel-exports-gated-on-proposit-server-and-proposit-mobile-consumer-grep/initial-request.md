@@ -69,7 +69,7 @@ Exported via `src/lib/index.ts`, zero in-repo consumers. Each requires the GATE 
 | `createLookup()`, `emptyClaimConnectionLookup()` | ~2 functions   | `src/lib/utils/lookup.ts:30;64`                      | |
 | `collectArgumentReferencedClaims()` + type       | ~130           | `src/lib/core/review-helpers.ts:18;47`               | |
 | `canonicalizeOperatorAssignments()` + type       | ~85            | `src/lib/core/review-helpers.ts:160;195`             | |
-| `defaultCompareVariable`                         | 1 function     | `src/lib/utils/diff.ts:29`                           | |
+| `defaultCompareVariable`                         | 1 function     | `src/lib/core/diff.ts:29`                            | |
 | `propagateOperatorConstraints`                   | 1 function     | `src/lib/core/evaluation/argument-evaluation.ts:88`  | |
 | `createChecksumConfig()`                         | 1 factory      | `src/lib/consts.ts:113`                              | Barrel-exported (`index.ts:74`); audit mis-filed it under "internal zero-callers" — it belongs HERE, gated. (Its *internal* key-array dedup is handled in the sibling child and does not remove the export.) |
 

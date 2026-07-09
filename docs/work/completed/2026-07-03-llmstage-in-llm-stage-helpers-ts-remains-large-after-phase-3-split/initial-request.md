@@ -17,3 +17,10 @@ effort. Low priority; not urgent.
 ## Meta changes
 
 
+
+## Resolution (wontfix — backlog audit 2026-07-09)
+
+Premise no longer holds. Commit `ddc95f9` ("extract single-attempt body from
+llmStage") reduced `llmStage` from ~290 lines to ~89 lines
+(`src/lib/pipelines/llm-stage-helpers.ts`). The "still large" concern that
+motivated this follow-up was addressed incidentally by that refactor.

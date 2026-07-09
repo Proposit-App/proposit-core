@@ -2,7 +2,13 @@ slug: 2026-07-03-executepipeline-in-scheduler-ts-remains-large-after-phase-2-spl
 title: executePipeline in scheduler.ts remains large after Phase 2 split
 phase: ''
 created: '2026-07-03'
-resolution: null
+resolution: wontfix
 priority: 3
 effort: low
 complexity: low
+dod:
+- tests pass
+- docs synced
+- capabilities reconciled
+- reviewed
+- version offered

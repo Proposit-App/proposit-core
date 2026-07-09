@@ -17,3 +17,10 @@ priority; not urgent.
 ## Meta changes
 
 
+
+## Resolution (wontfix — backlog audit 2026-07-09)
+
+Premise stale. `executePipeline` is now 156 lines
+(`src/lib/pipelines/scheduler.ts`), down from the 307 lines this item was filed
+against, after subsequent scheduler splits. At 156 lines and low priority, a
+further split isn't worth the effort/regression risk.
