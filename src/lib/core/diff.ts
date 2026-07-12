@@ -395,6 +395,32 @@ export function diffArguments<
     const conclusionChanged =
         rolesA.conclusionPremiseId !== rolesB.conclusionPremiseId
 
+    const variables = diffEntitySet(
+        collectVariables(engineA),
+        collectVariables(engineB),
+        compareVar,
+        options?.variableMatcher
+    )
+    const premises = diffPremiseSet(
+        premisesA,
+        premisesB,
+        expressionsA,
+        expressionsB,
+        comparePrem,
+        compareExpr,
+        options?.premiseMatcher,
+        options?.expressionMatcher
+    )
+
+    propagateReferenceWithin(
+        variables,
+        premises,
+        premisesA,
+        premisesB,
+        expressionsB,
+        options?.premiseMatcher
+    )
+
     return {
         argument: {
             before: argA,
@@ -409,25 +435,85 @@ export function diffArguments<
                     ? "modified-own"
                     : "modified-within",
         },
-        variables: diffEntitySet(
-            collectVariables(engineA),
-            collectVariables(engineB),
-            compareVar,
-            options?.variableMatcher
-        ),
-        premises: diffPremiseSet(
-            premisesA,
-            premisesB,
-            expressionsA,
-            expressionsB,
-            comparePrem,
-            compareExpr,
-            options?.premiseMatcher,
-            options?.expressionMatcher
-        ),
+        variables,
+        premises,
         roles: diffRoles(
             rolesA.conclusionPremiseId,
             rolesB.conclusionPremiseId
         ),
+    }
+}
+
+/**
+ * Marks premises that reference a `modified-own` variable as
+ * `modified-within`, following the reference edge
+ * (variable → variable-expression → premise). A claim edit surfaces as its
+ * claim-bound variable's own change; every premise whose expression tree
+ * points at that variable is then a container the change reaches.
+ *
+ * Premises already in `premises.modified` (for their own or containment
+ * reasons) are left untouched — own/containment state wins over
+ * reference-within. Only matched premises get a reference-within entry; a
+ * newly-added premise stays in `premises.added`.
+ */
+function propagateReferenceWithin<
+    TPremise extends TCorePremise = TCorePremise,
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+>(
+    variables: TCoreEntitySetDiff<TVar>,
+    premises: TCorePremiseSetDiff<TPremise, TExpr>,
+    premisesA: TPremise[],
+    premisesB: TPremise[],
+    expressionsB: Map<string, TExpr[]>,
+    premiseMatcher?: (a: TPremise, b: TPremise) => boolean
+): void {
+    const modifiedOwnVarIds = new Set(
+        variables.modified
+            .filter((m) => m.state === "modified-own")
+            .map((m) => m.after.id)
+    )
+    if (modifiedOwnVarIds.size === 0) {
+        return
+    }
+
+    const beforeById = new Map(premisesA.map((p) => [p.id, p]))
+
+    for (const afterPremise of premisesB) {
+        const alreadyPresent = premises.modified.some(
+            (m) => m.after.id === afterPremise.id
+        )
+        if (alreadyPresent) {
+            continue
+        }
+
+        const referencesChangedVar = (
+            expressionsB.get(afterPremise.id) ?? []
+        ).some(
+            (expr) =>
+                expr.type === "variable" &&
+                modifiedOwnVarIds.has(expr.variableId)
+        )
+        if (!referencesChangedVar) {
+            continue
+        }
+
+        // A reference-within premise is structurally unchanged, but its diff
+        // object must still carry the genuine before entity for downstream
+        // rendering — pair it with the matched before-side premise.
+        const beforePremise = premiseMatcher
+            ? premisesA.find((a) => premiseMatcher(a, afterPremise))
+            : beforeById.get(afterPremise.id)
+        if (!beforePremise) {
+            continue
+        }
+
+        premises.modified.push({
+            before: beforePremise,
+            after: afterPremise,
+            changes: [],
+            expressions: { added: [], removed: [], modified: [] },
+            state: "modified-within",
+        })
     }
 }

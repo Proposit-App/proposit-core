@@ -227,3 +227,102 @@ describe("conclusion role folded into argument own-state", () => {
         expect(diff.argument.state).toBe("modified-own")
     })
 })
+
+/** A claim library where `claim-default` has both version 0 and version 1, so
+ * a variable can pin either — modelling a claim edit (version bump). */
+function makeClaimLibraryWithBump(): ClaimLibrary {
+    const lib = makeClaimLibrary()
+    lib.freeze(DEFAULT_CLAIM_ID) // freezes v0 and opens a v1 draft
+    return lib
+}
+
+/**
+ * Builds an engine where variable Q is claim-bound to `claim-default@{qVersion}`
+ * and is referenced by three premises:
+ *  - p-1: `P → Q` (inference / conclusion),
+ *  - p-2: `Q` (bare reference),
+ *  - p-3: `Q {p3Op} P` (a constraint premise whose own operator can be edited).
+ */
+function buildReferenceEngine(
+    lib: ClaimLibrary,
+    qVersion: 0 | 1,
+    p3Op: "and" | "or"
+): ArgumentEngine {
+    const engine = makeEngine(lib)
+    engine.addVariable(makeVar("var-p", "P"))
+    engine.addVariable(makeVar("var-q", "Q", qVersion))
+
+    const { result: pm1 } = engine.createPremiseWithId("p-1", {})
+    pm1.addExpression(
+        opExpr("p-1-implies", "p-1", "implies", null, POSITION_INITIAL)
+    )
+    pm1.addExpression(varExpr("p-1-p", "p-1", "var-p", "p-1-implies", 0))
+    pm1.addExpression(varExpr("p-1-q", "p-1", "var-q", "p-1-implies", 1))
+
+    const { result: pm2 } = engine.createPremiseWithId("p-2", {})
+    pm2.addExpression(varExpr("p-2-q", "p-2", "var-q", null, POSITION_INITIAL))
+
+    const { result: pm3 } = engine.createPremiseWithId("p-3", {})
+    pm3.addExpression(opExpr("p-3-op", "p-3", p3Op, null, POSITION_INITIAL))
+    pm3.addExpression(varExpr("p-3-q", "p-3", "var-q", "p-3-op", 0))
+    pm3.addExpression(varExpr("p-3-p", "p-3", "var-p", "p-3-op", 1))
+
+    engine.setConclusionPremise("p-1")
+    return engine
+}
+
+describe("reference-edge propagation", () => {
+    it("marks premises that reference a changed claim as modified-within", () => {
+        const lib = makeClaimLibraryWithBump()
+        const engineA = buildReferenceEngine(lib, 0, "and")
+        const engineB = buildReferenceEngine(lib, 1, "and")
+
+        const diff = diffArguments(engineA, engineB)
+
+        const changedQ = diff.variables.modified.find(
+            (v) => v.after.id === "var-q"
+        )
+        expect(changedQ).toBeDefined()
+        expect(changedQ!.state).toBe("modified-own")
+        expect(changedQ!.changes).toEqual([
+            { field: "claimVersion", before: 0, after: 1 },
+        ])
+
+        for (const premiseId of ["p-1", "p-2"]) {
+            const entry = diff.premises.modified.find(
+                (p) => p.after.id === premiseId
+            )
+            expect(
+                entry,
+                `${premiseId} should be modified-within`
+            ).toBeDefined()
+            expect(entry!.state).toBe("modified-within")
+            expect(entry!.changes).toEqual([])
+        }
+    })
+
+    it("does not double-mark a premise that has its own containment change and also references the changed claim", () => {
+        const lib = makeClaimLibraryWithBump()
+        const engineA = buildReferenceEngine(lib, 0, "and")
+        const engineB = buildReferenceEngine(lib, 1, "or") // p-3 operator edit
+
+        const diff = diffArguments(engineA, engineB)
+
+        const p3Entries = diff.premises.modified.filter(
+            (p) => p.after.id === "p-3"
+        )
+        // Present exactly once — the reference pass must not duplicate a
+        // premise already flagged for its own containment change.
+        expect(p3Entries).toHaveLength(1)
+        // Its containment detail (the operator edit) is preserved, not
+        // clobbered into an empty reference-within entry.
+        const opEdit = p3Entries[0].expressions.modified.find(
+            (e) => e.after.id === "p-3-op"
+        )
+        expect(opEdit).toBeDefined()
+        expect(opEdit!.state).toBe("modified-own")
+        expect(opEdit!.changes).toEqual([
+            { field: "operator", before: "and", after: "or" },
+        ])
+    })
+})
