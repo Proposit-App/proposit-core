@@ -388,6 +388,13 @@ export function diffArguments<
 
     const argumentChanges = compareArg(argA, argB)
 
+    // Reassigning the conclusion premise is argument own-content: the
+    // conclusion role is a property of the (argument, premise) pairing, not of
+    // the premise. So a conclusion change makes the argument `modified-own`
+    // even though `defaultCompareArgument` reports no intrinsic field changes.
+    const conclusionChanged =
+        rolesA.conclusionPremiseId !== rolesB.conclusionPremiseId
+
     return {
         argument: {
             before: argA,
@@ -398,7 +405,9 @@ export function diffArguments<
             // Emptiness is decided by the `isDiffEmpty` predicate, not by this
             // field.
             state:
-                argumentChanges.length > 0 ? "modified-own" : "modified-within",
+                argumentChanges.length > 0 || conclusionChanged
+                    ? "modified-own"
+                    : "modified-within",
         },
         variables: diffEntitySet(
             collectVariables(engineA),

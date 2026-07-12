@@ -50,6 +50,7 @@ function makeVar(id: string, symbol: string, claimVersion = 0) {
 
 function varExpr(
     id: string,
+    premiseId: string,
     variableId: string,
     parentId: string | null,
     position: number
@@ -58,6 +59,7 @@ function varExpr(
         id,
         argumentId: ARG_ID,
         argumentVersion: 0,
+        premiseId,
         type: "variable",
         variableId,
         parentId,
@@ -67,6 +69,7 @@ function varExpr(
 
 function opExpr(
     id: string,
+    premiseId: string,
     operator: string,
     parentId: string | null,
     position: number
@@ -75,6 +78,7 @@ function opExpr(
         id,
         argumentId: ARG_ID,
         argumentVersion: 0,
+        premiseId,
         type: "operator",
         operator,
         parentId,
@@ -96,9 +100,9 @@ function buildBinaryOpEngine(
     engine.addVariable(makeVar("var-p", pSymbol))
     engine.addVariable(makeVar("var-q", "Q"))
     const { result: pm } = engine.createPremiseWithId("p-1", { title: "P1" })
-    pm.addExpression(opExpr("expr-op", operator, null, POSITION_INITIAL))
-    pm.addExpression(varExpr("expr-p", "var-p", "expr-op", 0))
-    pm.addExpression(varExpr("expr-q", "var-q", "expr-op", 1))
+    pm.addExpression(opExpr("expr-op", "p-1", operator, null, POSITION_INITIAL))
+    pm.addExpression(varExpr("expr-p", "p-1", "var-p", "expr-op", 0))
+    pm.addExpression(varExpr("expr-q", "p-1", "var-q", "expr-op", 1))
     return engine
 }
 
@@ -163,5 +167,63 @@ describe("own-vs-within tagging", () => {
         expect(renamed!.changes).toEqual([
             { field: "symbol", before: "P", after: "X" },
         ])
+    })
+})
+
+/** Builds an engine with two inference premises so the conclusion role can be
+ * reassigned between them without touching any premise content. */
+function buildTwoInferencePremiseEngine(
+    lib: ClaimLibrary,
+    conclusionPremiseId: "p-1" | "p-2"
+): ArgumentEngine {
+    const engine = makeEngine(lib)
+    engine.addVariable(makeVar("var-p", "P"))
+    engine.addVariable(makeVar("var-q", "Q"))
+    for (const premiseId of ["p-1", "p-2"] as const) {
+        const { result: pm } = engine.createPremiseWithId(premiseId, {})
+        pm.addExpression(
+            opExpr(
+                `${premiseId}-implies`,
+                premiseId,
+                "implies",
+                null,
+                POSITION_INITIAL
+            )
+        )
+        pm.addExpression(
+            varExpr(
+                `${premiseId}-p`,
+                premiseId,
+                "var-p",
+                `${premiseId}-implies`,
+                0
+            )
+        )
+        pm.addExpression(
+            varExpr(
+                `${premiseId}-q`,
+                premiseId,
+                "var-q",
+                `${premiseId}-implies`,
+                1
+            )
+        )
+    }
+    engine.setConclusionPremise(conclusionPremiseId)
+    return engine
+}
+
+describe("conclusion role folded into argument own-state", () => {
+    it("marks the argument modified-own when the conclusion premise is reassigned", () => {
+        const lib = makeClaimLibrary()
+        const engineA = buildTwoInferencePremiseEngine(lib, "p-1")
+        const engineB = buildTwoInferencePremiseEngine(lib, "p-2")
+
+        const diff = diffArguments(engineA, engineB)
+
+        expect(diff.roles.conclusion.before).not.toBe(
+            diff.roles.conclusion.after
+        )
+        expect(diff.argument.state).toBe("modified-own")
     })
 })
