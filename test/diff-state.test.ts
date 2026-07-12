@@ -440,3 +440,37 @@ describe("single origin across the two-variables-per-claim hazard", () => {
         expect(ownVars[0].after.id).toBe("var-q")
     })
 })
+
+describe("derivation premises diff without special-casing", () => {
+    it("an unchanged derivation premise produces no diff entry", () => {
+        const lib = makeClaimLibrary()
+        const engineA = buildSharedClaimEngine(lib, 0)
+        const engineB = buildSharedClaimEngine(lib, 0)
+
+        const diff = diffArguments(engineA, engineB)
+
+        expect(diff.premises.added).toEqual([])
+        expect(diff.premises.removed).toEqual([])
+        // The derivation premise is not spuriously flagged, and nothing is
+        // synthesized into the diff for it.
+        expect(diff.premises.modified).toEqual([])
+    })
+
+    it("a derivation premise touched by a claim edit is tagged like any referencing premise, exactly once", () => {
+        const lib = makeClaimLibraryWithBump()
+        const engineA = buildSharedClaimEngine(lib, 0)
+        const engineB = buildSharedClaimEngine(lib, 1)
+
+        const diff = diffArguments(engineA, engineB)
+
+        const derivEntries = diff.premises.modified.filter(
+            (p) => p.after.id === "p-deriv"
+        )
+        expect(derivEntries).toHaveLength(1)
+        expect(derivEntries[0].state).toBe("modified-within")
+
+        // No premise is duplicated by a synthesized within entry.
+        const ids = diff.premises.modified.map((p) => p.after.id)
+        expect(new Set(ids).size).toBe(ids.length)
+    })
+})
