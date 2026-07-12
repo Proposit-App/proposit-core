@@ -144,8 +144,7 @@ function diffEntitySet<T extends { id: string }>(
                     before: beforeItem,
                     after: afterItem,
                     changes,
-                    state:
-                        changes.length > 0 ? "modified-own" : "modified-within",
+                    state: "modified-own",
                 })
             }
         }
