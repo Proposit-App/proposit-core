@@ -5,11 +5,15 @@ import {
     POSITION_INITIAL,
     PropositCore,
     diffArguments,
+    isClaimBound,
 } from "../src/index.js"
 import type {
+    TCoreArgumentDiff,
     TCoreDiffState,
     TCorePropositionalExpression,
+    TCorePropositionalVariable,
 } from "../src/index.js"
+import { isDiffEmpty } from "../src/cli/output/diff-renderer.js"
 
 const ARG_ID = "arg-1"
 
@@ -324,5 +328,115 @@ describe("reference-edge propagation", () => {
         expect(opEdit!.changes).toEqual([
             { field: "operator", before: "and", after: "or" },
         ])
+    })
+})
+
+/**
+ * Tallies `modified-own` / `modified-within` across the *entity* records only
+ * (variables, premises, and each premise's expressions). The always-present
+ * argument root's default `state` is deliberately excluded — emptiness is
+ * decided by `isDiffEmpty`, not by the argument's structural default.
+ */
+function countByState(diff: TCoreArgumentDiff): {
+    own: number
+    within: number
+} {
+    let own = 0
+    let within = 0
+    const tally = (state: TCoreDiffState): void => {
+        if (state === "modified-own") own += 1
+        else if (state === "modified-within") within += 1
+    }
+    for (const v of diff.variables.modified) tally(v.state)
+    for (const p of diff.premises.modified) {
+        tally(p.state)
+        for (const e of p.expressions.modified) tally(e.state)
+    }
+    return { own, within }
+}
+
+describe("diff stability (id-stability contract)", () => {
+    it("a copy with no edits produces an empty diff", () => {
+        const lib = makeClaimLibraryWithBump()
+        const engineA = buildReferenceEngine(lib, 0, "and")
+        const engineB = buildReferenceEngine(lib, 0, "and")
+
+        const diff = diffArguments(engineA, engineB)
+
+        expect(isDiffEmpty(diff)).toBe(true)
+        // No modified-* on any entity record — argument.state's structural
+        // default is excluded by countByState.
+        expect(countByState(diff)).toEqual({ own: 0, within: 0 })
+    })
+
+    it("a single entity edit produces exactly one modified-own origin", () => {
+        const lib = makeClaimLibrary()
+        const engineA = buildBinaryOpEngine(lib, "and")
+        const engineB = buildBinaryOpEngine(lib, "or")
+
+        const diff = diffArguments(engineA, engineB)
+
+        const tally = countByState(diff)
+        // Exactly one origin (the edited operator expression); the containing
+        // premise is the only within entry.
+        expect(tally.own).toBe(1)
+        expect(tally.within).toBe(1)
+    })
+})
+
+/**
+ * Builds an engine where one claim (`claim-default`) is referenced BOTH by an
+ * authored claim-bound variable and by a derivation premise deriving it. A
+ * naive walk would see two variables pinning the claim; the engine's
+ * `ensureClaimBoundVariable` reuse means there is exactly one.
+ */
+function buildSharedClaimEngine(
+    lib: ClaimLibrary,
+    qVersion: 0 | 1
+): ArgumentEngine {
+    const engine = makeEngine(lib)
+    // Authored variable bound to the claim, referenced by an ordinary premise.
+    engine.addVariable(makeVar("var-q", "Q", qVersion))
+    const { result: authored } = engine.createPremiseWithId("p-authored", {})
+    authored.addExpression(
+        varExpr("p-authored-q", "p-authored", "var-q", null, POSITION_INITIAL)
+    )
+    // Derivation premise deriving the same claim — its naked-Q consequent
+    // reuses the authored variable rather than minting a second one.
+    engine.createPremiseWithId("p-deriv", {
+        type: "derivation",
+        derivedClaimId: DEFAULT_CLAIM_ID,
+    })
+    return engine
+}
+
+describe("single origin across the two-variables-per-claim hazard", () => {
+    it("keeps one claim-bound variable when a claim is both authored and derived", () => {
+        const lib = makeClaimLibraryWithBump()
+        const engine = buildSharedClaimEngine(lib, 0)
+
+        const claimBound = engine
+            .getVariables()
+            .filter(
+                (v: TCorePropositionalVariable) =>
+                    isClaimBound(v) && v.claimId === DEFAULT_CLAIM_ID
+            )
+        expect(claimBound).toHaveLength(1)
+    })
+
+    it("a single claim-version bump yields exactly one modified-own variable", () => {
+        const lib = makeClaimLibraryWithBump()
+        const engineA = buildSharedClaimEngine(lib, 0)
+        const engineB = buildSharedClaimEngine(lib, 1)
+
+        const diff = diffArguments(engineA, engineB)
+
+        const ownVars = diff.variables.modified.filter(
+            (v) => v.state === "modified-own"
+        )
+        // Exactly one origin. Two would be a real single-origin violation
+        // (the claim reference double-counted), not something to dedupe away.
+        expect(ownVars).toHaveLength(1)
+        expect(ownVars[0].after.id).toBe("var-q")
     })
 })
