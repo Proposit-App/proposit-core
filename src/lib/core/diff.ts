@@ -346,6 +346,21 @@ function collectVariables<
  * Compares argument metadata, variables, premises (with nested expression
  * diffs), and role assignments. Uses pluggable comparators that default to
  * the `defaultCompare*` functions.
+ *
+ * **Four-state enrichment:** Each modified entity carries a `state` field
+ * discriminating `modified-own` (the entity itself changed) from
+ * `modified-within` (only contained children or references changed). The
+ * `modified-within` state also marks premises whose claim-bound variables
+ * changed outside the premise — reference-edge propagation that surfaces
+ * downstream impacts of a claim edit.
+ *
+ * **Id-stability contract:** The id-stability contract matters because the
+ * `modified-own`/`modified-within` states are only expressible when an
+ * entity's id survives a content edit; if ids churn, the diff can only
+ * report add+remove. Every version-producing path must preserve the id of
+ * any entity that logically persists across a version bump; mint a new id
+ * only for something genuinely new; drop an id only for something genuinely
+ * gone.
  */
 export function diffArguments<
     TArg extends TCoreArgument = TCoreArgument,

@@ -438,6 +438,10 @@ Returns:
 
 Computes a structural diff between two managed arguments. Automatically injects fork-aware entity matchers derived from `ForkLibrary` records — when argument B is a fork of argument A, entities are paired by fork provenance rather than by ID. Caller-provided matchers in `options` take precedence over the fork-aware defaults.
 
+Each modified entity carries a `state` field discriminating `"modified-own"` (the entity itself changed) from `"modified-within"` (only contained children or references changed). The `"modified-within"` state also marks premises whose variables changed elsewhere — reference-edge propagation that surfaces downstream impacts of a claim edit.
+
+**Id-stability contract:** The `modified-own`/`modified-within` states are only expressible when an entity's id survives a content edit. Every version-producing path must preserve the id of any entity that logically persists across a version bump; mint a new id only for something genuinely new; drop an id only for something genuinely gone.
+
 ---
 
 ### `snapshot()` → `TPropositCoreSnapshot`
@@ -1137,6 +1141,17 @@ The pre-1.0 codes `DERIVATION_TYPE_MISMATCH`, `DERIVATION_STRUCTURE_INVALID`, `D
 
 Compares two `ArgumentEngine` instances and returns a structured diff covering argument metadata, variables, premises (with nested expression diffs), and role changes. Each entity category reports added, removed, and modified items with field-level change details.
 
+Modified entities carry a `state` field on the `TCoreEntityFieldDiff` record:
+
+| State               | Meaning                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `"added"`           | Entity exists in engine B but not in engine A (array membership in `added`)                               |
+| `"removed"`         | Entity exists in engine A but not in engine B (array membership in `removed`)                             |
+| `"modified-own"`    | Entity exists in both but its own fields changed (comparison found changes)                               |
+| `"modified-within"` | Entity exists in both but only contained children changed, or it references a modified variable elsewhere |
+
+The `"modified-within"` state marks premises that reference variables changed in the commit — reference-edge propagation that surfaces downstream impacts of a claim edit.
+
 Options allow plugging custom comparators per entity type via `TCoreDiffOptions`:
 
 ```typescript
@@ -1151,6 +1166,8 @@ const diff = diffArguments(engineA, engineB, {
 ```
 
 Default comparators exported: `defaultCompareArgument`, `defaultCompareVariable`, `defaultComparePremise`, `defaultCompareExpression`.
+
+**Id-stability contract:** The `modified-own`/`modified-within` states are only expressible when an entity's id survives a content edit. Every version-producing path must preserve the id of any entity that logically persists across a version bump; mint a new id only for something genuinely new; drop an id only for something genuinely gone.
 
 `TCoreDiffOptions` also accepts optional entity matchers (`premiseMatcher`, `variableMatcher`, `expressionMatcher`) for custom entity pairing. When provided, matchers override the default ID-based pairing. For fork-aware diffing, use `PropositCore.diffArguments()` instead — it injects fork-aware matchers automatically from `ForkLibrary` records.
 

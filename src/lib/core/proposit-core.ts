@@ -695,6 +695,10 @@ export class PropositCore<
      * Caller-provided matchers in `options` take precedence over the
      * fork-aware defaults.
      *
+     * Modified entities carry a `state` field: `modified-own` (own change) or
+     * `modified-within` (contained/referenced change only). See `diffArguments`
+     * for the id-stability contract governing state expressibility.
+     *
      * @param argumentIdA - The ID of the "before" argument.
      * @param argumentIdB - The ID of the "after" argument.
      * @param options - Optional diff configuration and comparator overrides.
