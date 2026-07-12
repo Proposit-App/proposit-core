@@ -12,11 +12,31 @@ export interface TCoreFieldChange {
     after: unknown
 }
 
+/**
+ * The four states a matched-or-membership entity can occupy in a diff.
+ *
+ * `added` / `removed` are expressed purely by array membership
+ * (`TCoreEntitySetDiff.added` / `.removed`); they are never stored on a record.
+ * The `state` field on a matched record carries only the `modified-*` pair:
+ *
+ * - `modified-own` — the entity's own comparator reported field changes (its
+ *   own `checksum` differs).
+ * - `modified-within` — own fields unchanged, but a containment child changed
+ *   or a referenced entity is `modified-own` (a claim/variable edit reaching it
+ *   through the reference edge).
+ */
+export type TCoreDiffState =
+    | "added"
+    | "removed"
+    | "modified-own"
+    | "modified-within"
+
 /** Field-level diff for a single matched entity. */
 export interface TCoreEntityFieldDiff<T> {
     before: T
     after: T
     changes: TCoreFieldChange[]
+    state: "modified-own" | "modified-within"
 }
 
 /** Set-level diff for a collection of ID-keyed entities. */

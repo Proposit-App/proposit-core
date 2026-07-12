@@ -43,6 +43,7 @@ function emptyDiff(
             before: makeArg(),
             after: makeArg({ version: 1 }),
             changes: [],
+            state: "modified-within",
         },
         variables: { added: [], removed: [], modified: [] },
         premises: { added: [], removed: [], modified: [] },
@@ -64,6 +65,7 @@ describe("isDiffEmpty", () => {
                 before: makeArg(),
                 after: makeArg({ version: 1 }),
                 changes: [{ field: "title", before: "Old", after: "New" }],
+                state: "modified-own",
             },
         })
         expect(isDiffEmpty(diff)).toBe(false)
@@ -118,6 +120,7 @@ describe("renderDiff", () => {
                         after: "New Title",
                     },
                 ],
+                state: "modified-own",
             },
         })
         renderDiff(diff)
@@ -171,6 +174,7 @@ describe("renderDiff", () => {
                             checksum: "x",
                         },
                         changes: [{ field: "symbol", before: "q", after: "Q" }],
+                        state: "modified-own",
                     },
                 ],
             },
@@ -266,6 +270,7 @@ describe("renderDiff", () => {
                             removed: [],
                             modified: [],
                         },
+                        state: "modified-own",
                     },
                 ],
             },
@@ -297,6 +302,7 @@ describe("renderDiff", () => {
                 before: makeArg(),
                 after: makeArg({ version: 1 }),
                 changes: [{ field: "title", before: "Old", after: "New" }],
+                state: "modified-own",
             },
         })
         renderDiff(diff)

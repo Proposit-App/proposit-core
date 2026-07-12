@@ -140,7 +140,13 @@ function diffEntitySet<T extends { id: string }>(
             }
             const changes = compare(beforeItem, afterItem)
             if (changes.length > 0) {
-                modified.push({ before: beforeItem, after: afterItem, changes })
+                modified.push({
+                    before: beforeItem,
+                    after: afterItem,
+                    changes,
+                    state:
+                        changes.length > 0 ? "modified-own" : "modified-within",
+                })
             }
         }
 
@@ -172,7 +178,12 @@ function diffEntitySet<T extends { id: string }>(
         const afterItem = afterItems[afterIndex]
         const changes = compare(beforeItem, afterItem)
         if (changes.length > 0) {
-            modified.push({ before: beforeItem, after: afterItem, changes })
+            modified.push({
+                before: beforeItem,
+                after: afterItem,
+                changes,
+                state: changes.length > 0 ? "modified-own" : "modified-within",
+            })
         }
     }
 
@@ -229,6 +240,10 @@ function diffPremiseSet<
                     after: afterPremise,
                     changes: premiseChanges,
                     expressions: expressionsDiff,
+                    state:
+                        premiseChanges.length > 0
+                            ? "modified-own"
+                            : "modified-within",
                 })
             }
         }
@@ -277,6 +292,10 @@ function diffPremiseSet<
                 after: afterPremise,
                 changes: premiseChanges,
                 expressions: expressionsDiff,
+                state:
+                    premiseChanges.length > 0
+                        ? "modified-own"
+                        : "modified-within",
             })
         }
     }
@@ -374,6 +393,12 @@ export function diffArguments<
             before: argA,
             after: argB,
             changes: argumentChanges,
+            // The argument node is always present, so `modified-within` is its
+            // structural default when only children (or nothing) changed.
+            // Emptiness is decided by the `isDiffEmpty` predicate, not by this
+            // field.
+            state:
+                argumentChanges.length > 0 ? "modified-own" : "modified-within",
         },
         variables: diffEntitySet(
             collectVariables(engineA),
