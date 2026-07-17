@@ -24509,13 +24509,11 @@ describe("PremiseEngine.wrapInFormula", () => {
 // ---------------------------------------------------------------------------
 // Ingestion prompts — anti-attribution clause (no "The author claims…" frame)
 // ---------------------------------------------------------------------------
-// Regression guards for
-// `docs/inbox/2026-05-29-strip-claim-attribution-prompts.md`: every in-code
-// prompt that authors user-facing claim prose must forbid the attributive
-// reporting wrapper ("The author claims X") while keeping the existing
-// third-person, present-tense, declarative voice. These are deterministic
-// substring assertions so a later prompt rewrite that silently drops the
-// clause fails CI.
+// Regression guards: every in-code prompt that authors user-facing claim
+// prose must forbid the attributive reporting wrapper ("The author claims X")
+// while keeping the existing third-person, present-tense, declarative voice.
+// These are deterministic substring assertions so a later prompt rewrite that
+// silently drops the clause fails CI.
 describe("Ingestion prompts — anti-attribution clause", () => {
     const ANTI_ATTRIBUTION_ANCHOR =
         "never prepend an author-attributive reporting frame"
