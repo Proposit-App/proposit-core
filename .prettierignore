@@ -3,11 +3,6 @@ docs/api/
 coverage/
 .claude/
 .untracked/
-# Inbox request docs are freeform, consumer-authored artifacts (prose,
-# tables, pasted output) — not maintained project source. Don't gate
-# `pnpm run check` on their prettier-format compliance. Covers the live
-# inbox and its `.archive/`.
-docs/inbox/
 # Planning docs under docs/work/ are freeform artifacts — not maintained
 # project source. Don't gate `pnpm run check` on their prettier compliance.
 docs/work/

@@ -49,7 +49,7 @@ Opt-in live integration suites exercise the provider against the real Responses 
 
 ## Change requests
 
-Detailed change requests and incoming work items live in `docs/inbox/` as markdown files. When the user mentions an inbox item or a change request, list the files in that folder and check if any filename pertains to the request. If a match looks likely, ask the user to confirm before reading the file. Once confirmed, read the file and use it as the specification for the work. After an inbox item is fully implemented, archive it to `docs/inbox/.archive/` (the convention used by the `skill-cefailures:process-inbox` skill). The legacy `docs/change-requests/` folder still contains historical specs from before this migration — read them when referenced, but do not create new files there.
+Incoming cross-repo change requests and work items are tracked through `tcw work` (the Work axis of TCW), not a hand-managed folder. A request delegated from the root or escalated from a sibling arrives in this node's `tcw` inbox; adopt it with `tcw work inbox list` → `tcw work inbox show <entry>` → `tcw work inbox accept <entry>`, which converts it into a durable backlog item you then plan and drive. See the root `AGENTS.md` for the cross-node flow.
 
 ## Commands
 
