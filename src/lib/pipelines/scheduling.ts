@@ -70,7 +70,7 @@ export function hasRequiredFailureUpstream(
     return false
 }
 
-/** The wave's progress: stages to launch + stages to mark skipped. */
+/** A scheduling step: stages to launch now + stages to mark skipped now. */
 export type TDagProgress<TStage extends TStageDescriptor> = {
     /** Stages eligible to run now (deps satisfied, not yet terminal). */
     runnable: TStage[]
