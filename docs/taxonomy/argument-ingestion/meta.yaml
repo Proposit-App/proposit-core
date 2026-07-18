@@ -1,9 +1,0 @@
-name: Argument Ingestion
-kind: Feature
-relatesTo: []
-vocabulary:
-    - argument
-    - argument/claim
-    - argument/premise
-    - argument/propositional-expression
-    - argument/claim/citation-claim

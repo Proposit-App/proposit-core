@@ -24,7 +24,6 @@ import {
     LLM_QUOTA_EXHAUSTED,
     LlmStageRetryExhaustedError,
     PipelineConfigurationError,
-    QuotaExhaustedLlmError,
     StageAbortedError,
     SubPipelineFailedError,
     completeStage,
@@ -46,6 +45,7 @@ import type {
     TExecuteStageDeps,
     TRetrievedResponse,
 } from "../src/lib/index.js"
+import { QuotaExhaustedLlmError } from "../src/extensions/openai/index.js"
 // Package-internal seam fns — imported directly from stage-helpers (NOT
 // the public barrel) to test them without exporting them.
 import {
@@ -841,7 +841,7 @@ describe("llmStage — quota-exhaustion classification", () => {
         expect(failure?.code).toBe("LLM_TRANSIENT_ERROR")
     })
 
-    it("exports LLM_QUOTA_EXHAUSTED constant and QuotaExhaustedLlmError class from the package root", () => {
+    it("exports the LLM_QUOTA_EXHAUSTED framework code from the package root and the QuotaExhaustedLlmError class from the openai subpath", () => {
         expect(LLM_QUOTA_EXHAUSTED).toBe("LLM_QUOTA_EXHAUSTED")
         const err = new QuotaExhaustedLlmError({
             message: "boom",

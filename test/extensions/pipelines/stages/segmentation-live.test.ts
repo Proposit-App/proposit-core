@@ -40,11 +40,8 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import Type from "typebox"
-import {
-    createOpenAiResponsesProvider,
-    executePipeline,
-    optional,
-} from "../../../../src/lib/index.js"
+import { executePipeline, optional } from "../../../../src/lib/index.js"
+import { createOpenAiResponsesProvider } from "../../../../src/extensions/openai/index.js"
 import {
     STAGE_IDS,
     segmentationStage,

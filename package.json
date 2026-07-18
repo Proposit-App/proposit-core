@@ -58,6 +58,11 @@
             "import": "./dist/extensions/pipelines/ingestion/index.js",
             "default": "./dist/extensions/pipelines/ingestion/index.js"
         },
+        "./pipelines/scheduling": {
+            "types": "./dist/lib/pipelines/scheduling.d.ts",
+            "import": "./dist/lib/pipelines/scheduling.js",
+            "default": "./dist/lib/pipelines/scheduling.js"
+        },
         "./conversation": {
             "types": "./dist/lib/conversation/index.d.ts",
             "import": "./dist/lib/conversation/index.js",

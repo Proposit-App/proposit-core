@@ -34,10 +34,8 @@
 import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import {
-    createOpenAiResponsesProvider,
-    executePipeline,
-} from "../../../src/lib/index.js"
+import { executePipeline } from "../../../src/lib/index.js"
+import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/index.js"
 import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
 import { basicsExtension } from "../../../src/extensions/pipelines/base/basics-extension.js"
 import {

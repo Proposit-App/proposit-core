@@ -24,11 +24,13 @@ import {
     createConversation,
     executeTurn,
     ConversationClosedError,
+    executePipeline,
+} from "../src/lib/index.js"
+import {
     createReviewTurn,
     createSimulateTurn,
     createDistillTurn,
-    executePipeline,
-} from "../src/lib/index.js"
+} from "../src/extensions/builder/index.js"
 import { createScribePipeline } from "../src/extensions/pipelines/ingestion/scribe/index.js"
 import { basicsExtension } from "../src/extensions/pipelines/base/index.js"
 import type { TExecuteTurnDeps } from "../src/lib/conversation/turn.js"
