@@ -1,2 +1,5 @@
 # tcw node marker — declares this folder a TCW project (node).
-# Future config (inheritance, etc.) goes here.
+id: proposit-core
+connected-projects:
+    parent:
+        proposit-app: ..
