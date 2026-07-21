@@ -341,6 +341,8 @@ Consumers key their state by `claimId`; translate with `getVariableIdForClaim` /
 
 Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `deriveDefaultAssignment()` and calls `evaluate` in one step. Default-sourced **axiomatic-bound** keys are dropped before evaluation (the engine force-sets them `true`), so the defaults and the pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. An `override` that names an axiomatic variable is left intact, so `evaluate` still enforces the one-way rule. `options` is the same `TCoreArgumentEvaluationOptions` accepted by `evaluate`.
 
+**Axiom vs. citation asymmetry (important for consumers).** Only **axiomatic**-bound variables are engine-forced: `evaluate` force-sets them `true` and rejects any explicit assignment for them. **Citation**-bound variables are _free_ — the engine does not force them and does not reject an explicit citation assignment. Both read as `true` under `deriveDefaultAssignment`, but the axiom `true` comes from the engine while the **citation `true` is supplied by the map** and is therefore _kept_ (never dropped) when evaluating — dropping it would leave the citation unknown. Consequence for a consumer building its own effective assignment and calling `evaluate` directly (e.g. `@proposit/shared`'s overlay): strip axiomatic-bound keys, but **keep** citation-bound keys. Because citations are not locked, a citation default is reviewer-overridable; an axiom is not.
+
 ---
 
 ### `getVariableIdForClaim(claimId)` → `string | undefined` (since 3.1.0)

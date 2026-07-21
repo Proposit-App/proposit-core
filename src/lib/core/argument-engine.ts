@@ -3005,6 +3005,15 @@ export class ArgumentEngine<
      * an axiomatic variable is left intact, so `evaluate` still enforces the
      * one-way rule.
      *
+     * **Citations are different from axioms.** The engine does *not* force
+     * citation-bound variables `true` and does *not* reject an explicit
+     * citation assignment — a citation is a free variable, so its default
+     * `true` is *kept* here (dropping it would leave the citation unknown at
+     * evaluation). Both citations and axioms read as `true` under defaults, but
+     * only the axiom `true` comes from the engine; the citation `true` is
+     * supplied by this map. That also makes citation defaults reviewer-
+     * overridable, whereas axioms stay locked.
+     *
      * @since 3.1.0
      */
     public evaluateWithDefaults(

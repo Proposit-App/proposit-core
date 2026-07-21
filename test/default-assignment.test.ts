@@ -405,6 +405,38 @@ describe("evaluateWithDefaults", () => {
         expect(result.isCounterexample).not.toBe(true)
     })
 
+    it("keeps default-sourced citation keys (citations are free, not engine-forced — the explicit true is load-bearing)", () => {
+        // Asymmetry with axioms: the engine does NOT force citation-bound
+        // variables true and does NOT reject an explicit citation assignment.
+        // So deriveDefaultAssignment's citation=true must reach evaluate as a
+        // real assignment — dropping it (as axiom keys are dropped) would leave
+        // the citation unknown. This test fails if citation keys are dropped.
+        const { eng, claimLib } = makeEngine()
+        claimLib.create({ id: "cite", type: "citation" })
+        const derived = claimLib.create({ id: "d", type: "normal" })
+        const { pe } = buildDerivation(eng, derived.id, {
+            op: "var",
+            claimId: "cite",
+        })
+        eng.setConclusionPremise(pe.getId())
+        const citeVarId = eng.getVariableIdForClaim("cite")!
+
+        // Unlike an axiom key, an explicit citation assignment is accepted
+        // (no AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN) — proving citations are free.
+        expect(() =>
+            eng.evaluate({
+                variables: { [citeVarId]: true },
+                operatorAssignments: {},
+            })
+        ).not.toThrow()
+
+        // evaluateWithDefaults keeps the citation=true in the effective
+        // assignment (it is not stripped the way axiom defaults are).
+        const result = eng.evaluateWithDefaults()
+        expect(result.ok).toBe(true)
+        expect(result.assignment!.variables[citeVarId]).toBe(true)
+    })
+
     it("applies caller overrides over the derived defaults", () => {
         const { eng, dVarId } = citationGroundedArgument()
         const overrides: TCoreVariableAssignment = { [dVarId]: false }
