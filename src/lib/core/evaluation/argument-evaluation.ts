@@ -74,6 +74,67 @@ export interface TEvaluablePremise {
 }
 
 /**
+ * Kleene-evaluate an expression subtree under a fixed variable assignment.
+ *
+ * Total and side-effect free: unknown/missing variables and empty operators
+ * yield `null`, and `formula` wrappers pass through to their single child.
+ * Unlike `PremiseEngine.evaluate`, it never throws on a non-evaluable tree —
+ * so callers deriving display-time defaults can evaluate a subtree of an
+ * argument that is not yet fully evaluable.
+ *
+ * The operator base cases (`and` seeds `true`, `or` seeds `false`) match
+ * `propagateOperatorConstraints`' internal resolver so the two agree.
+ */
+export function evaluateSubtreeKleene(
+    rootExpressionId: string,
+    getExpression: (id: string) => TCorePropositionalExpression | undefined,
+    getChildren: (parentId: string) => TCorePropositionalExpression[],
+    variables: TCoreVariableAssignment
+): TCoreTrivalentValue {
+    const expr = getExpression(rootExpressionId)
+    if (!expr) return null
+
+    if (expr.type === "variable") {
+        return variables[expr.variableId] ?? null
+    }
+
+    const recurse = (
+        child: TCorePropositionalExpression
+    ): TCoreTrivalentValue =>
+        evaluateSubtreeKleene(child.id, getExpression, getChildren, variables)
+    const children = getChildren(expr.id)
+
+    if (expr.type === "formula") {
+        return children.length > 0 ? recurse(children[0]) : null
+    }
+
+    switch (expr.operator) {
+        case "not":
+            return children.length > 0 ? kleeneNot(recurse(children[0])) : null
+        case "and":
+            return children.reduce<TCoreTrivalentValue>(
+                (acc, child) => kleeneAnd(acc, recurse(child)),
+                true
+            )
+        case "or":
+            return children.reduce<TCoreTrivalentValue>(
+                (acc, child) => kleeneOr(acc, recurse(child)),
+                false
+            )
+        case "implies":
+            return children.length >= 2
+                ? kleeneImplies(recurse(children[0]), recurse(children[1]))
+                : null
+        case "iff":
+            return children.length >= 2
+                ? kleeneIff(recurse(children[0]), recurse(children[1]))
+                : null
+        default:
+            return null
+    }
+}
+
+/**
  * Run fixed-point constraint propagation over accepted/rejected operators.
  * Fills unknown (null) variable values based on operator semantics.
  * Never overwrites user-assigned values (true/false).

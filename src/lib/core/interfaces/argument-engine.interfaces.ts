@@ -15,6 +15,7 @@ import type {
     TCoreValidationResult,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
+    TCoreVariableAssignment,
 } from "../../types/evaluation.js"
 import type { TCoreMutationResult } from "../../types/mutation.js"
 import type { TReactiveSnapshot } from "../../types/reactive.js"
@@ -616,6 +617,72 @@ export interface TArgumentEvaluation {
      * @returns The validity check result including any counterexamples.
      */
     checkValidity(options?: TCoreValidityCheckOptions): TCoreValidityCheckResult
+    /**
+     * Derives a default truth-value assignment for every variable in the
+     * argument, from claim type and immediate support structure alone. Values
+     * are `true` or `null` (unknown) — never `false`.
+     *
+     * `D(claim)`: a citation/axiomatic claim's variable → `true`; a normal
+     * claim's variable → `true` iff its derivation premise's immediate
+     * antecedent Kleene-evaluates `true` when each immediately-referenced claim
+     * is seeded `true` iff citation/axiomatic (else `null`) — one level, no
+     * recursion; everything else → `null`.
+     *
+     * The map is variable-keyed; translate to/from `claimId` with
+     * `getVariableIdForClaim` / `getClaimIdForVariable`.
+     *
+     * The map reports axiomatic-bound variables as `true` in agreement with
+     * `evaluate`'s force-true pre-pass, but those keys must not be passed to
+     * `evaluate` directly (it rejects explicit axiom assignments). Use
+     * `evaluateWithDefaults`, or strip axiomatic-bound keys first.
+     *
+     * @returns A variable-keyed assignment of `true` / `null` values.
+     *
+     * @since 3.1.0
+     */
+    deriveDefaultAssignment(): TCoreVariableAssignment
+    /**
+     * Merges caller `overrides` over `deriveDefaultAssignment()` and evaluates
+     * in one call. Default-sourced axiomatic-bound keys are dropped before
+     * evaluation (the engine force-sets them `true`), so the defaults and the
+     * pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`.
+     * An override naming an axiomatic variable is preserved so `evaluate`
+     * still enforces the rule.
+     *
+     * @param overrides - Variable assignments to layer over the defaults.
+     * @param options - Optional evaluation options, forwarded to `evaluate`.
+     * @returns The evaluation result under the merged assignment.
+     *
+     * @since 3.1.0
+     */
+    evaluateWithDefaults(
+        overrides?: TCoreVariableAssignment,
+        options?: TCoreArgumentEvaluationOptions
+    ): TCoreArgumentEvaluationResult
+    /**
+     * Returns the ID of the claim-bound variable bound to `claimId`, or
+     * `undefined` if none exists. Pure lookup — never creates a variable
+     * (contrast `ensureClaimBoundVariable`). The documented seam, with its
+     * inverse, for translating between the variable-keyed evaluation surface
+     * and consumers' `claimId`-keyed state.
+     *
+     * @param claimId - The claim whose bound variable to look up.
+     * @returns The variable ID, or `undefined`.
+     *
+     * @since 3.1.0
+     */
+    getVariableIdForClaim(claimId: string): string | undefined
+    /**
+     * Returns the `claimId` a claim-bound variable is bound to, or `undefined`
+     * when the variable is unknown or premise-bound. Inverse of
+     * `getVariableIdForClaim`.
+     *
+     * @param variableId - The variable whose claim to look up.
+     * @returns The claim ID, or `undefined`.
+     *
+     * @since 3.1.0
+     */
+    getClaimIdForVariable(variableId: string): string | undefined
 }
 
 /**

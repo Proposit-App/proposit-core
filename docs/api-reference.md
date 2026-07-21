@@ -319,6 +319,42 @@ Options:
 
 ---
 
+### `deriveDefaultAssignment()` → `TCoreVariableAssignment` (since 3.1.0)
+
+Derives a default truth-value assignment for **every** variable in the argument, from claim type and immediate support structure alone. Values are `true` or `null` (unknown) — **never `false`**. The returned map (`Record<string, boolean | null>`) is variable-keyed.
+
+`D(claim)` for the variable backing claim `c`:
+
+1. `c` is a **citation** or **axiomatic** claim → `true`.
+2. `c` is a **normal** claim → locate its derivation premise (the `implies`/`iff` inference whose consequent is `c`'s variable). Seed each variable referenced in that premise's **immediate antecedent** `true` iff it is itself bound to a citation/axiomatic claim, else `null`, then Kleene-evaluate the antecedent once. Antecedent `true` → `true`; otherwise `null`. **One level, no recursion** — only the immediate antecedent claims' types are inspected, never their own supports. This makes AND/OR/mixed support fall out for free (`cite ∧ cite` → `true`; `cite ∧ normal` → `null`; `cite ∨ normal` → `true`).
+3. Anything else — no derivation premise, a naked-Q (unpopulated) derivation, or a premise-bound variable → `null`.
+
+Because a normal claim's consequent is `null` until it is transitively grounded, feeding the map to `evaluate()` with the argument's inferences accepted lights up transitively-grounded consequents via propagation (`null → true`) with no further work.
+
+**Interaction with the axiomatic pre-pass.** The map reports axiomatic-bound variables as `true`, in agreement with `evaluate`'s force-true pre-pass — but those keys must **not** be passed to `evaluate()` directly (it rejects any explicit axiom assignment with `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`). Use `evaluateWithDefaults` (which drops them), or strip axiomatic-bound keys before calling `evaluate` yourself.
+
+Consumers key their state by `claimId`; translate with `getVariableIdForClaim` / `getClaimIdForVariable`.
+
+---
+
+### `evaluateWithDefaults(overrides?, options?)` → `TArgumentEvaluationResult` (since 3.1.0)
+
+Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `deriveDefaultAssignment()` and calls `evaluate` in one step. Default-sourced **axiomatic-bound** keys are dropped before evaluation (the engine force-sets them `true`), so the defaults and the pre-pass agree without tripping `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. An `override` that names an axiomatic variable is left intact, so `evaluate` still enforces the one-way rule. `options` is the same `TCoreArgumentEvaluationOptions` accepted by `evaluate`.
+
+---
+
+### `getVariableIdForClaim(claimId)` → `string | undefined` (since 3.1.0)
+
+Returns the ID of the claim-bound variable bound to `claimId`, or `undefined` if none exists. **Pure lookup — never creates a variable** (contrast `ensureClaimBoundVariable`). This accessor and its inverse are the documented seam for translating between the variable-keyed evaluation surface (`deriveDefaultAssignment`, `evaluate`) and consumers' `claimId`-keyed state.
+
+---
+
+### `getClaimIdForVariable(variableId)` → `string | undefined` (since 3.1.0)
+
+Returns the `claimId` a claim-bound variable is bound to, or `undefined` when the variable is unknown or premise-bound (premise-bound variables have no claim). Inverse of `getVariableIdForClaim`.
+
+---
+
 ### `getExtras()` → `Record<string, unknown>`
 
 Returns the argument's extra metadata (all fields except `id`, `version`, and checksums).

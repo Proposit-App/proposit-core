@@ -47,6 +47,7 @@ import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import {
     evaluateArgument as evaluateArgumentStandalone,
     checkArgumentValidity as checkArgumentValidityStandalone,
+    evaluateSubtreeKleene,
     type TArgumentEvaluationContext,
     type TEvaluablePremise,
 } from "./evaluation/argument-evaluation.js"
@@ -2843,6 +2844,189 @@ export class ArgumentEngine<
             excludedVariableIds,
             forcedTrueVariableIds,
         })
+    }
+
+    /**
+     * Returns the ID of the claim-bound variable bound to `claimId` in this
+     * argument, or `undefined` if no such variable exists. Pure lookup — it
+     * never creates a variable (contrast `ensureClaimBoundVariable`).
+     *
+     * The engine's evaluation surface is variable-keyed, but consumers key
+     * their review/UI state by `claimId`; this accessor (with its inverse
+     * `getClaimIdForVariable`) is the documented seam for translating between
+     * the two.
+     *
+     * @since 3.1.0
+     */
+    public getVariableIdForClaim(claimId: string): string | undefined {
+        for (const variable of this.variables.toArray()) {
+            const base = variable as unknown as TCorePropositionalVariable
+            if (
+                isClaimBound(base) &&
+                (base as unknown as TClaimBoundVariable).claimId === claimId
+            ) {
+                return variable.id
+            }
+        }
+        return undefined
+    }
+
+    /**
+     * Returns the `claimId` a claim-bound variable is bound to, or `undefined`
+     * when the variable is unknown or premise-bound (premise-bound variables
+     * have no claim). Inverse of `getVariableIdForClaim`.
+     *
+     * @since 3.1.0
+     */
+    public getClaimIdForVariable(variableId: string): string | undefined {
+        const variable = this.variables.getVariable(variableId)
+        if (variable === undefined) return undefined
+        const base = variable as unknown as TCorePropositionalVariable
+        if (!isClaimBound(base)) return undefined
+        return (base as unknown as TClaimBoundVariable).claimId
+    }
+
+    /**
+     * Returns `true` iff the variable is claim-bound to a citation or
+     * axiomatic claim — the "grounded" claim types that a default assignment
+     * seeds `true`.
+     */
+    private isGroundedVariable(variable: TCorePropositionalVariable): boolean {
+        if (!isClaimBound(variable)) return false
+        const cb = variable as unknown as TClaimBoundVariable
+        const claim = this.claimLibrary.get(cb.claimId, cb.claimVersion)
+        return claim?.type === "citation" || claim?.type === "axiomatic"
+    }
+
+    /**
+     * Derives a default truth-value assignment for every variable in the
+     * argument, from claim type and immediate support structure alone. Values
+     * are `true` or `null` (unknown) — **never `false`**.
+     *
+     * `D(claim)` for the variable backing claim `c`:
+     * 1. `c` is a citation or axiomatic claim → `true`.
+     * 2. `c` is a normal claim: locate its derivation premise (the inference
+     *    whose consequent is `c`'s variable). Seed each variable referenced in
+     *    that premise's immediate antecedent `true` iff it is itself bound to a
+     *    citation/axiomatic claim, else `null`, and Kleene-evaluate the
+     *    antecedent once. Antecedent `true` → `true`; otherwise `null`. **No
+     *    recursion** — only the immediate antecedent claims' types are
+     *    inspected, never their own supports.
+     * 3. Anything else (no derivation premise, naked-Q derivation, a
+     *    premise-bound variable) → `null`.
+     *
+     * The returned map is **variable-keyed**; use `getVariableIdForClaim` /
+     * `getClaimIdForVariable` to translate to/from `claimId`.
+     *
+     * Consistency with the axiomatic pre-pass: `evaluate` force-sets
+     * axiomatic-bound variables `true` and **rejects** any explicit assignment
+     * for them (`AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`). This map reports those
+     * same variables as `true` (the two agree), but the axiom keys must not be
+     * passed to `evaluate` directly. Feed the map through `evaluateWithDefaults`
+     * (which drops them), or strip axiomatic-bound keys before calling
+     * `evaluate` yourself.
+     *
+     * @since 3.1.0
+     */
+    public deriveDefaultAssignment(): TCoreVariableAssignment {
+        // Index each derivation premise by the claim it derives, so a normal
+        // claim's immediate support is a one-pass lookup.
+        const derivationByClaimId = new Map<
+            string,
+            PremiseEngine<TArg, TPremise, TExpr, TVar>
+        >()
+        for (const pm of this.listPremises()) {
+            const data = pm.toPremiseData() as unknown as TCorePremise
+            if (data.type === "derivation") {
+                derivationByClaimId.set(
+                    (data as unknown as TCoreDerivationPremise).derivedClaimId,
+                    pm
+                )
+            }
+        }
+
+        // One global seed evaluates every antecedent: grounded variables are
+        // `true`, everything else `null`. Because non-grounded (incl. normal)
+        // variables stay `null` here, evaluating an antecedent inspects only
+        // its immediate claims' types — never their own supports.
+        const seed: TCoreVariableAssignment = {}
+        for (const variable of this.variables.toArray()) {
+            const base = variable as unknown as TCorePropositionalVariable
+            seed[variable.id] = this.isGroundedVariable(base) ? true : null
+        }
+
+        const result: TCoreVariableAssignment = {}
+        for (const variable of this.variables.toArray()) {
+            const base = variable as unknown as TCorePropositionalVariable
+            if (this.isGroundedVariable(base)) {
+                result[variable.id] = true
+                continue
+            }
+            // Default to unknown; upgrade to `true` only for a normal claim
+            // whose derivation antecedent is grounded.
+            result[variable.id] = null
+            if (!isClaimBound(base)) continue
+            const claimId = (base as unknown as TClaimBoundVariable).claimId
+            const pm = derivationByClaimId.get(claimId)
+            if (pm === undefined) continue
+            const root = pm.getRootExpression()
+            if (root?.type !== "operator") continue
+            const operator = (
+                root as unknown as TCorePropositionalExpression<"operator">
+            ).operator
+            if (operator !== "implies" && operator !== "iff") continue
+            // `getChildExpressions` returns children sorted by position, so the
+            // first is the antecedent slot and the last is the consequent
+            // (matching `validateDerivationStructure`). A well-formed
+            // derivation root has arity 2; anything short of that is malformed
+            // mid-edit and grounds nothing.
+            const children = pm.getChildExpressions(root.id)
+            if (children.length < 2) continue
+            const antecedent = children[0]
+            const antecedentValue = evaluateSubtreeKleene(
+                antecedent.id,
+                (id) => pm.getExpression(id),
+                (parentId) => pm.getChildExpressions(parentId),
+                seed
+            )
+            if (antecedentValue === true) result[variable.id] = true
+        }
+        return result
+    }
+
+    /**
+     * Convenience: merge caller `overrides` over `deriveDefaultAssignment()`
+     * and `evaluate` in one call. Default-sourced **axiomatic-bound** keys are
+     * dropped before evaluation — the engine's pre-pass force-sets them `true`
+     * and rejects explicit axiom assignments, so passing the default `true`
+     * through would throw `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. Dropping them
+     * keeps `deriveDefaultAssignment` (which reports axioms as `true`) and the
+     * pre-pass in agreement without double-applying. An `override` that names
+     * an axiomatic variable is left intact, so `evaluate` still enforces the
+     * one-way rule.
+     *
+     * @since 3.1.0
+     */
+    public evaluateWithDefaults(
+        overrides?: TCoreVariableAssignment,
+        options?: TCoreArgumentEvaluationOptions
+    ): TCoreArgumentEvaluationResult {
+        const defaults = this.deriveDefaultAssignment()
+        const axiomaticIds = this.getAxiomaticBoundVariableIds()
+        const merged: TCoreVariableAssignment = {}
+        for (const [variableId, value] of Object.entries(defaults)) {
+            if (axiomaticIds.has(variableId)) continue
+            merged[variableId] = value
+        }
+        if (overrides) {
+            for (const [variableId, value] of Object.entries(overrides)) {
+                merged[variableId] = value
+            }
+        }
+        return this.evaluate(
+            { variables: merged, operatorAssignments: {} },
+            options
+        )
     }
 
     // -----------------------------------------------------------------
