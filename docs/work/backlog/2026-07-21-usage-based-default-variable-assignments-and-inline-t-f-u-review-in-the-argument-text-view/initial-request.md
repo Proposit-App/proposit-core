@@ -16,11 +16,11 @@ wizard pass. Two coupled changes:
    own assignment or the derived default (with an explanatory tooltip). The
    **argument-level evaluation grade** renders at the **conclusion premise**.
 
-> **This is a cross-repo effort.** It should be adopted as a **cross-node TCW
-> epic** spanning `proposit-core → @proposit/shared → (proposit-server ‖
-> proposit-mobile)`. **The epic is intentionally NOT created in this session** —
-> see [Cross-repo epic](#cross-repo-epic-to-be-created). This backlog item is the
-> planning seed and owns the **core** slice (Layer 1).
+> **This is a cross-repo effort**, coordinated by the cross-node TCW epic
+> [`proposit-app/…inline-t-f-u-review-cross-repo`](tcw://W/proposit-app/2026-07-21-usage-based-default-assignments-and-inline-t-f-u-review-cross-repo)
+> spanning `proposit-core → @proposit/shared → (proposit-server ‖
+> proposit-mobile)`. This backlog item is the **core** slice (Layer 1), linked to
+> the epic via `initiative`.
 
 ## Product changes
 
@@ -100,10 +100,12 @@ default is recomputed and auto-corrects as the author edits the argument.
 The full technical specification (API signatures, algorithm, overlay contract,
 UI placement, testing) is in [`spec.md`](./spec.md).
 
-## Cross-repo epic (to be created)
+## Cross-repo epic
 
-When this work is scheduled, create a **cross-node epic** and hang the four
-slices off it in dependency order — **core → shared → (server ‖ mobile)**:
+The **cross-node epic**
+[`…inline-t-f-u-review-cross-repo`](tcw://W/proposit-app/2026-07-21-usage-based-default-assignments-and-inline-t-f-u-review-cross-repo)
+hangs the four slices off it in dependency order — **core → shared → (server ‖
+mobile)**:
 
 - **Layer 1 / core** — this item (or its successor): `deriveDefaultAssignment`.
 - **Layer 2 / shared** — escalate to `@proposit/shared`: overlay resolution +
