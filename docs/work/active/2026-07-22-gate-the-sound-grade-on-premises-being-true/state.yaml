@@ -1,0 +1,10 @@
+slug: 2026-07-22-gate-the-sound-grade-on-premises-being-true
+title: Gate the sound grade on premises being true
+phase: ''
+created: '2026-07-22'
+resolution: null
+tags:
+- bug
+initiative: 2026-07-22-unknown-premises-must-not-grade-an-argument-sound
+worktree: .worktrees/2026-07-22-gate-the-sound-grade-on-premises-being-true
+branch: work/2026-07-22-gate-the-sound-grade-on-premises-being-true
