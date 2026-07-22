@@ -1,5 +1,8 @@
-# tcw node marker — declares this folder a TCW project (node).
 id: proposit-core
 connected-projects:
-    parent:
-        proposit-app: ..
+  parent:
+    proposit-app: ..
+work:
+  tags:
+  - bug
+  - product
