@@ -1,8 +1,8 @@
 id: proposit-core
 connected-projects:
-  parent:
-    proposit-app: ..
+    parent:
+        proposit-app: ..
 work:
-  tags:
-  - bug
-  - product
+    tags:
+        - bug
+        - product
