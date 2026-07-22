@@ -17,7 +17,13 @@
 
 import { describe, it, expect } from "vitest"
 import { ArgumentEngine, ClaimLibrary, gradeEvaluation } from "../src/lib/index"
-import type { TCoreVariableAssignment } from "../src/lib/index"
+import type {
+    TCoreVariableAssignment,
+    TCoreTrivalentValue,
+    TCoreEvaluationGrade,
+    TCoreArgumentEvaluationResult,
+    TCorePremiseEvaluationResult,
+} from "../src/lib/index"
 import { ClaimCitationLibrary } from "../src/lib/core/claim-citation-library.js"
 import { makeArgument } from "./grammar/fixtures.js"
 import type { PremiseEngine } from "../src/lib/index"
@@ -469,5 +475,162 @@ describe("claimId ↔ variableId accessors", () => {
         const premiseBound = eng.getVariablesBoundToPremise(pe.getId())[0]
         expect(premiseBound).toBeDefined()
         expect(eng.getClaimIdForVariable(premiseBound.id)).toBeUndefined()
+    })
+})
+
+// -- gradeEvaluation precedence -------------------------------------------
+
+const TRIVALENT: (TCoreTrivalentValue | undefined)[] = [
+    true,
+    false,
+    null,
+    undefined,
+]
+
+function vacuousConclusion(): TCorePremiseEvaluationResult {
+    return {
+        premiseId: "p-conclusion",
+        premiseType: "inference",
+        rootExpressionId: "x-root",
+        rootValue: true,
+        expressionValues: {},
+        variableValues: {},
+        inferenceDiagnostic: {
+            kind: "implies",
+            premiseId: "p-conclusion",
+            rootExpressionId: "x-root",
+            leftValue: false,
+            rightValue: null,
+            rootValue: true,
+            antecedentTrue: false,
+            consequentTrue: null,
+            isVacuouslyTrue: true,
+            fired: false,
+            firedAndHeld: false,
+        },
+    }
+}
+
+/** The grade the specification requires, independent of the implementation. */
+function expectedGrade(
+    allSupportingPremisesTrue: TCoreTrivalentValue | undefined,
+    conclusionTrue: TCoreTrivalentValue | undefined,
+    isCounterexample: TCoreTrivalentValue | undefined,
+    isAdmissibleAssignment: TCoreTrivalentValue | undefined,
+    conclusionIsVacuous: boolean
+): TCoreEvaluationGrade {
+    if (isAdmissibleAssignment === false) return "inadmissible"
+    if (allSupportingPremisesTrue === false) return "unsound"
+    if (isCounterexample === true) return "counterexample"
+    // Soundness requires premises known true; unknown or absent is not true.
+    if (allSupportingPremisesTrue !== true) return "indeterminate"
+    if (conclusionTrue !== true) return "indeterminate"
+    return conclusionIsVacuous ? "vacuously-true" : "sound"
+}
+
+describe("gradeEvaluation — soundness requires true premises", () => {
+    it("walks every trivalent permutation", () => {
+        for (const allSupportingPremisesTrue of TRIVALENT) {
+            for (const conclusionTrue of TRIVALENT) {
+                for (const isCounterexample of TRIVALENT) {
+                    for (const isAdmissibleAssignment of TRIVALENT) {
+                        for (const conclusionIsVacuous of [false, true]) {
+                            const result: TCoreArgumentEvaluationResult = {
+                                ok: true,
+                                allSupportingPremisesTrue,
+                                conclusionTrue,
+                                isCounterexample,
+                                isAdmissibleAssignment,
+                                conclusion: conclusionIsVacuous
+                                    ? vacuousConclusion()
+                                    : undefined,
+                            }
+                            const expected = expectedGrade(
+                                allSupportingPremisesTrue,
+                                conclusionTrue,
+                                isCounterexample,
+                                isAdmissibleAssignment,
+                                conclusionIsVacuous
+                            )
+                            expect({
+                                allSupportingPremisesTrue,
+                                conclusionTrue,
+                                isCounterexample,
+                                isAdmissibleAssignment,
+                                conclusionIsVacuous,
+                                grade: gradeEvaluation(result).grade,
+                            }).toEqual({
+                                allSupportingPremisesTrue,
+                                conclusionTrue,
+                                isCounterexample,
+                                isAdmissibleAssignment,
+                                conclusionIsVacuous,
+                                grade: expected,
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    })
+
+    it("unknown premises with a true conclusion are indeterminate, not sound", () => {
+        const grading = gradeEvaluation({
+            ok: true,
+            allSupportingPremisesTrue: null,
+            conclusionTrue: true,
+        })
+        expect(grading.grade).toBe("indeterminate")
+    })
+
+    it("unknown premises with a vacuously true conclusion are indeterminate", () => {
+        const grading = gradeEvaluation({
+            ok: true,
+            allSupportingPremisesTrue: null,
+            conclusionTrue: true,
+            conclusion: vacuousConclusion(),
+        })
+        expect(grading.grade).toBe("indeterminate")
+    })
+
+    it("treats an absent allSupportingPremisesTrue as unknown", () => {
+        const grading = gradeEvaluation({ ok: true, conclusionTrue: true })
+        expect(grading.grade).toBe("indeterminate")
+    })
+
+    it("true premises with a true conclusion stay sound", () => {
+        const grading = gradeEvaluation({
+            ok: true,
+            allSupportingPremisesTrue: true,
+            conclusionTrue: true,
+        })
+        expect(grading.grade).toBe("sound")
+    })
+
+    it("true premises with a vacuously true conclusion stay vacuously true", () => {
+        const grading = gradeEvaluation({
+            ok: true,
+            allSupportingPremisesTrue: true,
+            conclusionTrue: true,
+            conclusion: vacuousConclusion(),
+        })
+        expect(grading.grade).toBe("vacuously-true")
+    })
+
+    it("an argument with zero supporting premises grades sound", () => {
+        // Decided behavior: the supporting-premise fold is seeded true, so an
+        // argument with nothing to support grades sound rather than unknown.
+        const { eng, claimLib } = makeEngine()
+        claimLib.create({ id: "cite", type: "citation" })
+        const derived = claimLib.create({ id: "d", type: "normal" })
+        const { pe } = buildDerivation(eng, derived.id, {
+            op: "var",
+            claimId: "cite",
+        })
+        eng.setConclusionPremise(pe.getId())
+        const result = eng.evaluateWithDefaults()
+        expect(result.supportingPremises ?? []).toHaveLength(0)
+        expect(result.allSupportingPremisesTrue).toBe(true)
+        expect(gradeEvaluation(result).grade).toBe("sound")
     })
 })

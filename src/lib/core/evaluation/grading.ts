@@ -29,9 +29,10 @@ export interface TCoreEvaluationGrading {
  * 2. Inadmissible assignment → inadmissible
  * 3. Supporting premise false → unsound
  * 4. Counterexample (all supporting true, conclusion false) → counterexample
- * 5. Conclusion vacuously true → vacuously-true
- * 6. Conclusion true → sound
- * 7. Otherwise → indeterminate
+ * 5. Supporting premises not known true (unknown or absent) → indeterminate
+ * 6. Conclusion vacuously true → vacuously-true
+ * 7. Conclusion true → sound
+ * 8. Otherwise → indeterminate
  */
 export function gradeEvaluation(
     result: TCoreArgumentEvaluationResult
@@ -54,6 +55,12 @@ export function gradeEvaluation(
             label: "Counterexample",
             color: "red",
         }
+    }
+
+    // Soundness requires the supporting premises to be true. An unknown or
+    // absent value is not true, so it can never reach sound or vacuously-true.
+    if (result.allSupportingPremisesTrue !== true) {
+        return { grade: "indeterminate", label: "Indeterminate", color: "gray" }
     }
 
     if (result.conclusionTrue === true) {
