@@ -13,3 +13,6 @@ src/lib/core/parser/formula-gen.js
 # CI on prettier-format compliance.
 test/extensions/pipelines/fixtures/**/v2-recorded-llm.json
 test/extensions/pipelines/fixtures/**/scribe-recorded-llm.json
+
+# Rewritten by the tcw CLI on every run, in its own YAML indentation.
+tcw-config.yaml
