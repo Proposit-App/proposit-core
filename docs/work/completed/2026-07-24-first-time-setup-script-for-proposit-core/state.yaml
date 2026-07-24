@@ -2,5 +2,11 @@ slug: 2026-07-24-first-time-setup-script-for-proposit-core
 title: First-time setup script for proposit-core
 phase: ''
 created: '2026-07-24'
-resolution: null
+resolution: done
 initiative: 2026-07-24-new-developer-onboarding-setup-scripts
+dod:
+- tests pass
+- docs synced
+- capabilities reconciled
+- reviewed
+- version offered
