@@ -1180,6 +1180,10 @@ All CLI invocations are logged to `~/.proposit-core/logs/cli.jsonl` (or `$PROPOS
 
 ## Development
 
+New machine? `./scripts/first-time-setup.sh` checks your prerequisites and
+verifies the checkout builds and runs (it installs nothing — run `pnpm install`
+first).
+
 ```bash
 pnpm install
 pnpm run typecheck   # type-check without emitting

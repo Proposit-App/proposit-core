@@ -62,6 +62,7 @@ pnpm run build       # generate:parser (peggy) + tsc -p tsconfig.build.json → 
 pnpm run check       # all of the above in sequence
 pnpm cli -- --help   # run the local proposit-core CLI from the local build
 bash scripts/smoke-test.sh  # CLI smoke test (requires build first)
+./scripts/first-time-setup.sh  # new-machine check: prerequisites + check + smoke test
 ```
 
 ## Invariants easy to violate
