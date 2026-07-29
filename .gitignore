@@ -11,3 +11,6 @@ coverage/
 .env.*
 .DS_Store
 docs/api/
+
+# Validation tarballs from `pnpm run pack:branch`.
+*.tgz

@@ -101,6 +101,7 @@
         "cli": "node dist/cli.js",
         "preversion": "pnpm run check",
         "prepare": "git config core.hooksPath .githooks || true",
+        "pack:branch": "bash scripts/pack-branch.sh",
         "prepublishOnly": "pnpm run check"
     },
     "devDependencies": {
