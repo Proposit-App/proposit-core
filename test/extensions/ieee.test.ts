@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { Settings } from "typebox/system"
+import { describe, expect, it } from "vitest"
 import { Value } from "typebox/value"
 
 import {
@@ -231,28 +230,24 @@ describe("IEEE extension", () => {
     })
 
     describe("EncodableDate fields", () => {
-        beforeAll(() => Settings.Set({ correctiveParse: true }))
-        afterAll(() => Settings.Set({ correctiveParse: false }))
-
         it("Website accessedDate accepts a Date object", () => {
             expect(Value.Check(WebsiteReferenceSchema, validWebsite())).toBe(
                 true
             )
         })
 
-        it("Website accessedDate converts from a number via Parse", () => {
+        it("Website accessedDate rejects a number", () => {
             const ref = { ...validWebsite(), accessedDate: 1718409600000 }
-            const parsed = Value.Parse(WebsiteReferenceSchema, ref)
-            expect(parsed.accessedDate).toBeInstanceOf(Date)
+            expect(Value.Check(WebsiteReferenceSchema, ref)).toBe(false)
         })
 
-        it("Website accessedDate converts from an ISO string via Parse", () => {
+        it("Website accessedDate decodes from an ISO string", () => {
             const ref = {
                 ...validWebsite(),
                 accessedDate: "2024-06-15T00:00:00Z",
             }
-            const parsed = Value.Parse(WebsiteReferenceSchema, ref)
-            expect(parsed.accessedDate).toBeInstanceOf(Date)
+            const decoded = Value.Decode(WebsiteReferenceSchema, ref)
+            expect(decoded.accessedDate).toBeInstanceOf(Date)
         })
 
         it("Patent date accepts a Date object", () => {

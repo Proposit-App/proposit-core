@@ -258,7 +258,10 @@ export class ArgumentParser<
      */
     public validate(raw: unknown): TParsedArgumentResponse {
         clampMaxLengths(this.responseSchema, raw)
-        return Value.Parse(this.responseSchema, raw)
+        // `responseSchema` is a caller-supplied `TSchema`, so TypeBox can only
+        // infer `unknown` for the parsed value; the schema is contracted to
+        // describe a parsed-argument response.
+        return Value.Parse(this.responseSchema, raw) as TParsedArgumentResponse
     }
 
     /**
