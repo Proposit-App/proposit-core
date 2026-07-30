@@ -236,10 +236,9 @@ describe("IEEE extension", () => {
             )
         })
 
-        it("Website accessedDate decodes from a number", () => {
+        it("Website accessedDate rejects a number", () => {
             const ref = { ...validWebsite(), accessedDate: 1718409600000 }
-            const decoded = Value.Decode(WebsiteReferenceSchema, ref)
-            expect(decoded.accessedDate).toBeInstanceOf(Date)
+            expect(Value.Check(WebsiteReferenceSchema, ref)).toBe(false)
         })
 
         it("Website accessedDate decodes from an ISO string", () => {

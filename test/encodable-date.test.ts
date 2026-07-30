@@ -45,10 +45,8 @@ describe("EncodableDate", () => {
         )
     })
 
-    it("decodes epoch milliseconds into a Date", () => {
-        expect(Value.Decode(EncodableDate, 1718409600000)).toEqual(
-            new Date(1718409600000)
-        )
+    it("rejects a number, which is not a form JSON.stringify emits for a Date", () => {
+        expect(Value.Check(EncodableDate, 1718409600000)).toBe(false)
     })
 
     it("round-trips a record through encode, JSON, and decode", () => {

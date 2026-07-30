@@ -3,10 +3,16 @@ import Type, { type Static, type TSchema, type TSchemaOptions } from "typebox"
 // ---------------------------------------------------------------------------
 // EncodableDate — custom TypeBox type for Date values
 // ---------------------------------------------------------------------------
-/** Normalizes a `Date` or an encoded date (ISO string, epoch millis) to a `Date`. */
+/**
+ * Normalizes a `Date` or its serialized form to a `Date`.
+ *
+ * Only date strings are treated as a serialized date — the form
+ * `JSON.stringify` produces. Numbers are rejected so that a numeric field
+ * mistakenly supplied where a date belongs still fails validation.
+ */
 function toDate(value: unknown): Date | undefined {
     if (value instanceof Date) return value
-    if (typeof value !== "string" && typeof value !== "number") return undefined
+    if (typeof value !== "string") return undefined
     const date = new Date(value)
     return Number.isNaN(date.getTime()) ? undefined : date
 }
@@ -14,10 +20,9 @@ function toDate(value: unknown): Date | undefined {
 /**
  * Creates a new {@link TDateType} schema instance.
  *
- * The schema admits a `Date` or its encoded form (ISO string / epoch
- * milliseconds). `Value.Decode` normalizes either into a `Date`;
- * `Value.Encode` leaves `Date` instances in place so `JSON.stringify`
- * renders them as ISO strings.
+ * The schema admits a `Date` or its serialized date string. `Value.Decode`
+ * normalizes either into a `Date`; `Value.Encode` leaves `Date` instances in
+ * place so `JSON.stringify` renders them as ISO strings.
  */
 export function dateType() {
     return Type.Codec(
