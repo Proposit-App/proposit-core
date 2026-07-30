@@ -35,7 +35,13 @@ export async function readVariables(
     })
     const raw: unknown = JSON.parse(content)
     try {
-        return Value.Parse(VariablesFileSchema, raw)
+        // The disk schema is deliberately looser than the runtime type (extra
+        // properties allowed, checksum optional for files written before it
+        // existed), so the validated rows are asserted back to it.
+        return Value.Parse(
+            VariablesFileSchema,
+            raw
+        ) as unknown as TCorePropositionalVariable[]
     } catch {
         errorExit(`Invalid or corrupt file: ${filePath}`)
     }

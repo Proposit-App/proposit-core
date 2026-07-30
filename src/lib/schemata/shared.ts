@@ -3,33 +3,40 @@ import Type, { type Static, type TSchema, type TSchemaOptions } from "typebox"
 // ---------------------------------------------------------------------------
 // EncodableDate — custom TypeBox type for Date values
 // ---------------------------------------------------------------------------
-/** Custom TypeBox type that validates, converts, and clones `Date` values. */
-export class TDateType extends Type.Base<Date> {
-    public readonly type = Date
+/** Normalizes a `Date` or an encoded date (ISO string, epoch millis) to a `Date`. */
+function toDate(value: unknown): Date | undefined {
+    if (value instanceof Date) return value
+    if (typeof value !== "string" && typeof value !== "number") return undefined
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? undefined : date
+}
 
-    public override Check(value: unknown) {
-        return value instanceof Date
-    }
-    public override Errors(value: unknown): object[] {
-        if (this.Check(value)) return []
-        return [{ message: "Invalid date", value }]
-    }
-    public override Convert(value: unknown) {
-        if (this.Check(value)) return value
-        if (typeof value === "string" || typeof value === "number") {
-            const date = new Date(value)
-            if (this.Check(date)) return date
-        }
-        throw new Error("Cannot convert value to Date")
-    }
-    public override Clone(): Type.Base<Date> {
-        return new TDateType()
-    }
+/**
+ * Creates a new {@link TDateType} schema instance.
+ *
+ * The schema admits a `Date` or its encoded form (ISO string / epoch
+ * milliseconds). `Value.Decode` normalizes either into a `Date`;
+ * `Value.Encode` leaves `Date` instances in place so `JSON.stringify`
+ * renders them as ISO strings.
+ */
+export function dateType() {
+    return Type.Codec(
+        Type.Refine(
+            Type.Unsafe<Date>({}),
+            (value: unknown) => toDate(value) !== undefined,
+            () => "Invalid date"
+        )
+    )
+        .Decode((value: unknown): Date => {
+            const date = toDate(value)
+            if (date === undefined)
+                throw new Error("Cannot convert value to Date")
+            return date
+        })
+        .Encode((value: Date) => value)
 }
-/** Creates a new {@link TDateType} schema instance. */
-export function dateType(): TDateType {
-    return new TDateType()
-}
+/** TypeBox type that validates and decodes `Date` values. */
+export type TDateType = ReturnType<typeof dateType>
 export const EncodableDate = dateType()
 
 // ---------------------------------------------------------------------------

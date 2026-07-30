@@ -75,12 +75,21 @@ function cloneAndStrip(value: unknown): unknown {
         return value.map(cloneAndStrip)
     }
     if (!isPlainObject(value)) {
-        return value // preserve class instances (EncodableDate, etc.) by reference
+        return value
     }
     const result: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value)) {
         if (CONSTRAINT_KEYS.has(k)) continue
         result[k] = cloneAndStrip(v)
+    }
+    // TypeBox records a type's behavior (refinements, codecs, modifiers) on
+    // non-enumerable keys that `Object.entries` cannot see. Carry those over
+    // verbatim so a stripped schema still checks and decodes like its source —
+    // dropping them would leave e.g. a date field matching any value at all.
+    for (const key of Reflect.ownKeys(value)) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)
+        if (descriptor === undefined || descriptor.enumerable) continue
+        Object.defineProperty(result, key, descriptor)
     }
     return result
 }
