@@ -105,6 +105,13 @@ export class OriginLibrary<
     private verifiedDocumentBodies: Map<string, string>
     /** Code-point index per document, reused across that document's anchors. */
     private documentIndexes: Map<string, TCodePointIndex>
+    /**
+     * Violations present as of the last accepted state, so a mutation can be
+     * judged on what it *introduced* rather than on whether everything is
+     * clean afterwards. Carried between mutations rather than recomputed, so
+     * this costs no extra `validate()` pass.
+     */
+    private knownViolationKeys: Set<string>
     private checksumConfig?: TCoreChecksumConfig
 
     constructor(options?: { checksumConfig?: TCoreChecksumConfig }) {
@@ -116,7 +123,13 @@ export class OriginLibrary<
         this.anchorsByTarget = new Map()
         this.verifiedDocumentBodies = new Map()
         this.documentIndexes = new Map()
+        this.knownViolationKeys = new Set()
         this.checksumConfig = options?.checksumConfig
+    }
+
+    /** Stable identity for a violation, so two validation runs can be compared. */
+    private static violationKey(violation: TInvariantViolation): string {
+        return `${violation.code}|${violation.entityType}|${violation.entityId}`
     }
 
     private static addToIndex(
@@ -173,8 +186,20 @@ export class OriginLibrary<
     }
 
     /**
-     * Runs a mutation, then validates, then rolls back and throws if the
-     * mutation left the library inconsistent.
+     * Runs a mutation, then rolls back and throws if the mutation *introduced*
+     * a violation.
+     *
+     * Introduced, not "left the library inconsistent". Demanding a clean
+     * library after every mutation makes an already-inconsistent one
+     * unrepairable: two anchors that both violate the same invariant each keep
+     * the other's removal from being accepted, and every mutation fails
+     * forever. A library that validates has to stay repairable, and a snapshot
+     * assembled by a consumer — or written by an older build — can arrive
+     * inconsistent through no fault of the mutation being attempted.
+     *
+     * One rule covers both directions: an `addAnchor` with no link introduces a
+     * violation and is still refused on a broken library as on a clean one, and
+     * a `removeLink` that orphans existing anchors introduces theirs.
      *
      * ponytail: validating the whole library after every mutation is O(n²) in
      * anchor count across a bulk import — each of n `addAnchor` calls re-checks
@@ -186,17 +211,26 @@ export class OriginLibrary<
      */
     private withValidation<T>(fn: () => T): T {
         const snap = this.snapshot()
+        const knownBefore = this.knownViolationKeys
         try {
             const result = fn()
-            const validation = this.validate()
-            if (!validation.ok) {
+            const violations = this.validate().violations
+            const introduced = violations.filter(
+                (v) => !knownBefore.has(OriginLibrary.violationKey(v))
+            )
+            if (introduced.length > 0) {
                 this.restoreFromSnapshot(snap)
-                throw new InvariantViolationError(validation.violations)
+                this.knownViolationKeys = knownBefore
+                throw new InvariantViolationError(introduced)
             }
+            this.knownViolationKeys = new Set(
+                violations.map((v) => OriginLibrary.violationKey(v))
+            )
             return result
         } catch (e) {
             if (!(e instanceof InvariantViolationError)) {
                 this.restoreFromSnapshot(snap)
+                this.knownViolationKeys = knownBefore
             }
             throw e
         }
@@ -460,6 +494,12 @@ export class OriginLibrary<
     ): OriginLibrary<TDocument, TLink, TAnchor> {
         const lib = new OriginLibrary<TDocument, TLink, TAnchor>(options)
         lib.restoreFromSnapshot(snapshot)
+        // A loaded snapshot may already be inconsistent — this constructor
+        // deliberately does not refuse it. Recording what is already wrong is
+        // what lets a caller repair it one mutation at a time.
+        lib.knownViolationKeys = new Set(
+            lib.validate().violations.map((v) => OriginLibrary.violationKey(v))
+        )
         return lib
     }
 

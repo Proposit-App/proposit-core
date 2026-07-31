@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { createHash } from "node:crypto"
 import { OriginLibrary } from "../../src/lib/core/origin-library.js"
 import { InvariantViolationError } from "../../src/lib/core/invariant-violation-error.js"
+import { sha256Hex } from "../../src/lib/utils/sha256.js"
 import {
     codePointLength,
     sliceByCodePoints,
@@ -622,5 +623,96 @@ describe("OriginLibrary — an anchor needs a link to be interpretable", () => {
         // The rollback leaves both entities in place.
         expect(origins.getLink("link-0")).toBeDefined()
         expect(origins.getAllAnchors()).toHaveLength(1)
+    })
+})
+
+describe("OriginLibrary — an inconsistent library stays repairable", () => {
+    // Validating the whole library after every mutation asks the wrong
+    // question. What matters is whether a mutation made things worse, not
+    // whether everything is clean afterwards — demanding cleanliness means a
+    // library that is already inconsistent can never be repaired, and every
+    // mutation on it fails forever.
+    function orphanedAnchorSnapshot(
+        count: number
+    ): ReturnType<OriginLibrary["snapshot"]> {
+        return {
+            documents: [
+                {
+                    id: "doc-1",
+                    text: SOURCE,
+                    digest: sha256Hex(SOURCE),
+                    checksum: "deadbeef",
+                },
+            ],
+            links: [],
+            anchors: Array.from({ length: count }, (_, i) => ({
+                id: `anchor-${i}`,
+                argumentId: "arg-1",
+                argumentVersion: 0,
+                documentId: "doc-1",
+                targetType: "premise" as const,
+                targetId: `prem-${i}`,
+                exact: "All swans",
+                startCodePoint: 0,
+                endCodePoint: 9,
+                checksum: "cafe",
+            })),
+        }
+    }
+
+    it("drains several orphaned anchors one at a time", () => {
+        const origins = OriginLibrary.fromSnapshot(orphanedAnchorSnapshot(3))
+        expect(origins.validate().ok).toBe(false)
+
+        for (let i = 0; i < 3; i++) {
+            expect(origins.removeAnchor(`anchor-${i}`).id).toBe(`anchor-${i}`)
+        }
+        expect(origins.getAllAnchors()).toEqual([])
+        expect(origins.validate().ok).toBe(true)
+    })
+
+    it("lets the document go once its orphaned anchors are drained", () => {
+        const origins = OriginLibrary.fromSnapshot(orphanedAnchorSnapshot(2))
+        origins.removeAnchor("anchor-0")
+        origins.removeAnchor("anchor-1")
+        expect(origins.removeDocument("doc-1").id).toBe("doc-1")
+    })
+
+    it("repairs by adding the missing link instead, if that is what was meant", () => {
+        const origins = OriginLibrary.fromSnapshot(orphanedAnchorSnapshot(2))
+        origins.addLink({
+            id: "link-0",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        expect(origins.validate().ok).toBe(true)
+    })
+
+    it("still refuses a mutation that introduces a new violation", () => {
+        const origins = OriginLibrary.fromSnapshot(orphanedAnchorSnapshot(2))
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", { id: "anchor-new" })
+            )
+        ).toThrow(/ORIGIN_ANCHOR_LINK_NOT_FOUND/)
+        expect(origins.getAnchor("anchor-new")).toBeUndefined()
+        // The two it arrived with are untouched.
+        expect(origins.getAllAnchors()).toHaveLength(2)
+    })
+
+    it("reports only what the mutation introduced, not what it inherited", () => {
+        const origins = OriginLibrary.fromSnapshot(orphanedAnchorSnapshot(2))
+        try {
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", { id: "anchor-new" })
+            )
+            expect.unreachable("expected the add to be refused")
+        } catch (error) {
+            expect(error).toBeInstanceOf(InvariantViolationError)
+            const violations = (error as InvariantViolationError).violations
+            expect(violations.map((v) => v.entityId)).toEqual(["anchor-new"])
+        }
     })
 })
