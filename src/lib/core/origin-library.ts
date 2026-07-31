@@ -14,6 +14,7 @@ import type { TCoreChecksumConfig } from "../types/checksum.js"
 import { DEFAULT_CHECKSUM_CONFIG } from "../consts.js"
 import { entityChecksum } from "./checksum.js"
 import { sha256Hex } from "../utils/sha256.js"
+import type { TCodePointIndex } from "../utils/origin-text.js"
 import {
     normalizeOriginText,
     buildCodePointIndex,
@@ -87,6 +88,16 @@ export class OriginLibrary<
     private linksByArgument: Map<string, Set<string>>
     private anchorsByArgument: Map<string, Set<string>>
     private anchorsByTarget: Map<string, Set<string>>
+    /**
+     * Documents whose stored text has been confirmed normalized and matching
+     * its digest, keyed by id and pinned to the exact text that passed. A
+     * document is immutable, so a body that has been checked once cannot
+     * change — but keying on the text rather than the id alone is what stops a
+     * tampered snapshot from inheriting a previous instance's verdict.
+     */
+    private verifiedDocumentBodies: Map<string, string>
+    /** Code-point index per document, reused across that document's anchors. */
+    private documentIndexes: Map<string, TCodePointIndex>
     private checksumConfig?: TCoreChecksumConfig
 
     constructor(options?: { checksumConfig?: TCoreChecksumConfig }) {
@@ -96,6 +107,8 @@ export class OriginLibrary<
         this.linksByArgument = new Map()
         this.anchorsByArgument = new Map()
         this.anchorsByTarget = new Map()
+        this.verifiedDocumentBodies = new Map()
+        this.documentIndexes = new Map()
         this.checksumConfig = options?.checksumConfig
     }
 
@@ -143,9 +156,27 @@ export class OriginLibrary<
         this.documents = new Map(snap.documents.map((d) => [d.id, d]))
         this.links = new Map(snap.links.map((l) => [l.id, l]))
         this.anchors = new Map(snap.anchors.map((a) => [a.id, a]))
+        for (const [id, text] of this.verifiedDocumentBodies) {
+            if (this.documents.get(id)?.text !== text) {
+                this.verifiedDocumentBodies.delete(id)
+                this.documentIndexes.delete(id)
+            }
+        }
         this.reindex()
     }
 
+    /**
+     * Runs a mutation, then validates, then rolls back and throws if the
+     * mutation left the library inconsistent.
+     *
+     * ponytail: validating the whole library after every mutation is O(n²) in
+     * anchor count across a bulk import — each of n `addAnchor` calls re-checks
+     * the n anchors already present. Each check is one short slice comparison
+     * against a cached index, so a few thousand anchors is still milliseconds;
+     * scope the validation to the entity that changed if a caller ever needs
+     * tens of thousands. The document-body checks, which scaled with document
+     * *size* rather than count, are already skipped once verified.
+     */
     private withValidation<T>(fn: () => T): T {
         const snap = this.snapshot()
         try {
@@ -195,6 +226,7 @@ export class OriginLibrary<
                 this.fieldsFor("originDocumentFields")
             )
             this.documents.set(full.id, full)
+            this.verifiedDocumentBodies.set(full.id, text)
             return full
         })
     }
@@ -290,6 +322,8 @@ export class OriginLibrary<
                 ])
             }
             this.documents.delete(id)
+            this.verifiedDocumentBodies.delete(id)
+            this.documentIndexes.delete(id)
             return document
         })
     }
@@ -435,7 +469,15 @@ export class OriginLibrary<
                 })
                 continue
             }
+            // Normalizing and digesting a document body is the only cost in
+            // this method that scales with document *size*, and `validate()`
+            // runs after every mutation. Documents are immutable, so a body
+            // that has passed once cannot change; anything that could have
+            // swapped it (fromSnapshot, a rollback) clears its entry first.
+            if (this.verifiedDocumentBodies.get(id) === document.text) continue
+            let bodyOk = true
             if (normalizeOriginText(document.text) !== document.text) {
+                bodyOk = false
                 violations.push({
                     code: ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED,
                     message: `${ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED}: origin document "${id}" holds text that is not in normalized form; every anchor offset into it is unsound`,
@@ -444,6 +486,7 @@ export class OriginLibrary<
                 })
             }
             if (sha256Hex(document.text) !== document.digest) {
+                bodyOk = false
                 violations.push({
                     code: ORIGIN_DOCUMENT_DIGEST_MISMATCH,
                     message: `${ORIGIN_DOCUMENT_DIGEST_MISMATCH}: origin document "${id}" carries a digest that does not match its text`,
@@ -451,6 +494,7 @@ export class OriginLibrary<
                     entityId: id,
                 })
             }
+            if (bodyOk) this.verifiedDocumentBodies.set(id, document.text)
         }
 
         for (const [id, link] of this.links) {
@@ -473,14 +517,6 @@ export class OriginLibrary<
             }
         }
 
-        // One code-point index per document, reused across that document's
-        // anchors — resolving each anchor from the raw string instead costs a
-        // full scan of the document per anchor.
-        const indexes = new Map<
-            string,
-            ReturnType<typeof buildCodePointIndex>
-        >()
-
         for (const [id, anchor] of this.anchors) {
             if (!Value.Check(CoreOriginAnchorSchema, anchor)) {
                 violations.push({
@@ -501,10 +537,12 @@ export class OriginLibrary<
                 })
                 continue
             }
-            let index = indexes.get(document.id)
+            // Built once per document and kept, for the same reason the body
+            // checks are: the text cannot change under it.
+            let index = this.documentIndexes.get(document.id)
             if (index === undefined) {
                 index = buildCodePointIndex(document.text)
-                indexes.set(document.id, index)
+                this.documentIndexes.set(document.id, index)
             }
             const documentLength = index.offsets.length - 1
             if (

@@ -466,3 +466,60 @@ describe("OriginLibrary — documents whose text contains adjacent invisibles", 
         expect(origins.validate().ok).toBe(true)
     })
 })
+
+describe("OriginLibrary — cost of validating on every mutation", () => {
+    // Documents are immutable and `addDocument` computes their text and digest
+    // itself, so re-normalizing and re-digesting every body on every unrelated
+    // mutation is pure waste. The server slice adds one anchor per extracted
+    // claim inside a request handler, so the cost has to be flat in document
+    // size, not linear in it.
+    //
+    // The bound is deliberately loose — this asserts the algorithm, not the
+    // machine. Before the fix this took over a second.
+    it("adds many anchors to large documents without re-scanning them", () => {
+        const body = "lorem ipsum dolor sit amet ".repeat(3_800)
+        const origins = new OriginLibrary()
+        for (let i = 0; i < 5; i++) {
+            origins.addDocument({ id: `doc-${i}`, text: body })
+        }
+        const stored = origins.getDocument("doc-0")!.text
+        const quote = sliceByCodePoints(stored, 0, 11)
+
+        const startedAt = performance.now()
+        for (let i = 0; i < 100; i++) {
+            origins.addAnchor({
+                id: `anchor-${i}`,
+                argumentId: "arg-1",
+                argumentVersion: 0,
+                documentId: "doc-0",
+                targetType: "premise",
+                targetId: `prem-${i}`,
+                exact: quote,
+                startCodePoint: 0,
+                endCodePoint: 11,
+            })
+        }
+        const elapsed = performance.now() - startedAt
+
+        expect(origins.getAllAnchors()).toHaveLength(100)
+        expect(elapsed).toBeLessThan(300)
+    })
+
+    it("still catches a tampered document body after the first validation", () => {
+        // Skipping the re-check must be keyed to the exact text that was
+        // verified, not to the document id, or a tampered snapshot slips past.
+        const origins = new OriginLibrary()
+        origins.addDocument({ id: "doc-1", text: SOURCE })
+        expect(origins.validate().ok).toBe(true)
+
+        const tampered = origins.snapshot()
+        tampered.documents[0] = {
+            ...tampered.documents[0],
+            text: `${SOURCE} and then some.`,
+        }
+        const restored = OriginLibrary.fromSnapshot(tampered)
+        expect(restored.validate().violations.map((v) => v.code)).toContain(
+            "ORIGIN_DOCUMENT_DIGEST_MISMATCH"
+        )
+    })
+})
