@@ -25,10 +25,12 @@ import {
     readCitationLibrary,
     readAxiomLibrary,
     readForkLibrary,
+    readOriginLibrary,
     writeClaimLibrary,
     writeCitationLibrary,
     writeAxiomLibrary,
     writeForkLibrary,
+    writeOriginLibrary,
 } from "./storage/libraries.js"
 import {
     listPremiseIds,
@@ -51,9 +53,10 @@ export async function hydratePropositCore(): Promise<PropositCore> {
     await migrateV011()
     await migrateV012()
 
-    const [claimLibrary, forkLibrary] = await Promise.all([
+    const [claimLibrary, forkLibrary, originLibrary] = await Promise.all([
         readClaimLibrary(),
         readForkLibrary(),
+        readOriginLibrary(),
     ])
     const [claimCitationLibrary, claimAxiomLibrary] = await Promise.all([
         readCitationLibrary(claimLibrary),
@@ -64,6 +67,7 @@ export async function hydratePropositCore(): Promise<PropositCore> {
         claimCitationLibrary,
         claimAxiomLibrary,
         forkLibrary,
+        originLibrary,
     })
 }
 
@@ -73,6 +77,7 @@ export async function persistCore(core: PropositCore): Promise<void> {
         writeCitationLibrary(core.citations),
         writeAxiomLibrary(core.axioms),
         writeForkLibrary(core.forks),
+        writeOriginLibrary(core.origins),
     ])
 }
 

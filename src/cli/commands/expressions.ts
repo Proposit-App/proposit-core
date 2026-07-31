@@ -418,7 +418,69 @@ export function registerExpressionCommands(
                     if (expr.type === "operator") {
                         printLine(`operator:   ${expr.operator}`)
                     }
+                    if (expr.type === "variable" && expr.enthymeme === true) {
+                        printLine(`enthymeme:  true`)
+                    }
                 }
+            }
+        )
+
+    exprs
+        .command("mark <premise_id> <expression_id>")
+        .description(
+            "Mark or unmark a claim-bound variable expression as left unspoken in the natural-language original"
+        )
+        .option(
+            "--enthymeme",
+            "Mark the expression as left unspoken (the default)"
+        )
+        .option("--no-enthymeme", "Remove the unspoken mark")
+        .action(
+            async (
+                premiseId: string,
+                expressionId: string,
+                opts: { enthymeme?: boolean }
+            ) => {
+                await assertNotPublished(argumentId, version)
+                if (!(await premiseExists(argumentId, version, premiseId))) {
+                    errorExit(`Premise "${premiseId}" not found.`)
+                }
+
+                const engine = await hydrateEngine(argumentId, version)
+                const pm = engine.getPremise(premiseId)
+                if (!pm)
+                    errorExit(`Premise "${premiseId}" not found in engine.`)
+                const expr = pm.getExpression(expressionId)
+                if (!expr) {
+                    errorExit(`Expression "${expressionId}" not found.`)
+                }
+                if (expr.type !== "variable") {
+                    errorExit(
+                        `Expression "${expressionId}" is a ${expr.type} expression; only variable expressions can be marked.`
+                    )
+                }
+
+                try {
+                    // Unmarking sets the field to undefined rather than false:
+                    // an entity carrying the key at all hashes differently
+                    // from one that omits it, and `undefined` is dropped by
+                    // both the checksum and the JSON encoding.
+                    engine.patchExpressionAppFields(expressionId, {
+                        enthymeme: opts.enthymeme === false ? undefined : true,
+                    })
+                } catch (e) {
+                    errorExit(
+                        e instanceof Error ? e.message : "Failed to mark."
+                    )
+                }
+                engine.flushChecksums()
+
+                await writePremiseData(argumentId, version, premiseId, {
+                    rootExpressionId: pm.getRootExpressionId(),
+                    variables: [...pm.getReferencedVariableIds()].sort(),
+                    expressions: pm.getExpressions(),
+                })
+                printLine("success")
             }
         )
 

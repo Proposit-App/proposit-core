@@ -32,12 +32,19 @@ export type TCliArgumentVersionMeta = Static<
 
 // ---------------------------------------------------------------------------
 // Premise meta (stored in premises/<id>/meta.json)
-// Flat fields: { id, title? }
+// Flat fields: { id, title?, enthymeme? }
+//
+// `additionalProperties` is a string schema, so any non-string core field has
+// to be declared here explicitly or a premise carrying it fails to read back.
 // ---------------------------------------------------------------------------
 export const CliPremiseMetaSchema = Type.Object(
     {
         id: UUID,
         title: Type.Optional(Type.String()),
+        // Optional, never nullable: a premise that omits the key hashes as it
+        // did before the field existed, and a stored `null` would shift the
+        // checksum of every premise on disk.
+        enthymeme: Type.Optional(Type.Boolean()),
     },
     { additionalProperties: Type.String() }
 )
@@ -62,6 +69,10 @@ const CliExpressionSchema = Type.Union([
     Type.Interface([CliBaseExpressionSchema], {
         type: Type.Literal("variable"),
         variableId: UUID,
+        // Optional, never nullable: an expression that omits the key hashes
+        // as it did before the field existed, and a stored `null` would shift
+        // the checksum of every expression on disk.
+        enthymeme: Type.Optional(Type.Boolean()),
     }),
     Type.Interface([CliBaseExpressionSchema], {
         type: Type.Literal("operator"),

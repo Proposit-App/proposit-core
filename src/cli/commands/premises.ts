@@ -249,10 +249,19 @@ export function registerPremiseCommands(
         .description("Update premise metadata")
         .option("--title <new_title>", "New title")
         .option("--clear-title", "Remove the title")
+        .option(
+            "--enthymeme",
+            "Mark this premise as left unspoken in the natural-language original"
+        )
+        .option("--no-enthymeme", "Remove the unspoken mark")
         .action(
             async (
                 premiseId: string,
-                opts: { title?: string; clearTitle?: boolean }
+                opts: {
+                    title?: string
+                    clearTitle?: boolean
+                    enthymeme?: boolean
+                }
             ) => {
                 await assertNotPublished(argumentId, version)
                 if (opts.title !== undefined && opts.clearTitle) {
@@ -268,15 +277,32 @@ export function registerPremiseCommands(
                 }
 
                 try {
+                    let updated = false
                     if (opts.clearTitle) {
                         const extras = pm.getExtras()
                         delete extras.title
                         pm.setExtras(extras)
+                        updated = true
                     } else if (opts.title !== undefined) {
                         pm.updateExtras({ title: opts.title })
-                    } else {
+                        updated = true
+                    }
+                    if (opts.enthymeme === true) {
+                        pm.updateExtras({ enthymeme: true })
+                        updated = true
+                    } else if (opts.enthymeme === false) {
+                        // Delete the key rather than storing false. An entity
+                        // that carries the key at all hashes differently from
+                        // one that omits it, so unmarking must restore the
+                        // original absence.
+                        const extras = pm.getExtras()
+                        delete extras.enthymeme
+                        pm.setExtras(extras)
+                        updated = true
+                    }
+                    if (!updated) {
                         errorExit(
-                            "No updates specified. Use --title or --clear-title."
+                            "No updates specified. Use --title, --clear-title, --enthymeme, or --no-enthymeme."
                         )
                     }
                 } catch (err) {
