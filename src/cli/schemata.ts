@@ -41,10 +41,11 @@ export const CliPremiseMetaSchema = Type.Object(
     {
         id: UUID,
         title: Type.Optional(Type.String()),
-        // Optional, never nullable: a premise that omits the key hashes as it
-        // did before the field existed, and a stored `null` would shift the
-        // checksum of every premise on disk.
-        enthymeme: Type.Optional(Type.Boolean()),
+        // Optional and `true`-only, mirroring the core schema: a premise that
+        // omits the key hashes as it did before the field existed, while a
+        // stored `null` or `false` would shift the checksum of every premise
+        // on disk.
+        enthymeme: Type.Optional(Type.Literal(true)),
     },
     { additionalProperties: Type.String() }
 )
@@ -69,10 +70,11 @@ const CliExpressionSchema = Type.Union([
     Type.Interface([CliBaseExpressionSchema], {
         type: Type.Literal("variable"),
         variableId: UUID,
-        // Optional, never nullable: an expression that omits the key hashes
-        // as it did before the field existed, and a stored `null` would shift
-        // the checksum of every expression on disk.
-        enthymeme: Type.Optional(Type.Boolean()),
+        // Optional and `true`-only, mirroring the core schema: an expression
+        // that omits the key hashes as it did before the field existed, while
+        // a stored `null` or `false` would shift the checksum of every
+        // expression on disk.
+        enthymeme: Type.Optional(Type.Literal(true)),
     }),
     Type.Interface([CliBaseExpressionSchema], {
         type: Type.Literal("operator"),

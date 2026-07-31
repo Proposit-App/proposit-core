@@ -66,7 +66,7 @@ describe("enthymeme on the propositional schemas", () => {
         expect(
             Value.Check(CoreDerivationPremiseSchema, {
                 ...premise,
-                enthymeme: false,
+                enthymeme: true,
             })
         ).toBe(true)
     })
@@ -76,6 +76,33 @@ describe("enthymeme on the propositional schemas", () => {
             Value.Check(CorePropositionalVariableExpressionSchema, {
                 ...baseExpression,
                 enthymeme: "yes",
+            })
+        ).toBe(false)
+    })
+
+    it("rejects false — a present key is a present key", () => {
+        // `false` shifts the checksum exactly as `null` does, and it is the
+        // likelier value: an unchecked form control or an ORM default produces
+        // it. Unmarking must delete the key, not write `false`.
+        expect(
+            Value.Check(CorePropositionalVariableExpressionSchema, {
+                ...baseExpression,
+                enthymeme: false,
+            })
+        ).toBe(false)
+        expect(
+            Value.Check(CoreFreeformPremiseSchema, {
+                ...basePremise,
+                type: "freeform",
+                enthymeme: false,
+            })
+        ).toBe(false)
+        expect(
+            Value.Check(CoreDerivationPremiseSchema, {
+                ...basePremise,
+                type: "derivation",
+                derivedClaimId: "66666666-6666-4666-8666-666666666666",
+                enthymeme: false,
             })
         ).toBe(false)
     })

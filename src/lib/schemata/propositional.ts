@@ -43,16 +43,18 @@ const BasePropositionalExpressionSchema = Type.Object({
     }),
 })
 
-// `Type.Optional`, deliberately not `Nullable` (used at :22 and :36 of this
-// file, so the difference is a choice rather than an oversight). Entity
-// checksums include a field only when it is present on the entity, so an
-// unmarked expression omitting the key hashes exactly as it did before this
-// field existed. Writing `enthymeme: null` instead would make the key present
-// and change the checksum of every expression in existence.
+// Optional and `true`-only, deliberately neither `Nullable` nor a plain
+// boolean. Entity checksums include a field only when it is present on the
+// entity, so an unmarked entity omitting the key hashes exactly as it did
+// before this field existed — but `null` and `false` are both *present*, and
+// either would change the checksum of every expression and premise in
+// existence. `false` is the likelier of the two to arrive by accident, from an
+// unchecked form control or an ORM default, so the schema refuses it rather
+// than trusting every writer to know the difference. Unmarking deletes the key.
 const EnthymemeField = Type.Optional(
-    Type.Boolean({
+    Type.Literal(true, {
         description:
-            "Whether this content is left unspoken in the natural-language original. Declared by an author, never derived. Omit the key entirely when unmarked — a null or false value is not the same as absent.",
+            "Present and true when this content is left unspoken in the natural-language original. Declared by an author, never derived. Omit the key entirely when unmarked — null and false are both present values and are not the same as absent.",
     })
 )
 

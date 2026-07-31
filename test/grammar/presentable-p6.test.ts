@@ -74,17 +74,18 @@ describe("grammar/presentable P-6 enthymeme marks a claim-bound variable", () =>
         expect(validateP6(ctx)).toHaveLength(0)
     })
 
-    it("ignores enthymeme: false — only an assertion is checked", () => {
+    it("ignores enthymeme: false, which the schema no longer admits", () => {
+        // The type and the schema both reject `false` now, so this can only
+        // arrive from hand-built JSON. The validator stays defensive about it
+        // rather than treating any present key as an assertion.
+        const marked = makeVariableExpression({
+            id: "e-1",
+            premiseId: "p-1",
+            variableId: "v-1",
+        })
         const ctx = buildContext({
             premises: [makeFreeformPremise({ id: "p-1" })],
-            expressions: [
-                makeVariableExpression({
-                    id: "e-1",
-                    premiseId: "p-1",
-                    variableId: "v-1",
-                    enthymeme: false,
-                }),
-            ],
+            expressions: [{ ...marked, enthymeme: false as unknown as true }],
             variables: [
                 makePremiseBoundVariable({ id: "v-1", boundPremiseId: "p-2" }),
             ],
