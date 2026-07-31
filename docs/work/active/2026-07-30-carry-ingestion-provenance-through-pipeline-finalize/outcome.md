@@ -15,6 +15,23 @@ Tasks 2 and 3 landed as one commit deliberately: the wiring without the
 regenerated goldens leaves the suite red, and the plan's own rule is that the
 tree must be green at every commit boundary.
 
+**Rework pass** — dual review returned six findings (`rework.md`), all accepted
+and all addressed:
+
+| Commit    | Finding                                                       |
+| --------- | ------------------------------------------------------------- |
+| `bd2b2bb` | 1 HIGH — surrogate-safe `prefix`/`suffix`                      |
+| `5ec5e70` | 2 MEDIUM — tolerate a pipeline input with no `text`            |
+| `cb1a772` | 3 MEDIUM-LOW — locate segment offsets instead of trusting them |
+| `b6deca7` | 4 MEDIUM-LOW — report unresolved and ambiguous quotes          |
+| `c3ced9f` | 5 + 6 LOW — `mapPremise` doc clause, call-count caveat comment |
+
+No golden or recording file was touched during the rework: `git diff` over
+`test/extensions/pipelines/fixtures/` from `b1f4cbc` to `HEAD` is empty. The
+located-offset change (finding 3) moved no anchor in the recorded corpus,
+because its drift there is only −1 per segment and every quote in it is unique
+— which is precisely why the defect was invisible.
+
 ## The finalized output shape
 
 **This is the section the `proposit-server` slice needs.** That slice reaches
@@ -38,8 +55,17 @@ type TIngestionSourceAnchor = {
 ```
 
 Exported as `TIngestionSourceAnchor` from
-`@proposit/proposit-core/pipelines/base`, alongside `locateSourceAnchor` and
-`SOURCE_ANCHOR_CONTEXT_CHARS`.
+`@proposit/proposit-core/pipelines/base`, alongside `locateSourceAnchor`,
+`TSourceAnchorMatch`, `SOURCE_ANCHOR_CONTEXT_CHARS`, and
+`SOURCE_ANCHOR_NOTE_CODES`.
+
+> **The persisted shape did not change during the rework.** The five field
+> names and their types are exactly what was reported before review. What
+> changed is what goes *into* `prefix`/`suffix` at a surrogate boundary (they
+> are now always well-formed), which offsets are used as a search hint
+> (located, not model-reported), and that unresolved and ambiguous quotes are
+> now reported on `PipelineResult.failures`. A server-side brief written
+> against the previous report is still correct as written.
 
 Rules the consumer can rely on:
 
@@ -60,6 +86,11 @@ Rules the consumer can rely on:
   and has no source relation.
 - Only `createScholarPipeline` produces claim anchors. See the findings below
   for what `createScribePipeline` does.
+- Unresolved and ambiguous quotes are reported as `severity: "warning"` entries
+  on `PipelineResult.failures`, codes `SOURCE_ANCHOR_UNRESOLVED` and
+  `SOURCE_ANCHOR_AMBIGUOUS`. The consuming slice was asked to measure the
+  quote-location hit rate; this is the channel to measure it from, rather than
+  diffing anchor counts against claim counts.
 
 ## What the request got wrong, corrected in place
 
@@ -132,6 +163,51 @@ Rules the consumer can rely on:
   filing as follow-up work** if the fast pipeline is expected to feed the
   origin-data feature.
 
+## Rework findings, one by one
+
+1. **HIGH, surrogate-split context — fixed.** `dropEdgeLoneSurrogates` in
+   `buildAnchor` shrinks the window by one code unit rather than emit an
+   ill-formed string. Two new locator tests: one asserting no lone surrogate
+   survives with an emoji straddling the boundary on both sides, one asserting a
+   pair that *fits* is kept whole. `String.prototype.isWellFormed` is ES2024 and
+   this package targets ES2022, so the tests detect lone surrogates with a
+   regex rather than widening the lib for a test convenience.
+2. **MEDIUM, unchecked `ctx.input` — fixed.** `readInputText` returns `""` for
+   any shape without a string `text`. Three new tests: a foreign
+   `{ document }` input still assembles a full argument, emits no anchors, and
+   `null` / a bare string do not throw. All three reproduced the reported
+   `TypeError` before the fix.
+3. **MEDIUM-LOW, model arithmetic in the hint — fixed.** `resolveSegmentStarts`
+   locates each segment's verbatim text, scanning left to right behind a cursor
+   so a repeated segment cannot collapse onto an earlier copy, falling back to
+   the reported number only when the text is not found. Three new tests: a
+   drifted segment span no longer misresolves a repeated mention, the same for a
+   relation's evidence quote, and the fallback path when a segment was rewritten.
+   The first test failed instructively — under drift *both* of the claim's
+   mentions collapsed onto the first occurrence and deduped to a single wrong
+   anchor, which is worse than the reported symptom.
+4. **MEDIUM-LOW, silent drops — fixed.** `locateSourceAnchor` now returns
+   `{ anchor, occurrences }`, and finalize emits `SOURCE_ANCHOR_UNRESOLVED` /
+   `SOURCE_ANCHOR_AMBIGUOUS` warnings through `ctx.addFailure`. Five new tests
+   cover: nothing unresolved on a clean fixture, an unresolvable mention quote,
+   an unresolvable relation quote, a repeated quote reported as ambiguous with
+   its occurrence count, and every note being a `warning`. An empty relation
+   evidence quote is deliberately *not* reported — the fast pipeline's prompt
+   explicitly permits it, so it is a legal "no span to cite" rather than a failed
+   lookup, and reporting it would bury the real signal under one note per
+   relation on every fast-pipeline run.
+5. **LOW, `mapClaim` doc note — fixed.** The clause now names `mapPremise` too
+   and says the field must be listed in *both* hooks, since claims and premises
+   are anchored independently.
+6. **LOW, call-count caveat — comment added** to both e2e drivers. The assertion
+   itself is unchanged, as advised.
+
+**Measured effect of the new warning channel on the recorded corpus:** exactly
+one note across all five fixtures — the already-known elided quote on
+`with-url-citation`'s r2. No ambiguity notes at all, and no unresolved mention
+quotes. The channel starts with signal and no noise, which is the property that
+makes a coverage drop detectable later.
+
 ## Verification
 
 `pnpm run check` in the worktree, exit code 0:
@@ -141,11 +217,13 @@ Rules the consumer can rely on:
 > pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build
 
  Test Files  66 passed | 5 skipped (71)
-      Tests  2077 passed | 14 skipped (2091)
-   Duration  7.70s
+      Tests  2091 passed | 14 skipped (2105)
+   Duration  7.74s
 
 [info] html generated at ./docs/api
 ```
+
+(2077 → 2091 tests: 14 added across the rework.)
 
 Beyond the suite:
 
@@ -162,15 +240,19 @@ Beyond the suite:
 
 ## Documentation Sync
 
-Evaluated every entry in `AGENTS.md`. Three fired, all in `b1f4cbc`:
+Re-evaluated over the whole reworked diff. The same three entries fired; the
+rework's doc updates are in `c3ced9f`, the original pass in `b1f4cbc`:
 
 - `docs/changelogs/upcoming.md` [Any-Code-Change] — commit range `68f2481` to
   `30c4411`, plus the three findings above.
-- `docs/api-reference.md` [Public-API] — a new "Source anchors" subsection under
-  the ingestion pipelines (shape, the slice invariant, the offset unit, the
+- `docs/api-reference.md` [Public-API] — a "Source anchors" subsection under the
+  ingestion pipelines (shape, the slice invariant, the offset unit, the
   omitted-when-empty rule, per-pipeline availability, `locateSourceAnchor`), and
-  a pointer from `TParsedClaim` warning that a field-plucking `mapClaim` drops
-  it.
+  a pointer from `TParsedClaim` warning that a field-plucking `mapClaim` **or
+  `mapPremise`** drops it. The rework added the well-formed-UTF-16 guarantee,
+  the `TSourceAnchorMatch` return shape, a "Resolution notes" table for the two
+  warning codes, the located-not-trusted segment-offset rule, and the
+  foreign-input-shape behavior.
 - `docs/release-notes/upcoming.md` [Public-API] — plain language.
 
 Did not fire: `README.md` (both entries), `CLI_EXAMPLES.md`,
