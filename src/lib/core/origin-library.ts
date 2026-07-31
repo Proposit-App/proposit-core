@@ -40,6 +40,7 @@ import {
     ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED,
     ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE,
     ORIGIN_ANCHOR_QUOTE_MISMATCH,
+    ORIGIN_ANCHOR_LINK_NOT_FOUND,
     ORIGIN_DOCUMENT_NOT_FOUND,
     ORIGIN_LINK_NOT_FOUND,
     ORIGIN_ANCHOR_NOT_FOUND,
@@ -69,6 +70,12 @@ function targetKey(
  *
  * The text is opaque content. This class digests it, measures it, and slices
  * it by index; it never parses, renders, or interprets it.
+ *
+ * An anchor is only meaningful alongside a link: the link carries the stance.
+ * `validate()` therefore requires every anchor's
+ * `(argumentId, argumentVersion, documentId)` to have a matching link, which
+ * fixes the persistence order for consumers — document, then link, then
+ * anchors — and makes removing a link that still has anchors a violation.
  *
  * Like the claim-connection libraries, this one mints no identifiers —
  * callers supply them — and takes no argument lookup: an argument library is
@@ -569,6 +576,22 @@ export class OriginLibrary<
                 violations.push({
                     code: ORIGIN_ANCHOR_QUOTE_MISMATCH,
                     message: `${ORIGIN_ANCHOR_QUOTE_MISMATCH}: origin anchor "${id}" spans text that is not its own quote — an anchor at an unverified offset`,
+                    entityType: "originAnchor",
+                    entityId: id,
+                })
+            }
+            // The link carries the stance, and the stance is what decides
+            // whether unanchored content means anything. An anchor whose
+            // argument version is not linked to this document is provenance no
+            // consumer can interpret, so it is a violation rather than a gap.
+            const linked = this.getLinksForArgument(
+                anchor.argumentId,
+                anchor.argumentVersion
+            ).some((l) => l.documentId === anchor.documentId)
+            if (!linked) {
+                violations.push({
+                    code: ORIGIN_ANCHOR_LINK_NOT_FOUND,
+                    message: `${ORIGIN_ANCHOR_LINK_NOT_FOUND}: origin anchor "${id}" targets ${anchor.argumentId}@${anchor.argumentVersion}, which has no link to document "${anchor.documentId}"`,
                     entityType: "originAnchor",
                     entityId: id,
                 })

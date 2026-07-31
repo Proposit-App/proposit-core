@@ -113,6 +113,8 @@ export const ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED =
 export const ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE = "ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE"
 /** The anchor's span does not slice out its own quote — an anchor at an unverified offset. */
 export const ORIGIN_ANCHOR_QUOTE_MISMATCH = "ORIGIN_ANCHOR_QUOTE_MISMATCH"
+/** The anchor's argument version is not linked to the document it anchors into. */
+export const ORIGIN_ANCHOR_LINK_NOT_FOUND = "ORIGIN_ANCHOR_LINK_NOT_FOUND"
 export const ORIGIN_DOCUMENT_NOT_FOUND = "ORIGIN_DOCUMENT_NOT_FOUND"
 export const ORIGIN_LINK_NOT_FOUND = "ORIGIN_LINK_NOT_FOUND"
 export const ORIGIN_ANCHOR_NOT_FOUND = "ORIGIN_ANCHOR_NOT_FOUND"

@@ -11,10 +11,24 @@ import {
 const SOURCE =
     "All swans observed so far are white. Therefore all swans are white."
 
-/** A library holding one document, built inline per test. */
-function withDocument(text = SOURCE) {
+/**
+ * A library holding one document and a link to `arg-1@0`, built inline per
+ * test. The link is on by default because an anchor is only valid on an
+ * argument version linked to the document it anchors into; pass
+ * `{ link: false }` where the link itself is what the test is about.
+ */
+function withDocument(text = SOURCE, options?: { link?: boolean }) {
     const origins = new OriginLibrary()
     const document = origins.addDocument({ id: "doc-1", text })
+    if (options?.link !== false) {
+        origins.addLink({
+            id: "link-auto",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+    }
     return { origins, document }
 }
 
@@ -90,7 +104,7 @@ describe("OriginLibrary — documents", () => {
     })
 
     it("refuses to remove a document that is still referenced", () => {
-        const { origins } = withDocument()
+        const { origins } = withDocument(SOURCE, { link: false })
         origins.addLink({
             id: "link-1",
             argumentId: "arg-1",
@@ -108,7 +122,7 @@ describe("OriginLibrary — documents", () => {
 
 describe("OriginLibrary — links", () => {
     it("records a stance per argument version and indexes by argument", () => {
-        const { origins } = withDocument()
+        const { origins } = withDocument(SOURCE, { link: false })
         origins.addLink({
             id: "link-0",
             argumentId: "arg-1",
@@ -152,7 +166,7 @@ describe("OriginLibrary — links", () => {
     })
 
     it("rejects a link to an unknown document and rolls back", () => {
-        const { origins } = withDocument()
+        const { origins } = withDocument(SOURCE, { link: false })
         expect(() =>
             origins.addLink({
                 id: "link-x",
@@ -260,6 +274,13 @@ describe("OriginLibrary — code-point addressing", () => {
     it("validates an anchor whose span crosses an astral-plane character", () => {
         const origins = new OriginLibrary()
         origins.addDocument({ id: "doc-1", text: astralSource })
+        origins.addLink({
+            id: "link-auto",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
         const quote = "every \u{1F44D} counts"
         const anchor = origins.addAnchor(anchorFor(astralSource, quote))
         expect(anchor.exact).toBe(quote)
@@ -450,6 +471,13 @@ describe("OriginLibrary — documents whose text contains adjacent invisibles", 
             text: consumerText,
         })
         expect(document.text).toBe(consumerText)
+        origins.addLink({
+            id: "link-auto",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
 
         const anchor = origins.addAnchor({
             id: "anchor-1",
@@ -482,6 +510,13 @@ describe("OriginLibrary — cost of validating on every mutation", () => {
         for (let i = 0; i < 5; i++) {
             origins.addDocument({ id: `doc-${i}`, text: body })
         }
+        origins.addLink({
+            id: "link-0",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-0",
+            stance: "seed",
+        })
         const stored = origins.getDocument("doc-0")!.text
         const quote = sliceByCodePoints(stored, 0, 11)
 
@@ -521,5 +556,71 @@ describe("OriginLibrary — cost of validating on every mutation", () => {
         expect(restored.validate().violations.map((v) => v.code)).toContain(
             "ORIGIN_DOCUMENT_DIGEST_MISMATCH"
         )
+    })
+})
+
+describe("OriginLibrary — an anchor needs a link to be interpretable", () => {
+    // The link carries the stance, and the stance is what decides whether the
+    // absence of provenance means anything. An anchor whose argument version
+    // has no link is provenance nobody can read.
+    function linkedLibrary() {
+        const origins = new OriginLibrary()
+        origins.addDocument({ id: "doc-1", text: SOURCE })
+        origins.addLink({
+            id: "link-0",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        return origins
+    }
+
+    it("rejects an anchor on an argument version with no link", () => {
+        const origins = linkedLibrary()
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", { argumentVersion: 77 })
+            )
+        ).toThrow(/ORIGIN_ANCHOR_LINK_NOT_FOUND/)
+        expect(origins.getAllAnchors()).toHaveLength(0)
+    })
+
+    it("rejects an anchor on an argument with no link at all", () => {
+        const origins = linkedLibrary()
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", { argumentId: "arg-other" })
+            )
+        ).toThrow(/ORIGIN_ANCHOR_LINK_NOT_FOUND/)
+    })
+
+    it("rejects an anchor to a document the argument version is not linked to", () => {
+        const origins = linkedLibrary()
+        origins.addDocument({ id: "doc-2", text: SOURCE })
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", { documentId: "doc-2" })
+            )
+        ).toThrow(/ORIGIN_ANCHOR_LINK_NOT_FOUND/)
+    })
+
+    it("accepts an anchor once the link exists", () => {
+        const origins = linkedLibrary()
+        expect(origins.addAnchor(anchorFor(SOURCE, "Therefore")).id).toBe(
+            "anchor-1"
+        )
+        expect(origins.validate().ok).toBe(true)
+    })
+
+    it("reports an anchor orphaned by removing its link", () => {
+        const origins = linkedLibrary()
+        origins.addAnchor(anchorFor(SOURCE, "Therefore"))
+        expect(() => origins.removeLink("link-0")).toThrow(
+            /ORIGIN_ANCHOR_LINK_NOT_FOUND/
+        )
+        // The rollback leaves both entities in place.
+        expect(origins.getLink("link-0")).toBeDefined()
+        expect(origins.getAllAnchors()).toHaveLength(1)
     })
 })
