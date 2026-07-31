@@ -495,6 +495,50 @@ describe("finalizeResponseV2 — segment offsets are located, not trusted", () =
     })
 })
 
+describe("finalizeResponseV2 — mention offsets are located, not trusted", () => {
+    // The largest hint error in the recorded corpus is not segment
+    // drift: `with-url-citation` mention m1 sits in a segment located
+    // exactly at 0 and is still reported 14 short, because the model
+    // miscounts its way past a markdown link. The mention text is copied
+    // from the segment, so its offset within the segment is recoverable
+    // the same way the segment's own offset is.
+    it("resolves a repeated mention despite a drifted mention span", () => {
+        const outputs = buildOutputs()
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        // m2 lives in s3 and quotes text that also opens the document.
+        // Under-count its offset inside the segment far enough to pull
+        // the composed hint back toward the first occurrence.
+        mentions.mentions.find((m) => m.mentionId === "m2")!.span = {
+            start: -35,
+            end: -19,
+        }
+
+        const c1 = finalize(outputs).claims.find((c) => c.miniId === "c1")!
+        expect(c1.sourceAnchors!.map((a) => a.startUtf16)).toEqual([
+            0,
+            INPUT_TEXT.lastIndexOf("The risk"),
+        ])
+    })
+
+    it("falls back to the reported span when the mention is not in its segment", () => {
+        const outputs = buildOutputs()
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        // The model paraphrased the mention relative to its segment, so
+        // there is nothing to locate inside the segment — but the text
+        // does appear in the document, so the anchor still resolves.
+        mentions.mentions.find((m) => m.mentionId === "m3")!.segmentId = "s1"
+
+        const c2 = finalize(outputs).claims.find((c) => c.miniId === "c2")!
+        expect(c2.sourceAnchors![0].quote).toBe(
+            "Escalation costs more than delay"
+        )
+    })
+})
+
 describe("finalizeResponseV2 — a paraphrased segment must not derail the next", () => {
     // The fallback exists for a segment the model rewrote, so it is
     // exactly the branch that must not corrupt its follower. The input

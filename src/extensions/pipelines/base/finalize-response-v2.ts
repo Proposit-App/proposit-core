@@ -306,17 +306,39 @@ function buildAnchorByMentionId(args: {
     ctx: TStageContext
     inputText: string
     segmentStartById: Map<string, number>
+    segments: TSegmentationOutput["segments"] | undefined
     mentions: TClaimMentionExtractionOutput | undefined
 }): Map<string, TIngestionSourceAnchor> {
     const out = new Map<string, TIngestionSourceAnchor>()
     if (!args.mentions) return out
     const segmentStartById = args.segmentStartById
+    const segmentTextById = new Map(
+        (args.segments ?? []).map((s) => [s.segmentId, s.text])
+    )
     for (const mention of args.mentions.mentions) {
         // Mention spans are relative to the segment's text, so the
         // input-relative hint only exists once the segment's own start is
         // added back on.
+        //
+        // Both halves of that sum are located rather than trusted. The
+        // mention's own offset is the larger error of the two on the
+        // recorded corpus — a model can miscount its way through a
+        // markdown link and report a mention 14 characters early — and
+        // the mention text is copied from the segment, so its position
+        // inside the segment is recoverable exactly the way the
+        // segment's position in the document is.
+        const segmentText = segmentTextById.get(mention.segmentId)
+        const offsetInSegment =
+            segmentText === undefined
+                ? undefined
+                : nearestOccurrence(
+                      segmentText,
+                      mention.text,
+                      mention.span.start
+                  )
         const hint =
-            (segmentStartById.get(mention.segmentId) ?? 0) + mention.span.start
+            (segmentStartById.get(mention.segmentId) ?? 0) +
+            (offsetInSegment ?? mention.span.start)
         const match = locateSourceAnchor(args.inputText, mention.text, hint)
         noteResolution({
             ctx: args.ctx,
@@ -616,6 +638,7 @@ export function finalizeResponseV2(
         ctx,
         inputText,
         segmentStartById,
+        segments: input.segmentation?.segments,
         mentions: input.mentions,
     })
     const conclusionMiniId = conclusion?.conclusionMiniId ?? null
