@@ -8,6 +8,7 @@ import {
     sliceByCodePoints,
 } from "../../lib/utils/origin-text.js"
 import type { TOriginAnchorTargetType } from "../../lib/schemata/index.js"
+import { listVersionNumbers } from "../storage/arguments.js"
 
 const STANCES = ["representation", "seed"] as const
 const TARGET_TYPES = ["expression", "premise", "argument"] as const
@@ -18,6 +19,27 @@ function parseIntegerOption(value: string, label: string): number {
         errorExit(`${label} must be a non-negative integer (got "${value}").`)
     }
     return parsed
+}
+
+/**
+ * Fails unless the argument version exists on disk. Origin links and anchors
+ * reference an argument that the library deliberately cannot see — it is
+ * constructed after the origin library — so a typo would otherwise persist a
+ * link nothing ever resolves and nothing ever reports.
+ */
+async function assertArgumentVersionExists(
+    argumentId: string,
+    version: number
+): Promise<void> {
+    const versions = await listVersionNumbers(argumentId)
+    if (versions.length === 0) {
+        errorExit(`Argument "${argumentId}" not found.`)
+    }
+    if (!versions.includes(version)) {
+        errorExit(
+            `Argument "${argumentId}" has no version ${version} (has: ${versions.join(", ")}).`
+        )
+    }
 }
 
 export function registerOriginCommands(program: Command): void {
@@ -56,6 +78,7 @@ export function registerOriginCommands(program: Command): void {
                     errorExit(`Cannot read source text file "${file}".`)
                 }
                 const version = parseIntegerOption(opts.version, "--version")
+                await assertArgumentVersionExists(opts.argument, version)
                 const core = await hydratePropositCore()
                 let documentId: string
                 try {
@@ -154,6 +177,97 @@ export function registerOriginCommands(program: Command): void {
             }
         )
 
+    origins
+        .command("link <document_id>")
+        .description(
+            "Link an existing source text to another argument version, reusing the stored text"
+        )
+        .requiredOption("--argument <id>", "Argument ID to link the text to")
+        .requiredOption("--version <n>", "Argument version to link the text to")
+        .option(
+            "--stance <stance>",
+            `What the argument claims about the source: ${STANCES.join(" | ")}`,
+            "seed"
+        )
+        .action(
+            async (
+                documentId: string,
+                opts: { argument: string; version: string; stance: string }
+            ) => {
+                if (
+                    !STANCES.includes(opts.stance as (typeof STANCES)[number])
+                ) {
+                    errorExit(
+                        `Unknown stance "${opts.stance}". Expected one of: ${STANCES.join(", ")}.`
+                    )
+                }
+                const version = parseIntegerOption(opts.version, "--version")
+                await assertArgumentVersionExists(opts.argument, version)
+                const core = await hydratePropositCore()
+                if (!core.origins.getDocument(documentId)) {
+                    errorExit(`Origin document "${documentId}" not found.`)
+                }
+                let linkId: string
+                try {
+                    linkId = core.origins.addLink({
+                        id: randomUUID(),
+                        argumentId: opts.argument,
+                        argumentVersion: version,
+                        documentId,
+                        stance: opts.stance as (typeof STANCES)[number],
+                    }).id
+                } catch (error) {
+                    errorExit(
+                        error instanceof Error ? error.message : String(error)
+                    )
+                }
+                await persistCore(core)
+                printLine(linkId)
+            }
+        )
+
+    origins
+        .command("unlink <link_id>")
+        .description(
+            "Remove a link between an argument version and a source text"
+        )
+        .action(async (linkId: string) => {
+            const core = await hydratePropositCore()
+            if (!core.origins.getLink(linkId)) {
+                errorExit(`Origin link "${linkId}" not found.`)
+            }
+            try {
+                core.origins.removeLink(linkId)
+            } catch (error) {
+                errorExit(
+                    error instanceof Error ? error.message : String(error)
+                )
+            }
+            await persistCore(core)
+            printLine("success")
+        })
+
+    origins
+        .command("remove <document_id>")
+        .description(
+            "Remove a source text. Refuses while any link or anchor still references it."
+        )
+        .action(async (documentId: string) => {
+            const core = await hydratePropositCore()
+            if (!core.origins.getDocument(documentId)) {
+                errorExit(`Origin document "${documentId}" not found.`)
+            }
+            try {
+                core.origins.removeDocument(documentId)
+            } catch (error) {
+                errorExit(
+                    error instanceof Error ? error.message : String(error)
+                )
+            }
+            await persistCore(core)
+            printLine("success")
+        })
+
     const anchor = origins
         .command("anchor")
         .description("Manage the spans argument parts derive from")
@@ -204,6 +318,7 @@ export function registerOriginCommands(program: Command): void {
                     errorExit(`Origin document "${opts.document}" not found.`)
                 }
                 const version = parseIntegerOption(opts.version, "--version")
+                await assertArgumentVersionExists(opts.argument, version)
                 const start = parseIntegerOption(opts.start, "--start")
                 const end = parseIntegerOption(opts.end, "--end")
                 // The quote is derived by slicing rather than supplied: a

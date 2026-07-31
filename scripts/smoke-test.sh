@@ -664,6 +664,44 @@ fi
 cat /tmp/proposit-origin-err4
 rm -f /tmp/proposit-origin-err4
 
+section "9o. origins — link / unlink / remove"
+
+# A second argument can reuse the same stored text instead of pasting it in
+# again — the digest already proves the two are the same source.
+ORIGIN_ARG=$($CLI arguments create "Origin Reuse" "Second argument sharing one source text")
+LINK2=$($CLI origins link "$DOC" --argument "$ORIGIN_ARG" --version 0 --stance representation)
+echo "LINK2=$LINK2"
+$CLI origins show "$DOC"
+
+$CLI origins unlink "$LINK2"
+$CLI origins show "$DOC"
+$CLI arguments delete "$ORIGIN_ARG" --all --confirm
+
+# A typo in --argument must be refused rather than persisted as a dangling link.
+if $CLI origins attach "$SOURCE_FILE" --argument "not-an-argument" --version 0 \
+    2>/tmp/proposit-origin-err5; then
+    echo "FAIL: attach to an unknown argument should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err5
+rm -f /tmp/proposit-origin-err5
+
+if $CLI origins link "$DOC" --argument "$ARG" --version 999 \
+    2>/tmp/proposit-origin-err6; then
+    echo "FAIL: link to an unknown argument version should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err6
+rm -f /tmp/proposit-origin-err6
+
+# A document still carrying a link cannot be removed.
+if $CLI origins remove "$DOC" 2>/tmp/proposit-origin-err7; then
+    echo "FAIL: removing a referenced document should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err7
+rm -f /tmp/proposit-origin-err7
+
 echo "Origin data smoke OK"
 
 # ─────────────────────────────────────────────────────────────────────────────
