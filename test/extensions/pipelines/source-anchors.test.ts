@@ -15,6 +15,12 @@ import {
     SOURCE_ANCHOR_CONTEXT_CHARS,
 } from "../../../src/extensions/pipelines/base/index.js"
 
+// `String.prototype.isWellFormed` is ES2024 and this package targets
+// ES2022, so lone surrogates are detected with a regex instead of
+// widening the lib for a test.
+const LONE_SURROGATE =
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+
 describe("locateSourceAnchor", () => {
     it("locates a quote that occurs once", () => {
         const input = "The blockade is unsustainable. Therefore we must talk."
@@ -94,6 +100,36 @@ describe("locateSourceAnchor", () => {
         const last = locateSourceAnchor(input, "omega", 0)
         expect(last?.prefix).toBe("Alpha ")
         expect(last?.suffix).toBe("")
+    })
+
+    it("never cuts a surrogate pair when trimming context to length", () => {
+        // The context window is measured in UTF-16 code units, so a
+        // non-BMP character straddling the boundary would leave a lone
+        // surrogate at the edge. An ill-formed string is not merely
+        // ugly: Postgres rejects an unpaired surrogate escape on insert
+        // into json/jsonb, and TextEncoder silently replaces it with
+        // U+FFFD, which breaks the very re-locate path the context
+        // exists to serve.
+        const filler = "y".repeat(SOURCE_ANCHOR_CONTEXT_CHARS - 1)
+        const input = `\u{1F600}${filler}QUOTE${filler}\u{1F600}`
+        const anchor = locateSourceAnchor(input, "QUOTE", 0)
+        expect(anchor).toBeDefined()
+        expect(LONE_SURROGATE.test(anchor!.prefix)).toBe(false)
+        expect(LONE_SURROGATE.test(anchor!.suffix)).toBe(false)
+        // The emoji is dropped rather than half-included: the window
+        // shrinks by one code unit.
+        expect(anchor!.prefix).toBe(filler)
+        expect(anchor!.suffix).toBe(filler)
+    })
+
+    it("keeps a whole surrogate pair that fits inside the context window", () => {
+        const filler = "y".repeat(SOURCE_ANCHOR_CONTEXT_CHARS - 2)
+        const input = `\u{1F600}${filler}QUOTE${filler}\u{1F600}`
+        const anchor = locateSourceAnchor(input, "QUOTE", 0)
+        expect(anchor!.prefix).toBe(`\u{1F600}${filler}`)
+        expect(anchor!.suffix).toBe(`${filler}\u{1F600}`)
+        expect(LONE_SURROGATE.test(anchor!.prefix)).toBe(false)
+        expect(LONE_SURROGATE.test(anchor!.suffix)).toBe(false)
     })
 
     it("returns offsets that slice back to the quote for every hit", () => {

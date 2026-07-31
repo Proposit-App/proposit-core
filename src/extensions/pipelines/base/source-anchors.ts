@@ -78,6 +78,30 @@ function whitespaceInsensitiveRanges(
     return ranges
 }
 
+/**
+ * Drop a lone surrogate left at either edge by slicing on a code-unit
+ * boundary, shrinking the window by one unit rather than emitting an
+ * ill-formed string.
+ *
+ * Ill-formed here is not cosmetic. Postgres rejects an unpaired
+ * surrogate escape on insert into `json`/`jsonb`, so one emoji sitting
+ * on the context boundary would fail a consumer's whole persist
+ * transaction; and a `TextEncoder` round-trip silently substitutes
+ * U+FFFD, which breaks the re-locate path the context exists to serve.
+ * A slice of well-formed text can strand at most one surrogate per edge.
+ */
+function dropEdgeLoneSurrogates(context: string): string {
+    let start = 0
+    let end = context.length
+    const first = context.charCodeAt(start)
+    if (first >= 0xdc00 && first <= 0xdfff) start += 1
+    const last = context.charCodeAt(end - 1)
+    if (last >= 0xd800 && last <= 0xdbff) end -= 1
+    return start === 0 && end === context.length
+        ? context
+        : context.slice(start, end)
+}
+
 /** Build the anchor for an already-verified range. */
 function buildAnchor(
     input: string,
@@ -88,13 +112,14 @@ function buildAnchor(
         quote: input.slice(start, end),
         startUtf16: start,
         endUtf16: end,
-        prefix: input.slice(
-            Math.max(0, start - SOURCE_ANCHOR_CONTEXT_CHARS),
-            start
+        prefix: dropEdgeLoneSurrogates(
+            input.slice(Math.max(0, start - SOURCE_ANCHOR_CONTEXT_CHARS), start)
         ),
-        suffix: input.slice(
-            end,
-            Math.min(input.length, end + SOURCE_ANCHOR_CONTEXT_CHARS)
+        suffix: dropEdgeLoneSurrogates(
+            input.slice(
+                end,
+                Math.min(input.length, end + SOURCE_ANCHOR_CONTEXT_CHARS)
+            )
         ),
     }
 }
