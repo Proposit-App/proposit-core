@@ -71,19 +71,29 @@ function isRemovalCandidate(code: number): boolean {
  * These four boundaries are the hard part of invisible-character stripping:
  * naive removal breaks family and profession emoji, keycaps, CJK variation
  * sequences, Mongolian text, and flag tag sequences.
+ *
+ * **A removal candidate never legitimizes another removal candidate.** The
+ * joiner, the variation selectors, and the tag characters all satisfy the
+ * emoji-adjacency and variation-selector-base tests themselves, so a rule that
+ * consulted the raw input would keep a character on the strength of a
+ * neighbour that was being deleted in the same pass — and a second pass, seeing
+ * that neighbour gone, would then delete it too. That is what `emitted`
+ * enforces: the backward look reads only what actually survived, and the one
+ * forward look (the joiner's) rejects a candidate outright.
  */
 function isLegitimateInContext(
+    emitted: readonly string[],
     codePoints: readonly string[],
     index: number,
     code: number
 ): boolean {
-    const previous = index > 0 ? codePoints[index - 1] : ""
+    const previous = emitted.length > 0 ? emitted[emitted.length - 1] : ""
     if (code === 0x200d) {
+        if (previous !== "" && EMOJI_ADJACENT.test(previous)) return true
         const next = index + 1 < codePoints.length ? codePoints[index + 1] : ""
-        return (
-            (previous !== "" && EMOJI_ADJACENT.test(previous)) ||
-            (next !== "" && EMOJI_ADJACENT.test(next))
-        )
+        if (next === "") return false
+        const nextCode = next.codePointAt(0) ?? 0
+        return !isRemovalCandidate(nextCode) && EMOJI_ADJACENT.test(next)
     }
     if (code >= 0xfe00 && code <= 0xfe0f) {
         return previous !== "" && VARIATION_SELECTOR_BASE.test(previous)
@@ -92,13 +102,13 @@ function isLegitimateInContext(
         return previous !== "" && MONGOLIAN_BASE.test(previous)
     }
     if (code >= TAG_RANGE_START && code <= TAG_RANGE_END) {
-        let start = index
+        let start = emitted.length
         while (start > 0) {
-            const preceding = codePoints[start - 1].codePointAt(0) ?? 0
+            const preceding = emitted[start - 1].codePointAt(0) ?? 0
             if (preceding < TAG_RANGE_START || preceding > TAG_RANGE_END) break
             start--
         }
-        const base = start > 0 ? codePoints[start - 1] : ""
+        const base = start > 0 ? emitted[start - 1] : ""
         return base !== "" && PICTOGRAPH.test(base)
     }
     return false
@@ -106,19 +116,19 @@ function isLegitimateInContext(
 
 function stripInvisibleCharacters(text: string): string {
     const codePoints = Array.from(text)
-    let out = ""
+    const emitted: string[] = []
     for (let i = 0; i < codePoints.length; i++) {
         const char = codePoints[i]
         const code = char.codePointAt(0) ?? 0
         if (
             isRemovalCandidate(code) &&
-            !isLegitimateInContext(codePoints, i, code)
+            !isLegitimateInContext(emitted, codePoints, i, code)
         ) {
             continue
         }
-        out += char
+        emitted.push(char)
     }
-    return out
+    return emitted.join("")
 }
 
 /**
@@ -138,14 +148,20 @@ function stripInvisibleCharacters(text: string): string {
  * `normalizeOriginText(t)` — which is what makes it safe to apply both at an
  * application's import boundary and again on document creation.
  *
- * The step order is load-bearing. Line breaks are folded first because a lone
- * carriage return is itself a control character, so stripping first would
- * delete the break rather than convert it. Stripping precedes NFC because
- * removing an invisible character can leave a base letter adjacent to a
- * combining mark it was previously separated from; composing first would
- * leave that pair for a second application to compose, breaking idempotence.
- * NFC never emits a control, an invisible, or a line break, so the reverse
- * hazard does not exist.
+ * Two things make it idempotent, and both are load-bearing.
+ *
+ * The step order. Line breaks are folded first because a lone carriage return
+ * is itself a control character, so stripping first would delete the break
+ * rather than convert it. Stripping precedes NFC because removing an invisible
+ * character can leave a base letter adjacent to a combining mark it was
+ * previously separated from; composing first would leave that pair for a second
+ * application to compose. NFC never emits a control, an invisible, or a line
+ * break, so the reverse hazard does not exist.
+ *
+ * And the rule that a removal candidate never legitimizes another removal
+ * candidate — see `isLegitimateInContext`. Without it a character survives on
+ * the strength of a neighbour deleted in the same pass, and the next pass
+ * deletes it too.
  */
 export function normalizeOriginText(text: string): string {
     const withUnixLineBreaks = text.replace(LINE_BREAK_FORMS, "\n")

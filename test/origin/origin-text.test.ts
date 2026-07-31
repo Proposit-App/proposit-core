@@ -271,3 +271,132 @@ describe("code-point slicing", () => {
         }
     })
 })
+
+// Every fixture above separates its invisible characters with an ordinary
+// letter, so none of them places two removal candidates side by side. That is
+// the whole failure class below: a character that is itself being removed must
+// never act as the legitimacy base for its neighbour, because the joiner, the
+// variation selectors, and the tag characters all satisfy the emoji-adjacency
+// and variation-selector-base tests themselves.
+
+const TAG_LATIN_SMALL_G = "\u{E0067}"
+const TAG_LATIN_SMALL_B = "\u{E0062}"
+const TAG_CANCEL = "\u{E007F}"
+const WAVING_BLACK_FLAG = "\u{1F3F4}"
+const MAN = "\u{1F468}"
+const SKIN_TONE_4 = "\u{1F3FD}"
+
+const adjacentCandidateFixtures: readonly [string, string][] = [
+    [
+        "joiner then variation selector",
+        `The cat${ZWJ}${VARIATION_SELECTOR_1} sat.`,
+    ],
+    [
+        "two variation selectors",
+        `The cat${VARIATION_SELECTOR_16}${VARIATION_SELECTOR_16} sat.`,
+    ],
+    [
+        "tag character then variation selector",
+        `The cat${TAG_LATIN_SMALL_G}${VARIATION_SELECTOR_16} sat.`,
+    ],
+    [
+        "joiner then variation selector, bare",
+        `a${ZWJ}${VARIATION_SELECTOR_16}b`,
+    ],
+    ["variation selector then joiner", `a${VARIATION_SELECTOR_16}${ZWJ}b`],
+    ["joiner then joiner", `a${ZWJ}${ZWJ}b`],
+    [
+        "zero width space then variation selector",
+        `a${ZWSP}${VARIATION_SELECTOR_16}b`,
+    ],
+    ["bidi control then joiner", `a${BIDI_CONTROLS[7]}${ZWJ}b`],
+    [
+        "tag run with no pictograph base",
+        `a${TAG_LATIN_SMALL_G}${TAG_LATIN_SMALL_B}${TAG_CANCEL}b`,
+    ],
+    [
+        "mongolian fvs after a variation selector",
+        `a${VARIATION_SELECTOR_16}${MONGOLIAN_FVS_1}b`,
+    ],
+    ["candidate run at the very start", `${ZWJ}${VARIATION_SELECTOR_16}text`],
+    ["candidate run at the very end", `text${ZWJ}${VARIATION_SELECTOR_16}`],
+    ["candidates only", `${ZWJ}${VARIATION_SELECTOR_16}${TAG_LATIN_SMALL_G}`],
+]
+
+describe("normalizeOriginText — adjacent removal candidates", () => {
+    for (const [label, text] of adjacentCandidateFixtures) {
+        it(`is idempotent — ${label}`, () => {
+            const once = normalizeOriginText(text)
+            expect(normalizeOriginText(once)).toBe(once)
+        })
+    }
+
+    it("strips a candidate whose only base is another candidate", () => {
+        // A removal candidate cannot legitimize its neighbour. Each of these
+        // reaches its final form in one pass, not two.
+        expect(
+            normalizeOriginText(`The cat${ZWJ}${VARIATION_SELECTOR_1} sat.`)
+        ).toBe("The cat sat.")
+        expect(
+            normalizeOriginText(
+                `The cat${VARIATION_SELECTOR_16}${VARIATION_SELECTOR_16} sat.`
+            )
+        ).toBe("The cat sat.")
+        expect(
+            normalizeOriginText(
+                `The cat${TAG_LATIN_SMALL_G}${VARIATION_SELECTOR_16} sat.`
+            )
+        ).toBe("The cat sat.")
+        expect(normalizeOriginText(`a${ZWJ}${VARIATION_SELECTOR_16}b`)).toBe(
+            "ab"
+        )
+    })
+
+    it("still keeps every legitimate sequence when candidates sit adjacent", () => {
+        // The joiner is legitimate here because a real pictograph follows it,
+        // and the variation selector because a real pictograph precedes it.
+        const professional = `${MAN}${SKIN_TONE_4}${ZWJ}\u{1F680}`
+        expect(normalizeOriginText(professional)).toBe(professional)
+        const flag = `${WAVING_BLACK_FLAG}${TAG_LATIN_SMALL_G}${TAG_LATIN_SMALL_B}${TAG_CANCEL}`
+        expect(normalizeOriginText(flag)).toBe(flag)
+        const heartPresentation = `❤${VARIATION_SELECTOR_16}${ZWJ}\u{1F525}`
+        expect(normalizeOriginText(heartPresentation)).toBe(heartPresentation)
+    })
+})
+
+describe("normalizeOriginText — idempotence over an adversarial alphabet", () => {
+    it("is idempotent for every string over the emoji/invisible alphabet", () => {
+        // Exhaustive rather than random: the alphabet is chosen so that every
+        // pair of adjacent candidates is covered, and the failure class only
+        // needs two neighbours to appear.
+        const alphabet = [
+            "a",
+            ZWJ,
+            ZWSP,
+            VARIATION_SELECTOR_16,
+            VARIATION_SELECTOR_1,
+            MONGOLIAN_FVS_1,
+            MONGOLIAN_LETTER_A,
+            TAG_LATIN_SMALL_G,
+            WAVING_BLACK_FLAG,
+            MAN,
+            SKIN_TONE_4,
+            KEYCAP,
+            "1",
+            "神",
+        ]
+        const failures: string[] = []
+        for (const a of alphabet) {
+            for (const b of alphabet) {
+                for (const c of alphabet) {
+                    const input = a + b + c
+                    const once = normalizeOriginText(input)
+                    if (normalizeOriginText(once) !== once) {
+                        failures.push(JSON.stringify(input))
+                    }
+                }
+            }
+        }
+        expect(failures).toEqual([])
+    })
+})

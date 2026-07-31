@@ -5,6 +5,7 @@ import { InvariantViolationError } from "../../src/lib/core/invariant-violation-
 import {
     codePointLength,
     sliceByCodePoints,
+    normalizeOriginText,
 } from "../../src/lib/utils/origin-text.js"
 
 const SOURCE =
@@ -39,7 +40,7 @@ function anchorFor(
 
 describe("OriginLibrary — documents", () => {
     it("normalizes and digests the supplied text", () => {
-        const { document } = withDocument("﻿café\r\nsecond line  ")
+        const { document } = withDocument("\uFEFFcafe\u0301\r\nsecond line  ")
         expect(document.text).toBe("café\nsecond line")
         expect(document.digest).toBe(
             createHash("sha256")
@@ -54,7 +55,7 @@ describe("OriginLibrary — documents", () => {
         const plain = origins.addDocument({ id: "d1", text: "café\nline" })
         const encoded = origins.addDocument({
             id: "d2",
-            text: "﻿café\r\nline",
+            text: "\uFEFFcafe\u0301\r\nline",
         })
         expect(encoded.digest).toBe(plain.digest)
         expect(encoded.checksum).toBe(plain.checksum)
@@ -401,5 +402,67 @@ describe("OriginLibrary — snapshot round-trip", () => {
             text: SOURCE,
         })
         expect(withOwner.checksum).not.toBe(plain.checksum)
+    })
+})
+
+describe("OriginLibrary — documents whose text contains adjacent invisibles", () => {
+    // `addDocument` normalizes, then `withValidation` re-normalizes to check
+    // its own work. A normalizer that needed two passes made the library
+    // reject ordinary prose it had just normalized itself.
+    const cases: readonly [string, string][] = [
+        ["joiner then variation selector", "The cat\u200D\uFE00 sat."],
+        ["two variation selectors", "The cat\uFE0F\uFE0F sat."],
+        [
+            "tag character then variation selector",
+            "The cat\u{E0067}\uFE0F sat.",
+        ],
+        ["joiner then variation selector, bare", "a\u200D\uFE0Fb"],
+    ]
+
+    for (const [label, text] of cases) {
+        it(`stores text it normalized itself — ${label}`, () => {
+            const origins = new OriginLibrary()
+            const document = origins.addDocument({ id: "doc-1", text })
+            expect(origins.validate().ok).toBe(true)
+            // What the library stored is what one pass of the normalizer
+            // produces, and a second pass changes nothing.
+            expect(document.text).toBe(normalizeOriginText(text))
+            expect(normalizeOriginText(document.text)).toBe(document.text)
+            expect(origins.getDocument("doc-1")?.text).toBe(document.text)
+        })
+    }
+
+    it("keeps an anchor drawn against a consumer's own normalization", () => {
+        // The documented flow: a consumer normalizes at its import boundary,
+        // measures offsets against that string, then hands the same string to
+        // addDocument. If the two normalizations disagree, every anchor the
+        // consumer adds fails ORIGIN_ANCHOR_QUOTE_MISMATCH.
+        const raw = "The cat\u200D\uFE00 sat on the mat."
+        const consumerText = normalizeOriginText(raw)
+        const quote = "cat sat"
+        const start = codePointLength(
+            consumerText.slice(0, consumerText.indexOf(quote))
+        )
+
+        const origins = new OriginLibrary()
+        const document = origins.addDocument({
+            id: "doc-1",
+            text: consumerText,
+        })
+        expect(document.text).toBe(consumerText)
+
+        const anchor = origins.addAnchor({
+            id: "anchor-1",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            targetType: "premise",
+            targetId: "prem-1",
+            exact: quote,
+            startCodePoint: start,
+            endCodePoint: start + codePointLength(quote),
+        })
+        expect(anchor.exact).toBe(quote)
+        expect(origins.validate().ok).toBe(true)
     })
 })
