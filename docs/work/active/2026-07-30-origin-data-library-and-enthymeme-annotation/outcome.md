@@ -425,3 +425,83 @@ Worth a better parse error if the CLI ever grows one.
 clean, build and typedoc green.
 
 `bash scripts/smoke-test.sh` — `SMOKE TEST PASSED`.
+
+---
+
+# Rework round 3 — outcome
+
+The third occurrence of the `undefined`-key defect, plus a sweep that found a
+fourth. `pnpm run check` and `bash scripts/smoke-test.sh` both pass.
+
+| Change | Commit |
+|---|---|
+| `withoutUndefinedValues` helper + five call sites | `8983a5c` |
+| Docs restated as the general invariant | `0c38c10` |
+
+## What the sweep found
+
+`grep -rn "\.\.\.extras" src/` — six sites, three shapes:
+
+| Site | Shape | Verdict |
+|---|---|---|
+| `premise-engine.ts:1248` | `getExtras()` return | fine — reads, builds no entity |
+| `argument-engine.ts:646` | `getExtras()` return | fine — same |
+| `premise-engine.ts` `setExtras` | clear-a-field | fixed round 2 |
+| `argument-engine.ts` `setExtras` | clear-a-field | **the reported defect** |
+| `argument-parser.ts:368` | builds a claim from `mapClaim` | **fourth occurrence** |
+| `argument-parser.ts:420` | builds a variable from `mapVariable` | **fourth occurrence** |
+| `argument-parser.ts:586` | builds a connection from `mapHook` | **fourth occurrence** |
+
+The three parser sites spread a consumer-supplied mapping hook's output into a
+fresh entity. A hook returning `{ title: undefined }` for a field it could not
+populate is ordinary JavaScript, and `mapClaim` is a documented extension point.
+The checksum consequence is absent there — `canonicalSerialize` is
+`JSON.stringify`, which drops `undefined` — so it is the weaker half: no hash
+shift, but `"title" in claim` is true and the same downstream `undefined` →
+`null` coercion flips it to present. Fixed in this commit rather than in a
+fourth round.
+
+`Object.assign` in `src/` now appears only inside a comment; there is no second
+mutation path of that shape left.
+
+## The fix
+
+Third hand-written copy of the same filter, so it stopped being copy-paste:
+one `withoutUndefinedValues` in `src/lib/utils/collections.ts` — internal, not
+barrel-exported, because the invariant is core's rather than a consumer's —
+used by both `setExtras` implementations and the three parser sites. The inline
+filter added to `PremiseEngine.setExtras` in round 2 was replaced by the helper,
+so there is now exactly one definition of the rule and its doc comment is the
+only place the reasoning lives.
+
+## Tests
+
+Five, all failing first:
+
+- **Argument-level mirror** of the round-2 premise assertion — `updateExtras({ note: undefined })` leaves `"note" in argument === false`.
+- **Argument checksum reversibility** with `argumentFields: new Set(["note"])`, which is the configuration that makes this bite: set the field, checksum moves; clear it, checksum returns to its original value exactly. This is the test that proves the consequence rather than the mechanism.
+- **Three parser-hook tests** via a subclass whose `mapClaim` / `mapVariable` / `mapClaimCitation` return `undefined` for one field and a real value for another, asserting the key is absent and the sibling value still lands.
+
+## Docs
+
+The sentence added in round 3 — "That applies to any field patched to
+`undefined`, not only this one" — was a general guarantee when only two of five
+sites honored it. It now names all of them and is true. Both `setExtras` entries
+in `docs/api-reference.md` state the drop behavior, the changelog names every
+path, and `AGENTS.md` carries it as a standing invariant that points at the
+helper, so a sixth site has somewhere to be told about.
+
+## Process
+
+Verification commands whose exit code matters are no longer piped into `tail` —
+that pipeline reports `tail`'s status, which is how two round-3 commits were
+made with lint still red (both amended, nothing shipped). This round used
+`set -o pipefail` and explicit `echo "exit=$?"` on every gate: eslint, typecheck,
+prettier, `pnpm run check`, and the smoke test all reported `exit=0`.
+
+## Verification
+
+`pnpm run check` — exit 0. 2,291 tests passing (14 skipped), prettier clean,
+eslint clean, build and typedoc green.
+
+`bash scripts/smoke-test.sh` — exit 0, `SMOKE TEST PASSED`.
