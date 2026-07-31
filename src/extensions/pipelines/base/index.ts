@@ -13,6 +13,11 @@ export {
     FINALIZE_V2_FAILURE_TEXTS,
 } from "./finalize-response-v2.js"
 export type { TFinalizeResponseV2Input } from "./finalize-response-v2.js"
+export {
+    locateSourceAnchor,
+    SOURCE_ANCHOR_CONTEXT_CHARS,
+} from "./source-anchors.js"
+export type { TIngestionSourceAnchor } from "./source-anchors.js"
 export { resolveLlmStageOptions } from "./resolve-llm-stage-options.js"
 export { basicsExtension } from "./basics-extension.js"
 export type {
