@@ -1,0 +1,405 @@
+import { describe, it, expect } from "vitest"
+import { createHash } from "node:crypto"
+import { OriginLibrary } from "../../src/lib/core/origin-library.js"
+import { InvariantViolationError } from "../../src/lib/core/invariant-violation-error.js"
+import {
+    codePointLength,
+    sliceByCodePoints,
+} from "../../src/lib/utils/origin-text.js"
+
+const SOURCE =
+    "All swans observed so far are white. Therefore all swans are white."
+
+/** A library holding one document, built inline per test. */
+function withDocument(text = SOURCE) {
+    const origins = new OriginLibrary()
+    const document = origins.addDocument({ id: "doc-1", text })
+    return { origins, document }
+}
+
+function anchorFor(
+    text: string,
+    quote: string,
+    overrides: Record<string, unknown> = {}
+) {
+    const start = codePointLength(text.slice(0, text.indexOf(quote)))
+    return {
+        id: "anchor-1",
+        argumentId: "arg-1",
+        argumentVersion: 0,
+        documentId: "doc-1",
+        targetType: "premise" as const,
+        targetId: "prem-1",
+        exact: quote,
+        startCodePoint: start,
+        endCodePoint: start + codePointLength(quote),
+        ...overrides,
+    }
+}
+
+describe("OriginLibrary — documents", () => {
+    it("normalizes and digests the supplied text", () => {
+        const { document } = withDocument("﻿café\r\nsecond line  ")
+        expect(document.text).toBe("café\nsecond line")
+        expect(document.digest).toBe(
+            createHash("sha256")
+                .update("café\nsecond line", "utf8")
+                .digest("hex")
+        )
+        expect(document.checksum).not.toBe("")
+    })
+
+    it("gives the same digest to texts that differ only in encoding", () => {
+        const origins = new OriginLibrary()
+        const plain = origins.addDocument({ id: "d1", text: "café\nline" })
+        const encoded = origins.addDocument({
+            id: "d2",
+            text: "﻿café\r\nline",
+        })
+        expect(encoded.digest).toBe(plain.digest)
+        expect(encoded.checksum).toBe(plain.checksum)
+    })
+
+    it("gives different digests to texts differing by one character", () => {
+        const origins = new OriginLibrary()
+        const a = origins.addDocument({ id: "d1", text: "the source text" })
+        const b = origins.addDocument({ id: "d2", text: "the source texts" })
+        expect(a.digest).not.toBe(b.digest)
+    })
+
+    it("carries an optional segmentation overlay and app-level fields", () => {
+        const origins = new OriginLibrary()
+        const document = origins.addDocument({
+            id: "doc-1",
+            text: SOURCE,
+            segments: [
+                { segmentId: "s1", startCodePoint: 0, endCodePoint: 35 },
+            ],
+            ownerId: "app-owned",
+        } as Parameters<OriginLibrary["addDocument"]>[0])
+        expect(document.segments).toHaveLength(1)
+        expect(document).toMatchObject({ ownerId: "app-owned" })
+    })
+
+    it("rejects a duplicate document id", () => {
+        const { origins } = withDocument()
+        expect(() =>
+            origins.addDocument({ id: "doc-1", text: "other" })
+        ).toThrow(/ORIGIN_DOCUMENT_DUPLICATE_ID/)
+    })
+
+    it("refuses to remove a document that is still referenced", () => {
+        const { origins } = withDocument()
+        origins.addLink({
+            id: "link-1",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        expect(() => origins.removeDocument("doc-1")).toThrow(
+            /ORIGIN_DOCUMENT_IN_USE/
+        )
+        origins.removeLink("link-1")
+        expect(origins.removeDocument("doc-1").id).toBe("doc-1")
+    })
+})
+
+describe("OriginLibrary — links", () => {
+    it("records a stance per argument version and indexes by argument", () => {
+        const { origins } = withDocument()
+        origins.addLink({
+            id: "link-0",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        origins.addLink({
+            id: "link-1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            documentId: "doc-1",
+            stance: "representation",
+        })
+        expect(
+            origins.getLinksForArgument("arg-1", 0).map((l) => l.stance)
+        ).toEqual(["seed"])
+        expect(
+            origins.getLinksForArgument("arg-1", 1).map((l) => l.stance)
+        ).toEqual(["representation"])
+        expect(origins.getLinksForArgument("arg-2", 0)).toEqual([])
+    })
+
+    it("checksums the stance, so promoting a stance changes the checksum", () => {
+        const { origins } = withDocument()
+        const seed = origins.addLink({
+            id: "link-0",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        const representation = origins.addLink({
+            id: "link-1",
+            argumentId: "arg-2",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "representation",
+        })
+        expect(seed.checksum).not.toBe(representation.checksum)
+    })
+
+    it("rejects a link to an unknown document and rolls back", () => {
+        const { origins } = withDocument()
+        expect(() =>
+            origins.addLink({
+                id: "link-x",
+                argumentId: "arg-1",
+                argumentVersion: 0,
+                documentId: "missing",
+                stance: "seed",
+            })
+        ).toThrow(/ORIGIN_DOCUMENT_REF_NOT_FOUND/)
+        expect(origins.getAllLinks()).toHaveLength(0)
+        expect(origins.getLinksForArgument("arg-1", 0)).toEqual([])
+        expect(origins.validate().ok).toBe(true)
+    })
+})
+
+describe("OriginLibrary — anchors", () => {
+    it("indexes by argument version and by target", () => {
+        const { origins } = withDocument()
+        origins.addAnchor(
+            anchorFor(SOURCE, "All swans observed so far are white.")
+        )
+        origins.addAnchor(
+            anchorFor(SOURCE, "all swans are white.", {
+                id: "anchor-2",
+                targetType: "expression",
+                targetId: "expr-1",
+            })
+        )
+        expect(origins.getAnchorsForArgument("arg-1", 0)).toHaveLength(2)
+        expect(
+            origins.getAnchorsForTarget("premise", "prem-1").map((a) => a.id)
+        ).toEqual(["anchor-1"])
+        expect(
+            origins.getAnchorsForTarget("expression", "expr-1").map((a) => a.id)
+        ).toEqual(["anchor-2"])
+        expect(origins.getAnchorsForTarget("argument", "arg-1")).toEqual([])
+    })
+
+    it("keeps the optional prefix and suffix context", () => {
+        const { origins } = withDocument()
+        const anchor = origins.addAnchor(
+            anchorFor(SOURCE, "Therefore", {
+                prefix: "are white. ",
+                suffix: " all swans",
+            })
+        )
+        expect(anchor.prefix).toBe("are white. ")
+        expect(anchor.suffix).toBe(" all swans")
+    })
+
+    it("rejects an anchor whose span does not slice out its own quote", () => {
+        const { origins } = withDocument()
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", { startCodePoint: 0 })
+            )
+        ).toThrow(/ORIGIN_ANCHOR_QUOTE_MISMATCH/)
+        expect(origins.getAllAnchors()).toHaveLength(0)
+    })
+
+    it("rejects a span that runs past the end of the document", () => {
+        const { origins } = withDocument()
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", {
+                    startCodePoint: 0,
+                    endCodePoint: 10_000,
+                })
+            )
+        ).toThrow(/ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE/)
+    })
+
+    it("rejects an anchor referencing an unknown document", () => {
+        const { origins } = withDocument()
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", { documentId: "missing" })
+            )
+        ).toThrow(/ORIGIN_DOCUMENT_REF_NOT_FOUND/)
+    })
+
+    it("rejects a duplicate anchor id", () => {
+        const { origins } = withDocument()
+        origins.addAnchor(anchorFor(SOURCE, "Therefore"))
+        expect(() => origins.addAnchor(anchorFor(SOURCE, "Therefore"))).toThrow(
+            /ORIGIN_ANCHOR_DUPLICATE_ID/
+        )
+    })
+
+    it("drops an anchor from every index on removal", () => {
+        const { origins } = withDocument()
+        origins.addAnchor(anchorFor(SOURCE, "Therefore"))
+        origins.removeAnchor("anchor-1")
+        expect(origins.getAnchorsForArgument("arg-1", 0)).toEqual([])
+        expect(origins.getAnchorsForTarget("premise", "prem-1")).toEqual([])
+        expect(origins.getAnchor("anchor-1")).toBeUndefined()
+    })
+})
+
+describe("OriginLibrary — code-point addressing", () => {
+    // A document whose UTF-16 offsets and code-point offsets disagree. If the
+    // library ever switched units, the anchor below would stop validating.
+    const astralSource = "Proof \u{1D56C}: every \u{1F44D} counts as one."
+
+    it("validates an anchor whose span crosses an astral-plane character", () => {
+        const origins = new OriginLibrary()
+        origins.addDocument({ id: "doc-1", text: astralSource })
+        const quote = "every \u{1F44D} counts"
+        const anchor = origins.addAnchor(anchorFor(astralSource, quote))
+        expect(anchor.exact).toBe(quote)
+        expect(origins.validate().ok).toBe(true)
+    })
+
+    it("would reject the same span read as UTF-16 code units", () => {
+        const origins = new OriginLibrary()
+        origins.addDocument({ id: "doc-1", text: astralSource })
+        const quote = "every \u{1F44D} counts"
+        const codePointStart = codePointLength(
+            astralSource.slice(0, astralSource.indexOf(quote))
+        )
+        const utf16Start = astralSource.indexOf(quote)
+        expect(utf16Start).not.toBe(codePointStart)
+        expect(
+            astralSource.slice(codePointStart, codePointStart + quote.length)
+        ).not.toBe(quote)
+        expect(
+            sliceByCodePoints(
+                astralSource,
+                codePointStart,
+                codePointStart + codePointLength(quote)
+            )
+        ).toBe(quote)
+    })
+})
+
+describe("OriginLibrary — validate and rollback", () => {
+    it("reports a tampered digest", () => {
+        const { origins, document } = withDocument()
+        const tampered = origins.snapshot()
+        tampered.documents[0] = { ...document, digest: "0".repeat(64) }
+        const restored = OriginLibrary.fromSnapshot(tampered)
+        const result = restored.validate()
+        expect(result.ok).toBe(false)
+        expect(result.violations.map((v) => v.code)).toContain(
+            "ORIGIN_DOCUMENT_DIGEST_MISMATCH"
+        )
+    })
+
+    it("reports un-normalized text loaded from a snapshot", () => {
+        const restored = OriginLibrary.fromSnapshot({
+            documents: [
+                {
+                    id: "doc-1",
+                    text: "line one\r\nline two",
+                    digest: createHash("sha256")
+                        .update("line one\r\nline two", "utf8")
+                        .digest("hex"),
+                    checksum: "deadbeef",
+                },
+            ],
+            links: [],
+            anchors: [],
+        })
+        expect(restored.validate().violations.map((v) => v.code)).toContain(
+            "ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED"
+        )
+    })
+
+    it("leaves the library byte-identical after a failed add", () => {
+        const { origins } = withDocument()
+        origins.addAnchor(anchorFor(SOURCE, "Therefore"))
+        const before = JSON.stringify(origins.snapshot())
+        expect(() =>
+            origins.addAnchor(
+                anchorFor(SOURCE, "Therefore", {
+                    id: "anchor-2",
+                    startCodePoint: 0,
+                })
+            )
+        ).toThrow(InvariantViolationError)
+        expect(JSON.stringify(origins.snapshot())).toBe(before)
+    })
+})
+
+describe("OriginLibrary — snapshot round-trip", () => {
+    it("preserves every collection, index, and checksum", () => {
+        const { origins } = withDocument()
+        origins.addLink({
+            id: "link-0",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        origins.addLink({
+            id: "link-1",
+            argumentId: "arg-1",
+            argumentVersion: 1,
+            documentId: "doc-1",
+            stance: "representation",
+        })
+        origins.addAnchor(anchorFor(SOURCE, "All swans observed so far"))
+        origins.addAnchor(
+            anchorFor(SOURCE, "all swans are white.", {
+                id: "anchor-2",
+                targetType: "expression",
+                targetId: "expr-1",
+            })
+        )
+
+        const snapshot = origins.snapshot()
+        const restored = OriginLibrary.fromSnapshot(snapshot)
+
+        expect(restored.snapshot()).toEqual(snapshot)
+        expect(restored.validate().ok).toBe(true)
+        expect(restored.getLinksForArgument("arg-1", 1)[0].stance).toBe(
+            "representation"
+        )
+        expect(restored.getAnchorsForTarget("expression", "expr-1")[0].id).toBe(
+            "anchor-2"
+        )
+        expect(restored.getAnchorsForArgument("arg-1", 0)).toHaveLength(2)
+    })
+
+    it("round-trips through JSON, the form a snapshot is stored in", () => {
+        const { origins } = withDocument()
+        origins.addAnchor(anchorFor(SOURCE, "Therefore"))
+        const restored = OriginLibrary.fromSnapshot(
+            JSON.parse(JSON.stringify(origins.snapshot())) as ReturnType<
+                OriginLibrary["snapshot"]
+            >
+        )
+        expect(restored.snapshot()).toEqual(origins.snapshot())
+    })
+
+    it("honors a supplied checksum config", () => {
+        const origins = new OriginLibrary({
+            checksumConfig: { originDocumentFields: new Set(["ownerId"]) },
+        })
+        const withOwner = origins.addDocument({
+            id: "doc-1",
+            text: SOURCE,
+            ownerId: "someone",
+        } as Parameters<OriginLibrary["addDocument"]>[0])
+        const plain = new OriginLibrary().addDocument({
+            id: "doc-1",
+            text: SOURCE,
+        })
+        expect(withOwner.checksum).not.toBe(plain.checksum)
+    })
+})
