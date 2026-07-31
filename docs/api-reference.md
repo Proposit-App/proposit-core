@@ -1824,6 +1824,36 @@ The default `TIngestionExtension` (the schema bundle a factory consumes). Pairs 
 
 - `buildResponseSchema(extension)` / `buildClaimRecordSchema(claimSchema)` — build the **per-extension** canonicalization output schema (the canonical-claims envelope, and a single claim record with the canonicalizer fields injected into the extension's claim shape). The cheap `scribe.extract` stage uses these so its output carries the extension's claim fields; consumers building their own canonicalization-shaped stage can too.
 - `selectFallbackConclusion(classifications, relations)` — the deterministic relation-graph conclusion pick (highest in-degree pure-sink normal claim, document-order tiebreak; `null` when no candidate). Used to resolve a single `conclusionMiniId` when the model names none; exported so an alternate pipeline producing conclusion candidates in one call can reproduce the identical resolution.
+- `locateSourceAnchor(input, quote, hintUtf16)` / `SOURCE_ANCHOR_CONTEXT_CHARS` — see [Source anchors](#source-anchors).
+
+#### Source anchors
+
+Both pipelines attach an optional `sourceAnchors` array to the claims and premises in their finalized output, referring each back to the text the pipeline was given.
+
+```typescript
+type TIngestionSourceAnchor = {
+    quote: string // the input's own text for the range
+    startUtf16: number // JS string index of the first character
+    endUtf16: number // JS string index one past the last
+    prefix: string // up to 32 characters before the quote
+    suffix: string // up to 32 characters after the quote
+}
+```
+
+**`quote` is authoritative; the offsets are a convenience.** They are named `…Utf16` because they are JS string indices — UTF-16 code units, not Unicode code points — so a consumer counting code points must convert. A consumer that stores its own normalized copy of the document should re-locate the quote there rather than reusing these numbers, and use `prefix`/`suffix` to pick the right occurrence when a quote repeats.
+
+`input.slice(startUtf16, endUtf16) === quote` holds for every emitted anchor: offsets are produced by locating the quote in the input, never copied from the model. A quote that cannot be located yields **no anchor** rather than one at an unverified offset, and an entity with no resolvable anchor **omits the key entirely** rather than carrying an empty array.
+
+- **Claims** carry one anchor per canonicalizer mention that resolved to them, in `mentionIds` order and deduped by range. Only the thorough pipeline produces them — the fast pipeline has no segmentation or mention stage.
+- **Premises** compiled from a relation carry one anchor for that relation's `evidence.quote`. The conclusion premise is synthesized from a bare symbol, has no source relation, and carries none.
+
+##### `locateSourceAnchor(input, quote, hintUtf16)` → `TIngestionSourceAnchor | undefined`
+
+The locator behind the above, exported for consumers doing the same job over their own stored text. Empty and whitespace-only quotes return `undefined`; the quote is trimmed before matching. The ladder is exact match, then a whitespace-insensitive retry where any run of whitespace matches any other (a model that flattens a line break to a space still resolves) — nothing approximate beyond that. On a whitespace-insensitive hit the returned `quote` is the input's text for the matched range, which is what preserves the slice invariant.
+
+`hintUtf16` chooses among repeated occurrences — the occurrence whose start is nearest wins — and never affects _whether_ a quote matches, so a wrong hint degrades to a different occurrence of the same text rather than to a wrong span. `SOURCE_ANCHOR_CONTEXT_CHARS` (32) is the amount of surrounding input carried on each side, clamped at both ends of the input.
+
+Assembling the anchors makes **no** LLM call: it reads stage outputs the pipelines already produce.
 
 #### LLM-options seam — `TIngestionLlmOptions` / `TLlmStageOptionsOverride`
 
@@ -1984,6 +2014,8 @@ type TParsedClaim = {
 ```
 
 A claim as emitted by the LLM. `miniId` is a short identifier scoped to the response; the parser resolves it to a real UUID via `claimLibrary.create()`. `additionalProperties: true` preserves extension fields, which `mapClaim` can pluck out. Note: the pre-v0.12.2 `citationMiniIds` field was removed — support edges are now formula-derived (see `ArgumentParser.build`).
+
+The ingestion pipelines additionally attach an optional `sourceAnchors: TIngestionSourceAnchor[]` to each claim and premise they emit — see [Source anchors](#source-anchors). It rides through as an extension field; a `mapClaim` implementation that plucks fields by name must name it explicitly or it is dropped.
 
 #### `TParsedVariable`
 
