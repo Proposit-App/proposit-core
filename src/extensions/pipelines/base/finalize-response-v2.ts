@@ -206,20 +206,49 @@ function stripCanonicalizerOnlyFields(
 // used to choose among repeated occurrences and are never emitted
 // unverified. See `source-anchors.ts`.
 
+/**
+ * Where each segment actually begins in the input.
+ *
+ * The segmentation prompt requires `segment.text` be copied verbatim, so
+ * the true offset is recoverable by searching — and searching is what
+ * this does, because the model's own `span.start` drifts. Measured on
+ * recorded runs it runs short by one per segment and accumulates with
+ * document length, which is invisible until a quote repeats and the
+ * drifted hint picks the wrong occurrence.
+ *
+ * Segments are emitted left to right and cover the input, so the scan
+ * carries a cursor rather than searching from zero: that keeps a segment
+ * whose text repeats earlier in the document from collapsing onto the
+ * earlier copy. A segment that cannot be found (the model rewrote it)
+ * falls back to its own number and does not advance the cursor.
+ */
+function resolveSegmentStarts(
+    inputText: string,
+    segmentation: TSegmentationOutput | undefined
+): Map<string, number> {
+    const out = new Map<string, number>()
+    let cursor = 0
+    for (const segment of segmentation?.segments ?? []) {
+        const found = inputText.indexOf(segment.text, cursor)
+        if (found === -1) {
+            out.set(segment.segmentId, segment.span.start)
+            continue
+        }
+        out.set(segment.segmentId, found)
+        cursor = found + segment.text.length
+    }
+    return out
+}
+
 /** Resolve every mention to a verified anchor in the input, by id. */
 function buildAnchorByMentionId(args: {
     inputText: string
-    segmentation: TSegmentationOutput | undefined
+    segmentStartById: Map<string, number>
     mentions: TClaimMentionExtractionOutput | undefined
 }): Map<string, TIngestionSourceAnchor> {
     const out = new Map<string, TIngestionSourceAnchor>()
     if (!args.mentions) return out
-    const segmentStartById = new Map(
-        (args.segmentation?.segments ?? []).map((s) => [
-            s.segmentId,
-            s.span.start,
-        ])
-    )
+    const segmentStartById = args.segmentStartById
     for (const mention of args.mentions.mentions) {
         // Mention spans are relative to the segment's text, so the
         // input-relative hint only exists once the segment's own start is
@@ -504,17 +533,12 @@ export function finalizeResponseV2(
 
     // Happy path: assemble the argument.
     const inputText = readInputText(ctx.input)
+    const segmentStartById = resolveSegmentStarts(inputText, input.segmentation)
     const anchorByMentionId = buildAnchorByMentionId({
         inputText,
-        segmentation: input.segmentation,
+        segmentStartById,
         mentions: input.mentions,
     })
-    const segmentStartById = new Map(
-        (input.segmentation?.segments ?? []).map((s) => [
-            s.segmentId,
-            s.span.start,
-        ])
-    )
     const conclusionMiniId = conclusion?.conclusionMiniId ?? null
     const roles = buildClaimToRole({
         canonicalClaims: canon.canonicalClaims,

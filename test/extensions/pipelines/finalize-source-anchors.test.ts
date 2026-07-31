@@ -341,6 +341,64 @@ describe("finalizeResponseV2 — premise source anchors", () => {
     })
 })
 
+describe("finalizeResponseV2 — segment offsets are located, not trusted", () => {
+    // Segment `span.start` is a number the model emitted, and it drifts:
+    // measured across the recorded corpus it runs 1 short per segment,
+    // accumulating with document length. The segmentation prompt requires
+    // `segment.text` be copied verbatim, so the true offset is
+    // recoverable by searching — and must be, because a drifted hint
+    // silently picks the wrong occurrence of a repeated quote.
+    function driftLastSegment(
+        outputs: Record<string, unknown>,
+        by: number
+    ): void {
+        const segmentation = outputs[
+            STAGE_IDS.segmentation
+        ] as TSegmentationOutput
+        const last = segmentation.segments[segmentation.segments.length - 1]
+        last.span = { start: last.span.start - by, end: last.span.end - by }
+    }
+
+    it("resolves a repeated mention correctly despite a drifted segment span", () => {
+        const outputs = buildOutputs()
+        // Enough drift to pull the composed hint nearer the first
+        // occurrence of "The risk is real" than the second.
+        driftLastSegment(outputs, 30)
+
+        const c1 = finalize(outputs).claims.find((c) => c.miniId === "c1")!
+        expect(c1.sourceAnchors!.map((a) => a.startUtf16)).toEqual([
+            0,
+            INPUT_TEXT.lastIndexOf("The risk"),
+        ])
+    })
+
+    it("resolves a relation's evidence quote despite a drifted segment span", () => {
+        const outputs = buildOutputs()
+        driftLastSegment(outputs, 30)
+
+        const p1 = finalize(outputs).premises.find((p) => p.miniId === "p1")!
+        expect(p1.sourceAnchors![0].startUtf16).toBe(
+            INPUT_TEXT.indexOf("so we should wait")
+        )
+    })
+
+    it("falls back to the model's span when a segment cannot be located", () => {
+        const outputs = buildOutputs()
+        const segmentation = outputs[
+            STAGE_IDS.segmentation
+        ] as TSegmentationOutput
+        // The model rewrote this segment, so there is nothing to search
+        // for; its own number is all that is left.
+        segmentation.segments[2].text = "A rewritten segment."
+
+        const c1 = finalize(outputs).claims.find((c) => c.miniId === "c1")!
+        expect(c1.sourceAnchors).toHaveLength(2)
+        expect(c1.sourceAnchors![1].startUtf16).toBe(
+            INPUT_TEXT.lastIndexOf("The risk")
+        )
+    })
+})
+
 describe("finalizeResponseV2 — foreign input shapes", () => {
     // `TStageContext.input` is `unknown`, and `finalizeResponseV2` is
     // public API for consumers assembling their own pipelines. Before
