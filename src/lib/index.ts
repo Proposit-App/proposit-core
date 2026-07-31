@@ -59,6 +59,14 @@ export {
 } from "./core/checksum.js"
 export { sha256Hex } from "./utils/sha256.js"
 export {
+    normalizeOriginText,
+    codePointLength,
+    sliceByCodePoints,
+    buildCodePointIndex,
+    sliceByCodePointsIndexed,
+} from "./utils/origin-text.js"
+export type { TCodePointIndex } from "./utils/origin-text.js"
+export {
     diffArguments,
     defaultCompareArgument,
     defaultCompareVariable,
