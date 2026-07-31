@@ -47,16 +47,48 @@ function escapeForRegExp(literal: string): string {
     return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
-/** Every start index at which `needle` occurs in `haystack`. */
-function exactOccurrences(haystack: string, needle: string): number[] {
+/** Every start index at which `needle` occurs in `haystack`, from `fromUtf16`. */
+function exactOccurrences(
+    haystack: string,
+    needle: string,
+    fromUtf16 = 0
+): number[] {
     const starts: number[] = []
-    let from = 0
+    let from = fromUtf16
     for (;;) {
         const at = haystack.indexOf(needle, from)
         if (at === -1) return starts
         starts.push(at)
         from = at + 1
     }
+}
+
+/**
+ * The occurrence of `needle` at or after `fromUtf16` whose start sits
+ * nearest `hintUtf16`, or `undefined` when there is none.
+ *
+ * The same rule the anchor locator applies, exposed because the offsets
+ * the model reports for segments and mentions need it too: take the
+ * verifiable positions as the candidates and let the model's number pick
+ * between them, never the reverse.
+ */
+export function nearestOccurrence(
+    haystack: string,
+    needle: string,
+    hintUtf16: number,
+    fromUtf16 = 0
+): number | undefined {
+    if (needle.length === 0) return undefined
+    let best: number | undefined
+    for (const at of exactOccurrences(haystack, needle, fromUtf16)) {
+        if (
+            best === undefined ||
+            Math.abs(at - hintUtf16) < Math.abs(best - hintUtf16)
+        ) {
+            best = at
+        }
+    }
+    return best
 }
 
 /**

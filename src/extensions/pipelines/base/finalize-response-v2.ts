@@ -48,6 +48,7 @@ import {
 } from "./stages/schemas.js"
 import {
     locateSourceAnchor,
+    nearestOccurrence,
     type TIngestionSourceAnchor,
     type TSourceAnchorMatch,
 } from "./source-anchors.js"
@@ -212,16 +213,17 @@ function stripCanonicalizerOnlyFields(
  *
  * The segmentation prompt requires `segment.text` be copied verbatim, so
  * the true offset is recoverable by searching — and searching is what
- * this does, because the model's own `span.start` drifts. Measured on
- * recorded runs it runs short by one per segment and accumulates with
- * document length, which is invisible until a quote repeats and the
- * drifted hint picks the wrong occurrence.
+ * this does, because the model's own `span.start` drifts — off by one on
+ * several segments of the recorded corpus. Small, and invisible until a
+ * quote repeats, at which point the drifted hint picks the wrong
+ * occurrence.
  *
  * Segments are emitted left to right and cover the input, so the scan
  * carries a cursor rather than searching from zero: that keeps a segment
  * whose text repeats earlier in the document from collapsing onto the
- * earlier copy. A segment that cannot be found (the model rewrote it)
- * falls back to its own number and does not advance the cursor.
+ * earlier copy. Among the candidates at or after the cursor, the one
+ * nearest the model's reported start wins — the model's number chooses
+ * between verified positions rather than supplying one.
  */
 function resolveSegmentStarts(
     inputText: string,
@@ -230,9 +232,21 @@ function resolveSegmentStarts(
     const out = new Map<string, number>()
     let cursor = 0
     for (const segment of segmentation?.segments ?? []) {
-        const found = inputText.indexOf(segment.text, cursor)
-        if (found === -1) {
+        const found = nearestOccurrence(
+            inputText,
+            segment.text,
+            segment.span.start,
+            cursor
+        )
+        if (found === undefined) {
             out.set(segment.segmentId, segment.span.start)
+            // Advance past where the model says this segment ended.
+            // Leaving the cursor behind would let the next segment's
+            // scan reach back into territory this one owns and match a
+            // duplicate inside it — the exact collapse the cursor
+            // exists to prevent, triggered by the branch that handles a
+            // rewritten segment.
+            cursor = Math.max(cursor, segment.span.end)
             continue
         }
         out.set(segment.segmentId, found)

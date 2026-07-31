@@ -495,6 +495,122 @@ describe("finalizeResponseV2 — segment offsets are located, not trusted", () =
     })
 })
 
+describe("finalizeResponseV2 — a paraphrased segment must not derail the next", () => {
+    // The fallback exists for a segment the model rewrote, so it is
+    // exactly the branch that must not corrupt its follower. The input
+    // repeats "We must act now." on either side of the rewritten
+    // segment; the second copy is the one the last segment owns.
+    const REPEAT_INPUT =
+        "Intro here. We must act now. Some filler in between. We must act now. The end."
+
+    function buildRepeatOutputs(
+        paraphraseMiddle: boolean
+    ): Record<string, unknown> {
+        const texts = [
+            "Intro here.",
+            "We must act now. Some filler in between.",
+            "We must act now.",
+            "The end.",
+        ]
+        const segments = texts.map((text, i) => {
+            const start = REPEAT_INPUT.indexOf(
+                text,
+                i === 0 ? 0 : REPEAT_INPUT.indexOf(texts[i - 1]) + 1
+            )
+            return {
+                segmentId: `s${String(i + 1)}`,
+                text,
+                span: { start, end: start + text.length },
+            }
+        })
+        if (paraphraseMiddle) {
+            segments[1].text = "The author opens by insisting on urgency."
+        }
+        const segmentation: TSegmentationOutput = { segments }
+
+        const mentions: TClaimMentionExtractionOutput = {
+            mentions: [
+                {
+                    mentionId: "m1",
+                    segmentId: "s3",
+                    text: "We must act now.",
+                    span: { start: 0, end: 16 },
+                },
+            ],
+        }
+        const canonicalization: TClaimCanonicalizationOutput = {
+            canonicalClaims: [
+                {
+                    miniId: "c1",
+                    mentionIds: ["m1"],
+                    suggestedSymbol: "Act_Now",
+                    type: "normal",
+                    ...({ title: "We must act now" } as Record<
+                        string,
+                        unknown
+                    >),
+                },
+            ],
+            mentionToClaim: [{ mentionId: "m1", claimMiniId: "c1" }],
+        }
+        const variables: TVariableAssignmentOutput = [
+            { miniId: "v1", symbol: "Act_Now", claimMiniId: "c1" },
+        ]
+        const compilation: TFormulaCompilationOutput = {
+            premises: [
+                {
+                    premiseMiniId: "p1",
+                    formula: "Act_Now",
+                    roleHint: "conclusion",
+                    sourceRelationId: null,
+                },
+            ],
+            conclusionPremiseMiniId: "p1",
+            derivationBacking: [],
+        }
+        return {
+            [STAGE_IDS.segmentation]: segmentation,
+            [STAGE_IDS.claimMentionExtraction]: mentions,
+            [STAGE_IDS.claimCanonicalization]: canonicalization,
+            [STAGE_IDS.variableAssignment]: variables,
+            [STAGE_IDS.relationExtraction]: { relations: [] },
+            [STAGE_IDS.conclusionSelection]: {
+                conclusionMiniId: "c1",
+                conclusionCandidates: ["c1"],
+                rationale: "only claim",
+            },
+            [STAGE_IDS.formulaCompilation]: compilation,
+        }
+    }
+
+    function anchorStart(paraphraseMiddle: boolean): number | undefined {
+        const outputs = buildRepeatOutputs(paraphraseMiddle)
+        const out = finalizeResponseV2({
+            ctx: {
+                ...buildContextStub(outputs, REPEAT_INPUT),
+                input: { text: REPEAT_INPUT },
+            },
+            extension: basicsExtension,
+            segmentation: outputs[
+                STAGE_IDS.segmentation
+            ] as TSegmentationOutput,
+            mentions: outputs[
+                STAGE_IDS.claimMentionExtraction
+            ] as TClaimMentionExtractionOutput,
+        })
+        const argument = out.argument as unknown as { claims: TAnchored[] }
+        return argument.claims[0].sourceAnchors?.[0].startUtf16
+    }
+
+    it("locates the last segment's mention when every segment is verbatim", () => {
+        expect(anchorStart(false)).toBe(REPEAT_INPUT.lastIndexOf("We must act"))
+    })
+
+    it("still locates it when the preceding segment was paraphrased away", () => {
+        expect(anchorStart(true)).toBe(REPEAT_INPUT.lastIndexOf("We must act"))
+    })
+})
+
 describe("finalizeResponseV2 — foreign input shapes", () => {
     // `TStageContext.input` is `unknown`, and `finalizeResponseV2` is
     // public API for consumers assembling their own pipelines. Before
