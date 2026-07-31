@@ -228,15 +228,19 @@ function singleOperatorInsideFormula(
 }
 
 /**
- * P-6 — An enthymeme marks a claim-bound variable. A variable expression
- * carrying `enthymeme: true` resolves to a claim-bound variable.
+ * P-6 — An enthymeme marks a claim-bound variable. An expression carrying
+ * `enthymeme: true` is a variable expression, and its variable is claim-bound.
  *
- * The schema confines the annotation to variable expressions and premises,
- * but cannot express claim-boundness: that is a property of the variable the
- * expression points at, not of the expression itself. Marking a
- * premise-bound variable unspoken is meaningless — its truth is derived from
- * another premise's evaluation, so there is no natural-language assertion for
- * a speaker to have suppressed.
+ * The TypeScript types confine the annotation to variable expressions and
+ * premises, but the entity schemas stay open for app-level fields, so a mark
+ * on an operator or formula expression is reachable through the library API
+ * and shifts that expression's checksum. Both halves are reported here because
+ * neither is expressible in the schema: an operator has no assertion to
+ * suppress, and claim-boundness is a property of the variable an expression
+ * points at rather than of the expression itself. Marking a premise-bound
+ * variable is meaningless in the same way — its truth is derived from another
+ * premise's evaluation, so there is no natural-language assertion a speaker
+ * could have left out.
  *
  * An expression whose variable cannot be resolved is not reported here; the
  * dangling reference is a Structural concern.
@@ -245,8 +249,20 @@ export function validateP6(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     const variablesById = new Map(ctx.variables.map((v) => [v.id, v]))
     for (const e of ctx.expressions) {
-        if (e.type !== "variable") continue
-        if (e.enthymeme !== true) continue
+        // The field is declared only on the variable member of the union, so
+        // reading it off an operator or formula needs a widened view.
+        if ((e as { enthymeme?: unknown }).enthymeme !== true) continue
+        if (e.type !== "variable") {
+            violations.push({
+                tier: "presentable",
+                code: "P-6",
+                message: `${e.type} expression ${e.id} is marked unspoken; only a claim-bound variable expression can be`,
+                argumentId: ctx.argument.id,
+                premiseId: e.premiseId,
+                expressionId: e.id,
+            })
+            continue
+        }
         const variable = variablesById.get(e.variableId)
         if (variable === undefined) continue
         if (!isPremiseBound(variable)) continue

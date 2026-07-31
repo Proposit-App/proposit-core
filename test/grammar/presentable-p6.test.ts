@@ -5,11 +5,13 @@ import {
     buildContext,
     makeVariableExpression,
     makeOperatorExpression,
+    makeFormulaExpression,
     makeFreeformPremise,
     makeClaimBoundVariable,
     makePremiseBoundVariable,
     makeNormalClaim,
 } from "./fixtures.js"
+import type { TCorePropositionalExpression } from "../../src/lib/schemata/index.js"
 
 /**
  * A well-formed single-variable premise whose one variable expression is
@@ -102,7 +104,40 @@ describe("grammar/presentable P-6 enthymeme marks a claim-bound variable", () =>
         expect(validateP6(ctx)).toHaveLength(0)
     })
 
-    it("ignores a marked operator expression — the rule is about variables", () => {
+    it("reports a marked operator or formula expression", () => {
+        // The TypeScript types confine the field to variable expressions, but
+        // the schemas stay open for app-level fields, so a mark on an operator
+        // or formula is reachable from the library API and shifts that
+        // expression's checksum. Nothing else would report it.
+        for (const expression of [
+            makeOperatorExpression("and", { id: "e-1" }),
+            makeFormulaExpression({ id: "e-1" }),
+        ]) {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                // The mark is not declared on these members of the union,
+                // which is precisely why the schema lets it through at
+                // runtime and the validator has to catch it.
+                expressions: [
+                    {
+                        ...expression,
+                        enthymeme: true,
+                    } as unknown as TCorePropositionalExpression,
+                ],
+                variables: [makeClaimBoundVariable({ id: "v-1" })],
+            })
+            const violations = validateP6(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "presentable",
+                code: "P-6",
+                expressionId: "e-1",
+            })
+            expect(violations[0].variableId).toBeUndefined()
+        }
+    })
+
+    it("accepts an unmarked operator expression", () => {
         const ctx = buildContext({
             premises: [makeFreeformPremise({ id: "p-1" })],
             expressions: [makeOperatorExpression("and", { id: "e-1" })],
