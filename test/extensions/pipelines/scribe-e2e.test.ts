@@ -165,6 +165,10 @@ describe(`scribe ingestion pipeline — golden corpus (${mode} mode)`, () => {
             expect(result.output).toEqual(runtime)
             // The finalize-time source anchors add no model work: the
             // run still makes exactly one call per recorded pair.
+            // Counts calls, not distinct prompts. In replay that is the
+            // same thing; in `record` mode a transient API retry makes
+            // this fail on the count rather than on the underlying
+            // error, so read it as a symptom there, not a cause.
             expect(provider.callCount()).toBe(SCRIBE_LLM_STAGE_COUNT)
         })
     }

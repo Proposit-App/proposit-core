@@ -1824,7 +1824,7 @@ The default `TIngestionExtension` (the schema bundle a factory consumes). Pairs 
 
 - `buildResponseSchema(extension)` / `buildClaimRecordSchema(claimSchema)` — build the **per-extension** canonicalization output schema (the canonical-claims envelope, and a single claim record with the canonicalizer fields injected into the extension's claim shape). The cheap `scribe.extract` stage uses these so its output carries the extension's claim fields; consumers building their own canonicalization-shaped stage can too.
 - `selectFallbackConclusion(classifications, relations)` — the deterministic relation-graph conclusion pick (highest in-degree pure-sink normal claim, document-order tiebreak; `null` when no candidate). Used to resolve a single `conclusionMiniId` when the model names none; exported so an alternate pipeline producing conclusion candidates in one call can reproduce the identical resolution.
-- `locateSourceAnchor(input, quote, hintUtf16)` / `SOURCE_ANCHOR_CONTEXT_CHARS` — see [Source anchors](#source-anchors).
+- `locateSourceAnchor(input, quote, hintUtf16)` / `SOURCE_ANCHOR_CONTEXT_CHARS` / `SOURCE_ANCHOR_NOTE_CODES` — see [Source anchors](#source-anchors).
 
 #### Source anchors
 
@@ -1847,13 +1847,32 @@ type TIngestionSourceAnchor = {
 - **Claims** carry one anchor per canonicalizer mention that resolved to them, in `mentionIds` order and deduped by range. Only the thorough pipeline produces them — the fast pipeline has no segmentation or mention stage.
 - **Premises** compiled from a relation carry one anchor for that relation's `evidence.quote`. The conclusion premise is synthesized from a bare symbol, has no source relation, and carries none.
 
-##### `locateSourceAnchor(input, quote, hintUtf16)` → `TIngestionSourceAnchor | undefined`
+`prefix` and `suffix` are always well-formed UTF-16. The window is measured in code units, so a non-BMP character straddling its boundary would otherwise strand a lone surrogate — which Postgres rejects on insert into `json`/`jsonb` and a `TextEncoder` round-trip silently rewrites to U+FFFD, breaking the re-locate path the context exists to serve. The window shrinks by one code unit instead, so an emoji on the boundary is dropped whole rather than halved.
 
-The locator behind the above, exported for consumers doing the same job over their own stored text. Empty and whitespace-only quotes return `undefined`; the quote is trimmed before matching. The ladder is exact match, then a whitespace-insensitive retry where any run of whitespace matches any other (a model that flattens a line break to a space still resolves) — nothing approximate beyond that. On a whitespace-insensitive hit the returned `quote` is the input's text for the matched range, which is what preserves the slice invariant.
+##### `locateSourceAnchor(input, quote, hintUtf16)` → `TSourceAnchorMatch | undefined`
+
+The locator behind the above, exported for consumers doing the same job over their own stored text. It returns `{ anchor: TIngestionSourceAnchor; occurrences: number }`, where `occurrences` is how many candidate ranges the hint chose between — greater than one means the quote is not unique in the input and the result is a tie-break rather than a certainty.
+
+Empty and whitespace-only quotes return `undefined`; the quote is trimmed before matching. The ladder is exact match, then a whitespace-insensitive retry where any run of whitespace matches any other (a model that flattens a line break to a space still resolves) — nothing approximate beyond that. On a whitespace-insensitive hit the returned `quote` is the input's text for the matched range, which is what preserves the slice invariant.
 
 `hintUtf16` chooses among repeated occurrences — the occurrence whose start is nearest wins — and never affects _whether_ a quote matches, so a wrong hint degrades to a different occurrence of the same text rather than to a wrong span. `SOURCE_ANCHOR_CONTEXT_CHARS` (32) is the amount of surrounding input carried on each side, clamped at both ends of the input.
 
+##### Resolution notes
+
+Finalize reports each resolution it could not make cleanly through `ctx.addFailure`, so they arrive on `PipelineResult.failures`. Both are `severity: "warning"` and neither stops assembly; the codes are exported as `SOURCE_ANCHOR_NOTE_CODES`.
+
+| Code                       | Meaning                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SOURCE_ANCHOR_UNRESOLVED` | The quote was not found in the input. No anchor was emitted. `context` carries the quote plus the `mentionId` or `relationId` it came from.       |
+| `SOURCE_ANCHOR_AMBIGUOUS`  | The quote occurs more than once. The occurrence nearest the reported position was used; `context` adds `occurrences` and the chosen `startUtf16`. |
+
+An empty relation evidence quote is not reported — it is a legal "no span to cite", not a failed lookup. Watching the unresolved rate is how a consumer detects a model that has started paraphrasing instead of quoting, which would otherwise take anchor coverage toward zero in silence.
+
+**Segment offsets are located, not trusted.** Where a hint needs a segment's position in the input, finalize finds `segment.text` rather than reading the model's `span.start` — the segmentation prompt requires the text be copied verbatim, and the model's own numbers are measurably off (short by one per segment on recorded runs, accumulating with document length). Segments are scanned left to right behind a cursor so a repeated segment does not collapse onto an earlier copy; a segment that cannot be found falls back to its reported number.
+
 Assembling the anchors makes **no** LLM call: it reads stage outputs the pipelines already produce.
+
+`finalizeResponseV2` reads the pipeline input only for this. Any input shape that does not carry a `text: string` yields no anchors rather than an error, so a consumer pipeline with a different `inputSchema` can reuse the assembler unchanged.
 
 #### LLM-options seam — `TIngestionLlmOptions` / `TLlmStageOptionsOverride`
 
@@ -2015,7 +2034,7 @@ type TParsedClaim = {
 
 A claim as emitted by the LLM. `miniId` is a short identifier scoped to the response; the parser resolves it to a real UUID via `claimLibrary.create()`. `additionalProperties: true` preserves extension fields, which `mapClaim` can pluck out. Note: the pre-v0.12.2 `citationMiniIds` field was removed — support edges are now formula-derived (see `ArgumentParser.build`).
 
-The ingestion pipelines additionally attach an optional `sourceAnchors: TIngestionSourceAnchor[]` to each claim and premise they emit — see [Source anchors](#source-anchors). It rides through as an extension field; a `mapClaim` implementation that plucks fields by name must name it explicitly or it is dropped.
+The ingestion pipelines additionally attach an optional `sourceAnchors: TIngestionSourceAnchor[]` to each claim and premise they emit — see [Source anchors](#source-anchors). It rides through as an extension field, so a `mapClaim` **or `mapPremise`** implementation that plucks fields by name must name it explicitly in _both_ hooks or it is silently dropped from whichever one omits it — claims and premises are anchored independently.
 
 #### `TParsedVariable`
 

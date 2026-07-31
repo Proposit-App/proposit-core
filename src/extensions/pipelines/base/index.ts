@@ -11,6 +11,7 @@
 export {
     finalizeResponseV2,
     FINALIZE_V2_FAILURE_TEXTS,
+    SOURCE_ANCHOR_NOTE_CODES,
 } from "./finalize-response-v2.js"
 export type { TFinalizeResponseV2Input } from "./finalize-response-v2.js"
 export {

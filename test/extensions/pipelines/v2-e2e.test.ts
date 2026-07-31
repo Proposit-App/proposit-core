@@ -390,6 +390,10 @@ describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 assertSourceAnchors(actual, input.text)
                 // Assembling the anchors adds no model work: the run
                 // still makes exactly one call per LLM stage.
+                // Counts calls, not distinct prompts. In replay that is the
+                // same thing; in `record` mode a transient API retry makes
+                // this fail on the count rather than on the underlying
+                // error, so read it as a symptom there, not a cause.
                 expect(provider.callCount()).toBe(SCHOLAR_LLM_STAGE_COUNT)
             }
         )

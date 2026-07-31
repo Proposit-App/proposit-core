@@ -16,6 +16,11 @@
     cannot be found word-for-word, nothing is reported for it rather than a
     confident guess at the wrong passage.
 
+    When a passage cannot be matched, or when the same wording appears in more
+    than one place and one had to be chosen, the run says so alongside its
+    result. An application can watch that to notice a drop in quality rather
+    than discovering it from a reader.
+
     No extra work is asked of the language model and nothing costs more to run.
     The fast pipeline does not produce this detail, because it never breaks the
     text into pieces in the first place.
