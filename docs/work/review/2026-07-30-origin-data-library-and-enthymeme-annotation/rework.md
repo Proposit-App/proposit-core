@@ -171,3 +171,165 @@ to write that code. One sentence.
 - `readOriginLibrary` swallowing a JSON parse error and returning an empty
   library is real data loss, but it is the identical pattern used by all four
   pre-existing `read*Library` functions. Out of scope for this item.
+
+---
+
+# Rework round 2 — review of `d3f64be..HEAD`
+
+The normalizer fix (`0a9e654`) and the P-6 fix (`74166e1`) came back clean and
+hard-verified — 400k random strings, exhaustive lengths 1-5, every Unicode code
+point in 14 contexts, zero non-idempotent; 19 real emoji sequences round-trip;
+200k prose strings byte-identical to pre-rework. Not iterating to a fixed point
+was judged correct. Both are left alone.
+
+Two of the other fixes introduced defects. Everything below was reproduced
+against the built output before any code was written; a failing test lands
+before each fix.
+
+## 1. HIGH — two or more unlinked anchors brick the library permanently
+
+`5e2cf41` added `ORIGIN_ANCHOR_LINK_NOT_FOUND`, but `withValidation` requires
+`validate().ok` over the **whole** library after every mutation. So one orphan
+anchor cannot be removed while another orphan remains — each removal is rolled
+back by the violation the *other* anchor still raises.
+
+Reproduced:
+
+```
+1 orphan anchor(s): removed 1/1
+2 orphan anchor(s): removed 0/2 — ORIGIN_ANCHOR_LINK_NOT_FOUND: origin anchor "a2" …
+3 orphan anchor(s): removed 0/3 — 2 invariant violations detected
+```
+
+The dead end is total. On a two-orphan library `removeAnchor("a1")` throws,
+`removeAnchor("a2")` throws, there is no link to remove, and
+`removeDocument("d1")` throws `ORIGIN_DOCUMENT_IN_USE`. Every mutation fails
+forever; the only exit is hand-editing `origins.json`. `fromSnapshot` does not
+validate, so such a file loads silently and bricks on the first write.
+
+Reachable from any `origins.json` written on this branch before `5e2cf41` — the
+smoke test created exactly that shape while anchors-without-links were still
+legal — or from any consumer assembling a snapshot programmatically.
+
+**Root cause: the wrong question.** `withValidation` asks "is the library clean
+now?" when what matters is "did this mutation make it worse?". Demanding
+cleanliness means a library that is already inconsistent can never be repaired,
+which is exactly the state a validating library has to leave repairable.
+
+**Fix.** Compare the post-mutation violation set against the pre-mutation set and
+reject only violations the mutation *introduced*. One uniform rule, no
+add-versus-remove branching: an `addAnchor` with no link still introduces a new
+violation and is still refused, on a clean library and a broken one alike.
+
+Carry the pre-mutation set as state between mutations rather than recomputing it,
+so this stays at one `validate()` per mutation and does not undo `e66d44f`.
+`fromSnapshot` seeds it once from the loaded state.
+
+**Do not break the other direction**, which is correct and tested: `removeLink`
+while anchors remain must stay refused with a clean rollback
+(`test/origin/origin-library.test.ts:615`). Under the introduced-violations rule
+it does — the orphaning is new.
+
+## 2. MEDIUM — the premise path still has the exact defect the expression path lost
+
+`b047659` made `patchAndMarkExpression` delete an `undefined`-valued key. The
+premise equivalent `updateExtras` is
+`setExtras({ ...this.getExtras(), ...updates })` — the spread **creates** the key
+holding `undefined`, and `setExtras` spreads it again into the new premise.
+Verified end to end:
+
+```
+premise unmark   : 'enthymeme' in premise    -> true  (value undefined)
+expression unmark: 'enthymeme' in expression -> false
+```
+
+That is verbatim the failure the commit message describes.
+`docs/api-reference.md` names the premise extras round-trip as the sanctioned
+premise route in the same breath as `patchExpressionAppFields`, and the sentence
+added at `:975` ("That applies to any field patched to `undefined`, not only
+this one") reads as a general guarantee that is not one.
+
+The CLI already hand-rolls `getExtras()` → `delete` → `setExtras()`, which is
+evidence the gap was known CLI-side and never closed in the library — the same
+"fixed the caller, not the shared helper" mistake, in the other direction.
+
+**Fix** in `setExtras`, covering `updateExtras` and every direct caller. Add the
+premise mirror of the `"enthymeme" in expr` assertion. Then delete the CLI
+hand-roll, whose passing is the evidence it worked.
+
+## 3. MEDIUM — `addDocument` marks a document verified before `validate()` looks at it
+
+`e66d44f` seeds `verifiedDocumentBodies` inside the `withValidation` callback, so
+the skip in `validate()` fires on the very pass that was supposed to check the
+document. `ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED` is no longer reachable at add
+time — and that check is exactly what caught the idempotence bug fixed in
+`0a9e654`, in the function this file's own header calls a one-way door. The perf
+commit deleted the self-check that found the bug the previous commit fixed.
+
+Fuzzing says the assumption holds today, so this is defense-in-depth rather than
+a live bug. Restore it anyway: seed the entry only when
+`normalizeOriginText(text) === text`. One extra normalize per `addDocument` —
+O(document size) **once**, not the per-mutation cost `e66d44f` removed.
+
+## 4. MEDIUM — `documentIndexes` is keyed by id while the comment and changelog claim text
+
+The lookup reads `this.documentIndexes.get(document.id)` and trusts it, while the
+comment beside it says "the text cannot change under it" and
+`docs/changelogs/upcoming.md` states outright that both caches are "keyed to the
+exact text that passed, not to the document id". True of the body record, false
+of the index.
+
+Invalidation is coupled to the wrong map as well: `restoreFromSnapshot` drops
+`documentIndexes[id]` only when `verifiedDocumentBodies[id]` exists *and*
+mismatches, so a document indexed but never verified keeps its index across a
+restore.
+
+No reachable wrong slice today — `restoreFromSnapshot` is private and only ever
+fed a self-taken snapshot, and no document-update path exists. But
+`TCodePointIndex` already carries `.text` precisely so this is one comparison.
+Make the code match the claim, and the trap a future `replaceDocument` would fall
+into disappears.
+
+## 5. MEDIUM — three shipped Public-API doc sites still say `Object.assign`
+
+Contradicting `b047659`: `src/lib/core/argument-engine.ts:1586`,
+`src/lib/core/interfaces/argument-engine.interfaces.ts:452`, and
+`docs/api-reference.md:233`. All three carry their own Documentation Sync
+entries, and `api-reference.md` now contradicts itself — `:233` says
+`Object.assign`, `:975` says the key is deleted.
+
+## 6. MEDIUM — `docs/api-reference.md` states the old schema two lines below the corrected one
+
+`:968` correctly says `Type.Optional(Type.Literal(true))` rejects both `null` and
+`false`. The blockquote immediately below still reads "The schema is
+`Type.Optional(Type.Boolean())`, never `Nullable`, and unmarking must delete the
+field rather than set it to `false`" — which accepts `false`, in the one
+paragraph flagged as the invariant. `:964` is stale the same way.
+
+## 7. LOW — the `stripInvisibleCharacters` docstring overstates the rule
+
+A removal candidate *does* legitimize another in two places by design:
+`EMOJI_ADJACENT` matches `FE0F` and the skin tones (correctly, for
+`emoji + FE0F + ZWJ + emoji`), and the Mongolian free variation selectors are
+themselves `Script=Mongolian`, so an FVS run self-legitimizes. Both are stable
+because the base must have *survived*, so idempotence is unaffected — the
+sentence is simply stronger than the code. "…never on the strength of a
+neighbour that did not survive" is accurate.
+
+## Deferred — record in `outcome.md`, do not implement
+
+- **Retained code-point index memory.** 20 anchored documents totalling 10 MB of
+  text retain **103 MB** of heap; no eviction, no cap, bounded only by live
+  document count. Peak is unchanged from before `e66d44f`; steady state is not.
+  The `ponytail:` comment documents the time tradeoff and is silent on memory —
+  add the sentence, do not re-engineer. The lazy fix, if it bites, is indexing
+  only documents that have anchors and dropping the index with their last anchor.
+- **`arguments delete` does not cascade to `origins.json`.** The CLI removes
+  directories only, so the invariant `assertArgumentVersionExists` establishes on
+  create is broken by the very next command, leaving links and anchors pointing
+  at nothing — which the origin library structurally cannot detect, by design.
+  The smoke test masks it by unlinking first. Record the choice (cascade /
+  refuse / document) without implementing it.
+- **`Value.Parse` on an on-disk `enthymeme: false`** fails as "Invalid or corrupt
+  file" with no indication which field. Not a live break — every writer was
+  traced and none emits `false`, and the feature is unreleased.
