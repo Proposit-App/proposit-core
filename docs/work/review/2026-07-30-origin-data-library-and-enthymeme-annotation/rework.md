@@ -333,3 +333,69 @@ neighbour that did not survive" is accurate.
 - **`Value.Parse` on an on-disk `enthymeme: false`** fails as "Invalid or corrupt
   file" with no indication which field. Not a live break — every writer was
   traced and none emits `false`, and the feature is unreleased.
+
+---
+
+# Rework round 3 — the third occurrence of the `undefined`-key defect
+
+Round 2 fixed the expression path (`patchAndMarkExpression`). Round 3 fixed the
+premise path, in `setExtras` rather than `updateExtras` so every caller was
+covered. `ArgumentEngine` has its own independent `setExtras` / `updateExtras`
+pair with the identical shape and was not touched.
+
+Confirmed against the worktree source:
+
+```
+engine.updateExtras({ note: "hello" })   ->  'note' in argument = true
+engine.updateExtras({ note: undefined }) ->  'note' in argument = true  | value = undefined
+```
+
+Verbatim the failure the last two rounds have been closing. It matters at least
+as much here, not less: `createChecksumConfig` **unions** additional fields onto
+the per-entity defaults rather than replacing them, so an app that extends
+`argumentFields` past the default `["version"]` — which is what the consuming
+repos do — gets a checksum that moves when a field is cleared. Arguments carry
+`descendantChecksum` and `combinedChecksum`, so an argument-level shift
+propagates further than a premise-level one.
+
+## The sweep
+
+`grep -rn "\.\.\.extras" src/` — six sites, three distinct shapes:
+
+| Site | Shape | Verdict |
+|---|---|---|
+| `premise-engine.ts:1248` | `getExtras()` return | fine — reads, does not build an entity |
+| `argument-engine.ts:646` | `getExtras()` return | fine — same |
+| `premise-engine.ts` `setExtras` | clear-a-field | fixed in round 3 |
+| **`argument-engine.ts:651`** `setExtras` | clear-a-field | **the reported defect** |
+| **`argument-parser.ts:368`** | builds a claim from `mapClaim` | **latent, same shape** |
+| **`argument-parser.ts:420`** | builds a variable from `mapVariable` | **latent, same shape** |
+| **`argument-parser.ts:586`** | builds a connection from `mapHook` | **latent, same shape** |
+
+The three parser sites spread a consumer-supplied mapping hook's output into a
+brand-new entity. A hook returning `{ title: undefined }` for a field it could
+not populate — completely ordinary JavaScript, and `mapClaim` is a documented
+extension point — creates the key holding `undefined` on the entity. The
+checksum is unaffected there (`canonicalSerialize` is `JSON.stringify`, which
+drops `undefined`), so this is the weaker half of the defect: no checksum shift,
+but `"title" in claim` is true and the same downstream `undefined` → `null`
+mapper flips it to present. Fixed in the same commit rather than left for a
+fourth round, as instructed.
+
+## Fix
+
+This is the third hand-written copy of the same filter, so it stops being
+copy-paste: one `withoutUndefinedValues` helper in `src/lib/utils/collections.ts`
+(internal, not barrel-exported — the invariant is core's, not a consumer's), used
+by both `setExtras` implementations and the three parser sites. Smaller total
+diff than three more inline filters, and it gives the invariant a name.
+
+Failing test first: the argument-level mirror of the premise assertion added in
+round 3.
+
+## Process note, carried forward
+
+Piping a linter into `tail` reports `tail`'s exit code, not the linter's, which
+is how two commits in round 3 were made with lint still failing (both caught and
+amended, nothing shipped). Verification commands whose exit code matters are no
+longer piped.
