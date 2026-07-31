@@ -19,7 +19,8 @@
     When a passage cannot be matched, or when the same wording appears in more
     than one place and one had to be chosen, the run says so alongside its
     result. An application can watch that to notice a drop in quality rather
-    than discovering it from a reader.
+    than discovering it from a reader. If the text was never handed to the run
+    at all, it says that once instead of complaining about every passage.
 
     No extra work is asked of the language model and nothing costs more to run.
     The fast pipeline does not produce this detail, because it never breaks the

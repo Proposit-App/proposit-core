@@ -66,15 +66,39 @@
   reached `haystack.indexOf` with `undefined` and threw on the happy path, after
   every LLM call had been paid for. Anchors are the only reader of the input, so
   a missing `text` now yields no anchors — the documented behavior — instead.
-- **Segment offsets are located rather than trusted.** The hint composition read
-  the model's `segment.span.start`, while the segmentation prompt requires
-  `segment.text` be copied verbatim — so the true offset was recoverable and the
-  untrusted number was being used anyway. Measured on the recorded corpus the
-  model's spans run one short per segment and accumulate with document length;
-  harmless while every quote is unique, and a confidently wrong location the
-  moment one repeats. Segments are now found by searching left to right behind a
-  cursor (so a repeated segment does not collapse onto an earlier copy), falling
-  back to the reported number only when a segment cannot be found.
+- **Reported offsets are located rather than trusted, on both halves of the
+  hint.** A mention's input position is `segment start + mention offset within
+the segment`, and the composition previously read the model's number for each.
+  The prompts require both segment and mention text be copied verbatim, so both
+  terms are recoverable by searching — and both reported numbers are wrong on the
+  recorded corpus: segment starts run one short on several segments, and a
+  mention offset is off by 14 on `with-url-citation`, where the model miscounts
+  past a markdown link. That last one is the largest error in the corpus and
+  survived an earlier partial fix that addressed only the segment term. Harmless
+  while every quote is unique; a confidently wrong location the moment one
+  repeats.
+- **A segment the model rewrote no longer derails the segment after it.** The
+  scan carries a cursor so a repeated segment cannot collapse onto an earlier
+  copy, but the not-found branch left the cursor behind the skipped segment's
+  territory, so the next segment could match a duplicate inside it — worse than
+  the reported number it replaced, and the exact collapse the cursor exists to
+  prevent. The cursor now advances past the skipped segment, and among the
+  candidates at or after it the one nearest the model's reported start wins
+  rather than the first, which also removes the overshoot hazard the cursor
+  advance would otherwise introduce.
+- **An anchor range that would split a surrogate pair is refused.** The
+  well-formedness guard covered the two context fields but not the located range
+  itself, so an ill-formed model quote — a bare `\uD83D` escape is valid JSON and
+  survives `JSON.parse` — could match inside a whole pair and put a lone
+  surrogate in `quote`. The candidate range is discarded rather than the quote
+  trimmed, which is what preserves
+  `input.slice(startUtf16, endUtf16) === quote`.
+- **An input carrying no `text` is reported once, not once per quote.** The
+  fallback to `""` is correct and stays, but every mention and relation then
+  reported its own `SOURCE_ANCHOR_UNRESOLVED`, blaming the model for a property
+  of the caller's input shape and echoing every extracted quote into `failures`.
+  Resolution is now skipped wholesale in that case and a single
+  `SOURCE_ANCHOR_INPUT_UNAVAILABLE` names the real cause.
 
 ## Changed
 
@@ -101,8 +125,12 @@
 - **One recorded relation quote in the corpus is elided rather than verbatim**
   (`with-url-citation` joins two clauses with `...`), so that premise resolves
   to no anchor. Dropping it is the designed behavior — an unlocatable quote is
-  never turned into an anchor at an unverified offset. It is now also the only
-  resolution note the whole recorded corpus emits, so the new warning channel
-  starts life with signal and no noise.
+  never turned into an anchor at an unverified offset.
+- **The recorded corpus emits exactly two resolution notes**, both of them
+  model-behavior findings rather than defects: the elided `with-url-citation`
+  quote above under the thorough pipeline, and a `with-axiom` relation under the
+  fast pipeline whose evidence quote is a synthesized summary sentence rather
+  than a copy. Pinned by a test that replays all ten recordings, added because an
+  earlier count of "one" had been measured on the thorough pipeline alone.
 
 </changes>

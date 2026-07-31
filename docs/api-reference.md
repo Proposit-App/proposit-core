@@ -1866,13 +1866,16 @@ Finalize reports each resolution it could not make cleanly through `ctx.addFailu
 | `SOURCE_ANCHOR_UNRESOLVED` | The quote was not found in the input. No anchor was emitted. `context` carries the quote plus the `mentionId` or `relationId` it came from.       |
 | `SOURCE_ANCHOR_AMBIGUOUS`  | The quote occurs more than once. The occurrence nearest the reported position was used; `context` adds `occurrences` and the chosen `startUtf16`. |
 
+| `SOURCE_ANCHOR_INPUT_UNAVAILABLE` | The pipeline input carried no `text`, so no quote was looked up at all. Emitted **once**, in place of the per-quote notes, and it carries no quote — the cause is the input shape, not the model. |
 An empty relation evidence quote is not reported — it is a legal "no span to cite", not a failed lookup. Watching the unresolved rate is how a consumer detects a model that has started paraphrasing instead of quoting, which would otherwise take anchor coverage toward zero in silence.
 
-**Segment offsets are located, not trusted.** Where a hint needs a segment's position in the input, finalize finds `segment.text` rather than reading the model's `span.start` — the segmentation prompt requires the text be copied verbatim, and the model's own numbers are measurably off (short by one per segment on recorded runs, accumulating with document length). Segments are scanned left to right behind a cursor so a repeated segment does not collapse onto an earlier copy; a segment that cannot be found falls back to its reported number.
+**Reported offsets are located, not trusted — on both halves of the hint.** A mention's position in the input is `segment start + mention offset within the segment`, and finalize derives _both_ terms by finding verbatim text rather than reading the model's numbers. The prompts require segment and mention text be copied verbatim, and the reported numbers are measurably wrong: segment starts run short by one on several segments of the recorded corpus, and a mention offset within its segment is off by as much as 14 where the model miscounts past a markdown link. That error is invisible until a quote repeats, at which point it selects the wrong occurrence.
+
+The model's number is kept as a tie-breaker only: among the verbatim matches, the one nearest the reported position wins. Segments are scanned left to right behind a cursor so a segment whose text repeats earlier does not collapse onto the earlier copy, and the cursor advances past a segment that could not be found so the _next_ segment's scan cannot reach back into it. Either term falls back to its reported number only when its text cannot be located at all.
 
 Assembling the anchors makes **no** LLM call: it reads stage outputs the pipelines already produce.
 
-`finalizeResponseV2` reads the pipeline input only for this. Any input shape that does not carry a `text: string` yields no anchors rather than an error, so a consumer pipeline with a different `inputSchema` can reuse the assembler unchanged.
+`finalizeResponseV2` reads the pipeline input only for this. Any input shape that does not carry a `text: string` yields no anchors rather than an error, so a consumer pipeline with a different `inputSchema` can reuse the assembler unchanged; it emits one `SOURCE_ANCHOR_INPUT_UNAVAILABLE` note in place of per-quote notes, so the report names the input rather than blaming the model.
 
 #### LLM-options seam — `TIngestionLlmOptions` / `TLlmStageOptionsOverride`
 
