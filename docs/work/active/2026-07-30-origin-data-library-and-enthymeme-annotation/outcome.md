@@ -303,3 +303,125 @@ the confirmed-clean invariants, and `readOriginLibrary`'s parse-error handling.
 eslint clean, build and typedoc green.
 
 `bash scripts/smoke-test.sh` — `SMOKE TEST PASSED`.
+
+---
+
+# Rework round 2 — outcome
+
+Seven findings, all addressed. Two of them were defects my own round-1 fixes
+introduced. `pnpm run check` and `bash scripts/smoke-test.sh` both pass.
+
+| # | Severity | Finding | Commit |
+|---|---|---|---|
+| 1 | HIGH | Two orphan anchors bricked the library permanently | `3c6ca06` |
+| 2 | MEDIUM | Premise path kept the defect the expression path lost | `a51bc93` |
+| 3 | MEDIUM | `addDocument` seeded verified before `validate()` ran | `f0a768c` |
+| 4 | MEDIUM | `documentIndexes` keyed by id, not text | `f0a768c` |
+| 5-7 | MEDIUM/LOW | `Object.assign` doc sites, schema contradictions, docstring | `9abeb99` |
+
+## 1 — the library stayed unrepairable
+
+My `5e2cf41` asked the wrong question. `withValidation` demanded
+`validate().ok` over the whole library, so a library that was *already*
+inconsistent could never be repaired: two orphan anchors each blocked the
+other's removal, `removeDocument` then refused because they were still there,
+and every mutation failed forever.
+
+Now it compares the post-mutation violation set against the pre-mutation set and
+rejects only what the mutation **introduced**. One uniform rule, no
+add-versus-remove branching — which is both smaller and more correct than
+special-casing removals:
+
+- `addAnchor` with no link introduces a violation → refused, on a clean library
+  and a broken one alike.
+- `removeAnchor` on one of several orphans introduces nothing → allowed.
+- `removeLink` while anchors remain introduces theirs → still refused, still with
+  a clean rollback. The existing test at `origin-library.test.ts:615` covers
+  this and still passes.
+
+The pre-mutation set is carried between mutations as `knownViolationKeys` rather
+than recomputed, so this is still one `validate()` per mutation and does not undo
+`e66d44f`. `fromSnapshot` seeds it once and still does not reject a payload,
+which is what leaves a bad one repairable rather than fatal.
+
+Five tests: draining three orphans one at a time, releasing the document
+afterwards, repairing by adding the missing link instead, refusing a mutation
+that introduces a new violation, and asserting the error reports only
+`anchor-new` rather than the two it inherited.
+
+## 2 — the premise path
+
+Fixed in `setExtras`, which is where `updateExtras` and every direct caller
+route through — not in `updateExtras` alone. `undefined`-valued keys are
+filtered before the new premise object is built.
+
+The CLI's hand-rolled `getExtras()` → `delete` → `setExtras()` is deleted; its
+replacement `updateExtras({ enthymeme: undefined })` is covered by the smoke
+test's `--no-enthymeme` path. Two tests: the premise mirror of the expression
+assertion, and a direct `setExtras` call.
+
+## 3 — the seeding order
+
+Restored, guarded on `normalizeOriginText(text) === text`.
+
+**No black-box test can fail for this one, and I did not write one that pretends
+otherwise.** The normalizer is idempotent, so `addDocument` cannot currently
+produce a body its own check would reject — the finding is defense-in-depth, as
+the report said. What is tested is the adjacent, real guarantee: a document that
+fails its body checks never enters the verified record, so repeated `validate()`
+calls keep reporting `ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED` rather than silently
+passing on the second. That test would fail if the seeding moved back.
+
+## 4 — the index key
+
+`index?.text !== document.text` at the lookup, and the two invalidation loops in
+`restoreFromSnapshot` decoupled so each map checks its own entry.
+
+Testable, unlike #3, by reaching the private map directly: plant an index built
+from different text under a known id and assert `validate()` rebuilds instead of
+slicing against it. Fails before the change. The test block says plainly why it
+is white-box rather than implying a public path exists.
+
+## 5-7
+
+All three `Object.assign` claims removed and replaced with the delete-on-
+`undefined` behavior. The `api-reference.md` blockquote and the stale "optional
+`boolean`" line now say `Type.Optional(Type.Literal(true))`. The
+`stripInvisibleCharacters` docstring now says "never kept on the strength of a
+neighbour that did not survive" and names the two places a *surviving* candidate
+legitimately does anchor another — `FE0F` and the skin tones under
+`EMOJI_ADJACENT`, and Mongolian FVS runs being `Script=Mongolian` themselves.
+
+The changelog claim that both caches were "keyed to the exact text that passed"
+was false of the index when written. It is true now, and the sentence says so
+alongside the seeding guard.
+
+## Deferred follow-ups — recorded, not implemented
+
+**Retained code-point index memory.** Twenty anchored documents totalling 10 MB
+of text retain roughly **103 MB** of heap. No eviction, no cap; bounded only by
+live document count. Peak is unchanged from before `e66d44f`, steady state is
+not. The `ponytail:` comment on `withValidation` now names the memory ceiling
+alongside the time one. The lazy fix, if it bites: index only documents that have
+anchors, and drop the index with their last anchor.
+
+**`arguments delete` does not cascade to `origins.json`.** The CLI removes
+directories only, so the invariant `assertArgumentVersionExists` establishes at
+create time is broken by the very next command — links and anchors are left
+pointing at an argument that no longer exists, which the origin library
+structurally cannot detect because it deliberately has no argument lookup. The
+smoke test masks it by unlinking first. Three ways out: cascade the delete,
+refuse to delete an argument with origin data, or document that origin data
+outlives its argument. Not chosen here.
+
+**`Value.Parse` on an on-disk `enthymeme: false`** fails as "Invalid or corrupt
+file" with no indication which field. Not a live break — every writer was traced
+and none emits `false` — and the feature is unreleased, so no such file exists.
+Worth a better parse error if the CLI ever grows one.
+
+## Verification
+
+`pnpm run check` — 2,286 tests passing (14 skipped), prettier clean, eslint
+clean, build and typedoc green.
+
+`bash scripts/smoke-test.sh` — `SMOKE TEST PASSED`.
