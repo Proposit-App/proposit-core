@@ -7,6 +7,15 @@
                 "title": "Rain wets the ground",
                 "body": "If it rains, the ground gets wet.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "If it rains, the ground gets wet.",
+                        "startUtf16": 0,
+                        "endUtf16": 33,
+                        "prefix": "",
+                        "suffix": " It is raining. Therefore, the g"
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -14,6 +23,15 @@
                 "title": "It is raining",
                 "body": "It is raining.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "It is raining.",
+                        "startUtf16": 34,
+                        "endUtf16": 48,
+                        "prefix": " it rains, the ground gets wet. ",
+                        "suffix": " Therefore, the ground is wet."
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -21,6 +39,15 @@
                 "title": "The ground is wet",
                 "body": "The ground is wet.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "the ground is wet.",
+                        "startUtf16": 60,
+                        "endUtf16": 78,
+                        "prefix": " wet. It is raining. Therefore, ",
+                        "suffix": ""
+                    }
+                ],
                 "role": "conclusion"
             }
         ],
@@ -45,7 +72,16 @@
             {
                 "miniId": "gid-4",
                 "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "If \"Rain wets the ground\" and \"It is raining\" then \"The ground is wet\""
+                "title": "If \"Rain wets the ground\" and \"It is raining\" then \"The ground is wet\"",
+                "sourceAnchors": [
+                    {
+                        "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.",
+                        "startUtf16": 0,
+                        "endUtf16": 78,
+                        "prefix": "",
+                        "suffix": ""
+                    }
+                ]
             },
             {
                 "miniId": "gid-5",

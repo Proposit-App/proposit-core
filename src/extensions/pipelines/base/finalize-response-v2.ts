@@ -35,6 +35,7 @@ import type { TStageContext } from "../../../lib/pipelines/index.js"
 import {
     STAGE_IDS,
     type TClaimCanonicalizationOutput,
+    type TClaimMentionExtractionOutput,
     type TClaimTypeClassificationEntry,
     type TClaimTypeClassificationOutput,
     type TCompiledPremise,
@@ -42,9 +43,14 @@ import {
     type TFormulaCompilationOutput,
     type TInferenceRelation,
     type TRelationExtractionOutput,
+    type TSegmentationOutput,
     type TVariableAssignmentOutput,
 } from "./stages/schemas.js"
-import type { TIngestionExtension } from "./types.js"
+import {
+    locateSourceAnchor,
+    type TIngestionSourceAnchor,
+} from "./source-anchors.js"
+import type { TIngestionExtension, TIngestionInput } from "./types.js"
 import { IEEE_REFERENCE_TYPES } from "../../citations/ieee/references.js"
 import type {
     TUnparsedCitation,
@@ -174,15 +180,99 @@ function stripCanonicalizerOnlyFields(
 ): Record<string, unknown> {
     // The canonicalizer's per-claim record carries `mentionIds` and
     // `suggestedSymbol` which are not part of the public response
-    // schema. Strip them from the finalize output (the variable's
-    // `symbol` carries the assigned identifier; mentionIds are an
-    // internal trace).
+    // schema. Strip them from the finalize output: the variable's
+    // `symbol` carries the assigned identifier, and mention ids name an
+    // id space the response never carries — the provenance they trace is
+    // resolved into `sourceAnchors` instead, which a consumer can act on.
     const stripped: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(claim)) {
         if (key === "mentionIds" || key === "suggestedSymbol") continue
         stripped[key] = value
     }
     return stripped
+}
+
+// -- Source anchors --
+//
+// The pipeline knows where each claim and each inference came from, but
+// only as data spread across three stages: `segmentation` holds
+// input-relative segment spans, `claim-mention-extraction` holds
+// *segment-relative* mention spans plus the mention text, and
+// `relation-extraction` holds a quote per relation. Finalize is the
+// first place all three are in scope at once, so it is where they become
+// a usable reference back into the input.
+//
+// Only quoted text crosses the boundary as fact; the model's offsets are
+// used to choose among repeated occurrences and are never emitted
+// unverified. See `source-anchors.ts`.
+
+/** Resolve every mention to a verified anchor in the input, by id. */
+function buildAnchorByMentionId(args: {
+    inputText: string
+    segmentation: TSegmentationOutput | undefined
+    mentions: TClaimMentionExtractionOutput | undefined
+}): Map<string, TIngestionSourceAnchor> {
+    const out = new Map<string, TIngestionSourceAnchor>()
+    if (!args.mentions) return out
+    const segmentStartById = new Map(
+        (args.segmentation?.segments ?? []).map((s) => [
+            s.segmentId,
+            s.span.start,
+        ])
+    )
+    for (const mention of args.mentions.mentions) {
+        // Mention spans are relative to the segment's text, so the
+        // input-relative hint only exists once the segment's own start is
+        // added back on.
+        const hint =
+            (segmentStartById.get(mention.segmentId) ?? 0) + mention.span.start
+        const anchor = locateSourceAnchor(args.inputText, mention.text, hint)
+        if (anchor !== undefined) out.set(mention.mentionId, anchor)
+    }
+    return out
+}
+
+/** Anchors for the mentions of one claim, in order, deduped by range. */
+function claimAnchors(
+    mentionIds: readonly string[],
+    anchorByMentionId: Map<string, TIngestionSourceAnchor>
+): TIngestionSourceAnchor[] {
+    const seen = new Set<string>()
+    const anchors: TIngestionSourceAnchor[] = []
+    for (const mentionId of mentionIds) {
+        const anchor = anchorByMentionId.get(mentionId)
+        if (anchor === undefined) continue
+        const key = `${String(anchor.startUtf16)}:${String(anchor.endUtf16)}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        anchors.push(anchor)
+    }
+    return anchors
+}
+
+/** The anchor for a relation's evidence quote, if it can be located. */
+function relationAnchor(args: {
+    inputText: string
+    relation: TInferenceRelation
+    segmentStartById: Map<string, number>
+}): TIngestionSourceAnchor | undefined {
+    const starts = args.relation.evidence.segmentIds
+        .map((id) => args.segmentStartById.get(id))
+        .filter((start): start is number => start !== undefined)
+    const hint = starts.length > 0 ? Math.min(...starts) : 0
+    return locateSourceAnchor(
+        args.inputText,
+        args.relation.evidence.quote,
+        hint
+    )
+}
+
+/** The `mentionIds` on a canonical claim record, defensively read. */
+function readMentionIds(record: Record<string, unknown>): string[] {
+    const raw = record.mentionIds
+    return Array.isArray(raw)
+        ? raw.filter((id): id is string => typeof id === "string")
+        : []
 }
 
 // **Premise titles read as prose, not formulas.** Each premise title
@@ -317,6 +407,17 @@ function buildArgumentTitle(
 export type TFinalizeResponseV2Input = {
     ctx: TStageContext
     extension: TIngestionExtension
+    /**
+     * Segmentation + mention outputs, supplied by the caller rather than
+     * read from `ctx`, because not every pipeline has these stages —
+     * `ctx.get` on a stage outside `finalize.dependsOn` is a
+     * configuration error, and declaring a dep on a stage the pipeline
+     * does not contain is another. Passing them keeps the declaration
+     * and the read in the same file, per pipeline. Omit both and claims
+     * carry no source anchors; premises are unaffected either way.
+     */
+    segmentation?: TSegmentationOutput
+    mentions?: TClaimMentionExtractionOutput
 }
 
 /**
@@ -386,6 +487,18 @@ export function finalizeResponseV2(
     }
 
     // Happy path: assemble the argument.
+    const inputText = (ctx.input as TIngestionInput).text
+    const anchorByMentionId = buildAnchorByMentionId({
+        inputText,
+        segmentation: input.segmentation,
+        mentions: input.mentions,
+    })
+    const segmentStartById = new Map(
+        (input.segmentation?.segments ?? []).map((s) => [
+            s.segmentId,
+            s.span.start,
+        ])
+    )
     const conclusionMiniId = conclusion?.conclusionMiniId ?? null
     const roles = buildClaimToRole({
         canonicalClaims: canon.canonicalClaims,
@@ -398,6 +511,14 @@ export function finalizeResponseV2(
         const classifiedType = typeByMiniId.get(c.miniId)?.type ?? c.type
         const record = c as unknown as Record<string, unknown>
         const stripped = stripCanonicalizerOnlyFields(record)
+        // An entity with no resolvable provenance carries no key at all
+        // rather than an empty array — "we found nothing" and "we did not
+        // look" read the same to a consumer, and neither is a claim about
+        // the text.
+        const anchors = claimAnchors(readMentionIds(record), anchorByMentionId)
+        if (anchors.length > 0) {
+            stripped.sourceAnchors = anchors
+        }
         // A claim classified `citation` stays `citation` and carries an
         // explicit `UnparsedCitation` (its `text` is the display text, so
         // a url-less reference no longer renders blank). Premise
@@ -448,13 +569,27 @@ export function finalizeResponseV2(
         relationById: new Map(relations.map((r) => [r.relationId, r])),
     }
 
-    const finalPremises: TPremiseFinalForm[] = compilation.premises.map(
-        (p) => ({
+    const finalPremises: TPremiseFinalForm[] = compilation.premises.map((p) => {
+        const premise: TPremiseFinalForm = {
             miniId: p.premiseMiniId,
             formula: p.formula,
             title: buildPremiseTitle(p, titleComposerMaps),
-        })
-    )
+        }
+        // The conclusion premise is synthesized from a bare symbol and
+        // has no source relation, so it has no evidence quote to anchor.
+        const relation =
+            p.sourceRelationId !== null
+                ? titleComposerMaps.relationById.get(p.sourceRelationId)
+                : undefined
+        const anchor =
+            relation !== undefined
+                ? relationAnchor({ inputText, relation, segmentStartById })
+                : undefined
+        if (anchor !== undefined) {
+            premise.sourceAnchors = [anchor]
+        }
+        return premise
+    })
 
     const argument: TArgumentFinalForm = {
         claims,

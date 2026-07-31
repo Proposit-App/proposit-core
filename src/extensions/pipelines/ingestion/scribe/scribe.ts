@@ -124,6 +124,11 @@ export function createScribePipeline(
                 optional(STAGE_IDS.formulaValidation),
                 optional(STAGE_IDS.claimReferenceValidation),
             ],
+            // No segmentation or mention output is passed: this pipeline
+            // has neither stage, and its `extract` prompt asks for
+            // synthetic mention ids. Claims therefore carry no source
+            // anchors; relation-derived premises still do, since their
+            // evidence quote comes from `structure`.
             run: (ctx) => finalizeResponseV2({ ctx, extension }),
         },
     }

@@ -53,6 +53,8 @@ import {
     CLAIM_TYPE_CLASSIFICATION_STAGE_DEFAULTS,
     RELATION_EXTRACTION_STAGE_DEFAULTS,
     CONCLUSION_SELECTION_STAGE_DEFAULTS,
+    type TClaimMentionExtractionOutput,
+    type TSegmentationOutput,
 } from "../../base/stages/index.js"
 import { optional } from "../../../../lib/pipelines/index.js"
 import type { TPipeline, TStage } from "../../../../lib/pipelines/index.js"
@@ -209,8 +211,23 @@ export function createScholarPipeline(
                 optional(STAGE_IDS.conclusionSelection),
                 optional(STAGE_IDS.formulaValidation),
                 optional(STAGE_IDS.claimReferenceValidation),
+                // Read only for the source anchors finalize attaches to
+                // claims; a missing segmentation or mention output costs
+                // the anchors, never the argument.
+                optional(STAGE_IDS.segmentation),
+                optional(STAGE_IDS.claimMentionExtraction),
             ],
-            run: (ctx) => finalizeResponseV2({ ctx, extension }),
+            run: (ctx) =>
+                finalizeResponseV2({
+                    ctx,
+                    extension,
+                    segmentation: ctx.get<TSegmentationOutput>(
+                        STAGE_IDS.segmentation
+                    ),
+                    mentions: ctx.get<TClaimMentionExtractionOutput>(
+                        STAGE_IDS.claimMentionExtraction
+                    ),
+                }),
         },
     }
 }

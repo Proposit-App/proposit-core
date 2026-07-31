@@ -71,7 +71,7 @@ describe("createScholarPipeline — shape", () => {
         )
     })
 
-    it("declares the spec-aligned finalize.dependsOn (3 required + 5 optional)", () => {
+    it("declares the spec-aligned finalize.dependsOn (3 required + 7 optional)", () => {
         const pipeline = createScholarPipeline(basicsExtension)
         const required = pipeline.finalize.dependsOn
             .filter((d) => typeof d === "string")
@@ -95,6 +95,10 @@ describe("createScholarPipeline — shape", () => {
                 STAGE_IDS.conclusionSelection,
                 STAGE_IDS.formulaValidation,
                 STAGE_IDS.claimReferenceValidation,
+                // Read by finalize only to anchor claims back to the
+                // input text.
+                STAGE_IDS.segmentation,
+                STAGE_IDS.claimMentionExtraction,
             ].sort()
         )
     })
