@@ -149,6 +149,24 @@ describe("locateSourceAnchor", () => {
         expect(LONE_SURROGATE.test(anchor!.suffix)).toBe(false)
     })
 
+    it("refuses a range that would split a surrogate pair", () => {
+        // A model can emit a bare `\uD83D` escape — valid JSON that
+        // survives JSON.parse — and half of a pair matches inside a
+        // whole one. Anchoring there would put an ill-formed string in
+        // `quote`, which fails a Postgres json/jsonb insert exactly as
+        // an ill-formed context would.
+        const input = "a\u{1F600}b"
+        expect(locateSourceAnchor(input, "\uDE00b", 0)).toBe(undefined)
+        expect(locateSourceAnchor(input, "a\uD83D", 0)).toBe(undefined)
+    })
+
+    it("still anchors a quote that starts or ends on a whole pair", () => {
+        const input = "a\u{1F600}b"
+        const whole = anchorOf(input, "\u{1F600}b", 0)
+        expect(whole?.quote).toBe("\u{1F600}b")
+        expect(LONE_SURROGATE.test(whole!.quote)).toBe(false)
+    })
+
     it("returns offsets that slice back to the quote for every hit", () => {
         const input =
             "Markets clear. Markets clear only under competition. Hence regulation."

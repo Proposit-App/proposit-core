@@ -156,6 +156,27 @@ function buildAnchor(
     }
 }
 
+/**
+ * Whether index `at` falls between the halves of a surrogate pair.
+ *
+ * A range boundary there would put a lone surrogate in `quote`. That is
+ * reachable from an ill-formed model quote — a bare `\uD83D` escape is
+ * valid JSON and survives `JSON.parse`, and half a pair matches inside a
+ * whole one — and the resulting string fails a Postgres `json`/`jsonb`
+ * insert just as an ill-formed context string would.
+ */
+function splitsSurrogatePair(text: string, at: number): boolean {
+    if (at <= 0 || at >= text.length) return false
+    const before = text.charCodeAt(at - 1)
+    const after = text.charCodeAt(at)
+    return (
+        before >= 0xd800 &&
+        before <= 0xdbff &&
+        after >= 0xdc00 &&
+        after <= 0xdfff
+    )
+}
+
 /** The range whose start sits nearest `hintUtf16`, or undefined if none. */
 function nearestRange(
     ranges: { start: number; end: number }[],
@@ -209,8 +230,15 @@ export function locateSourceAnchor(
         start,
         end: start + trimmed.length,
     }))
-    const ranges =
+    const candidates =
         exact.length > 0 ? exact : whitespaceInsensitiveRanges(input, trimmed)
+    // Discarding the range, rather than trimming the quote, is what
+    // keeps `input.slice(start, end) === quote` true.
+    const ranges = candidates.filter(
+        (range) =>
+            !splitsSurrogatePair(input, range.start) &&
+            !splitsSurrogatePair(input, range.end)
+    )
 
     const range = nearestRange(ranges, hintUtf16)
     return range === undefined
