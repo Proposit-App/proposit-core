@@ -57,6 +57,7 @@ export {
     canonicalSerialize,
     entityChecksum,
 } from "./core/checksum.js"
+export { sha256Hex } from "./utils/sha256.js"
 export {
     diffArguments,
     defaultCompareArgument,
