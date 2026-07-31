@@ -32,6 +32,12 @@ import { isClaimBound } from "../schemata/propositional.js"
 import { ClaimLibrary } from "./claim-library.js"
 import { ClaimCitationLibrary } from "./claim-citation-library.js"
 import { ClaimAxiomLibrary } from "./claim-axiom-library.js"
+import { OriginLibrary } from "./origin-library.js"
+import type {
+    TCoreOriginDocument,
+    TCoreOriginLink,
+    TCoreOriginAnchor,
+} from "../schemata/origin.js"
 import { ArgumentLibrary } from "./argument-library.js"
 import { ArgumentEngine, defaultGenerateId } from "./argument-engine.js"
 import { ForkLibrary } from "./fork-library.js"
@@ -58,6 +64,9 @@ export type TPropositCoreOptions<
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
+    TOriginDocument extends TCoreOriginDocument = TCoreOriginDocument,
+    TOriginLink extends TCoreOriginLink = TCoreOriginLink,
+    TOriginAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
 > = TPropositCoreConfig & {
     /** Pre-constructed claim library instance. */
     claimLibrary?: ClaimLibrary<TClaim>
@@ -75,20 +84,24 @@ export type TPropositCoreOptions<
     >
     /** Pre-constructed argument library instance. */
     argumentLibrary?: ArgumentLibrary<TArg, TPremise, TExpr, TVar, TClaim>
+    /** Pre-constructed origin library instance. */
+    originLibrary?: OriginLibrary<TOriginDocument, TOriginLink, TOriginAnchor>
 }
 
 /**
- * Top-level orchestrator for the proposit-core system. Owns all four
- * libraries (claims, claim citations, forks, arguments) and provides
+ * Top-level orchestrator for the proposit-core system. Owns every library
+ * (claims, claim citations, axioms, forks, arguments, origins) and provides
  * unified snapshot/restore and validation.
  *
  * Construction order follows dependency order:
- * claims -> citations -> axioms -> forks -> arguments.
+ * claims -> citations -> axioms -> origins -> forks -> arguments.
  *
  * As of v0.10.0 the legacy `sources` and `claimSources` libraries have been
  * folded into `claims` and `citations` respectively — sources are now
  * claims with `type: "citation"`. As of v0.12.0 a parallel `axioms` library
  * holds axiomatic-claim connections (a third claim type `"axiomatic"`).
+ * The `origins` library holds the source texts arguments were built from,
+ * their per-version links, and the spans individual parts derive from.
  */
 export class PropositCore<
     TArg extends TCoreArgument = TCoreArgument,
@@ -103,6 +116,9 @@ export class PropositCore<
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
+    TOriginDocument extends TCoreOriginDocument = TCoreOriginDocument,
+    TOriginLink extends TCoreOriginLink = TCoreOriginLink,
+    TOriginAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
 > {
     public readonly claims: ClaimLibrary<TClaim>
     public readonly citations: ClaimCitationLibrary<TCitation>
@@ -121,6 +137,11 @@ export class PropositCore<
         TVar,
         TClaim
     >
+    public readonly origins: OriginLibrary<
+        TOriginDocument,
+        TOriginLink,
+        TOriginAnchor
+    >
     protected generateId: () => string
 
     constructor(
@@ -136,7 +157,10 @@ export class PropositCore<
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork
+            TClaimFork,
+            TOriginDocument,
+            TOriginLink,
+            TOriginAnchor
         >
     ) {
         this.generateId = options?.generateId ?? defaultGenerateId
@@ -156,6 +180,12 @@ export class PropositCore<
         this.axioms =
             options?.claimAxiomLibrary ??
             new ClaimAxiomLibrary<TAxiom>(this.claims, checksumOpts)
+
+        this.origins =
+            options?.originLibrary ??
+            new OriginLibrary<TOriginDocument, TOriginLink, TOriginAnchor>(
+                checksumOpts
+            )
 
         this.forks =
             options?.forkLibrary ??
@@ -198,7 +228,10 @@ export class PropositCore<
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork
+        TClaimFork,
+        TOriginDocument,
+        TOriginLink,
+        TOriginAnchor
     > {
         return {
             arguments: this.arguments.snapshot(),
@@ -206,6 +239,7 @@ export class PropositCore<
             citations: this.citations.snapshot(),
             axioms: this.axioms.snapshot(),
             forks: this.forks.snapshot(),
+            origins: this.origins.snapshot(),
         }
     }
 
@@ -232,6 +266,9 @@ export class PropositCore<
         TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
         TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
         TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
+        TOriginDocument extends TCoreOriginDocument = TCoreOriginDocument,
+        TOriginLink extends TCoreOriginLink = TCoreOriginLink,
+        TOriginAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
     >(
         snapshot: TPropositCoreSnapshot<
             TArg,
@@ -245,7 +282,10 @@ export class PropositCore<
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork
+            TClaimFork,
+            TOriginDocument,
+            TOriginLink,
+            TOriginAnchor
         >,
         config?: TPropositCoreConfig
     ): PropositCore<
@@ -260,7 +300,10 @@ export class PropositCore<
         TPremiseFork,
         TExprFork,
         TVarFork,
-        TClaimFork
+        TClaimFork,
+        TOriginDocument,
+        TOriginLink,
+        TOriginAnchor
     > {
         // Pre-typecheck on raw shape. PropositCore.fromSnapshot is called with an
         // `unknown`-typed payload in real callers; the typed signature does not
@@ -307,6 +350,24 @@ export class PropositCore<
             claims,
             checksumOpts
         )
+        // A missing 'origins' slot is not a legacy-shape error, unlike a
+        // missing 'axioms' slot: no earlier field ever carried origin data, so
+        // absence means "none" and defaulting to an empty library is lossless.
+        // Refusing here would also break consumers pinned to this release
+        // before they persist origin data of their own.
+        const origins =
+            snapshot.origins === undefined
+                ? new OriginLibrary<
+                      TOriginDocument,
+                      TOriginLink,
+                      TOriginAnchor
+                  >(checksumOpts)
+                : OriginLibrary.fromSnapshot<
+                      TOriginDocument,
+                      TOriginLink,
+                      TOriginAnchor
+                  >(snapshot.origins, checksumOpts)
+
         const forks = ForkLibrary.fromSnapshot<
             TArgFork,
             TPremiseFork,
@@ -345,13 +406,17 @@ export class PropositCore<
             TPremiseFork,
             TExprFork,
             TVarFork,
-            TClaimFork
+            TClaimFork,
+            TOriginDocument,
+            TOriginLink,
+            TOriginAnchor
         >({
             claimLibrary: claims,
             claimCitationLibrary: citations,
             claimAxiomLibrary: axioms,
             forkLibrary: forks,
             argumentLibrary: restoredArguments,
+            originLibrary: origins,
         })
 
         core.generateId = config?.generateId ?? defaultGenerateId
@@ -372,6 +437,7 @@ export class PropositCore<
             ...this.axioms.validate().violations,
             ...this.forks.validate().violations,
             ...this.arguments.validate().violations,
+            ...this.origins.validate().violations,
         ]
         return { ok: violations.length === 0, violations }
     }
@@ -454,6 +520,13 @@ export class PropositCore<
             }
         }
 
+        // Origin documents, links, and anchors are deliberately absent from
+        // this walk and from the fork remap tables. Association entities are
+        // copied at the persistence layer, the same route claim citations
+        // already take; nothing in this repo's fork machinery has ever touched
+        // one. Their targets are argument-scoped, so a consumer that does copy
+        // them must remap anchor target ids itself.
+        //
         // DFS through both the citation and axiom graphs from the seed set,
         // accumulating every reachable claim along outgoing supporting-side
         // edges. Both ends of any connection we plan to clone must themselves

@@ -397,6 +397,9 @@ export type TPropositCoreSnapshot<
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
+    TOriginDocument extends TCoreOriginDocument = TCoreOriginDocument,
+    TOriginLink extends TCoreOriginLink = TCoreOriginLink,
+    TOriginAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
 > = {
     /** Snapshot of all argument engines. */
     arguments: TArgumentLibrarySnapshot<TArg, TPremise, TExpr, TVar>
@@ -413,6 +416,18 @@ export type TPropositCoreSnapshot<
         TExprFork,
         TVarFork,
         TClaimFork
+    >
+    /**
+     * Snapshot of the origin library. Optional on input only: a snapshot
+     * written before origin data existed carries no such slot, and absence is
+     * unambiguously "no origin data" — unlike the axiom slot, no earlier field
+     * ever held it. `PropositCore.fromSnapshot` defaults it to an empty
+     * library rather than refusing the payload.
+     */
+    origins?: TOriginLibrarySnapshot<
+        TOriginDocument,
+        TOriginLink,
+        TOriginAnchor
     >
 }
 
