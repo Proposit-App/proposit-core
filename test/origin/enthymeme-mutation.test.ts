@@ -113,6 +113,53 @@ describe("marking content unspoken", () => {
         expect("enthymeme" in stored).toBe(false)
     })
 
+    it("removes an argument-level field by deleting the key, not blanking it", () => {
+        // The argument-level mirror. `ArgumentEngine` has its own
+        // `setExtras`/`updateExtras` pair, independent of `PremiseEngine`'s,
+        // and it had the same defect. It matters at least as much here:
+        // `createChecksumConfig` unions app fields onto `argumentFields`, and
+        // an argument carries descendant and combined checksums, so a shift
+        // propagates further than a premise-level one.
+        const engine = makeEngine()
+        seedSingleVariablePremise(engine)
+
+        engine.updateExtras({ note: "hello" })
+        engine.flushChecksums()
+        expect(engine.snapshot().argument).toMatchObject({ note: "hello" })
+
+        engine.updateExtras({ note: undefined })
+        engine.flushChecksums()
+        expect("note" in engine.snapshot().argument).toBe(false)
+    })
+
+    it("restores the argument checksum when a checksum-bearing field is cleared", () => {
+        // With the field in the checksum config, a key left present holding
+        // `undefined` is one downstream null-coercion away from moving every
+        // argument checksum. Clearing has to be exactly reversible.
+        const claims = new ClaimLibrary()
+        claims.create({ id: "claim-default", type: "normal" })
+        const engine = new ArgumentEngine<
+            TCoreArgument,
+            TCorePremise,
+            TCorePropositionalExpression,
+            TCorePropositionalVariable
+        >({ id: "arg-1", version: 1 }, claims, {
+            behavior: "permissive",
+            checksumConfig: { argumentFields: new Set(["note"]) },
+        })
+        engine.flushChecksums()
+        const original = engine.snapshot().argument.checksum
+
+        engine.updateExtras({ note: "hello" })
+        engine.flushChecksums()
+        expect(engine.snapshot().argument.checksum).not.toBe(original)
+
+        engine.updateExtras({ note: undefined })
+        engine.flushChecksums()
+        expect(engine.snapshot().argument.checksum).toBe(original)
+        expect("note" in engine.snapshot().argument).toBe(false)
+    })
+
     it("marks a premise and changes its checksum", () => {
         const engine = makeEngine()
         const premise = seedSingleVariablePremise(engine)

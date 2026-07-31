@@ -31,6 +31,7 @@ import {
     CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID,
 } from "../types/validation.js"
 import { validateDerivationStructure } from "../utils/derivation-validation.js"
+import { withoutUndefinedValues } from "../utils/collections.js"
 import {
     DEFAULT_CHECKSUM_CONFIG,
     normalizeChecksumConfig,
@@ -660,7 +661,7 @@ export class ArgumentEngine<
         const { id, version, checksum, descendantChecksum, combinedChecksum } =
             this.argument as Record<string, unknown>
         this.argument = {
-            ...extras,
+            ...withoutUndefinedValues(extras),
             id,
             version,
             ...(checksum !== undefined ? { checksum } : {}),

@@ -17,7 +17,11 @@ import {
     POSITION_MAX,
     type TCorePositionConfig,
 } from "../utils/position.js"
-import { sortedCopyById, sortedUnique } from "../utils/collections.js"
+import {
+    sortedCopyById,
+    sortedUnique,
+    withoutUndefinedValues,
+} from "../utils/collections.js"
 import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import type {
     TCoreExpressionAssignment,
@@ -1271,21 +1275,12 @@ export class PremiseEngine<
                 type,
                 derivedClaimId,
             } = this.premise as Record<string, unknown>
-            // An `undefined` value drops the key rather than creating it. The
-            // extras round-trip is the only way to clear an app-level field on
-            // a premise, and `updateExtras` spreads its updates in, so
-            // `{ field: undefined }` would otherwise leave the key present
-            // holding `undefined` — checksum-safe and JSON-safe on its own,
-            // but `"field" in premise` becomes true and any downstream mapper
-            // that turns `undefined` into `null` then flips the field from
-            // absent to present. Clearing has to restore the prior shape.
-            const definedExtras = Object.fromEntries(
-                Object.entries(extras).filter(
-                    ([, value]) => value !== undefined
-                )
-            )
+            // Clearing a field means removing its key, not assigning
+            // `undefined` — see `withoutUndefinedValues`. `updateExtras`
+            // spreads its updates in, so this is the single place that has to
+            // enforce it for every premise-level caller.
             this.premise = {
-                ...definedExtras,
+                ...withoutUndefinedValues(extras),
                 id,
                 argumentId,
                 argumentVersion,
