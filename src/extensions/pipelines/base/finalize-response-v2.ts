@@ -265,6 +265,7 @@ function resolveSegmentStarts(
 export const SOURCE_ANCHOR_NOTE_CODES = {
     unresolved: "SOURCE_ANCHOR_UNRESOLVED",
     ambiguous: "SOURCE_ANCHOR_AMBIGUOUS",
+    inputUnavailable: "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
 } as const
 
 /** Emit the note for one attempted resolution, if there is one to emit. */
@@ -633,14 +634,31 @@ export function finalizeResponseV2(
 
     // Happy path: assemble the argument.
     const inputText = readInputText(ctx.input)
+    // Nothing resolves against an empty input, so resolution is skipped
+    // wholesale rather than run to produce one "quote not found" note per
+    // mention and relation. N notes blaming the model for a fault in the
+    // caller's input shape is worse than no notes; one note naming the
+    // real cause is better than either. It also keeps every extracted
+    // quote out of `failures`.
+    const inputAvailable = inputText.length > 0
+    if (!inputAvailable) {
+        ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.inputUnavailable,
+            message:
+                "The pipeline input carries no text, so no source anchors were resolved. This is a property of the input, not of the model's output.",
+            severity: "warning",
+        })
+    }
     const segmentStartById = resolveSegmentStarts(inputText, input.segmentation)
-    const anchorByMentionId = buildAnchorByMentionId({
-        ctx,
-        inputText,
-        segmentStartById,
-        segments: input.segmentation?.segments,
-        mentions: input.mentions,
-    })
+    const anchorByMentionId = inputAvailable
+        ? buildAnchorByMentionId({
+              ctx,
+              inputText,
+              segmentStartById,
+              segments: input.segmentation?.segments,
+              mentions: input.mentions,
+          })
+        : new Map<string, TIngestionSourceAnchor>()
     const conclusionMiniId = conclusion?.conclusionMiniId ?? null
     const roles = buildClaimToRole({
         canonicalClaims: canon.canonicalClaims,
@@ -724,7 +742,7 @@ export function finalizeResponseV2(
                 ? titleComposerMaps.relationById.get(p.sourceRelationId)
                 : undefined
         const anchor =
-            relation !== undefined
+            inputAvailable && relation !== undefined
                 ? relationAnchor({
                       ctx,
                       inputText,

@@ -700,6 +700,36 @@ describe("finalizeResponseV2 — foreign input shapes", () => {
         }
     })
 
+    it("blames the input once instead of blaming the model per quote", () => {
+        // Every mention and relation would otherwise report its own
+        // unresolved quote, sending a reader to inspect prompts when the
+        // cause is that `ctx.input` carries no text. It would also echo
+        // every extracted quote into `failures`.
+        const outputs = buildOutputs()
+        const ctx: TStageContext = {
+            ...buildContextStub(outputs),
+            input: { document: INPUT_TEXT },
+            addFailure: (failure) => {
+                failures.push(failure)
+            },
+        }
+        const failures: { code: string; message: string }[] = []
+        finalizeResponseV2({
+            ctx,
+            extension: basicsExtension,
+            segmentation: outputs[
+                STAGE_IDS.segmentation
+            ] as TSegmentationOutput,
+            mentions: outputs[
+                STAGE_IDS.claimMentionExtraction
+            ] as TClaimMentionExtractionOutput,
+        })
+        expect(failures.map((f) => f.code)).toEqual([
+            "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
+        ])
+        expect(failures[0].message).not.toContain("The risk is real")
+    })
+
     it("tolerates a null or non-object input", () => {
         expect(() => finalizeWithInput(null)).not.toThrow()
         expect(() => finalizeWithInput("just a string")).not.toThrow()
