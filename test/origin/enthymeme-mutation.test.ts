@@ -148,5 +148,10 @@ describe("marking content unspoken", () => {
         engine.patchExpressionAppFields("e1", { enthymeme: undefined })
         engine.flushChecksums()
         expect(findVariableExpression(engine, "e1").checksum).toBe(original)
+
+        // And the key is gone, not merely undefined. `"enthymeme" in expr`
+        // staying true is checksum-safe here but reintroduces the invariant's
+        // failure the moment a downstream mapper turns undefined into null.
+        expect("enthymeme" in findVariableExpression(engine, "e1")).toBe(false)
     })
 })
