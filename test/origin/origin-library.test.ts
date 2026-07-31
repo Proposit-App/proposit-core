@@ -7,7 +7,9 @@ import {
     codePointLength,
     sliceByCodePoints,
     normalizeOriginText,
+    buildCodePointIndex,
 } from "../../src/lib/utils/origin-text.js"
+import type { TCodePointIndex } from "../../src/lib/utils/origin-text.js"
 
 const SOURCE =
     "All swans observed so far are white. Therefore all swans are white."
@@ -714,5 +716,75 @@ describe("OriginLibrary — an inconsistent library stays repairable", () => {
             const violations = (error as InvariantViolationError).violations
             expect(violations.map((v) => v.entityId)).toEqual(["anchor-new"])
         }
+    })
+})
+
+describe("OriginLibrary — the caches keep their own guarantees", () => {
+    // Neither defect these cover is reachable through the public API today:
+    // the normalizer is idempotent, so `addDocument` cannot produce a body its
+    // own check would reject, and `restoreFromSnapshot` is private and only
+    // ever fed a snapshot this same library took. Both are still wrong, and
+    // both are one line from becoming live — a `replaceDocument` method, or any
+    // future edit to the normalizer. The tests below reach the caches directly
+    // rather than pretending a black-box path exists.
+
+    type TCacheProbe = {
+        verifiedDocumentBodies: Map<string, string>
+        documentIndexes: Map<string, TCodePointIndex>
+    }
+    const probe = (origins: OriginLibrary): TCacheProbe =>
+        origins as unknown as TCacheProbe
+
+    it("does not record a document as verified before its text is checked", () => {
+        const origins = new OriginLibrary()
+        origins.addDocument({ id: "doc-1", text: SOURCE })
+        expect(probe(origins).verifiedDocumentBodies.get("doc-1")).toBe(SOURCE)
+    })
+
+    it("keeps reporting un-normalized text however often validate runs", () => {
+        // A document that fails its body checks must never enter the verified
+        // record, or the second validate() would silently pass it.
+        const restored = OriginLibrary.fromSnapshot({
+            documents: [
+                {
+                    id: "doc-1",
+                    text: "line one\r\nline two",
+                    digest: sha256Hex("line one\r\nline two"),
+                    checksum: "deadbeef",
+                },
+            ],
+            links: [],
+            anchors: [],
+        })
+        for (let i = 0; i < 3; i++) {
+            expect(restored.validate().violations.map((v) => v.code)).toContain(
+                "ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED"
+            )
+        }
+        expect(probe(restored).verifiedDocumentBodies.has("doc-1")).toBe(false)
+    })
+
+    it("rebuilds a code-point index whose text no longer matches the document", () => {
+        const origins = new OriginLibrary()
+        origins.addDocument({ id: "doc-1", text: SOURCE })
+        origins.addLink({
+            id: "link-0",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        origins.addAnchor(anchorFor(SOURCE, "All swans"))
+        expect(origins.validate().ok).toBe(true)
+
+        // Plant an index built from different text under the same id. Keyed by
+        // id alone, validate() would slice against the wrong string and report
+        // a quote mismatch that is not there.
+        probe(origins).documentIndexes.set(
+            "doc-1",
+            buildCodePointIndex("a completely different body of text")
+        )
+        expect(origins.validate().ok).toBe(true)
+        expect(probe(origins).documentIndexes.get("doc-1")?.text).toBe(SOURCE)
     })
 })

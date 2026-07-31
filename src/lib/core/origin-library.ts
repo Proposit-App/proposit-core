@@ -179,6 +179,10 @@ export class OriginLibrary<
         for (const [id, text] of this.verifiedDocumentBodies) {
             if (this.documents.get(id)?.text !== text) {
                 this.verifiedDocumentBodies.delete(id)
+            }
+        }
+        for (const [id, index] of this.documentIndexes) {
+            if (this.documents.get(id)?.text !== index.text) {
                 this.documentIndexes.delete(id)
             }
         }
@@ -267,7 +271,16 @@ export class OriginLibrary<
                 this.fieldsFor("originDocumentFields")
             )
             this.documents.set(full.id, full)
-            this.verifiedDocumentBodies.set(full.id, text)
+            // Recording the body as verified is what lets later mutations skip
+            // re-scanning it, but seeding unconditionally would disable
+            // ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED on the very pass meant to
+            // check this document — and that check is what caught the
+            // normalizer not being idempotent. One extra normalize per
+            // document, once, rather than per mutation. The digest half needs
+            // no check: it was computed from this exact string.
+            if (normalizeOriginText(text) === text) {
+                this.verifiedDocumentBodies.set(full.id, text)
+            }
             return full
         })
     }
@@ -585,9 +598,13 @@ export class OriginLibrary<
                 continue
             }
             // Built once per document and kept, for the same reason the body
-            // checks are: the text cannot change under it.
+            // checks are skipped: a document is immutable. The entry is keyed
+            // to the exact text it was built from, not to the id alone, so
+            // anything that ever puts a different body under a known id — a
+            // restore, or a future replace — rebuilds instead of slicing
+            // against the wrong string.
             let index = this.documentIndexes.get(document.id)
-            if (index === undefined) {
+            if (index?.text !== document.text) {
                 index = buildCodePointIndex(document.text)
                 this.documentIndexes.set(document.id, index)
             }
