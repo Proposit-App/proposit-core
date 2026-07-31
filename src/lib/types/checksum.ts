@@ -16,4 +16,7 @@ export interface TCoreChecksumConfig {
     claimCitationFields?: Set<string>
     /** Fields to hash for claim axioms. Defaults to ["claimId", "claimVersion", "supportingClaimId", "supportingClaimVersion"]. */
     claimAxiomFields?: Set<string>
+    originDocumentFields?: Set<string>
+    originLinkFields?: Set<string>
+    originAnchorFields?: Set<string>
 }
