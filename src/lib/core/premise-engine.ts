@@ -1271,8 +1271,21 @@ export class PremiseEngine<
                 type,
                 derivedClaimId,
             } = this.premise as Record<string, unknown>
+            // An `undefined` value drops the key rather than creating it. The
+            // extras round-trip is the only way to clear an app-level field on
+            // a premise, and `updateExtras` spreads its updates in, so
+            // `{ field: undefined }` would otherwise leave the key present
+            // holding `undefined` — checksum-safe and JSON-safe on its own,
+            // but `"field" in premise` becomes true and any downstream mapper
+            // that turns `undefined` into `null` then flips the field from
+            // absent to present. Clearing has to restore the prior shape.
+            const definedExtras = Object.fromEntries(
+                Object.entries(extras).filter(
+                    ([, value]) => value !== undefined
+                )
+            )
             this.premise = {
-                ...extras,
+                ...definedExtras,
                 id,
                 argumentId,
                 argumentVersion,

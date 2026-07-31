@@ -291,13 +291,10 @@ export function registerPremiseCommands(
                         pm.updateExtras({ enthymeme: true })
                         updated = true
                     } else if (opts.enthymeme === false) {
-                        // Delete the key rather than storing false. An entity
-                        // that carries the key at all hashes differently from
-                        // one that omits it, so unmarking must restore the
-                        // original absence.
-                        const extras = pm.getExtras()
-                        delete extras.enthymeme
-                        pm.setExtras(extras)
+                        // `undefined` deletes the key. An entity that carries
+                        // the key at all hashes differently from one that omits
+                        // it, so unmarking must restore the original absence.
+                        pm.updateExtras({ enthymeme: undefined })
                         updated = true
                     }
                     if (!updated) {

@@ -80,6 +80,39 @@ describe("marking content unspoken", () => {
         expect(after.checksum).not.toBe(before.checksum)
     })
 
+    it("removes a premise mark by deleting the key, not blanking it", () => {
+        // The mirror of the expression assertion below. `updateExtras` spreads
+        // its updates into the extras object, so an `undefined` value used to
+        // *create* the key — the same failure the expression path had.
+        const engine = makeEngine()
+        const premise = seedSingleVariablePremise(engine)
+        const original = engine.snapshot().premises[0].premise.checksum
+
+        premise.updateExtras({ enthymeme: true })
+        engine.flushChecksums()
+        expect(engine.snapshot().premises[0].premise.checksum).not.toBe(
+            original
+        )
+
+        premise.updateExtras({ enthymeme: undefined })
+        engine.flushChecksums()
+        const unmarked = engine.snapshot().premises[0].premise
+        expect(unmarked.checksum).toBe(original)
+        expect("enthymeme" in unmarked).toBe(false)
+    })
+
+    it("drops an undefined-valued key passed straight to setExtras", () => {
+        const engine = makeEngine()
+        const premise = seedSingleVariablePremise(engine)
+        premise.setExtras({ title: "kept", enthymeme: undefined })
+        const stored = engine.snapshot().premises[0].premise as Record<
+            string,
+            unknown
+        >
+        expect(stored.title).toBe("kept")
+        expect("enthymeme" in stored).toBe(false)
+    })
+
     it("marks a premise and changes its checksum", () => {
         const engine = makeEngine()
         const premise = seedSingleVariablePremise(engine)
