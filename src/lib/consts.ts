@@ -21,6 +21,7 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "premiseId",
         "variableId",
         "operator",
+        "enthymeme",
     ]),
     variableFields: new Set([
         "symbol",
@@ -37,6 +38,7 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "argumentVersion",
         "type",
         "derivedClaimId",
+        "enthymeme",
     ]),
     argumentFields: new Set(["version"]),
     roleFields: new Set(["conclusionPremiseId"]),

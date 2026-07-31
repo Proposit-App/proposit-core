@@ -72,3 +72,56 @@ describe("enthymeme is checksum-neutral for entities that lack it", () => {
         expect(kinds).toEqual(new Set(["expression", "premise"]))
     })
 })
+
+describe("a present enthymeme key does change the checksum", () => {
+    for (const [name, kind, entity] of CHECKSUM_FIXTURES) {
+        const baseline = entityChecksum(entity, fieldsFor(kind))
+
+        it(`${name} — enthymeme: null hashes differently from absent`, () => {
+            // The failure mode this guards: a persistence layer that
+            // "normalizes" absence into null. `null` is a value, so the key is
+            // present, the field enters the hash, and every stored checksum
+            // shifts at once.
+            expect(
+                entityChecksum({ ...entity, enthymeme: null }, fieldsFor(kind))
+            ).not.toBe(baseline)
+        })
+
+        it(`${name} — enthymeme: true hashes differently from absent`, () => {
+            expect(
+                entityChecksum({ ...entity, enthymeme: true }, fieldsFor(kind))
+            ).not.toBe(baseline)
+        })
+
+        it(`${name} — enthymeme: false hashes differently from absent`, () => {
+            // `false` is not "unmarked" either. Unmarking content must delete
+            // the key, or the entity's checksum never returns to the value it
+            // had before it was marked.
+            expect(
+                entityChecksum({ ...entity, enthymeme: false }, fieldsFor(kind))
+            ).not.toBe(baseline)
+        })
+
+        it(`${name} — null, true, and false all differ from each other`, () => {
+            const hashes = new Set(
+                [null, true, false].map((value) =>
+                    entityChecksum(
+                        { ...entity, enthymeme: value },
+                        fieldsFor(kind)
+                    )
+                )
+            )
+            expect(hashes.size).toBe(3)
+        })
+    }
+
+    it("is reached through an app-extended config too", () => {
+        const [, kind, entity] = CHECKSUM_FIXTURES[0]
+        expect(
+            entityChecksum(
+                { ...entity, enthymeme: true },
+                extendedFieldsFor(kind)
+            )
+        ).not.toBe(entityChecksum(entity, extendedFieldsFor(kind)))
+    })
+})
