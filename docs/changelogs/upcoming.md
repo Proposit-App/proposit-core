@@ -139,3 +139,138 @@ Its _logic_ was lifted rather than rediscovered. Four preservation boundaries ar
 Bidi controls, zero-width space and non-joiner, word joiner, soft hyphen, and the byte-order mark are stripped unconditionally.
 
 </changes>
+
+<changes starting-hash="68f2481" ending-hash="25f98ae">
+
+## Added
+
+- **`locateSourceAnchor` + `TIngestionSourceAnchor`, exported from `@proposit/proposit-core/pipelines/base`.**
+  `locateSourceAnchor(input, quote, hintUtf16)` finds a quote in a text and
+  returns `{quote, startUtf16, endUtf16, prefix, suffix}`, or `undefined` when
+  the quote cannot be found. The ladder is exact match, then a
+  whitespace-insensitive retry (any whitespace run matches any other, covering a
+  model that flattens a line break to a space); nothing approximate. `hintUtf16`
+  only selects among repeated occurrences, so a wrong hint degrades to "picked
+  another occurrence of the same text", never to a wrong span. `prefix`/`suffix`
+  carry `SOURCE_ANCHOR_CONTEXT_CHARS` (32) characters of surrounding input,
+  clamped at both ends. On a whitespace-insensitive hit the returned `quote` is
+  the **input's** text for the matched range rather than the caller's copy,
+  which is what keeps `input.slice(startUtf16, endUtf16) === quote` true for
+  every anchor the function returns.
+- **`finalizeResponseV2` attaches `sourceAnchors` to claims and premises.** A
+  claim gets one anchor per canonicalizer mention that resolved to it, in
+  `mentionIds` order, deduped by range; a premise compiled from a relation gets
+  one anchor for that relation's `evidence.quote`. The key is **omitted
+  entirely** when nothing resolves — never `sourceAnchors: []`.
+- **`SOURCE_ANCHOR_NOTE_CODES` — non-fatal notes for anchor resolution.**
+  Finalize emits `SOURCE_ANCHOR_UNRESOLVED` when a quote is not found in the
+  input and `SOURCE_ANCHOR_AMBIGUOUS` when it occurs more than once and the hint
+  broke the tie. Both are `severity: "warning"` on `PipelineResult.failures` via
+  `ctx.addFailure`; neither stops assembly. Dropping an unlocatable quote was
+  already correct, but dropping it in silence meant a model that started
+  paraphrasing would take anchor coverage to zero in production with no
+  detector. An empty relation evidence quote is not reported — it is a legal
+  "no span to cite", not a failed lookup.
+- **`locateSourceAnchor` now returns `TSourceAnchorMatch`** —
+  `{ anchor, occurrences }` rather than a bare anchor, so a caller can tell a
+  unique match from a tie-break. The emitted `sourceAnchors` payload is
+  unchanged.
+- **The mention hint is `segment.span.start + mention.span.start`.** The
+  composition is required: `claim-mention-extraction` asks the model for spans
+  "relative to the SEGMENT'S TEXT (not the original input)", so a raw mention
+  span drifts further from the truth the deeper into the document a claim sits.
+  It is only a hint either way — offsets are produced by locating the quote, so
+  an emitted span always slices back to its own quote.
+- **`TFinalizeResponseV2Input` takes optional `segmentation` and `mentions`.**
+  The two stage outputs are passed in rather than read from `ctx`, because a
+  pipeline that lacks those stages can neither declare them in
+  `finalize.dependsOn` (`UNKNOWN_DEP`) nor have finalize read them (`ctx.get`
+  outside `dependsOn` is a configuration error). `createScholarPipeline`
+  declares both as optional finalize deps and passes them;
+  `createScribePipeline` passes neither.
+
+## Fixed
+
+- **Anchor `prefix`/`suffix` no longer strand a lone surrogate.** The context
+  window is measured in UTF-16 code units, so a non-BMP character straddling its
+  boundary used to leave an unpaired surrogate at the edge of the string. That
+  is not cosmetic: Postgres rejects an unpaired surrogate escape on insert into
+  `json`/`jsonb`, so a single emoji 31 code units from a claim would fail a
+  consumer's whole persist transaction, and a `TextEncoder` round-trip instead
+  substitutes U+FFFD, silently breaking the re-locate path the context exists to
+  serve. The window now shrinks by one code unit, dropping the character whole.
+- **A pipeline input without a `text` field no longer throws out of finalize.**
+  `TStageContext.input` is `unknown` and `finalizeResponseV2` is public API for
+  consumers assembling their own pipelines; the input was cast rather than
+  checked, so a pipeline whose `inputSchema` is (say) `{ document: string }`
+  reached `haystack.indexOf` with `undefined` and threw on the happy path, after
+  every LLM call had been paid for. Anchors are the only reader of the input, so
+  a missing `text` now yields no anchors — the documented behavior — instead.
+- **Reported offsets are located rather than trusted, on both halves of the
+  hint.** A mention's input position is `segment start + mention offset within
+the segment`, and the composition previously read the model's number for each.
+  The prompts require both segment and mention text be copied verbatim, so both
+  terms are recoverable by searching — and both reported numbers are wrong on the
+  recorded corpus: segment starts run one short on several segments, and a
+  mention offset is off by 14 on `with-url-citation`, where the model miscounts
+  past a markdown link. That last one is the largest error in the corpus and
+  survived an earlier partial fix that addressed only the segment term. Harmless
+  while every quote is unique; a confidently wrong location the moment one
+  repeats.
+- **A segment the model rewrote no longer derails the segment after it.** The
+  scan carries a cursor so a repeated segment cannot collapse onto an earlier
+  copy, but the not-found branch left the cursor behind the skipped segment's
+  territory, so the next segment could match a duplicate inside it — worse than
+  the reported number it replaced, and the exact collapse the cursor exists to
+  prevent. The cursor now advances past the skipped segment, and among the
+  candidates at or after it the one nearest the model's reported start wins
+  rather than the first, which also removes the overshoot hazard the cursor
+  advance would otherwise introduce.
+- **An anchor range that would split a surrogate pair is refused.** The
+  well-formedness guard covered the two context fields but not the located range
+  itself, so an ill-formed model quote — a bare `\uD83D` escape is valid JSON and
+  survives `JSON.parse` — could match inside a whole pair and put a lone
+  surrogate in `quote`. The candidate range is discarded rather than the quote
+  trimmed, which is what preserves
+  `input.slice(startUtf16, endUtf16) === quote`.
+- **An input carrying no `text` is reported once, not once per quote.** The
+  fallback to `""` is correct and stays, but every mention and relation then
+  reported its own `SOURCE_ANCHOR_UNRESOLVED`, blaming the model for a property
+  of the caller's input shape and echoing every extracted quote into `failures`.
+  Resolution is now skipped wholesale in that case and a single
+  `SOURCE_ANCHOR_INPUT_UNAVAILABLE` names the real cause.
+
+## Changed
+
+- **`createScholarPipeline`'s `finalize.dependsOn` gains two optional entries** —
+  `segmentation` and `claim-mention-extraction`. Both already ran; neither can
+  fail the finalize gate, since an optional dep never propagates a skip.
+- **`mentionIds` and `suggestedSymbol` are still stripped from the finalized
+  claim**, and the comment saying so now explains why: carrying the raw ids
+  forward would hand a consumer an id space the response never contains, while
+  the resolved anchors are the actionable form of the same trace.
+
+## Notes
+
+- **No prompt changed and no LLM call was added.** The per-fixture
+  `*-recorded-llm.json` recordings are byte-identical across this change, which
+  the replay harness's prompt-hash guard would have rejected otherwise, and the
+  golden e2e suites now assert the LLM call count directly (8 for the thorough
+  pipeline, 2 for the fast one).
+- **The fast pipeline emits no claim anchors.** It has no segmentation or
+  mention stage and its `extract` prompt asks for synthetic mention ids. Its
+  relation evidence would anchor premises, but its `structure` prompt states
+  that an empty quote is acceptable and the recorded fixtures take that option,
+  so in practice it currently produces none.
+- **One recorded relation quote in the corpus is elided rather than verbatim**
+  (`with-url-citation` joins two clauses with `...`), so that premise resolves
+  to no anchor. Dropping it is the designed behavior — an unlocatable quote is
+  never turned into an anchor at an unverified offset.
+- **The recorded corpus emits exactly two resolution notes**, both of them
+  model-behavior findings rather than defects: the elided `with-url-citation`
+  quote above under the thorough pipeline, and a `with-axiom` relation under the
+  fast pipeline whose evidence quote is a synthesized summary sentence rather
+  than a copy. Pinned by a test that replays all ten recordings, added because an
+  earlier count of "one" had been measured on the thorough pipeline alone.
+
+</changes>

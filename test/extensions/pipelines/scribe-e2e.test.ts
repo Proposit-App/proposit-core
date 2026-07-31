@@ -28,6 +28,7 @@ import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/in
 import { createScribePipeline } from "../../../src/extensions/pipelines/ingestion/scribe/scribe.js"
 import { basicsExtension } from "../../../src/extensions/pipelines/base/basics-extension.js"
 import {
+    countingLlmProvider,
     createRecordingLlmProvider,
     recordingMode,
 } from "./recording-provider.js"
@@ -35,6 +36,11 @@ import type { TLlmProvider } from "../../../src/lib/llm/types.js"
 
 const FIXTURES_ROOT = path.join(import.meta.dirname, "fixtures")
 const SCRIBE_RECORDED_FILE = "scribe-recorded-llm.json"
+
+// The pipeline's two cheap LLM stages (`extract`, `structure`); every
+// other stage is a deterministic adapter. Asserted per fixture so any
+// change that quietly adds model work fails loudly.
+const SCRIBE_LLM_STAGE_COUNT = 2
 const SCRIBE_EXPECTED_FILE = "scribe-expected.json"
 const FIXTURE_NAMES = [
     "straightforward",
@@ -136,7 +142,9 @@ describe(`scribe ingestion pipeline — golden corpus (${mode} mode)`, () => {
         const itOrSkip = mode === "record" || hasRecording ? it : it.skip
 
         itOrSkip(`${name}: scribe output matches the golden`, async () => {
-            const provider = buildProviderForMode(fixtureDir)
+            const provider = countingLlmProvider(
+                buildProviderForMode(fixtureDir)
+            )
             const result = await executePipeline(
                 createScribePipeline(basicsExtension),
                 { text: readInput(fixtureDir) },
@@ -155,6 +163,13 @@ describe(`scribe ingestion pipeline — golden corpus (${mode} mode)`, () => {
             expect(expected).toBeDefined()
             const { runtime } = splitExpected(expected!)
             expect(result.output).toEqual(runtime)
+            // The finalize-time source anchors add no model work: the
+            // run still makes exactly one call per recorded pair.
+            // Counts calls, not distinct prompts. In replay that is the
+            // same thing; in `record` mode a transient API retry makes
+            // this fail on the count rather than on the underlying
+            // error, so read it as a symptom there, not a cause.
+            expect(provider.callCount()).toBe(SCRIBE_LLM_STAGE_COUNT)
         })
     }
 })

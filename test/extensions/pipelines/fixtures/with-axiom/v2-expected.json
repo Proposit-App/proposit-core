@@ -6,6 +6,15 @@
                 "miniId": "c1",
                 "axiom": "A bachelor is an unmarried man by definition.",
                 "type": "axiomatic",
+                "sourceAnchors": [
+                    {
+                        "quote": "a bachelor is an unmarried man.",
+                        "startUtf16": 15,
+                        "endUtf16": 46,
+                        "prefix": "By definition, ",
+                        "suffix": " John is a bachelor. Therefore, "
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -13,6 +22,15 @@
                 "title": "John is a bachelor",
                 "body": "John is a bachelor.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "John is a bachelor.",
+                        "startUtf16": 47,
+                        "endUtf16": 66,
+                        "prefix": "a bachelor is an unmarried man. ",
+                        "suffix": " Therefore, John is unmarried."
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -20,6 +38,15 @@
                 "title": "John is unmarried",
                 "body": "John is unmarried.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "John is unmarried.",
+                        "startUtf16": 78,
+                        "endUtf16": 96,
+                        "prefix": " John is a bachelor. Therefore, ",
+                        "suffix": ""
+                    }
+                ],
                 "role": "conclusion"
             }
         ],
@@ -44,7 +71,16 @@
             {
                 "miniId": "gid-4",
                 "formula": "John_Bachelor implies John_Unmarried",
-                "title": "If \"A bachelor is an unmarried man by definition.\" and \"John is a bachelor\" then \"John is unmarried\""
+                "title": "If \"A bachelor is an unmarried man by definition.\" and \"John is a bachelor\" then \"John is unmarried\"",
+                "sourceAnchors": [
+                    {
+                        "quote": "By definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.",
+                        "startUtf16": 0,
+                        "endUtf16": 96,
+                        "prefix": "",
+                        "suffix": ""
+                    }
+                ]
             },
             {
                 "miniId": "gid-5",

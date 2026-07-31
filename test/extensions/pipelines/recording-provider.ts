@@ -259,3 +259,21 @@ export function createRecordingLlmProvider(
         },
     }
 }
+
+/**
+ * Wrap a provider so a test can assert how many LLM calls a pipeline
+ * actually made. Used to prove a change is assembly-only: the call count
+ * must still match the number of recorded request/response pairs.
+ */
+export function countingLlmProvider(underlying: TLlmProvider): TLlmProvider & {
+    callCount: () => number
+} {
+    let calls = 0
+    return {
+        async respond<T>(req: TLlmRequest<T>): Promise<TLlmResponse<T>> {
+            calls += 1
+            return underlying.respond(req)
+        },
+        callCount: () => calls,
+    }
+}

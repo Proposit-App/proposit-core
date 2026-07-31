@@ -39,9 +39,11 @@ import { createOpenAiResponsesProvider } from "../../../src/extensions/openai/in
 import { createScholarPipeline } from "../../../src/extensions/pipelines/ingestion/scholar/scholar.js"
 import { basicsExtension } from "../../../src/extensions/pipelines/base/basics-extension.js"
 import {
+    countingLlmProvider,
     createRecordingLlmProvider,
     recordingMode,
 } from "./recording-provider.js"
+import { SOURCE_ANCHOR_CONTEXT_CHARS } from "../../../src/extensions/pipelines/base/index.js"
 import type { TLlmProvider } from "../../../src/lib/llm/types.js"
 
 const FIXTURES_ROOT = path.join(import.meta.dirname, "fixtures")
@@ -54,6 +56,13 @@ const FIXTURE_NAMES = [
     "ambiguous-conclusion",
     "enthymeme",
 ] as const
+
+// The pipeline's 8 LLM stages (segmentation, claim-mention-extraction,
+// citation-source-detection, axiom-indicator-detection,
+// claim-canonicalization, claim-type-classification, relation-extraction,
+// conclusion-selection); the other 4 are deterministic. Asserted per
+// fixture so any change that quietly adds model work fails loudly.
+const SCHOLAR_LLM_STAGE_COUNT = 8
 
 function loadApiKey(): string | undefined {
     if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY
@@ -162,6 +171,83 @@ function buildProviderForMode(fixtureDir: string): TLlmProvider {
 
 const mode = recordingMode()
 
+// -- Source-anchor assertions --
+//
+// Every anchor the pipeline emits must be resolvable against the exact
+// input the pipeline was given: slicing the input at the anchor's own
+// offsets returns the anchor's own quote. That is the check that turns
+// "the model said it copied verbatim" into something falsifiable, and it
+// is measured here on real recorded runs for the first time.
+
+type TFixtureAnchor = {
+    quote: string
+    startUtf16: number
+    endUtf16: number
+    prefix: string
+    suffix: string
+}
+type TFixtureEntity = { miniId: string; sourceAnchors?: TFixtureAnchor[] }
+type TFixtureArgument = {
+    claims: TFixtureEntity[]
+    premises: TFixtureEntity[]
+    conclusionPremiseMiniId: string
+}
+
+function assertAnchorResolves(anchor: TFixtureAnchor, input: string): void {
+    expect(anchor.startUtf16).toBeGreaterThanOrEqual(0)
+    expect(anchor.endUtf16).toBeGreaterThan(anchor.startUtf16)
+    expect(anchor.endUtf16).toBeLessThanOrEqual(input.length)
+    expect(input.slice(anchor.startUtf16, anchor.endUtf16)).toBe(anchor.quote)
+    expect(anchor.prefix).toBe(
+        input.slice(
+            Math.max(0, anchor.startUtf16 - SOURCE_ANCHOR_CONTEXT_CHARS),
+            anchor.startUtf16
+        )
+    )
+    expect(anchor.suffix).toBe(
+        input.slice(
+            anchor.endUtf16,
+            Math.min(
+                input.length,
+                anchor.endUtf16 + SOURCE_ANCHOR_CONTEXT_CHARS
+            )
+        )
+    )
+}
+
+function assertSourceAnchors(
+    output: Record<string, unknown>,
+    input: string
+): void {
+    const argument = output.argument as TFixtureArgument | null
+    if (argument === null) return
+    for (const claim of argument.claims) {
+        expect(claim.sourceAnchors ?? []).not.toHaveLength(0)
+        for (const anchor of claim.sourceAnchors ?? []) {
+            assertAnchorResolves(anchor, input)
+        }
+    }
+    for (const premise of argument.premises) {
+        if (premise.miniId === argument.conclusionPremiseMiniId) {
+            // Synthesized from a bare symbol — no source relation, so
+            // nothing to quote.
+            expect("sourceAnchors" in premise).toBe(false)
+            continue
+        }
+        // A relation-derived premise is anchored only when its evidence
+        // quote is verbatim. Models sometimes elide with an ellipsis
+        // instead, and an unlocatable quote is deliberately dropped
+        // rather than guessed at, so this is not required of every
+        // premise — which premises carry anchors is pinned exactly by
+        // the golden comparison above. What is required here is that
+        // whatever is emitted resolves against the input.
+        for (const anchor of premise.sourceAnchors ?? []) {
+            expect(anchor.quote.length).toBeGreaterThan(0)
+            assertAnchorResolves(anchor, input)
+        }
+    }
+}
+
 describe("scholar ingestion pipeline — fixture parity labels", () => {
     const VALID_PARITY = new Set(["strict", "v2-strict-upgrade", "v2-only"])
     for (const name of FIXTURE_NAMES) {
@@ -201,7 +287,9 @@ describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
             `${name}: replays the recorded provider and matches v2-expected.json`,
             { timeout: 300_000 },
             async () => {
-                const provider = buildProviderForMode(fixtureDir)
+                const provider = countingLlmProvider(
+                    buildProviderForMode(fixtureDir)
+                )
                 const pipeline = createScholarPipeline(basicsExtension)
                 const input = { text: readInput(fixtureDir) }
                 const result = await executePipeline(pipeline, input, {
@@ -299,6 +387,14 @@ describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 expect(result.output).not.toBeNull()
                 const actual = result.output as Record<string, unknown>
                 expect(actual).toEqual(runtime)
+                assertSourceAnchors(actual, input.text)
+                // Assembling the anchors adds no model work: the run
+                // still makes exactly one call per LLM stage.
+                // Counts calls, not distinct prompts. In replay that is the
+                // same thing; in `record` mode a transient API retry makes
+                // this fail on the count rather than on the underlying
+                // error, so read it as a symptom there, not a cause.
+                expect(provider.callCount()).toBe(SCHOLAR_LLM_STAGE_COUNT)
             }
         )
     }

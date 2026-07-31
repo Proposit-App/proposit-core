@@ -7,6 +7,15 @@
                 "title": "NASA reports temperature rise",
                 "url": "https://climate.nasa.gov/evidence/",
                 "type": "citation",
+                "sourceAnchors": [
+                    {
+                        "quote": "global temperatures have risen significantly over the past century.",
+                        "startUtf16": 74,
+                        "endUtf16": 141,
+                        "prefix": "://climate.nasa.gov/evidence/), ",
+                        "suffix": " Rising global temperatures caus"
+                    }
+                ],
                 "role": "premise",
                 "citation": {
                     "type": "unparsed",
@@ -20,6 +29,15 @@
                 "title": "Global temperatures have risen",
                 "body": "Global temperatures have risen significantly over the past century.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "global temperatures have risen significantly over the past century.",
+                        "startUtf16": 74,
+                        "endUtf16": 141,
+                        "prefix": "://climate.nasa.gov/evidence/), ",
+                        "suffix": " Rising global temperatures caus"
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -27,6 +45,15 @@
                 "title": "Warming increases extreme weather",
                 "body": "Rising global temperatures cause more frequent extreme weather events.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Rising global temperatures cause more frequent extreme weather events.",
+                        "startUtf16": 142,
+                        "endUtf16": 212,
+                        "prefix": "ficantly over the past century. ",
+                        "suffix": " Therefore, we are seeing more f"
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -34,6 +61,15 @@
                 "title": "Extreme weather is more frequent",
                 "body": "People are seeing more frequent extreme weather events.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "we are seeing more frequent extreme weather events.",
+                        "startUtf16": 224,
+                        "endUtf16": 275,
+                        "prefix": "reme weather events. Therefore, ",
+                        "suffix": ""
+                    }
+                ],
                 "role": "conclusion"
             }
         ],

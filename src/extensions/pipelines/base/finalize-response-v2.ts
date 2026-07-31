@@ -35,6 +35,7 @@ import type { TStageContext } from "../../../lib/pipelines/index.js"
 import {
     STAGE_IDS,
     type TClaimCanonicalizationOutput,
+    type TClaimMentionExtractionOutput,
     type TClaimTypeClassificationEntry,
     type TClaimTypeClassificationOutput,
     type TCompiledPremise,
@@ -42,9 +43,16 @@ import {
     type TFormulaCompilationOutput,
     type TInferenceRelation,
     type TRelationExtractionOutput,
+    type TSegmentationOutput,
     type TVariableAssignmentOutput,
 } from "./stages/schemas.js"
-import type { TIngestionExtension } from "./types.js"
+import {
+    locateSourceAnchor,
+    nearestOccurrence,
+    type TIngestionSourceAnchor,
+    type TSourceAnchorMatch,
+} from "./source-anchors.js"
+import type { TIngestionExtension, TIngestionInput } from "./types.js"
 import { IEEE_REFERENCE_TYPES } from "../../citations/ieee/references.js"
 import type {
     TUnparsedCitation,
@@ -174,15 +182,243 @@ function stripCanonicalizerOnlyFields(
 ): Record<string, unknown> {
     // The canonicalizer's per-claim record carries `mentionIds` and
     // `suggestedSymbol` which are not part of the public response
-    // schema. Strip them from the finalize output (the variable's
-    // `symbol` carries the assigned identifier; mentionIds are an
-    // internal trace).
+    // schema. Strip them from the finalize output: the variable's
+    // `symbol` carries the assigned identifier, and mention ids name an
+    // id space the response never carries — the provenance they trace is
+    // resolved into `sourceAnchors` instead, which a consumer can act on.
     const stripped: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(claim)) {
         if (key === "mentionIds" || key === "suggestedSymbol") continue
         stripped[key] = value
     }
     return stripped
+}
+
+// -- Source anchors --
+//
+// The pipeline knows where each claim and each inference came from, but
+// only as data spread across three stages: `segmentation` holds
+// input-relative segment spans, `claim-mention-extraction` holds
+// *segment-relative* mention spans plus the mention text, and
+// `relation-extraction` holds a quote per relation. Finalize is the
+// first place all three are in scope at once, so it is where they become
+// a usable reference back into the input.
+//
+// Only quoted text crosses the boundary as fact; the model's offsets are
+// used to choose among repeated occurrences and are never emitted
+// unverified. See `source-anchors.ts`.
+
+/**
+ * Where each segment actually begins in the input.
+ *
+ * The segmentation prompt requires `segment.text` be copied verbatim, so
+ * the true offset is recoverable by searching — and searching is what
+ * this does, because the model's own `span.start` drifts — off by one on
+ * several segments of the recorded corpus. Small, and invisible until a
+ * quote repeats, at which point the drifted hint picks the wrong
+ * occurrence.
+ *
+ * Segments are emitted left to right and cover the input, so the scan
+ * carries a cursor rather than searching from zero: that keeps a segment
+ * whose text repeats earlier in the document from collapsing onto the
+ * earlier copy. Among the candidates at or after the cursor, the one
+ * nearest the model's reported start wins — the model's number chooses
+ * between verified positions rather than supplying one.
+ */
+function resolveSegmentStarts(
+    inputText: string,
+    segmentation: TSegmentationOutput | undefined
+): Map<string, number> {
+    const out = new Map<string, number>()
+    let cursor = 0
+    for (const segment of segmentation?.segments ?? []) {
+        const found = nearestOccurrence(
+            inputText,
+            segment.text,
+            segment.span.start,
+            cursor
+        )
+        if (found === undefined) {
+            out.set(segment.segmentId, segment.span.start)
+            // Advance past where the model says this segment ended.
+            // Leaving the cursor behind would let the next segment's
+            // scan reach back into territory this one owns and match a
+            // duplicate inside it — the exact collapse the cursor
+            // exists to prevent, triggered by the branch that handles a
+            // rewritten segment.
+            cursor = Math.max(cursor, segment.span.end)
+            continue
+        }
+        out.set(segment.segmentId, found)
+        cursor = found + segment.text.length
+    }
+    return out
+}
+
+/**
+ * Non-fatal note codes for anchor resolution. Neither stops assembly:
+ * an unresolved quote yields no anchor, and an ambiguous one yields the
+ * nearest-hint winner. Both are reported because silence here is
+ * indistinguishable from success — a model that starts paraphrasing
+ * would otherwise take anchor coverage to zero with no signal.
+ */
+export const SOURCE_ANCHOR_NOTE_CODES = {
+    unresolved: "SOURCE_ANCHOR_UNRESOLVED",
+    ambiguous: "SOURCE_ANCHOR_AMBIGUOUS",
+    inputUnavailable: "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
+} as const
+
+/** Emit the note for one attempted resolution, if there is one to emit. */
+function noteResolution(args: {
+    ctx: TStageContext
+    match: TSourceAnchorMatch | undefined
+    quote: string
+    subject: Record<string, string>
+}): void {
+    const subjectText = Object.entries(args.subject)
+        .map(([key, value]) => `${key} ${value}`)
+        .join(" ")
+    if (args.match === undefined) {
+        args.ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.unresolved,
+            message: `Quote for ${subjectText} was not found in the input; no source anchor was emitted.`,
+            severity: "warning",
+            context: { ...args.subject, quote: args.quote },
+        })
+        return
+    }
+    if (args.match.occurrences > 1) {
+        args.ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.ambiguous,
+            message: `Quote for ${subjectText} occurs ${String(args.match.occurrences)} times in the input; the occurrence nearest the reported position was used.`,
+            severity: "warning",
+            context: {
+                ...args.subject,
+                quote: args.quote,
+                occurrences: args.match.occurrences,
+                startUtf16: args.match.anchor.startUtf16,
+            },
+        })
+    }
+}
+
+/** Resolve every mention to a verified anchor in the input, by id. */
+function buildAnchorByMentionId(args: {
+    ctx: TStageContext
+    inputText: string
+    segmentStartById: Map<string, number>
+    segments: TSegmentationOutput["segments"] | undefined
+    mentions: TClaimMentionExtractionOutput | undefined
+}): Map<string, TIngestionSourceAnchor> {
+    const out = new Map<string, TIngestionSourceAnchor>()
+    if (!args.mentions) return out
+    const segmentStartById = args.segmentStartById
+    const segmentTextById = new Map(
+        (args.segments ?? []).map((s) => [s.segmentId, s.text])
+    )
+    for (const mention of args.mentions.mentions) {
+        // Mention spans are relative to the segment's text, so the
+        // input-relative hint only exists once the segment's own start is
+        // added back on.
+        //
+        // Both halves of that sum are located rather than trusted. The
+        // mention's own offset is the larger error of the two on the
+        // recorded corpus — a model can miscount its way through a
+        // markdown link and report a mention 14 characters early — and
+        // the mention text is copied from the segment, so its position
+        // inside the segment is recoverable exactly the way the
+        // segment's position in the document is.
+        const segmentText = segmentTextById.get(mention.segmentId)
+        const offsetInSegment =
+            segmentText === undefined
+                ? undefined
+                : nearestOccurrence(
+                      segmentText,
+                      mention.text,
+                      mention.span.start
+                  )
+        const hint =
+            (segmentStartById.get(mention.segmentId) ?? 0) +
+            (offsetInSegment ?? mention.span.start)
+        const match = locateSourceAnchor(args.inputText, mention.text, hint)
+        noteResolution({
+            ctx: args.ctx,
+            match,
+            quote: mention.text,
+            subject: { mentionId: mention.mentionId },
+        })
+        if (match !== undefined) out.set(mention.mentionId, match.anchor)
+    }
+    return out
+}
+
+/** Anchors for the mentions of one claim, in order, deduped by range. */
+function claimAnchors(
+    mentionIds: readonly string[],
+    anchorByMentionId: Map<string, TIngestionSourceAnchor>
+): TIngestionSourceAnchor[] {
+    const seen = new Set<string>()
+    const anchors: TIngestionSourceAnchor[] = []
+    for (const mentionId of mentionIds) {
+        const anchor = anchorByMentionId.get(mentionId)
+        if (anchor === undefined) continue
+        const key = `${String(anchor.startUtf16)}:${String(anchor.endUtf16)}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        anchors.push(anchor)
+    }
+    return anchors
+}
+
+/** The anchor for a relation's evidence quote, if it can be located. */
+function relationAnchor(args: {
+    ctx: TStageContext
+    inputText: string
+    relation: TInferenceRelation
+    segmentStartById: Map<string, number>
+}): TIngestionSourceAnchor | undefined {
+    const starts = args.relation.evidence.segmentIds
+        .map((id) => args.segmentStartById.get(id))
+        .filter((start): start is number => start !== undefined)
+    const hint = starts.length > 0 ? Math.min(...starts) : 0
+    const quote = args.relation.evidence.quote
+    const match = locateSourceAnchor(args.inputText, quote, hint)
+    // An empty evidence quote is a legal "no span to cite" the fast
+    // pipeline's prompt explicitly permits, not a failure to find one,
+    // so it is not reported.
+    if (quote.trim().length > 0) {
+        noteResolution({
+            ctx: args.ctx,
+            match,
+            quote,
+            subject: { relationId: args.relation.relationId },
+        })
+    }
+    return match?.anchor
+}
+
+/**
+ * The raw text this pipeline was given, or `""` for any input shape that
+ * does not carry one.
+ *
+ * `TStageContext.input` is `unknown` and this assembler is public API
+ * for consumers composing their own pipelines, whose `inputSchema` need
+ * not be `{ text }`. Anchors are the only thing that reads the input, so
+ * an empty string degrades exactly into the documented no-anchor
+ * behavior — every match misses — rather than throwing out of finalize
+ * on the happy path, after every LLM call has been paid for.
+ */
+function readInputText(input: unknown): string {
+    const text = (input as TIngestionInput | null | undefined)?.text
+    return typeof text === "string" ? text : ""
+}
+
+/** The `mentionIds` on a canonical claim record, defensively read. */
+function readMentionIds(record: Record<string, unknown>): string[] {
+    const raw = record.mentionIds
+    return Array.isArray(raw)
+        ? raw.filter((id): id is string => typeof id === "string")
+        : []
 }
 
 // **Premise titles read as prose, not formulas.** Each premise title
@@ -317,6 +553,17 @@ function buildArgumentTitle(
 export type TFinalizeResponseV2Input = {
     ctx: TStageContext
     extension: TIngestionExtension
+    /**
+     * Segmentation + mention outputs, supplied by the caller rather than
+     * read from `ctx`, because not every pipeline has these stages —
+     * `ctx.get` on a stage outside `finalize.dependsOn` is a
+     * configuration error, and declaring a dep on a stage the pipeline
+     * does not contain is another. Passing them keeps the declaration
+     * and the read in the same file, per pipeline. Omit both and claims
+     * carry no source anchors; premises are unaffected either way.
+     */
+    segmentation?: TSegmentationOutput
+    mentions?: TClaimMentionExtractionOutput
 }
 
 /**
@@ -386,6 +633,32 @@ export function finalizeResponseV2(
     }
 
     // Happy path: assemble the argument.
+    const inputText = readInputText(ctx.input)
+    // Nothing resolves against an empty input, so resolution is skipped
+    // wholesale rather than run to produce one "quote not found" note per
+    // mention and relation. N notes blaming the model for a fault in the
+    // caller's input shape is worse than no notes; one note naming the
+    // real cause is better than either. It also keeps every extracted
+    // quote out of `failures`.
+    const inputAvailable = inputText.length > 0
+    if (!inputAvailable) {
+        ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.inputUnavailable,
+            message:
+                "The pipeline input carries no text, so no source anchors were resolved. This is a property of the input, not of the model's output.",
+            severity: "warning",
+        })
+    }
+    const segmentStartById = resolveSegmentStarts(inputText, input.segmentation)
+    const anchorByMentionId = inputAvailable
+        ? buildAnchorByMentionId({
+              ctx,
+              inputText,
+              segmentStartById,
+              segments: input.segmentation?.segments,
+              mentions: input.mentions,
+          })
+        : new Map<string, TIngestionSourceAnchor>()
     const conclusionMiniId = conclusion?.conclusionMiniId ?? null
     const roles = buildClaimToRole({
         canonicalClaims: canon.canonicalClaims,
@@ -398,6 +671,14 @@ export function finalizeResponseV2(
         const classifiedType = typeByMiniId.get(c.miniId)?.type ?? c.type
         const record = c as unknown as Record<string, unknown>
         const stripped = stripCanonicalizerOnlyFields(record)
+        // An entity with no resolvable provenance carries no key at all
+        // rather than an empty array — "we found nothing" and "we did not
+        // look" read the same to a consumer, and neither is a claim about
+        // the text.
+        const anchors = claimAnchors(readMentionIds(record), anchorByMentionId)
+        if (anchors.length > 0) {
+            stripped.sourceAnchors = anchors
+        }
         // A claim classified `citation` stays `citation` and carries an
         // explicit `UnparsedCitation` (its `text` is the display text, so
         // a url-less reference no longer renders blank). Premise
@@ -448,13 +729,32 @@ export function finalizeResponseV2(
         relationById: new Map(relations.map((r) => [r.relationId, r])),
     }
 
-    const finalPremises: TPremiseFinalForm[] = compilation.premises.map(
-        (p) => ({
+    const finalPremises: TPremiseFinalForm[] = compilation.premises.map((p) => {
+        const premise: TPremiseFinalForm = {
             miniId: p.premiseMiniId,
             formula: p.formula,
             title: buildPremiseTitle(p, titleComposerMaps),
-        })
-    )
+        }
+        // The conclusion premise is synthesized from a bare symbol and
+        // has no source relation, so it has no evidence quote to anchor.
+        const relation =
+            p.sourceRelationId !== null
+                ? titleComposerMaps.relationById.get(p.sourceRelationId)
+                : undefined
+        const anchor =
+            inputAvailable && relation !== undefined
+                ? relationAnchor({
+                      ctx,
+                      inputText,
+                      relation,
+                      segmentStartById,
+                  })
+                : undefined
+        if (anchor !== undefined) {
+            premise.sourceAnchors = [anchor]
+        }
+        return premise
+    })
 
     const argument: TArgumentFinalForm = {
         claims,
