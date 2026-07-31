@@ -9,6 +9,9 @@ const CHECKSUM_CONFIG_KEYS = [
     "claimFields",
     "claimCitationFields",
     "claimAxiomFields",
+    "originDocumentFields",
+    "originLinkFields",
+    "originAnchorFields",
 ] as const
 
 export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
@@ -21,6 +24,7 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "premiseId",
         "variableId",
         "operator",
+        "enthymeme",
     ]),
     variableFields: new Set([
         "symbol",
@@ -37,6 +41,7 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "argumentVersion",
         "type",
         "derivedClaimId",
+        "enthymeme",
     ]),
     argumentFields: new Set(["version"]),
     roleFields: new Set(["conclusionPremiseId"]),
@@ -52,6 +57,28 @@ export const DEFAULT_CHECKSUM_CONFIG: Readonly<TCoreChecksumConfig> = {
         "claimVersion",
         "supportingClaimId",
         "supportingClaimVersion",
+    ]),
+    // The digest stands in for the text: it already identifies the content,
+    // and hashing it costs a pass over 64 characters rather than over the
+    // whole document body.
+    originDocumentFields: new Set(["digest"]),
+    originLinkFields: new Set([
+        "argumentId",
+        "argumentVersion",
+        "documentId",
+        "stance",
+    ]),
+    originAnchorFields: new Set([
+        "argumentId",
+        "argumentVersion",
+        "documentId",
+        "targetType",
+        "targetId",
+        "exact",
+        "prefix",
+        "suffix",
+        "startCodePoint",
+        "endCodePoint",
     ]),
 }
 

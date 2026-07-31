@@ -14,6 +14,7 @@ import { parseFormula } from "../core/parser/formula.js"
 import type { TFormulaAST } from "../core/parser/formula.js"
 import type { TExpressionInput } from "../core/expression-manager.js"
 import { POSITION_INITIAL } from "../utils/position.js"
+import { withoutUndefinedValues } from "../utils/collections.js"
 import { ArgumentEngine, defaultGenerateId } from "../core/argument-engine.js"
 import { ClaimLibrary } from "../core/claim-library.js"
 import { ClaimCitationLibrary } from "../core/claim-citation-library.js"
@@ -365,7 +366,7 @@ export class ArgumentParser<
             const extras = this.mapClaim(parsedClaim)
             const claimId = genId()
             const claim = claimLibrary.create({
-                ...extras,
+                ...withoutUndefinedValues(extras),
                 id: claimId,
                 type: parsedClaim.type,
             } as Omit<TClaim, "version" | "frozen" | "checksum">)
@@ -417,7 +418,7 @@ export class ArgumentParser<
             const extras = this.mapVariable(parsedVar)
             const variable: Omit<TClaimBoundVariable, "checksum"> &
                 Record<string, unknown> = {
-                ...extras,
+                ...withoutUndefinedValues(extras),
                 id: genId(),
                 argumentId,
                 argumentVersion,
@@ -583,7 +584,7 @@ export class ArgumentParser<
             )
             try {
                 params.library.add({
-                    ...extras,
+                    ...withoutUndefinedValues(extras),
                     id: genId(),
                     claimId: params.consequentClaimId,
                     claimVersion: params.consequentClaimVersion,

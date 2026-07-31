@@ -163,7 +163,7 @@ flowchart TD
 
 ### PropositCore
 
-`PropositCore` is the recommended top-level entry point. It creates and wires together all four libraries and provides unified cross-library operations:
+`PropositCore` is the recommended top-level entry point. It creates and wires together every library and provides unified cross-library operations:
 
 ```typescript
 import { PropositCore } from "@proposit/proposit-core"
@@ -212,11 +212,24 @@ const snapshot = core.snapshot()
 const restored = PropositCore.fromSnapshot(snapshot)
 ```
 
-`PropositCore` is designed for subclassing. All library fields (`claims`, `citations`, `axioms`, `forks`, `arguments`) are public and readable. Pass pre-constructed library instances via `TPropositCoreOptions` to inject custom implementations.
+`PropositCore` is designed for subclassing. All library fields (`claims`, `citations`, `axioms`, `origins`, `forks`, `arguments`) are public and readable. Pass pre-constructed library instances via `TPropositCoreOptions` to inject custom implementations.
+
+A snapshot written before origin data existed carries no `origins` slot.
+`PropositCore.fromSnapshot` restores such a payload with an empty origin
+library rather than refusing it.
 
 ### No application metadata
 
 The core library does not deal in user IDs, timestamps, or display text. These are application-level concerns. The CLI adds some metadata (e.g., `createdAt`, `publishedAt`) for its own purposes, but the core schemas are intentionally minimal. Applications extend core entity types via generic parameters.
+
+An origin document's `text` is the one string the core schemas carry that a
+reader might mistake for display text. It is not: core stores it, digests it,
+measures it, and slices it by index, and never parses, renders, formats, or
+interprets it. What core owns is the structure around it — entity identity, the
+anchor relation, checksum participation, and snapshot round-tripping — exactly
+as it owns a citation claim's identity while the IEEE extension owns its
+reference data. Who pasted the text, when, whether they may share it, how it
+renders, and how long it may be all remain application concerns.
 
 ### Claims, citations, and axioms
 
@@ -808,6 +821,8 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 | `formula` wrapping no operator (leaf or single `not`)            | `P-3`     | Presentable |
 | Single-child `and` / `or`                                        | `P-4`     | Presentable |
 | Same-operator parent/grandchild separated only by `formula`      | `P-5`     | Presentable |
+| Premise-bound variable expression marked as an enthymeme         | `P-6`     | Presentable |
+| Operator or formula expression marked as an enthymeme            | `P-6`     | Presentable |
 
 ### Variables — prevented at construction time
 
@@ -953,6 +968,11 @@ $PROPOSIT_HOME/
             meta.json    # id, title?
             data.json    # type, rootExpressionId?, variables[], expressions[]
         <analysis>.json  # named analysis files (default: analysis.json)
+  claims.json          # global claim library
+  citations.json       # citation connections
+  axioms.json          # axiom connections
+  origins.json         # source texts, their argument links, and anchors
+  forks.json           # fork provenance records
 ```
 
 ### Versioning
@@ -990,6 +1010,14 @@ proposit-core axioms list [--json]                 List all axiom connections
 proposit-core axioms show <connection_id> [--json] Show a single axiom connection
 proposit-core axioms add --claim-id <id> --axiom-id <id>           Add an axiom connection (supporting claim must be type=axiomatic; dependent must be type=normal)
 proposit-core axioms remove <connection_id>        Remove an axiom connection
+proposit-core origins attach <file> --argument <id> --version <n> [--stance <s>]  Store a source text and link it to an argument version
+proposit-core origins list [--json]                List stored source texts and their links
+proposit-core origins show <document_id> [--json] [--text]  Show a source text, its links, and its anchors
+proposit-core origins link <document_id> --argument <id> --version <n> [--stance <s>]  Link an existing source text to another argument version
+proposit-core origins unlink <link_id>             Remove a link between an argument version and a source text
+proposit-core origins remove <document_id>         Remove a source text (refuses while referenced)
+proposit-core origins anchor add --document <id> --argument <id> --version <n> --target <type> --target-id <id> --start <n> --end <n>  Record the span an argument part derives from
+proposit-core origins anchor remove <anchor_id>    Remove an anchor
 ```
 
 > **Breaking change in v0.12.0.** The `citations` command group switched from positional arguments + `unlink` to flag arguments + `remove`, matching the new `axioms` group and the renamed schema fields. Scripts that used `citations add <citing_claim_id> <source_claim_id>` or `citations unlink <id>` need to update to `citations add --claim-id <id> --supporting-claim-id <id>` and `citations remove <id>`.
@@ -1018,6 +1046,75 @@ proposit-core axioms add --claim-id <normal-claim-id> --axiom-id <axiomatic-clai
 ```
 
 Axiomatic claim-bound variables are forced to `true` at evaluation time. Passing an explicit assignment for one to `analysis evaluate` raises `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN` before the evaluator runs. To express "this derivation should not be supported by this axiom," wrap the axiom's variable expression in the antecedent with `not`.
+
+### Origin data
+
+An argument can record the source text it was built from, which of its parts
+derive from which span of that text, and which parts the original left unspoken.
+
+```bash
+# Store a source text and link it to an argument version.
+DOC=$(proposit-core origins attach ./speech.txt --argument "$ARG" --version 0 --stance seed)
+
+# Record that a premise derives from code points [0, 12) of that text.
+proposit-core origins anchor add --document "$DOC" --argument "$ARG" \
+    --version 0 --target premise --target-id "$PREMISE" --start 0 --end 12
+
+proposit-core origins show "$DOC"
+```
+
+**Stance.** `seed` (the default) says the argument merely started from the
+source. `representation` asserts the argument faithfully renders it — which is
+what makes the _absence_ of provenance meaningful, so it is a claim about
+someone else's text and never a default.
+
+**Positions count Unicode code points, not UTF-16 code units**, following the
+Web Annotation Data Model. The fields are named `startCodePoint` /
+`endCodePoint` for that reason, and `sliceByCodePoints` is the exported helper
+that reads them; a plain `String.prototype.slice` on these offsets is wrong for
+any text containing an astral-plane character and right for every ASCII test.
+An anchor whose span does not slice out its own recorded quote is rejected, so a
+mis-measured anchor fails loudly instead of highlighting the wrong passage.
+
+**The stored text is normalized on the way in** by the exported
+`normalizeOriginText`: every line-break form folds to LF, the byte-order mark,
+control characters other than LF and tab, bidirectional controls, zero-width
+characters, and stray variation selectors are stripped, and the result is
+composed to Unicode NFC and trimmed. Emoji ZWJ, keycap, CJK, Mongolian, and
+emoji-tag sequences survive intact. It never touches content: internal
+whitespace, paragraph breaks, smart quotes, dashes, case, and punctuation are
+left exactly as written. The function is idempotent, so an application may
+safely apply it at its own import boundary as well.
+
+Because every stored anchor is an offset into text this function produced,
+**changing its behavior later is a data migration, not a bug fix.**
+
+Each document also carries a SHA-256 `digest` of its normalized text, so two
+pastes of the same source are detectable. Two texts differing only in line-ending
+style, a byte-order mark, or accent composition produce the same digest.
+
+Anchoring requires a link first: an anchor's argument version must already be
+linked to the document, because the link carries the stance that gives the
+anchor its meaning. Persist in that order — document, link, anchors.
+
+**Unspoken content.** An author can mark a premise or a claim-bound variable
+expression as an _enthymeme_ — content the natural-language original left for
+the audience to supply:
+
+```bash
+proposit-core "$ARG" latest premises update "$PREMISE" --enthymeme
+proposit-core "$ARG" latest expressions mark "$PREMISE" "$EXPR" --enthymeme
+```
+
+The mark is always declared, never derived; nothing infers it. Passing
+`--no-enthymeme` removes the field entirely rather than storing `false`, which
+restores the entity's original checksum. Marking a _premise-bound_ variable is
+reported as `P-6` by `validate('presentable')` — its truth is derived from
+another premise rather than asserted, so there is nothing for a speaker to have
+suppressed.
+
+Origin data lives on `PropositCore` as `core.origins` and is stored by the CLI
+in `$PROPOSIT_HOME/origins.json`.
 
 ### Version-scoped commands
 

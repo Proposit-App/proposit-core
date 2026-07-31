@@ -7,6 +7,12 @@ import type {
     TCoreVariableForkRecord,
     TCoreClaimForkRecord,
 } from "../../schemata/fork.js"
+import type {
+    TCoreOriginDocument,
+    TCoreOriginLink,
+    TCoreOriginAnchor,
+    TOriginAnchorTargetType,
+} from "../../schemata/origin.js"
 import type { TInvariantValidationResult } from "../../types/validation.js"
 import type {
     TCoreArgument,
@@ -245,6 +251,89 @@ export type TClaimConnectionLibrarySnapshot<
 }
 
 /**
+ * Read-only view of an origin library — the source texts an argument was
+ * built from, their association with argument versions, and the spans of
+ * those texts individual argument parts derive from.
+ */
+export interface TOriginLookup<
+    TDocument extends TCoreOriginDocument = TCoreOriginDocument,
+    TLink extends TCoreOriginLink = TCoreOriginLink,
+    TAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
+> {
+    /** Returns the document with the given ID, or `undefined`. */
+    getDocument(id: string): TDocument | undefined
+    /** Returns the link with the given ID, or `undefined`. */
+    getLink(id: string): TLink | undefined
+    /** Returns the anchor with the given ID, or `undefined`. */
+    getAnchor(id: string): TAnchor | undefined
+    /** Returns every link attached to the given argument version. */
+    getLinksForArgument(argumentId: string, argumentVersion: number): TLink[]
+    /** Returns every anchor recorded against the given argument version. */
+    getAnchorsForArgument(
+        argumentId: string,
+        argumentVersion: number
+    ): TAnchor[]
+    /**
+     * Returns every anchor pointing at one target — a claim expression, a
+     * premise, or the argument itself.
+     */
+    getAnchorsForTarget(
+        targetType: TOriginAnchorTargetType,
+        targetId: string
+    ): TAnchor[]
+}
+
+/**
+ * Full management surface of an origin library: the read-only lookup plus
+ * creation, removal, snapshotting, and validation.
+ */
+export interface TOriginLibraryManagement<
+    TDocument extends TCoreOriginDocument = TCoreOriginDocument,
+    TLink extends TCoreOriginLink = TCoreOriginLink,
+    TAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
+> extends TOriginLookup<TDocument, TLink, TAnchor> {
+    /**
+     * Creates a document. The supplied text is normalized and its SHA-256
+     * digest computed by the library; neither is a caller input.
+     */
+    addDocument(document: Omit<TDocument, "checksum" | "digest">): TDocument
+    /** Attaches a document to one argument version with a stance. */
+    addLink(link: Omit<TLink, "checksum">): TLink
+    /** Records the span of a document that one argument part derives from. */
+    addAnchor(anchor: Omit<TAnchor, "checksum">): TAnchor
+    /** Removes a document. Refuses while any link or anchor still references it. */
+    removeDocument(id: string): TDocument
+    /** Removes a link. */
+    removeLink(id: string): TLink
+    /** Removes an anchor. */
+    removeAnchor(id: string): TAnchor
+    /** Every document in the library. */
+    getAllDocuments(): TDocument[]
+    /** Every link in the library. */
+    getAllLinks(): TLink[]
+    /** Every anchor in the library. */
+    getAllAnchors(): TAnchor[]
+    /** Serializable snapshot of the whole library. */
+    snapshot(): TOriginLibrarySnapshot<TDocument, TLink, TAnchor>
+    /** Checks every entity against the schema and the library's invariants. */
+    validate(): TInvariantValidationResult
+}
+
+/** Serializable snapshot of an `OriginLibrary`. */
+export type TOriginLibrarySnapshot<
+    TDocument extends TCoreOriginDocument = TCoreOriginDocument,
+    TLink extends TCoreOriginLink = TCoreOriginLink,
+    TAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
+> = {
+    /** All origin documents in the library. */
+    documents: TDocument[]
+    /** All argument-version-to-document links. */
+    links: TLink[]
+    /** All origin anchors. */
+    anchors: TAnchor[]
+}
+
+/**
  * Serializable snapshot of a `ClaimLibrary`. Contains all claim entities
  * across all IDs and versions.
  */
@@ -308,6 +397,9 @@ export type TPropositCoreSnapshot<
     TExprFork extends TCoreExpressionForkRecord = TCoreExpressionForkRecord,
     TVarFork extends TCoreVariableForkRecord = TCoreVariableForkRecord,
     TClaimFork extends TCoreClaimForkRecord = TCoreClaimForkRecord,
+    TOriginDocument extends TCoreOriginDocument = TCoreOriginDocument,
+    TOriginLink extends TCoreOriginLink = TCoreOriginLink,
+    TOriginAnchor extends TCoreOriginAnchor = TCoreOriginAnchor,
 > = {
     /** Snapshot of all argument engines. */
     arguments: TArgumentLibrarySnapshot<TArg, TPremise, TExpr, TVar>
@@ -324,6 +416,18 @@ export type TPropositCoreSnapshot<
         TExprFork,
         TVarFork,
         TClaimFork
+    >
+    /**
+     * Snapshot of the origin library. Optional on input only: a snapshot
+     * written before origin data existed carries no such slot, and absence is
+     * unambiguously "no origin data" — unlike the axiom slot, no earlier field
+     * ever held it. `PropositCore.fromSnapshot` defaults it to an empty
+     * library rather than refusing the payload.
+     */
+    origins?: TOriginLibrarySnapshot<
+        TOriginDocument,
+        TOriginLink,
+        TOriginAnchor
     >
 }
 

@@ -17,7 +17,11 @@ import {
     POSITION_MAX,
     type TCorePositionConfig,
 } from "../utils/position.js"
-import { sortedCopyById, sortedUnique } from "../utils/collections.js"
+import {
+    sortedCopyById,
+    sortedUnique,
+    withoutUndefinedValues,
+} from "../utils/collections.js"
 import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import type {
     TCoreExpressionAssignment,
@@ -1214,7 +1218,18 @@ export class PremiseEngine<
     patchAndMarkExpression(expressionId: string, fields: Partial<TExpr>): void {
         const expr = this.expressions.getExpression(expressionId)
         if (expr) {
-            Object.assign(expr, fields)
+            // An `undefined` value deletes the key rather than assigning it.
+            // `Object.assign` would leave the key present holding `undefined`,
+            // which is checksum-safe and JSON-safe on its own but makes
+            // `"field" in entity` true — and any downstream mapper that turns
+            // `undefined` into `null` then flips a field from absent to
+            // present, changing the entity's checksum. Clearing a field has to
+            // restore the shape it had before it was set.
+            const target = expr as Record<string, unknown>
+            for (const [key, value] of Object.entries(fields)) {
+                if (value === undefined) delete target[key]
+                else target[key] = value
+            }
         }
         this.expressions.markExpressionDirty(expressionId)
         this.markDirty()
@@ -1260,8 +1275,12 @@ export class PremiseEngine<
                 type,
                 derivedClaimId,
             } = this.premise as Record<string, unknown>
+            // Clearing a field means removing its key, not assigning
+            // `undefined` — see `withoutUndefinedValues`. `updateExtras`
+            // spreads its updates in, so this is the single place that has to
+            // enforce it for every premise-level caller.
             this.premise = {
-                ...extras,
+                ...withoutUndefinedValues(extras),
                 id,
                 argumentId,
                 argumentVersion,

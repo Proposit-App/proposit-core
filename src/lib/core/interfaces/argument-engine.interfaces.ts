@@ -449,7 +449,8 @@ export interface TArgumentExpressionQueries<
      * patching (atomic patch-and-mark).
      *
      * @param expressionId - The ID of the expression to patch.
-     * @param fields - Fields to merge into the expression via `Object.assign`.
+     * @param fields - Fields to merge into the expression. A field whose
+     *   value is `undefined` is deleted rather than assigned.
      *   The generic `Partial<TExpr>` ensures type compatibility with the
      *   engine's expression type (which includes app-specific fields when
      *   the engine is instantiated with a consumer-supplied expression type).

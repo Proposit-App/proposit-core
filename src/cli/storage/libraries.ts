@@ -4,6 +4,7 @@ import { ClaimLibrary } from "../../lib/core/claim-library.js"
 import { ClaimCitationLibrary } from "../../lib/core/claim-citation-library.js"
 import { ClaimAxiomLibrary } from "../../lib/core/claim-axiom-library.js"
 import { ForkLibrary } from "../../lib/core/fork-library.js"
+import { OriginLibrary } from "../../lib/core/origin-library.js"
 import type { TClaimLookup } from "../../lib/core/interfaces/library.interfaces.js"
 import { getStateDir } from "../config.js"
 
@@ -57,6 +58,30 @@ export async function readAxiomLibrary(
     } catch {
         return new ClaimAxiomLibrary(claimLookup)
     }
+}
+
+export function originsPath(): string {
+    return path.join(getStateDir(), "origins.json")
+}
+
+export async function readOriginLibrary(): Promise<OriginLibrary> {
+    try {
+        const content = await fs.readFile(originsPath(), "utf-8")
+        const snapshot = JSON.parse(content) as ReturnType<
+            OriginLibrary["snapshot"]
+        >
+        return OriginLibrary.fromSnapshot(snapshot)
+    } catch {
+        return new OriginLibrary()
+    }
+}
+
+export async function writeOriginLibrary(
+    library: OriginLibrary
+): Promise<void> {
+    const filePath = originsPath()
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, JSON.stringify(library.snapshot(), null, 2))
 }
 
 export async function writeClaimLibrary(library: ClaimLibrary): Promise<void> {

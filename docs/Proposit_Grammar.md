@@ -597,6 +597,30 @@ unabsorbed state.
 - **Valid:** `AND(formula(OR(b, c)), d)` — different operator types; no absorption.
 - **Validator:** `validateP5`.
 
+#### P-6 — Enthymeme marks a claim-bound variable
+
+An expression carrying `enthymeme: true` — the author's declaration that
+this content goes unspoken in the natural-language original — is a
+variable expression, and its variable is **claim-bound**.
+
+Neither half is expressible in the schema. The TypeScript types confine
+the annotation to variable expressions and premises, but the entity
+schemas stay open for app-level fields, so a mark on an operator or
+formula expression is reachable at runtime and shifts that expression's
+checksum with nothing else reporting it. And claim-boundness is a
+property of the variable an expression points at rather than of the
+expression itself. Marking a premise-bound variable is meaningless in the
+same way an operator is: its truth is derived from another premise's
+evaluation rather than asserted, so there is no natural-language
+statement a speaker could have left out.
+
+An expression whose `variableId` resolves to nothing is not reported
+here — a dangling reference is a Structural concern.
+
+- **Invalid:** a variable expression with `enthymeme: true` whose variable is premise-bound; an operator or formula expression with `enthymeme: true`.
+- **Valid:** the mark on a claim-bound variable expression; a premise marked `enthymeme: true`; any expression with the field absent.
+- **Validator:** `validateP6`.
+
 ## 4. Engine behavior and auto-normalization
 
 ### 4.1 `behavior: 'assistive' | 'permissive'`
@@ -822,7 +846,7 @@ and mobile:
 S-1  S-2  S-3  S-4  S-5  S-6  S-7  S-8  S-9  S-10  S-11  S-12  S-13  S-14
 E-1            E-3  E-4  E-5  E-6  E-7
 D-1  D-2  D-3  D-4  D-5  D-6
-P-1  P-2  P-3  P-4  P-5
+P-1  P-2  P-3  P-4  P-5  P-6
 ```
 
 Codes `E-2` and `D-7` are intentionally absent — those rules were

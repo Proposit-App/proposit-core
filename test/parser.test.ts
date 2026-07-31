@@ -237,3 +237,64 @@ describe("ArgumentParser — derivation-backing citation/axiom edges", () => {
         )
     })
 })
+
+describe("ArgumentParser — a mapping hook returning undefined", () => {
+    // The map* hooks are the documented extension point, and returning
+    // `{ field: undefined }` for something a hook could not populate is
+    // ordinary JavaScript. Spreading that straight into a fresh entity creates
+    // the key holding `undefined`: the checksum is unaffected, because
+    // canonical serialization drops it, but `"field" in entity` is true and any
+    // downstream mapper that coerces `undefined` to `null` flips it to present
+    // — the same failure the engine-level extras paths had.
+    class UndefinedMappingParser extends ArgumentParser {
+        protected override mapClaim(): Record<string, unknown> {
+            return { title: undefined, source: "hook" }
+        }
+        protected override mapVariable(): Record<string, unknown> {
+            return { label: undefined }
+        }
+        protected override mapClaimCitation(): Record<string, unknown> {
+            return { note: undefined }
+        }
+    }
+
+    const response = buildResponse({
+        claims: [
+            { miniId: "c1", role: "premise", type: "citation" },
+            { miniId: "c2", role: "conclusion", type: "normal" },
+        ],
+        variables: [{ miniId: "v2", symbol: "Concl", claimMiniId: "c2" }],
+        premises: [{ miniId: "p1", formula: "Concl" }],
+        conclusionPremiseMiniId: "p1",
+        derivationBacking: [
+            { derivedClaimMiniId: "c2", supportingClaimMiniIds: ["c1"] },
+        ],
+    })
+
+    it("does not create the key on a claim", () => {
+        const result = new UndefinedMappingParser().build(response)
+        for (const claim of result.claimLibrary.getAll()) {
+            expect("title" in claim).toBe(false)
+            // A defined value from the same hook still lands.
+            expect(claim).toMatchObject({ source: "hook" })
+        }
+    })
+
+    it("does not create the key on a variable", () => {
+        const result = new UndefinedMappingParser().build(response)
+        const variables = result.engine.getVariables()
+        expect(variables.length).toBeGreaterThan(0)
+        for (const variable of variables) {
+            expect("label" in variable).toBe(false)
+        }
+    })
+
+    it("does not create the key on a claim-connection edge", () => {
+        const result = new UndefinedMappingParser().build(response)
+        const edges = result.claimCitationLibrary.getAll()
+        expect(edges.length).toBeGreaterThan(0)
+        for (const edge of edges) {
+            expect("note" in edge).toBe(false)
+        }
+    })
+})

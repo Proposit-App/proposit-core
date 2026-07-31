@@ -8,6 +8,9 @@ export type TInvariantViolationEntityType =
     | "axiom"
     | "fork"
     | "forkRecord"
+    | "originDocument"
+    | "originLink"
+    | "originAnchor"
 
 export type TInvariantViolation = {
     code: string
@@ -95,6 +98,27 @@ export const AXIOM_NOT_FOUND = "AXIOM_NOT_FOUND"
 
 // -- AxiomLibrary legacy codes --
 export const LEGACY_MISSING_AXIOM_SLOT = "LEGACY_MISSING_AXIOM_SLOT"
+
+// -- OriginLibrary codes --
+export const ORIGIN_DOCUMENT_SCHEMA_INVALID = "ORIGIN_DOCUMENT_SCHEMA_INVALID"
+export const ORIGIN_LINK_SCHEMA_INVALID = "ORIGIN_LINK_SCHEMA_INVALID"
+export const ORIGIN_ANCHOR_SCHEMA_INVALID = "ORIGIN_ANCHOR_SCHEMA_INVALID"
+export const ORIGIN_DOCUMENT_DUPLICATE_ID = "ORIGIN_DOCUMENT_DUPLICATE_ID"
+export const ORIGIN_LINK_DUPLICATE_ID = "ORIGIN_LINK_DUPLICATE_ID"
+export const ORIGIN_ANCHOR_DUPLICATE_ID = "ORIGIN_ANCHOR_DUPLICATE_ID"
+export const ORIGIN_DOCUMENT_REF_NOT_FOUND = "ORIGIN_DOCUMENT_REF_NOT_FOUND"
+export const ORIGIN_DOCUMENT_DIGEST_MISMATCH = "ORIGIN_DOCUMENT_DIGEST_MISMATCH"
+export const ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED =
+    "ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED"
+export const ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE = "ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE"
+/** The anchor's span does not slice out its own quote — an anchor at an unverified offset. */
+export const ORIGIN_ANCHOR_QUOTE_MISMATCH = "ORIGIN_ANCHOR_QUOTE_MISMATCH"
+/** The anchor's argument version is not linked to the document it anchors into. */
+export const ORIGIN_ANCHOR_LINK_NOT_FOUND = "ORIGIN_ANCHOR_LINK_NOT_FOUND"
+export const ORIGIN_DOCUMENT_NOT_FOUND = "ORIGIN_DOCUMENT_NOT_FOUND"
+export const ORIGIN_LINK_NOT_FOUND = "ORIGIN_LINK_NOT_FOUND"
+export const ORIGIN_ANCHOR_NOT_FOUND = "ORIGIN_ANCHOR_NOT_FOUND"
+export const ORIGIN_DOCUMENT_IN_USE = "ORIGIN_DOCUMENT_IN_USE"
 
 // -- Derivation premise errors --
 // `DERIVATION_TYPE_MISMATCH`, `DERIVATION_CONSEQUENT_LOCKED`,

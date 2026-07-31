@@ -6,10 +6,12 @@
 // P-4 no single-child binary operator (largely redundant with E-1, kept
 //     for clarity in the rule inventory)
 // P-5 no operator-of-same-type adjacency through a formula
+// P-6 enthymeme marks a claim-bound variable
 
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
 import type { TCorePropositionalExpression } from "../../schemata/index.js"
+import { isPremiseBound } from "../../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "../bounded-subtree.js"
 
 type TChildMap = Map<string, TCorePropositionalExpression[]>
@@ -225,6 +227,58 @@ function singleOperatorInsideFormula(
     return inner.operator
 }
 
+/**
+ * P-6 — An enthymeme marks a claim-bound variable. An expression carrying
+ * `enthymeme: true` is a variable expression, and its variable is claim-bound.
+ *
+ * The TypeScript types confine the annotation to variable expressions and
+ * premises, but the entity schemas stay open for app-level fields, so a mark
+ * on an operator or formula expression is reachable through the library API
+ * and shifts that expression's checksum. Both halves are reported here because
+ * neither is expressible in the schema: an operator has no assertion to
+ * suppress, and claim-boundness is a property of the variable an expression
+ * points at rather than of the expression itself. Marking a premise-bound
+ * variable is meaningless in the same way — its truth is derived from another
+ * premise's evaluation, so there is no natural-language assertion a speaker
+ * could have left out.
+ *
+ * An expression whose variable cannot be resolved is not reported here; the
+ * dangling reference is a Structural concern.
+ */
+export function validateP6(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const variablesById = new Map(ctx.variables.map((v) => [v.id, v]))
+    for (const e of ctx.expressions) {
+        // The field is declared only on the variable member of the union, so
+        // reading it off an operator or formula needs a widened view.
+        if ((e as { enthymeme?: unknown }).enthymeme !== true) continue
+        if (e.type !== "variable") {
+            violations.push({
+                tier: "presentable",
+                code: "P-6",
+                message: `${e.type} expression ${e.id} is marked unspoken; only a claim-bound variable expression can be`,
+                argumentId: ctx.argument.id,
+                premiseId: e.premiseId,
+                expressionId: e.id,
+            })
+            continue
+        }
+        const variable = variablesById.get(e.variableId)
+        if (variable === undefined) continue
+        if (!isPremiseBound(variable)) continue
+        violations.push({
+            tier: "presentable",
+            code: "P-6",
+            message: `expression ${e.id} is marked unspoken but its variable ${variable.id} (${variable.symbol}) is premise-bound, not claim-bound`,
+            argumentId: ctx.argument.id,
+            premiseId: e.premiseId,
+            expressionId: e.id,
+            variableId: variable.id,
+        })
+    }
+    return violations
+}
+
 export function validatePresentable(
     ctx: TValidatorContext
 ): readonly TViolation[] {
@@ -234,5 +288,6 @@ export function validatePresentable(
         ...validateP3(ctx),
         ...validateP4(ctx),
         ...validateP5(ctx),
+        ...validateP6(ctx),
     ]
 }

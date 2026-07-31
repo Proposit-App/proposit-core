@@ -569,6 +569,141 @@ $CLI axioms list
 
 echo "Axiomatic smoke OK"
 
+# ─────────────────────────────
+# 9o. ORIGIN DATA — source texts, links, anchors, and unspoken marks
+# ─────────────────────────────
+section "9o. origins — attach / list / show"
+
+SOURCE_FILE="$PROPOSIT_HOME/source.txt"
+# Written with a byte-order mark, CRLF endings, and a trailing blank line, so
+# the stored text proves the normalizer ran on the way in.
+printf '\xef\xbb\xbfIf it rains the streets are wet.\r\nIf the streets are wet they are slippery.\r\n\r\n' > "$SOURCE_FILE"
+
+DOC=$($CLI origins attach "$SOURCE_FILE" --argument "$ARG" --version 0 --stance seed)
+echo "DOC=$DOC"
+
+$CLI origins list
+$CLI origins list --json
+$CLI origins show "$DOC"
+$CLI origins show "$DOC" --json
+$CLI origins show "$DOC" --text
+
+# 74 code points is the normalized length: BOM stripped, both CRLFs folded to
+# LF, trailing blank line trimmed. Every anchor offset indexes into this exact
+# string, so the count is the thing worth asserting.
+ORIGIN_LEN=$($CLI origins show "$DOC" --json | node -e "const d=JSON.parse(require('node:fs').readFileSync(0,'utf-8'));process.stdout.write(String([...d.document.text].length))")
+if [ "$ORIGIN_LEN" != "74" ]; then
+    echo "FAIL: normalized origin text is $ORIGIN_LEN code points, expected 74"
+    exit 1
+fi
+
+section "9o. origins — anchor add / remove"
+
+# "If it rains" occupies code points [0, 12) of the normalized text.
+ANCHOR=$($CLI origins anchor add --document "$DOC" --argument "$ARG" \
+    --version 0 --target premise --target-id "$P1" --start 0 --end 12)
+echo "ANCHOR=$ANCHOR"
+$CLI origins show "$DOC"
+
+# A span running past the end of the document must be refused rather than
+# stored at an offset nothing can verify.
+if $CLI origins anchor add --document "$DOC" --argument "$ARG" \
+    --version 0 --target premise --target-id "$P1" --start 0 --end 99999 \
+    2>/tmp/proposit-origin-err1; then
+    echo "FAIL: out-of-range anchor should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err1
+rm -f /tmp/proposit-origin-err1
+
+# An unknown stance must be refused.
+if $CLI origins attach "$SOURCE_FILE" --argument "$ARG" --version 0 \
+    --stance verbatim 2>/tmp/proposit-origin-err2; then
+    echo "FAIL: unknown stance should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err2
+rm -f /tmp/proposit-origin-err2
+
+# An unknown document must be refused.
+if $CLI origins show "00000000-0000-4000-8000-000000000000" \
+    2>/tmp/proposit-origin-err3; then
+    echo "FAIL: unknown origin document should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err3
+rm -f /tmp/proposit-origin-err3
+
+$CLI origins anchor remove "$ANCHOR"
+$CLI origins show "$DOC"
+
+section "9o. enthymeme marks"
+
+# Mark a premise unspoken, then unmark it.
+$CLI "$ARG" latest premises update "$P1" --enthymeme
+$CLI "$ARG" latest premises show "$P1" --json
+$CLI "$ARG" latest premises update "$P1" --no-enthymeme
+
+# Mark a claim-bound variable expression unspoken, then unmark it.
+MARK_EXPR=$($CLI "$ARG" latest expressions list "$P1" --json \
+    | node -e "const d=JSON.parse(require('node:fs').readFileSync(0,'utf-8'));const list=Array.isArray(d)?d:(d.expressions??[]);const e=list.find(x=>x.type==='variable');process.stdout.write(e?e.id:'')")
+if [ -z "$MARK_EXPR" ]; then
+    echo "FAIL: no variable expression found to mark"
+    exit 1
+fi
+$CLI "$ARG" latest expressions mark "$P1" "$MARK_EXPR" --enthymeme
+$CLI "$ARG" latest expressions show "$P1" "$MARK_EXPR"
+$CLI "$ARG" latest expressions mark "$P1" "$MARK_EXPR" --no-enthymeme
+
+# Marking a non-variable expression must be refused.
+if $CLI "$ARG" latest expressions mark "$P1" "00000000-0000-4000-8000-000000000000" \
+    2>/tmp/proposit-origin-err4; then
+    echo "FAIL: marking an unknown expression should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err4
+rm -f /tmp/proposit-origin-err4
+
+section "9o. origins — link / unlink / remove"
+
+# A second argument can reuse the same stored text instead of pasting it in
+# again — the digest already proves the two are the same source.
+ORIGIN_ARG=$($CLI arguments create "Origin Reuse" "Second argument sharing one source text")
+LINK2=$($CLI origins link "$DOC" --argument "$ORIGIN_ARG" --version 0 --stance representation)
+echo "LINK2=$LINK2"
+$CLI origins show "$DOC"
+
+$CLI origins unlink "$LINK2"
+$CLI origins show "$DOC"
+$CLI arguments delete "$ORIGIN_ARG" --all --confirm
+
+# A typo in --argument must be refused rather than persisted as a dangling link.
+if $CLI origins attach "$SOURCE_FILE" --argument "not-an-argument" --version 0 \
+    2>/tmp/proposit-origin-err5; then
+    echo "FAIL: attach to an unknown argument should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err5
+rm -f /tmp/proposit-origin-err5
+
+if $CLI origins link "$DOC" --argument "$ARG" --version 999 \
+    2>/tmp/proposit-origin-err6; then
+    echo "FAIL: link to an unknown argument version should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err6
+rm -f /tmp/proposit-origin-err6
+
+# A document still carrying a link cannot be removed.
+if $CLI origins remove "$DOC" 2>/tmp/proposit-origin-err7; then
+    echo "FAIL: removing a referenced document should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err7
+rm -f /tmp/proposit-origin-err7
+
+echo "Origin data smoke OK"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 9p. DERIVATION PREMISES (v0.11.0)
 # ─────────────────────────────────────────────────────────────────────────────

@@ -230,9 +230,15 @@ Returns the root expression from each premise that has one.
 Patches application-specific fields onto an expression across all premises,
 then marks the expression and its ancestors dirty so the next checksum flush
 recomputes from the patched values. Resolves the owning premise internally,
-applies the patch in place via `Object.assign`, and marks the expression dirty
-— callers cannot patch without marking (stale checksum) or mark without
-patching (no-op). Throws if `expressionId` is unknown.
+applies the patch in place, and marks the expression dirty — callers cannot
+patch without marking (stale checksum) or mark without patching (no-op). Throws
+if `expressionId` is unknown.
+
+A field whose value is `undefined` is **deleted** rather than assigned, so
+clearing one restores the shape and the checksum the entity had before it was
+set. The same rule holds everywhere caller-supplied fields are spread into an
+entity: `setExtras` on both `ArgumentEngine` and `PremiseEngine` (and therefore
+both `updateExtras`), and the `ArgumentParser` `map*` hooks.
 
 The `fields` parameter is typed as `Partial<TExpr>`, generic over the engine's
 expression type parameter (which consumers extend with app-level fields like
@@ -367,6 +373,10 @@ Returns the argument's extra metadata (all fields except `id`, `version`, and ch
 
 Replaces all extra metadata on the argument. Structural fields (`id`, `version`, checksums) are preserved and cannot be overwritten. Returns the new extras and a changeset with the updated argument in `changes.argument`.
 
+A key whose value is `undefined` is **dropped**, not stored. Clearing a field
+therefore restores the exact shape — and the exact checksum — the entity had
+before it was set, which is what `updateExtras({ field: undefined })` relies on.
+
 ---
 
 ### `updateExtras(updates)` → `TCoreMutationResult<Record<string, unknown>>`
@@ -427,19 +437,22 @@ Returns whether this argument may be forked. Default implementation returns `tru
 
 ## `PropositCore`
 
-Top-level orchestrator that owns all five libraries and provides unified snapshot/restore, validation, and cross-library operations. Recommended entry point for new applications.
+Top-level orchestrator that owns all six libraries and provides unified snapshot/restore, validation, and cross-library operations. Recommended entry point for new applications.
 
 ### `new PropositCore(options?)`
 
-Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → citations → axioms → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `behavior`).
+Creates a new `PropositCore` instance. All libraries are constructed automatically in dependency order (claims → citations → axioms → origins → forks → arguments). Pass a `TPropositCoreOptions` object to inject pre-constructed library instances or shared configuration (`checksumConfig`, `positionConfig`, `behavior`).
 
-Public library fields (v0.12.0 — all single-word nouns):
+Public library fields (all single-word nouns):
 
 - `core.claims` — `ClaimLibrary`
 - `core.citations` — `ClaimCitationLibrary` (renamed from `claimCitations` in v0.12.0)
 - `core.axioms` — `ClaimAxiomLibrary` (new in v0.12.0)
+- `core.origins` — `OriginLibrary`
 - `core.forks` — `ForkLibrary`
 - `core.arguments` — `ArgumentLibrary`
+
+The three origin type parameters (`TOriginDocument`, `TOriginLink`, `TOriginAnchor`) are appended at the **end** of the `PropositCore` and `TPropositCoreOptions` parameter lists rather than inserted beside the other libraries, so existing code that spells out all twelve arguments keeps its bindings.
 
 As of v0.10.0 the previously separate `sources` and `claimSources` libraries are gone — sources are now claims with `type: 'citation'` and the citation graph lives in `core.citations`. As of v0.12.0 `core.axioms` holds an analogous graph for axiomatic claims (see `ClaimAxiomLibrary` below).
 
@@ -484,7 +497,7 @@ Each modified entity carries a `state` field discriminating `"modified-own"` (th
 
 ### `snapshot()` → `TPropositCoreSnapshot`
 
-Returns a serializable snapshot of the entire system state (all five libraries: `claims`, `citations`, `axioms`, `forks`, `arguments`). The snapshot slot for citations renamed from `claimCitations` to `citations` in v0.12.0; the new `axioms` slot was added in the same version.
+Returns a serializable snapshot of the entire system state (all six libraries: `claims`, `citations`, `axioms`, `origins`, `forks`, `arguments`). The snapshot slot for citations renamed from `claimCitations` to `citations` in v0.12.0; the `axioms` slot was added in the same version.
 
 ---
 
@@ -492,11 +505,13 @@ Returns a serializable snapshot of the entire system state (all five libraries: 
 
 Restores a `PropositCore` from a snapshot. Libraries are restored in dependency order. Performs unknown-typed pre-checks before any typed coercion: throws `LEGACY_MISSING_AXIOM_SLOT` when the `axioms` slot is absent, and throws `LEGACY_CLAIM_CITATION_SHAPE` when the snapshot still uses the legacy `claimCitations` wrapper key. Both signal that the v0.12 CLI migration must run before non-CLI consumers can load the snapshot.
 
+The `origins` slot is deliberately **not** guarded that way: a snapshot lacking it is restored with an empty `OriginLibrary`. Absence is unambiguous — no earlier field ever held origin data, so nothing could have been dropped — and refusing would break consumers that adopt this release before persisting origin data of their own.
+
 ---
 
 ### `validate()` → `TInvariantValidationResult`
 
-Runs invariant validation across all five libraries and merges the results.
+Runs invariant validation across all six libraries and merges the results.
 
 ---
 
@@ -828,6 +843,150 @@ Reconstructs a `ClaimAxiomLibrary` from a previously captured snapshot. Does not
 
 ---
 
+## `OriginLibrary<TDocument, TLink, TAnchor>`
+
+Holds the source texts arguments were built from, their per-argument-version links, and the spans individual argument parts derive from. Implements `TOriginLibraryManagement`, which extends the narrow read-only `TOriginLookup`. Lives on `PropositCore` as `core.origins`.
+
+The document text is **opaque content**: the library stores, normalizes, digests, measures, and index-slices it, and never parses, renders, formats, or interprets it. Documents are immutable — there is no update path, because every anchor is an offset into a document's exact text. Correcting a source means replacing the document, which invalidates its anchors by design.
+
+Like the claim-connection libraries, `OriginLibrary` mints no identifiers — callers supply them. It takes no argument lookup: `ArgumentLibrary` is constructed after it, so cross-checking argument existence would invert the dependency order. Anchor and link targets are therefore not verified against a real argument; everything decidable from the library's own contents is.
+
+### `new OriginLibrary(options?)`
+
+Creates an empty origin library. `options.checksumConfig` supplies the `originDocumentFields` / `originLinkFields` / `originAnchorFields` sets used for entity checksums; each falls back to `DEFAULT_CHECKSUM_CONFIG`.
+
+---
+
+### `addDocument(document)` → `TDocument`
+
+Stores a source text. Takes the entity without `checksum` or `digest`: the library applies `normalizeOriginText` to `document.text` and computes the SHA-256 `digest` of the result itself, so every document in the library shares one coordinate system and one identity rule. Throws `ORIGIN_DOCUMENT_DUPLICATE_ID` on a repeated id.
+
+The document's entity checksum covers its `digest` rather than its `text` — the digest already identifies the content, and hashing it costs a pass over 64 characters instead of the whole body. Attributing a document (an IEEE reference on the open `additionalProperties` slot) therefore leaves its checksum unchanged.
+
+---
+
+### `addLink(link)` → `TLink`
+
+Attaches a document to one argument version with a `stance` of `'representation'` or `'seed'`. Throws `ORIGIN_DOCUMENT_REF_NOT_FOUND` when the document does not resolve, and `ORIGIN_LINK_DUPLICATE_ID` on a repeated id.
+
+Removing a link that still has anchors throws `ORIGIN_ANCHOR_LINK_NOT_FOUND` — see `addAnchor`.
+
+---
+
+### `addAnchor(anchor)` → `TAnchor`
+
+Records the span of a document one argument part derives from. `targetType` is `'expression' | 'premise' | 'argument'` — a global claim is excluded, because a claim is shared by reference across arguments and its provenance is a property of _this_ argument's use of it.
+
+Positions are counted in Unicode code points. The library rejects an anchor whose `[startCodePoint, endCodePoint)` slice of the document does **not** equal its own `exact` quote (`ORIGIN_ANCHOR_QUOTE_MISMATCH`), and one whose span leaves the document (`ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE`). A mis-measured anchor therefore fails at creation rather than highlighting the wrong passage.
+
+An anchor also requires a link: its `(argumentId, argumentVersion, documentId)` must already have one, or it is rejected with `ORIGIN_ANCHOR_LINK_NOT_FOUND`. The link carries the stance, and the stance is what decides whether unanchored content means anything, so an anchor without one is provenance no consumer can interpret. The same check makes removing a link that still has anchors a violation.
+
+**Origin entities never enter a `TCoreChangeset`, so `orderChangeset` gives a persistence layer no FK ordering for them.** Write them in dependency order by hand: documents, then links, then anchors — and delete in reverse.
+
+---
+
+### `removeDocument(id)` → `TDocument` · `removeLink(id)` → `TLink` · `removeAnchor(id)` → `TAnchor`
+
+Remove an entity, returning it. `removeDocument` throws `ORIGIN_DOCUMENT_IN_USE` while any link or anchor still references the document.
+
+Every mutator runs under a validating wrapper: a rejected call restores the library to its pre-call state and throws `InvariantViolationError`.
+
+---
+
+### `getDocument(id)` · `getLink(id)` · `getAnchor(id)` → entity `| undefined`
+
+### `getLinksForArgument(argumentId, argumentVersion)` → `TLink[]`
+
+### `getAnchorsForArgument(argumentId, argumentVersion)` → `TAnchor[]`
+
+### `getAnchorsForTarget(targetType, targetId)` → `TAnchor[]`
+
+### `getAllDocuments()` · `getAllLinks()` · `getAllAnchors()` → entity arrays
+
+---
+
+### `validate()` → `TInvariantValidationResult`
+
+Checks every entity against its schema, then: that each document's stored text is in normalized form (`ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED`) and matches its digest (`ORIGIN_DOCUMENT_DIGEST_MISMATCH`); that every link and anchor resolves to a document; that every anchor's span lies inside its document and slices out its own quote. One code-point index is built per document and reused across that document's anchors.
+
+---
+
+### `snapshot()` → `TOriginLibrarySnapshot`
+
+Returns `{ documents, links, anchors }`.
+
+---
+
+### `static fromSnapshot(snapshot, options?)` → `OriginLibrary`
+
+Reconstructs the library and rebuilds its indexes. Does not re-validate; call `validate()` afterwards to detect a tampered snapshot.
+
+---
+
+## Origin text utilities
+
+Exported from the package root and used by `OriginLibrary`; an application can call them directly.
+
+### `normalizeOriginText(text)` → `string`
+
+Normalizes a source text for **encoding**, never for content.
+
+**Does:** folds every line-break form (CRLF, lone CR, NEL, U+2028, U+2029) to LF; strips the byte-order mark, control characters other than LF and tab, bidirectional controls, zero-width characters, tag characters, and stray variation selectors; composes to Unicode NFC; trims leading and trailing whitespace.
+
+**Preserves:** emoji ZWJ sequences, keycap sequences, variation selectors after a pictograph, emoji component, or CJK ideograph, Mongolian free variation selectors after Mongolian script, and emoji tag sequences.
+
+**Does not:** collapse internal whitespace, reflow paragraphs, fold smart quotes or dashes, case-fold, or strip punctuation, diacritics, emoji, or non-ASCII characters.
+
+Idempotent, which is what makes it safe to apply both at an application's import boundary and again on document creation. The step order is load-bearing — line breaks fold before stripping (a lone CR is itself a control character), and stripping precedes NFC (removing an invisible character can leave a base letter next to a combining mark, which composing first would leave for a second pass).
+
+> Every stored anchor is an offset into text this function produced. **Treat any later change to it as a data migration, not a bug fix.**
+
+---
+
+### `sliceByCodePoints(text, startCodePoint, endCodePoint)` → `string`
+
+Slices by **code-point** offsets, the unit anchor positions are recorded in. `String.prototype.slice` on the same offsets is wrong for any text containing an astral-plane character — and right for every ASCII test, which is why the fields are named `startCodePoint` / `endCodePoint` and why this helper exists. Offsets are clamped rather than rejected; range checking against a document belongs to `OriginLibrary.validate()`.
+
+---
+
+### `codePointLength(text)` → `number`
+
+The number of Unicode code points in a string — not its UTF-16 `length`.
+
+---
+
+### `buildCodePointIndex(text)` → `TCodePointIndex` · `sliceByCodePointsIndexed(index, start, end)` → `string`
+
+Build the index once per document and reuse it across that document's anchors; `sliceByCodePoints` scans the whole string on every call.
+
+---
+
+### `sha256Hex(text)` → `string`
+
+SHA-256 of a string's UTF-8 encoding, as 64 lowercase hex characters. Synchronous and runtime-agnostic — a hand-written implementation rather than `crypto.subtle.digest` (asynchronous, and absent from a bare React Native runtime) or `node:crypto`. The algorithm is standard, so a consumer digesting the same bytes with Web Crypto gets the same string.
+
+Used for content identity only, never for authentication. The 32-bit FNV-1a `computeHash` remains the hash behind sync-detection checksums.
+
+---
+
+## The `enthymeme` annotation
+
+An optional, `true`-only field on `CorePropositionalVariableExpressionSchema` and on both `CorePremiseSchema` variants: the author's declaration that this content goes unspoken in the natural-language original. It is deliberately **not** part of the origin library, because it must be expressible on an argument with no source text at all.
+
+Set it through the existing surfaces — `ArgumentEngine.patchExpressionAppFields(expressionId, { enthymeme: true })` for an expression, and the premise extras round-trip for a premise. No new mutator exists, and none is needed.
+
+The schema is `Type.Optional(Type.Literal(true))` — the field is present and `true`, or absent. Both `null` and `false` are rejected: each is a _present_ value, and a present key changes the entity's checksum. `false` is refused explicitly because it is the likelier of the two to arrive by accident, from an unchecked form control or an ORM default.
+
+`"enthymeme"` is included in the default `expressionFields` and `premiseFields` checksum sets. Adding it was backward compatible with **no migration**, because `entityChecksum` includes a field only when the key is present on the entity and `createChecksumConfig` unions additional fields onto the defaults. That guarantee is conditional:
+
+> **An unmarked entity must omit the key entirely.** Persisting `enthymeme: null` — or `false` — makes the key present, changes the checksum of every premise and expression in existence, and breaks hierarchical checksums and sync detection. `Type.Optional(Type.Literal(true))` is what refuses both at the schema boundary, and unmarking must delete the field rather than set it to `false`.
+
+`validate('presentable')` reports `P-6`, at no lower tier, for either misuse: a mark on a **premise-bound** variable expression, whose truth is derived from another premise's evaluation rather than asserted; and a mark on an **operator or formula** expression, which the TypeScript types forbid but the open entity schemas admit at runtime. Per the standing rule that only Structural violations throw, neither throws at mutation time.
+
+Clearing the mark **deletes** the key rather than setting it to `undefined`, so the entity returns to the exact shape — and the exact checksum — it had before it was marked. Both routes do this: `patchExpressionAppFields(id, { enthymeme: undefined })` for an expression, and `updateExtras({ enthymeme: undefined })` for a premise. It applies to any field cleared this way, not only this one.
+
+---
+
 ## Generic claim-connection interfaces
 
 _Since v0.12.0._
@@ -1091,6 +1250,10 @@ Returns a serialisable premise object (`{ id, argumentId, argumentVersion, check
 ### `setExtras(extras)` → `TCoreMutationResult<Record<string, unknown>>`
 
 Replaces all extra metadata on the premise. Structural fields (`id`, `argumentId`, `argumentVersion`, checksums) are preserved and cannot be overwritten. Returns the new extras and a changeset with the modified premise in `changes.premises.modified`.
+
+A key whose value is `undefined` is **dropped**, not stored. Clearing a field
+therefore restores the exact shape — and the exact checksum — the entity had
+before it was set, which is what `updateExtras({ field: undefined })` relies on.
 
 ---
 

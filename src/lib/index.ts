@@ -21,6 +21,7 @@ export { VersionedLibrary } from "./core/versioned-library.js"
 export type { TVersionedEntity } from "./core/versioned-library.js"
 export { ClaimCitationLibrary } from "./core/claim-citation-library.js"
 export { ClaimAxiomLibrary } from "./core/claim-axiom-library.js"
+export { OriginLibrary } from "./core/origin-library.js"
 export { ArgumentLibrary } from "./core/argument-library.js"
 export type { TArgumentLibraryLibraries } from "./core/argument-library.js"
 export { ForkNamespace } from "./core/fork-namespace.js"
@@ -57,6 +58,15 @@ export {
     canonicalSerialize,
     entityChecksum,
 } from "./core/checksum.js"
+export { sha256Hex } from "./utils/sha256.js"
+export {
+    normalizeOriginText,
+    codePointLength,
+    sliceByCodePoints,
+    buildCodePointIndex,
+    sliceByCodePointsIndexed,
+} from "./utils/origin-text.js"
+export type { TCodePointIndex } from "./utils/origin-text.js"
 export {
     diffArguments,
     defaultCompareArgument,

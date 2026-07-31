@@ -62,12 +62,13 @@ export const GrammarRuleCodeSchema = Type.Union([
     Type.Literal("D-4"),
     Type.Literal("D-5"),
     Type.Literal("D-6"),
-    // Presentable (P-1..P-5)
+    // Presentable (P-1..P-6)
     Type.Literal("P-1"),
     Type.Literal("P-2"),
     Type.Literal("P-3"),
     Type.Literal("P-4"),
     Type.Literal("P-5"),
+    Type.Literal("P-6"),
 ])
 
 export type TGrammarRuleCode = Static<typeof GrammarRuleCodeSchema>
