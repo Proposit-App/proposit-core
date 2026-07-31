@@ -6,10 +6,12 @@
 // P-4 no single-child binary operator (largely redundant with E-1, kept
 //     for clarity in the rule inventory)
 // P-5 no operator-of-same-type adjacency through a formula
+// P-6 enthymeme marks a claim-bound variable
 
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
 import type { TCorePropositionalExpression } from "../../schemata/index.js"
+import { isPremiseBound } from "../../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "../bounded-subtree.js"
 
 type TChildMap = Map<string, TCorePropositionalExpression[]>
@@ -225,6 +227,42 @@ function singleOperatorInsideFormula(
     return inner.operator
 }
 
+/**
+ * P-6 — An enthymeme marks a claim-bound variable. A variable expression
+ * carrying `enthymeme: true` resolves to a claim-bound variable.
+ *
+ * The schema confines the annotation to variable expressions and premises,
+ * but cannot express claim-boundness: that is a property of the variable the
+ * expression points at, not of the expression itself. Marking a
+ * premise-bound variable unspoken is meaningless — its truth is derived from
+ * another premise's evaluation, so there is no natural-language assertion for
+ * a speaker to have suppressed.
+ *
+ * An expression whose variable cannot be resolved is not reported here; the
+ * dangling reference is a Structural concern.
+ */
+export function validateP6(ctx: TValidatorContext): readonly TViolation[] {
+    const violations: TViolation[] = []
+    const variablesById = new Map(ctx.variables.map((v) => [v.id, v]))
+    for (const e of ctx.expressions) {
+        if (e.type !== "variable") continue
+        if (e.enthymeme !== true) continue
+        const variable = variablesById.get(e.variableId)
+        if (variable === undefined) continue
+        if (!isPremiseBound(variable)) continue
+        violations.push({
+            tier: "presentable",
+            code: "P-6",
+            message: `expression ${e.id} is marked unspoken but its variable ${variable.id} (${variable.symbol}) is premise-bound, not claim-bound`,
+            argumentId: ctx.argument.id,
+            premiseId: e.premiseId,
+            expressionId: e.id,
+            variableId: variable.id,
+        })
+    }
+    return violations
+}
+
 export function validatePresentable(
     ctx: TValidatorContext
 ): readonly TViolation[] {
@@ -234,5 +272,6 @@ export function validatePresentable(
         ...validateP3(ctx),
         ...validateP4(ctx),
         ...validateP5(ctx),
+        ...validateP6(ctx),
     ]
 }
