@@ -236,8 +236,9 @@ if `expressionId` is unknown.
 
 A field whose value is `undefined` is **deleted** rather than assigned, so
 clearing one restores the shape and the checksum the entity had before it was
-set. `PremiseEngine.setExtras` — and therefore `updateExtras` — drops
-`undefined`-valued keys for the same reason.
+set. The same rule holds everywhere caller-supplied fields are spread into an
+entity: `setExtras` on both `ArgumentEngine` and `PremiseEngine` (and therefore
+both `updateExtras`), and the `ArgumentParser` `map*` hooks.
 
 The `fields` parameter is typed as `Partial<TExpr>`, generic over the engine's
 expression type parameter (which consumers extend with app-level fields like
@@ -371,6 +372,10 @@ Returns the argument's extra metadata (all fields except `id`, `version`, and ch
 ### `setExtras(extras)` → `TCoreMutationResult<Record<string, unknown>>`
 
 Replaces all extra metadata on the argument. Structural fields (`id`, `version`, checksums) are preserved and cannot be overwritten. Returns the new extras and a changeset with the updated argument in `changes.argument`.
+
+A key whose value is `undefined` is **dropped**, not stored. Clearing a field
+therefore restores the exact shape — and the exact checksum — the entity had
+before it was set, which is what `updateExtras({ field: undefined })` relies on.
 
 ---
 
@@ -1245,6 +1250,10 @@ Returns a serialisable premise object (`{ id, argumentId, argumentVersion, check
 ### `setExtras(extras)` → `TCoreMutationResult<Record<string, unknown>>`
 
 Replaces all extra metadata on the premise. Structural fields (`id`, `argumentId`, `argumentVersion`, checksums) are preserved and cannot be overwritten. Returns the new extras and a changeset with the modified premise in `changes.premises.modified`.
+
+A key whose value is `undefined` is **dropped**, not stored. Clearing a field
+therefore restores the exact shape — and the exact checksum — the entity had
+before it was set, which is what `updateExtras({ field: undefined })` relies on.
 
 ---
 
