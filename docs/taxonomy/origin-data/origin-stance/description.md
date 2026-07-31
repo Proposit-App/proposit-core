@@ -1,0 +1,1 @@
+What an argument claims about its source text. 'representation' asserts the argument faithfully renders the source, which makes unanchored content meaningful; 'seed' says only that the argument started from the source.

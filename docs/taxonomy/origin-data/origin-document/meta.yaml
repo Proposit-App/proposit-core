@@ -1,0 +1,4 @@
+name: Origin Document
+kind: Vocabulary
+relatesTo:
+    - reference

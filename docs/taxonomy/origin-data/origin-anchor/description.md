@@ -1,0 +1,1 @@
+A span of an origin document that one part of one argument version derives from, identified by both its quoted passage and its code-point positions. Targets a claim expression, a premise, or the argument — never a global claim.

@@ -1,0 +1,1 @@
+An immutable source text an argument was built from, carrying a SHA-256 digest of its normalized content and, optionally, an IEEE reference attributing it to a real source. The text is opaque content: core stores, digests, and slices it, but never interprets it.

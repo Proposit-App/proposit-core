@@ -1,0 +1,1 @@
+An authorial declaration that a claim expression or premise goes unspoken in the natural-language original. Declared, never derived: no code path marks content unspoken without an explicit human action.
