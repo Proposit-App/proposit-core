@@ -26,7 +26,19 @@ and all addressed:
 | `b6deca7` | 4 MEDIUM-LOW — report unresolved and ambiguous quotes          |
 | `c3ced9f` | 5 + 6 LOW — `mapPremise` doc clause, call-count caveat comment |
 
-No golden or recording file was touched during the rework: `git diff` over
+**Rework pass, round 2** — the second review cleared `bd2b2bb` and `b6deca7` as
+hard-verified and left them alone, but found `cb1a772` both regressive and
+incomplete. Five findings, all accepted after reproducing each:
+
+| Commit    | Finding                                                        |
+| --------- | -------------------------------------------------------------- |
+| `d4d8afe` | R2-1 HIGH — a rewritten segment derailing the next              |
+| `f319564` | R2-2 HIGH — mention offsets located, not trusted                |
+| `a03e2c4` | R2-4 MEDIUM-LOW — refuse a range that splits a surrogate pair   |
+| `78c799e` | R2-5 MEDIUM-LOW — report an unusable input once, not per quote  |
+| `25f98ae` | R2-3 MEDIUM — corrected doc claims, corpus note-count test      |
+
+No golden or recording file was touched during either rework round: `git diff` over
 `test/extensions/pipelines/fixtures/` from `b1f4cbc` to `HEAD` is empty. The
 located-offset change (finding 3) moved no anchor in the recorded corpus,
 because its drift there is only −1 per segment and every quote in it is unique
@@ -208,6 +220,68 @@ one note across all five fixtures — the already-known elided quote on
 quotes. The channel starts with signal and no noise, which is the property that
 makes a coverage drop detectable later.
 
+## Round-2 findings, one by one
+
+1. **R2-1 HIGH, stalled cursor — fixed, and it was a real regression.** The
+   not-found branch left `cursor` behind the skipped segment, so the next
+   segment could match a duplicate inside it; the pre-`cb1a772` code got that
+   case right. Two changes rather than the suggested one-liner: the cursor now
+   advances to `segment.span.end` on fallback, **and** the winner among
+   candidates at or after the cursor is the one nearest the model's reported
+   start rather than the first. The second is what makes the first safe — a
+   cursor advanced by a model number that overshoots by one would otherwise make
+   the next segment's scan miss its true position and take a later duplicate,
+   converting one failure mode into another. New test reproduces the reviewer's
+   exact case (12 instead of 53) and pins both the verbatim and paraphrased
+   shapes; the old test only had a trailing segment, which is why it passed.
+2. **R2-2 HIGH, drift lives in the mention term — fixed.** Confirmed by
+   measurement: `with-url-citation` m1's segment is located at 0 and reported as
+   0, so all 14 characters of error are in `mention.span.start`.
+   `nearestOccurrence(segment.text, mention.text, mention.span.start)` yields
+   exactly 74 / 142 / 224 on that fixture. Both halves of the hint are now
+   located, with the model's number as tie-breaker only. Two new tests: a
+   drifted mention span no longer misresolves a repeated mention, and the
+   fallback when the mention is not in its segment. The **"accumulates with
+   document length" claim was unsupported and is corrected everywhere** it
+   appeared — the module comment, `docs/changelogs/upcoming.md`, and
+   `docs/api-reference.md`. Measured drift is a flat 1.
+3. **R2-3 MEDIUM, the corpus emits two notes, not one — corrected.** The claim
+   was measured on the thorough pipeline alone. New
+   `corpus-anchor-notes.test.ts` replays all ten recordings across both
+   pipelines and asserts the exact note list, not just a count, so a new note has
+   to be looked at. **Decision on suppressing notes under the fast pipeline: no.**
+   The note is factually true — the model returned a quote that is not in the
+   input, which is what the channel exists to say — and it is currently the only
+   evidence that the fast pipeline fabricates evidence quotes rather than copying
+   them. Suppressing it would mean teaching a deliberately pipeline-agnostic
+   assembler which pipeline it is under, in order to hide a true signal. The fast
+   pipeline's lack of anchors is already filed separately; when that is fixed
+   these notes become directly actionable.
+4. **R2-4 MEDIUM-LOW, `anchor.quote` — fixed.** `splitsSurrogatePair` discards a
+   candidate range whose start or end falls between the halves of a pair.
+   Discarding the range rather than trimming the quote is what preserves
+   `input.slice(start, end) === quote`. Two new tests: half-pair quotes yield no
+   anchor; a quote on a whole pair still anchors.
+5. **R2-5 MEDIUM-LOW, N notes blaming the model — fixed.** Resolution is skipped
+   wholesale when the input carries no text, and a single
+   `SOURCE_ANCHOR_INPUT_UNAVAILABLE` is emitted with no quote in its context.
+   New test asserts exactly one code and that the message does not echo the
+   extracted text.
+
+## Recorded, deliberately not fixed
+
+- **`occurrences` counts on two bases.** `exactOccurrences` steps `from = at + 1`
+  and therefore counts overlapping hits —
+  `locateSourceAnchor("aaaa", "aa", 0).occurrences === 3` — while the
+  whitespace-insensitive path uses `matchAll`, which does not. It affects the
+  ambiguity note's message text only: the chosen range, the emitted anchor, and
+  the output shape are all unaffected either way. Left as-is rather than
+  normalized, because the note's job is "this was a tie-break, look at it" and
+  neither count changes that answer.
+- **`docs/changelogs/upcoming.md` carries `ending-hash="HEAD"`.** Every other
+  changelog entry has a concrete hash. Pinned at version cut, along with the
+  starting hash, rather than churned on every commit of an open branch.
+
 ## Verification
 
 `pnpm run check` in the worktree, exit code 0:
@@ -216,14 +290,14 @@ makes a coverage drop detectable later.
 > @proposit/proposit-core@3.3.0 check
 > pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build
 
- Test Files  66 passed | 5 skipped (71)
-      Tests  2091 passed | 14 skipped (2105)
-   Duration  7.74s
+ Test Files  67 passed | 5 skipped (72)
+      Tests  2100 passed | 14 skipped (2114)
+   Duration  7.79s
 
 [info] html generated at ./docs/api
 ```
 
-(2077 → 2091 tests: 14 added across the rework.)
+(2077 → 2091 → 2100 tests: 14 added in round 1, 9 more in round 2.)
 
 Beyond the suite:
 
