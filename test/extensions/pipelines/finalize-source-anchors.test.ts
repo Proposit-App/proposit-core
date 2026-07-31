@@ -341,6 +341,57 @@ describe("finalizeResponseV2 — premise source anchors", () => {
     })
 })
 
+describe("finalizeResponseV2 — foreign input shapes", () => {
+    // `TStageContext.input` is `unknown`, and `finalizeResponseV2` is
+    // public API for consumers assembling their own pipelines. Before
+    // anchors existed finalize never read the input at all, so any
+    // input shape worked; reading it must not turn a different
+    // `inputSchema` into a throw on the happy path, after every LLM
+    // call has already been paid for.
+    function finalizeWithInput(input: unknown): {
+        claims: TAnchored[]
+        premises: TAnchored[]
+    } {
+        const outputs = buildOutputs()
+        const ctx: TStageContext = {
+            ...buildContextStub(outputs),
+            input,
+        }
+        const out = finalizeResponseV2({
+            ctx,
+            extension: basicsExtension,
+            segmentation: outputs[
+                STAGE_IDS.segmentation
+            ] as TSegmentationOutput,
+            mentions: outputs[
+                STAGE_IDS.claimMentionExtraction
+            ] as TClaimMentionExtractionOutput,
+        })
+        return out.argument as unknown as {
+            claims: TAnchored[]
+            premises: TAnchored[]
+        }
+    }
+
+    it("assembles the argument when the input has no `text` field", () => {
+        const { claims, premises } = finalizeWithInput({ document: INPUT_TEXT })
+        expect(claims).toHaveLength(3)
+        expect(premises).toHaveLength(2)
+    })
+
+    it("emits no anchors rather than throwing on a foreign input shape", () => {
+        const { claims, premises } = finalizeWithInput({ document: INPUT_TEXT })
+        for (const entity of [...claims, ...premises]) {
+            expect("sourceAnchors" in entity).toBe(false)
+        }
+    })
+
+    it("tolerates a null or non-object input", () => {
+        expect(() => finalizeWithInput(null)).not.toThrow()
+        expect(() => finalizeWithInput("just a string")).not.toThrow()
+    })
+})
+
 describe("finalizeResponseV2 — pipelines without segmentation", () => {
     // The fast pipeline collapses segmentation and mention extraction
     // into one call and emits synthetic mention ids, so no mention

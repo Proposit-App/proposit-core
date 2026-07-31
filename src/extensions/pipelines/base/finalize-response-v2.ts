@@ -267,6 +267,22 @@ function relationAnchor(args: {
     )
 }
 
+/**
+ * The raw text this pipeline was given, or `""` for any input shape that
+ * does not carry one.
+ *
+ * `TStageContext.input` is `unknown` and this assembler is public API
+ * for consumers composing their own pipelines, whose `inputSchema` need
+ * not be `{ text }`. Anchors are the only thing that reads the input, so
+ * an empty string degrades exactly into the documented no-anchor
+ * behavior — every match misses — rather than throwing out of finalize
+ * on the happy path, after every LLM call has been paid for.
+ */
+function readInputText(input: unknown): string {
+    const text = (input as TIngestionInput | null | undefined)?.text
+    return typeof text === "string" ? text : ""
+}
+
 /** The `mentionIds` on a canonical claim record, defensively read. */
 function readMentionIds(record: Record<string, unknown>): string[] {
     const raw = record.mentionIds
@@ -487,7 +503,7 @@ export function finalizeResponseV2(
     }
 
     // Happy path: assemble the argument.
-    const inputText = (ctx.input as TIngestionInput).text
+    const inputText = readInputText(ctx.input)
     const anchorByMentionId = buildAnchorByMentionId({
         inputText,
         segmentation: input.segmentation,
