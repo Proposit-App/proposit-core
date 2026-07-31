@@ -212,6 +212,12 @@ export class OriginLibrary<
      * scope the validation to the entity that changed if a caller ever needs
      * tens of thousands. The document-body checks, which scaled with document
      * *size* rather than count, are already skipped once verified.
+     *
+     * ponytail: the code-point indexes those checks rely on are retained for
+     * the life of every document, uncapped — roughly 10x the text size, so 10 MB
+     * of documents holds about 100 MB of heap. Peak is unchanged; steady state
+     * is not. If it bites, index only documents that have anchors and drop the
+     * index with their last anchor.
      */
     private withValidation<T>(fn: () => T): T {
         const snap = this.snapshot()

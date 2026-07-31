@@ -72,14 +72,21 @@ function isRemovalCandidate(code: number): boolean {
  * naive removal breaks family and profession emoji, keycaps, CJK variation
  * sequences, Mongolian text, and flag tag sequences.
  *
- * **A removal candidate never legitimizes another removal candidate.** The
- * joiner, the variation selectors, and the tag characters all satisfy the
- * emoji-adjacency and variation-selector-base tests themselves, so a rule that
- * consulted the raw input would keep a character on the strength of a
- * neighbour that was being deleted in the same pass — and a second pass, seeing
- * that neighbour gone, would then delete it too. That is what `emitted`
- * enforces: the backward look reads only what actually survived, and the one
- * forward look (the joiner's) rejects a candidate outright.
+ * **A character is never kept on the strength of a neighbour that did not
+ * survive.** The joiner, the variation selectors, and the tag characters all
+ * satisfy the emoji-adjacency and variation-selector-base tests themselves, so
+ * a rule that consulted the raw input would keep one because of a neighbour
+ * being deleted in the same pass — and a second pass, seeing that neighbour
+ * gone, would delete it too. That is what `emitted` enforces: the backward
+ * look reads only what actually survived, and the one forward look (the
+ * joiner's) rejects a candidate outright.
+ *
+ * A surviving candidate *may* legitimize another, deliberately: `FE0F` and the
+ * skin-tone modifiers match `EMOJI_ADJACENT` so that a joiner after an emoji
+ * presentation selector is kept, and a Mongolian free variation selector is
+ * itself `Script=Mongolian` so a run of them self-legitimizes after a
+ * Mongolian base. Both are stable across passes precisely because the base has
+ * to have survived.
  */
 function isLegitimateInContext(
     emitted: readonly string[],

@@ -230,9 +230,14 @@ Returns the root expression from each premise that has one.
 Patches application-specific fields onto an expression across all premises,
 then marks the expression and its ancestors dirty so the next checksum flush
 recomputes from the patched values. Resolves the owning premise internally,
-applies the patch in place via `Object.assign`, and marks the expression dirty
-— callers cannot patch without marking (stale checksum) or mark without
-patching (no-op). Throws if `expressionId` is unknown.
+applies the patch in place, and marks the expression dirty — callers cannot
+patch without marking (stale checksum) or mark without patching (no-op). Throws
+if `expressionId` is unknown.
+
+A field whose value is `undefined` is **deleted** rather than assigned, so
+clearing one restores the shape and the checksum the entity had before it was
+set. `PremiseEngine.setExtras` — and therefore `updateExtras` — drops
+`undefined`-valued keys for the same reason.
 
 The `fields` parameter is typed as `Partial<TExpr>`, generic over the engine's
 expression type parameter (which consumers extend with app-level fields like
@@ -961,7 +966,7 @@ Used for content identity only, never for authentication. The 32-bit FNV-1a `com
 
 ## The `enthymeme` annotation
 
-An optional `boolean` on `CorePropositionalVariableExpressionSchema` and on both `CorePremiseSchema` variants: the author's declaration that this content goes unspoken in the natural-language original. It is deliberately **not** part of the origin library, because it must be expressible on an argument with no source text at all.
+An optional, `true`-only field on `CorePropositionalVariableExpressionSchema` and on both `CorePremiseSchema` variants: the author's declaration that this content goes unspoken in the natural-language original. It is deliberately **not** part of the origin library, because it must be expressible on an argument with no source text at all.
 
 Set it through the existing surfaces — `ArgumentEngine.patchExpressionAppFields(expressionId, { enthymeme: true })` for an expression, and the premise extras round-trip for a premise. No new mutator exists, and none is needed.
 
@@ -969,11 +974,11 @@ The schema is `Type.Optional(Type.Literal(true))` — the field is present and `
 
 `"enthymeme"` is included in the default `expressionFields` and `premiseFields` checksum sets. Adding it was backward compatible with **no migration**, because `entityChecksum` includes a field only when the key is present on the entity and `createChecksumConfig` unions additional fields onto the defaults. That guarantee is conditional:
 
-> **An unmarked entity must omit the key entirely.** Persisting `enthymeme: null` — or `false` — makes the key present, changes the checksum of every premise and expression in existence, and breaks hierarchical checksums and sync detection. The schema is `Type.Optional(Type.Boolean())`, never `Nullable`, and unmarking must delete the field rather than set it to `false`.
+> **An unmarked entity must omit the key entirely.** Persisting `enthymeme: null` — or `false` — makes the key present, changes the checksum of every premise and expression in existence, and breaks hierarchical checksums and sync detection. `Type.Optional(Type.Literal(true))` is what refuses both at the schema boundary, and unmarking must delete the field rather than set it to `false`.
 
 `validate('presentable')` reports `P-6`, at no lower tier, for either misuse: a mark on a **premise-bound** variable expression, whose truth is derived from another premise's evaluation rather than asserted; and a mark on an **operator or formula** expression, which the TypeScript types forbid but the open entity schemas admit at runtime. Per the standing rule that only Structural violations throw, neither throws at mutation time.
 
-Clearing the mark through `patchExpressionAppFields(id, { enthymeme: undefined })` **deletes** the key rather than setting it to `undefined`, so the entity returns to the exact shape — and the exact checksum — it had before it was marked. That applies to any field patched to `undefined`, not only this one.
+Clearing the mark **deletes** the key rather than setting it to `undefined`, so the entity returns to the exact shape — and the exact checksum — it had before it was marked. Both routes do this: `patchExpressionAppFields(id, { enthymeme: undefined })` for an expression, and `updateExtras({ enthymeme: undefined })` for a premise. It applies to any field cleared this way, not only this one.
 
 ---
 

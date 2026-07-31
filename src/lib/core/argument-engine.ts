@@ -1583,9 +1583,11 @@ export class ArgumentEngine<
      * This is the public API for consumers that need to attach app-level
      * metadata (e.g. `creatorId`, `createdOn`) to expressions synthesized
      * by the engine's auto-normalization. It resolves the owning premise
-     * internally, applies the patch in place via `Object.assign`, and
-     * marks the expression dirty — callers cannot patch without marking
-     * (stale checksum) or mark without patching (no-op).
+     * internally, applies the patch in place, and marks the expression
+     * dirty — callers cannot patch without marking (stale checksum) or mark
+     * without patching (no-op). A field whose value is `undefined` is
+     * **deleted** rather than assigned, so clearing one restores the shape and
+     * the checksum the entity had before it was set.
      *
      * @param expressionId - The ID of the expression to patch.
      * @param fields - Fields to merge into the expression.

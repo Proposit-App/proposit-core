@@ -91,6 +91,12 @@ Every pre-existing idempotence fixture separated its invisibles with an ordinary
 
 A bare joiner followed by a variation selector in plain prose previously survived both passes, each keeping the other alive. Both are now stripped.
 
+### A mutation is judged on what it introduces, not on whether everything is clean
+
+`withValidation` required `validate().ok` over the whole library after every mutation, which made an already-inconsistent library permanently unrepairable: two anchors violating the same invariant each blocked the other's removal, and `removeDocument` then refused because they were still there. Every mutation failed forever, with hand-editing `origins.json` the only exit — reachable from any file written before the anchor-link rule existed, or from any snapshot a consumer assembles.
+
+It now compares the post-mutation violation set against the pre-mutation one and rejects only what the mutation _introduced_. One rule, no add-versus-remove branching: an `addAnchor` with no link still introduces a violation and is still refused on a broken library as on a clean one, and `removeLink` still refuses to orphan existing anchors. The pre-mutation set is carried between mutations rather than recomputed, so this stays at one `validate()` per mutation; `fromSnapshot` seeds it once and still does not reject a payload, which is what leaves a bad one repairable.
+
 ### An anchor could name an argument version with no link
 
 `addAnchor` accepted an anchor for `arg@77` when the only link was `arg@0`, and `validate()` reported nothing. The link carries the stance, and the stance is what decides whether unanchored content means anything, so an anchor without one is provenance no consumer can interpret. `validate()` now requires every anchor's `(argumentId, argumentVersion, documentId)` to have a matching link — new code `ORIGIN_ANCHOR_LINK_NOT_FOUND` — which also makes removing a link that still has anchors a violation, and fixes the persistence order a consumer must follow.
@@ -99,7 +105,9 @@ A bare joiner followed by a variation selector in plain prose previously survive
 
 Documents are immutable and `addDocument` computes their text and digest itself, yet every `addAnchor`, `addLink`, and `removeAnchor` re-ran `normalizeOriginText` and `sha256Hex` over every document and rebuilt a code-point index per document. One hundred `addAnchor` calls against five ~98 KB documents took **1,117 ms**; the same run now takes **44 ms**.
 
-Both the verified-body record and the code-point index are keyed to the exact text that passed, not to the document id, so a tampered snapshot cannot inherit a previous instance's verdict — asserted directly. The remaining O(n²) in anchor count across a bulk import is one short slice comparison per pair and is named in a comment on `withValidation`.
+Both the verified-body record and the code-point index are keyed to the exact text that passed, not to the document id, so neither a tampered snapshot nor a future document-replace path can inherit an earlier verdict or slice against the wrong string — both asserted directly. A document is recorded as verified only once its own normalization self-check holds, so `ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED` stays reachable at add time.
+
+The remaining O(n²) in anchor count across a bulk import is one short slice comparison per pair and is named in a comment on `withValidation`. Retained index memory is the other side of the trade and is recorded as a follow-up: twenty anchored documents totalling 10 MB of text hold roughly 103 MB of heap, with no eviction and no cap.
 
 ## Changed
 
