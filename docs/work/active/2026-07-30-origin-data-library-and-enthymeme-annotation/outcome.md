@@ -169,3 +169,137 @@ completed June/July items and nothing new. `tcw taxonomy check` is clean.
 - No IEEE attribution CLI commands — resolving a URL into reference fields is a
   network operation the CLI has no counterpart for.
 - No fuzzy quote matching; deferred to the slice with the measured hit rate.
+
+---
+
+# Rework pass — dual-review findings
+
+All seven findings addressed at full scope. Each was reproduced against the
+built output first, and each fix landed behind a failing test. `pnpm run check`
+and `bash scripts/smoke-test.sh` both pass.
+
+| # | Severity | Finding | Commit |
+|---|---|---|---|
+| 1 | HIGH | `normalizeOriginText` not idempotent; `addDocument` refused its own output | `0a9e654` |
+| 2 | MEDIUM | Schema accepted `enthymeme: false` | `5f44214` |
+| 3 | MEDIUM | `enthymeme` on a non-variable expression unreported | `74166e1` |
+| 4 | MEDIUM | `validate()` re-scanned every document body per mutation | `e66d44f` |
+| 5 | LOW | Anchor with no matching link accepted | `5e2cf41` |
+| 6 | LOW | Unmarking left the key present as `undefined` | `b047659` |
+| 7 | LOW | CLI surface gaps | `c3f1e2e` |
+| — | — | Documentation Sync over the rework diff | `fe59fb9` |
+
+## 1 — the normalizer
+
+The root cause is one sentence: **a removal candidate must never legitimize
+another removal candidate.** `isLegitimateInContext` read its neighbours from
+the pre-strip array, and the joiner, the variation selectors, and the tag
+characters all satisfy the emoji-adjacency and variation-selector-base tests
+themselves, so they qualified each other.
+
+The fix consults what actually survived — the backward look reads the emitted
+output, the tag-run backscan walks the emitted output, and the joiner's single
+forward look rejects a `next` that is itself a candidate. Iterating to a fixed
+point was the offered alternative and was not taken: it hides a wrong per-pass
+rule behind a loop.
+
+The test debt the finding identified was real. No prior fixture placed two
+removal candidates adjacent. Added thirteen adjacency fixtures, an exhaustive
+sweep over every three-code-point string from a fourteen-symbol
+emoji/invisible alphabet (2,744 strings — 144 failed before the fix), and two
+`OriginLibrary` regressions: that `addDocument` stores text it normalized
+itself, and that an anchor drawn against a consumer's own normalization still
+validates. That second one is the downstream server slice's exact flow.
+
+The related `ZWJ + VS16` case resolves under the same rule — neither anchors
+the other now, and both are stripped from plain prose.
+
+`AGENTS.md` and `docs/api-reference.md` both claimed the step order alone made
+the function idempotent. Both now name the two mechanisms.
+
+## 2 — `enthymeme: false`
+
+`Type.Optional(Type.Literal(true))`, in the core schemas and in the CLI's
+on-disk schemas, which had the same hole. The field's description already said
+"a null or false value is not the same as absent"; the schema now agrees.
+
+One knock-on: a P-6 test asserted `enthymeme: false` was ignored. `false` is no
+longer representable in the type, so the case is kept with a cast — the
+validator stays defensive about hand-built JSON.
+
+## 3 — marks on non-variable expressions
+
+Chose reporting over closing the schemas, as recorded in `rework.md`. Closing
+`CoreOperatorExpressionSchema` and `CoreFormulaExpressionSchema` would break the
+documented app-extension mechanism — the existing `patchExpressionAppFields`
+coverage in `core.test.ts` attaches `creatorId` and `createdOn` through exactly
+that openness.
+
+`validateP6` now reports `P-6` for a mark on an operator or formula expression,
+with `variableId` omitted since there is none. The JSDoc, the grammar doc, and
+the README's rule table all say so.
+
+## 4 — validation cost
+
+1,117 ms → **44 ms** for 100 `addAnchor` calls against five ~98 KB documents,
+measured against the built output.
+
+Immutability is the licence: a document body checked once cannot change. The
+verified record and the code-point index are both keyed to **the exact text
+that passed**, not to the document id, so a tampered snapshot cannot inherit a
+previous instance's verdict — covered by its own test. `restoreFromSnapshot`
+drops any entry whose body no longer matches.
+
+The remaining O(n²) in anchor count across a bulk import is one short slice
+comparison per pair; named in a `ponytail:` comment on `withValidation` with the
+upgrade path.
+
+## 5 — anchors without links
+
+Added the check rather than documenting the gap. New code
+`ORIGIN_ANCHOR_LINK_NOT_FOUND`. Because it lives in `validate()`, it covers both
+directions: `addAnchor` without a link is refused, and `removeLink` while
+anchors remain is refused.
+
+This exposed the same fixture debt as finding 1 — every existing anchor test
+created anchors with no link at all. The `withDocument` helper now creates a
+link by default, with three link-focused tests opting out.
+
+It also turns the persistence order into an enforced invariant rather than a
+docs sentence, which is what the server slice needs.
+
+## 6 — `undefined` creating the key
+
+Fixed at the root, in `PremiseEngine.patchAndMarkExpression`, not at the CLI
+call site the finding named — so every patched field benefits rather than this
+one path. A field patched to `undefined` is now deleted.
+
+## 7 — CLI
+
+`attach` and the new `link` both verify the argument version exists on disk
+first. Added `origins link`, `origins unlink`, and `origins remove`. Smoke test
+covers cross-argument reuse of one stored text, plus three new failure paths:
+unknown argument, unknown version, and removing a still-referenced document.
+
+## Also
+
+`docs/api-reference.md` now states that origin entities never enter a changeset
+and get no FK ordering from `orderChangeset` — persist documents, then links,
+then anchors, and delete in reverse.
+
+## Nothing pushed back on
+
+Every finding reproduced exactly as described. The two places the report's
+diagnosis was incomplete rather than wrong are noted above: the ZWJ+VS16 pair
+(same root cause, so it fell out of the same fix) and finding 6's blast radius
+(a shared helper, not the CLI path).
+
+The three "explicitly NOT findings" were left alone: the hand-rolled SHA-256,
+the confirmed-clean invariants, and `readOriginLibrary`'s parse-error handling.
+
+## Verification
+
+`pnpm run check` — 2,276 tests passing (14 skipped, 79 files), prettier clean,
+eslint clean, build and typedoc green.
+
+`bash scripts/smoke-test.sh` — `SMOKE TEST PASSED`.
