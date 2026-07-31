@@ -461,6 +461,100 @@ proposit-core <argument-id> latest premises render <derivation-premise-id>
 
 ---
 
+## 7c. Origin Data and Unspoken Content
+
+Record the source text an argument was built from, which parts derive from
+which spans of it, and which parts the original left unspoken.
+
+### Attach a source text
+
+```bash
+DOC=$(proposit-core origins attach ./speech.txt \
+    --argument <argument-id> --version 0 --stance seed)
+# → <document-id>
+```
+
+`--stance seed` (the default) says the argument merely started from the source.
+`--stance representation` asserts it faithfully renders the source — a claim
+about someone else's text, so it is never the default.
+
+The stored text is normalized on the way in: every line-break form folds to LF,
+the byte-order mark, control characters other than LF and tab, bidirectional
+controls, zero-width characters, and stray variation selectors are stripped, and
+the result is composed to Unicode NFC and trimmed. Internal whitespace,
+paragraph breaks, smart quotes, dashes, case, and punctuation survive untouched.
+
+### Inspect what was stored
+
+```bash
+proposit-core origins list
+# → <document-id> | 74 code points | 1 link(s) | 0 anchor(s)
+# →   <argument-id>@0 (seed)
+
+proposit-core origins show $DOC
+# → id:          <document-id>
+# → digest:      7b605bcd…
+# → codePoints:  74
+# → link:        <link-id> -> <argument-id>@0 (seed)
+
+# Just the text, for piping
+proposit-core origins show $DOC --text
+```
+
+### Anchor a premise to a span
+
+```bash
+proposit-core origins anchor add --document $DOC \
+    --argument <argument-id> --version 0 \
+    --target premise --target-id <premise-id> \
+    --start 0 --end 12
+# → <anchor-id>
+```
+
+`--target` is `expression`, `premise`, or `argument`. A global claim cannot be
+anchored: a claim is shared by reference across arguments, so its provenance is
+a property of _this_ argument's use of it.
+
+**`--start` and `--end` count Unicode code points, not UTF-16 code units** — the
+unit the Web Annotation Data Model requires and the one Postgres `substring()`
+uses. The quote is sliced out of the stored document rather than typed in, and
+an anchor whose span leaves the document is refused:
+
+```bash
+proposit-core origins anchor add --document $DOC \
+    --argument <argument-id> --version 0 \
+    --target premise --target-id <premise-id> --start 0 --end 99999
+# → ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE: origin anchor "…" spans [0, 99999) of a
+#   document 74 code points long
+
+proposit-core origins anchor remove <anchor-id>
+```
+
+### Mark content as unspoken
+
+An _enthymeme_ is content the natural-language original left for the audience to
+supply. It is always declared by an author — nothing infers it — and it can be
+declared on an argument with no source text at all.
+
+```bash
+proposit-core <argument-id> latest premises update <premise-id> --enthymeme
+proposit-core <argument-id> latest expressions mark <premise-id> <expression-id> --enthymeme
+
+# Unmark — removes the field rather than storing false, which restores the
+# entity's original checksum.
+proposit-core <argument-id> latest premises update <premise-id> --no-enthymeme
+proposit-core <argument-id> latest expressions mark <premise-id> <expression-id> --no-enthymeme
+```
+
+Only a claim-bound variable expression can meaningfully be marked — a
+premise-bound variable's truth is derived from another premise rather than
+asserted, so there is nothing for a speaker to have suppressed. Marking one does
+not throw (mutations throw only on Structural violations); it is reported as
+`P-6` by the library's tier-aware `engine.validate('presentable')`, which the CLI
+does not currently surface.
+
+---
+
 ## 8. Render
 
 Print the full argument with metadata:
