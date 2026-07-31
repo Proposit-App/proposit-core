@@ -599,22 +599,26 @@ unabsorbed state.
 
 #### P-6 — Enthymeme marks a claim-bound variable
 
-A variable expression carrying `enthymeme: true` — the author's
-declaration that this content goes unspoken in the natural-language
-original — resolves to a **claim-bound** variable.
+An expression carrying `enthymeme: true` — the author's declaration that
+this content goes unspoken in the natural-language original — is a
+variable expression, and its variable is **claim-bound**.
 
-The schema confines the annotation to variable expressions and premises,
-but cannot express claim-boundness: that is a property of the variable
-the expression points at, not of the expression. Marking a premise-bound
-variable unspoken is meaningless, because its truth is derived from
-another premise's evaluation rather than asserted, so there is no
-natural-language statement for a speaker to have suppressed.
+Neither half is expressible in the schema. The TypeScript types confine
+the annotation to variable expressions and premises, but the entity
+schemas stay open for app-level fields, so a mark on an operator or
+formula expression is reachable at runtime and shifts that expression's
+checksum with nothing else reporting it. And claim-boundness is a
+property of the variable an expression points at rather than of the
+expression itself. Marking a premise-bound variable is meaningless in the
+same way an operator is: its truth is derived from another premise's
+evaluation rather than asserted, so there is no natural-language
+statement a speaker could have left out.
 
 An expression whose `variableId` resolves to nothing is not reported
 here — a dangling reference is a Structural concern.
 
-- **Invalid:** a variable expression with `enthymeme: true` whose variable is premise-bound.
-- **Valid:** the same mark on a claim-bound variable expression; a premise marked `enthymeme: true`; any expression with the field absent.
+- **Invalid:** a variable expression with `enthymeme: true` whose variable is premise-bound; an operator or formula expression with `enthymeme: true`.
+- **Valid:** the mark on a claim-bound variable expression; a premise marked `enthymeme: true`; any expression with the field absent.
 - **Validator:** `validateP6`.
 
 ## 4. Engine behavior and auto-normalization

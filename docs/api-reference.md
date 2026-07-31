@@ -859,6 +859,8 @@ The document's entity checksum covers its `digest` rather than its `text` — th
 
 Attaches a document to one argument version with a `stance` of `'representation'` or `'seed'`. Throws `ORIGIN_DOCUMENT_REF_NOT_FOUND` when the document does not resolve, and `ORIGIN_LINK_DUPLICATE_ID` on a repeated id.
 
+Removing a link that still has anchors throws `ORIGIN_ANCHOR_LINK_NOT_FOUND` — see `addAnchor`.
+
 ---
 
 ### `addAnchor(anchor)` → `TAnchor`
@@ -866,6 +868,10 @@ Attaches a document to one argument version with a `stance` of `'representation'
 Records the span of a document one argument part derives from. `targetType` is `'expression' | 'premise' | 'argument'` — a global claim is excluded, because a claim is shared by reference across arguments and its provenance is a property of _this_ argument's use of it.
 
 Positions are counted in Unicode code points. The library rejects an anchor whose `[startCodePoint, endCodePoint)` slice of the document does **not** equal its own `exact` quote (`ORIGIN_ANCHOR_QUOTE_MISMATCH`), and one whose span leaves the document (`ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE`). A mis-measured anchor therefore fails at creation rather than highlighting the wrong passage.
+
+An anchor also requires a link: its `(argumentId, argumentVersion, documentId)` must already have one, or it is rejected with `ORIGIN_ANCHOR_LINK_NOT_FOUND`. The link carries the stance, and the stance is what decides whether unanchored content means anything, so an anchor without one is provenance no consumer can interpret. The same check makes removing a link that still has anchors a violation.
+
+**Origin entities never enter a `TCoreChangeset`, so `orderChangeset` gives a persistence layer no FK ordering for them.** Write them in dependency order by hand: documents, then links, then anchors — and delete in reverse.
 
 ---
 
@@ -959,11 +965,15 @@ An optional `boolean` on `CorePropositionalVariableExpressionSchema` and on both
 
 Set it through the existing surfaces — `ArgumentEngine.patchExpressionAppFields(expressionId, { enthymeme: true })` for an expression, and the premise extras round-trip for a premise. No new mutator exists, and none is needed.
 
+The schema is `Type.Optional(Type.Literal(true))` — the field is present and `true`, or absent. Both `null` and `false` are rejected: each is a _present_ value, and a present key changes the entity's checksum. `false` is refused explicitly because it is the likelier of the two to arrive by accident, from an unchecked form control or an ORM default.
+
 `"enthymeme"` is included in the default `expressionFields` and `premiseFields` checksum sets. Adding it was backward compatible with **no migration**, because `entityChecksum` includes a field only when the key is present on the entity and `createChecksumConfig` unions additional fields onto the defaults. That guarantee is conditional:
 
 > **An unmarked entity must omit the key entirely.** Persisting `enthymeme: null` — or `false` — makes the key present, changes the checksum of every premise and expression in existence, and breaks hierarchical checksums and sync detection. The schema is `Type.Optional(Type.Boolean())`, never `Nullable`, and unmarking must delete the field rather than set it to `false`.
 
-Marking a **premise-bound** variable expression is reported as `P-6` by `validate('presentable')` and by no lower tier: a premise-bound variable's truth is derived from another premise's evaluation rather than asserted, so there is no natural-language statement for a speaker to have suppressed. Per the standing rule that only Structural violations throw, marking one never throws at mutation time.
+`validate('presentable')` reports `P-6`, at no lower tier, for either misuse: a mark on a **premise-bound** variable expression, whose truth is derived from another premise's evaluation rather than asserted; and a mark on an **operator or formula** expression, which the TypeScript types forbid but the open entity schemas admit at runtime. Per the standing rule that only Structural violations throw, neither throws at mutation time.
+
+Clearing the mark through `patchExpressionAppFields(id, { enthymeme: undefined })` **deletes** the key rather than setting it to `undefined`, so the entity returns to the exact shape — and the exact checksum — it had before it was marked. That applies to any field patched to `undefined`, not only this one.
 
 ---
 

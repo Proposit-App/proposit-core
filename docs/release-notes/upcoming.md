@@ -30,9 +30,15 @@ What the cleanup deliberately never touches is the writing itself. Spacing, para
 
 Every stored text carries a fingerprint of its content, so two pastes of the same passage can be recognized as identical — including when they differ only in line endings, a byte-order mark, or how accents were typed. What an application does with that information is its own decision.
 
+### One stored text can serve more than one argument
+
+Because every stored text carries a fingerprint of its content, a second argument can reuse one that is already stored rather than pasting the same passage in again. A text can also be removed once nothing points at it any more.
+
 ### New CLI commands
 
-`origins attach`, `origins list`, `origins show`, `origins anchor add`, and `origins anchor remove`, plus `--enthymeme` and `--no-enthymeme` on `premises update` and the new `expressions mark`.
+`origins attach`, `origins list`, `origins show`, `origins link`, `origins unlink`, `origins remove`, `origins anchor add`, and `origins anchor remove`, plus `--enthymeme` and `--no-enthymeme` on `premises update` and the new `expressions mark`.
+
+Attaching or linking a source text checks that the argument really exists first, so a mistyped argument is refused instead of quietly stored.
 
 ## Notes
 

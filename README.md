@@ -822,6 +822,7 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 | Single-child `and` / `or`                                        | `P-4`     | Presentable |
 | Same-operator parent/grandchild separated only by `formula`      | `P-5`     | Presentable |
 | Premise-bound variable expression marked as an enthymeme         | `P-6`     | Presentable |
+| Operator or formula expression marked as an enthymeme            | `P-6`     | Presentable |
 
 ### Variables — prevented at construction time
 
@@ -1012,6 +1013,9 @@ proposit-core axioms remove <connection_id>        Remove an axiom connection
 proposit-core origins attach <file> --argument <id> --version <n> [--stance <s>]  Store a source text and link it to an argument version
 proposit-core origins list [--json]                List stored source texts and their links
 proposit-core origins show <document_id> [--json] [--text]  Show a source text, its links, and its anchors
+proposit-core origins link <document_id> --argument <id> --version <n> [--stance <s>]  Link an existing source text to another argument version
+proposit-core origins unlink <link_id>             Remove a link between an argument version and a source text
+proposit-core origins remove <document_id>         Remove a source text (refuses while referenced)
 proposit-core origins anchor add --document <id> --argument <id> --version <n> --target <type> --target-id <id> --start <n> --end <n>  Record the span an argument part derives from
 proposit-core origins anchor remove <anchor_id>    Remove an anchor
 ```
@@ -1088,6 +1092,10 @@ Because every stored anchor is an offset into text this function produced,
 Each document also carries a SHA-256 `digest` of its normalized text, so two
 pastes of the same source are detectable. Two texts differing only in line-ending
 style, a byte-order mark, or accent composition produce the same digest.
+
+Anchoring requires a link first: an anchor's argument version must already be
+linked to the document, because the link carries the stance that gives the
+anchor its meaning. Persist in that order — document, link, anchors.
 
 **Unspoken content.** An author can mark a premise or a claim-bound variable
 expression as an _enthymeme_ — content the natural-language original left for

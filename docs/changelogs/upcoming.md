@@ -1,6 +1,6 @@
 # upcoming changelog
 
-<changes starting-hash="897f80d" ending-hash="29bc2c5">
+<changes starting-hash="897f80d" ending-hash="c3f1e2e">
 
 ## Added
 
@@ -43,21 +43,23 @@ FNV-1a (`computeHash`) is not reused for this — a 32-bit non-cryptographic has
 
 ### Presentable rule `P-6`
 
-A variable expression carrying `enthymeme: true` must resolve to a claim-bound variable. `validateP6` reads `ctx.expressions` and `ctx.variables` — both already on `TValidatorContext` — and reuses the exported `isPremiseBound` guard.
+An expression carrying `enthymeme: true` must be a variable expression whose variable is claim-bound. `validateP6` reads `ctx.expressions` and `ctx.variables` — both already on `TValidatorContext` — and reuses the exported `isPremiseBound` guard.
+
+Both halves are reported, because neither is expressible in the schema. The TypeScript types confine the field to variable expressions, but the entity schemas stay open for app-level fields, so `patchExpressionAppFields` on an operator or formula expression succeeds and shifts that expression's checksum. Closing those schemas was the alternative and was rejected — the same openness is what carries `creatorId` and `createdOn` in the existing app-extension coverage.
 
 The tier dispatcher composes cumulatively, so placing the rule in Presentable makes it invisible to the lower three tiers with no extra work, and the Structural-only throw rule means marking a premise-bound variable never throws at mutation time. `E-2` and `D-7` remain reserved.
 
 ### The `enthymeme` field
 
-`Type.Optional(Type.Boolean())` on `CorePropositionalVariableExpressionSchema` and on `CommonPremiseFields`, which both `CorePremiseSchema` variants compose. Added to the default `expressionFields` and `premiseFields` checksum sets.
+`Type.Optional(Type.Literal(true))` on `CorePropositionalVariableExpressionSchema` and on `CommonPremiseFields`, which both `CorePremiseSchema` variants compose. Added to the default `expressionFields` and `premiseFields` checksum sets.
 
 **Backward compatible with no migration**, and the reason is exact: `entityChecksum` picks a field only when the key is present on the entity, and `createChecksumConfig` unions additional fields onto the defaults rather than replacing them. An entity lacking the key contributes nothing and hashes byte-identically.
 
-That holds **only** while unmarked entities omit the key. Persisting `enthymeme: null` makes the key present and shifts the checksum of every premise and expression in existence. `Type.Optional`, never `Nullable`, is what encodes the difference; `Nullable` is used twice in the same file, so the choice is deliberate rather than incidental.
+That holds **only** while unmarked entities omit the key. Persisting `enthymeme: null` — or `false` — makes the key present and shifts the checksum of every premise and expression in existence. A plain `Type.Optional(Type.Boolean())` rejects `null` and accepts `false`, which is the likelier of the two to arrive by accident from an unchecked form control or an ORM default, so the schema is narrowed to the literal `true`. The CLI's on-disk schemas mirror it.
 
 `test/origin/enthymeme-checksum.test.ts` was written and passing **before** the field existed, against seven frozen fixtures in `checksum-fixtures.ts` with hard-coded golden hex strings. Those goldens are unchanged now that the field has landed — that is the byte-identity proof, and re-recording them would convert it into a tautology. The same file separately asserts that `null`, `true`, and `false` each change the hash and each differ from the others.
 
-No new mutator was added: an expression takes the field through the existing `patchExpressionAppFields`, a premise through the existing extras round-trip. Unmarking passes `undefined` rather than `false`, which both the checksum and the JSON encoding drop, restoring the original checksum exactly.
+No new mutator was added: an expression takes the field through the existing `patchExpressionAppFields`, a premise through the existing extras round-trip. Unmarking passes `undefined`, and `PremiseEngine.patchAndMarkExpression` now **deletes** a key patched to `undefined` rather than assigning it — `Object.assign` left the key present holding `undefined`, which is checksum-safe and JSON-safe on its own but makes `"enthymeme" in entity` true, and any downstream mapper that turns `undefined` into `null` then flips the field from absent to present. The change is in the shared helper, so it covers every patched field rather than this one path.
 
 ### `IEEEOriginDocumentSchema`
 
@@ -65,11 +67,39 @@ New `src/extensions/citations/ieee/origin-document.ts`, intersecting `CoreOrigin
 
 ### CLI `origins` command group
 
-`origins attach`, `origins list`, `origins show`, `origins anchor add`, and `origins anchor remove`, plus `--enthymeme` and `--no-enthymeme` on `premises update` and a new `expressions mark`.
+`origins attach`, `origins list`, `origins show`, `origins link`, `origins unlink`, `origins remove`, `origins anchor add`, and `origins anchor remove`, plus `--enthymeme` and `--no-enthymeme` on `premises update` and a new `expressions mark`.
+
+`attach` and `link` verify the argument version exists on disk before minting anything — the library deliberately cannot see arguments, so a typo would otherwise persist a link nothing resolves and nothing reports. `link` attaches an already-stored text to another argument, which is what makes the digest useful; `remove` refuses while any link or anchor still points at the document.
 
 `"origins"` is added to `NAMED_COMMANDS` in `src/cli/router.ts` — omitting it routes the word as an argument UUID and dies in `resolveVersion` with an unrelated error. State persists to `origins.json` through the existing read/write triplet idiom; the bare-`catch` fallback to an empty library means no migration file is needed.
 
 `anchor add` derives `exact` by slicing the stored document rather than accepting it as input: the operator selected a range, so the positions are authoritative and a hand-typed quote could only disagree with them.
+
+## Fixed
+
+### `normalizeOriginText` was not idempotent, and `addDocument` refused ordinary text
+
+`isLegitimateInContext` read its neighbours from the pre-strip array while `stripInvisibleCharacters` accumulated its output separately, so a code point being removed still acted as the legitimacy base for the one beside it. The joiner, the variation selectors, and the tag characters are all `Emoji_Component` or pictograph-adjacent, so they qualified each other.
+
+`"The cat" + U+200D + U+FE00 + " sat."` kept the variation selector on the first pass — its predecessor in the _original_ array was the joiner — and dropped it on the second. `addDocument` stored the first-pass string and `withValidation` then re-normalized to check it, got the second, and rolled back with `ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED`. The library refused to store text it had just normalized itself.
+
+Worse for the consumer flow the docs prescribe: normalize at your import boundary, measure offsets, hand the same string to `addDocument`, and every anchor fails `ORIGIN_ANCHOR_QUOTE_MISMATCH` because the stored text differs from the one measured.
+
+The rule is now that **a removal candidate never legitimizes another removal candidate**: the backward look reads only what was actually emitted, and the joiner's one forward look rejects a `next` that is itself a candidate. Iterating to a fixed point was the alternative and was rejected — it hides the wrong per-pass rule behind a loop.
+
+Every pre-existing idempotence fixture separated its invisibles with an ordinary letter, so no test placed two candidates adjacent and the entire failure class was untested. Added thirteen adjacency fixtures plus an exhaustive sweep over every three-code-point string from a fourteen-symbol emoji/invisible alphabet — 2,744 strings, which found 144 non-idempotent cases before the fix.
+
+A bare joiner followed by a variation selector in plain prose previously survived both passes, each keeping the other alive. Both are now stripped.
+
+### An anchor could name an argument version with no link
+
+`addAnchor` accepted an anchor for `arg@77` when the only link was `arg@0`, and `validate()` reported nothing. The link carries the stance, and the stance is what decides whether unanchored content means anything, so an anchor without one is provenance no consumer can interpret. `validate()` now requires every anchor's `(argumentId, argumentVersion, documentId)` to have a matching link — new code `ORIGIN_ANCHOR_LINK_NOT_FOUND` — which also makes removing a link that still has anchors a violation, and fixes the persistence order a consumer must follow.
+
+### `validate()` re-scanned every document body on every mutation
+
+Documents are immutable and `addDocument` computes their text and digest itself, yet every `addAnchor`, `addLink`, and `removeAnchor` re-ran `normalizeOriginText` and `sha256Hex` over every document and rebuilt a code-point index per document. One hundred `addAnchor` calls against five ~98 KB documents took **1,117 ms**; the same run now takes **44 ms**.
+
+Both the verified-body record and the code-point index are keyed to the exact text that passed, not to the document id, so a tampered snapshot cannot inherit a previous instance's verdict — asserted directly. The remaining O(n²) in anchor count across a bulk import is one short slice comparison per pair and is named in a comment on `withValidation`.
 
 ## Changed
 

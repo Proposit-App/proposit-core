@@ -515,6 +515,11 @@ proposit-core origins anchor add --document $DOC \
 anchored: a claim is shared by reference across arguments, so its provenance is
 a property of _this_ argument's use of it.
 
+The argument version must already be linked to the document — `origins attach`
+creates that link, `origins link` adds one for an argument that already has the
+text. Without it the anchor is refused with `ORIGIN_ANCHOR_LINK_NOT_FOUND`,
+because the link carries the stance that gives the anchor its meaning.
+
 **`--start` and `--end` count Unicode code points, not UTF-16 code units** — the
 unit the Web Annotation Data Model requires and the one Postgres `substring()`
 uses. The quote is sliced out of the stored document rather than typed in, and
@@ -528,6 +533,25 @@ proposit-core origins anchor add --document $DOC \
 #   document 74 code points long
 
 proposit-core origins anchor remove <anchor-id>
+```
+
+### Reuse or remove a source text
+
+A second argument can share one stored text rather than pasting it in again:
+
+```bash
+proposit-core origins link $DOC --argument <other-argument-id> --version 0 --stance representation
+# → <link-id>
+
+proposit-core origins unlink <link-id>
+```
+
+Removing a source text is refused while anything still points at it, so
+unlink and drop its anchors first:
+
+```bash
+proposit-core origins remove $DOC
+# → ORIGIN_DOCUMENT_IN_USE: origin document "…" is still referenced by 1 link(s) or anchor(s)
 ```
 
 ### Mark content as unspoken
@@ -548,10 +572,12 @@ proposit-core <argument-id> latest expressions mark <premise-id> <expression-id>
 
 Only a claim-bound variable expression can meaningfully be marked — a
 premise-bound variable's truth is derived from another premise rather than
-asserted, so there is nothing for a speaker to have suppressed. Marking one does
-not throw (mutations throw only on Structural violations); it is reported as
-`P-6` by the library's tier-aware `engine.validate('presentable')`, which the CLI
-does not currently surface.
+asserted, so there is nothing for a speaker to have suppressed, and an operator
+or formula has no assertion at all. Marking one does not throw (mutations throw
+only on Structural violations); it is reported as `P-6` by the library's
+tier-aware `engine.validate('presentable')`, which the CLI does not currently
+surface. The CLI's own `expressions mark` refuses a non-variable expression up
+front.
 
 ---
 
