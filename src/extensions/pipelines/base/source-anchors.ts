@@ -142,7 +142,20 @@ function nearestRange(
 }
 
 /**
- * Locate `quote` in `input`, returning a verified anchor or `undefined`.
+ * A located anchor together with how many candidates it was chosen from.
+ *
+ * `occurrences > 1` means the quote is not unique in the input and the
+ * hint broke the tie. Callers surface that as a note rather than
+ * swallowing it: a silent tie-break is indistinguishable from a certain
+ * match, and the two deserve different trust.
+ */
+export type TSourceAnchorMatch = {
+    anchor: TIngestionSourceAnchor
+    occurrences: number
+}
+
+/**
+ * Locate `quote` in `input`, returning a verified match or `undefined`.
  *
  * `hintUtf16` selects among repeated occurrences — the occurrence whose
  * start sits nearest the hint wins. It never affects *whether* a quote
@@ -156,7 +169,7 @@ export function locateSourceAnchor(
     input: string,
     quote: string,
     hintUtf16: number
-): TIngestionSourceAnchor | undefined {
+): TSourceAnchorMatch | undefined {
     const trimmed = quote.trim()
     if (trimmed.length === 0) return undefined
 
@@ -170,5 +183,8 @@ export function locateSourceAnchor(
     const range = nearestRange(ranges, hintUtf16)
     return range === undefined
         ? undefined
-        : buildAnchor(input, range.start, range.end)
+        : {
+              anchor: buildAnchor(input, range.start, range.end),
+              occurrences: ranges.length,
+          }
 }

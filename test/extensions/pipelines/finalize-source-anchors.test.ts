@@ -242,6 +242,102 @@ function finalize(outputs: Record<string, unknown>): {
     }
 }
 
+// Collect the non-fatal notes finalize emits through `ctx.addFailure`.
+function finalizeFailures(
+    outputs: Record<string, unknown>
+): { code: string; message: string; context?: Record<string, unknown> }[] {
+    const failures: {
+        code: string
+        message: string
+        context?: Record<string, unknown>
+    }[] = []
+    const ctx: TStageContext = {
+        ...buildContextStub(outputs),
+        addFailure: (failure) => {
+            failures.push(failure)
+        },
+    }
+    finalizeResponseV2({
+        ctx,
+        extension: basicsExtension,
+        segmentation: outputs[STAGE_IDS.segmentation] as
+            | TSegmentationOutput
+            | undefined,
+        mentions: outputs[STAGE_IDS.claimMentionExtraction] as
+            | TClaimMentionExtractionOutput
+            | undefined,
+    })
+    return failures
+}
+
+describe("finalizeResponseV2 — anchor resolution is reported, not silent", () => {
+    // Dropping an unlocatable quote is correct, but dropping it in
+    // silence means a model that starts paraphrasing takes anchor
+    // coverage to zero in production with no detector. The e2e goldens
+    // only ever see frozen recordings.
+    it("reports nothing unresolved when every quote is found", () => {
+        const unresolved = finalizeFailures(buildOutputs()).filter(
+            (f) => f.code === "SOURCE_ANCHOR_UNRESOLVED"
+        )
+        expect(unresolved).toEqual([])
+    })
+
+    it("reports a mention quote that cannot be found in the input", () => {
+        const outputs = buildOutputs()
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m3")!.text =
+            "a sentence never written"
+
+        const unresolved = finalizeFailures(outputs).filter(
+            (f) => f.code === "SOURCE_ANCHOR_UNRESOLVED"
+        )
+        expect(unresolved).toHaveLength(1)
+        expect(unresolved[0].context?.mentionId).toBe("m3")
+        expect(unresolved[0].context?.quote).toBe("a sentence never written")
+    })
+
+    it("reports a relation evidence quote that cannot be found", () => {
+        const outputs = buildOutputs()
+        const relations = outputs[
+            STAGE_IDS.relationExtraction
+        ] as TRelationExtractionOutput
+        relations.relations[0].evidence.quote = "a clause never written"
+
+        const unresolved = finalizeFailures(outputs).filter(
+            (f) => f.code === "SOURCE_ANCHOR_UNRESOLVED"
+        )
+        expect(unresolved).toHaveLength(1)
+        expect(unresolved[0].context?.relationId).toBe("r1")
+    })
+
+    it("reports that a repeated quote was disambiguated by position", () => {
+        // "The risk is real" occurs twice in the input, and both of c1's
+        // mentions quote it — so each resolution picked a winner, and
+        // each says so.
+        const ambiguous = finalizeFailures(buildOutputs()).filter(
+            (f) => f.code === "SOURCE_ANCHOR_AMBIGUOUS"
+        )
+        expect(ambiguous).toHaveLength(2)
+        expect(ambiguous.map((f) => f.context?.mentionId)).toEqual(["m1", "m2"])
+        expect(ambiguous[0].context?.occurrences).toBe(2)
+    })
+
+    it("reports every note as a warning, never an error", () => {
+        const outputs = buildOutputs()
+        const relations = outputs[
+            STAGE_IDS.relationExtraction
+        ] as TRelationExtractionOutput
+        relations.relations[0].evidence.quote = "a clause never written"
+        for (const failure of finalizeFailures(outputs)) {
+            expect((failure as unknown as { severity: string }).severity).toBe(
+                "warning"
+            )
+        }
+    })
+})
+
 describe("finalizeResponseV2 — claim source anchors", () => {
     it("anchors a claim once per mention that resolved to it", () => {
         const c1 = finalize(buildOutputs()).claims.find(

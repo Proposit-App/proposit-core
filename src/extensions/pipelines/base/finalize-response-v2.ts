@@ -49,6 +49,7 @@ import {
 import {
     locateSourceAnchor,
     type TIngestionSourceAnchor,
+    type TSourceAnchorMatch,
 } from "./source-anchors.js"
 import type { TIngestionExtension, TIngestionInput } from "./types.js"
 import { IEEE_REFERENCE_TYPES } from "../../citations/ieee/references.js"
@@ -240,8 +241,55 @@ function resolveSegmentStarts(
     return out
 }
 
+/**
+ * Non-fatal note codes for anchor resolution. Neither stops assembly:
+ * an unresolved quote yields no anchor, and an ambiguous one yields the
+ * nearest-hint winner. Both are reported because silence here is
+ * indistinguishable from success — a model that starts paraphrasing
+ * would otherwise take anchor coverage to zero with no signal.
+ */
+export const SOURCE_ANCHOR_NOTE_CODES = {
+    unresolved: "SOURCE_ANCHOR_UNRESOLVED",
+    ambiguous: "SOURCE_ANCHOR_AMBIGUOUS",
+} as const
+
+/** Emit the note for one attempted resolution, if there is one to emit. */
+function noteResolution(args: {
+    ctx: TStageContext
+    match: TSourceAnchorMatch | undefined
+    quote: string
+    subject: Record<string, string>
+}): void {
+    const subjectText = Object.entries(args.subject)
+        .map(([key, value]) => `${key} ${value}`)
+        .join(" ")
+    if (args.match === undefined) {
+        args.ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.unresolved,
+            message: `Quote for ${subjectText} was not found in the input; no source anchor was emitted.`,
+            severity: "warning",
+            context: { ...args.subject, quote: args.quote },
+        })
+        return
+    }
+    if (args.match.occurrences > 1) {
+        args.ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.ambiguous,
+            message: `Quote for ${subjectText} occurs ${String(args.match.occurrences)} times in the input; the occurrence nearest the reported position was used.`,
+            severity: "warning",
+            context: {
+                ...args.subject,
+                quote: args.quote,
+                occurrences: args.match.occurrences,
+                startUtf16: args.match.anchor.startUtf16,
+            },
+        })
+    }
+}
+
 /** Resolve every mention to a verified anchor in the input, by id. */
 function buildAnchorByMentionId(args: {
+    ctx: TStageContext
     inputText: string
     segmentStartById: Map<string, number>
     mentions: TClaimMentionExtractionOutput | undefined
@@ -255,8 +303,14 @@ function buildAnchorByMentionId(args: {
         // added back on.
         const hint =
             (segmentStartById.get(mention.segmentId) ?? 0) + mention.span.start
-        const anchor = locateSourceAnchor(args.inputText, mention.text, hint)
-        if (anchor !== undefined) out.set(mention.mentionId, anchor)
+        const match = locateSourceAnchor(args.inputText, mention.text, hint)
+        noteResolution({
+            ctx: args.ctx,
+            match,
+            quote: mention.text,
+            subject: { mentionId: mention.mentionId },
+        })
+        if (match !== undefined) out.set(mention.mentionId, match.anchor)
     }
     return out
 }
@@ -281,6 +335,7 @@ function claimAnchors(
 
 /** The anchor for a relation's evidence quote, if it can be located. */
 function relationAnchor(args: {
+    ctx: TStageContext
     inputText: string
     relation: TInferenceRelation
     segmentStartById: Map<string, number>
@@ -289,11 +344,20 @@ function relationAnchor(args: {
         .map((id) => args.segmentStartById.get(id))
         .filter((start): start is number => start !== undefined)
     const hint = starts.length > 0 ? Math.min(...starts) : 0
-    return locateSourceAnchor(
-        args.inputText,
-        args.relation.evidence.quote,
-        hint
-    )
+    const quote = args.relation.evidence.quote
+    const match = locateSourceAnchor(args.inputText, quote, hint)
+    // An empty evidence quote is a legal "no span to cite" the fast
+    // pipeline's prompt explicitly permits, not a failure to find one,
+    // so it is not reported.
+    if (quote.trim().length > 0) {
+        noteResolution({
+            ctx: args.ctx,
+            match,
+            quote,
+            subject: { relationId: args.relation.relationId },
+        })
+    }
+    return match?.anchor
 }
 
 /**
@@ -535,6 +599,7 @@ export function finalizeResponseV2(
     const inputText = readInputText(ctx.input)
     const segmentStartById = resolveSegmentStarts(inputText, input.segmentation)
     const anchorByMentionId = buildAnchorByMentionId({
+        ctx,
         inputText,
         segmentStartById,
         mentions: input.mentions,
@@ -623,7 +688,12 @@ export function finalizeResponseV2(
                 : undefined
         const anchor =
             relation !== undefined
-                ? relationAnchor({ inputText, relation, segmentStartById })
+                ? relationAnchor({
+                      ctx,
+                      inputText,
+                      relation,
+                      segmentStartById,
+                  })
                 : undefined
         if (anchor !== undefined) {
             premise.sourceAnchors = [anchor]

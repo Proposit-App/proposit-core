@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest"
 import {
     locateSourceAnchor,
     SOURCE_ANCHOR_CONTEXT_CHARS,
+    type TIngestionSourceAnchor,
 } from "../../../src/extensions/pipelines/base/index.js"
 
 // `String.prototype.isWellFormed` is ES2024 and this package targets
@@ -21,10 +22,19 @@ import {
 const LONE_SURROGATE =
     /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
 
+/** The anchor half of a match, for assertions that ignore ambiguity. */
+function anchorOf(
+    input: string,
+    quote: string,
+    hintUtf16: number
+): TIngestionSourceAnchor | undefined {
+    return locateSourceAnchor(input, quote, hintUtf16)?.anchor
+}
+
 describe("locateSourceAnchor", () => {
     it("locates a quote that occurs once", () => {
         const input = "The blockade is unsustainable. Therefore we must talk."
-        const anchor = locateSourceAnchor(input, "we must talk", 0)
+        const anchor = anchorOf(input, "we must talk", 0)
         expect(anchor).toBeDefined()
         expect(input.slice(anchor!.startUtf16, anchor!.endUtf16)).toBe(
             "we must talk"
@@ -37,20 +47,27 @@ describe("locateSourceAnchor", () => {
         // index 0; the hint points at the second, so the second must win.
         const input = "the risk is real. Some deny the risk anyway."
         const second = input.lastIndexOf("the risk")
-        const anchor = locateSourceAnchor(input, "the risk", second + 2)
+        const anchor = anchorOf(input, "the risk", second + 2)
         expect(anchor?.startUtf16).toBe(second)
     })
 
     it("picks the earlier occurrence when the hint points at it", () => {
         const input = "the risk is real. Some deny the risk anyway."
-        const anchor = locateSourceAnchor(input, "the risk", 1)
+        const anchor = anchorOf(input, "the risk", 1)
         expect(anchor?.startUtf16).toBe(0)
     })
 
     it("still locates the quote when the hint runs past the input", () => {
         const input = "Short text with a quotable clause."
-        const anchor = locateSourceAnchor(input, "quotable clause", 10_000)
+        const anchor = anchorOf(input, "quotable clause", 10_000)
         expect(anchor?.startUtf16).toBe(input.indexOf("quotable clause"))
+    })
+
+    it("reports how many occurrences it chose between", () => {
+        const once = locateSourceAnchor("only here once", "here", 0)
+        expect(once?.occurrences).toBe(1)
+        const twice = locateSourceAnchor("here and here", "here", 0)
+        expect(twice?.occurrences).toBe(2)
     })
 
     it("returns nothing for a quote absent from the input", () => {
@@ -68,7 +85,7 @@ describe("locateSourceAnchor", () => {
 
     it("matches across a line break the model flattened to a space", () => {
         const input = "We should act now\nbecause delay compounds the cost."
-        const anchor = locateSourceAnchor(input, "act now because delay", 0)
+        const anchor = anchorOf(input, "act now because delay", 0)
         expect(anchor).toBeDefined()
         // The emitted quote is the INPUT's text for the matched range,
         // not the model's flattened copy — so the slice invariant holds.
@@ -80,24 +97,24 @@ describe("locateSourceAnchor", () => {
 
     it("ignores whitespace padding the model left on the quote", () => {
         const input = "The conclusion follows."
-        const anchor = locateSourceAnchor(input, "  conclusion  ", 0)
+        const anchor = anchorOf(input, "  conclusion  ", 0)
         expect(anchor?.quote).toBe("conclusion")
     })
 
     it("carries bounded context before and after the quote", () => {
         const filler = "x".repeat(SOURCE_ANCHOR_CONTEXT_CHARS * 2)
         const input = `${filler}QUOTE${filler}`
-        const anchor = locateSourceAnchor(input, "QUOTE", 0)
+        const anchor = anchorOf(input, "QUOTE", 0)
         expect(anchor?.prefix).toBe("x".repeat(SOURCE_ANCHOR_CONTEXT_CHARS))
         expect(anchor?.suffix).toBe("x".repeat(SOURCE_ANCHOR_CONTEXT_CHARS))
     })
 
     it("clamps context at the start and end of the input", () => {
         const input = "Alpha omega"
-        const first = locateSourceAnchor(input, "Alpha", 0)
+        const first = anchorOf(input, "Alpha", 0)
         expect(first?.prefix).toBe("")
         expect(first?.suffix).toBe(" omega")
-        const last = locateSourceAnchor(input, "omega", 0)
+        const last = anchorOf(input, "omega", 0)
         expect(last?.prefix).toBe("Alpha ")
         expect(last?.suffix).toBe("")
     })
@@ -112,7 +129,7 @@ describe("locateSourceAnchor", () => {
         // exists to serve.
         const filler = "y".repeat(SOURCE_ANCHOR_CONTEXT_CHARS - 1)
         const input = `\u{1F600}${filler}QUOTE${filler}\u{1F600}`
-        const anchor = locateSourceAnchor(input, "QUOTE", 0)
+        const anchor = anchorOf(input, "QUOTE", 0)
         expect(anchor).toBeDefined()
         expect(LONE_SURROGATE.test(anchor!.prefix)).toBe(false)
         expect(LONE_SURROGATE.test(anchor!.suffix)).toBe(false)
@@ -125,7 +142,7 @@ describe("locateSourceAnchor", () => {
     it("keeps a whole surrogate pair that fits inside the context window", () => {
         const filler = "y".repeat(SOURCE_ANCHOR_CONTEXT_CHARS - 2)
         const input = `\u{1F600}${filler}QUOTE${filler}\u{1F600}`
-        const anchor = locateSourceAnchor(input, "QUOTE", 0)
+        const anchor = anchorOf(input, "QUOTE", 0)
         expect(anchor!.prefix).toBe(`\u{1F600}${filler}`)
         expect(anchor!.suffix).toBe(`${filler}\u{1F600}`)
         expect(LONE_SURROGATE.test(anchor!.prefix)).toBe(false)
@@ -140,7 +157,7 @@ describe("locateSourceAnchor", () => {
             "only under competition",
             "Hence regulation",
         ]) {
-            const anchor = locateSourceAnchor(input, quote, 0)
+            const anchor = anchorOf(input, quote, 0)
             expect(anchor).toBeDefined()
             expect(anchor!.startUtf16).toBeGreaterThanOrEqual(0)
             expect(anchor!.endUtf16).toBeGreaterThan(anchor!.startUtf16)
