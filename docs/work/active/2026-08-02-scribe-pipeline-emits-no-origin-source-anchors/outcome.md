@@ -40,6 +40,25 @@ whose reason to exist is being cheap — and claim anchors are what a consumer
 hangs a per-claim source cue off anyway. `structure` is now asked for no quote
 instead of one it cannot supply, so the warning channel stays honest.
 
+## Also fixed: the locator's first-character tolerance
+
+Live runs surfaced a second, independent cause of lost anchors that the prompt
+could not fix. `locateSourceAnchor` gains a third tier — exact, then
+whitespace-insensitive, then both again with the quote's first character re-cased.
+
+Two paid runs against the reporting document showed the model re-casing the first
+character of a span in **both** directions: a span lifted from mid-sentence came
+back capitalized (`the world, to each individual` → `The world, …`), and after the
+prompt was tightened against that, spans lifted from sentence starts came back
+lower-cased (`This aspect` → `this aspect`, `Let us suppose` → `let us suppose`).
+Every one was a single-character miss. Prompt-wrangling the first character is
+fighting the tide, so the tolerance moved into the locator, where it also helps
+scholar.
+
+It cannot rescue a paraphrase: every character after the first must still match,
+and the anchor is built from the range in the input, so the document's casing is
+what gets stored.
+
 ## Verification
 
 - `pnpm run check` green: 2338 tests, typecheck, lint, build.
@@ -49,6 +68,21 @@ instead of one it cannot supply, so the warning channel stays honest.
   than empty; no relation reaches anchor resolution.
 - All five golden fixtures now carry claim anchors (2–4 each), where every
   scribe golden previously had zero.
+
+Live runs against the reporting document's own text, through a tarball of this
+build installed in `proposit-server`, with real `gpt-5.4-mini` calls:
+
+| run | claims | anchored | mis-sliced | anchor notes |
+| --- | --- | --- | --- | --- |
+| 6,000-char slice, before the locator tier | 9 | 8 | 0 | 1 |
+| same slice, after | 12 | 12 | 0 | 0 |
+| **full 96,963-char document** | **9** | **9** | **0** | **0** |
+
+"mis-sliced" counts anchors where `input.slice(startUtf16, endUtf16) !== quote` —
+the invariant that makes an anchor mean anything. Zero throughout.
+
+`pnpm run check` in `proposit-server` against the same tarball: 3351 tests,
+compiled successfully.
 
 ## Caveat on the fixtures
 
