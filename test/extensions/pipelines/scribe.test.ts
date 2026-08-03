@@ -29,10 +29,33 @@ function createDeterministicGenerateId(prefix = "gid"): () => string {
     }
 }
 
+/**
+ * The source text every run in this file is given. Anchors are offsets
+ * into it, so the assertions slice it rather than trusting a quote.
+ */
+const INPUT_TEXT = "It is raining. Therefore the ground is wet."
+
 // A two-claim "rain → wet ground" extract payload (the per-extension
-// canonicalization shape: basics claim records carry title/body/type).
+// canonicalization shape: basics claim records carry title/body/type),
+// plus the mentions whose quoted text becomes each claim's anchor.
 function happyExtractOutput(): unknown {
     return {
+        mentions: [
+            {
+                mentionId: "c1-m",
+                segmentId: "",
+                text: "It is raining",
+                span: { start: 0, end: 13 },
+            },
+            {
+                mentionId: "c2-m",
+                segmentId: "",
+                text: "the ground is wet",
+                // Deliberately wrong: the offsets are a tie-break hint, and
+                // a quote that occurs once must resolve regardless of them.
+                span: { start: 0, end: 17 },
+            },
+        ],
         canonicalClaims: [
             {
                 miniId: "c1",
@@ -90,7 +113,7 @@ function runScribe(
     })
     return executePipeline(
         createScribePipeline(basicsExtension),
-        { text: "It is raining. Therefore the ground is wet." },
+        { text: INPUT_TEXT },
         { llm, generateId: createDeterministicGenerateId() }
     ) as Promise<{
         output: TParsedArgumentResponse | null
@@ -149,7 +172,7 @@ describe("createScribePipeline", () => {
         })
         await executePipeline(
             createScribePipeline(basicsExtension),
-            { text: "It is raining. Therefore the ground is wet." },
+            { text: INPUT_TEXT },
             { llm, generateId: createDeterministicGenerateId() }
         )
         const structureCall = calls.find(
@@ -188,7 +211,7 @@ describe("createScribePipeline", () => {
 
     it("an empty claim set yields a valid argument: null response (no throw)", async () => {
         const result = await runScribe(
-            { canonicalClaims: [], mentionToClaim: [] },
+            { canonicalClaims: [], mentionToClaim: [], mentions: [] },
             { relations: [], conclusionCandidates: [], rationale: "" }
         )
         expect(result.output).not.toBeNull()
@@ -210,5 +233,90 @@ describe("createScribePipeline", () => {
         expect(failureCodes).toContain("NO_SINGLE_CONCLUSION")
         // Degraded, not crashed: a defined response with argument: null.
         expect(result.output!.argument).toBeNull()
+    })
+
+    // -- Source anchors --
+
+    it("every claim carries source anchors located in the input text", async () => {
+        const result = await runScribe(
+            happyExtractOutput(),
+            happyStructureOutput()
+        )
+        const claims = result.output!.argument!.claims as {
+            title?: string
+            sourceAnchors?: {
+                quote: string
+                startUtf16: number
+                endUtf16: number
+            }[]
+        }[]
+        expect(claims.length).toBe(2)
+        for (const claim of claims) {
+            expect(claim.sourceAnchors?.length).toBeGreaterThan(0)
+            for (const anchor of claim.sourceAnchors ?? []) {
+                // The offsets are the fact, not the quote: slicing the
+                // input at them has to reproduce the quote, or the anchor
+                // points somewhere the reader was never promised.
+                expect(
+                    INPUT_TEXT.slice(anchor.startUtf16, anchor.endUtf16)
+                ).toBe(anchor.quote)
+            }
+        }
+        expect(claims[0].sourceAnchors![0].quote).toBe("It is raining")
+        expect(claims[1].sourceAnchors![0].quote).toBe("the ground is wet")
+    })
+
+    it("a claim whose quote is not in the input still assembles, with one warning and no anchors", async () => {
+        // The model paraphrasing instead of quoting is the failure mode
+        // that takes anchor coverage to zero silently. It must cost the
+        // anchor and a warning — never the argument.
+        const extract = happyExtractOutput() as {
+            mentions: { text: string }[]
+        }
+        extract.mentions[0].text = "a paraphrase that appears nowhere"
+        const result = await runScribe(extract, happyStructureOutput())
+        expect(result.output!.argument).not.toBeNull()
+        const claims = result.output!.argument!.claims as {
+            sourceAnchors?: unknown[]
+        }[]
+        // Absent, not empty: "we found nothing" and "we did not look" must
+        // not read the same downstream.
+        expect("sourceAnchors" in claims[0]).toBe(false)
+        expect(claims[1].sourceAnchors?.length).toBe(1)
+        expect(
+            result.failures.filter((f) => f.code === "SOURCE_ANCHOR_UNRESOLVED")
+        ).toHaveLength(1)
+    })
+
+    it("no relation is asked to supply an evidence quote it cannot have", async () => {
+        // `structure` never sees the input text, so any quote it returns is
+        // a paraphrase that can only miss. Nothing may be routed to anchor
+        // resolution on its behalf — a miss there would blame the model for
+        // a fault in the pipeline's own wiring.
+        const calls: TMockCallRecord[] = []
+        const llm = createMockLlmProvider({
+            responses: {
+                extract: [{ kind: "ok", output: happyExtractOutput() }],
+                "scribe-structure": [
+                    { kind: "ok", output: happyStructureOutput() },
+                ],
+            },
+            onCall: (record) => calls.push(record),
+        })
+        const result = (await executePipeline(
+            createScribePipeline(basicsExtension),
+            { text: INPUT_TEXT },
+            { llm, generateId: createDeterministicGenerateId() }
+        )) as { failures: readonly { code: string; context?: unknown }[] }
+        const structureCall = calls.find(
+            (c) => c.stageId === "scribe-structure"
+        )
+        expect(structureCall!.systemPrompt).not.toMatch(/no span to cite/)
+        for (const failure of result.failures) {
+            expect(
+                (failure.context as { relationId?: string } | undefined)
+                    ?.relationId
+            ).toBeUndefined()
+        }
     })
 })

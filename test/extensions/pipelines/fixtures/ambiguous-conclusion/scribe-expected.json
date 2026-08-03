@@ -6,6 +6,15 @@
                 "title": "Remote work boosts productivity",
                 "body": "Working remotely improves productivity for many people.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Working remotely improves productivity for many people.",
+                        "startUtf16": 0,
+                        "endUtf16": 55,
+                        "prefix": "",
+                        "suffix": " Working remotely also reduces c"
+                    }
+                ],
                 "role": "conclusion"
             },
             {
@@ -13,6 +22,15 @@
                 "title": "Remote work cuts commute time",
                 "body": "Working remotely reduces commuting time.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Working remotely also reduces commuting time.",
+                        "startUtf16": 56,
+                        "endUtf16": 101,
+                        "prefix": "s productivity for many people. ",
+                        "suffix": " Reducing commuting time improve"
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -20,6 +38,15 @@
                 "title": "Less commuting improves balance",
                 "body": "Reducing commuting time improves work-life balance.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Reducing commuting time improves work-life balance.",
+                        "startUtf16": 102,
+                        "endUtf16": 153,
+                        "prefix": "ly also reduces commuting time. ",
+                        "suffix": ""
+                    }
+                ],
                 "role": "premise"
             }
         ],

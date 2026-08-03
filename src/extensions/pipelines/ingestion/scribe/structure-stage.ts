@@ -42,7 +42,7 @@ export const STRUCTURE_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
 export const STRUCTURE_SYSTEM_PROMPT = `You read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.
 
 Emit:
-- \`relations\` — the inference edges between claims. Each relation: a stable \`relationId\` (r1, r2, ...), a \`type\` of "inference", an \`antecedents\` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single \`consequent\` claim miniId, and an \`evidence\` object ({ segmentIds: [], quote: "" } is acceptable when you have no span to cite).
+- \`relations\` — the inference edges between claims. Each relation: a stable \`relationId\` (r1, r2, ...), a \`type\` of "inference", an \`antecedents\` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single \`consequent\` claim miniId, and an \`evidence\` object, which is always exactly { segmentIds: [], quote: "" } — you are shown the claims, not the text they came from, so you have nothing to quote.
 - \`conclusionCandidates\` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.
 - \`rationale\` — one sentence explaining your best pick (or why none qualifies).
 

@@ -5,6 +5,15 @@
                 "miniId": "c1",
                 "axiom": "A bachelor is an unmarried man.",
                 "type": "axiomatic",
+                "sourceAnchors": [
+                    {
+                        "quote": "By definition, a bachelor is an unmarried man.",
+                        "startUtf16": 0,
+                        "endUtf16": 46,
+                        "prefix": "",
+                        "suffix": " John is a bachelor. Therefore, "
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -12,6 +21,15 @@
                 "title": "John is a bachelor",
                 "body": "John is a bachelor.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "John is a bachelor.",
+                        "startUtf16": 47,
+                        "endUtf16": 66,
+                        "prefix": "a bachelor is an unmarried man. ",
+                        "suffix": " Therefore, John is unmarried."
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -19,6 +37,15 @@
                 "title": "John is unmarried",
                 "body": "John is unmarried.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "John is unmarried",
+                        "startUtf16": 78,
+                        "endUtf16": 95,
+                        "prefix": " John is a bachelor. Therefore, ",
+                        "suffix": "."
+                    }
+                ],
                 "role": "conclusion"
             }
         ],

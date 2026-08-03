@@ -10,11 +10,58 @@
 //     relation-extraction + conclusion-selection slots.
 //
 // `extract`'s output schema is the per-extension canonicalization
-// schema itself (`buildResponseSchema(extension)`); only `structure`
-// needs a bespoke schema, defined here.
+// schema widened with the mention slot (`buildExtractOutputSchema`);
+// `structure` needs a bespoke schema. Both are defined here.
 
-import Type, { type Static } from "typebox"
-import { RelationExtractionOutputSchema } from "../../base/stages/index.js"
+import Type, { type Static, type TSchema } from "typebox"
+import {
+    ClaimMentionExtractionOutputSchema,
+    RelationExtractionOutputSchema,
+    buildResponseSchema,
+} from "../../base/stages/index.js"
+import type {
+    TClaimCanonicalizationOutput,
+    TClaimMentionExtractionOutput,
+} from "../../base/stages/index.js"
+import type { TIngestionExtension } from "../../base/types.js"
+
+/**
+ * What `extract` returns: the canonicalization slot's payload and the
+ * mention slot's, in one object. Structural rather than a `Static<>`,
+ * because the schema is built per-extension.
+ */
+export type TScribeExtractOutput = TClaimCanonicalizationOutput &
+    TClaimMentionExtractionOutput
+
+/**
+ * `extract`'s output: the per-extension canonicalization shape, plus the
+ * mentions whose quoted text becomes each claim's source anchor.
+ *
+ * The mentions ride along on the one stage that is given the input text,
+ * rather than coming from a stage of their own — scribe's whole point is
+ * that there are two LLM calls, and locating a claim in the text is not
+ * worth a third. Their item shape is scholar's, so the same finalize
+ * resolution reads them without a translation layer.
+ *
+ * The canonicalization envelope is `additionalProperties: false`, so the
+ * widened shape is a distinct schema rather than an extra key on the
+ * shared one — and the adapter that republishes the canonicalization slot
+ * has to narrow back to it. See `createExtractCanonicalizationAdapterStage`.
+ */
+export function buildExtractOutputSchema(
+    extension: TIngestionExtension
+): TSchema {
+    const canonicalization = buildResponseSchema(extension) as unknown as {
+        properties: Record<string, TSchema>
+    }
+    return Type.Object(
+        {
+            ...canonicalization.properties,
+            mentions: ClaimMentionExtractionOutputSchema.properties.mentions,
+        },
+        { additionalProperties: false }
+    )
+}
 
 // `structure` emits the relation graph (same per-relation shape as
 // scholar's `relation-extraction`) plus the conclusion candidates +

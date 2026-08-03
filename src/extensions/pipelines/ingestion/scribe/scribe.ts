@@ -11,8 +11,9 @@
 // DAG:
 //
 //   extract ──┬─ (adapter) claim-canonicalization ─┬─ claim-reference-validation
-//             └─ (adapter) claim-type-classification ┤
-//                                                    └─ variable-assignment
+//             ├─ (adapter) claim-type-classification ┤
+//             │                                      └─ variable-assignment
+//             └─ (adapter) claim-mention-extraction
 //   structure ─┬─ (adapter) relation-extraction
 //              └─ (adapter) conclusion-selection
 //                                          formula-compilation
@@ -31,6 +32,7 @@ import {
     variableAssignmentStage,
     formulaCompilationStage,
     formulaValidationStage,
+    type TClaimMentionExtractionOutput,
 } from "../../base/stages/index.js"
 import { finalizeResponseV2 } from "../../base/finalize-response-v2.js"
 import { resolveLlmStageOptions } from "../../base/resolve-llm-stage-options.js"
@@ -44,6 +46,7 @@ import {
     createExtractStage,
     createExtractCanonicalizationAdapterStage,
     extractClassificationAdapterStage,
+    extractMentionAdapterStage,
     EXTRACT_STAGE_DEFAULTS,
 } from "./extract-stage.js"
 import {
@@ -95,6 +98,7 @@ export function createScribePipeline(
         extractStage,
         extractCanonicalizationAdapterStage,
         extractClassificationAdapterStage,
+        extractMentionAdapterStage,
         claimReferenceValidationStage,
         variableAssignmentStage,
         structureStage,
@@ -123,13 +127,30 @@ export function createScribePipeline(
                 optional(STAGE_IDS.conclusionSelection),
                 optional(STAGE_IDS.formulaValidation),
                 optional(STAGE_IDS.claimReferenceValidation),
+                // Read only for the source anchors finalize attaches to
+                // claims; a missing mention output costs the anchors,
+                // never the argument.
+                optional(STAGE_IDS.claimMentionExtraction),
             ],
-            // No segmentation or mention output is passed: this pipeline
-            // has neither stage, and its `extract` prompt asks for
-            // synthetic mention ids. Claims therefore carry no source
-            // anchors; relation-derived premises still do, since their
-            // evidence quote comes from `structure`.
-            run: (ctx) => finalizeResponseV2({ ctx, extension }),
+            // No segmentation is passed — this pipeline has no such stage,
+            // and needs none: a mention's span is only a tie-break hint
+            // between repeated occurrences, and finalize locates the quoted
+            // text itself.
+            //
+            // Premises carry no source anchors here. Their quote would have
+            // to come from `structure`, which is built from the canonical
+            // claim set and never sees the input text, so anything it
+            // returned would be a paraphrase that could only fail to
+            // resolve. `structure` is asked for no quote at all rather than
+            // for one it cannot have.
+            run: (ctx) =>
+                finalizeResponseV2({
+                    ctx,
+                    extension,
+                    mentions: ctx.get<TClaimMentionExtractionOutput>(
+                        STAGE_IDS.claimMentionExtraction
+                    ),
+                }),
         },
     }
 }

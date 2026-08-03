@@ -95,6 +95,35 @@ describe("locateSourceAnchor", () => {
         )
     })
 
+    it("matches when the model capitalized a span it lifted from mid-sentence", () => {
+        const input = "It follows that the argument is unsound."
+        const anchor = anchorOf(input, "The argument is unsound.", 0)
+        expect(anchor).toBeDefined()
+        // Stored with the DOCUMENT's casing, not the model's — otherwise
+        // the offsets and the quote disagree about the same span.
+        expect(anchor!.quote).toBe("the argument is unsound.")
+        expect(input.slice(anchor!.startUtf16, anchor!.endUtf16)).toBe(
+            anchor!.quote
+        )
+    })
+
+    it("matches when the model lower-cased a span that starts a sentence", () => {
+        // The same reflex in the other direction, which is why the fix is
+        // a case flip rather than a lower-casing.
+        const input = "Delay compounds the cost. So we should act."
+        const anchor = anchorOf(input, "delay compounds the cost.", 0)
+        expect(anchor?.quote).toBe("Delay compounds the cost.")
+    })
+
+    it("re-casing the first character never rescues a genuine paraphrase", () => {
+        // Every character after the first must still match exactly; the
+        // tier widens the search by one character, not by a similarity.
+        const input = "The ground is wet because it rained."
+        expect(
+            locateSourceAnchor(input, "the ground is damp because it rained", 0)
+        ).toBe(undefined)
+    })
+
     it("ignores whitespace padding the model left on the quote", () => {
         const input = "The conclusion follows."
         const anchor = anchorOf(input, "  conclusion  ", 0)

@@ -6,6 +6,15 @@
                 "title": "Global temperatures rise significantly",
                 "body": "Global temperatures have risen significantly over the past century.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "global temperatures have risen significantly over the past century",
+                        "startUtf16": 74,
+                        "endUtf16": 140,
+                        "prefix": "://climate.nasa.gov/evidence/), ",
+                        "suffix": ". Rising global temperatures cau"
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -13,6 +22,15 @@
                 "title": "Rising temperatures increase extreme weather",
                 "body": "Rising global temperatures cause more frequent extreme weather events.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Rising global temperatures cause more frequent extreme weather events",
+                        "startUtf16": 142,
+                        "endUtf16": 211,
+                        "prefix": "ficantly over the past century. ",
+                        "suffix": ". Therefore, we are seeing more "
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -20,6 +38,15 @@
                 "title": "Extreme weather events are more frequent",
                 "body": "More frequent extreme weather events are being seen.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "we are seeing more frequent extreme weather events",
+                        "startUtf16": 224,
+                        "endUtf16": 274,
+                        "prefix": "reme weather events. Therefore, ",
+                        "suffix": "."
+                    }
+                ],
                 "role": "conclusion"
             },
             {
@@ -27,6 +54,15 @@
                 "title": "NASA climate report on warming",
                 "url": "https://climate.nasa.gov/evidence/",
                 "type": "citation",
+                "sourceAnchors": [
+                    {
+                        "quote": "[NASA's climate report](https://climate.nasa.gov/evidence/)",
+                        "startUtf16": 13,
+                        "endUtf16": 72,
+                        "prefix": "According to ",
+                        "suffix": ", global temperatures have risen"
+                    }
+                ],
                 "role": "intermediate",
                 "citation": {
                     "type": "unparsed",

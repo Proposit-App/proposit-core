@@ -28,6 +28,7 @@ export const INGESTION_SCRIBE_STAGE_IDS: readonly string[] = [
     "extract",
     "claim-canonicalization",
     "claim-type-classification",
+    "claim-mention-extraction",
     "claim-reference-validation",
     "variable-assignment",
     "scribe-structure",
