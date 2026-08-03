@@ -429,10 +429,25 @@ describe("e2e: distill → scribe pipeline", () => {
         }
 
         // Scribe's internal LLM stages (extract + structure) each need a response.
-        // The extract stage returns a canonicalClaims + mentionToClaim shape;
-        // the structure stage returns relations + conclusionCandidates.
-        // These match the shapes used by the deterministic adapters + finalize.
+        // The extract stage returns a canonicalClaims + mentions +
+        // mentionToClaim shape; the structure stage returns relations +
+        // conclusionCandidates. These match the shapes used by the
+        // deterministic adapters + finalize.
         const scribeExtractOutput = {
+            mentions: [
+                {
+                    mentionId: "c1-m",
+                    segmentId: "",
+                    text: "Running for a third term violates the Constitution.",
+                    span: { start: 0, end: 51 },
+                },
+                {
+                    mentionId: "c2-m",
+                    segmentId: "",
+                    text: "The Constitution limits presidents to two terms.",
+                    span: { start: 52, end: 99 },
+                },
+            ],
             canonicalClaims: [
                 {
                     miniId: "c1",

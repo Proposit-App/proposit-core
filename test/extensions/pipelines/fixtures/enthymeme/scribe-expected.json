@@ -6,6 +6,15 @@
                 "title": "Socrates is a man",
                 "body": "Socrates is a man.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Socrates is a man.",
+                        "startUtf16": 0,
+                        "endUtf16": 18,
+                        "prefix": "",
+                        "suffix": " Therefore, Socrates is mortal."
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -13,6 +22,15 @@
                 "title": "Socrates is mortal",
                 "body": "Socrates is mortal.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Socrates is mortal.",
+                        "startUtf16": 30,
+                        "endUtf16": 49,
+                        "prefix": "Socrates is a man. Therefore, ",
+                        "suffix": ""
+                    }
+                ],
                 "role": "conclusion"
             }
         ],

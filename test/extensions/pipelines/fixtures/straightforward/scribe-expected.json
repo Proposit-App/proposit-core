@@ -6,6 +6,15 @@
                 "title": "Rain makes ground wet",
                 "body": "If it rains, the ground gets wet.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "If it rains, the ground gets wet.",
+                        "startUtf16": 0,
+                        "endUtf16": 33,
+                        "prefix": "",
+                        "suffix": " It is raining. Therefore, the g"
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -13,6 +22,15 @@
                 "title": "It is raining",
                 "body": "It is raining.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "It is raining.",
+                        "startUtf16": 34,
+                        "endUtf16": 48,
+                        "prefix": " it rains, the ground gets wet. ",
+                        "suffix": " Therefore, the ground is wet."
+                    }
+                ],
                 "role": "premise"
             },
             {
@@ -20,6 +38,15 @@
                 "title": "Ground is wet",
                 "body": "The ground is wet.",
                 "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "the ground is wet",
+                        "startUtf16": 60,
+                        "endUtf16": 77,
+                        "prefix": " wet. It is raining. Therefore, ",
+                        "suffix": "."
+                    }
+                ],
                 "role": "conclusion"
             }
         ],
