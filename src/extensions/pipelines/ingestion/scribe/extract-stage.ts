@@ -45,7 +45,7 @@ For each distinct proposition the author makes, emit one canonical claim. Two ph
 
 Also emit \`mentions\` — where in the input each claim is stated. One entry per place a claim is made:
 - \`mentionId\` — "<claim miniId>-m" for the first mention of a claim, then "-m2", "-m3", ... for further ones (e.g. "c1-m", "c1-m2").
-- \`text\` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.
+- \`text\` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.
 - \`span\` — approximate \`{ start, end }\` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.
 - \`segmentId\` — the empty string.
 

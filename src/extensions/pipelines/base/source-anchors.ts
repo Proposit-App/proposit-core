@@ -110,6 +110,43 @@ function whitespaceInsensitiveRanges(
     return ranges
 }
 
+/** Exact ranges for `quote`, falling back to whitespace-insensitive ones. */
+function rangesFor(
+    input: string,
+    quote: string
+): { start: number; end: number }[] {
+    const exact = exactOccurrences(input, quote).map((start) => ({
+        start,
+        end: start + quote.length,
+    }))
+    return exact.length > 0 ? exact : whitespaceInsensitiveRanges(input, quote)
+}
+
+/**
+ * The same text with its first character's case flipped, or `undefined`
+ * when that character has no other case.
+ *
+ * Models re-case the first character of a quoted span reflexively, in
+ * both directions: a span lifted from mid-sentence comes back with a
+ * capital, and one lifted from a sentence start comes back lower-cased
+ * to look like a fragment. Both were observed on the same document, on
+ * consecutive runs, under a prompt that forbids exactly this — so it is
+ * handled here rather than argued about in the prompt.
+ *
+ * Only the first character, and only after an exact search has already
+ * failed: every other character must still match, so this cannot invent
+ * a match the model did not essentially supply. The anchor is built from
+ * the range in the input, so what gets stored is the document's own
+ * casing, not the model's.
+ */
+function flipFirstCharacterCase(text: string): string | undefined {
+    const first = text[0]
+    const lower = first.toLowerCase()
+    const upper = first.toUpperCase()
+    if (lower === upper) return undefined
+    return (first === lower ? upper : lower) + text.slice(1)
+}
+
 /**
  * Drop a lone surrogate left at either edge by slicing on a code-unit
  * boundary, shrinking the window by one unit rather than emitting an
@@ -215,7 +252,8 @@ export type TSourceAnchorMatch = {
  * matches, so a wrong hint degrades to "picked another occurrence of the
  * same text", never to a wrong span.
  *
- * The ladder is exact match, then whitespace-insensitive match. Nothing
+ * The ladder is exact match, then whitespace-insensitive match, then
+ * both again with the quote's first character re-cased. Nothing
  * approximate: a quote that still does not match yields `undefined`.
  */
 export function locateSourceAnchor(
@@ -226,12 +264,11 @@ export function locateSourceAnchor(
     const trimmed = quote.trim()
     if (trimmed.length === 0) return undefined
 
-    const exact = exactOccurrences(input, trimmed).map((start) => ({
-        start,
-        end: start + trimmed.length,
-    }))
-    const candidates =
-        exact.length > 0 ? exact : whitespaceInsensitiveRanges(input, trimmed)
+    let candidates = rangesFor(input, trimmed)
+    if (candidates.length === 0) {
+        const recased = flipFirstCharacterCase(trimmed)
+        if (recased !== undefined) candidates = rangesFor(input, recased)
+    }
     // Discarding the range, rather than trimming the quote, is what
     // keeps `input.slice(start, end) === quote` true.
     const ranges = candidates.filter(
