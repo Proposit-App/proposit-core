@@ -64,7 +64,7 @@ Your output has two parts:
 - \`"citation"\` — a claim whose content is "the cited source asserts X". Use this type when one of the citation sources covers the same span(s) as the mention. Populate \`url\` (the URL if present), \`title\` (a short human-readable label), and \`citationTypeGuess\` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. "JournalArticle", "NewspaperArticle", "Book", "Website", "GovernmentPublication", … — or "unknown" when no IEEE type fits or you cannot tell).
 - \`"axiomatic"\` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. "by definition") covers or precedes the mention. Populate \`axiom\` with the gist of the self-evident proposition.
 
-When a mention is the antecedent of "according to X, P", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here.
+When a mention is the antecedent of "according to X, P", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here. BOTH claims list that mention in their \`mentionIds\` — the split is one span giving rise to two claims, and a claim with no \`mentionIds\` loses its link back to the source text entirely. (\`mentionToClaim\` is unaffected: it still maps that mention to exactly one claim — the normal-typed one.)
 
 ## Style
 

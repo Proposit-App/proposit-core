@@ -61,23 +61,23 @@
               "text": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century.",
               "span": {
                 "start": 0,
-                "end": 142
+                "end": 144
               }
             },
             {
               "segmentId": "s2",
               "text": "Rising global temperatures cause more frequent extreme weather events.",
               "span": {
-                "start": 143,
-                "end": 213
+                "start": 145,
+                "end": 216
               }
             },
             {
               "segmentId": "s3",
               "text": "Therefore, we are seeing more frequent extreme weather events.",
               "span": {
-                "start": 214,
-                "end": 276
+                "start": 217,
+                "end": 279
               }
             }
           ]
@@ -87,7 +87,7 @@
           "output": 126,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0374dec6b7973141006a3e7275a4ec819f98028649f42f9cf9"
+        "rawResponseId": "resp_0d515ad14313ac74006a720c03f32881a3bd60228707d1d763"
       }
     },
     {
@@ -154,8 +154,8 @@
               "segmentId": "s1",
               "text": "global temperatures have risen significantly over the past century.",
               "span": {
-                "start": 60,
-                "end": 124
+                "start": 59,
+                "end": 123
               }
             },
             {
@@ -164,7 +164,7 @@
               "text": "Rising global temperatures cause more frequent extreme weather events.",
               "span": {
                 "start": 0,
-                "end": 69
+                "end": 68
               }
             },
             {
@@ -173,7 +173,7 @@
               "text": "we are seeing more frequent extreme weather events.",
               "span": {
                 "start": 11,
-                "end": 63
+                "end": 64
               }
             }
           ]
@@ -183,7 +183,7 @@
           "output": 124,
           "reasoning": 0
         },
-        "rawResponseId": "resp_08e1fa7a74244079006a3e727770e481a0ad037954610c36f3"
+        "rawResponseId": "resp_03626e728e6a0bf0006a720c061c5c81a0a608ca9079ea03db"
       }
     },
     {
@@ -272,7 +272,7 @@
               "spans": [
                 {
                   "start": 12,
-                  "end": 64
+                  "end": 62
                 }
               ]
             }
@@ -283,7 +283,7 @@
           "output": 65,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0b80bda2997e8aaf006a3e727775c48191831c9463b8e13ec5"
+        "rawResponseId": "resp_07b302ffc79f78d6006a720c06374081a08973705723999058"
       }
     },
     {
@@ -357,7 +357,7 @@
           "output": 19,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0ce8cd60ab0685ba006a3e72777750819c8a3f99523f5c96d2"
+        "rawResponseId": "resp_0c20bce14ebc82a8006a720c062d68819fbb2d44e3ef3771c5"
       }
     },
     {
@@ -678,9 +678,7 @@
           "canonicalClaims": [
             {
               "miniId": "c1",
-              "mentionIds": [
-                "m1"
-              ],
+              "mentionIds": [],
               "suggestedSymbol": "NASA_Temp_Rise",
               "title": "NASA reports temperature rise",
               "url": "https://climate.nasa.gov/evidence/",
@@ -692,8 +690,8 @@
               "mentionIds": [
                 "m1"
               ],
-              "suggestedSymbol": "Global_Temp_Rise",
-              "title": "Global temperatures have risen",
+              "suggestedSymbol": "GlobalTemps_Rose",
+              "title": "Global temperatures rose",
               "body": "Global temperatures have risen significantly over the past century.",
               "type": "normal"
             },
@@ -702,9 +700,9 @@
               "mentionIds": [
                 "m2"
               ],
-              "suggestedSymbol": "Temp_Rise_Extreme_Weather",
-              "title": "Warming increases extreme weather",
-              "body": "Rising global temperatures cause more frequent extreme weather events.",
+              "suggestedSymbol": "Warming_ExtremeWeather",
+              "title": "Warming causes extreme weather",
+              "body": "Rising global temperatures cause extreme weather events to occur more frequently.",
               "type": "normal"
             },
             {
@@ -712,9 +710,9 @@
               "mentionIds": [
                 "m3"
               ],
-              "suggestedSymbol": "Extreme_Weather_More_Frequent",
+              "suggestedSymbol": "ExtremeWeather_MoreFrequent",
               "title": "Extreme weather is more frequent",
-              "body": "People are seeing more frequent extreme weather events.",
+              "body": "People are seeing more frequent extreme weather events now.",
               "type": "normal"
             }
           ],
@@ -735,10 +733,10 @@
         },
         "tokenUsage": {
           "input": 1517,
-          "output": 781,
+          "output": 776,
           "reasoning": 516
         },
-        "rawResponseId": "resp_08fa3002987185c4006a3e727945cc819db27da27263635626"
+        "rawResponseId": "resp_068b2a8d8443c2cf006a7202b61a4c819ca85f2874cb07d4e8"
       }
     },
     {
@@ -1230,6 +1228,1634 @@
           "reasoning": 53
         },
         "rawResponseId": "resp_0563372d304e965f006a3e72907be48191837d5dc9844bda82"
+      }
+    },
+    {
+      "hash": "5e13492dc228c7d8580effc31d0e12139cf91fabf06a63e3626533bcd83518ae",
+      "stageId": "claim-type-classification",
+      "request": {
+        "model": "gpt-5.4",
+        "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
+        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=citation suggestedSymbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal suggestedSymbol=GlobalTemps_Rose fields={\"title\":\"Global temperatures rose\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal suggestedSymbol=Warming_ExtremeWeather fields={\"title\":\"Warming causes extreme weather\",\"body\":\"Rising global temperatures cause extreme weather events to occur more frequently.\"}\n  [c4] type=normal suggestedSymbol=ExtremeWeather_MoreFrequent fields={\"title\":\"Extreme weather is more frequent\",\"body\":\"People are seeing more frequent extreme weather events now.\"}\n\nDetected citation sources:\n  [src1 @ s1] \"NASA's climate report\" (url: https://climate.nasa.gov/evidence/)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "classifications"
+          ],
+          "properties": {
+            "classifications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "miniId",
+                  "type",
+                  "sourceString"
+                ],
+                "properties": {
+                  "miniId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "normal"
+                      },
+                      {
+                        "type": "string",
+                        "const": "citation"
+                      },
+                      {
+                        "type": "string",
+                        "const": "axiomatic"
+                      }
+                    ]
+                  },
+                  "sourceString": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "classifications": [
+            {
+              "miniId": "c1",
+              "type": "citation",
+              "sourceString": "NASA's climate report"
+            },
+            {
+              "miniId": "c2",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c3",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c4",
+              "type": "normal",
+              "sourceString": null
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 616,
+          "output": 83,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_09ade1a4c9e12dda006a7202c36cb081928a9dd9f9ad6f49fe"
+      }
+    },
+    {
+      "hash": "c331a66bac725b63c6b7b7633e604d453c4acc7aa81eff481416e7e23cdac9f9",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=citation symbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal symbol=GlobalTemps_Rose fields={\"title\":\"Global temperatures rose\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal symbol=Warming_ExtremeWeather fields={\"title\":\"Warming causes extreme weather\",\"body\":\"Rising global temperatures cause extreme weather events to occur more frequently.\"}\n  [c4] type=normal symbol=ExtremeWeather_MoreFrequent fields={\"title\":\"Extreme weather is more frequent\",\"body\":\"People are seeing more frequent extreme weather events now.\"}\n\nSegments:\n  [s1] \"According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century.\"\n  [s2] \"Rising global temperatures cause more frequent extreme weather events.\"\n  [s3] \"Therefore, we are seeing more frequent extreme weather events.\"\n\nEmit every inference relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "NASA report as evidence",
+              "evidence": {
+                "segmentIds": [
+                  "s1"
+                ],
+                "quote": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century."
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
+                "c2",
+                "c3"
+              ],
+              "consequent": "c4",
+              "title": "Applying warming's effects",
+              "evidence": {
+                "segmentIds": [
+                  "s1",
+                  "s2",
+                  "s3"
+                ],
+                "quote": "global temperatures have risen significantly over the past century. Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events."
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 905,
+          "output": 698,
+          "reasoning": 516
+        },
+        "rawResponseId": "resp_0162a5a7f6c8a114006a7202c53f6481a29c61dd482326c0e2"
+      }
+    },
+    {
+      "hash": "8205a7ff9c44386a3443f69bc8343f97ab07f6f5a16339176c59647bb5bcf91e",
+      "stageId": "conclusion-selection",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the inference relation graph from `relation-extraction` (each relation's antecedents jointly imply its consequent)\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n- `title` — for your FIRST candidate only: a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Return an empty string when `conclusionCandidates` is empty.\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
+        "userMessage": "Per-claim types:\n  [c1] type=citation\n  [c2] type=normal\n  [c3] type=normal\n  [c4] type=normal\n\nRelations:\n  [r1] antecedents=[c1] consequent=c2\n  [r2] antecedents=[c2,c3] consequent=c4\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "conclusionCandidates",
+            "rationale",
+            "title"
+          ],
+          "properties": {
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "conclusionCandidates": [
+            "c4"
+          ],
+          "rationale": "c4 is the terminal supported normal claim, inferred from c2 and c3, while c2 functions as an intermediate supported claim.",
+          "title": "Combining authority with premise"
+        },
+        "tokenUsage": {
+          "input": 590,
+          "output": 61,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0b3ce3a828778f8e006a720c29908c81a08f682cfe28eb7d47"
+      }
+    },
+    {
+      "hash": "bb2e6582664aead24f54f9f5256f849e5a250e7388224c7d3314ab451ef11506",
+      "stageId": "claim-canonicalization",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here.\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Input text:\n\nAccording to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century. Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events.\n\nClaim mentions:\n  [m1 @ s1] \"global temperatures have risen significantly over the past century\"\n  [m2 @ s2] \"Rising global temperatures cause more frequent extreme weather events.\"\n  [m3 @ s3] \"we are seeing more frequent extreme weather events.\"\n\nDetected citation sources:\n  [src1 @ s1] \"NASA's climate report\" (url: https://climate.nasa.gov/evidence/)\n\nDetected axiom indicators:\n  (none)\n\nProduce the canonicalClaims + mentionToClaim object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "canonicalClaims",
+            "mentionToClaim"
+          ],
+          "properties": {
+            "canonicalClaims": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "body",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "body": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "A detailed description of the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "normal",
+                        "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "url",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "The URL of the citation supporting the claim"
+                      },
+                      "citationTypeGuess": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "Book"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Website"
+                              },
+                              {
+                                "type": "string",
+                                "const": "BookChapter"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Handbook"
+                              },
+                              {
+                                "type": "string",
+                                "const": "TechnicalReport"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Standard"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Thesis"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Patent"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dictionary"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Encyclopedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "JournalArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "MagazineArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "NewspaperArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferencePaper"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferenceProceedings"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dataset"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Software"
+                              },
+                              {
+                                "type": "string",
+                                "const": "OnlineDocument"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Blog"
+                              },
+                              {
+                                "type": "string",
+                                "const": "SocialMedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Preprint"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Video"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Podcast"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Course"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Presentation"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Interview"
+                              },
+                              {
+                                "type": "string",
+                                "const": "PersonalCommunication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Email"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Law"
+                              },
+                              {
+                                "type": "string",
+                                "const": "CourtCase"
+                              },
+                              {
+                                "type": "string",
+                                "const": "GovernmentPublication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Datasheet"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ProductManual"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "const": "unknown"
+                          }
+                        ]
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "citation",
+                        "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "axiom",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "axiom": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "The axiom supporting the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "axiomatic",
+                        "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "mentionToClaim": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mentionId",
+                  "claimMiniId"
+                ],
+                "properties": {
+                  "mentionId": {
+                    "type": "string"
+                  },
+                  "claimMiniId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "canonicalClaims": [
+            {
+              "miniId": "c1",
+              "mentionIds": [],
+              "suggestedSymbol": "NASA_Temp_Rise",
+              "title": "NASA reports temperature rise",
+              "url": "https://climate.nasa.gov/evidence/",
+              "citationTypeGuess": "Website",
+              "type": "citation"
+            },
+            {
+              "miniId": "c2",
+              "mentionIds": [
+                "m1"
+              ],
+              "suggestedSymbol": "Global_Temps_Risen",
+              "title": "Global temperatures have risen",
+              "body": "Global temperatures have risen significantly over the past century.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c3",
+              "mentionIds": [
+                "m2"
+              ],
+              "suggestedSymbol": "Warming_Causes_Extreme",
+              "title": "Warming increases extreme weather",
+              "body": "Rising global temperatures cause extreme weather events to occur more frequently.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c4",
+              "mentionIds": [
+                "m3"
+              ],
+              "suggestedSymbol": "Extreme_Weather_More_Frequent",
+              "title": "Extreme weather is more frequent",
+              "body": "People are seeing more frequent extreme weather events.",
+              "type": "normal"
+            }
+          ],
+          "mentionToClaim": [
+            {
+              "mentionId": "m1",
+              "claimMiniId": "c2"
+            },
+            {
+              "mentionId": "m2",
+              "claimMiniId": "c3"
+            },
+            {
+              "mentionId": "m3",
+              "claimMiniId": "c4"
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 1517,
+          "output": 780,
+          "reasoning": 516
+        },
+        "rawResponseId": "resp_0d602fecd9363ae2006a7206de432c81a2be0cfd9429398b35"
+      }
+    },
+    {
+      "hash": "7ca5d57e42f4314aaa3bdba6c47b636c1441116d0437cbda65009bcb5c3c72d4",
+      "stageId": "claim-type-classification",
+      "request": {
+        "model": "gpt-5.4",
+        "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
+        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=citation suggestedSymbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal suggestedSymbol=Global_Temps_Risen fields={\"title\":\"Global temperatures have risen\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal suggestedSymbol=Warming_Causes_Extreme fields={\"title\":\"Warming increases extreme weather\",\"body\":\"Rising global temperatures cause extreme weather events to occur more frequently.\"}\n  [c4] type=normal suggestedSymbol=Extreme_Weather_More_Frequent fields={\"title\":\"Extreme weather is more frequent\",\"body\":\"People are seeing more frequent extreme weather events.\"}\n\nDetected citation sources:\n  [src1 @ s1] \"NASA's climate report\" (url: https://climate.nasa.gov/evidence/)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "classifications"
+          ],
+          "properties": {
+            "classifications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "miniId",
+                  "type",
+                  "sourceString"
+                ],
+                "properties": {
+                  "miniId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "normal"
+                      },
+                      {
+                        "type": "string",
+                        "const": "citation"
+                      },
+                      {
+                        "type": "string",
+                        "const": "axiomatic"
+                      }
+                    ]
+                  },
+                  "sourceString": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "classifications": [
+            {
+              "miniId": "c1",
+              "type": "citation",
+              "sourceString": "NASA's climate report"
+            },
+            {
+              "miniId": "c2",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c3",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c4",
+              "type": "normal",
+              "sourceString": null
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 620,
+          "output": 83,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0d7e31f41df52d02006a7206ea5f7881a0a5a5e29a1e7b378a"
+      }
+    },
+    {
+      "hash": "43e21e84ad5f80713e231ff8c78137923a7d6b828c32674f8ffc1e35a1cd93f9",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=citation symbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal symbol=Global_Temps_Risen fields={\"title\":\"Global temperatures have risen\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal symbol=Warming_Causes_Extreme fields={\"title\":\"Warming increases extreme weather\",\"body\":\"Rising global temperatures cause extreme weather events to occur more frequently.\"}\n  [c4] type=normal symbol=Extreme_Weather_More_Frequent fields={\"title\":\"Extreme weather is more frequent\",\"body\":\"People are seeing more frequent extreme weather events.\"}\n\nSegments:\n  [s1] \"According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century.\"\n  [s2] \"Rising global temperatures cause more frequent extreme weather events.\"\n  [s3] \"Therefore, we are seeing more frequent extreme weather events.\"\n\nEmit every inference relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "Report as evidence",
+              "evidence": {
+                "segmentIds": [
+                  "s1"
+                ],
+                "quote": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly"
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
+                "c2",
+                "c3"
+              ],
+              "consequent": "c4",
+              "title": "Applying warming's effects",
+              "evidence": {
+                "segmentIds": [
+                  "s2",
+                  "s3"
+                ],
+                "quote": "Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events."
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 909,
+          "output": 527,
+          "reasoning": 363
+        },
+        "rawResponseId": "resp_07e1963baa1fd338006a7206ebf34c8192afdbb888f203c515"
+      }
+    },
+    {
+      "hash": "5783c7d73a0876c246108f66bcba39bb39ff853cc6ea1c35b73deb4ad8be6884",
+      "stageId": "claim-canonicalization",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here. BOTH claims list that mention in their `mentionIds` — the split is one span giving rise to two claims, and a claim with no `mentionIds` loses its link back to the source text entirely. (`mentionToClaim` is unaffected: it still maps that mention to exactly one claim — the normal-typed one.)\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Input text:\n\nAccording to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century. Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events.\n\nClaim mentions:\n  [m1 @ s1] \"global temperatures have risen significantly over the past century.\"\n  [m2 @ s2] \"Rising global temperatures cause more frequent extreme weather events.\"\n  [m3 @ s3] \"we are seeing more frequent extreme weather events.\"\n\nDetected citation sources:\n  [src1 @ s1] \"NASA's climate report\" (url: https://climate.nasa.gov/evidence/)\n\nDetected axiom indicators:\n  (none)\n\nProduce the canonicalClaims + mentionToClaim object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "canonicalClaims",
+            "mentionToClaim"
+          ],
+          "properties": {
+            "canonicalClaims": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "body",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "body": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "A detailed description of the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "normal",
+                        "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "url",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "The URL of the citation supporting the claim"
+                      },
+                      "citationTypeGuess": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "Book"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Website"
+                              },
+                              {
+                                "type": "string",
+                                "const": "BookChapter"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Handbook"
+                              },
+                              {
+                                "type": "string",
+                                "const": "TechnicalReport"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Standard"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Thesis"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Patent"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dictionary"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Encyclopedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "JournalArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "MagazineArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "NewspaperArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferencePaper"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferenceProceedings"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dataset"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Software"
+                              },
+                              {
+                                "type": "string",
+                                "const": "OnlineDocument"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Blog"
+                              },
+                              {
+                                "type": "string",
+                                "const": "SocialMedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Preprint"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Video"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Podcast"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Course"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Presentation"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Interview"
+                              },
+                              {
+                                "type": "string",
+                                "const": "PersonalCommunication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Email"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Law"
+                              },
+                              {
+                                "type": "string",
+                                "const": "CourtCase"
+                              },
+                              {
+                                "type": "string",
+                                "const": "GovernmentPublication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Datasheet"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ProductManual"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "const": "unknown"
+                          }
+                        ]
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "citation",
+                        "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "axiom",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "axiom": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "The axiom supporting the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "axiomatic",
+                        "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "mentionToClaim": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mentionId",
+                  "claimMiniId"
+                ],
+                "properties": {
+                  "mentionId": {
+                    "type": "string"
+                  },
+                  "claimMiniId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "canonicalClaims": [
+            {
+              "miniId": "c1",
+              "mentionIds": [
+                "m1"
+              ],
+              "suggestedSymbol": "NASA_Temp_Rise",
+              "title": "NASA reports temperature rise",
+              "url": "https://climate.nasa.gov/evidence/",
+              "citationTypeGuess": "GovernmentPublication",
+              "type": "citation"
+            },
+            {
+              "miniId": "c2",
+              "mentionIds": [
+                "m1"
+              ],
+              "suggestedSymbol": "Temps_Rose_Century",
+              "title": "Temperatures rose over a century",
+              "body": "Global temperatures have risen significantly over the past century.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c3",
+              "mentionIds": [
+                "m2"
+              ],
+              "suggestedSymbol": "Warming_Causes_Extreme_Weather",
+              "title": "Warming causes extreme weather",
+              "body": "Rising global temperatures cause more frequent extreme weather events.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c4",
+              "mentionIds": [
+                "m3"
+              ],
+              "suggestedSymbol": "Extreme_Weather_Increases",
+              "title": "Extreme weather occurs more often",
+              "body": "More frequent extreme weather events are occurring now.",
+              "type": "normal"
+            }
+          ],
+          "mentionToClaim": [
+            {
+              "mentionId": "m1",
+              "claimMiniId": "c2"
+            },
+            {
+              "mentionId": "m2",
+              "claimMiniId": "c3"
+            },
+            {
+              "mentionId": "m3",
+              "claimMiniId": "c4"
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 1583,
+          "output": 461,
+          "reasoning": 192
+        },
+        "rawResponseId": "resp_02370ade484ad918006a720c087e6481a1a827485057db5dca"
+      }
+    },
+    {
+      "hash": "025a8088b86e19b67a923942673e88efd4002bd08ceb33af30b2cb6c59880c66",
+      "stageId": "claim-type-classification",
+      "request": {
+        "model": "gpt-5.4",
+        "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
+        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=citation suggestedSymbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal suggestedSymbol=Global_Temps_Risen fields={\"title\":\"Global temperatures have risen\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal suggestedSymbol=Warming_Causes_ExtremeWeather fields={\"title\":\"Warming increases extreme weather\",\"body\":\"Rising global temperatures cause extreme weather events to occur more frequently.\"}\n  [c4] type=normal suggestedSymbol=ExtremeWeather_MoreFrequent fields={\"title\":\"Extreme weather is more frequent\",\"body\":\"People are seeing more frequent extreme weather events now.\"}\n\nDetected citation sources:\n  [src1 @ s1] \"NASA's climate report\" (url: https://climate.nasa.gov/evidence/)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "classifications"
+          ],
+          "properties": {
+            "classifications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "miniId",
+                  "type",
+                  "sourceString"
+                ],
+                "properties": {
+                  "miniId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "normal"
+                      },
+                      {
+                        "type": "string",
+                        "const": "citation"
+                      },
+                      {
+                        "type": "string",
+                        "const": "axiomatic"
+                      }
+                    ]
+                  },
+                  "sourceString": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "classifications": [
+            {
+              "miniId": "c1",
+              "type": "citation",
+              "sourceString": "NASA's climate report"
+            },
+            {
+              "miniId": "c2",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c3",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c4",
+              "type": "normal",
+              "sourceString": null
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 621,
+          "output": 83,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0f604c6ec9ddc06f006a720bc2475881a38c8777dfade3df2d"
+      }
+    },
+    {
+      "hash": "921122d42b1c3ea4db00eab0427dc2df3e96aea99c97833c9914559633946f79",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=citation symbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal symbol=Global_Temps_Risen fields={\"title\":\"Global temperatures have risen\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal symbol=Warming_Causes_ExtremeWeather fields={\"title\":\"Warming increases extreme weather\",\"body\":\"Rising global temperatures cause extreme weather events to occur more frequently.\"}\n  [c4] type=normal symbol=ExtremeWeather_MoreFrequent fields={\"title\":\"Extreme weather is more frequent\",\"body\":\"People are seeing more frequent extreme weather events now.\"}\n\nSegments:\n  [s1] \"According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century.\"\n  [s2] \"Rising global temperatures cause more frequent extreme weather events.\"\n  [s3] \"Therefore, we are seeing more frequent extreme weather events.\"\n\nEmit every inference relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "NASA report as evidence",
+              "evidence": {
+                "segmentIds": [
+                  "s1"
+                ],
+                "quote": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century."
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
+                "c2",
+                "c3"
+              ],
+              "consequent": "c4",
+              "title": "Applying warming's effects",
+              "evidence": {
+                "segmentIds": [
+                  "s2",
+                  "s3"
+                ],
+                "quote": "Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events."
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 910,
+          "output": 500,
+          "reasoning": 330
+        },
+        "rawResponseId": "resp_0f1afd819c0b8330006a720bc6e2ec81a1b807da62ef27d250"
+      }
+    },
+    {
+      "hash": "4ae1486d7eb7d7bde2bb12a24462bafe1e7f3da4ab78814dc99b2163de055ae9",
+      "stageId": "claim-type-classification",
+      "request": {
+        "model": "gpt-5.4",
+        "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
+        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=citation suggestedSymbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"GovernmentPublication\"}\n  [c2] type=normal suggestedSymbol=Temps_Rose_Century fields={\"title\":\"Temperatures rose over a century\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal suggestedSymbol=Warming_Causes_Extreme_Weather fields={\"title\":\"Warming causes extreme weather\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c4] type=normal suggestedSymbol=Extreme_Weather_Increases fields={\"title\":\"Extreme weather occurs more often\",\"body\":\"More frequent extreme weather events are occurring now.\"}\n\nDetected citation sources:\n  [src1 @ s1] \"NASA's climate report\" (url: https://climate.nasa.gov/evidence/)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "classifications"
+          ],
+          "properties": {
+            "classifications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "miniId",
+                  "type",
+                  "sourceString"
+                ],
+                "properties": {
+                  "miniId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "normal"
+                      },
+                      {
+                        "type": "string",
+                        "const": "citation"
+                      },
+                      {
+                        "type": "string",
+                        "const": "axiomatic"
+                      }
+                    ]
+                  },
+                  "sourceString": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "classifications": [
+            {
+              "miniId": "c1",
+              "type": "citation",
+              "sourceString": "NASA's climate report"
+            },
+            {
+              "miniId": "c2",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c3",
+              "type": "normal",
+              "sourceString": null
+            },
+            {
+              "miniId": "c4",
+              "type": "normal",
+              "sourceString": null
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 622,
+          "output": 83,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0d8f09cc72ca3d9d006a720c0faac481a1b41cfb458155b0fa"
+      }
+    },
+    {
+      "hash": "d7b26d36e8294bdb6079a5406a5fe515778af9e0e2c765b08db32d8f873db83d",
+      "stageId": "relation-extraction",
+      "request": {
+        "model": "gpt-5.5",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=citation symbol=NASA_Temp_Rise fields={\"title\":\"NASA reports temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"GovernmentPublication\"}\n  [c2] type=normal symbol=Temps_Rose_Century fields={\"title\":\"Temperatures rose over a century\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal symbol=Warming_Causes_Extreme_Weather fields={\"title\":\"Warming causes extreme weather\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c4] type=normal symbol=Extreme_Weather_Increases fields={\"title\":\"Extreme weather occurs more often\",\"body\":\"More frequent extreme weather events are occurring now.\"}\n\nSegments:\n  [s1] \"According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century.\"\n  [s2] \"Rising global temperatures cause more frequent extreme weather events.\"\n  [s3] \"Therefore, we are seeing more frequent extreme weather events.\"\n\nEmit every inference relationship as a relations array.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "NASA report as evidence",
+              "evidence": {
+                "segmentIds": [
+                  "s1"
+                ],
+                "quote": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century."
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
+                "c2",
+                "c3"
+              ],
+              "consequent": "c4",
+              "title": "Applying warming's effects",
+              "evidence": {
+                "segmentIds": [
+                  "s1",
+                  "s2",
+                  "s3"
+                ],
+                "quote": "Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events."
+              }
+            }
+          ]
+        },
+        "tokenUsage": {
+          "input": 911,
+          "output": 689,
+          "reasoning": 516
+        },
+        "rawResponseId": "resp_099b6b3fd1cbf1fc006a720c1d26a881a390df442ebf174c10"
       }
     }
   ]

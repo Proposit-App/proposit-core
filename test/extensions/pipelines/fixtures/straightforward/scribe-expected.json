@@ -3,7 +3,7 @@
         "claims": [
             {
                 "miniId": "c1",
-                "title": "Rain makes ground wet",
+                "title": "Rain wets the ground",
                 "body": "If it rains, the ground gets wet.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -40,11 +40,11 @@
                 "type": "normal",
                 "sourceAnchors": [
                     {
-                        "quote": "the ground is wet",
+                        "quote": "the ground is wet.",
                         "startUtf16": 60,
-                        "endUtf16": 77,
+                        "endUtf16": 78,
                         "prefix": " wet. It is raining. Therefore, ",
-                        "suffix": "."
+                        "suffix": ""
                     }
                 ],
                 "role": "conclusion"
@@ -71,12 +71,12 @@
             {
                 "miniId": "gid-4",
                 "formula": "(rain_implies_wet_ground and it_is_raining) implies ground_is_wet",
-                "title": "If \"Rain makes ground wet\" and \"It is raining\" then \"Ground is wet\""
+                "title": "Applying the rain rule"
             },
             {
                 "miniId": "gid-5",
                 "formula": "ground_is_wet",
-                "title": "Ground is wet"
+                "title": "Result of the rainfall"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -85,6 +85,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the supported conclusion because c1 and c2 together imply that the ground is wet.",
+    "selectionRationale": "c3 is best supported by the other claims, while c1 functions as a rule and c2 as the factual trigger.",
     "processingFailures": []
 }

@@ -3,8 +3,9 @@
         "claims": [
             {
                 "miniId": "c1",
-                "axiom": "A bachelor is an unmarried man.",
-                "type": "axiomatic",
+                "title": "Bachelor means unmarried man",
+                "body": "A bachelor is an unmarried man.",
+                "type": "normal",
                 "sourceAnchors": [
                     {
                         "quote": "By definition, a bachelor is an unmarried man.",
@@ -39,11 +40,11 @@
                 "type": "normal",
                 "sourceAnchors": [
                     {
-                        "quote": "John is unmarried",
-                        "startUtf16": 78,
-                        "endUtf16": 95,
-                        "prefix": " John is a bachelor. Therefore, ",
-                        "suffix": "."
+                        "quote": "Therefore, John is unmarried.",
+                        "startUtf16": 67,
+                        "endUtf16": 96,
+                        "prefix": "arried man. John is a bachelor. ",
+                        "suffix": ""
                     }
                 ],
                 "role": "conclusion"
@@ -69,26 +70,21 @@
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "john_is_bachelor implies john_unmarried",
-                "title": "If \"A bachelor is an unmarried man.\" and \"John is a bachelor\" then \"John is unmarried\""
+                "formula": "(bachelor_unmarried_man and john_is_bachelor) implies john_unmarried",
+                "title": "Definition applies to John"
             },
             {
                 "miniId": "gid-5",
                 "formula": "john_unmarried",
-                "title": "John is unmarried"
+                "title": "Unmarried status inferred"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
-        "derivationBacking": [
-            {
-                "derivedClaimMiniId": "c3",
-                "supportingClaimMiniIds": ["c1"]
-            }
-        ],
+        "derivationBacking": [],
         "title": "John is unmarried"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the supported non-axiomatic claim and nothing else is inferred from it.",
+    "selectionRationale": "c3 is the only claim supported by the others and no further claim depends on it.",
     "processingFailures": []
 }

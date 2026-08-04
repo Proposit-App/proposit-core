@@ -48,6 +48,7 @@ You receive:
 Emit:
 - \`conclusionCandidates\` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.
 - \`rationale\` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)
+- \`title\` — for your FIRST candidate only: a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: "Limits of the crowd's power", "Residence as tacit consent", "Principle over survival". Return an empty string when \`conclusionCandidates\` is empty.
 
 ## Selection rules
 
@@ -168,8 +169,9 @@ export function selectFallbackConclusion(
  * `NO_SINGLE_CONCLUSION` `ProcessingFailure` (severity `warning`) that
  * drives finalize's `{ argument: null, failureText: "No single
  * conclusion could be selected." }`. The resolved id flows downstream to
- * `formula-compilation`; the model's raw ranked list is preserved on the
- * output for consumers that want to offer alternates.
+ * `formula-compilation`; the model's raw ranked list — and the title it
+ * authored for the first candidate — are preserved on the output, the
+ * latter usable only when the resolved id is that same candidate.
  */
 export function createConclusionSelectionStage(
     options?: TLlmStageOptionsOverride
@@ -236,6 +238,10 @@ export function createConclusionSelectionStage(
             return {
                 conclusionMiniId,
                 conclusionCandidates: llmOutput.conclusionCandidates,
+                // Carried verbatim: it belongs to the model's first
+                // candidate, and only a reader that knows which
+                // candidate won can tell whether it applies.
+                title: llmOutput.title,
                 rationale: usedGraphFallback
                     ? `Auto-selected ${conclusionMiniId} from the relation graph (the model named no usable candidate).`
                     : llmOutput.rationale,

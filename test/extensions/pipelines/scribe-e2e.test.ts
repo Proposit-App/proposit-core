@@ -136,40 +136,58 @@ describe(`scribe ingestion pipeline — golden corpus (${mode} mode)`, () => {
         const hasRecording = fs.existsSync(
             path.join(fixtureDir, SCRIBE_RECORDED_FILE)
         )
+        const hasExpected = fs.existsSync(
+            path.join(fixtureDir, SCRIBE_EXPECTED_FILE)
+        )
         // In replay mode (CI + default), skip any fixture whose scribe
         // recording has not been captured yet — the suite is inert until
-        // a dev records it with a real API key.
-        const itOrSkip = mode === "record" || hasRecording ? it : it.skip
+        // a dev records it with a real API key. Both files are required:
+        // a recording without an assembled expected output is a partial
+        // capture (a recording run that died before `writeExpected`),
+        // and replaying it would compare against a stale golden. Treat
+        // that as "not yet recorded" → skip, not fail.
+        const itOrSkip =
+            mode === "record" || (hasRecording && hasExpected) ? it : it.skip
 
-        itOrSkip(`${name}: scribe output matches the golden`, async () => {
-            const provider = countingLlmProvider(
-                buildProviderForMode(fixtureDir)
-            )
-            const result = await executePipeline(
-                createScribePipeline(basicsExtension),
-                { text: readInput(fixtureDir) },
-                { llm: provider, generateId: createDeterministicGenerateId() }
-            )
-
-            if (mode === "record") {
-                writeExpected(
-                    fixtureDir,
-                    result.output as unknown as Record<string, unknown>
+        itOrSkip(
+            `${name}: scribe output matches the golden`,
+            // Recording drives the real Responses API; the 5s default
+            // times out mid-call and leaves exactly the partial capture
+            // guarded against above.
+            { timeout: 300_000 },
+            async () => {
+                const provider = countingLlmProvider(
+                    buildProviderForMode(fixtureDir)
                 )
-                return
-            }
+                const result = await executePipeline(
+                    createScribePipeline(basicsExtension),
+                    { text: readInput(fixtureDir) },
+                    {
+                        llm: provider,
+                        generateId: createDeterministicGenerateId(),
+                    }
+                )
 
-            const expected = readExpected(fixtureDir)
-            expect(expected).toBeDefined()
-            const { runtime } = splitExpected(expected!)
-            expect(result.output).toEqual(runtime)
-            // The finalize-time source anchors add no model work: the
-            // run still makes exactly one call per recorded pair.
-            // Counts calls, not distinct prompts. In replay that is the
-            // same thing; in `record` mode a transient API retry makes
-            // this fail on the count rather than on the underlying
-            // error, so read it as a symptom there, not a cause.
-            expect(provider.callCount()).toBe(SCRIBE_LLM_STAGE_COUNT)
-        })
+                if (mode === "record") {
+                    writeExpected(
+                        fixtureDir,
+                        result.output as unknown as Record<string, unknown>
+                    )
+                    return
+                }
+
+                const expected = readExpected(fixtureDir)
+                expect(expected).toBeDefined()
+                const { runtime } = splitExpected(expected!)
+                expect(result.output).toEqual(runtime)
+                // The finalize-time source anchors add no model work: the
+                // run still makes exactly one call per recorded pair.
+                // Counts calls, not distinct prompts. In replay that is the
+                // same thing; in `record` mode a transient API retry makes
+                // this fail on the count rather than on the underlying
+                // error, so read it as a symptom there, not a cause.
+                expect(provider.callCount()).toBe(SCRIBE_LLM_STAGE_COUNT)
+            }
+        )
     }
 })

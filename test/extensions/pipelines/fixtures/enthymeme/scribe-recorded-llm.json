@@ -363,7 +363,7 @@
               "mentionIds": [
                 "c1-m"
               ],
-              "suggestedSymbol": "SocratesIsMan",
+              "suggestedSymbol": "socrates_is_a_man",
               "title": "Socrates is a man",
               "body": "Socrates is a man.",
               "type": "normal"
@@ -373,7 +373,7 @@
               "mentionIds": [
                 "c2-m"
               ],
-              "suggestedSymbol": "SocratesIsMortal",
+              "suggestedSymbol": "socrates_is_mortal",
               "title": "Socrates is mortal",
               "body": "Socrates is mortal.",
               "type": "normal"
@@ -396,7 +396,7 @@
               "text": "Socrates is a man.",
               "span": {
                 "start": 0,
-                "end": 18
+                "end": 19
               }
             },
             {
@@ -405,15 +405,17 @@
               "text": "Socrates is mortal.",
               "span": {
                 "start": 30,
-                "end": 49
+                "end": 50
               }
             }
           ]
         },
         "tokenUsage": {
-          "input": 0,
-          "output": 0
-        }
+          "input": 1152,
+          "output": 207,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_07bc9e35ac3e2665006a7205ed5304819eaa86dc9c4b337236"
       }
     },
     {
@@ -518,6 +520,238 @@
           "input": 0,
           "output": 0
         }
+      }
+    },
+    {
+      "hash": "85e3be142cdf396b32111169147df3909b5da016c6bc9d3251339bfc69a2bfb2",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=socrates_is_man fields={\"title\":\"Socrates is a man\",\"body\":\"Socrates is a man.\"}\n  [c2] type=normal symbol=socrates_is_mortal fields={\"title\":\"Socrates is mortal\",\"body\":\"Socrates is mortal.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "Man to mortal",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c2"
+          ],
+          "conclusionTitle": "Final mortality claim",
+          "rationale": "c2 is the only claim supported by another claim, so it is the argument's conclusion."
+        },
+        "tokenUsage": {
+          "input": 675,
+          "output": 101,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0da34615d8a99f12006a7202ad92c481a29408b040e7fdc87e"
+      }
+    },
+    {
+      "hash": "bb40a5dfa0add2e6ddf3b612149b19235d497c00b0b45356d5ff3317e1df7366",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=socrates_is_a_man fields={\"title\":\"Socrates is a man\",\"body\":\"Socrates is a man.\"}\n  [c2] type=normal symbol=socrates_is_mortal fields={\"title\":\"Socrates is mortal\",\"body\":\"Socrates is mortal.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "Man to mortal",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c2"
+          ],
+          "conclusionTitle": "Mortality inference",
+          "rationale": "c2 is the supported claim and nothing else depends on it, so it is the best conclusion candidate."
+        },
+        "tokenUsage": {
+          "input": 676,
+          "output": 103,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_01150ab0d8ae9767006a7205efbfd881a296916de4b55d0e91"
       }
     }
   ]

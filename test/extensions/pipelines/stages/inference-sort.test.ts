@@ -27,6 +27,7 @@ const rel = (
     type: "inference",
     antecedents,
     consequent,
+    title: "",
     evidence: { segmentIds: ["s1"], quote: "q" },
 })
 

@@ -3,7 +3,7 @@
         "claims": [
             {
                 "miniId": "c1",
-                "title": "Remote work boosts productivity",
+                "title": "Remote work improves productivity",
                 "body": "Working remotely improves productivity for many people.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -19,7 +19,7 @@
             },
             {
                 "miniId": "c2",
-                "title": "Remote work cuts commute time",
+                "title": "Remote work reduces commuting",
                 "body": "Working remotely reduces commuting time.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -53,38 +53,38 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "remote_productivity",
+                "symbol": "remote_work_productivity",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "remote_commute_reduction",
+                "symbol": "remote_work_reduces_commute_time",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "less_commute_better_balance",
+                "symbol": "p1",
                 "claimMiniId": "c3"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(remote_commute_reduction and less_commute_better_balance) implies remote_productivity",
-                "title": "If \"Remote work cuts commute time\" and \"Less commuting improves balance\" then \"Remote work boosts productivity\""
+                "formula": "(remote_work_reduces_commute_time and p1) implies remote_work_productivity",
+                "title": "Balance benefits from less commuting"
             },
             {
                 "miniId": "gid-5",
-                "formula": "remote_productivity",
-                "title": "Remote work boosts productivity"
+                "formula": "remote_work_productivity",
+                "title": "End benefit claim"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
         "derivationBacking": [],
-        "title": "Remote work boosts productivity"
+        "title": "Remote work improves productivity"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c1 is the best conclusion because c2 and c3 can jointly support the claim that remote work boosts productivity.",
+    "selectionRationale": "c1 is the best conclusion because c2 and c3 together support it, while c2 and c3 function as supporting premises.",
     "processingFailures": []
 }

@@ -35,14 +35,15 @@ const FIXTURE_NAMES = [
  * Every note the corpus is expected to emit, as
  * `<fixture>/<pipeline> <code> <subject>`.
  *
- * `with-url-citation` r2 elides with an ellipsis; `with-axiom`'s fast
- * run synthesises a summary sentence rather than quoting. Neither is
- * locatable, and neither should be anchored.
+ * Currently none: in the present recordings every relation's evidence
+ * quote is copied verbatim from the input, so every one of them
+ * locates. Earlier recordings carried two — a quote elided with an
+ * ellipsis, and a synthesised summary sentence rather than a quote —
+ * and both were model-behavior findings rather than defects in the
+ * anchor code. An empty list still pins the corpus: a note reappearing
+ * has to be looked at rather than absorbed into a total.
  */
-const EXPECTED_NOTES = [
-    "with-axiom/scribe SOURCE_ANCHOR_UNRESOLVED r1",
-    "with-url-citation/scholar SOURCE_ANCHOR_UNRESOLVED r2",
-] as const
+const EXPECTED_NOTES = [] as const
 
 function readInput(fixtureDir: string): string {
     return fs.readFileSync(path.join(fixtureDir, "input.txt"), "utf-8").trim()

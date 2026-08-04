@@ -90,10 +90,12 @@ function happyStructureOutput(): unknown {
                 type: "inference",
                 antecedents: ["c1"],
                 consequent: "c2",
+                title: "Rain as the cause of wetness",
                 evidence: { segmentIds: [], quote: "" },
             },
         ],
         conclusionCandidates: ["c2"],
+        conclusionTitle: "Wet ground as the upshot",
         rationale: "c2 is supported by c1 and supports nothing further.",
     }
 }
@@ -151,6 +153,20 @@ describe("createScribePipeline", () => {
             processingFailures: unknown[]
         }
         expect(response.processingFailures).toEqual([])
+    })
+
+    it("titles each premise with the phrase the structure stage authored", async () => {
+        const result = await runScribe(
+            happyExtractOutput(),
+            happyStructureOutput()
+        )
+        const titles = result.output!.argument!.premises.map(
+            (p) => (p as { title?: string }).title
+        )
+        expect(titles).toContain("Rain as the cause of wetness")
+        // The conclusion premise gets the authored conclusion title
+        // because the resolved conclusion is the first candidate.
+        expect(titles).toContain("Wet ground as the upshot")
     })
 
     it("the structure stage prompt carries each claim's title/body, not just ids", async () => {
@@ -212,7 +228,12 @@ describe("createScribePipeline", () => {
     it("an empty claim set yields a valid argument: null response (no throw)", async () => {
         const result = await runScribe(
             { canonicalClaims: [], mentionToClaim: [], mentions: [] },
-            { relations: [], conclusionCandidates: [], rationale: "" }
+            {
+                relations: [],
+                conclusionCandidates: [],
+                conclusionTitle: "",
+                rationale: "",
+            }
         )
         expect(result.output).not.toBeNull()
         expect(result.output!.argument).toBeNull()
@@ -226,6 +247,7 @@ describe("createScribePipeline", () => {
         const result = await runScribe(happyExtractOutput(), {
             relations: [],
             conclusionCandidates: [],
+            conclusionTitle: "",
             rationale: "no argument structure",
         })
         expect(result.output).not.toBeNull()

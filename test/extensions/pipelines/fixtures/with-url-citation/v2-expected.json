@@ -20,13 +20,13 @@
                 "citation": {
                     "type": "unparsed",
                     "text": "NASA reports temperature rise",
-                    "citationTypeGuess": "Website",
+                    "citationTypeGuess": "GovernmentPublication",
                     "url": "https://climate.nasa.gov/evidence/"
                 }
             },
             {
                 "miniId": "c2",
-                "title": "Global temperatures have risen",
+                "title": "Temperatures rose over a century",
                 "body": "Global temperatures have risen significantly over the past century.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -42,7 +42,7 @@
             },
             {
                 "miniId": "c3",
-                "title": "Warming increases extreme weather",
+                "title": "Warming causes extreme weather",
                 "body": "Rising global temperatures cause more frequent extreme weather events.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -58,8 +58,8 @@
             },
             {
                 "miniId": "c4",
-                "title": "Extreme weather is more frequent",
-                "body": "People are seeing more frequent extreme weather events.",
+                "title": "Extreme weather occurs more often",
+                "body": "More frequent extreme weather events are occurring now.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -81,30 +81,39 @@
             },
             {
                 "miniId": "gid-2",
-                "symbol": "Global_Temp_Rise",
+                "symbol": "Temps_Rose_Century",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "Temp_Rise_Extreme_Weather",
+                "symbol": "Warming_Causes_Extreme_Weather",
                 "claimMiniId": "c3"
             },
             {
                 "miniId": "gid-4",
-                "symbol": "Extreme_Weather_More_Frequent",
+                "symbol": "Extreme_Weather_Increases",
                 "claimMiniId": "c4"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-5",
-                "formula": "(Global_Temp_Rise and Temp_Rise_Extreme_Weather) implies Extreme_Weather_More_Frequent",
-                "title": "If \"Global temperatures have risen\" and \"Warming increases extreme weather\" then \"Extreme weather is more frequent\""
+                "formula": "(Temps_Rose_Century and Warming_Causes_Extreme_Weather) implies Extreme_Weather_Increases",
+                "title": "Applying warming's effects",
+                "sourceAnchors": [
+                    {
+                        "quote": "Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events.",
+                        "startUtf16": 142,
+                        "endUtf16": 275,
+                        "prefix": "ficantly over the past century. ",
+                        "suffix": ""
+                    }
+                ]
             },
             {
                 "miniId": "gid-6",
-                "formula": "Extreme_Weather_More_Frequent",
-                "title": "Extreme weather is more frequent"
+                "formula": "Extreme_Weather_Increases",
+                "title": "Combining authority with premise"
             }
         ],
         "conclusionPremiseMiniId": "gid-6",
@@ -114,10 +123,10 @@
                 "supportingClaimMiniIds": ["c1"]
             }
         ],
-        "title": "Extreme weather is more frequent"
+        "title": "Extreme weather occurs more often"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c4 is the terminal supported claim, while c2 functions as an intermediate premise supported by c1 and then used with c3 to support c4.",
+    "selectionRationale": "c4 is the terminal supported normal claim, inferred from c2 and c3, while c2 functions as an intermediate supported claim.",
     "processingFailures": []
 }

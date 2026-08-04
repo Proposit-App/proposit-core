@@ -225,6 +225,13 @@ export const RelationExtractionOutputSchema = Type.Object({
             type: Type.Literal("inference"),
             antecedents: Type.Array(Type.String()),
             consequent: Type.String(),
+            // A short noun phrase naming the inferential move, used as
+            // the title of the premise this relation compiles into.
+            // Plain `Type.String()` on purpose: strict structured output
+            // ignores `maxLength`, so the length cap is applied where the
+            // title is read rather than being a validation gate that
+            // could discard an otherwise complete run.
+            title: Type.String(),
             evidence: Type.Object({
                 segmentIds: Type.Array(Type.String()),
                 quote: Type.String(),
@@ -246,6 +253,10 @@ export type TInferenceRelation = TRelationExtractionOutput["relations"][number]
 export const ConclusionSelectionLlmOutputSchema = Type.Object({
     conclusionCandidates: Type.Array(Type.String()),
     rationale: Type.String(),
+    // A short noun phrase naming the concluding move, authored for the
+    // FIRST candidate only. Whether it is usable depends on which
+    // candidate resolution actually picks — see the output schema below.
+    title: Type.String(),
 })
 export type TConclusionSelectionLlmOutput = Static<
     typeof ConclusionSelectionLlmOutputSchema
@@ -256,10 +267,17 @@ export type TConclusionSelectionLlmOutput = Static<
 // fallback when the model returns none, or null when no claim
 // qualifies), while `conclusionCandidates` carries the model's full
 // ranked list for consumers that want to offer alternates.
+// `title` is the model's authored title for `conclusionCandidates[0]`,
+// carried verbatim (empty when none was authored). It describes that
+// candidate and no other, so a reader must only use it when
+// `conclusionMiniId` is that same candidate — the check
+// `finalizeResponseV2` performs before preferring it over a composed
+// title.
 export const ConclusionSelectionOutputSchema = Type.Object({
     conclusionMiniId: Type.Union([Type.String(), Type.Null()]),
     conclusionCandidates: Type.Array(Type.String()),
     rationale: Type.String(),
+    title: Type.String(),
 })
 export type TConclusionSelectionOutput = Static<
     typeof ConclusionSelectionOutputSchema

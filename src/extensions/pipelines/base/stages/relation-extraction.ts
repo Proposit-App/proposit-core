@@ -39,6 +39,7 @@ For each relation emit:
 - \`type\` — always \`"inference"\`
 - \`antecedents\` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent
 - \`consequent\` — the implied claim's miniId
+- \`title\` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: "Limits of the crowd's power", "Residence as tacit consent", "Principle over survival".
 - \`evidence.segmentIds\` — the segments that ground the relation (often a single segment containing a "therefore", "so", "because")
 - \`evidence.quote\` — a short verbatim quote from the input that justifies the relation
 

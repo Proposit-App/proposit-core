@@ -25,6 +25,7 @@ import {
     type TRelationExtractionOutput,
     type TVariableAssignmentOutput,
 } from "../../../src/extensions/pipelines/base/stages/index.js"
+import { structureConclusionAdapterStage } from "../../../src/extensions/pipelines/ingestion/scribe/structure-stage.js"
 import type { TStageContext } from "../../../src/lib/pipelines/index.js"
 
 /**
@@ -136,6 +137,7 @@ function buildHormuzOutputs(): Record<string, unknown> {
                 type: "inference",
                 antecedents: ["c1"],
                 consequent: "c2",
+                title: "",
                 evidence: { segmentIds: ["s1"], quote: "too risky" },
             },
             {
@@ -143,6 +145,7 @@ function buildHormuzOutputs(): Record<string, unknown> {
                 type: "inference",
                 antecedents: ["c2", "c3"],
                 consequent: "c4",
+                title: "",
                 evidence: { segmentIds: ["s2"], quote: "therefore" },
             },
         ],
@@ -151,6 +154,7 @@ function buildHormuzOutputs(): Record<string, unknown> {
     const selection: TConclusionSelectionOutput = {
         conclusionMiniId: "c4",
         conclusionCandidates: ["c4"],
+        title: "",
         rationale: "c4 is the terminal of the support graph.",
     }
 
@@ -268,6 +272,172 @@ describe("finalizeResponseV2 — natural-language premise titles", () => {
     })
 })
 
+// -- Authored titles --
+//
+// A relation and the conclusion-selection slot each carry a `title` the
+// model authored to name the inferential move. finalize prefers it over
+// the composition above — but only when it is usable, and for the
+// conclusion only when the resolved conclusion is the very candidate the
+// title was written for.
+
+function relationsOf(outputs: Record<string, unknown>) {
+    return (outputs[STAGE_IDS.relationExtraction] as TRelationExtractionOutput)
+        .relations
+}
+
+function selectionOf(outputs: Record<string, unknown>) {
+    return outputs[STAGE_IDS.conclusionSelection] as TConclusionSelectionOutput
+}
+
+function titleOf(outputs: Record<string, unknown>, premiseMiniId: string) {
+    return finalize(outputs).premises.find((p) => p.miniId === premiseMiniId)!
+        .title
+}
+
+describe("finalizeResponseV2 — authored relation titles", () => {
+    it("uses the relation's authored title verbatim", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "Limits of the crowd's power"
+        expect(titleOf(outputs, "p1")).toBe("Limits of the crowd's power")
+    })
+
+    it("trims surrounding whitespace off an authored title", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "  Principle over survival\n"
+        expect(titleOf(outputs, "p1")).toBe("Principle over survival")
+    })
+
+    it("composes when the authored title is whitespace-only", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "   "
+        expect(titleOf(outputs, "p1")).toBe(
+            'If "Forcing Hormuz open is too risky" then "No realistic off-ramp exists"'
+        )
+    })
+
+    it("composes when the relation carries no title at all", () => {
+        const outputs = buildHormuzOutputs()
+        delete (relationsOf(outputs)[0] as Record<string, unknown>).title
+        expect(titleOf(outputs, "p1")).toBe(
+            'If "Forcing Hormuz open is too risky" then "No realistic off-ramp exists"'
+        )
+    })
+
+    it("clamps an over-long authored title rather than failing the run", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "x".repeat(500)
+        const ctx = buildContextStub(outputs)
+        const response = finalizeResponseV2({ ctx, extension: basicsExtension })
+        // The run completes — an unusable length is a display problem,
+        // not grounds for discarding a finished pipeline run.
+        expect(response.failureText).toBeNull()
+        expect(response.argument).not.toBeNull()
+        const title = titleOf(outputs, "p1")
+        expect(title).toHaveLength(80)
+        expect(title.endsWith("…")).toBe(true)
+    })
+
+    it("leaves the machine formula untouched when a title is authored", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "Limits of the crowd's power"
+        const support = finalize(outputs).premises.find(
+            (p) => p.miniId === "p1"
+        )!
+        expect(support.formula).toBe("Hormuz_Too_Risky implies No_Offramp")
+    })
+})
+
+describe("finalizeResponseV2 — authored conclusion titles", () => {
+    it("uses the authored title when the resolved conclusion is the first candidate", () => {
+        const outputs = buildHormuzOutputs()
+        const selection = selectionOf(outputs)
+        selection.conclusionCandidates = ["c4"]
+        selection.conclusionMiniId = "c4"
+        selection.title = "Restraint over escalation"
+        expect(titleOf(outputs, "p3")).toBe("Restraint over escalation")
+    })
+
+    it("composes when a later candidate was resolved — the title describes the first", () => {
+        const outputs = buildHormuzOutputs()
+        const selection = selectionOf(outputs)
+        // The model's best pick (c9) was not a known normal claim, so
+        // resolution moved on to c4. The authored title still describes
+        // c9 and must not be pinned onto c4's premise.
+        selection.conclusionCandidates = ["c9", "c4"]
+        selection.conclusionMiniId = "c4"
+        selection.title = "A title written about a different claim"
+        expect(titleOf(outputs, "p3")).toBe("The US should not strike")
+    })
+
+    it("composes when the conclusion came from the relation-graph fallback", () => {
+        const outputs = buildHormuzOutputs()
+        const selection = selectionOf(outputs)
+        // The model named no candidate at all; `conclusionMiniId` was
+        // resolved deterministically from the relation graph.
+        selection.conclusionCandidates = []
+        selection.conclusionMiniId = "c4"
+        selection.title = "A title written about nothing in particular"
+        expect(titleOf(outputs, "p3")).toBe("The US should not strike")
+    })
+
+    it("composes when the authored conclusion title is whitespace-only", () => {
+        const outputs = buildHormuzOutputs()
+        selectionOf(outputs).title = "   "
+        expect(titleOf(outputs, "p3")).toBe("The US should not strike")
+    })
+
+    it("clamps an over-long authored conclusion title", () => {
+        const outputs = buildHormuzOutputs()
+        selectionOf(outputs).title = "y".repeat(500)
+        const title = titleOf(outputs, "p3")
+        expect(title).toHaveLength(80)
+        expect(title.endsWith("…")).toBe(true)
+    })
+})
+
+describe("finalizeResponseV2 — title resolution is pipeline-independent", () => {
+    it("resolves the same titles whether the slots come from scholar or scribe", async () => {
+        // scribe emits relations + conclusion candidates in one call and
+        // republishes them into the same two slots scholar's dedicated
+        // stages fill. Same slot contents ⇒ same titles, so the adapter's
+        // `conclusionTitle` → `title` hand-off is the only thing that can
+        // make the two pipelines disagree.
+        const scholarOutputs = buildHormuzOutputs()
+        relationsOf(scholarOutputs)[0].title = "Limits of the crowd's power"
+        relationsOf(scholarOutputs)[1].title = "Principle over survival"
+        selectionOf(scholarOutputs).title = "Restraint over escalation"
+
+        const scribeStructure = {
+            relations: relationsOf(scholarOutputs),
+            conclusionCandidates:
+                selectionOf(scholarOutputs).conclusionCandidates,
+            conclusionTitle: "Restraint over escalation",
+            rationale: selectionOf(scholarOutputs).rationale,
+        }
+        const scribeOutputs = { ...buildHormuzOutputs() }
+        scribeOutputs[STAGE_IDS.relationExtraction] = {
+            relations: scribeStructure.relations,
+        }
+        scribeOutputs[STAGE_IDS.scribeStructure] = scribeStructure
+        scribeOutputs[STAGE_IDS.conclusionSelection] =
+            await structureConclusionAdapterStage.run(
+                buildContextStub(scribeOutputs)
+            )
+
+        const scholarTitles = finalize(scholarOutputs).premises.map(
+            (p) => p.title
+        )
+        expect(finalize(scribeOutputs).premises.map((p) => p.title)).toEqual(
+            scholarTitles
+        )
+        expect(scholarTitles).toEqual([
+            "Limits of the crowd's power",
+            "Principle over survival",
+            "Restraint over escalation",
+        ])
+    })
+})
+
 // A claim the type-classifier marked `citation` that is also a relation
 // source/target (a propositional antecedent or consequent). The claim
 // stays typed `citation` and finalize attaches an explicit
@@ -328,6 +498,7 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
                 type: "inference",
                 antecedents: ["c1"],
                 consequent: "c2",
+                title: "",
                 evidence: { segmentIds: ["s1"], quote: "the footnotes" },
             },
         ],
@@ -336,6 +507,7 @@ function buildCitationAntecedentOutputs(): Record<string, unknown> {
     const selection: TConclusionSelectionOutput = {
         conclusionMiniId: "c2",
         conclusionCandidates: ["c2"],
+        title: "",
         rationale: "c2 is the terminal of the support graph.",
     }
 

@@ -174,6 +174,7 @@ function buildOutputs(): Record<string, unknown> {
                 type: "inference",
                 antecedents: ["c1", "c2"],
                 consequent: "c3",
+                title: "",
                 evidence: {
                     segmentIds: ["s3"],
                     quote: "so we should wait",
@@ -185,6 +186,7 @@ function buildOutputs(): Record<string, unknown> {
     const selection: TConclusionSelectionOutput = {
         conclusionMiniId: "c3",
         conclusionCandidates: ["c3"],
+        title: "",
         rationale: "c3 terminates the support graph.",
     }
 
@@ -621,6 +623,7 @@ describe("finalizeResponseV2 — a paraphrased segment must not derail the next"
             [STAGE_IDS.conclusionSelection]: {
                 conclusionMiniId: "c1",
                 conclusionCandidates: ["c1"],
+                title: "",
                 rationale: "only claim",
             },
             [STAGE_IDS.formulaCompilation]: compilation,

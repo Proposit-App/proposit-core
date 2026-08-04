@@ -5,7 +5,7 @@
             {
                 "miniId": "c1",
                 "title": "Socrates is a man",
-                "body": "Socrates is a man.",
+                "body": "Socrates belongs to the class of men.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -21,7 +21,7 @@
             {
                 "miniId": "c2",
                 "title": "Socrates is mortal",
-                "body": "Socrates is mortal.",
+                "body": "Socrates has the property of mortality.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -51,13 +51,13 @@
             {
                 "miniId": "gid-3",
                 "formula": "Socrates_Man implies Socrates_Mortal",
-                "title": "If \"Socrates is a man\" then \"Socrates is mortal\"",
+                "title": "Mortality from humanity",
                 "sourceAnchors": [
                     {
-                        "quote": "Therefore, Socrates is mortal.",
-                        "startUtf16": 19,
+                        "quote": "Socrates is a man. Therefore, Socrates is mortal.",
+                        "startUtf16": 0,
                         "endUtf16": 49,
-                        "prefix": "Socrates is a man. ",
+                        "prefix": "",
                         "suffix": ""
                     }
                 ]
@@ -65,7 +65,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "Socrates_Mortal",
-                "title": "Socrates is mortal"
+                "title": "Single-step inference"
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
@@ -74,6 +74,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is the sole normal claim supported by an inference relation, with c1 serving as its antecedent, so c2 is the terminal conclusion.",
+    "selectionRationale": "c2 is the sole supported claim and terminal consequent of the only relation, while c1 functions as its support.",
     "processingFailures": []
 }

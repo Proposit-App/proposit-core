@@ -71,7 +71,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "John_Bachelor implies John_Unmarried",
-                "title": "If \"A bachelor is an unmarried man by definition.\" and \"John is a bachelor\" then \"John is unmarried\"",
+                "title": "Definition applied to John",
                 "sourceAnchors": [
                     {
                         "quote": "By definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.",
@@ -85,7 +85,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "John_Unmarried",
-                "title": "John is unmarried"
+                "title": "Applying the principle"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -99,6 +99,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the supported consequent of the only inference relation, while c1 is axiomatic and c2 serves as support, so c3 is the clear terminal conclusion.",
+    "selectionRationale": "c3 is the only normal claim supported by an inference relation and serves as the terminal consequent of the argument.",
     "processingFailures": []
 }

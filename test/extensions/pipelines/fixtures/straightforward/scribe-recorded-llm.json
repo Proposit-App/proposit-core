@@ -364,7 +364,7 @@
                 "c1-m"
               ],
               "suggestedSymbol": "rain_implies_wet_ground",
-              "title": "Rain makes ground wet",
+              "title": "Rain wets the ground",
               "body": "If it rains, the ground gets wet.",
               "type": "normal"
             },
@@ -410,7 +410,7 @@
               "text": "If it rains, the ground gets wet.",
               "span": {
                 "start": 0,
-                "end": 33
+                "end": 34
               }
             },
             {
@@ -418,25 +418,27 @@
               "segmentId": "",
               "text": "It is raining.",
               "span": {
-                "start": 34,
-                "end": 48
+                "start": 35,
+                "end": 49
               }
             },
             {
               "mentionId": "c3-m",
               "segmentId": "",
-              "text": "the ground is wet",
+              "text": "the ground is wet.",
               "span": {
                 "start": 60,
-                "end": 77
+                "end": 78
               }
             }
           ]
         },
         "tokenUsage": {
-          "input": 0,
-          "output": 0
-        }
+          "input": 1158,
+          "output": 283,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_044f709e1cc4a5fb006a7205d6dc1481a2be8e0e8ce3e3ca4b"
       }
     },
     {
@@ -542,6 +544,240 @@
           "input": 0,
           "output": 0
         }
+      }
+    },
+    {
+      "hash": "88ef9c40aeb592898884bcb787e12562a2eaafe59c8a2ab1ec542e58fc014787",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=rain_wets_ground fields={\"title\":\"Rain makes ground wet\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=it_is_raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal symbol=ground_is_wet fields={\"title\":\"Ground is wet\",\"body\":\"Therefore, the ground is wet.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1",
+                "c2"
+              ],
+              "consequent": "c3",
+              "title": "Applying the rain rule",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "conclusionTitle": "Wet-ground conclusion",
+          "rationale": "c3 is the only claim supported by the others and does not support any further claim."
+        },
+        "tokenUsage": {
+          "input": 702,
+          "output": 104,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0dbc82ec0cce3c55006a72029c08b4819cad783960eab85ea6"
+      }
+    },
+    {
+      "hash": "bea453cee8abc253617b9e898c510e2482b9039b8aff96593c946ab400c03081",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=rain_implies_wet_ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=it_is_raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal symbol=ground_is_wet fields={\"title\":\"Ground is wet\",\"body\":\"The ground is wet.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1",
+                "c2"
+              ],
+              "consequent": "c3",
+              "title": "Applying the rain rule",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "conclusionTitle": "Result of the rainfall",
+          "rationale": "c3 is best supported by the other claims, while c1 functions as a rule and c2 as the factual trigger."
+        },
+        "tokenUsage": {
+          "input": 702,
+          "output": 112,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0ab8384bb16a1461006a7205dad74c819dbeecfec4f7b182ea"
       }
     }
   ]
