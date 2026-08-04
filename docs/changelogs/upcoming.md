@@ -58,3 +58,30 @@ fixture in `test/extensions/pipelines/fixtures/` now misses with
 `RECORDED_PROMPT_STALE`. Re-record with a live key:
 `INGESTION_TEST_RECORD=1 OPENAI_API_KEY=… pnpm exec vitest run test/extensions/pipelines/v2-e2e.test.ts test/extensions/pipelines/scribe-e2e.test.ts`,
 then review the rewritten `*-expected.json` by hand before committing.
+
+## Fixed — a split mention left its citation claim unanchored
+
+`CLAIM_CANONICALIZATION_SYSTEM_PROMPT` tells the model to split a mention of the
+form "according to X, P" into a citation-typed claim plus a normal-typed claim,
+but said nothing about how `mentionIds` should be populated across that pair —
+while the neighbouring `mentionToClaim` rule insists each mention maps to
+exactly one claim. Read literally, that pushed the model toward giving the whole
+mention to the normal claim and leaving the citation claim with `mentionIds:
+[]`. `mentionIds` is what finalize resolves into `sourceAnchors`, so the
+citation claim lost its link back to the source text entirely.
+
+The split rule now states that both claims carry the mention in `mentionIds`,
+and notes that `mentionToClaim` is unaffected. Surfaced by re-recording the
+golden corpus: `with-url-citation`'s citation claim came back with zero source
+anchors on two independent recordings, tripping the every-claim-is-anchored
+assertion in the scholar driver.
+
+Also test-only: the scribe golden driver ran on vitest's 5s default timeout, so
+record mode timed out mid-call and left a recording whose expected output was
+never assembled — replay then compared against the stale golden and failed
+instead of skipping. It now mirrors the scholar driver's 300s timeout and
+both-files guard.
+
+`EXPECTED_NOTES` in the corpus anchor-notes suite is now empty: in the present
+recordings every relation's evidence quote is copied verbatim and therefore
+locates. The assertion still fails if a note reappears.
