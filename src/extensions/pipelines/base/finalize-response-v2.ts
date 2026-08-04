@@ -421,12 +421,34 @@ function readMentionIds(record: Record<string, unknown>): string[] {
         : []
 }
 
-// **Premise titles read as prose, not formulas.** Each premise title
-// is composed from the LLM-authored claim titles that back its
-// variables — mirroring how `buildArgumentTitle` reuses the conclusion
-// claim's title — rather than serializing the compiled symbolic
-// `formula`. The machine `formula` field is left untouched; only the
-// human-facing `title` changes.
+// **Premise titles read as prose, not formulas.** A premise title is
+// never a serialization of the compiled symbolic `formula`; it is
+// human-facing prose. The machine `formula` field is left untouched.
+//
+// **An authored title is preferred; composition is the fallback.** A
+// premise title names the *inferential move* — what the step does in the
+// argument — which only the model that read the source can say. So the
+// structured output that produces a premise carries a `title`: the
+// relation for a relation-derived premise, the conclusion-selection slot
+// for the conclusion premise. When a usable one is present it is used
+// verbatim (trimmed, and clamped to `AUTHORED_PREMISE_TITLE_CAP`).
+//
+// When it is absent, empty, or whitespace-only, the title is composed
+// from the LLM-authored claim titles that back the premise's variables —
+// mirroring how `buildArgumentTitle` reuses the conclusion claim's
+// title. Composition is lossless but redundant: consumers render the
+// premise's expression tree directly beneath the header, so it restates
+// the rows below it. It is the floor, not the goal — and it means a
+// missing title never fails a run.
+//
+// **The conclusion title is guarded.** The model authors one conclusion
+// title, for `conclusionCandidates[0]`, but the resolved
+// `conclusionMiniId` is the first candidate that is a known normal claim
+// — and may instead come from the relation-graph fallback. Using the
+// authored title when a *different* claim won would label the conclusion
+// premise with a description of some other claim, which is worse than a
+// redundant-but-true composed title. So it is used only when the
+// resolved id is strictly `conclusionCandidates[0]`.
 //
 // **Structure-walk, not string-substitution.** Each relation-derived
 // premise (support / joint-support / derivation) is composed by walking
@@ -443,9 +465,61 @@ function readMentionIds(record: Record<string, unknown>): string[] {
 // chip, so a textual `Conclusion:` / `Support:` prefix on the prose is
 // redundant; titles are pure prose.
 //
-// **No truncation.** The pre-prose implementation capped titles at 50
-// chars, which mangled multi-claim premises mid-symbol. Prose titles
-// are emitted in full.
+// **No truncation of composed titles.** The pre-prose implementation
+// capped titles at 50 chars, which mangled multi-claim premises
+// mid-symbol. Composed prose titles are emitted in full. Only an
+// authored title is clamped, and generously: it is a short phrase by
+// instruction, so the cap is a backstop against a runaway generation,
+// not a second opinion on the model's phrasing.
+
+/**
+ * Length cap for an authored premise title. The prompts ask for under
+ * 60 characters; this leaves slack above that so a slightly long but
+ * well-formed phrase survives intact.
+ */
+const AUTHORED_PREMISE_TITLE_CAP = 80
+
+/**
+ * Normalize a model-authored title: trim it, treat empty or
+ * whitespace-only as absent, and clamp an over-long one rather than
+ * rejecting it. Returns `undefined` when there is nothing usable, which
+ * is the caller's cue to compose a title instead.
+ *
+ * Clamping lives here rather than in the schema because strict
+ * structured output ignores JSON-Schema `maxLength`: making the length a
+ * validation gate would let one long string discard a completed
+ * pipeline run. The value is typed `unknown` because a caller-composed
+ * pipeline can populate these slots itself, with no schema check between
+ * it and this read.
+ */
+function resolveAuthoredTitle(authored: unknown): string | undefined {
+    if (typeof authored !== "string") return undefined
+    const trimmed = authored.trim()
+    if (trimmed.length === 0) return undefined
+    return trimmed.length <= AUTHORED_PREMISE_TITLE_CAP
+        ? trimmed
+        : trimmed.slice(0, AUTHORED_PREMISE_TITLE_CAP - 1) + "…"
+}
+
+/**
+ * The conclusion title the model authored, when it is safe to use.
+ *
+ * The model authors exactly one, describing `conclusionCandidates[0]`.
+ * The resolved `conclusionMiniId` is the first candidate that is a known
+ * normal claim, or a relation-graph fallback — so it is not necessarily
+ * that first candidate. Anything but a strict match falls through to
+ * composition, which can be redundant but is never about the wrong
+ * claim.
+ */
+function resolveAuthoredConclusionTitle(
+    conclusion: TConclusionSelectionOutput | undefined
+): string | undefined {
+    if (conclusion === undefined) return undefined
+    const { conclusionMiniId, conclusionCandidates } = conclusion
+    if (conclusionMiniId === null) return undefined
+    if (conclusionMiniId !== conclusionCandidates[0]) return undefined
+    return resolveAuthoredTitle(conclusion.title)
+}
 
 type TTitleComposerMaps = {
     /** claim miniId → display title (LLM `title`, else `axiom`). */
@@ -478,13 +552,19 @@ function quotedClaimTitle(
 
 function buildPremiseTitle(
     premise: TCompiledPremise,
-    maps: TTitleComposerMaps
+    maps: TTitleComposerMaps,
+    /** Guard-resolved authored conclusion title, if one is usable. */
+    authoredConclusionTitle: string | undefined
 ): string {
     if (premise.roleHint === "conclusion") {
-        // The conclusion premise is a bare symbol; its prose title is
-        // the conclusion claim's title (unquoted — the whole title is
-        // the proposition, not an embedded clause). Fall back to the
-        // symbol when the claim title is unresolvable.
+        if (authoredConclusionTitle !== undefined) {
+            return authoredConclusionTitle
+        }
+        // No usable authored title: the conclusion premise is a bare
+        // symbol, so compose its prose title from the conclusion claim's
+        // title (unquoted — the whole title is the proposition, not an
+        // embedded clause). Fall back to the symbol when the claim title
+        // is unresolvable.
         const symbol = premise.formula.trim()
         const claimMiniId = maps.claimMiniIdBySymbol.get(symbol)
         return (
@@ -494,14 +574,16 @@ function buildPremiseTitle(
         )
     }
 
-    // Relation-derived premise: compose `If <antecedent> then
-    // <consequent>` by walking the source relation. The antecedent is
-    // the `and`-joined source claim titles; the consequent is the
-    // target claim title.
+    // Relation-derived premise: prefer the title the relation carries;
+    // otherwise compose `If <antecedent> then <consequent>` by walking
+    // the source relation. The antecedent is the `and`-joined source
+    // claim titles; the consequent is the target claim title.
     const relation =
         premise.sourceRelationId !== null
             ? maps.relationById.get(premise.sourceRelationId)
             : undefined
+    const authored = resolveAuthoredTitle(relation?.title)
+    if (authored !== undefined) return authored
     if (relation === undefined) {
         // No resolvable source relation — fall back to the raw formula
         // so the title is never empty. (Should not occur in practice:
@@ -729,11 +811,17 @@ export function finalizeResponseV2(
         relationById: new Map(relations.map((r) => [r.relationId, r])),
     }
 
+    const authoredConclusionTitle = resolveAuthoredConclusionTitle(conclusion)
+
     const finalPremises: TPremiseFinalForm[] = compilation.premises.map((p) => {
         const premise: TPremiseFinalForm = {
             miniId: p.premiseMiniId,
             formula: p.formula,
-            title: buildPremiseTitle(p, titleComposerMaps),
+            title: buildPremiseTitle(
+                p,
+                titleComposerMaps,
+                authoredConclusionTitle
+            ),
         }
         // The conclusion premise is synthesized from a bare symbol and
         // has no source relation, so it has no evidence quote to anchor.

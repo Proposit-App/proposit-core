@@ -565,6 +565,7 @@ describe("relationExtractionStage", () => {
                     type: "inference",
                     antecedents: ["c1"],
                     consequent: "c2",
+                    title: "",
                     evidence: { segmentIds: ["s1"], quote: "therefore" },
                 },
             ],
@@ -641,17 +642,20 @@ describe("conclusionSelectionStage", () => {
                     type: "inference",
                     antecedents: ["c1"],
                     consequent: "c2",
+                    title: "",
                     evidence: { segmentIds: ["s1"], quote: "therefore" },
                 },
             ],
         }
         const llmOutput: TConclusionSelectionLlmOutput = {
             conclusionCandidates: ["c2"],
+            title: "",
             rationale: "c2 is the only terminal of the support graph.",
         }
         const selection: TConclusionSelectionOutput = {
             conclusionMiniId: "c2",
             conclusionCandidates: ["c2"],
+            title: "",
             rationale: "c2 is the only terminal of the support graph.",
         }
         const llm = createMockLlmProvider({
@@ -695,11 +699,13 @@ describe("conclusionSelectionStage", () => {
     it("can return a null conclusionMiniId", async () => {
         const llmOutput: TConclusionSelectionLlmOutput = {
             conclusionCandidates: [],
+            title: "",
             rationale: "Multiple candidates.",
         }
         const selection: TConclusionSelectionOutput = {
             conclusionMiniId: null,
             conclusionCandidates: [],
+            title: "",
             rationale: "Multiple candidates.",
         }
         const llm = createMockLlmProvider({

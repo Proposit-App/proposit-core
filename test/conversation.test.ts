@@ -478,10 +478,12 @@ describe("e2e: distill → scribe pipeline", () => {
                     type: "inference",
                     antecedents: ["c1"],
                     consequent: "c2",
+                    title: "Term limit as the constraint",
                     evidence: { segmentIds: [], quote: "" },
                 },
             ],
             conclusionCandidates: ["c2"],
+            conclusionTitle: "The limit itself as the point",
             rationale: "c2 is supported by c1 and supports nothing further.",
         }
 

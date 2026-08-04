@@ -83,11 +83,16 @@ function makeRelation(
         type: "inference",
         antecedents: sources,
         consequent: target,
+        title: "",
         evidence: { segmentIds: [], quote: "" },
     }
 }
 
-function llmReturning(candidates: string[], rationale = "Model rationale.") {
+function llmReturning(
+    candidates: string[],
+    rationale = "Model rationale.",
+    title = ""
+) {
     return createMockLlmProvider({
         responses: {
             [STAGE_IDS.conclusionSelection]: [
@@ -96,6 +101,7 @@ function llmReturning(candidates: string[], rationale = "Model rationale.") {
                     output: {
                         conclusionCandidates: candidates,
                         rationale,
+                        title,
                     } satisfies TConclusionSelectionLlmOutput,
                 },
             ],
@@ -134,6 +140,33 @@ describe("conclusionSelectionStage — model-ranked candidates", () => {
         // A clean model pick keeps the model's own rationale.
         expect(result.output?.rationale).toBe("c2 is the strongest.")
         expect(noConclusionFailure(result)).toBeUndefined()
+    })
+
+    it("carries the authored title through verbatim, even when a later candidate wins", async () => {
+        // The title describes the model's FIRST candidate. The stage does
+        // not judge whether it applies — it hands the raw pair
+        // (`conclusionCandidates`, `title`) downstream, where the reader
+        // that knows which candidate won decides whether to use it.
+        const pipeline = buildStandalonePipeline(
+            makeClassifications([
+                ["cit1", "citation"],
+                ["c3", "normal"],
+            ]),
+            { relations: [] }
+        )
+        const result = await executePipeline(
+            pipeline,
+            { text: "x" },
+            {
+                llm: llmReturning(
+                    ["cit1", "c3"],
+                    "cit1 reads as the point.",
+                    "Limits of the crowd's power"
+                ),
+            }
+        )
+        expect(result.output?.conclusionMiniId).toBe("c3")
+        expect(result.output?.title).toBe("Limits of the crowd's power")
     })
 
     it("prefers the model's pick over the graph fallback when they disagree", async () => {
@@ -374,6 +407,7 @@ describe("selectFallbackConclusion (exported helper)", () => {
                 type: "inference" as const,
                 antecedents: ["c1"],
                 consequent: "c3",
+                title: "",
                 evidence: { segmentIds: [], quote: "" },
             },
             {
@@ -381,6 +415,7 @@ describe("selectFallbackConclusion (exported helper)", () => {
                 type: "inference" as const,
                 antecedents: ["c2"],
                 consequent: "c3",
+                title: "",
                 evidence: { segmentIds: [], quote: "" },
             },
         ]

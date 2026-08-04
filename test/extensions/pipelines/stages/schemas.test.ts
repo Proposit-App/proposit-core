@@ -11,11 +11,27 @@ describe("RelationExtractionOutputSchema (inference relations)", () => {
                     type: "inference",
                     antecedents: ["c1", "c2"],
                     consequent: "c3",
+                    title: "Two conditions taken together",
                     evidence: { segmentIds: ["s1"], quote: "q" },
                 },
             ],
         }
         expect(Value.Check(RelationExtractionOutputSchema, ok)).toBe(true)
+    })
+
+    it("rejects a relation with no authored title", () => {
+        const bad = {
+            relations: [
+                {
+                    relationId: "r1",
+                    type: "inference",
+                    antecedents: ["c1"],
+                    consequent: "c2",
+                    evidence: { segmentIds: ["s1"], quote: "q" },
+                },
+            ],
+        }
+        expect(Value.Check(RelationExtractionOutputSchema, bad)).toBe(false)
     })
 
     it("rejects a legacy support relation", () => {

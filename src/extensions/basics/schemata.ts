@@ -86,7 +86,8 @@ export const BasicsVariableExtension = Type.Object({})
 export const BasicsPremiseExtension = Type.Object({
     title: Type.String({
         maxLength: 50,
-        description: "A short title for this premise",
+        description:
+            'A short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim\'s own title is already shown directly beneath this one. Examples: "Limits of the crowd\'s power", "Residence as tacit consent", "Principle over survival".',
     }),
 })
 

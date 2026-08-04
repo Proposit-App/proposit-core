@@ -62,6 +62,7 @@ describe("compileFormulas — relation compilation rules", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -87,6 +88,7 @@ describe("compileFormulas — relation compilation rules", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -112,6 +114,7 @@ describe("compileFormulas — relation compilation rules", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -137,6 +140,7 @@ describe("compileFormulas — relation compilation rules", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -161,6 +165,7 @@ describe("compileFormulas — relation compilation rules", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -178,6 +183,7 @@ describe("compileFormulas — conclusion premise minting", () => {
         const conclusion: TConclusionSelectionOutput = {
             conclusionMiniId: "c2",
             conclusionCandidates: ["c2"],
+            title: "",
             rationale: "",
         }
         const result = compileFormulas({
@@ -212,6 +218,7 @@ describe("compileFormulas — conclusion premise minting", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -245,6 +252,7 @@ describe("compileFormulas — conclusion premise minting", () => {
             conclusion: {
                 conclusionMiniId: "c3",
                 conclusionCandidates: ["c3"],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -273,6 +281,7 @@ describe("compileFormulas — conclusion premise minting", () => {
             conclusion: {
                 conclusionMiniId: "c2",
                 conclusionCandidates: ["c2"],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([["c1", "A"]]),
@@ -304,6 +313,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([["c1", "A"]]),
@@ -333,6 +343,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([
@@ -370,6 +381,7 @@ describe("compileFormulas — symbol-resolution failures", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: buildVars([["c1", "A"]]),
@@ -394,6 +406,7 @@ describe("compileFormulas — empty input", () => {
             conclusion: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             },
             variables: [],
@@ -454,6 +467,7 @@ describe("formulaCompilationStage — TStage wiring", () => {
                         type: "inference",
                         antecedents: ["c1"],
                         consequent: "c2",
+                        title: "",
                         evidence: { segmentIds: [], quote: "" },
                     },
                 ],
@@ -461,6 +475,7 @@ describe("formulaCompilationStage — TStage wiring", () => {
             [STAGE_IDS.conclusionSelection]: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             } satisfies TConclusionSelectionOutput,
             [STAGE_IDS.variableAssignment]: buildVars([
@@ -510,6 +525,7 @@ describe("formulaCompilationStage — TStage wiring", () => {
                         type: "inference",
                         antecedents: ["c1"],
                         consequent: "c2",
+                        title: "",
                         evidence: { segmentIds: [], quote: "" },
                     },
                 ],
@@ -517,6 +533,7 @@ describe("formulaCompilationStage — TStage wiring", () => {
             [STAGE_IDS.conclusionSelection]: {
                 conclusionMiniId: null,
                 conclusionCandidates: [],
+                title: "",
                 rationale: "",
             } satisfies TConclusionSelectionOutput,
             [STAGE_IDS.variableAssignment]: buildVars([

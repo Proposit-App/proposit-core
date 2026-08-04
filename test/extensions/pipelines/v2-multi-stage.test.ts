@@ -231,6 +231,7 @@ function buildHappyMockResponses(): Record<
                 type: "inference",
                 antecedents: ["c1", "c2"],
                 consequent: "c3",
+                title: "",
                 evidence: { segmentIds: ["s3"], quote: "Therefore" },
             },
         ],
@@ -238,6 +239,7 @@ function buildHappyMockResponses(): Record<
 
     const selection: TConclusionSelectionLlmOutput = {
         conclusionCandidates: ["c3"],
+        title: "",
         rationale: "c3 is the only terminal of the support graph.",
     }
 
@@ -331,6 +333,7 @@ describe("createScholarPipeline — failure paths", () => {
                 kind: "ok",
                 output: {
                     conclusionCandidates: [],
+                    title: "",
                     rationale: "Multiple terminals.",
                 } satisfies TConclusionSelectionLlmOutput,
             },
@@ -373,6 +376,7 @@ describe("createScholarPipeline — failure paths", () => {
                 kind: "ok",
                 output: {
                     conclusionCandidates: [],
+                    title: "",
                     rationale: "No claims to choose from.",
                 },
             },
@@ -521,6 +525,7 @@ describe("v2 stage + finalize outputs are JSON round-trippable", () => {
                         type: "inference",
                         antecedents: ["c1"],
                         consequent: "c2",
+                        title: "",
                         evidence: { segmentIds: ["s1"], quote: "therefore" },
                     },
                 ],
@@ -532,6 +537,7 @@ describe("v2 stage + finalize outputs are JSON round-trippable", () => {
             value: {
                 conclusionMiniId: "c2",
                 conclusionCandidates: ["c2", "c3"],
+                title: "",
                 rationale: "c2 is terminal in the support graph.",
             },
         },

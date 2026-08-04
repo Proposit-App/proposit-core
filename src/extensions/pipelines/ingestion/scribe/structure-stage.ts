@@ -42,8 +42,10 @@ export const STRUCTURE_STAGE_DEFAULTS: TLlmStageOptionsOverride = {
 export const STRUCTURE_SYSTEM_PROMPT = `You read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.
 
 Emit:
-- \`relations\` — the inference edges between claims. Each relation: a stable \`relationId\` (r1, r2, ...), a \`type\` of "inference", an \`antecedents\` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single \`consequent\` claim miniId, and an \`evidence\` object, which is always exactly { segmentIds: [], quote: "" } — you are shown the claims, not the text they came from, so you have nothing to quote.
+- \`relations\` — the inference edges between claims. Each relation: a stable \`relationId\` (r1, r2, ...), a \`type\` of "inference", an \`antecedents\` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single \`consequent\` claim miniId, a \`title\`, and an \`evidence\` object, which is always exactly { segmentIds: [], quote: "" } — you are shown the claims, not the text they came from, so you have nothing to quote.
+- each relation's \`title\` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: "Limits of the crowd's power", "Residence as tacit consent", "Principle over survival".
 - \`conclusionCandidates\` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.
+- \`conclusionTitle\` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when \`conclusionCandidates\` is empty.
 - \`rationale\` — one sentence explaining your best pick (or why none qualifies).
 
 Output ONLY the schema-shaped object. No prose.`
@@ -185,6 +187,10 @@ export const structureConclusionAdapterStage: TStage<TConclusionSelectionOutput>
             return {
                 conclusionMiniId,
                 conclusionCandidates: candidates,
+                // Carried verbatim: it belongs to the model's first
+                // candidate, and only a reader that knows which
+                // candidate won can tell whether it applies.
+                title: structure?.conclusionTitle ?? "",
                 rationale: usedGraphFallback
                     ? `Auto-selected ${conclusionMiniId} from the relation graph (the model named no usable candidate).`
                     : rationale,

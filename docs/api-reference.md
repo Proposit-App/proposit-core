@@ -1977,7 +1977,7 @@ The thorough pipeline: a 12-stage DAG (4 deterministic + 8 LLM) — `segmentatio
 
 #### `createScribePipeline(extension, options?)` → `TPipeline<TIngestionInput, TParsedArgumentResponse>`
 
-The fast, low-cost pipeline: two cheap LLM calls (`extract` → `structure`) feed scholar's deterministic backend + `finalizeResponseV2`, so it emits the identical output shape with ~2 LLM calls instead of ~8. `extract` produces the canonical claim set (the same per-extension shape scholar's canonicalizer emits) and `structure` produces the relation graph + conclusion candidates; deterministic adapter stages republish those under the six standard stage-output slots the shared backend reads. The cheap-model default is `gpt-5.4-mini`, overridable per stage via `llm`. `options` is `TCreateScribePipelineOptions` (`{ llm?: TIngestionLlmOptions }`). Its `pipelineId` is `argument-ingestion-scribe`.
+The fast, low-cost pipeline: two cheap LLM calls (`extract` → `structure`) feed scholar's deterministic backend + `finalizeResponseV2`, so it emits the identical output shape with ~2 LLM calls instead of ~8. `extract` produces the canonical claim set (the same per-extension shape scholar's canonicalizer emits) and `structure` produces the relation graph + conclusion candidates + the titles for the premises they become; deterministic adapter stages republish those under the six standard stage-output slots the shared backend reads. The cheap-model default is `gpt-5.4-mini`, overridable per stage via `llm`. `options` is `TCreateScribePipelineOptions` (`{ llm?: TIngestionLlmOptions }`). Its `pipelineId` is `argument-ingestion-scribe`.
 
 #### `basicsExtension`
 
@@ -1988,6 +1988,22 @@ The default `TIngestionExtension` (the schema bundle a factory consumes). Pairs 
 - `buildResponseSchema(extension)` / `buildClaimRecordSchema(claimSchema)` — build the **per-extension** canonicalization output schema (the canonical-claims envelope, and a single claim record with the canonicalizer fields injected into the extension's claim shape). The cheap `scribe.extract` stage uses these so its output carries the extension's claim fields; consumers building their own canonicalization-shaped stage can too.
 - `selectFallbackConclusion(classifications, relations)` — the deterministic relation-graph conclusion pick (highest in-degree pure-sink normal claim, document-order tiebreak; `null` when no candidate). Used to resolve a single `conclusionMiniId` when the model names none; exported so an alternate pipeline producing conclusion candidates in one call can reproduce the identical resolution.
 - `locateSourceAnchor(input, quote, hintUtf16)` / `SOURCE_ANCHOR_CONTEXT_CHARS` / `SOURCE_ANCHOR_NOTE_CODES` — see [Source anchors](#source-anchors).
+
+#### Premise titles
+
+Both pipelines give every premise a `title`, and both prefer one the model authored over one assembled from the premise's parts.
+
+The authored title names the **inferential move** — what the step does in the argument — as a short noun phrase (`Residence as tacit consent`), not a restatement of the claim it concludes. It rides on structured output the pipelines already produce, so it costs no extra model call: a relation entry carries the `title` of the premise it compiles into (`relation-extraction` for the thorough pipeline, `structure` for the fast one), and the `conclusion-selection` slot carries the title for the conclusion premise.
+
+Resolution, per premise:
+
+- The authored title is trimmed. Empty or whitespace-only counts as **absent**.
+- It is clamped to 80 characters (an over-long one is truncated with an ellipsis, never rejected — strict structured output ignores JSON-Schema `maxLength`, and discarding a completed run over a long string is the worse failure).
+- Absent, the title is **composed** from the LLM-authored claim titles behind the premise: `If "<antecedent>" and "<antecedent>" then "<consequent>"` for a relation-derived premise, and the conclusion claim's own title for the conclusion premise. Composition is the floor, so a model that omits the field never fails a run.
+
+**The conclusion title is used only when it describes the resolved conclusion.** The model authors one conclusion title, for `conclusionCandidates[0]`. The resolved `conclusionMiniId` is the first candidate that is a known normal claim, or `selectFallbackConclusion`'s relation-graph pick when the model names none usable — so it is not necessarily that first candidate. `finalizeResponseV2` uses the authored title only when `conclusionMiniId === conclusionCandidates[0]`, and composes otherwise. A composed conclusion title can be redundant; it is never about a different claim.
+
+`title` is a required field on `RelationExtractionOutputSchema`'s relation entries and on both conclusion-selection schemas, so a consumer-built stage filling those slots must supply it — `""` selects composition.
 
 #### Source anchors
 

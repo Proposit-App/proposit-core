@@ -64,13 +64,17 @@ export function buildExtractOutputSchema(
 }
 
 // `structure` emits the relation graph (same per-relation shape as
-// scholar's `relation-extraction`) plus the conclusion candidates +
-// rationale (same fields scholar's conclusion-selection LLM emits,
-// before the deterministic resolution the adapter reproduces).
+// scholar's `relation-extraction`, each relation carrying its own
+// `title`) plus the conclusion candidates + rationale (same fields
+// scholar's conclusion-selection LLM emits, before the deterministic
+// resolution the adapter reproduces). `conclusionTitle` is the
+// conclusion counterpart of a relation's `title`; it is named
+// distinctly because both live on one object here.
 export const ScribeStructureOutputSchema = Type.Object(
     {
         relations: RelationExtractionOutputSchema.properties.relations,
         conclusionCandidates: Type.Array(Type.String()),
+        conclusionTitle: Type.String(),
         rationale: Type.String(),
     },
     { additionalProperties: false }
