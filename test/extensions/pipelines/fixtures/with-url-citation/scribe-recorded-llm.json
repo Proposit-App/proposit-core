@@ -363,17 +363,18 @@
               "mentionIds": [
                 "c1-m"
               ],
-              "suggestedSymbol": "GlobalTempsRise",
-              "title": "Global temperatures rise significantly",
-              "body": "Global temperatures have risen significantly over the past century.",
-              "type": "normal"
+              "suggestedSymbol": "global_temps_risen",
+              "title": "Global temperatures have risen",
+              "url": "https://climate.nasa.gov/evidence/",
+              "citationTypeGuess": "Website",
+              "type": "citation"
             },
             {
               "miniId": "c2",
               "mentionIds": [
                 "c2-m"
               ],
-              "suggestedSymbol": "TempsCauseExtremeWeather",
+              "suggestedSymbol": "warming_causes_extreme_weather",
               "title": "Rising temperatures increase extreme weather",
               "body": "Rising global temperatures cause more frequent extreme weather events.",
               "type": "normal"
@@ -383,21 +384,10 @@
               "mentionIds": [
                 "c3-m"
               ],
-              "suggestedSymbol": "MoreExtremeWeatherObserved",
-              "title": "Extreme weather events are more frequent",
+              "suggestedSymbol": "more_extreme_weather_now",
+              "title": "More extreme weather is occurring",
               "body": "More frequent extreme weather events are being seen.",
               "type": "normal"
-            },
-            {
-              "miniId": "c4",
-              "mentionIds": [
-                "c4-m"
-              ],
-              "suggestedSymbol": "NASAClimateReportGlobalTemps",
-              "title": "NASA climate report on warming",
-              "url": "https://climate.nasa.gov/evidence/",
-              "citationTypeGuess": "Website",
-              "type": "citation"
             }
           ],
           "mentionToClaim": [
@@ -412,55 +402,44 @@
             {
               "mentionId": "c3-m",
               "claimMiniId": "c3"
-            },
-            {
-              "mentionId": "c4-m",
-              "claimMiniId": "c4"
             }
           ],
           "mentions": [
             {
               "mentionId": "c1-m",
               "segmentId": "",
-              "text": "global temperatures have risen significantly over the past century",
+              "text": "According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century.",
               "span": {
-                "start": 74,
-                "end": 140
+                "start": 0,
+                "end": 143
               }
             },
             {
               "mentionId": "c2-m",
               "segmentId": "",
-              "text": "Rising global temperatures cause more frequent extreme weather events",
+              "text": "Rising global temperatures cause more frequent extreme weather events.",
               "span": {
-                "start": 142,
-                "end": 211
+                "start": 145,
+                "end": 216
               }
             },
             {
               "mentionId": "c3-m",
               "segmentId": "",
-              "text": "we are seeing more frequent extreme weather events",
+              "text": "we are seeing more frequent extreme weather events.",
               "span": {
-                "start": 224,
-                "end": 274
-              }
-            },
-            {
-              "mentionId": "c4-m",
-              "segmentId": "",
-              "text": "[NASA's climate report](https://climate.nasa.gov/evidence/)",
-              "span": {
-                "start": 13,
-                "end": 72
+                "start": 218,
+                "end": 270
               }
             }
           ]
         },
         "tokenUsage": {
-          "input": 0,
-          "output": 0
-        }
+          "input": 1188,
+          "output": 340,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0313de207d4a58b4006a7205dcb504819eaf5cf2d2ee2de78b"
       }
     },
     {
@@ -578,6 +557,264 @@
           "input": 0,
           "output": 0
         }
+      }
+    },
+    {
+      "hash": "480457501da6f695b4ac3a42590778502e9e09fbc18d9c2396f33220dec722b6",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=citation symbol=NASAClimateReportRisingTemps fields={\"title\":\"NASA report says temperatures rose\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal symbol=RisingTempsCauseExtremeWeather fields={\"title\":\"Rising temperatures increase extremes\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c3] type=normal symbol=MoreExtremeWeatherObserved fields={\"title\":\"More extreme weather occurs\",\"body\":\"More frequent extreme weather events are occurring.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "Evidence for temperature rise",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
+                "c2"
+              ],
+              "consequent": "c3",
+              "title": "Implication for weather frequency",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "conclusionTitle": "Observed weather increase",
+          "rationale": "c3 is the only non-citation claim that is supported by another claim and does not support anything further, so it is the best conclusion candidate."
+        },
+        "tokenUsage": {
+          "input": 725,
+          "output": 159,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0f4b58c2501c9406006a7202a40ef88191a1293e8166ebe54c"
+      }
+    },
+    {
+      "hash": "18a9404148f0983473a2c2367f3cb34b48e35fd61288f61dbbd1e79b8acf3bb1",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=citation symbol=global_temps_risen fields={\"title\":\"Global temperatures have risen\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal symbol=warming_causes_extreme_weather fields={\"title\":\"Rising temperatures increase extreme weather\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c3] type=normal symbol=more_extreme_weather_now fields={\"title\":\"More extreme weather is occurring\",\"body\":\"More frequent extreme weather events are being seen.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1"
+              ],
+              "consequent": "c2",
+              "title": "Temperature evidence to impact",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
+                "c2"
+              ],
+              "consequent": "c3",
+              "title": "Causal application to events",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "conclusionTitle": "Observed extreme weather",
+          "rationale": "c3 is the terminal claim supported by c2, while c1 functions as citation support for the causal premise."
+        },
+        "tokenUsage": {
+          "input": 727,
+          "output": 152,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0594666e9999e95e006a7205df313c8191abba7c621cc061a4"
       }
     }
   ]

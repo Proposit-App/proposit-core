@@ -9,11 +9,11 @@
                 "type": "normal",
                 "sourceAnchors": [
                     {
-                        "quote": "If it rains, the ground gets wet.",
-                        "startUtf16": 0,
-                        "endUtf16": 33,
-                        "prefix": "",
-                        "suffix": " It is raining. Therefore, the g"
+                        "quote": "the ground gets wet",
+                        "startUtf16": 13,
+                        "endUtf16": 32,
+                        "prefix": "If it rains, ",
+                        "suffix": ". It is raining. Therefore, the "
                     }
                 ],
                 "role": "premise"
@@ -21,7 +21,7 @@
             {
                 "miniId": "c2",
                 "title": "It is raining",
-                "body": "It is raining.",
+                "body": "Rain is currently falling.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -72,7 +72,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "If \"Rain wets the ground\" and \"It is raining\" then \"The ground is wet\"",
+                "title": "Modus ponens",
                 "sourceAnchors": [
                     {
                         "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.",
@@ -86,7 +86,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "Ground_Is_Wet",
-                "title": "The ground is wet"
+                "title": "Joint support inference"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -95,6 +95,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the sole normal claim supported by the only inference relation, with c1 and c2 serving jointly as premises.",
+    "selectionRationale": "c3 is the sole supported consequent and terminal claim in the relation graph, with c1 and c2 jointly serving as its support.",
     "processingFailures": []
 }
