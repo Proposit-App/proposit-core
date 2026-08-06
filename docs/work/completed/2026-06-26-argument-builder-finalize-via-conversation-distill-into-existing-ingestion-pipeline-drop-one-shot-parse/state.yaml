@@ -1,8 +1,0 @@
-slug: 2026-06-26-argument-builder-finalize-via-conversation-distill-into-existing-ingestion-pipeline-drop-one-shot-parse
-title: Argument Builder finalize via conversation-distill into existing ingestion
-  pipeline (drop one-shot parse)
-phase: 'completed (Phase 4 server adoption done)'
-created: '2026-06-26'
-resolution: shipped
-priority: 20
-initiative: 2026-06-21-builder-pipeline-family-socratic-argument-builder-into-core
