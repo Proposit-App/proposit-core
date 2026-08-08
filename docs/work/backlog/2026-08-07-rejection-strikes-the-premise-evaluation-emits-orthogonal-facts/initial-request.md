@@ -5,10 +5,6 @@ Epic: [Review verdicts as two axes with rejection striking premises from the rec
 **Slice A of five. This slice leads the initiative — nothing else can start until
 it resolves.**
 
-Adopt with `tcw work new --initiative 2026-08-07-review-verdicts-as-two-axes-with-rejection-striking-premises-from-the-record`,
-**not** `tcw work inbox accept` — accept double-dates the slug and drops the
-initiative link on a delegated slice. Then `git rm` this file.
-
 ## Design of record
 
 `/Users/brian/Projects/Proposit-App/docs/work/active/2026-08-07-review-verdicts-as-two-axes-with-rejection-striking-premises-from-the-record/design.md`
