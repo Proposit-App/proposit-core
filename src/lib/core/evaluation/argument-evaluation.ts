@@ -28,6 +28,7 @@ import {
     kleeneIff,
 } from "./kleene.js"
 import { createPremiseBoundResolver } from "./premise-resolver.js"
+import { isPremiseSetSatisfiable } from "./satisfiability.js"
 import { makeErrorIssue, makeValidationResult } from "./validation.js"
 
 /**
@@ -551,15 +552,33 @@ export function evaluateArgument(
         .map((pm) => pm.getId())
     const struckIds = new Set(struckPremiseIds)
 
-    const propagation = closeUnderAcceptedOperators(ctx, assignment, {
-        excludedPremiseIds: struckIds,
-    })
-    const propagatedAssignment: TCoreExpressionAssignment = {
-        variables: propagation.variables,
-        operatorAssignments: assignment.operatorAssignments,
-    }
-
     try {
+        const premiseSetSatisfiable =
+            options?.premiseSetSatisfiable !== undefined
+                ? options.premiseSetSatisfiable
+                : isPremiseSetSatisfiable(ctx, {
+                      premises: [
+                          ...supportingPremises,
+                          ...constraintPremises,
+                      ].filter((pm) => !struckIds.has(pm.getId())),
+                      freeVariableIds: referencedVariableIds,
+                      forcedTrueVariableIds: options?.forcedTrueVariableIds,
+                  })
+
+        // Contradicting premises license nothing: exclude every premise from
+        // the closure so the reader is shown only what they asserted.
+        const derivationSuppressed = premiseSetSatisfiable === false
+        const closureExclusions = derivationSuppressed
+            ? new Set(ctx.listPremises().map((pm) => pm.getId()))
+            : struckIds
+        const propagation = closeUnderAcceptedOperators(ctx, assignment, {
+            excludedPremiseIds: closureExclusions,
+        })
+        const propagatedAssignment: TCoreExpressionAssignment = {
+            variables: propagation.variables,
+            operatorAssignments: assignment.operatorAssignments,
+        }
+
         const resolver = createPremiseBoundResolver(ctx, propagatedAssignment)
 
         const evalOpts = {
@@ -614,13 +633,13 @@ export function evaluateArgument(
         const isReaderAsserted = (variableId: string): boolean =>
             forcedTrueVariableIds?.has(variableId) !== true &&
             (assignment.variables[variableId] ?? null) !== null
-        const hasAcceptedOperator = Object.values(
-            assignment.operatorAssignments
-        ).includes("accepted")
+        const canDerive =
+            !derivationSuppressed &&
+            Object.values(assignment.operatorAssignments).includes("accepted")
         const withhold = (
             withheldVariableIds: ReadonlySet<string>
         ): TCoreVariableAssignment => {
-            if (!hasAcceptedOperator) {
+            if (!canDerive) {
                 // Nothing can be derived, so closure is the seed minus what
                 // was withheld.
                 const reduced = { ...assignment.variables }
@@ -629,7 +648,7 @@ export function evaluateArgument(
                 return reduced
             }
             return closeUnderAcceptedOperators(ctx, assignment, {
-                excludedPremiseIds: struckIds,
+                excludedPremiseIds: closureExclusions,
                 withheldVariableIds,
             }).variables
         }
@@ -666,7 +685,7 @@ export function evaluateArgument(
         // One closure per reader-asserted claim, and only when something could
         // have been derived at all.
         const claimAttribution =
-            includeDiagnostics && hasAcceptedOperator
+            includeDiagnostics && canDerive
                 ? Object.fromEntries(
                       referencedVariableIds
                           .filter((vid) => {
@@ -743,6 +762,7 @@ export function evaluateArgument(
             premisesHoldConclusionFalse,
             conclusionAttribution,
             claimAttribution,
+            premiseSetSatisfiable,
             propagatedVariableValues,
             variableProvenance,
         }
@@ -852,6 +872,16 @@ export function checkArgumentValidity(
         }
     }
 
+    // The generated assignments carry no operator decisions, so nothing is
+    // ever struck and the premise set is the same on every row. Computing it
+    // once here and threading it through keeps the search 2^n rather than
+    // 2^n × 2^n.
+    const premiseSetSatisfiable = isPremiseSetSatisfiable(ctx, {
+        premises: [...supportingPremises, ...constraintPremises],
+        freeVariableIds: checkedVariableIds,
+        forcedTrueVariableIds,
+    })
+
     const mode = options?.mode ?? "firstCounterexample"
     const maxAssignmentsChecked = options?.maxAssignmentsChecked
     const counterexamples: TCoreCounterexample[] = []
@@ -890,6 +920,8 @@ export function checkArgumentValidity(
                 options?.includeCounterexampleEvaluations ?? false,
             includeDiagnostics:
                 options?.includeCounterexampleEvaluations ?? false,
+            forcedTrueVariableIds,
+            premiseSetSatisfiable,
         })
 
         if (!result.ok) {
