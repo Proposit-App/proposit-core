@@ -22,6 +22,7 @@ export interface TFormulaTreeVisitor<T> {
 }
 import type {
     TCoreExpressionAssignment,
+    TCoreResolvedAssignment,
     TCorePremiseEvaluationResult,
     TCoreValidationResult,
 } from "../../types/evaluation.js"
@@ -403,12 +404,17 @@ export interface TPremiseEvaluation {
      */
     validateEvaluability(): TCoreValidationResult
     /**
-     * Evaluates the premise under a three-valued expression assignment.
+     * Evaluates the premise under an expression assignment.
      *
-     * Variable values are looked up using Kleene three-valued logic
-     * (`null` = unknown). Missing variables default to `null`. For
-     * inference premises (`implies`/`iff`), an `inferenceDiagnostic` is
-     * always computed with three-valued fields.
+     * Variable values are looked up using the four-valued Belnap connectives
+     * (`null` = unknown, `CONTESTED` = forced both true and false). Missing
+     * variables default to `null`. For inference premises (`implies`/`iff`),
+     * an `inferenceDiagnostic` is always computed.
+     *
+     * The parameter is the wider {@link TCoreResolvedAssignment} because
+     * argument evaluation feeds its own constraint-closure output back
+     * through here; a reader's {@link TCoreExpressionAssignment} is
+     * assignable to it and stays three-valued.
      *
      * Operator decisions do not affect premise evaluation. A rejected
      * expression evaluates from its children like any other — a rejection is
@@ -425,7 +431,7 @@ export interface TPremiseEvaluation {
      * @returns The premise evaluation result.
      */
     evaluate(
-        assignment: TCoreExpressionAssignment,
+        assignment: TCoreResolvedAssignment,
         options?: {
             strictUnknownKeys?: boolean
             requireExactCoverage?: boolean

@@ -48,7 +48,7 @@ import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import {
     evaluateArgument as evaluateArgumentStandalone,
     checkArgumentValidity as checkArgumentValidityStandalone,
-    evaluateSubtreeKleene,
+    evaluateSubtree,
     type TArgumentEvaluationContext,
     type TEvaluablePremise,
 } from "./evaluation/argument-evaluation.js"
@@ -2821,15 +2821,22 @@ export class ArgumentEngine<
             variables: effectiveVariables,
         }
         // Axiomatic-bound variables are forced true by the pre-pass above, so
-        // evaluation must not read them back as reader assertions.
+        // evaluation must not read them back as reader assertions. Union the
+        // engine's axiomatic set with anything the caller passed, exactly as
+        // `checkValidity` does — a caller's own set adds to the axioms, it
+        // never replaces them.
+        const forcedTrueVariableIds = new Set<string>(
+            this.getAxiomaticBoundVariableIds()
+        )
+        for (const id of options?.forcedTrueVariableIds ?? []) {
+            forcedTrueVariableIds.add(id)
+        }
         return evaluateArgumentStandalone(
             this.asEvaluationContext(),
             effectiveAssignment,
             {
                 ...options,
-                forcedTrueVariableIds:
-                    options?.forcedTrueVariableIds ??
-                    this.getAxiomaticBoundVariableIds(),
+                forcedTrueVariableIds,
             }
         )
     }
@@ -2993,7 +3000,7 @@ export class ArgumentEngine<
             const children = pm.getChildExpressions(root.id)
             if (children.length < 2) continue
             const antecedent = children[0]
-            const antecedentValue = evaluateSubtreeKleene(
+            const antecedentValue = evaluateSubtree(
                 antecedent.id,
                 (id) => pm.getExpression(id),
                 (parentId) => pm.getChildExpressions(parentId),

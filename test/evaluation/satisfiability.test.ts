@@ -4,6 +4,11 @@
 
 import { describe, it, expect, vi } from "vitest"
 import * as satisfiabilityModule from "../../src/lib/core/evaluation/satisfiability.js"
+import { isPremiseSetSatisfiable } from "../../src/lib/core/evaluation/satisfiability.js"
+import type {
+    TArgumentEvaluationContext,
+    TEvaluablePremise,
+} from "../../src/lib/core/evaluation/argument-evaluation.js"
 import { buildArgument, and, implies, not, v } from "./fixtures.js"
 
 describe("premise-set satisfiability", () => {
@@ -91,5 +96,41 @@ describe("premise-set satisfiability", () => {
         } finally {
             spy.mockRestore()
         }
+    })
+
+    it("reports not-determined rather than unsatisfiable when no row could be evaluated", () => {
+        // A premise that never resolves to anything: no assignment settles it,
+        // so the search establishes nothing — including its unsatisfiability.
+        const indeterminate: TEvaluablePremise = {
+            getId: () => "p-indeterminate",
+            getExpressions: () => [],
+            getChildExpressions: () => [],
+            getVariables: () => [],
+            getDecidableOperatorExpressions: () => [],
+            evaluate: () => ({
+                premiseId: "p-indeterminate",
+                premiseType: "constraint",
+                rootValue: null,
+                expressionValues: {},
+                variableValues: {},
+            }),
+        }
+        const ctx = {
+            argumentId: "arg-1",
+            getConclusionPremise: () => undefined,
+            listSupportingPremises: () => [],
+            listPremises: () => [indeterminate],
+            conclusionPremiseId: undefined,
+            getVariable: () => undefined,
+            getPremise: () => undefined,
+            validateEvaluability: () => ({ ok: true, issues: [] }),
+        } satisfies TArgumentEvaluationContext
+
+        expect(
+            isPremiseSetSatisfiable(ctx, {
+                premises: [indeterminate],
+                freeVariableIds: ["v1"],
+            })
+        ).toBeNull()
     })
 })

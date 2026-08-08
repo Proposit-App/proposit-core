@@ -2,10 +2,11 @@ import { Command } from "commander"
 import { hydrateEngine, hydratePropositCore } from "../engine.js"
 import { isClaimBound, isPremiseBound } from "../../lib/schemata/index.js"
 import type { TCorePropositionalVariable } from "../../lib/schemata/index.js"
-import type {
-    TCoreArgumentEvaluationResult,
-    TCorePremiseEvaluationResult,
-    TCoreTrivalentValue,
+import {
+    CONTESTED,
+    type TCoreArgumentEvaluationResult,
+    type TCorePremiseEvaluationResult,
+    type TCoreQuadrivalentValue,
 } from "../../lib/types/evaluation.js"
 import type { ArgumentEngine } from "../../lib/core/argument-engine.js"
 import type { PropositCore } from "../../lib/core/proposit-core.js"
@@ -62,16 +63,23 @@ function operatorLabel(op: string): string {
     }
 }
 
-function truthColor(value: TCoreTrivalentValue): string {
+function truthColor(value: TCoreQuadrivalentValue): string {
     if (value === true) return "green3"
     if (value === false) return "red"
+    if (value === CONTESTED) return "purple"
     return "gray70"
 }
 
-function truthFillColor(value: TCoreTrivalentValue, vacuous?: boolean): string {
+function truthFillColor(
+    value: TCoreQuadrivalentValue,
+    vacuous?: boolean
+): string {
     if (value === true && vacuous) return '"#fff3cd"' // yellow for vacuous truth
     if (value === true) return '"#d4edda"'
     if (value === false) return '"#f8d7da"'
+    // Contested is not a shade of unknown: the reader's own inputs force this
+    // both true and false, and only they can resolve it.
+    if (value === CONTESTED) return '"#e6d9f2"'
     return '"#e2e3e5"'
 }
 
@@ -111,18 +119,24 @@ export function buildDotGraph(
     // Evaluation summary box (top-right)
     if (overlay) {
         const r = overlay.result
-        const tri = (v: TCoreTrivalentValue | undefined): string =>
-            v === true ? "true" : v === false ? "false" : "unknown"
+        const truth = (v: TCoreQuadrivalentValue | undefined): string =>
+            v === true
+                ? "true"
+                : v === false
+                  ? "false"
+                  : v === CONTESTED
+                    ? "contested"
+                    : "unknown"
 
         const summaryHtml = [
             `<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="white">`,
-            `<TR><TD ALIGN="LEFT">admissible</TD><TD ALIGN="RIGHT">${tri(r.isAdmissibleAssignment)}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">surviving support</TD><TD ALIGN="RIGHT">${tri(r.survivingSupportingPremisesTrue)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">admissible</TD><TD ALIGN="RIGHT">${truth(r.isAdmissibleAssignment)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">surviving support</TD><TD ALIGN="RIGHT">${truth(r.survivingSupportingPremisesTrue)}</TD></TR>`,
             `<TR><TD ALIGN="LEFT">premises struck</TD><TD ALIGN="RIGHT">${htmlEscape(String(r.struckPremiseIds?.length ?? 0))}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">conclusion true</TD><TD ALIGN="RIGHT">${tri(r.conclusionTrue)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">conclusion true</TD><TD ALIGN="RIGHT">${truth(r.conclusionTrue)}</TD></TR>`,
             `<TR><TD ALIGN="LEFT">reached without your assertion</TD><TD ALIGN="RIGHT">${String(r.conclusionAttribution?.reachedWithoutAssertion ?? "unknown")}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">premises hold, conclusion does not follow</TD><TD ALIGN="RIGHT">${tri(r.premisesHoldConclusionFalse)}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">premises satisfiable</TD><TD ALIGN="RIGHT">${tri(r.premiseSetSatisfiable)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">premises hold, conclusion false</TD><TD ALIGN="RIGHT">${truth(r.premisesHoldConclusionFalse)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">premises satisfiable</TD><TD ALIGN="RIGHT">${truth(r.premiseSetSatisfiable)}</TD></TR>`,
             `</TABLE>`,
         ].join("")
 
@@ -203,7 +217,7 @@ export function buildDotGraph(
 
             // Evaluation overlay: color nodes by truth value
             if (overlay && premResult) {
-                let exprValue: TCoreTrivalentValue | undefined =
+                let exprValue: TCoreQuadrivalentValue | undefined =
                     premResult.expressionValues[expr.id]
                 // For variable expressions without a direct value (e.g. under
                 // a rejected operator), inherit the variable's assignment value
@@ -278,7 +292,7 @@ export function buildDotGraph(
         // Overlay: color variable node by assignment value
         if (overlay) {
             // Find variable value from any premise result
-            let varValue: TCoreTrivalentValue | undefined
+            let varValue: TCoreQuadrivalentValue | undefined
             for (const pr of overlay.premiseResults.values()) {
                 if (pr.variableValues[v.id] !== undefined) {
                     varValue = pr.variableValues[v.id]

@@ -2,11 +2,43 @@ import type { TCoreArgumentRoleState } from "../schemata/index.js"
 
 export type { TCoreArgumentRoleState }
 
+/**
+ * The fourth truth value: the reader's assignments, run through the steps they
+ * granted, force this both true and false.
+ *
+ * Only evaluation produces it. A reader assigns `TCoreTrivalentValue`, and the
+ * assignment types below deliberately exclude this literal so a caller cannot
+ * feed it back in.
+ */
+export const CONTESTED = "contested"
+
+/** The type of {@link CONTESTED}. */
+export type TCoreContestedValue = typeof CONTESTED
+
 /** Three-valued truth value: true, false, or null (unset/unknown). */
 export type TCoreTrivalentValue = boolean | null
 
+/**
+ * Four-valued truth value — the three a reader may assign, plus
+ * {@link CONTESTED}, which only evaluation can produce.
+ */
+export type TCoreQuadrivalentValue = TCoreTrivalentValue | TCoreContestedValue
+
+/** Narrows a four-valued truth value to {@link CONTESTED}. */
+export function isContested(
+    value: TCoreQuadrivalentValue | undefined
+): value is TCoreContestedValue {
+    return value === CONTESTED
+}
+
 /** Maps variable IDs to three-valued truth values. */
 export type TCoreVariableAssignment = Record<string, TCoreTrivalentValue>
+
+/** Maps variable IDs to the four-valued results constraint closure produced. */
+export type TCoreResolvedVariableValues = Record<
+    string,
+    TCoreQuadrivalentValue
+>
 
 /**
  * Operator decision recorded by a reader.
@@ -22,6 +54,20 @@ export type TCoreOperatorAssignment = "accepted" | "rejected"
 export interface TCoreExpressionAssignment {
     /** Variable ID → true/false/null (null = unset/not sure). */
     variables: TCoreVariableAssignment
+    /** Operator expression ID → accepted/rejected. Unset operators evaluate normally. */
+    operatorAssignments: Record<string, TCoreOperatorAssignment>
+}
+
+/**
+ * An assignment carrying the values constraint closure resolved, which may
+ * include {@link CONTESTED}. Evaluation feeds its own closure output back into
+ * premise evaluation through this type; a reader supplies
+ * {@link TCoreExpressionAssignment}, which is assignable to this one but never
+ * the reverse.
+ */
+export interface TCoreResolvedAssignment {
+    /** Variable ID → true/false/null/contested. */
+    variables: TCoreResolvedVariableValues
     /** Operator expression ID → accepted/rejected. Unset operators evaluate normally. */
     operatorAssignments: Record<string, TCoreOperatorAssignment>
 }
@@ -74,15 +120,15 @@ export interface TCoreValidationResult {
 
 export interface TCoreDirectionalVacuity {
     /** Truth value of the antecedent for this directional implication view. */
-    antecedentTrue: TCoreTrivalentValue
+    antecedentTrue: TCoreQuadrivalentValue
     /** Truth value of the consequent for this directional implication view. */
-    consequentTrue: TCoreTrivalentValue
+    consequentTrue: TCoreQuadrivalentValue
     /** Result of evaluating `antecedent -> consequent`. */
-    implicationValue: TCoreTrivalentValue
+    implicationValue: TCoreQuadrivalentValue
     /** `true` iff the implication is true because the antecedent is false; `null` if indeterminate. */
-    isVacuouslyTrue: TCoreTrivalentValue
+    isVacuouslyTrue: TCoreQuadrivalentValue
     /** `true` iff the antecedent was true (the implication "fired"); `null` if indeterminate. */
-    fired: TCoreTrivalentValue
+    fired: TCoreQuadrivalentValue
 }
 
 export type TCorePremiseInferenceDiagnostic =
@@ -90,26 +136,26 @@ export type TCorePremiseInferenceDiagnostic =
           kind: "implies"
           premiseId: string
           rootExpressionId: string
-          leftValue: TCoreTrivalentValue
-          rightValue: TCoreTrivalentValue
-          rootValue: TCoreTrivalentValue
-          antecedentTrue: TCoreTrivalentValue
-          consequentTrue: TCoreTrivalentValue
-          isVacuouslyTrue: TCoreTrivalentValue
-          fired: TCoreTrivalentValue
-          firedAndHeld: TCoreTrivalentValue
+          leftValue: TCoreQuadrivalentValue
+          rightValue: TCoreQuadrivalentValue
+          rootValue: TCoreQuadrivalentValue
+          antecedentTrue: TCoreQuadrivalentValue
+          consequentTrue: TCoreQuadrivalentValue
+          isVacuouslyTrue: TCoreQuadrivalentValue
+          fired: TCoreQuadrivalentValue
+          firedAndHeld: TCoreQuadrivalentValue
       }
     | {
           kind: "iff"
           premiseId: string
           rootExpressionId: string
-          leftValue: TCoreTrivalentValue
-          rightValue: TCoreTrivalentValue
-          rootValue: TCoreTrivalentValue
+          leftValue: TCoreQuadrivalentValue
+          rightValue: TCoreQuadrivalentValue
+          rootValue: TCoreQuadrivalentValue
           leftToRight: TCoreDirectionalVacuity
           rightToLeft: TCoreDirectionalVacuity
-          bothSidesTrue: TCoreTrivalentValue
-          bothSidesFalse: TCoreTrivalentValue
+          bothSidesTrue: TCoreQuadrivalentValue
+          bothSidesFalse: TCoreQuadrivalentValue
       }
 
 export interface TCorePremiseEvaluationResult {
@@ -120,11 +166,11 @@ export interface TCorePremiseEvaluationResult {
     /** Root expression ID, if the premise has a root. */
     rootExpressionId?: string
     /** Truth value of the root expression, if the premise was evaluable. */
-    rootValue?: TCoreTrivalentValue
+    rootValue?: TCoreQuadrivalentValue
     /** Per-expression truth values keyed by expression ID. */
-    expressionValues: Record<string, TCoreTrivalentValue>
+    expressionValues: Record<string, TCoreQuadrivalentValue>
     /** Referenced variable truth values keyed by variable ID. */
-    variableValues: Record<string, TCoreTrivalentValue>
+    variableValues: Record<string, TCoreQuadrivalentValue>
     /** Inference-specific diagnostics for `implies`/`iff` roots. */
     inferenceDiagnostic?: TCorePremiseInferenceDiagnostic
 }
@@ -157,8 +203,8 @@ export interface TCoreArgumentEvaluationResult {
     ok: boolean
     /** Validation output when `ok === false`, or when validation was requested and included. */
     validation?: TCoreValidationResult
-    /** The assignment used for this evaluation. */
-    assignment?: TCoreExpressionAssignment
+    /** The assignment used for this evaluation, after constraint closure. */
+    assignment?: TCoreResolvedAssignment
     /** All variable IDs referenced across evaluated supporting/conclusion/constraint premises. */
     referencedVariableIds?: string[]
     /** Evaluation result for the designated conclusion premise. */
@@ -181,7 +227,7 @@ export interface TCoreArgumentEvaluationResult {
     /** Number of supporting premises that were not struck. */
     survivingSupportingPremiseCount?: number
     /** `true` iff every surviving constraint premise evaluates to true. */
-    isAdmissibleAssignment?: TCoreTrivalentValue
+    isAdmissibleAssignment?: TCoreQuadrivalentValue
     /**
      * `true` iff every surviving supporting premise evaluates to true.
      *
@@ -190,17 +236,24 @@ export interface TCoreArgumentEvaluationResult {
      * "the argument worked". Whether the argument reached its conclusion is
      * `conclusionAttribution`, not this field.
      */
-    survivingSupportingPremisesTrue?: TCoreTrivalentValue
+    survivingSupportingPremisesTrue?: TCoreQuadrivalentValue
     /** The truth value of the conclusion premise root expression. */
-    conclusionTrue?: TCoreTrivalentValue
+    conclusionTrue?: TCoreQuadrivalentValue
     /**
      * `true` iff constraints are satisfied, every surviving supporting premise
      * is true, and the conclusion is false.
      *
      * A reader-relative gap under one assignment — **not** a countermodel to
      * entailment, which is the stronger claim `checkValidity` answers.
+     *
+     * It rests on `survivingSupportingPremisesTrue`, which is vacuously `true`
+     * when nothing survives, so this field is `null` when the argument had
+     * supporting premises and the reader struck every one of them: the case was
+     * withheld, not weighed and found wanting. An argument authored with no
+     * supporting premises at all is the entailment-from-nothing case and still
+     * reports `true` for a false conclusion.
      */
-    premisesHoldConclusionFalse?: TCoreTrivalentValue
+    premisesHoldConclusionFalse?: TCoreQuadrivalentValue
     /**
      * Where the conclusion's truth came from. `assertedByReader` records that
      * the reader supplied a value for at least one claim the conclusion
@@ -234,7 +287,7 @@ export interface TCoreArgumentEvaluationResult {
      * matches `referencedVariableIds`; still-unresolved variables appear
      * with value `null`.
      */
-    propagatedVariableValues?: Record<string, TCoreTrivalentValue>
+    propagatedVariableValues?: TCoreResolvedVariableValues
     /**
      * Where each propagated value came from, keyed like
      * `propagatedVariableValues`. Populated only when
@@ -252,7 +305,11 @@ export interface TCoreValueAttribution {
 }
 
 /** Where a propagated variable value came from. */
-export type TCoreValueOrigin = "asserted" | "derived" | "unassigned"
+export type TCoreValueOrigin =
+    | "asserted"
+    | "derived"
+    | "contested"
+    | "unassigned"
 
 /** The granted operator step that produced a derived value. */
 export interface TCoreDerivationStep {
@@ -269,11 +326,25 @@ export interface TCoreDerivationStep {
 
 export interface TCoreVariableProvenance {
     /** The variable's value after propagation. */
-    value: TCoreTrivalentValue
-    /** `"asserted"` for a reader-supplied `true`/`false`, `"derived"` for anything propagation produced, `"unassigned"` otherwise. */
+    value: TCoreQuadrivalentValue
+    /**
+     * `"contested"` whenever the value is {@link CONTESTED}, whatever else
+     * contributed; otherwise `"asserted"` for a reader-supplied `true`/`false`,
+     * `"derived"` for anything propagation produced, `"unassigned"` for a value
+     * still unresolved.
+     */
     origin: TCoreValueOrigin
     /** The immediate producing step; present iff `origin === "derived"`. */
     derivedBy?: TCoreDerivationStep
+    /**
+     * Every granted step that contributed a truth component to a contested
+     * value, in a stable order; present iff `origin === "contested"`. The
+     * reader's own assertion is not a step and never appears here — compare
+     * `assignment.variables[id]` to see whether one of the two components came
+     * from the reader. `derivedBy` is absent for a contested value: naming one
+     * producing step is a lie once two steps disagree.
+     */
+    contestedBy?: TCoreDerivationStep[]
 }
 
 /** Options for `propagateOperatorConstraints`. */
@@ -318,7 +389,7 @@ export interface TCoreValidityCheckOptions {
 
 export interface TCoreCounterexample {
     /** Assignment under which the argument fails to preserve truth. */
-    assignment: TCoreExpressionAssignment
+    assignment: TCoreResolvedAssignment
     /** Full argument evaluation result for that assignment. */
     result: TCoreArgumentEvaluationResult
 }

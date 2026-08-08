@@ -61,7 +61,10 @@ import {
 } from "../src/lib/consts"
 import type { TOptionalChecksum } from "../src/lib/schemata/shared"
 import type { TCoreChecksumConfig } from "../src/lib/types/checksum"
-import type { TCoreExpressionAssignment } from "../src/lib/types/evaluation"
+import {
+    CONTESTED,
+    type TCoreExpressionAssignment,
+} from "../src/lib/types/evaluation"
 import type { TCoreChangeset } from "../src/lib/types/mutation"
 import {
     POSITION_MIN,
@@ -79,12 +82,12 @@ import {
     diffArguments,
 } from "../src/lib/core/diff"
 import {
-    kleeneNot,
-    kleeneAnd,
-    kleeneOr,
-    kleeneImplies,
-    kleeneIff,
-} from "../src/lib/core/evaluation/kleene"
+    belnapNot,
+    belnapAnd,
+    belnapOr,
+    belnapImplies,
+    belnapIff,
+} from "../src/lib/core/evaluation/belnap"
 import {
     propagateOperatorConstraints,
     evaluateArgument,
@@ -2861,173 +2864,173 @@ describe("diffArguments", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Kleene three-valued logic helpers
+// Four-valued logic helpers
 // ---------------------------------------------------------------------------
 
-describe("Kleene three-valued logic helpers", () => {
-    describe("kleeneNot", () => {
+describe("four-valued logic helpers", () => {
+    describe("belnapNot", () => {
         it("NOT true = false", () => {
-            expect(kleeneNot(true)).toBe(false)
+            expect(belnapNot(true)).toBe(false)
         })
 
         it("NOT false = true", () => {
-            expect(kleeneNot(false)).toBe(true)
+            expect(belnapNot(false)).toBe(true)
         })
 
         it("NOT null = null", () => {
-            expect(kleeneNot(null)).toBeNull()
+            expect(belnapNot(null)).toBeNull()
         })
     })
 
-    describe("kleeneAnd", () => {
+    describe("belnapAnd", () => {
         it("true AND true = true", () => {
-            expect(kleeneAnd(true, true)).toBe(true)
+            expect(belnapAnd(true, true)).toBe(true)
         })
 
         it("true AND false = false", () => {
-            expect(kleeneAnd(true, false)).toBe(false)
+            expect(belnapAnd(true, false)).toBe(false)
         })
 
         it("true AND null = null", () => {
-            expect(kleeneAnd(true, null)).toBeNull()
+            expect(belnapAnd(true, null)).toBeNull()
         })
 
         it("false AND true = false", () => {
-            expect(kleeneAnd(false, true)).toBe(false)
+            expect(belnapAnd(false, true)).toBe(false)
         })
 
         it("false AND false = false", () => {
-            expect(kleeneAnd(false, false)).toBe(false)
+            expect(belnapAnd(false, false)).toBe(false)
         })
 
         it("false AND null = false", () => {
-            expect(kleeneAnd(false, null)).toBe(false)
+            expect(belnapAnd(false, null)).toBe(false)
         })
 
         it("null AND true = null", () => {
-            expect(kleeneAnd(null, true)).toBeNull()
+            expect(belnapAnd(null, true)).toBeNull()
         })
 
         it("null AND false = false", () => {
-            expect(kleeneAnd(null, false)).toBe(false)
+            expect(belnapAnd(null, false)).toBe(false)
         })
 
         it("null AND null = null", () => {
-            expect(kleeneAnd(null, null)).toBeNull()
+            expect(belnapAnd(null, null)).toBeNull()
         })
     })
 
-    describe("kleeneOr", () => {
+    describe("belnapOr", () => {
         it("true OR true = true", () => {
-            expect(kleeneOr(true, true)).toBe(true)
+            expect(belnapOr(true, true)).toBe(true)
         })
 
         it("true OR false = true", () => {
-            expect(kleeneOr(true, false)).toBe(true)
+            expect(belnapOr(true, false)).toBe(true)
         })
 
         it("true OR null = true", () => {
-            expect(kleeneOr(true, null)).toBe(true)
+            expect(belnapOr(true, null)).toBe(true)
         })
 
         it("false OR true = true", () => {
-            expect(kleeneOr(false, true)).toBe(true)
+            expect(belnapOr(false, true)).toBe(true)
         })
 
         it("false OR false = false", () => {
-            expect(kleeneOr(false, false)).toBe(false)
+            expect(belnapOr(false, false)).toBe(false)
         })
 
         it("false OR null = null", () => {
-            expect(kleeneOr(false, null)).toBeNull()
+            expect(belnapOr(false, null)).toBeNull()
         })
 
         it("null OR true = true", () => {
-            expect(kleeneOr(null, true)).toBe(true)
+            expect(belnapOr(null, true)).toBe(true)
         })
 
         it("null OR false = null", () => {
-            expect(kleeneOr(null, false)).toBeNull()
+            expect(belnapOr(null, false)).toBeNull()
         })
 
         it("null OR null = null", () => {
-            expect(kleeneOr(null, null)).toBeNull()
+            expect(belnapOr(null, null)).toBeNull()
         })
     })
 
-    describe("kleeneImplies", () => {
+    describe("belnapImplies", () => {
         it("true -> true = true", () => {
-            expect(kleeneImplies(true, true)).toBe(true)
+            expect(belnapImplies(true, true)).toBe(true)
         })
 
         it("true -> false = false", () => {
-            expect(kleeneImplies(true, false)).toBe(false)
+            expect(belnapImplies(true, false)).toBe(false)
         })
 
         it("true -> null = null", () => {
-            expect(kleeneImplies(true, null)).toBeNull()
+            expect(belnapImplies(true, null)).toBeNull()
         })
 
         it("false -> true = true", () => {
-            expect(kleeneImplies(false, true)).toBe(true)
+            expect(belnapImplies(false, true)).toBe(true)
         })
 
         it("false -> false = true", () => {
-            expect(kleeneImplies(false, false)).toBe(true)
+            expect(belnapImplies(false, false)).toBe(true)
         })
 
         it("false -> null = true", () => {
-            expect(kleeneImplies(false, null)).toBe(true)
+            expect(belnapImplies(false, null)).toBe(true)
         })
 
         it("null -> true = true", () => {
-            expect(kleeneImplies(null, true)).toBe(true)
+            expect(belnapImplies(null, true)).toBe(true)
         })
 
         it("null -> false = null", () => {
-            expect(kleeneImplies(null, false)).toBeNull()
+            expect(belnapImplies(null, false)).toBeNull()
         })
 
         it("null -> null = null", () => {
-            expect(kleeneImplies(null, null)).toBeNull()
+            expect(belnapImplies(null, null)).toBeNull()
         })
     })
 
-    describe("kleeneIff", () => {
+    describe("belnapIff", () => {
         it("true <-> true = true", () => {
-            expect(kleeneIff(true, true)).toBe(true)
+            expect(belnapIff(true, true)).toBe(true)
         })
 
         it("true <-> false = false", () => {
-            expect(kleeneIff(true, false)).toBe(false)
+            expect(belnapIff(true, false)).toBe(false)
         })
 
         it("true <-> null = null", () => {
-            expect(kleeneIff(true, null)).toBeNull()
+            expect(belnapIff(true, null)).toBeNull()
         })
 
         it("false <-> true = false", () => {
-            expect(kleeneIff(false, true)).toBe(false)
+            expect(belnapIff(false, true)).toBe(false)
         })
 
         it("false <-> false = true", () => {
-            expect(kleeneIff(false, false)).toBe(true)
+            expect(belnapIff(false, false)).toBe(true)
         })
 
         it("false <-> null = null", () => {
-            expect(kleeneIff(false, null)).toBeNull()
+            expect(belnapIff(false, null)).toBeNull()
         })
 
         it("null <-> true = null", () => {
-            expect(kleeneIff(null, true)).toBeNull()
+            expect(belnapIff(null, true)).toBeNull()
         })
 
         it("null <-> false = null", () => {
-            expect(kleeneIff(null, false)).toBeNull()
+            expect(belnapIff(null, false)).toBeNull()
         })
 
         it("null <-> null = null", () => {
-            expect(kleeneIff(null, null)).toBeNull()
+            expect(belnapIff(null, null)).toBeNull()
         })
     })
 })
@@ -20834,7 +20837,7 @@ describe("operator constraint propagation", () => {
         expect(result.conclusionTrue).toBe(true)
     })
 
-    it("user assignment wins over propagation", () => {
+    it("a granted step contradicting the reader's assignment contests it", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         const vA = makeVar("vA", "A")
         const vB = makeVar("vB", "B")
@@ -20859,18 +20862,21 @@ describe("operator constraint propagation", () => {
         )
         eng.setConclusionPremise("p1")
 
-        // User explicitly sets A=false; and is accepted, so B propagated to true
+        // User explicitly sets A=false; the accepted conjunction forces both
+        // conjuncts true, so A is told both and B is told true.
         const result = eng.evaluate({
             variables: { vA: false, vB: null },
             operatorAssignments: { conj: "accepted" },
         })
         expect(result.ok).toBe(true)
-        // User's explicit A=false must not be overridden
-        expect(result.assignment!.variables.vA).toBe(false)
-        // B is propagated to true from and-accepted
+        expect(result.assignment!.variables.vA).toBe(CONTESTED)
         expect(result.assignment!.variables.vB).toBe(true)
-        // But the conjunction is false (false AND true = false)
-        expect(result.conclusionTrue).toBe(false)
+        expect(result.variableProvenance?.vA).toMatchObject({
+            value: CONTESTED,
+            origin: "contested",
+        })
+        // contested AND true = contested
+        expect(result.conclusionTrue).toBe(CONTESTED)
     })
 
     it("no propagation for unset operators", () => {
@@ -21068,7 +21074,7 @@ describe("evaluateArgument (standalone)", () => {
             expect(result[VAR_Q.id] ?? null).toBeNull()
         })
 
-        it("never overwrites user-assigned values", () => {
+        it("merges a granted step with a contradicting reader assignment", () => {
             const eng = new ArgumentEngine(ARG, aLib(), {
                 behavior: "permissive",
             })
@@ -21090,12 +21096,13 @@ describe("evaluateArgument (standalone)", () => {
                 })
             )
             const ctx = ctxFrom(eng)
-            // User says P=false, accepted AND would want P=true but must not override
+            // User says P=false; the accepted conjunction forces P=true, so
+            // the two reports merge into contested rather than one winning.
             const result = propagateOperatorConstraints(ctx, {
                 variables: { [VAR_P.id]: false },
                 operatorAssignments: { [andId]: "accepted" },
             })
-            expect(result[VAR_P.id]).toBe(false)
+            expect(result[VAR_P.id]).toBe(CONTESTED)
             expect(result[VAR_Q.id]).toBe(true)
         })
 

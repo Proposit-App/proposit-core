@@ -39,6 +39,12 @@ export interface TPremiseSetSatisfiabilityInput {
  * all, so a `false` answer means the premises contradict each other and
  * nothing may be derived through them.
  *
+ * Returns `null` for "not determined" rather than `false` in two cases: the
+ * free-variable count exceeds the ceiling, or some row could not be settled —
+ * a premise that came back neither `true` nor `false` leaves that row's answer
+ * unestablished, and `false` here suppresses derivation argument-wide, so it
+ * must be a claim the search actually made.
+ *
  * ponytail: a truth-table walk, not a SAT solver. Real arguments carry
  * single-digit variable counts; the ceiling bounds the worst case. Reach for a
  * solver only if `null` answers start showing up in practice.
@@ -56,6 +62,7 @@ export function isPremiseSetSatisfiable(
     if (freeVariableIds.length > SATISFIABILITY_VARIABLE_CEILING) return null
 
     const totalAssignments = 2 ** freeVariableIds.length
+    let sawIndeterminateRow = false
     for (let mask = 0; mask < totalAssignments; mask++) {
         const variables: TCoreVariableAssignment = {}
         for (let index = 0; index < freeVariableIds.length; index++) {
@@ -69,12 +76,19 @@ export function isPremiseSetSatisfiable(
             operatorAssignments: {},
         }
         const resolver = createPremiseBoundResolver(ctx, assignment)
-        const allTrue = input.premises.every(
+        const rootValues = input.premises.map(
             (premise) =>
-                (premise.evaluate(assignment, { resolver }).rootValue ??
-                    null) === true
+                premise.evaluate(assignment, { resolver }).rootValue ?? null
         )
-        if (allTrue) return true
+        if (rootValues.every((value) => value === true)) return true
+        // A row is settled either because one premise is outright false or
+        // because every premise resolved to something.
+        if (
+            !rootValues.includes(false) &&
+            rootValues.some((value) => value === null)
+        ) {
+            sawIndeterminateRow = true
+        }
     }
-    return false
+    return sawIndeterminateRow ? null : false
 }

@@ -1,5 +1,8 @@
 import { isPremiseBound } from "../../schemata/index.js"
-import type { TCoreExpressionAssignment } from "../../types/evaluation.js"
+import type {
+    TCoreQuadrivalentValue,
+    TCoreResolvedAssignment,
+} from "../../types/evaluation.js"
 import type { TArgumentEvaluationContext } from "./argument-evaluation.js"
 
 /**
@@ -13,10 +16,10 @@ import type { TArgumentEvaluationContext } from "./argument-evaluation.js"
  */
 export function createPremiseBoundResolver(
     ctx: TArgumentEvaluationContext,
-    assignment: TCoreExpressionAssignment
-): (variableId: string) => boolean | null {
-    const cache = new Map<string, boolean | null>()
-    const resolver = (variableId: string): boolean | null => {
+    assignment: TCoreResolvedAssignment
+): (variableId: string) => TCoreQuadrivalentValue {
+    const cache = new Map<string, TCoreQuadrivalentValue>()
+    const resolver = (variableId: string): TCoreQuadrivalentValue => {
         if (cache.has(variableId)) {
             return cache.get(variableId)!
         }

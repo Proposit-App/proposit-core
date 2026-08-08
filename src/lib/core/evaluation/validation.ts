@@ -1,10 +1,10 @@
 import type {
     TCoreDirectionalVacuity,
-    TCoreTrivalentValue,
+    TCoreQuadrivalentValue,
     TCoreValidationIssue,
     TCoreValidationResult,
 } from "../../types/evaluation.js"
-import { kleeneAnd, kleeneImplies, kleeneNot } from "./kleene.js"
+import { belnapAnd, belnapImplies, belnapNot } from "./belnap.js"
 
 /** Creates a validation result, setting `ok` based on whether any error-severity issues exist. */
 export function makeValidationResult(
@@ -23,25 +23,25 @@ export function makeErrorIssue(
     return { severity: "error", ...issue }
 }
 
-/** Computes Kleene three-valued material implication: `!antecedent || consequent`. */
+/** Computes four-valued material implication: `!antecedent || consequent`. */
 export function implicationValue(
-    antecedent: TCoreTrivalentValue,
-    consequent: TCoreTrivalentValue
-): TCoreTrivalentValue {
-    return kleeneImplies(antecedent, consequent)
+    antecedent: TCoreQuadrivalentValue,
+    consequent: TCoreQuadrivalentValue
+): TCoreQuadrivalentValue {
+    return belnapImplies(antecedent, consequent)
 }
 
 /** Builds a directional vacuity diagnostic for one direction of an implication. */
 export function buildDirectionalVacuity(
-    antecedentTrue: TCoreTrivalentValue,
-    consequentTrue: TCoreTrivalentValue
+    antecedentTrue: TCoreQuadrivalentValue,
+    consequentTrue: TCoreQuadrivalentValue
 ): TCoreDirectionalVacuity {
     const implication = implicationValue(antecedentTrue, consequentTrue)
     return {
         antecedentTrue,
         consequentTrue,
         implicationValue: implication,
-        isVacuouslyTrue: kleeneAnd(implication, kleeneNot(antecedentTrue)),
+        isVacuouslyTrue: belnapAnd(implication, belnapNot(antecedentTrue)),
         fired: antecedentTrue,
     }
 }

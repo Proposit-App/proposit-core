@@ -552,7 +552,7 @@ export function registerAnalysisCommands(
                     `reached without:   ${result.conclusionAttribution?.reachedWithoutAssertion}`
                 )
                 printLine(
-                    `premises hold, conclusion does not follow: ${result.premisesHoldConclusionFalse}`
+                    `premises hold, conclusion false: ${result.premisesHoldConclusionFalse}`
                 )
                 printLine(
                     `premises satisfiable: ${result.premiseSetSatisfiable}`

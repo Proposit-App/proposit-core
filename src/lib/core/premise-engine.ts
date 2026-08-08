@@ -24,21 +24,21 @@ import {
 } from "../utils/collections.js"
 import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import type {
-    TCoreExpressionAssignment,
+    TCoreQuadrivalentValue,
+    TCoreResolvedAssignment,
     TCorePremiseEvaluationResult,
     TCorePremiseInferenceDiagnostic,
-    TCoreTrivalentValue,
     TCoreValidationIssue,
     TCoreValidationResult,
 } from "../types/evaluation.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
 import {
-    kleeneAnd,
-    kleeneIff,
-    kleeneImplies,
-    kleeneNot,
-    kleeneOr,
-} from "./evaluation/kleene.js"
+    belnapAnd,
+    belnapIff,
+    belnapImplies,
+    belnapNot,
+    belnapOr,
+} from "./evaluation/belnap.js"
 import {
     buildDirectionalVacuity,
     makeErrorIssue,
@@ -1518,11 +1518,11 @@ export class PremiseEngine<
     }
 
     public evaluate(
-        assignment: TCoreExpressionAssignment,
+        assignment: TCoreResolvedAssignment,
         options?: {
             strictUnknownKeys?: boolean
             requireExactCoverage?: boolean
-            resolver?: (variableId: string) => boolean | null
+            resolver?: (variableId: string) => TCoreQuadrivalentValue
         }
     ): TCorePremiseEvaluationResult {
         const validation = this.validateEvaluability()
@@ -1561,17 +1561,17 @@ export class PremiseEngine<
             }
         }
 
-        const expressionValues: Record<string, TCoreTrivalentValue> = {}
+        const expressionValues: Record<string, TCoreQuadrivalentValue> = {}
         const evaluateExpression = (
             expressionId: string
-        ): TCoreTrivalentValue => {
+        ): TCoreQuadrivalentValue => {
             const expression = this.expressions.getExpression(expressionId)
             if (!expression) {
                 throw new Error(`Expression "${expressionId}" was not found.`)
             }
 
             if (expression.type === "variable") {
-                let value: TCoreTrivalentValue
+                let value: TCoreQuadrivalentValue
                 if (options?.resolver) {
                     const variable = this.variables.getVariable(
                         expression.variableId
@@ -1594,7 +1594,7 @@ export class PremiseEngine<
             }
 
             const children = this.expressions.getChildExpressions(expression.id)
-            let value: TCoreTrivalentValue
+            let value: TCoreQuadrivalentValue
 
             if (expression.type === "formula") {
                 value = evaluateExpression(children[0].id)
@@ -1604,26 +1604,26 @@ export class PremiseEngine<
 
             switch (expression.operator) {
                 case "not":
-                    value = kleeneNot(evaluateExpression(children[0].id))
+                    value = belnapNot(evaluateExpression(children[0].id))
                     break
                 case "and":
-                    value = children.reduce<TCoreTrivalentValue>(
+                    value = children.reduce<TCoreQuadrivalentValue>(
                         (acc, child) =>
-                            kleeneAnd(acc, evaluateExpression(child.id)),
+                            belnapAnd(acc, evaluateExpression(child.id)),
                         true
                     )
                     break
                 case "or":
-                    value = children.reduce<TCoreTrivalentValue>(
+                    value = children.reduce<TCoreQuadrivalentValue>(
                         (acc, child) =>
-                            kleeneOr(acc, evaluateExpression(child.id)),
+                            belnapOr(acc, evaluateExpression(child.id)),
                         false
                     )
                     break
                 case "implies": {
                     const left = children[0]
                     const right = children[1]
-                    value = kleeneImplies(
+                    value = belnapImplies(
                         evaluateExpression(left.id),
                         evaluateExpression(right.id)
                     )
@@ -1632,7 +1632,7 @@ export class PremiseEngine<
                 case "iff": {
                     const left = children[0]
                     const right = children[1]
-                    value = kleeneIff(
+                    value = belnapIff(
                         evaluateExpression(left.id),
                         evaluateExpression(right.id)
                     )
@@ -1645,7 +1645,7 @@ export class PremiseEngine<
         }
 
         const rootValue = evaluateExpression(rootExpressionId)
-        const variableValues: Record<string, TCoreTrivalentValue> = {}
+        const variableValues: Record<string, TCoreQuadrivalentValue> = {}
         for (const variableId of referencedVariableIds) {
             if (options?.resolver) {
                 const variable = this.variables.getVariable(variableId)
@@ -1678,9 +1678,9 @@ export class PremiseEngine<
                             rootValue,
                             antecedentTrue: leftValue,
                             consequentTrue: rightValue,
-                            isVacuouslyTrue: kleeneNot(leftValue),
+                            isVacuouslyTrue: belnapNot(leftValue),
                             fired: leftValue,
-                            firedAndHeld: kleeneAnd(leftValue, rightValue),
+                            firedAndHeld: belnapAnd(leftValue, rightValue),
                         }
                     } else if (root.operator === "iff") {
                         const leftToRight = buildDirectionalVacuity(
@@ -1700,10 +1700,10 @@ export class PremiseEngine<
                             rootValue,
                             leftToRight,
                             rightToLeft,
-                            bothSidesTrue: kleeneAnd(leftValue, rightValue),
-                            bothSidesFalse: kleeneAnd(
-                                kleeneNot(leftValue),
-                                kleeneNot(rightValue)
+                            bothSidesTrue: belnapAnd(leftValue, rightValue),
+                            bothSidesFalse: belnapAnd(
+                                belnapNot(leftValue),
+                                belnapNot(rightValue)
                             ),
                         }
                     }

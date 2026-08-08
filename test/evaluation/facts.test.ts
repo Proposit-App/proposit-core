@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from "vitest"
 import * as libraryBarrel from "../../src/lib/index.js"
-import { buildArgument, implies, or, v } from "./fixtures.js"
+import { buildArgument, implies, not, or, v } from "./fixtures.js"
 
 describe("the emitted facts", () => {
     it("exposes no grade from the library barrel", () => {
@@ -57,5 +57,68 @@ describe("the emitted facts", () => {
         expect(result.conclusionTrue).toBe(true)
         expect(result.survivingSupportingPremisesTrue).toBe(true)
         expect(result.conclusionAttribution?.assertedByReader).toBe(true)
+    })
+
+    it("keeps the axiomatic set when the caller supplies its own forced-true set", () => {
+        const built = buildArgument({
+            conclusion: v("A"),
+            premises: [not(v("A"))],
+            claimTypes: { A: "axiomatic" },
+        })
+
+        const implicit = built.engine.evaluate({
+            variables: {},
+            operatorAssignments: {},
+        })
+        const explicit = built.engine.evaluate(
+            { variables: {}, operatorAssignments: {} },
+            { forcedTrueVariableIds: new Set() }
+        )
+
+        // An axiomatic claim is true by construction, so the premise set that
+        // denies it cannot hold, and the axiom is nobody's assertion.
+        expect(implicit.premiseSetSatisfiable).toBe(false)
+        expect(explicit.premiseSetSatisfiable).toBe(
+            implicit.premiseSetSatisfiable
+        )
+        expect(implicit.conclusionAttribution?.assertedByReader).toBe(false)
+        expect(explicit.conclusionAttribution?.assertedByReader).toBe(
+            implicit.conclusionAttribution?.assertedByReader
+        )
+    })
+
+    it("withholds the premises-hold reading when every supporting premise is struck", () => {
+        const built = buildArgument({
+            conclusion: v("Q"),
+            premises: [implies(v("P"), v("Q"))],
+        })
+
+        const result = built.engine.evaluate({
+            variables: {
+                [built.variableId("P")]: true,
+                [built.variableId("Q")]: false,
+            },
+            operatorAssignments: { [built.rootIds[0]]: "rejected" },
+        })
+
+        expect(result.struckPremiseIds).toEqual([built.premiseIds[0]])
+        expect(result.survivingSupportingPremiseCount).toBe(0)
+        // Vacuously true, and documented as such.
+        expect(result.survivingSupportingPremisesTrue).toBe(true)
+        // The reader withheld the whole case; it was not weighed and found
+        // wanting.
+        expect(result.premisesHoldConclusionFalse).toBeNull()
+    })
+
+    it("still reports a false conclusion when the argument has no supporting premises", () => {
+        const built = buildArgument({ conclusion: v("Q") })
+
+        const result = built.engine.evaluate({
+            variables: { [built.variableId("Q")]: false },
+            operatorAssignments: {},
+        })
+
+        expect(result.survivingSupportingPremiseCount).toBe(0)
+        expect(result.premisesHoldConclusionFalse).toBe(true)
     })
 })

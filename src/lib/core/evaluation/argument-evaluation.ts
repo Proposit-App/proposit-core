@@ -4,29 +4,34 @@ import {
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
 } from "../../schemata/index.js"
-import type {
-    TCoreArgumentEvaluationOptions,
-    TCoreArgumentEvaluationResult,
-    TCoreCounterexample,
-    TCoreDerivationStep,
-    TCoreExpressionAssignment,
-    TCorePropagationOptions,
-    TCoreTrivalentValue,
-    TCoreValueAttribution,
-    TCoreValidityCheckOptions,
-    TCoreValidityCheckResult,
-    TCoreVariableAssignment,
-    TCoreVariableProvenance,
-    TCorePremiseEvaluationResult,
-    TCoreValidationResult,
+import {
+    CONTESTED,
+    type TCoreArgumentEvaluationOptions,
+    type TCoreArgumentEvaluationResult,
+    type TCoreCounterexample,
+    type TCoreDerivationStep,
+    type TCoreExpressionAssignment,
+    type TCorePropagationOptions,
+    type TCoreQuadrivalentValue,
+    type TCoreResolvedAssignment,
+    type TCoreResolvedVariableValues,
+    type TCoreValueAttribution,
+    type TCoreValidityCheckOptions,
+    type TCoreValidityCheckResult,
+    type TCoreVariableProvenance,
+    type TCorePremiseEvaluationResult,
+    type TCoreValidationResult,
 } from "../../types/evaluation.js"
 import {
-    kleeneAnd,
-    kleeneNot,
-    kleeneOr,
-    kleeneImplies,
-    kleeneIff,
-} from "./kleene.js"
+    belnapAnd,
+    belnapNot,
+    belnapOr,
+    belnapImplies,
+    belnapIff,
+    hasFalseComponent,
+    hasTrueComponent,
+    joinKnowledge,
+} from "./belnap.js"
 import { createPremiseBoundResolver } from "./premise-resolver.js"
 import { isPremiseSetSatisfiable } from "./satisfiability.js"
 import { makeErrorIssue, makeValidationResult } from "./validation.js"
@@ -71,10 +76,10 @@ export interface TEvaluablePremise {
     getChildExpressions(parentId: string): TCorePropositionalExpression[]
     getVariables(): TCorePropositionalVariable[]
     evaluate(
-        assignment: TCoreExpressionAssignment,
+        assignment: TCoreResolvedAssignment,
         options?: {
             strictUnknownKeys?: boolean
-            resolver?: (variableId: string) => boolean | null
+            resolver?: (variableId: string) => TCoreQuadrivalentValue
         }
     ): TCorePremiseEvaluationResult
     /**
@@ -87,7 +92,8 @@ export interface TEvaluablePremise {
 }
 
 /**
- * Kleene-evaluate an expression subtree under a fixed variable assignment.
+ * Evaluate an expression subtree under a fixed variable assignment, using the
+ * four-valued Belnap connectives.
  *
  * Total and side-effect free: unknown/missing variables and empty operators
  * yield `null`, and `formula` wrappers pass through to their single child.
@@ -98,12 +104,12 @@ export interface TEvaluablePremise {
  * The operator base cases (`and` seeds `true`, `or` seeds `false`) match
  * `propagateOperatorConstraints`' internal resolver so the two agree.
  */
-export function evaluateSubtreeKleene(
+export function evaluateSubtree(
     rootExpressionId: string,
     getExpression: (id: string) => TCorePropositionalExpression | undefined,
     getChildren: (parentId: string) => TCorePropositionalExpression[],
-    variables: TCoreVariableAssignment
-): TCoreTrivalentValue {
+    variables: TCoreResolvedVariableValues
+): TCoreQuadrivalentValue {
     const expr = getExpression(rootExpressionId)
     if (!expr) return null
 
@@ -113,8 +119,8 @@ export function evaluateSubtreeKleene(
 
     const recurse = (
         child: TCorePropositionalExpression
-    ): TCoreTrivalentValue =>
-        evaluateSubtreeKleene(child.id, getExpression, getChildren, variables)
+    ): TCoreQuadrivalentValue =>
+        evaluateSubtree(child.id, getExpression, getChildren, variables)
     const children = getChildren(expr.id)
 
     if (expr.type === "formula") {
@@ -123,24 +129,24 @@ export function evaluateSubtreeKleene(
 
     switch (expr.operator) {
         case "not":
-            return children.length > 0 ? kleeneNot(recurse(children[0])) : null
+            return children.length > 0 ? belnapNot(recurse(children[0])) : null
         case "and":
-            return children.reduce<TCoreTrivalentValue>(
-                (acc, child) => kleeneAnd(acc, recurse(child)),
+            return children.reduce<TCoreQuadrivalentValue>(
+                (acc, child) => belnapAnd(acc, recurse(child)),
                 true
             )
         case "or":
-            return children.reduce<TCoreTrivalentValue>(
-                (acc, child) => kleeneOr(acc, recurse(child)),
+            return children.reduce<TCoreQuadrivalentValue>(
+                (acc, child) => belnapOr(acc, recurse(child)),
                 false
             )
         case "implies":
             return children.length >= 2
-                ? kleeneImplies(recurse(children[0]), recurse(children[1]))
+                ? belnapImplies(recurse(children[0]), recurse(children[1]))
                 : null
         case "iff":
             return children.length >= 2
-                ? kleeneIff(recurse(children[0]), recurse(children[1]))
+                ? belnapIff(recurse(children[0]), recurse(children[1]))
                 : null
         default:
             return null
@@ -148,29 +154,38 @@ export function evaluateSubtreeKleene(
 }
 
 /**
- * Run fixed-point constraint propagation over the operators the reader
- * accepted. Fills unknown (null) variable values based on operator semantics.
- * Never overwrites user-assigned values (true/false).
+ * Run constraint propagation to a fixed point over the operators the reader
+ * accepted, filling in variable values the granted steps force.
  *
  * Only acceptances propagate. A rejection is not a truth value: it strikes the
  * premise it lives in, and the caller excludes that premise here via
  * `options.excludedPremiseIds` — so nothing inside a struck premise
  * contributes, and no value is ever forced `false` by a refusal.
  *
- * Because closure only ever fills `null`s from the seed, it is monotone and
- * its result is the **least fixed point** of that seed. The attribution
- * counterfactual depends on that: withholding an assertion and re-closing must
- * not let mutually supporting premises certify each other.
+ * Each step **merges** what it forces into the variable's current value rather
+ * than overwriting it or declining to write, so two steps that force opposite
+ * values leave the variable `CONTESTED` instead of letting whichever step ran
+ * first decide. That merge is the join of the knowledge order, every rule's
+ * trigger is monotone in that same order, and the state space is finite — so
+ * the sweep converges to the least fixed point above the reader's assignment
+ * and reaches it whatever order premises, expressions and rules are visited
+ * in. Attribution's counterfactual depends on that: withholding an assertion
+ * and re-closing must give one answer, and must not let mutually supporting
+ * premises certify each other.
+ *
+ * A reader's own assertion takes part in the merge like any other source. If
+ * the reader asserts a value that a granted step contradicts, the result is
+ * `CONTESTED` — the conflict is reported, not silently resolved in either
+ * direction.
  *
  * Axiomatic-bound variables are forced to `true` by `ArgumentEngine`'s
- * pre-pass before this function runs; they land in the propagator's
- * `userAssigned` set and are immune to overwrite.
+ * pre-pass before this function runs, and are merged on the same footing.
  */
 export function propagateOperatorConstraints(
     ctx: TArgumentEvaluationContext,
     assignment: TCoreExpressionAssignment,
     options?: TCorePropagationOptions
-): TCoreVariableAssignment {
+): TCoreResolvedVariableValues {
     return closeUnderAcceptedOperators(ctx, assignment, options).variables
 }
 
@@ -184,10 +199,10 @@ export function closeUnderAcceptedOperators(
     assignment: TCoreExpressionAssignment,
     options?: TCorePropagationOptions
 ): {
-    variables: TCoreVariableAssignment
+    variables: TCoreResolvedVariableValues
     provenance: Record<string, TCoreVariableProvenance>
 } {
-    const vars: TCoreVariableAssignment = { ...assignment.variables }
+    const vars: TCoreResolvedVariableValues = { ...assignment.variables }
     for (const variableId of options?.withheldVariableIds ?? []) {
         delete vars[variableId]
     }
@@ -214,11 +229,11 @@ export function closeUnderAcceptedOperators(
     }
 
     /**
-     * Resolve the current Kleene value of an expression subtree
-     * given the current variable assignments. Does not force-accept
-     * nested operators — evaluates them normally via Kleene logic.
+     * Resolve the current four-valued value of an expression subtree given the
+     * current variable assignments. Does not force-accept nested operators —
+     * evaluates them normally.
      */
-    const resolveValue = (exprId: string): TCoreTrivalentValue => {
+    const resolveValue = (exprId: string): TCoreQuadrivalentValue => {
         const expr = exprById.get(exprId)
         if (!expr) return null
 
@@ -237,25 +252,25 @@ export function closeUnderAcceptedOperators(
 
         switch (op) {
             case "not":
-                return kleeneNot(resolveValue(children[0].id))
+                return belnapNot(resolveValue(children[0].id))
             case "and":
-                return children.reduce<TCoreTrivalentValue>(
-                    (acc, child) => kleeneAnd(acc, resolveValue(child.id)),
+                return children.reduce<TCoreQuadrivalentValue>(
+                    (acc, child) => belnapAnd(acc, resolveValue(child.id)),
                     true
                 )
             case "or":
-                return children.reduce<TCoreTrivalentValue>(
-                    (acc, child) => kleeneOr(acc, resolveValue(child.id)),
+                return children.reduce<TCoreQuadrivalentValue>(
+                    (acc, child) => belnapOr(acc, resolveValue(child.id)),
                     false
                 )
             case "implies": {
-                return kleeneImplies(
+                return belnapImplies(
                     resolveValue(children[0].id),
                     resolveValue(children[1].id)
                 )
             }
             case "iff": {
-                return kleeneIff(
+                return belnapIff(
                     resolveValue(children[0].id),
                     resolveValue(children[1].id)
                 )
@@ -296,41 +311,56 @@ export function closeUnderAcceptedOperators(
         )
     }
 
-    // Track which variable IDs were explicitly set by the user
-    // (true or false). These are never overwritten by propagation.
+    // Variable IDs the reader supplied a value for. Propagation merges into
+    // them like any other source; the set only tags provenance.
     const userAssigned = new Set<string>()
     for (const [varId, val] of Object.entries(vars)) {
         if (val !== null && val !== undefined) userAssigned.add(varId)
     }
 
-    const provenance: Record<string, TCoreVariableProvenance> = {}
-    for (const [varId, val] of Object.entries(vars)) {
-        provenance[varId] = {
-            value: val ?? null,
-            origin: userAssigned.has(varId) ? "asserted" : "unassigned",
-        }
-    }
+    /**
+     * Every granted step that contributed a component to a variable, keyed by
+     * the step's expression and the value it forced. A step is recorded each
+     * time its rule fires, whether or not the merge changed anything, and the
+     * record is overwritten — so at the fixed point every entry carries
+     * `fromVariableIds` read off the converged state rather than off whatever
+     * was known the first time the rule happened to run.
+     */
+    const contributions = new Map<
+        string,
+        Map<string, { step: TCoreDerivationStep; value: boolean }>
+    >()
 
     /**
-     * Try to set a child expression's variable to a value, recording the step
-     * that produced it. Never overwrites a value already present: closure only
-     * fills `null`s, which is what makes it a least fixed point.
-     * Returns true if a value changed.
+     * Merge a value into a child expression's leaf variable and record the
+     * step that forced it. Returns true iff the variable gained a component
+     * it did not already have.
      */
-    const trySetChild = (
+    const mergeIntoChild = (
         child: TCorePropositionalExpression,
         value: boolean,
         step: TCoreDerivationStep
     ): boolean => {
         const varId = resolveLeafVariableId(child)
-        if (varId == null || userAssigned.has(varId)) return false
-        if ((vars[varId] ?? null) !== null) return false
-        vars[varId] = value
-        provenance[varId] = { value, origin: "derived", derivedBy: step }
+        if (varId == null) return false
+
+        let byStep = contributions.get(varId)
+        if (!byStep) {
+            byStep = new Map()
+            contributions.set(varId, byStep)
+        }
+        byStep.set(`${step.expressionId}|${String(value)}`, { step, value })
+
+        const current = vars[varId] ?? null
+        const merged = joinKnowledge(current, value)
+        if (merged === current) return false
+        vars[varId] = merged
         return true
     }
 
-    // One pass over accepted operators; a rejection propagates nothing.
+    // One pass over accepted operators; a rejection propagates nothing. Every
+    // trigger below reads a truth *component* rather than an exact value, so
+    // it can only start holding as the closure learns more, never stop.
     let changed = true
     while (changed) {
         changed = false
@@ -357,7 +387,7 @@ export function closeUnderAcceptedOperators(
                 case "not": {
                     // ¬A accepted (= true) => child must be false
                     if (children.length > 0) {
-                        if (trySetChild(children[0], false, stepFrom([])))
+                        if (mergeIntoChild(children[0], false, stepFrom([])))
                             changed = true
                     }
                     break
@@ -365,48 +395,38 @@ export function closeUnderAcceptedOperators(
                 case "and": {
                     // A ∧ B accepted => all children must be true
                     for (const child of children) {
-                        if (trySetChild(child, true, stepFrom([])))
+                        if (mergeIntoChild(child, true, stepFrom([])))
                             changed = true
                     }
                     break
                 }
                 case "or": {
-                    // A ∨ B accepted: if all-but-one are false, remaining must be true
-                    const unknownChildren: TCorePropositionalExpression[] = []
-                    let allOthersAreFalse = true
-                    for (const child of children) {
-                        const childValue = resolveValue(child.id)
-                        if (childValue === null) {
-                            unknownChildren.push(child)
-                        } else if (childValue !== false) {
-                            allOthersAreFalse = false
-                        }
-                    }
-                    if (unknownChildren.length === 1 && allOthersAreFalse) {
-                        const consumed = children
-                            .filter(
-                                (child) => child.id !== unknownChildren[0].id
-                            )
-                            .map((child) => child.id)
-                        if (
-                            trySetChild(
-                                unknownChildren[0],
-                                true,
-                                stepFrom(consumed)
-                            )
+                    // A ∨ B accepted: a child whose every sibling is known
+                    // false must itself be true.
+                    const isFalse = children.map((child) =>
+                        hasFalseComponent(resolveValue(child.id))
+                    )
+                    for (const [index, child] of children.entries()) {
+                        const siblingsAllFalse = isFalse.every(
+                            (value, other) => other === index || value
                         )
+                        if (!siblingsAllFalse) continue
+                        const consumed = children
+                            .filter((_, other) => other !== index)
+                            .map((sibling) => sibling.id)
+                        if (mergeIntoChild(child, true, stepFrom(consumed)))
                             changed = true
                     }
                     break
                 }
                 case "implies": {
-                    // A → B accepted: if A=true => B=true; if B=false => A=false
+                    // A → B accepted: A true => B true; B false => A false
                     if (children.length >= 2) {
                         const leftValue = resolveValue(children[0].id)
                         const rightValue = resolveValue(children[1].id)
-                        if (leftValue === true) {
+                        if (hasTrueComponent(leftValue)) {
                             if (
-                                trySetChild(
+                                mergeIntoChild(
                                     children[1],
                                     true,
                                     stepFrom([children[0].id])
@@ -414,9 +434,9 @@ export function closeUnderAcceptedOperators(
                             )
                                 changed = true
                         }
-                        if (rightValue === false) {
+                        if (hasFalseComponent(rightValue)) {
                             if (
-                                trySetChild(
+                                mergeIntoChild(
                                     children[0],
                                     false,
                                     stepFrom([children[1].id])
@@ -428,34 +448,70 @@ export function closeUnderAcceptedOperators(
                     break
                 }
                 case "iff": {
-                    // A ↔ B accepted: if A known => B matches; if B known => A matches
+                    // A ↔ B accepted: each side carries its components across
                     if (children.length >= 2) {
-                        const leftValue = resolveValue(children[0].id)
-                        const rightValue = resolveValue(children[1].id)
-                        if (leftValue !== null) {
-                            if (
-                                trySetChild(
-                                    children[1],
-                                    leftValue,
-                                    stepFrom([children[0].id])
-                                )
-                            )
-                                changed = true
-                        }
-                        if (rightValue !== null) {
-                            if (
-                                trySetChild(
-                                    children[0],
-                                    rightValue,
-                                    stepFrom([children[1].id])
-                                )
-                            )
-                                changed = true
+                        const sides: [
+                            TCorePropositionalExpression,
+                            TCorePropositionalExpression,
+                        ][] = [
+                            [children[0], children[1]],
+                            [children[1], children[0]],
+                        ]
+                        for (const [source, target] of sides) {
+                            const sourceValue = resolveValue(source.id)
+                            const step = stepFrom([source.id])
+                            if (hasTrueComponent(sourceValue)) {
+                                if (mergeIntoChild(target, true, step))
+                                    changed = true
+                            }
+                            if (hasFalseComponent(sourceValue)) {
+                                if (mergeIntoChild(target, false, step))
+                                    changed = true
+                            }
                         }
                     }
                     break
                 }
             }
+        }
+    }
+
+    /** Stable step order, so provenance never depends on visitation order. */
+    const sortSteps = (
+        entries: { step: TCoreDerivationStep; value: boolean }[]
+    ): TCoreDerivationStep[] =>
+        [...entries]
+            .sort(
+                (a, b) =>
+                    a.step.premiseId.localeCompare(b.step.premiseId) ||
+                    a.step.expressionId.localeCompare(b.step.expressionId) ||
+                    String(a.value).localeCompare(String(b.value))
+            )
+            .map((entry) => entry.step)
+
+    const provenance: Record<string, TCoreVariableProvenance> = {}
+    for (const varId of new Set([
+        ...Object.keys(vars),
+        ...contributions.keys(),
+    ])) {
+        const value = vars[varId] ?? null
+        const steps = sortSteps([...(contributions.get(varId)?.values() ?? [])])
+        if (value === CONTESTED) {
+            provenance[varId] = {
+                value,
+                origin: "contested",
+                contestedBy: steps,
+            }
+        } else if (userAssigned.has(varId)) {
+            provenance[varId] = { value, origin: "asserted" }
+        } else if (value !== null && steps.length > 0) {
+            provenance[varId] = {
+                value,
+                origin: "derived",
+                derivedBy: steps[0],
+            }
+        } else {
+            provenance[varId] = { value, origin: "unassigned" }
         }
     }
 
@@ -574,7 +630,7 @@ export function evaluateArgument(
         const propagation = closeUnderAcceptedOperators(ctx, assignment, {
             excludedPremiseIds: closureExclusions,
         })
-        const propagatedAssignment: TCoreExpressionAssignment = {
+        const propagatedAssignment: TCoreResolvedAssignment = {
             variables: propagation.variables,
             operatorAssignments: assignment.operatorAssignments,
         }
@@ -603,25 +659,34 @@ export function evaluateArgument(
 
         const isAdmissibleAssignment = surviving(
             constraintEvaluations
-        ).reduce<TCoreTrivalentValue>(
-            (acc, result) => kleeneAnd(acc, result.rootValue ?? null),
+        ).reduce<TCoreQuadrivalentValue>(
+            (acc, result) => belnapAnd(acc, result.rootValue ?? null),
             true
         )
         const survivingSupport = surviving(supportingEvaluations)
         const survivingSupportingPremisesTrue =
-            survivingSupport.reduce<TCoreTrivalentValue>(
-                (acc, result) => kleeneAnd(acc, result.rootValue ?? null),
+            survivingSupport.reduce<TCoreQuadrivalentValue>(
+                (acc, result) => belnapAnd(acc, result.rootValue ?? null),
                 true
             )
-        const conclusionTrue: TCoreTrivalentValue =
+        const conclusionTrue: TCoreQuadrivalentValue =
             conclusionEvaluation.rootValue ?? null
-        const premisesHoldConclusionFalse = kleeneAnd(
-            isAdmissibleAssignment,
-            kleeneAnd(
-                survivingSupportingPremisesTrue,
-                kleeneNot(conclusionTrue)
-            )
-        )
+        // `survivingSupportingPremisesTrue` folds an empty list to `true`, so
+        // when the reader struck every supporting premise there is no case left
+        // to weigh — say so rather than reporting that the premises held and
+        // the conclusion failed. An argument authored with no supporting
+        // premises is the entailment-from-nothing case and keeps its answer.
+        const allSupportStruck =
+            supportingEvaluations.length > 0 && survivingSupport.length === 0
+        const premisesHoldConclusionFalse = allSupportStruck
+            ? null
+            : belnapAnd(
+                  isAdmissibleAssignment,
+                  belnapAnd(
+                      survivingSupportingPremisesTrue,
+                      belnapNot(conclusionTrue)
+                  )
+              )
 
         const includeExpressionValues = options?.includeExpressionValues ?? true
         const includeDiagnostics = options?.includeDiagnostics ?? true
@@ -638,7 +703,7 @@ export function evaluateArgument(
             Object.values(assignment.operatorAssignments).includes("accepted")
         const withhold = (
             withheldVariableIds: ReadonlySet<string>
-        ): TCoreVariableAssignment => {
+        ): TCoreResolvedVariableValues => {
             if (!canDerive) {
                 // Nothing can be derived, so closure is the seed minus what
                 // was withheld.
@@ -667,7 +732,7 @@ export function evaluateArgument(
         })
         let reachedWithoutAssertion = conclusionTrue === true
         if (conclusionClaimVariableIds.length > 0) {
-            const counterfactual: TCoreExpressionAssignment = {
+            const counterfactual: TCoreResolvedAssignment = {
                 variables: withhold(new Set(conclusionClaimVariableIds)),
                 operatorAssignments: assignment.operatorAssignments,
             }
