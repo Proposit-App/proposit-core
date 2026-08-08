@@ -98,13 +98,20 @@ named variables from the seed and re-runs `propagateOperatorConstraints`
 premise references, re-close, and test the conclusion root for `true` — and
 `claimAttribution`, one entry per **reader-asserted claim-bound variable**, each
 asking whether the same value returns. Skip the whole map when no operator is
-accepted (nothing can derive). Gated on `includeDiagnostics`.
+accepted (nothing can derive).
+
+*(Corrected during implementation: only `claimAttribution` is gated on
+`includeDiagnostics`. `conclusionAttribution` is always emitted — it is one of
+the six core facts and the sole input to the "reaches its conclusion" reading,
+so gating it would leave a consumer that turns diagnostics off unable to
+compose the primary label. Its cost is one premise evaluation, and the closure
+behind it is skipped whenever no operator is accepted.)*
 
 **Verifies** — new `test/evaluation/attribution.test.ts`:
 
 | Test | Criterion |
 | --- | --- |
-| `it("reports a conclusion the reader supplied as not reached by the argument")` — water and mammals: conclusion `W`, sole premise `M → W`, `M` and `W` both true, premise accepted → conclusion true, asserted, not reached, nothing struck | 5 |
+| `it("reports a conclusion the reader supplied as not reached by the argument")` — water and mammals: conclusion `W`, sole premise `M → W`, `M` and `W` both true, **no step granted** → conclusion true, asserted, not reached, nothing struck. Corrected during implementation; see spec AC-5. A sibling test pins the accepted-premise variant as *reached*. | 5 |
 | `it("reports the conclusion reached when a granted premise supports it and another is struck")` — `A → C` struck, `B → C` accepted with `B` true | 6 |
 | `it("reports nothing reached when every supporting premise is struck")` — surviving count `0`, not reached, despite the surviving-conjunction being vacuously true | 4 |
 | `it("does not treat mutually supporting premises as an independent derivation")` — `A → B`, `B → A` both accepted, `A` asserted true → withholding `A` re-derives nothing | Design §3 (least fixed point) |
@@ -132,9 +139,12 @@ accepted (nothing can derive). Gated on `includeDiagnostics`.
 `it("restores derivation when the contradicting restriction is struck")`;
 `it("reports satisfiability as undetermined beyond the variable ceiling")`;
 `it("checks validity of a ten-variable argument without recomputing satisfiability per row")`
-— the 2ⁿ × 2ⁿ regression guard, asserted by timing budget **and** by a spy/counter
-on the satisfiability entry point (a timing-only assertion would pass either way
-on a fast machine).
+— the 2ⁿ × 2ⁿ regression guard.
+
+*(Corrected during implementation: asserted by the call counter alone, without
+a timing budget. The counter fails deterministically on a regression — 1 call
+versus 1 + 2ⁿ — and the plan's own parenthesis concedes a timing assertion
+proves nothing on a fast machine, so it would only add flake.)*
 
 ### T5 — Delete the grade; rename the misnamed facts
 
@@ -171,7 +181,10 @@ runs once over the finished diff, not interleaved between code tasks.
 ### Fires
 
 - **D1 — `docs/api-reference.md` [Public-API].** The evaluation surface is
-  described in several places (≈ lines 291, 293, 312, 1439, 2351). Do it as one
+  described in several places (≈ lines 291, 293, 312, 1439). *`gradeEvaluation`
+  turned out never to have been documented there at all — the reference had no
+  grade to remove, only a rejection semantics to correct and the new facts to
+  add.* Do it as one
   pass driven by a grep for `grade`, `isCounterexample`,
   `preservesTruthUnderAssignment`, `allSupportingPremisesTrue`, `inadmissible`,
   not as spot edits — a partial update leaves the reference describing a removed

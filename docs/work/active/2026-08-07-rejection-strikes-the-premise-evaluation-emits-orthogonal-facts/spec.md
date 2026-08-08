@@ -250,8 +250,14 @@ acceptance, and with rejection gone it is dead code **and** the only thing that
 made closure non-monotone. Delete the rejected short-circuit in
 `PremiseEngine.evaluate` (`premise-engine.ts:1568-1572`); the diagnostic
 suppression at `premise-engine.ts:1665` becomes unnecessary once struck premises
-are excluded upstream, and should be re-expressed as "struck" rather than left
-keyed on `"rejected"`.
+are excluded upstream.
+
+*(Corrected during implementation: the suppression is **deleted**, not
+re-expressed as "struck". `PremiseEngine` is a premise-level API with no
+knowledge of argument-level striking, so re-expressing it would mean plumbing a
+struck flag into that API for no behavioral gain. With the short-circuit gone a
+rejected root evaluates normally, so there is nothing left to suppress — the
+diagnostic is true and useful either way.)*
 
 With those three deletions closure only ever fills `null`s from a seed, which
 makes it monotone and its result **the least fixed point** of that seed. That is
@@ -333,8 +339,15 @@ language:
 | Surviving supporting premises all true | `survivingSupportingPremisesTrue` | `TCoreTrivalentValue` |
 | Premise set satisfiable | `premiseSetSatisfiable` | `TCoreTrivalentValue` |
 
-Plus, from §3 and §6: `claimAttribution?: Record<string, TCoreClaimAttribution>`
+Plus, from §3 and §6: `claimAttribution?: Record<string, TCoreValueAttribution>`
 and `variableProvenance?: Record<string, TCoreVariableProvenance>`.
+
+*(Corrected during implementation: shipped as `TCoreValueAttribution`, one
+interface used by both `conclusionAttribution` and each `claimAttribution`
+entry, rather than a separate `TCoreClaimAttribution`. The two fields have
+identical shape; only the meaning of `reachedWithoutAssertion` differs, and
+that is stated per field in JSDoc. Two names for one shape is drift waiting to
+happen across four repos.)*
 
 Renames and removals (all breaking, all intended):
 
@@ -477,9 +490,18 @@ intent; AC-7..AC-12 cover the rest of the slice's boundary.
    `struckPremiseIds` lists them all — regardless of
    `survivingSupportingPremisesTrue` being vacuously `true`.
 5. **AC-5** — Water and mammals: conclusion `W`, sole supporting premise `M → W`,
-   reader assigns `M` true and `W` true, accepts the premise. Result:
+   reader assigns `M` true and `W` true and **grants no step**. Result:
    `conclusionTrue === true`, `assertedByReader === true`,
    `reachedWithoutAssertion === false`, `struckPremiseIds` empty.
+   *(Corrected during implementation. As first written this criterion said the
+   reader "accepts the premise", which contradicts its own expectation: an
+   accepted `M → W` with `M` true derives `W` by modus ponens, so the
+   counterfactual correctly returns `true`. The bug the criterion exists to
+   pin is the old ladder reporting `sound` when the reader granted nothing and
+   merely assigned both claims true — that is the design's "a reader who
+   strikes nothing but already believed the conclusion of an argument that
+   establishes nothing". The accepted-premise variant is pinned as a separate
+   test asserting `reachedWithoutAssertion === true`.)*
 6. **AC-6** — Redundant support: conclusion `C`, supporting `A → C` and `B → C`;
    `A` true, first premise's root rejected; `B` true, second accepted. Result:
    `conclusionTrue === true`, `reachedWithoutAssertion === true`,
