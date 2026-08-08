@@ -2820,10 +2820,17 @@ export class ArgumentEngine<
             ...assignment,
             variables: effectiveVariables,
         }
+        // Axiomatic-bound variables are forced true by the pre-pass above, so
+        // evaluation must not read them back as reader assertions.
         return evaluateArgumentStandalone(
             this.asEvaluationContext(),
             effectiveAssignment,
-            options
+            {
+                ...options,
+                forcedTrueVariableIds:
+                    options?.forcedTrueVariableIds ??
+                    this.getAxiomaticBoundVariableIds(),
+            }
         )
     }
 

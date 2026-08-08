@@ -12,6 +12,7 @@ import type {
     TCoreExpressionAssignment,
     TCorePropagationOptions,
     TCoreTrivalentValue,
+    TCoreValueAttribution,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
     TCoreVariableAssignment,
@@ -26,6 +27,7 @@ import {
     kleeneImplies,
     kleeneIff,
 } from "./kleene.js"
+import { createPremiseBoundResolver } from "./premise-resolver.js"
 import { makeErrorIssue, makeValidationResult } from "./validation.js"
 
 /**
@@ -220,12 +222,7 @@ export function closeUnderAcceptedOperators(
         if (!expr) return null
 
         if (expr.type === "variable") {
-            return (
-                vars[
-                    (expr)
-                        .variableId
-                ] ?? null
-            )
+            return vars[expr.variableId] ?? null
         }
 
         if (expr.type === "formula") {
@@ -234,7 +231,7 @@ export function closeUnderAcceptedOperators(
         }
 
         // operator
-        const op = (expr).operator
+        const op = expr.operator
         const children = childrenOf.get(expr.id) ?? []
 
         switch (op) {
@@ -341,8 +338,7 @@ export function closeUnderAcceptedOperators(
             if (expr.type !== "operator") continue
             if (opAssignments[exprId] !== "accepted") continue
 
-            const op = (expr)
-                .operator
+            const op = expr.operator
             const children = childrenOf.get(exprId) ?? []
             const stepFrom = (
                 consumedExpressionIds: string[]
@@ -564,37 +560,7 @@ export function evaluateArgument(
     }
 
     try {
-        // Build a resolver that lazily evaluates premise-bound variables
-        // by evaluating their bound premise's expression tree under the
-        // same assignment. Results are cached per-variable per-evaluate call.
-        const resolverCache = new Map<string, boolean | null>()
-        const resolver = (variableId: string): boolean | null => {
-            if (resolverCache.has(variableId)) {
-                return resolverCache.get(variableId)!
-            }
-            const variable = ctx.getVariable(variableId)
-            if (
-                !variable ||
-                !isPremiseBound(variable) ||
-                variable.boundArgumentId !== ctx.argumentId
-            ) {
-                // Claim-bound or externally-bound: read from assignment
-                return propagatedAssignment.variables[variableId] ?? null
-            }
-            // Internal premise-bound: lazy resolution
-            const boundPremiseId = variable.boundPremiseId
-            const boundPremise = ctx.getPremise(boundPremiseId)
-            if (!boundPremise) {
-                resolverCache.set(variableId, null)
-                return null
-            }
-            const premiseResult = boundPremise.evaluate(propagatedAssignment, {
-                resolver,
-            })
-            const value = premiseResult?.rootValue ?? null
-            resolverCache.set(variableId, value)
-            return value
-        }
+        const resolver = createPremiseBoundResolver(ctx, propagatedAssignment)
 
         const evalOpts = {
             strictUnknownKeys: options?.strictUnknownAssignmentKeys ?? false,
@@ -640,6 +606,91 @@ export function evaluateArgument(
 
         const includeExpressionValues = options?.includeExpressionValues ?? true
         const includeDiagnostics = options?.includeDiagnostics ?? true
+
+        // Attribution: withhold an assertion, recompute closure from what is
+        // left, and ask again. Never delete a tag from an already-derived
+        // value — the intervention has to be re-derived, not un-derived.
+        const forcedTrueVariableIds = options?.forcedTrueVariableIds
+        const isReaderAsserted = (variableId: string): boolean =>
+            forcedTrueVariableIds?.has(variableId) !== true &&
+            (assignment.variables[variableId] ?? null) !== null
+        const hasAcceptedOperator = Object.values(
+            assignment.operatorAssignments
+        ).includes("accepted")
+        const withhold = (
+            withheldVariableIds: ReadonlySet<string>
+        ): TCoreVariableAssignment => {
+            if (!hasAcceptedOperator) {
+                // Nothing can be derived, so closure is the seed minus what
+                // was withheld.
+                const reduced = { ...assignment.variables }
+                for (const variableId of withheldVariableIds)
+                    delete reduced[variableId]
+                return reduced
+            }
+            return closeUnderAcceptedOperators(ctx, assignment, {
+                excludedPremiseIds: struckIds,
+                withheldVariableIds,
+            }).variables
+        }
+
+        const conclusionClaimVariableIds = [
+            ...new Set(
+                conclusion
+                    .getExpressions()
+                    .filter((expr) => expr.type === "variable")
+                    .map((expr) => expr.variableId)
+            ),
+        ].filter((vid) => {
+            if (forcedTrueVariableIds?.has(vid) === true) return false
+            const variable = ctx.getVariable(vid)
+            return variable != null && isClaimBound(variable)
+        })
+        let reachedWithoutAssertion = conclusionTrue === true
+        if (conclusionClaimVariableIds.length > 0) {
+            const counterfactual: TCoreExpressionAssignment = {
+                variables: withhold(new Set(conclusionClaimVariableIds)),
+                operatorAssignments: assignment.operatorAssignments,
+            }
+            const rootValue = conclusion.evaluate(counterfactual, {
+                strictUnknownKeys: false,
+                resolver: createPremiseBoundResolver(ctx, counterfactual),
+            }).rootValue
+            reachedWithoutAssertion = (rootValue ?? null) === true
+        }
+        const conclusionAttribution: TCoreValueAttribution = {
+            assertedByReader: conclusionClaimVariableIds.some(isReaderAsserted),
+            reachedWithoutAssertion,
+        }
+
+        // One closure per reader-asserted claim, and only when something could
+        // have been derived at all.
+        const claimAttribution =
+            includeDiagnostics && hasAcceptedOperator
+                ? Object.fromEntries(
+                      referencedVariableIds
+                          .filter((vid) => {
+                              const variable = ctx.getVariable(vid)
+                              return (
+                                  variable != null &&
+                                  isClaimBound(variable) &&
+                                  isReaderAsserted(vid)
+                              )
+                          })
+                          .map((vid) => {
+                              const asserted = assignment.variables[vid]
+                              const reclosed = withhold(new Set([vid]))
+                              return [
+                                  vid,
+                                  {
+                                      assertedByReader: true,
+                                      reachedWithoutAssertion:
+                                          (reclosed[vid] ?? null) === asserted,
+                                  } satisfies TCoreValueAttribution,
+                              ]
+                          })
+                  )
+                : undefined
         const strip = (
             result: TCorePremiseEvaluationResult
         ): TCorePremiseEvaluationResult => ({
@@ -690,6 +741,8 @@ export function evaluateArgument(
             survivingSupportingPremisesTrue,
             conclusionTrue,
             premisesHoldConclusionFalse,
+            conclusionAttribution,
+            claimAttribution,
             propagatedVariableValues,
             variableProvenance,
         }
