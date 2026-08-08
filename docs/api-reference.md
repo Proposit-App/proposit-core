@@ -296,7 +296,9 @@ As of v0.12.0, `evaluate()` and `checkValidity()` additionally run a claim-type 
 
 ### `evaluate(assignment, options?)` → `TArgumentEvaluationResult`
 
-Evaluates all relevant premises under the given expression assignment (`TCoreExpressionAssignment`). The assignment contains `variables` (a `Record<string, boolean | null>`) and `operatorAssignments` (a `Record<string, "accepted" | "rejected">` mapping operator expression IDs to their override state — `"accepted"` propagates constraints to unknown variables, `"rejected"` forces `false` with children skipped, absent means normal evaluation). Returns per-premise truth values, counterexample status, and an admissibility flag.
+Evaluates all relevant premises under the given expression assignment (`TCoreExpressionAssignment`). The assignment contains `variables` (a `Record<string, boolean | null>`) and `operatorAssignments` (a `Record<string, "accepted" | "rejected">` mapping operator expression IDs to a reader's decision about that step).
+
+**An operator decision is not a truth value.** `"accepted"` grants the step, so constraint propagation may derive values through it. `"rejected"` withholds the step and **strikes the whole premise the operator lives in** from the evaluated set — it asserts nothing, and in particular never forces the expression or its children to `false`. An absent entry means normal evaluation. As of v4.0.0 evaluation emits a set of orthogonal facts rather than a single named grade; see [Evaluation facts](#evaluation-facts) below.
 
 Claim-type-aware pre-pass (v0.12.0): before delegating to the standalone evaluator, `ArgumentEngine.evaluate` walks all claim-bound variables. If the caller's assignment includes any entry (as determined by `Object.hasOwn`) for any axiomatic-bound variable, evaluation aborts with `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`. Otherwise the engine builds an effective assignments map: caller entries unchanged, plus a forced `true` for every axiomatic-bound variable. Citation- and normal-bound variables continue to behave exactly as today (caller assigns; unassigned → `null`).
 
@@ -306,12 +308,44 @@ Options:
 - `includeExpressionValues` (default `true`) — include per-expression truth maps.
 - `includeDiagnostics` (default `true`) — include inference diagnostics.
 - `strictUnknownAssignmentKeys` (default `false`) — reject assignment keys not referenced by evaluated premises.
+- `forcedTrueVariableIds` — variable IDs pinned `true` in the premise-set satisfiability search and never read back as reader assertions. `ArgumentEngine.evaluate` supplies its axiomatic-bound set automatically; standalone callers of `evaluateArgument` pass their own.
+- `premiseSetSatisfiable` — a satisfiability answer the caller already has, which skips the search.
+
+---
+
+### Evaluation facts
+
+`TCoreArgumentEvaluationResult` reports independent facts; composing them into a label is the consumer's job, and core ships no label strings. The two questions a consumer normally asks — what is the conclusion's truth value, and did the argument reach it — are answered by different fields and must not be collapsed.
+
+| Field                                           | Meaning                                                                                                                                                                                                                 |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conclusionTrue`                                | Truth value of the conclusion premise's root.                                                                                                                                                                           |
+| `conclusionAttribution.assertedByReader`        | The reader supplied a value for at least one claim the conclusion premise references. An explicit _unknown_ is a decision, not an assertion.                                                                            |
+| `conclusionAttribution.reachedWithoutAssertion` | Withhold every one of those claim assignments, recompute closure from what is left, and the conclusion premise root still comes back `true`.                                                                            |
+| `struckPremiseIds`                              | Premises struck by a rejection.                                                                                                                                                                                         |
+| `survivingSupportingPremiseCount`               | Supporting premises that were not struck.                                                                                                                                                                               |
+| `survivingSupportingPremisesTrue`               | Every surviving supporting premise is true. **Vacuously `true` when the count is `0`** — read the two together, and never read this as "the argument worked".                                                           |
+| `isAdmissibleAssignment`                        | Every surviving constraint premise is true. A blocking fact, not a label.                                                                                                                                               |
+| `premisesHoldConclusionFalse`                   | Constraints satisfied, every surviving supporting premise true, conclusion false. A reader-relative gap under one assignment — _not_ a countermodel to entailment, which is the stronger claim `checkValidity` answers. |
+| `premiseSetSatisfiable`                         | Some total assignment makes every surviving premise true. `null` means "not determined" (past the search ceiling).                                                                                                      |
+| `claimAttribution`                              | Per-claim attribution, one entry per reader-asserted claim-bound variable. Diagnostics-gated.                                                                                                                           |
+| `variableProvenance`                            | Where each propagated value came from. Diagnostics-gated.                                                                                                                                                               |
+
+**Striking.** A premise is struck iff any expression in it carries `operatorAssignments[expressionId] === "rejected"`, with two exclusions: the **conclusion premise is never struck**, and **derivation premises are never struck** (engine wiring is not a user-authored inferential step). A rejection recorded against either is ignored — observably, because `struckPremiseIds` reports what was actually struck. A struck premise is excluded from the aggregates, from constraint propagation, and from the satisfiability search, but is **still evaluated and still returned** in `supportingPremises` / `constraintPremises`, so a consumer can render it crossed out.
+
+**Engine limitation.** Striking is per premise; the operator id is provenance for the objection, never a different evaluation rule. So a premise of the shape `A ∧ (B → C)` asserts `A` outright _and_ embodies a step, and striking it discards both. Placing inference operators at the root of a premise's tree avoids this; the engine imposes no such restriction, and a partial strike is not offered because it would leave a hole in a formula. (`(A ∧ B) → C` is unaffected — it asserts only the conditional.)
+
+**Attribution** is computed by intervention followed by fresh derivational closure: the reader's assignment is withheld from the seed and the closure is recomputed from the remaining inputs, never by deleting a provenance tag from an already-derived value. Closure is a least fixed point — it only ever fills `null`s — so mutually supporting premises cannot certify each other: with `A → B` and `B → A` both accepted and `A` asserted true, withholding `A` derives nothing. The conclusion asks whether its root comes back `true`; an intermediate claim asks whether the **same value** returns.
+
+**Satisfiability and derivation suppression.** `premiseSetSatisfiable` is classical satisfiability over the **surviving** premise set alone, ignoring the reader's assignment entirely — a different question from the strong-Kleene partial evaluation the rest of the pipeline does. It is a truth-table walk with a ceiling of `SATISFIABILITY_VARIABLE_CEILING` (16) free variables, above which the answer is `null` ("not determined": do not suppress and do not warn). When it is `false`, constraint propagation is skipped entirely — the conclusion then reports only what the reader asserted, and every provenance entry reads `asserted` or `unassigned`. Striking the contradicting premise can restore both satisfiability and derivation.
 
 ---
 
 ### `checkValidity(options?)` → `TValidityCheckResult`
 
-Runs a truth-table search over all 2ⁿ assignments (n = distinct referenced variable count). Returns `isValid` (`true`, `false`, or `undefined` if truncated), counterexamples, and statistics.
+Runs a truth-table search over all 2ⁿ assignments (n = distinct referenced variable count). Returns `isValid` (`true`, `false`, or `undefined` if truncated), counterexamples, and statistics. Here `counterexample` genuinely denotes a countermodel — this is the exhaustive entailment check, distinct from the reader-relative `premisesHoldConclusionFalse` fact a single `evaluate()` reports.
+
+Premise-set satisfiability is computed **once**, before the row loop, and threaded into each row's evaluation. The generated assignments carry no operator decisions, so nothing is ever struck and the premise set is identical on every row; recomputing it per row would make the search 2ⁿ × 2ⁿ.
 
 Claim-type-aware enumeration (v0.12.0): the variable enumeration set excludes claim-bound variables whose bound claim has `type === "axiomatic"`. Their value is fixed at `true` and they are not a free choice. Citation-bound variables remain in the enumeration set (they are free choices for validity-check purposes, same as normal variables). Counts (`numAdmissibleAssignments`, counterexample search space) are computed against the reduced enumeration set, so an argument with `k` claim-bound variables of which `a` are axiomatic enumerates `2^(k - a)` assignments rather than `2^k`. Each generated assignment also implicitly fixes axiomatic-bound variables to `true` via the same pre-pass that `evaluate()` runs.
 
@@ -1437,6 +1471,38 @@ Throws `UnknownExpressionError` for any override id missing from the argument. T
 ### `TCoreArgumentEvaluationResult.propagatedVariableValues?: Record<string, TCoreTrivalentValue>`
 
 Optional map of the evaluator's authoritative propagated variable values. Populated only when `evaluateArgument` is called with `includeDiagnostics: true`. Key set matches `referencedVariableIds` (claim-bound and externally-bound premise variables only); still-unresolved variables appear with value `null`. Internally-bound premise variables have no standalone truth value and are resolved lazily by the evaluator — they are NOT included in this map.
+
+---
+
+### `TCoreArgumentEvaluationResult.variableProvenance?: Record<string, TCoreVariableProvenance>`
+
+Where each of those values came from, keyed identically and under the same `includeDiagnostics` gate.
+
+```typescript
+type TCoreValueOrigin = "asserted" | "derived" | "unassigned"
+
+interface TCoreDerivationStep {
+    expressionId: string // the accepted operator that produced the value
+    premiseId: string // the premise that operator lives in
+    fromVariableIds: string[] // the values the step consumed
+}
+
+interface TCoreVariableProvenance {
+    value: TCoreTrivalentValue
+    origin: TCoreValueOrigin
+    derivedBy?: TCoreDerivationStep // present iff origin === "derived"
+}
+```
+
+`"asserted"` is reserved for a reader-supplied `true` or `false`; an explicit _unknown_ reads `"unassigned"`, as does a variable nobody supplied and nothing derived. Only one **immediate** step is recorded per derived value — walk `fromVariableIds` transitively to reconstruct a chain, rather than storing whole chains and duplicating the graph. A derived value that overrode an explicit unknown is `"derived"`, not a collision: the reader granted the step that produced it.
+
+Since only an accepted operator can propagate, provenance discharges the engine's obligation never to present a derived value as the reader's own.
+
+---
+
+### `isPremiseSetSatisfiable(ctx, input)` → `TCoreTrivalentValue`
+
+The standalone satisfiability walk `evaluate()` uses. `input` is `{ premises, freeVariableIds, forcedTrueVariableIds? }`: the premises that must come out true together, the variable IDs to enumerate over, and the IDs pinned `true` in every row (which get no column). Returns `null` past `SATISFIABILITY_VARIABLE_CEILING` free variables. No SAT-solver dependency — real arguments are small, and the ceiling bounds the worst case.
 
 ---
 

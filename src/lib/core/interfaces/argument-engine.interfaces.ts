@@ -581,18 +581,29 @@ export interface TArgumentEvaluation {
     /**
      * Evaluates the argument under a three-valued expression assignment.
      *
-     * Variables may be `true`, `false`, or `null` (unknown). All result
-     * flags (`isAdmissibleAssignment`, `premisesHoldConclusionFalse`, etc.) are
-     * three-valued: `null` means indeterminate due to unknown variable
-     * values.
+     * Variables may be `true`, `false`, or `null` (unknown). The trivalent
+     * result facts (`isAdmissibleAssignment`,
+     * `survivingSupportingPremisesTrue`, `premisesHoldConclusionFalse`,
+     * `premiseSetSatisfiable`) use `null` for indeterminate.
+     *
+     * The result is a set of orthogonal facts, not a single outcome. In
+     * particular `survivingSupportingPremisesTrue` is vacuously `true` when
+     * every supporting premise is struck, so whether the argument reached its
+     * conclusion is `conclusionAttribution.reachedWithoutAssertion` and never
+     * that field. A rejected operator strikes its whole premise and asserts
+     * nothing.
      *
      * Calls `validateEvaluability()` internally before evaluation; if the
      * argument is not structurally ready (including derivation pre-flight),
      * the method returns early with `{ ok: false }` and the validation
      * details. Do not bypass `evaluate` to avoid this check.
      *
-     * @param assignment - The variable assignment and optional rejected
-     *   expression IDs.
+     * Axiomatic-bound variables are forced `true` by this method's pre-pass,
+     * and are passed down as `forcedTrueVariableIds` so they are pinned in the
+     * satisfiability search and never read back as reader assertions.
+     *
+     * @param assignment - The variable assignment and the reader's operator
+     *   decisions.
      * @param options - Optional evaluation options.
      * @returns The evaluation result, or `{ ok: false }` with validation
      *   details if the argument is not structurally evaluable.
@@ -607,7 +618,13 @@ export interface TArgumentEvaluation {
      *
      * A counterexample is an admissible assignment where all supporting
      * premises are true but the conclusion is false. The argument is valid
-     * if no counterexamples exist.
+     * if no counterexamples exist. This is the exhaustive entailment check;
+     * the single-assignment `premisesHoldConclusionFalse` fact is a weaker,
+     * reader-relative statement and not a countermodel.
+     *
+     * Premise-set satisfiability is computed once before the row loop and
+     * threaded into each row, since the generated assignments carry no
+     * operator decisions and the premise set never varies.
      *
      * Calls `validateEvaluability()` (including derivation pre-flight)
      * before enumeration. If the argument is not evaluable, returns early

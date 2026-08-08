@@ -358,10 +358,22 @@ $CLI "$ARG" latest analysis reset --value false --file "$ANALYSIS_FILE"
 $CLI "$ARG" latest analysis show --file "$ANALYSIS_FILE"
 $CLI "$ARG" latest analysis evaluate --file "$ANALYSIS_FILE"
 
-section "9g. analysis — set-operator (reject and accept)"
+section "9g. analysis — set-operator (reject strikes the premise, asserts nothing)"
 $CLI "$ARG" latest analysis set-operator "$ROOT1" rejected --file "$ANALYSIS_FILE"
 $CLI "$ARG" latest analysis show --file "$ANALYSIS_FILE"
+# P1 is struck: it stops contributing to surviving support, and no variable
+# is forced false by the refusal.
 $CLI "$ARG" latest analysis evaluate --file "$ANALYSIS_FILE"
+
+section "9g1. analysis — the argument reaches its conclusion through the surviving premise"
+# P1 stays struck while P2's step is granted, so the conclusion is still
+# reached — striking one premise does not sink the argument.
+$CLI "$ARG" latest analysis set R true --file "$ANALYSIS_FILE"
+$CLI "$ARG" latest analysis set W true --file "$ANALYSIS_FILE"
+$CLI "$ARG" latest analysis set S true --file "$ANALYSIS_FILE"
+$CLI "$ARG" latest analysis set-operator "$ROOT2" accepted --file "$ANALYSIS_FILE"
+$CLI "$ARG" latest analysis evaluate --file "$ANALYSIS_FILE"
+$CLI "$ARG" latest analysis set-operator "$ROOT2" unset --file "$ANALYSIS_FILE"
 $CLI "$ARG" latest analysis set-operator "$ROOT1" unset --file "$ANALYSIS_FILE"
 
 section "9g2. analysis — operators (with state)"

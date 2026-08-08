@@ -1,1 +1,45 @@
 # Upcoming
+
+## Changed
+
+### Rejecting a step no longer says anything is false
+
+**Read this if your application lets a reader accept or reject an argument's reasoning.** Rejecting an operator used to be treated as a claim that the expression is false, and the engine worked backwards from it — rejecting "if it rains, the streets are wet" set _it rains_ to true and _the streets are wet_ to false. Nobody said either of those things.
+
+A rejection now means what a reader means by it: they are withholding that step. The premise it belongs to is **struck** from the evaluated set — it stops carrying weight, and it puts no truth value anywhere. Two separate places in the engine had the old reading; both are gone, so a struck premise no longer drags the whole argument to "a premise is false" either.
+
+A struck premise is still evaluated and still returned in the results, so you can show it crossed out with its own values intact. Which premises were struck is reported as `struckPremiseIds`. Two premises are never struck: the conclusion, and derivation premises, which are engine wiring rather than a step anyone authored.
+
+Striking a restriction premise now genuinely releases its restriction — a reader who rejects a constraint stops being bound by it.
+
+### The single grade is gone; evaluation reports facts
+
+**This is a breaking change for anything that displayed a grade.** `gradeEvaluation`, `TCoreEvaluationGrade`, and `TCoreEvaluationGrading` are removed. The six words they produced — _sound_, _unsound_, _vacuously true_, _counterexample_, _inadmissible_, _indeterminate_ — answered six unrelated questions on one scale, behind a precedence ladder, and at least one of them was reliably wrong: an argument whose conclusion the reader had simply asserted came out _sound_.
+
+Evaluation now reports each question separately, and the library ships no display words at all — you compose the wording your product needs. What comes back:
+
+- what the conclusion's truth value is;
+- whether the reader supplied it themselves, and whether the argument reaches it with that assertion withheld;
+- which premises were struck, and how many supporting premises survive;
+- whether the surviving supporting premises are all true;
+- whether the premises can all be true at once.
+
+The two facts easiest to confuse are worth stating plainly: "all surviving supporting premises are true" is **vacuously true when every one of them has been struck**. Whether the argument got anywhere is the attribution fact, never that one.
+
+### The conclusion's truth and the argument's work are answered separately
+
+A reader who already believed the conclusion, and granted the author nothing, now gets an honest answer: the conclusion is true, _and_ the argument did not reach it. The engine works this out by withholding the reader's own assignments, recomputing the derivation from what is left, and asking again — so an argument that genuinely carries the conclusion still gets credit even when the reader happened to agree with it.
+
+Mutually supporting premises cannot certify each other under this test: if "A therefore B" and "B therefore A" are both granted and the reader asserted A, withholding A derives nothing.
+
+## Added
+
+### Every derived value says where it came from
+
+`variableProvenance` reports, for each value, whether the reader asserted it, the engine derived it, or nobody supplied it — and for a derived value, the granted step that produced it and the values that step consumed. Follow those links to reconstruct a chain of reasoning behind any conclusion on screen. An answer of _unknown_ counts as a decision, not an assertion, so a step the reader granted may still settle it.
+
+### Contradicting premises stop the engine inventing conclusions
+
+The engine now asks whether the surviving premises could all be true at once. When they cannot, it derives nothing at all: the reader is shown only what they themselves asserted, rather than conclusions drawn from a contradiction. Striking the premise that causes the contradiction restores both.
+
+Very large arguments (more than sixteen open variables) report this as "not determined" rather than paying for the search; nothing is suppressed and nothing is warned about in that case.

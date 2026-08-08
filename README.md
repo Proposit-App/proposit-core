@@ -501,7 +501,7 @@ The evaluation pipeline proceeds as follows:
 
 ```mermaid
 flowchart LR
-    IN["Input\n(variable ID → true/false/null\n+ rejected expression IDs)"]
+    IN["Input\n(variable ID → true/false/null\n+ operator decisions)"]
 
     IN --> VAL{"validateEvaluability()"}
 
@@ -542,7 +542,9 @@ flowchart LR
     style Validity fill:none,stroke:#888,stroke-dasharray: 5 5
 ```
 
-Assignments use `TCoreExpressionAssignment`, which carries both variable truth values (three-valued: `true`, `false`, or `null` for unknown) and operator assignments (three-state: `"accepted"`, `"rejected"`, or absent for normal evaluation):
+Assignments use `TCoreExpressionAssignment`, which carries both variable truth values (three-valued: `true`, `false`, or `null` for unknown) and the reader's operator decisions (`"accepted"`, `"rejected"`, or absent).
+
+**An operator decision is not a truth value.** `"accepted"` grants the step, so propagation may derive values through it. `"rejected"` withholds the step and strikes the whole premise the operator lives in from the evaluated set — it asserts nothing, and never forces the expression or its children to `false`. The conclusion premise and derivation premises are never struck; a struck premise is still evaluated and still returned, so you can render it crossed out.
 
 ```typescript
 const result = eng.evaluate({
@@ -551,10 +553,14 @@ const result = eng.evaluate({
 })
 if (result.ok) {
     console.log(result.conclusionTrue) // true
-    console.log(result.allSupportingPremisesTrue) // true
-    console.log(result.isCounterexample) // false
+    console.log(result.survivingSupportingPremisesTrue) // true
+    console.log(result.premisesHoldConclusionFalse) // false
+    console.log(result.struckPremiseIds) // []
+    console.log(result.conclusionAttribution) // { assertedByReader: …, reachedWithoutAssertion: … }
 }
 ```
+
+Evaluation emits **orthogonal facts**, not a single named outcome, and the library ships no label strings — composing a reading is the consumer's job. Two facts are easy to conflate and must not be: `survivingSupportingPremisesTrue` is vacuously `true` when every supporting premise has been struck, so whether the argument reached its conclusion is `conclusionAttribution.reachedWithoutAssertion` — which withholds the reader's own assignments and recomputes the derivation from what is left. See `docs/api-reference.md` → Evaluation facts for the full set, including per-value provenance and premise-set satisfiability.
 
 ### Checking validity
 
@@ -1263,9 +1269,9 @@ proposit-core <id> <ver> analysis export [--json]
 
 `--file` defaults to `analysis.json` throughout. Key subcommands:
 
-- **`reject`** — marks an expression as rejected (it will evaluate to `false` and its children are skipped).
+- **`reject`** — records a rejection against an expression, which strikes its whole premise from the evaluated set. The premise is still evaluated and reported; it simply stops contributing, and nothing is forced `false`.
 - **`accept`** — removes an expression from the rejected list (restores normal computation).
-- **`evaluate`** — resolves symbol→ID, evaluates the argument, reports admissibility, counterexample status, and whether the conclusion is true.
+- **`evaluate`** — resolves symbol→ID, evaluates the argument, and reports the facts: admissibility, surviving support, struck premises, the conclusion's value and attribution, and premise-set satisfiability.
 - **`check-validity`** — runs the full truth-table search (`--mode first-counterexample|exhaustive`).
 - **`validate-argument`** — checks structural readiness (conclusion set, inference premises, etc.).
 - **`refs`** — lists every variable referenced across all premises.

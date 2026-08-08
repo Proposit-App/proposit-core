@@ -1,1 +1,1 @@
-Evaluating an argument under trivalent truth values to determine validity and grade its inferences.
+Evaluating an argument under trivalent truth values to report orthogonal facts about it: the truth of each premise and of the conclusion, where the conclusion's value came from, which premises a reader struck, and whether the premises can hold together.

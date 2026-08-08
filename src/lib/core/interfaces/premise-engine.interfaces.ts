@@ -408,10 +408,15 @@ export interface TPremiseEvaluation {
      * Variable values are looked up using Kleene three-valued logic
      * (`null` = unknown). Missing variables default to `null`. For
      * inference premises (`implies`/`iff`), an `inferenceDiagnostic` is
-     * computed with three-valued fields unless the root is rejected.
+     * always computed with three-valued fields.
      *
-     * @param assignment - The variable assignment and optional rejected
-     *   expression IDs.
+     * Operator decisions do not affect premise evaluation. A rejected
+     * expression evaluates from its children like any other — a rejection is
+     * a decision about a step, and its effect (striking the whole premise
+     * from the evaluated set) belongs to argument-level evaluation.
+     *
+     * @param assignment - The variable assignment and the reader's operator
+     *   decisions.
      * @param options - Optional evaluation options.
      * @param options.strictUnknownKeys - If `true`, unknown variable keys
      *   in the assignment cause an error.

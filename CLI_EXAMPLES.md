@@ -683,13 +683,13 @@ proposit-core <argument-id> latest analysis validate-assignments
 
 ### Set operator states
 
-Set an operator expression to accepted (relationship holds), rejected (relationship doesn't hold), or unset (normal evaluation):
+Record a decision about an operator: accepted (grant the step), rejected (withhold it), or unset (no decision). A decision is not a truth value — rejecting an operator strikes the whole premise it lives in from the evaluated set and asserts nothing:
 
 ```bash
 # Accept an operator (propagates constraints to unknown variables)
 proposit-core <argument-id> latest analysis set-operator <operator-id> accepted
 
-# Reject an operator (evaluates to false, children skipped)
+# Reject an operator (strikes its premise; nothing is forced false)
 proposit-core <argument-id> latest analysis set-operator <operator-id> rejected
 
 # Clear an operator back to normal evaluation
