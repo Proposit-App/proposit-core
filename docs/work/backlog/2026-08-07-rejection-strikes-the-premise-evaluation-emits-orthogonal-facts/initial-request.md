@@ -1,8 +1,3 @@
----
-from: proposit-app
-initiative: 2026-08-07-review-verdicts-as-two-axes-with-rejection-striking-premises-from-the-record
----
-
 # Rejection strikes the premise; evaluation emits orthogonal facts
 
 Epic: [Review verdicts as two axes with rejection striking premises from the record](tcw://W/proposit-app/2026-08-07-review-verdicts-as-two-axes-with-rejection-striking-premises-from-the-record)
