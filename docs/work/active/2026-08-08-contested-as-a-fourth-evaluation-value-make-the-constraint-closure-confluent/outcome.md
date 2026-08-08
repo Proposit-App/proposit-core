@@ -50,6 +50,36 @@ bullet: propagation merges, never overwrites and never declines to write, and
 widening a trigger back to an exact-value test reintroduces the
 nondeterminism silently.
 
+## Follow-ups from re-review (folded in)
+
+- **`contestedVariableIds`** on `TCoreArgumentEvaluationResult` — sorted,
+  always present when `ok`, not diagnostics-gated. The forward rule carries
+  only the told-true component, so a contested variable can yield an
+  uncontested `true` downstream and leave *every* aggregate reading clean.
+  Verified failing-clean case, now pinned in `confluence.test.ts`: conclusion
+  `Y`; constraint `or(and(P, Q), R)` with the inner `and` accepted; supporting
+  `P → Y` accepted; reader asserts `P = false`, `R = true`. Variable-keyed —
+  no claim→variable resolution invented here, since `getVariableIdForClaim` is
+  known-broken and separately escalated.
+- **Arity guards in `resolveValue`**, mirroring `evaluateSubtree`. Now that
+  `closeUnderAcceptedOperators` is exported, a caller can hand the closure a
+  tree that never passed `validateEvaluability()`; an accepted
+  `or(A, implies(B))` with a one-child `implies` threw a raw `TypeError`.
+- **`docs/api-reference.md`** discussed the paraconsistency trade-off only for
+  `→`. Extended to `∨`: an accepted `A ∨ B` with `A` contested commits
+  disjunctive syllogism off a contested disjunct, which is the pattern
+  Belnap's paraconsistency exists to block. Deliberate, monotone, and now
+  documented where a reader will hit it.
+- **Attribution corrected.** The rules are *not* Fitting's Φ. Fitting's
+  operator transfers both components across a rule, which from `A = false` and
+  `A → B` would derive `B = false` — affirming the consequent. Ours is a
+  componentwise transfer: forward on `hasTrueComponent(left)` merging
+  told-true, backward on `hasFalseComponent(right)` merging told-false, which
+  is what a one-way material implication licenses. Fitting is the *setting*
+  (monotone-in-`≤_k` consequence operator on a bilattice), not the operator.
+  Corrected in `spec.md` and recorded in the closure's doc comment, where a
+  future editor could break it.
+
 ## Deviations from the plan
 
 - **T5's `contested` colour** landed as a light purple fill and a purple pen in
@@ -81,14 +111,18 @@ nondeterminism silently.
 
 Beyond the type widening (enumerated in `spec.md` → Downstream API delta):
 
-1. `TCoreValueOrigin` gains `"contested"` — an exhaustive `switch` or a
-   union-keyed lookup map on it fails to compile until a branch is added. This
-   is the change most likely to break a consumer build.
-2. A reader's own assertion can come back `CONTESTED`.
-3. An accepted disjunction with every disjunct asserted false now contests them
+1. `TCoreValueOrigin` gains `"contested"`. Surveyed the three consumers: none
+   has an exhaustive `switch` or `Record<TCoreValueOrigin, …>`, so nothing
+   breaks at compile time — it breaks a **runtime wire gate**,
+   `proposit-shared/src/schemas/review.ts:250-254`, which rejects the new
+   origin.
+2. `contestedVariableIds` is the field consumers must read; a conflict can
+   leave every other fact reading clean.
+3. A reader's own assertion can come back `CONTESTED`.
+4. An accepted disjunction with every disjunct asserted false now contests them
    all; previously it said nothing.
-4. `premisesHoldConclusionFalse` can be `null`.
-5. `isPremiseSetSatisfiable` can return `null` where it returned `false`.
+5. `premisesHoldConclusionFalse` can be `null`.
+6. `isPremiseSetSatisfiable` can return `null` where it returned `false`.
 
 ## Not done, deliberately
 

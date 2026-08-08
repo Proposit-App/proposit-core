@@ -68,10 +68,14 @@ Sources:
   the tables: `¬A` relates to 1 iff `A` relates to 0; `A ∧ B` relates to 1 iff
   both do and to 0 iff either does; `A ∨ B` dually.
 - M. C. Fitting, "Bilattices and the semantics of logic programming",
-  *J. Logic Programming* 11 (1991) — the monotone-in-`≤_k` immediate-consequence
-  operator whose least fixed point is the program's meaning, and where the
-  fourth value arises precisely from conflicting rules. This is the source for
-  the **propagation** half of the design; Belnap/FDE is the source for the
+  *J. Logic Programming* 11 (1991) — the **setting** for the propagation half:
+  a consequence operator that is monotone in `≤_k`, joins its results, has a
+  least fixed point that is the program's meaning, and produces the fourth
+  value precisely from conflicting rules. It is the setting, **not** the
+  operator: Fitting's Φ transfers *both* components across a rule, which from
+  `A = false` and `A → B` would derive `B = false` — affirming the consequent.
+  Ours is a **componentwise** transfer (D3), which is what a one-way material
+  implication actually licenses. Belnap/FDE is the source for the
   **evaluation** half. They are different objects and the spec keeps them apart.
 - M. Ginsberg, "Multivalued logics: a uniform approach to inference in AI"
   (1988) — bilattices as the general setting.
@@ -198,8 +202,8 @@ hold by construction, and the exhaustive 4×4 tests pin them.
 **These rules are not the FDE tables and are not meant to be.** Evaluation
 answers "what value does this formula display"; propagation answers "what does
 the reader's granted step force". They are separate objects in the literature
-too — FDE for the former, Fitting's bilattice consequence operator for the
-latter.
+too — FDE for the former, and a monotone consequence operator on Fitting's
+bilattice for the latter.
 
 State is a map from variable id to a value in FOUR, ordered by `≤_k`. Write
 `T?(v)` for "`v` has the `t` component" (`v` is `true` or `contested`) and
@@ -233,9 +237,15 @@ modus ponens for `→` is invalid there (Priest ch. 8). We fire it anyway becaus
    the reader is shown "unknown" for a step they explicitly accepted — the
    outcome the product owner rejected in the same breath as rejecting
    `unknown` for the conflict itself.
-2. It is exactly Fitting's operator: rules fire on the presence of a component
-   and their results are joined, which is what makes the closure monotone in
-   `≤_k` and therefore confluent (D4). The `≤_t`-flavoured alternative —
+2. It has the shape Fitting's setting requires: rules fire on the presence of
+   a component and their results are joined, which is what makes the closure
+   monotone in `≤_k` and therefore confluent (D4). It is not Fitting's Φ,
+   which transfers both components at once and would read `A → B` as a
+   two-way rule, deriving `B = false` from `A = false`. Each rule here moves
+   one component in one direction: forward on `T?(A)` merging told-true,
+   backward on `F?(B)` merging told-false — exactly what a one-way material
+   implication licenses, and monotone either way. The `≤_t`-flavoured
+   alternative —
    "fire only when the antecedent is exactly `true`" — is **not** monotone in
    `≤_k` (a variable that later becomes `contested` would retract the
    derivation), and non-monotone is precisely the bug being fixed.

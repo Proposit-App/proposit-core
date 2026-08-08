@@ -169,7 +169,20 @@ export function evaluateSubtree(
  * trigger is monotone in that same order, and the state space is finite — so
  * the sweep converges to the least fixed point above the reader's assignment
  * and reaches it whatever order premises, expressions and rules are visited
- * in. Attribution's counterfactual depends on that: withholding an assertion
+ * in.
+ *
+ * Each rule moves **one truth component in one direction**, and that is not
+ * decoration: an accepted `A → B` fires forward on `A` being told true and
+ * merges told-true into `B`, and backward on `B` being told false merging
+ * told-false into `A`. Transferring both components at once would read the
+ * conditional as a biconditional and derive `B` false from `A` false. The
+ * one-directional pairing is what a material implication licenses; only `iff`
+ * carries both components both ways.
+ *
+ * Because only the told-true component travels forward, a contested variable
+ * can produce an uncontested `true` downstream and leave every aggregate fact
+ * reading clean. `evaluateArgument` reports `contestedVariableIds` so a
+ * conflict is never inferred from the aggregates. Attribution's counterfactual depends on that: withholding an assertion
  * and re-closing must give one answer, and must not let mutually supporting
  * premises certify each other.
  *
@@ -250,9 +263,14 @@ export function closeUnderAcceptedOperators(
         const op = expr.operator
         const children = childrenOf.get(expr.id) ?? []
 
+        // Arity is guarded rather than assumed: this function is reachable
+        // from the exported closure, which a caller may hand a tree that
+        // never passed `validateEvaluability()`.
         switch (op) {
             case "not":
-                return belnapNot(resolveValue(children[0].id))
+                return children.length > 0
+                    ? belnapNot(resolveValue(children[0].id))
+                    : null
             case "and":
                 return children.reduce<TCoreQuadrivalentValue>(
                     (acc, child) => belnapAnd(acc, resolveValue(child.id)),
@@ -264,16 +282,20 @@ export function closeUnderAcceptedOperators(
                     false
                 )
             case "implies": {
-                return belnapImplies(
-                    resolveValue(children[0].id),
-                    resolveValue(children[1].id)
-                )
+                return children.length >= 2
+                    ? belnapImplies(
+                          resolveValue(children[0].id),
+                          resolveValue(children[1].id)
+                      )
+                    : null
             }
             case "iff": {
-                return belnapIff(
-                    resolveValue(children[0].id),
-                    resolveValue(children[1].id)
-                )
+                return children.length >= 2
+                    ? belnapIff(
+                          resolveValue(children[0].id),
+                          resolveValue(children[1].id)
+                      )
+                    : null
             }
         }
     }
@@ -688,6 +710,14 @@ export function evaluateArgument(
                   )
               )
 
+        // Reported unconditionally, not behind `includeDiagnostics`: a
+        // contested value can leave every aggregate above reading clean, so
+        // this is the only fact that always records one.
+        const contestedVariableIds = Object.entries(propagation.provenance)
+            .filter(([, entry]) => entry.value === CONTESTED)
+            .map(([variableId]) => variableId)
+            .sort()
+
         const includeExpressionValues = options?.includeExpressionValues ?? true
         const includeDiagnostics = options?.includeDiagnostics ?? true
 
@@ -825,6 +855,7 @@ export function evaluateArgument(
             survivingSupportingPremisesTrue,
             conclusionTrue,
             premisesHoldConclusionFalse,
+            contestedVariableIds,
             conclusionAttribution,
             claimAttribution,
             premiseSetSatisfiable,

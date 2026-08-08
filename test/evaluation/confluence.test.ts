@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest"
 import {
+    propagateOperatorConstraints,
+    type TArgumentEvaluationContext,
+    type TEvaluablePremise,
+} from "../../src/lib/core/evaluation/argument-evaluation.js"
+import {
     CONTESTED,
     type TCoreArgumentEvaluationResult,
 } from "../../src/lib/types/evaluation.js"
-import { buildArgument, implies, not, v } from "./fixtures.js"
+import { buildArgument, and, implies, not, or, v } from "./fixtures.js"
 
 /**
  * Conclusion `X`, supporting `A → X` and `X → F`; the reader asserts
@@ -175,5 +180,103 @@ describe("closure confluence", () => {
         expect(provenance.contestedBy?.[0].expressionId).toBe(
             negation.conclusionRootId
         )
+    })
+
+    it("reports contested variables even when every aggregate reads clean", () => {
+        // The forward rule carries only the told-true component, so a
+        // contested antecedent yields an uncontested `true` downstream. Here
+        // the disjunction's other arm is true, so nothing the reader can read
+        // off the aggregates records that P is pulled both ways.
+        const built = buildArgument({
+            conclusion: v("Y"),
+            premises: [
+                or(and(v("P"), v("Q")), v("R")),
+                implies(v("P"), v("Y")),
+            ],
+        })
+        const innerAnd = built.engine
+            .getPremise(built.premiseIds[0])!
+            .getExpressions()
+            .find(
+                (expr) => expr.type === "operator" && expr.operator === "and"
+            )!
+
+        const result = built.engine.evaluate({
+            variables: {
+                [built.variableId("P")]: false,
+                [built.variableId("R")]: true,
+            },
+            operatorAssignments: {
+                [innerAnd.id]: "accepted",
+                [built.rootIds[1]]: "accepted",
+            },
+        })
+
+        // Every aggregate reads clean...
+        expect(result.conclusionTrue).toBe(true)
+        expect(result.isAdmissibleAssignment).toBe(true)
+        expect(result.survivingSupportingPremisesTrue).toBe(true)
+        expect(result.premisesHoldConclusionFalse).toBe(false)
+        expect(result.premiseSetSatisfiable).toBe(true)
+        expect(result.struckPremiseIds).toEqual([])
+        // ...and the conflict is still reported.
+        expect(result.contestedVariableIds).toEqual([built.variableId("P")])
+        expect(result.variableProvenance![built.variableId("P")].origin).toBe(
+            "contested"
+        )
+    })
+
+    it("reports no contested variables when nothing conflicts", () => {
+        const built = buildArgument({
+            conclusion: v("Y"),
+            premises: [implies(v("P"), v("Y"))],
+        })
+        const result = built.engine.evaluate({
+            variables: { [built.variableId("P")]: true },
+            operatorAssignments: { [built.rootIds[0]]: "accepted" },
+        })
+        expect(result.contestedVariableIds).toEqual([])
+    })
+
+    it("closes over an operator with too few children without throwing", () => {
+        // The exported closure can be handed a tree that never passed
+        // `validateEvaluability()`.
+        const built = buildArgument({
+            conclusion: v("Z"),
+            premises: [or(v("A"), not(v("B")))],
+        })
+        const premise = built.engine.getPremise(built.premiseIds[0])!
+        const negation = premise
+            .getExpressions()
+            .find(
+                (expr) => expr.type === "operator" && expr.operator === "not"
+            )!
+        const orphan = premise.getChildExpressions(negation.id)[0]
+        premise.removeExpression(orphan.id, true)
+
+        const ctx: TArgumentEvaluationContext = {
+            argumentId: built.engine.getArgument().id,
+            conclusionPremiseId:
+                built.engine.getRoleState().conclusionPremiseId,
+            getConclusionPremise: () =>
+                built.engine.getConclusionPremise() as
+                    | TEvaluablePremise
+                    | undefined,
+            listSupportingPremises: () =>
+                built.engine.listSupportingPremises() as TEvaluablePremise[],
+            listPremises: () =>
+                built.engine.listPremises() as TEvaluablePremise[],
+            getVariable: (id) => built.engine.getVariable(id),
+            getPremise: (id) =>
+                built.engine.getPremise(id) as TEvaluablePremise | undefined,
+            validateEvaluability: () => built.engine.validateEvaluability(),
+        }
+
+        expect(() =>
+            propagateOperatorConstraints(ctx, {
+                variables: { [built.variableId("A")]: false },
+                operatorAssignments: { [built.rootIds[0]]: "accepted" },
+            })
+        ).not.toThrow()
     })
 })

@@ -252,6 +252,24 @@ export interface TCoreArgumentEvaluationResult {
      */
     premisesHoldConclusionFalse?: TCoreQuadrivalentValue
     /**
+     * Variable IDs whose value came out {@link CONTESTED}, sorted. Always
+     * present when `ok`, and **not** gated on `includeDiagnostics`.
+     *
+     * Read this rather than inferring a conflict from the aggregates above.
+     * Propagation carries only the told-true component forward, so a contested
+     * variable can yield an uncontested `true` downstream and leave
+     * `conclusionTrue`, `isAdmissibleAssignment`,
+     * `survivingSupportingPremisesTrue`, `premisesHoldConclusionFalse` and
+     * `premiseSetSatisfiable` all reading clean while the reader's inputs
+     * still force something both true and false. A non-empty array is the one
+     * fact that always records it.
+     *
+     * Variable-keyed, covering every premise in the argument rather than only
+     * `referencedVariableIds`. `variableProvenance[id].contestedBy` names the
+     * granted steps behind each entry.
+     */
+    contestedVariableIds?: string[]
+    /**
      * Where the conclusion's truth came from. `assertedByReader` records that
      * the reader supplied a value for at least one claim the conclusion
      * premise references; `reachedWithoutAssertion` withholds all of them,
