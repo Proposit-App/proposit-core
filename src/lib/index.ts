@@ -29,16 +29,16 @@ export { ForkLibrary } from "./core/fork-library.js"
 export { PropositCore } from "./core/proposit-core.js"
 export type { TPropositCoreOptions } from "./core/proposit-core.js"
 export * from "./types/evaluation.js"
-export { gradeEvaluation } from "./core/evaluation/grading.js"
-export type {
-    TCoreEvaluationGrade,
-    TCoreEvaluationGrading,
-} from "./core/evaluation/grading.js"
 export {
     evaluateArgument,
     checkArgumentValidity,
     propagateOperatorConstraints,
 } from "./core/evaluation/argument-evaluation.js"
+export {
+    isPremiseSetSatisfiable,
+    SATISFIABILITY_VARIABLE_CEILING,
+} from "./core/evaluation/satisfiability.js"
+export type { TPremiseSetSatisfiabilityInput } from "./core/evaluation/satisfiability.js"
 export type {
     TArgumentEvaluationContext,
     TEvaluablePremise,

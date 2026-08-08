@@ -7,7 +7,6 @@ import type {
     TCorePremiseEvaluationResult,
     TCoreTrivalentValue,
 } from "../../lib/types/evaluation.js"
-import { gradeEvaluation } from "../../lib/core/evaluation/grading.js"
 import type { ArgumentEngine } from "../../lib/core/argument-engine.js"
 import type { PropositCore } from "../../lib/core/proposit-core.js"
 import { printJson, printLine, errorExit } from "../output.js"
@@ -112,26 +111,18 @@ export function buildDotGraph(
     // Evaluation summary box (top-right)
     if (overlay) {
         const r = overlay.result
-        const grading = gradeEvaluation(r)
-
-        const gradeColorMap: Record<string, string> = {
-            green: "#28a745",
-            orange: "#d48806",
-            red: "#dc3545",
-            gray: "#6c757d",
-        }
-        const gradeHtmlColor = gradeColorMap[grading.color] ?? "#6c757d"
-
         const tri = (v: TCoreTrivalentValue | undefined): string =>
             v === true ? "true" : v === false ? "false" : "unknown"
 
         const summaryHtml = [
             `<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="white">`,
-            `<TR><TD COLSPAN="2"><FONT POINT-SIZE="14" COLOR="${gradeHtmlColor}"><B>${htmlEscape(grading.label)}</B></FONT></TD></TR>`,
             `<TR><TD ALIGN="LEFT">admissible</TD><TD ALIGN="RIGHT">${tri(r.isAdmissibleAssignment)}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">all supporting</TD><TD ALIGN="RIGHT">${tri(r.survivingSupportingPremisesTrue)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">surviving support</TD><TD ALIGN="RIGHT">${tri(r.survivingSupportingPremisesTrue)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">premises struck</TD><TD ALIGN="RIGHT">${htmlEscape(String(r.struckPremiseIds?.length ?? 0))}</TD></TR>`,
             `<TR><TD ALIGN="LEFT">conclusion true</TD><TD ALIGN="RIGHT">${tri(r.conclusionTrue)}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">counterexample</TD><TD ALIGN="RIGHT">${tri(r.premisesHoldConclusionFalse)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">reached without your assertion</TD><TD ALIGN="RIGHT">${String(r.conclusionAttribution?.reachedWithoutAssertion ?? "unknown")}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">premises hold, conclusion does not follow</TD><TD ALIGN="RIGHT">${tri(r.premisesHoldConclusionFalse)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">premises satisfiable</TD><TD ALIGN="RIGHT">${tri(r.premiseSetSatisfiable)}</TD></TR>`,
             `</TABLE>`,
         ].join("")
 

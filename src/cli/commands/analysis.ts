@@ -15,7 +15,6 @@ import {
     resolveAnalysisFilename,
     writeAnalysis,
 } from "../storage/analysis.js"
-import { gradeEvaluation } from "../../lib/core/evaluation/grading.js"
 import { listPremiseIds, readPremiseData } from "../storage/premises.js"
 import { readVariables } from "../storage/variables.js"
 
@@ -524,10 +523,7 @@ export function registerAnalysisCommands(
                 )
 
                 if (opts.json) {
-                    printJson({
-                        ...result,
-                        grading: gradeEvaluation(result),
-                    })
+                    printJson(result)
                     return
                 }
 
@@ -541,15 +537,25 @@ export function registerAnalysisCommands(
                     return
                 }
 
-                const grading = gradeEvaluation(result)
-                printLine(`grade:             ${grading.label}`)
                 printLine(`admissible:        ${result.isAdmissibleAssignment}`)
                 printLine(
-                    `all supporting:    ${result.survivingSupportingPremisesTrue}`
+                    `surviving support: ${result.survivingSupportingPremisesTrue} (${result.survivingSupportingPremiseCount} of ${result.supportingPremises?.length ?? 0})`
+                )
+                printLine(
+                    `struck premises:   ${result.struckPremiseIds?.length ? result.struckPremiseIds.join(", ") : "none"}`
                 )
                 printLine(`conclusion true:   ${result.conclusionTrue}`)
                 printLine(
-                    `counterexample:    ${result.premisesHoldConclusionFalse}`
+                    `asserted by you:   ${result.conclusionAttribution?.assertedByReader}`
+                )
+                printLine(
+                    `reached without:   ${result.conclusionAttribution?.reachedWithoutAssertion}`
+                )
+                printLine(
+                    `premises hold, conclusion does not follow: ${result.premisesHoldConclusionFalse}`
+                )
+                printLine(
+                    `premises satisfiable: ${result.premiseSetSatisfiable}`
                 )
             }
         )
