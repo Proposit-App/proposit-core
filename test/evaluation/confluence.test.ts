@@ -113,7 +113,9 @@ describe("closure confluence", () => {
             conclusion: v("X"),
             premises: [implies(v("X"), v("F")), implies(v("A"), v("X"))],
         })
-        const evaluate = (built: typeof forward): TCoreArgumentEvaluationResult =>
+        const evaluate = (
+            built: typeof forward
+        ): TCoreArgumentEvaluationResult =>
             built.engine.evaluate({
                 variables: {
                     [built.variableId("A")]: true,
@@ -149,8 +151,7 @@ describe("closure confluence", () => {
                 [built.rootIds[1]]: "accepted",
             },
         })
-        const provenance =
-            result.variableProvenance![built.variableId("X")]
+        const provenance = result.variableProvenance![built.variableId("X")]
         expect(provenance.origin).toBe("contested")
         expect(provenance.derivedBy).toBeUndefined()
         expect(
@@ -168,8 +169,7 @@ describe("closure confluence", () => {
                 [negation.conclusionRootId]: "accepted",
             },
         })
-        const provenance =
-            result.variableProvenance![negation.variableId("A")]
+        const provenance = result.variableProvenance![negation.variableId("A")]
         expect(provenance.value).toBe(CONTESTED)
         expect(provenance.origin).toBe("contested")
         expect(provenance.contestedBy?.[0].expressionId).toBe(

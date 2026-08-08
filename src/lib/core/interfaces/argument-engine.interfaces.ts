@@ -581,10 +581,14 @@ export interface TArgumentEvaluation {
     /**
      * Evaluates the argument under a three-valued expression assignment.
      *
-     * Variables may be `true`, `false`, or `null` (unknown). The trivalent
-     * result facts (`isAdmissibleAssignment`,
-     * `survivingSupportingPremisesTrue`, `premisesHoldConclusionFalse`,
-     * `premiseSetSatisfiable`) use `null` for indeterminate.
+     * Variables may be assigned `true`, `false`, or `null` (unknown).
+     * Evaluation reports a fourth value, `CONTESTED`, for anything the
+     * reader's assignments and the steps they granted force both true and
+     * false; `null` still means indeterminate. `isAdmissibleAssignment`,
+     * `survivingSupportingPremisesTrue`, `conclusionTrue` and
+     * `premisesHoldConclusionFalse` all range over the four values;
+     * `premiseSetSatisfiable` stays three-valued, since it is a classical
+     * search over the premise set alone.
      *
      * The result is a set of orthogonal facts, not a single outcome. In
      * particular `survivingSupportingPremisesTrue` is vacuously `true` when
@@ -600,7 +604,9 @@ export interface TArgumentEvaluation {
      *
      * Axiomatic-bound variables are forced `true` by this method's pre-pass,
      * and are passed down as `forcedTrueVariableIds` so they are pinned in the
-     * satisfiability search and never read back as reader assertions.
+     * satisfiability search and never read back as reader assertions. A
+     * caller's own `forcedTrueVariableIds` is unioned with that set, never
+     * substituted for it.
      *
      * @param assignment - The variable assignment and the reader's operator
      *   decisions.

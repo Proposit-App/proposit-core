@@ -35,10 +35,7 @@ export function isContested(
 export type TCoreVariableAssignment = Record<string, TCoreTrivalentValue>
 
 /** Maps variable IDs to the four-valued results constraint closure produced. */
-export type TCoreResolvedVariableValues = Record<
-    string,
-    TCoreQuadrivalentValue
->
+export type TCoreResolvedVariableValues = Record<string, TCoreQuadrivalentValue>
 
 /**
  * Operator decision recorded by a reader.

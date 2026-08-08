@@ -48,9 +48,7 @@ function checkBinary(
             const expected = table[rowIndex][columnIndex]
             expect(
                 `${label(left)} ? ${label(right)} = ${label(actual)}`
-            ).toEqual(
-                `${label(left)} ? ${label(right)} = ${label(expected)}`
-            )
+            ).toEqual(`${label(left)} ? ${label(right)} = ${label(expected)}`)
         }
     }
 }
@@ -152,9 +150,9 @@ describe("components and the knowledge join", () => {
             for (const b of VALUES) {
                 expect(joinKnowledge(a, b)).toBe(joinKnowledge(b, a))
                 for (const c of VALUES) {
-                    expect(
-                        joinKnowledge(joinKnowledge(a, b), c)
-                    ).toBe(joinKnowledge(a, joinKnowledge(b, c)))
+                    expect(joinKnowledge(joinKnowledge(a, b), c)).toBe(
+                        joinKnowledge(a, joinKnowledge(b, c))
+                    )
                 }
             }
         }

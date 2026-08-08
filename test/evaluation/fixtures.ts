@@ -62,7 +62,7 @@ export interface TBuildArgumentInput {
 export interface TBuiltArgument {
     engine: ArgumentEngine
     /** Variable ID for a claim name. */
-    variableId(name: string): string
+    variableId: (name: string) => string
     conclusionPremiseId: string
     conclusionRootId: string
     /** Premise IDs of `premises` then `derivations`, in the order given. */

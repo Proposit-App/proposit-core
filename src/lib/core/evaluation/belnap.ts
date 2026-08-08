@@ -69,9 +69,7 @@ export function joinKnowledge(
 }
 
 /** Belnap NOT: swaps the components, so `null` and `contested` are fixed points. */
-export function belnapNot(
-    a: TCoreQuadrivalentValue
-): TCoreQuadrivalentValue {
+export function belnapNot(a: TCoreQuadrivalentValue): TCoreQuadrivalentValue {
     const components = toComponents(a)
     return fromComponents(
         ((components & TRUE_COMPONENT) !== 0 ? FALSE_COMPONENT : 0) |

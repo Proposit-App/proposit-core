@@ -21,7 +21,6 @@ export interface TFormulaTreeVisitor<T> {
     empty(): T
 }
 import type {
-    TCoreExpressionAssignment,
     TCoreResolvedAssignment,
     TCorePremiseEvaluationResult,
     TCoreValidationResult,
@@ -413,7 +412,7 @@ export interface TPremiseEvaluation {
      *
      * The parameter is the wider {@link TCoreResolvedAssignment} because
      * argument evaluation feeds its own constraint-closure output back
-     * through here; a reader's {@link TCoreExpressionAssignment} is
+     * through here; a reader's `TCoreExpressionAssignment` is
      * assignable to it and stays three-valued.
      *
      * Operator decisions do not affect premise evaluation. A rejected
