@@ -33,6 +33,7 @@ export {
     evaluateArgument,
     checkArgumentValidity,
     propagateOperatorConstraints,
+    closeUnderAcceptedOperators,
 } from "./core/evaluation/argument-evaluation.js"
 export {
     isPremiseSetSatisfiable,
