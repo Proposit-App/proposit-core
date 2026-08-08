@@ -8,7 +8,14 @@ export type TCoreTrivalentValue = boolean | null
 /** Maps variable IDs to three-valued truth values. */
 export type TCoreVariableAssignment = Record<string, TCoreTrivalentValue>
 
-/** Operator acceptance state: accepted (true), rejected (false), or unset (normal evaluation). */
+/**
+ * Operator decision recorded by a reader.
+ *
+ * `"accepted"` grants the step: constraint propagation may derive values
+ * through it. `"rejected"` withholds the step and **strikes the whole premise
+ * the operator lives in** from the evaluated set — it asserts nothing, and in
+ * particular never forces the expression or its children to `false`.
+ */
 export type TCoreOperatorAssignment = "accepted" | "rejected"
 
 /** Full expression assignment: variable truth values and operator acceptance states. */
@@ -131,6 +138,18 @@ export interface TCoreArgumentEvaluationOptions {
     includeDiagnostics?: boolean
     /** Run argument/premise evaluability validation before evaluating. */
     validateFirst?: boolean
+    /**
+     * Variable IDs pinned `true` in every row of the premise-set
+     * satisfiability search — typically axiomatic-bound variables, which the
+     * engine forces true. They are also never treated as reader assertions.
+     */
+    forcedTrueVariableIds?: ReadonlySet<string>
+    /**
+     * Premise-set satisfiability computed by the caller. Supplying it skips
+     * the search — `checkArgumentValidity` computes it once and threads it
+     * through its truth-table rows, where the surviving set never varies.
+     */
+    premiseSetSatisfiable?: TCoreTrivalentValue
 }
 
 export interface TCoreArgumentEvaluationResult {
@@ -148,16 +167,67 @@ export interface TCoreArgumentEvaluationResult {
     supportingPremises?: TCorePremiseEvaluationResult[]
     /** Evaluation results for constraint premises (used to determine admissibility). */
     constraintPremises?: TCorePremiseEvaluationResult[]
-    /** `true` iff all constraint premises evaluate to true under the assignment. */
+    /**
+     * IDs of premises struck from the evaluated set because the reader
+     * rejected an operator inside them. Struck premises are still evaluated
+     * and still present in `supportingPremises` / `constraintPremises`, so a
+     * consumer can render them crossed out — they are simply excluded from the
+     * aggregates, from constraint propagation, and from the satisfiability
+     * search.
+     *
+     * The conclusion premise and derivation premises are never struck.
+     */
+    struckPremiseIds?: string[]
+    /** Number of supporting premises that were not struck. */
+    survivingSupportingPremiseCount?: number
+    /** `true` iff every surviving constraint premise evaluates to true. */
     isAdmissibleAssignment?: TCoreTrivalentValue
-    /** `true` iff every supporting premise evaluates to true. */
-    allSupportingPremisesTrue?: TCoreTrivalentValue
+    /**
+     * `true` iff every surviving supporting premise evaluates to true.
+     *
+     * Vacuously `true` when every supporting premise is struck — read it
+     * together with `survivingSupportingPremiseCount`, and never as
+     * "the argument worked". Whether the argument reached its conclusion is
+     * `conclusionAttribution`, not this field.
+     */
+    survivingSupportingPremisesTrue?: TCoreTrivalentValue
     /** The truth value of the conclusion premise root expression. */
     conclusionTrue?: TCoreTrivalentValue
-    /** `true` iff constraints are satisfied, all supporting premises are true, and the conclusion is false. */
-    isCounterexample?: TCoreTrivalentValue
-    /** Convenience inverse of `isCounterexample` for the evaluated assignment. */
-    preservesTruthUnderAssignment?: TCoreTrivalentValue
+    /**
+     * `true` iff constraints are satisfied, every surviving supporting premise
+     * is true, and the conclusion is false.
+     *
+     * A reader-relative gap under one assignment — **not** a countermodel to
+     * entailment, which is the stronger claim `checkValidity` answers.
+     */
+    premisesHoldConclusionFalse?: TCoreTrivalentValue
+    /**
+     * Where the conclusion's truth came from. `assertedByReader` records that
+     * the reader supplied a value for at least one claim the conclusion
+     * premise references; `reachedWithoutAssertion` withholds all of them,
+     * re-runs constraint propagation from the reduced seed, and reports
+     * whether the conclusion premise root still comes back `true`.
+     */
+    conclusionAttribution?: TCoreValueAttribution
+    /**
+     * Per-claim attribution, one entry per reader-asserted claim-bound
+     * variable. `reachedWithoutAssertion` here asks whether the **same value**
+     * returns once the reader's own assignment of that variable is withheld —
+     * the conclusion asks whether it comes back `true`. Populated only when
+     * `includeDiagnostics: true`, and omitted entirely when no operator is
+     * accepted (nothing can be derived, so every answer would be `false`).
+     */
+    claimAttribution?: Record<string, TCoreValueAttribution>
+    /**
+     * `true` iff some total assignment makes every surviving premise true.
+     * Asked of the surviving premise set alone, ignoring the reader's own
+     * assignment. `null` means "not determined" — the premise set has more
+     * free variables than the search ceiling.
+     *
+     * When `false`, constraint propagation is skipped entirely: nothing is
+     * derived, and the conclusion reports only what the reader asserted.
+     */
+    premiseSetSatisfiable?: TCoreTrivalentValue
     /**
      * Evaluator's authoritative propagated variable values across the whole
      * argument. Populated only when `includeDiagnostics: true`. Key set
@@ -165,6 +235,60 @@ export interface TCoreArgumentEvaluationResult {
      * with value `null`.
      */
     propagatedVariableValues?: Record<string, TCoreTrivalentValue>
+    /**
+     * Where each propagated value came from, keyed like
+     * `propagatedVariableValues`. Populated only when
+     * `includeDiagnostics: true`.
+     */
+    variableProvenance?: Record<string, TCoreVariableProvenance>
+}
+
+/** Whether a value was supplied by the reader, and whether it holds without that. */
+export interface TCoreValueAttribution {
+    /** `true` iff the reader supplied `true` or `false`. An explicit unknown is a decision, not an assertion. */
+    assertedByReader: boolean
+    /** `true` iff the value still holds once the reader's own assertion is withheld and closure is recomputed. */
+    reachedWithoutAssertion: boolean
+}
+
+/** Where a propagated variable value came from. */
+export type TCoreValueOrigin = "asserted" | "derived" | "unassigned"
+
+/** The granted operator step that produced a derived value. */
+export interface TCoreDerivationStep {
+    /** The accepted operator expression that produced the value. */
+    expressionId: string
+    /** The premise that operator lives in. */
+    premiseId: string
+    /**
+     * Variable IDs whose values the step consumed. One immediate step is
+     * recorded per value; walk these transitively to reconstruct a chain.
+     */
+    fromVariableIds: string[]
+}
+
+export interface TCoreVariableProvenance {
+    /** The variable's value after propagation. */
+    value: TCoreTrivalentValue
+    /** `"asserted"` for a reader-supplied `true`/`false`, `"derived"` for anything propagation produced, `"unassigned"` otherwise. */
+    origin: TCoreValueOrigin
+    /** The immediate producing step; present iff `origin === "derived"`. */
+    derivedBy?: TCoreDerivationStep
+}
+
+/** Options for `propagateOperatorConstraints`. */
+export interface TCorePropagationOptions {
+    /**
+     * Premise IDs excluded from propagation entirely — their expressions are
+     * not indexed, so no operator inside them contributes a value.
+     */
+    excludedPremiseIds?: ReadonlySet<string>
+    /**
+     * Variable IDs dropped from the seed before closure runs. Used by the
+     * attribution counterfactual: withhold an assertion, then recompute from
+     * the remaining inputs rather than deleting a value after the fact.
+     */
+    withheldVariableIds?: ReadonlySet<string>
 }
 
 export interface TCoreValidityCheckOptions {

@@ -100,9 +100,9 @@ describe("monopoly-regulation.yaml", () => {
         })
         const result = engine.evaluate(assignment)
         expect(result.ok).toBe(true)
-        expect(result.allSupportingPremisesTrue).toBe(true)
+        expect(result.survivingSupportingPremisesTrue).toBe(true)
         expect(result.conclusionTrue).toBe(true)
-        expect(result.isCounterexample).toBe(false)
+        expect(result.premisesHoldConclusionFalse).toBe(false)
     })
 })
 
@@ -163,9 +163,9 @@ describe("education-reform.yaml", () => {
         })
         const result = engine.evaluate(assignment)
         expect(result.ok).toBe(true)
-        expect(result.allSupportingPremisesTrue).toBe(true)
+        expect(result.survivingSupportingPremisesTrue).toBe(true)
         expect(result.conclusionTrue).toBe(true)
-        expect(result.isCounterexample).toBe(false)
+        expect(result.premisesHoldConclusionFalse).toBe(false)
     })
 })
 
@@ -226,9 +226,9 @@ describe("exam-performance.yaml", () => {
         })
         const ce = result.counterexamples![0]
         expect(ce.result.ok).toBe(true)
-        expect(ce.result.allSupportingPremisesTrue).toBe(true)
+        expect(ce.result.survivingSupportingPremisesTrue).toBe(true)
         expect(ce.result.conclusionTrue).toBe(false)
-        expect(ce.result.isCounterexample).toBe(true)
+        expect(ce.result.premisesHoldConclusionFalse).toBe(true)
     })
 
     it("the counterexample assigns PassedExam=true, MasteredSubject=false", () => {

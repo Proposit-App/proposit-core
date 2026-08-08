@@ -45,11 +45,11 @@ export function gradeEvaluation(
         return { grade: "inadmissible", label: "Inadmissible", color: "gray" }
     }
 
-    if (result.allSupportingPremisesTrue === false) {
+    if (result.survivingSupportingPremisesTrue === false) {
         return { grade: "unsound", label: "Unsound", color: "red" }
     }
 
-    if (result.isCounterexample === true) {
+    if (result.premisesHoldConclusionFalse === true) {
         return {
             grade: "counterexample",
             label: "Counterexample",
@@ -59,7 +59,7 @@ export function gradeEvaluation(
 
     // Soundness requires the supporting premises to be true. An unknown or
     // absent value is not true, so it can never reach sound or vacuously-true.
-    if (result.allSupportingPremisesTrue !== true) {
+    if (result.survivingSupportingPremisesTrue !== true) {
         return { grade: "indeterminate", label: "Indeterminate", color: "gray" }
     }
 

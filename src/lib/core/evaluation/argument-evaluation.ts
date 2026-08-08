@@ -8,11 +8,14 @@ import type {
     TCoreArgumentEvaluationOptions,
     TCoreArgumentEvaluationResult,
     TCoreCounterexample,
+    TCoreDerivationStep,
     TCoreExpressionAssignment,
+    TCorePropagationOptions,
     TCoreTrivalentValue,
     TCoreValidityCheckOptions,
     TCoreValidityCheckResult,
     TCoreVariableAssignment,
+    TCoreVariableProvenance,
     TCorePremiseEvaluationResult,
     TCoreValidationResult,
 } from "../../types/evaluation.js"
@@ -54,6 +57,13 @@ export interface TArgumentEvaluationContext {
  */
 export interface TEvaluablePremise {
     getId(): string
+    /**
+     * The premise entity's `type`. Derivation premises are engine wiring
+     * rather than a user-authored inferential step, so a rejection recorded
+     * inside one never strikes it. Optional: an implementation that omits it
+     * is treated as a freeform premise.
+     */
+    getPremiseType?(): string
     getExpressions(): TCorePropositionalExpression[]
     getChildExpressions(parentId: string): TCorePropositionalExpression[]
     getVariables(): TCorePropositionalVariable[]
@@ -135,41 +145,65 @@ export function evaluateSubtreeKleene(
 }
 
 /**
- * Run fixed-point constraint propagation over accepted/rejected operators.
- * Fills unknown (null) variable values based on operator semantics.
+ * Run fixed-point constraint propagation over the operators the reader
+ * accepted. Fills unknown (null) variable values based on operator semantics.
  * Never overwrites user-assigned values (true/false).
+ *
+ * Only acceptances propagate. A rejection is not a truth value: it strikes the
+ * premise it lives in, and the caller excludes that premise here via
+ * `options.excludedPremiseIds` — so nothing inside a struck premise
+ * contributes, and no value is ever forced `false` by a refusal.
+ *
+ * Because closure only ever fills `null`s from the seed, it is monotone and
+ * its result is the **least fixed point** of that seed. The attribution
+ * counterfactual depends on that: withholding an assertion and re-closing must
+ * not let mutually supporting premises certify each other.
  *
  * Axiomatic-bound variables are forced to `true` by `ArgumentEngine`'s
  * pre-pass before this function runs; they land in the propagator's
- * `userAssigned` set and are immune to overwrite. Rejecting an operator
- * whose only unknown child is axiom-bound is therefore a propagation no-op
- * on that branch — the axiom stays true and the rejection's downstream
- * propagation halts gracefully.
+ * `userAssigned` set and are immune to overwrite.
  */
 export function propagateOperatorConstraints(
     ctx: TArgumentEvaluationContext,
-    assignment: TCoreExpressionAssignment
+    assignment: TCoreExpressionAssignment,
+    options?: TCorePropagationOptions
 ): TCoreVariableAssignment {
+    return closeUnderAcceptedOperators(ctx, assignment, options).variables
+}
+
+/**
+ * `propagateOperatorConstraints` plus the provenance of every value it saw or
+ * produced. The two share one closure, so a tag is recorded where the value is
+ * actually set rather than reconstructed afterwards.
+ */
+export function closeUnderAcceptedOperators(
+    ctx: TArgumentEvaluationContext,
+    assignment: TCoreExpressionAssignment,
+    options?: TCorePropagationOptions
+): {
+    variables: TCoreVariableAssignment
+    provenance: Record<string, TCoreVariableProvenance>
+} {
     const vars: TCoreVariableAssignment = { ...assignment.variables }
+    for (const variableId of options?.withheldVariableIds ?? []) {
+        delete vars[variableId]
+    }
     const opAssignments = assignment.operatorAssignments
+    const excludedPremiseIds = options?.excludedPremiseIds
 
     // Collect all expressions across all premises, indexed by id
-    const exprById = new Map<
-        string,
-        TCorePropositionalExpression & { premiseId: string }
-    >()
+    const exprById = new Map<string, TCorePropositionalExpression>()
+    // Expression id -> the premise it belongs to
+    const premiseIdOf = new Map<string, string>()
     // Children lookup: parentId -> sorted children
     const childrenOf = new Map<string, TCorePropositionalExpression[]>()
 
     for (const pm of ctx.listPremises()) {
+        if (excludedPremiseIds?.has(pm.getId())) continue
         for (const expr of pm.getExpressions()) {
-            exprById.set(
-                expr.id,
-                expr as TCorePropositionalExpression & { premiseId: string }
-            )
-        }
-        // Build children map using getChildExpressions for each operator/formula
-        for (const expr of pm.getExpressions()) {
+            exprById.set(expr.id, expr)
+            premiseIdOf.set(expr.id, pm.getId())
+            // Build children map using getChildExpressions for each operator/formula
             if (expr.type === "operator" || expr.type === "formula") {
                 childrenOf.set(expr.id, pm.getChildExpressions(expr.id))
             }
@@ -188,7 +222,7 @@ export function propagateOperatorConstraints(
         if (expr.type === "variable") {
             return (
                 vars[
-                    (expr as TCorePropositionalExpression<"variable">)
+                    (expr)
                         .variableId
                 ] ?? null
             )
@@ -200,7 +234,7 @@ export function propagateOperatorConstraints(
         }
 
         // operator
-        const op = (expr as TCorePropositionalExpression<"operator">).operator
+        const op = (expr).operator
         const children = childrenOf.get(expr.id) ?? []
 
         switch (op) {
@@ -250,6 +284,20 @@ export function propagateOperatorConstraints(
         return null
     }
 
+    /** Variable IDs in an expression subtree that currently hold a value. */
+    const collectValuedVariableIds = (exprId: string): string[] => {
+        const expr = exprById.get(exprId)
+        if (!expr) return []
+        if (expr.type === "variable") {
+            return (vars[expr.variableId] ?? null) === null
+                ? []
+                : [expr.variableId]
+        }
+        return (childrenOf.get(expr.id) ?? []).flatMap((child) =>
+            collectValuedVariableIds(child.id)
+        )
+    }
+
     // Track which variable IDs were explicitly set by the user
     // (true or false). These are never overwritten by propagation.
     const userAssigned = new Set<string>()
@@ -257,194 +305,164 @@ export function propagateOperatorConstraints(
         if (val !== null && val !== undefined) userAssigned.add(varId)
     }
 
+    const provenance: Record<string, TCoreVariableProvenance> = {}
+    for (const [varId, val] of Object.entries(vars)) {
+        provenance[varId] = {
+            value: val ?? null,
+            origin: userAssigned.has(varId) ? "asserted" : "unassigned",
+        }
+    }
+
     /**
-     * Try to set a child expression's variable to a value.
-     * Never overwrites user-assigned values.
-     * False overrides propagated true (rejection wins).
+     * Try to set a child expression's variable to a value, recording the step
+     * that produced it. Never overwrites a value already present: closure only
+     * fills `null`s, which is what makes it a least fixed point.
      * Returns true if a value changed.
      */
     const trySetChild = (
         child: TCorePropositionalExpression,
-        value: boolean
+        value: boolean,
+        step: TCoreDerivationStep
     ): boolean => {
         const varId = resolveLeafVariableId(child)
         if (varId == null || userAssigned.has(varId)) return false
-        const current = vars[varId] ?? null
-        if (current === null) {
-            vars[varId] = value
-            return true
-        }
-        // False overrides propagated true
-        if (value === false && current === true) {
-            vars[varId] = false
-            return true
-        }
-        return false
+        if ((vars[varId] ?? null) !== null) return false
+        vars[varId] = value
+        provenance[varId] = { value, origin: "derived", derivedBy: step }
+        return true
     }
 
-    // Two-phase propagation: rejections first (to establish false values),
-    // then acceptances (which only fill remaining unknowns).
-    // This prevents acceptance from deriving values through chains that
-    // are later invalidated by rejection.
-    for (const phase of ["rejected", "accepted"] as const) {
-        let changed = true
-        while (changed) {
-            changed = false
+    // One pass over accepted operators; a rejection propagates nothing.
+    let changed = true
+    while (changed) {
+        changed = false
 
-            for (const [exprId, expr] of exprById) {
-                if (expr.type !== "operator") continue
-                const state = opAssignments[exprId]
-                if (state !== phase) continue
+        for (const [exprId, expr] of exprById) {
+            if (expr.type !== "operator") continue
+            if (opAssignments[exprId] !== "accepted") continue
 
-                const op = (expr as TCorePropositionalExpression<"operator">)
-                    .operator
-                const children = childrenOf.get(exprId) ?? []
+            const op = (expr)
+                .operator
+            const children = childrenOf.get(exprId) ?? []
+            const stepFrom = (
+                consumedExpressionIds: string[]
+            ): TCoreDerivationStep => ({
+                expressionId: exprId,
+                premiseId: premiseIdOf.get(exprId)!,
+                fromVariableIds: [
+                    ...new Set(
+                        consumedExpressionIds.flatMap(collectValuedVariableIds)
+                    ),
+                ],
+            })
 
-                if (state === "accepted") {
-                    switch (op) {
-                        case "not": {
-                            // ¬A accepted (= true) => child must be false
-                            if (children.length > 0) {
-                                if (trySetChild(children[0], false))
-                                    changed = true
-                            }
-                            break
-                        }
-                        case "and": {
-                            // A ∧ B accepted => all children must be true
-                            for (const child of children) {
-                                if (trySetChild(child, true)) changed = true
-                            }
-                            break
-                        }
-                        case "or": {
-                            // A ∨ B accepted: if all-but-one are false, remaining must be true
-                            const unknownChildren: TCorePropositionalExpression[] =
-                                []
-                            let allOthersAreFalse = true
-                            for (const child of children) {
-                                const childValue = resolveValue(child.id)
-                                if (childValue === null) {
-                                    unknownChildren.push(child)
-                                } else if (childValue !== false) {
-                                    allOthersAreFalse = false
-                                }
-                            }
-                            if (
-                                unknownChildren.length === 1 &&
-                                allOthersAreFalse
-                            ) {
-                                if (trySetChild(unknownChildren[0], true))
-                                    changed = true
-                            }
-                            break
-                        }
-                        case "implies": {
-                            // A → B accepted: if A=true => B=true; if B=false => A=false
-                            if (children.length >= 2) {
-                                const leftValue = resolveValue(children[0].id)
-                                const rightValue = resolveValue(children[1].id)
-                                if (leftValue === true) {
-                                    if (trySetChild(children[1], true))
-                                        changed = true
-                                }
-                                if (rightValue === false) {
-                                    if (trySetChild(children[0], false))
-                                        changed = true
-                                }
-                            }
-                            break
-                        }
-                        case "iff": {
-                            // A ↔ B accepted: if A known => B matches; if B known => A matches
-                            if (children.length >= 2) {
-                                const leftValue = resolveValue(children[0].id)
-                                const rightValue = resolveValue(children[1].id)
-                                if (leftValue !== null) {
-                                    if (trySetChild(children[1], leftValue))
-                                        changed = true
-                                }
-                                if (rightValue !== null) {
-                                    if (trySetChild(children[0], rightValue))
-                                        changed = true
-                                }
-                            }
-                            break
+            switch (op) {
+                case "not": {
+                    // ¬A accepted (= true) => child must be false
+                    if (children.length > 0) {
+                        if (trySetChild(children[0], false, stepFrom([])))
+                            changed = true
+                    }
+                    break
+                }
+                case "and": {
+                    // A ∧ B accepted => all children must be true
+                    for (const child of children) {
+                        if (trySetChild(child, true, stepFrom([])))
+                            changed = true
+                    }
+                    break
+                }
+                case "or": {
+                    // A ∨ B accepted: if all-but-one are false, remaining must be true
+                    const unknownChildren: TCorePropositionalExpression[] = []
+                    let allOthersAreFalse = true
+                    for (const child of children) {
+                        const childValue = resolveValue(child.id)
+                        if (childValue === null) {
+                            unknownChildren.push(child)
+                        } else if (childValue !== false) {
+                            allOthersAreFalse = false
                         }
                     }
-                } else {
-                    // state === "rejected" — expression forced false
-                    switch (op) {
-                        case "not": {
-                            // ¬A rejected (= false) => child must be true
-                            if (children.length > 0) {
-                                if (trySetChild(children[0], true))
-                                    changed = true
-                            }
-                            break
-                        }
-                        case "and": {
-                            // A ∧ B rejected (= false): if all-but-one are true, remaining must be false
-                            const unknownChildren: TCorePropositionalExpression[] =
-                                []
-                            let allOthersAreTrue = true
-                            for (const child of children) {
-                                const childValue = resolveValue(child.id)
-                                if (childValue === null) {
-                                    unknownChildren.push(child)
-                                } else if (childValue !== true) {
-                                    allOthersAreTrue = false
-                                }
-                            }
+                    if (unknownChildren.length === 1 && allOthersAreFalse) {
+                        const consumed = children
+                            .filter(
+                                (child) => child.id !== unknownChildren[0].id
+                            )
+                            .map((child) => child.id)
+                        if (
+                            trySetChild(
+                                unknownChildren[0],
+                                true,
+                                stepFrom(consumed)
+                            )
+                        )
+                            changed = true
+                    }
+                    break
+                }
+                case "implies": {
+                    // A → B accepted: if A=true => B=true; if B=false => A=false
+                    if (children.length >= 2) {
+                        const leftValue = resolveValue(children[0].id)
+                        const rightValue = resolveValue(children[1].id)
+                        if (leftValue === true) {
                             if (
-                                unknownChildren.length === 1 &&
-                                allOthersAreTrue
-                            ) {
-                                if (trySetChild(unknownChildren[0], false))
-                                    changed = true
-                            }
-                            break
+                                trySetChild(
+                                    children[1],
+                                    true,
+                                    stepFrom([children[0].id])
+                                )
+                            )
+                                changed = true
                         }
-                        case "or": {
-                            // A ∨ B rejected (= false) => all children must be false
-                            for (const child of children) {
-                                if (trySetChild(child, false)) changed = true
-                            }
-                            break
-                        }
-                        case "implies": {
-                            // A → B rejected (= false) => A must be true, B must be false
-                            if (children.length >= 2) {
-                                if (trySetChild(children[0], true))
-                                    changed = true
-                                if (trySetChild(children[1], false))
-                                    changed = true
-                            }
-                            break
-                        }
-                        case "iff": {
-                            // A ↔ B rejected (= false): if A known => B is opposite; if B known => A is opposite
-                            if (children.length >= 2) {
-                                const leftValue = resolveValue(children[0].id)
-                                const rightValue = resolveValue(children[1].id)
-                                if (leftValue !== null) {
-                                    if (trySetChild(children[1], !leftValue))
-                                        changed = true
-                                }
-                                if (rightValue !== null) {
-                                    if (trySetChild(children[0], !rightValue))
-                                        changed = true
-                                }
-                            }
-                            break
+                        if (rightValue === false) {
+                            if (
+                                trySetChild(
+                                    children[0],
+                                    false,
+                                    stepFrom([children[1].id])
+                                )
+                            )
+                                changed = true
                         }
                     }
+                    break
+                }
+                case "iff": {
+                    // A ↔ B accepted: if A known => B matches; if B known => A matches
+                    if (children.length >= 2) {
+                        const leftValue = resolveValue(children[0].id)
+                        const rightValue = resolveValue(children[1].id)
+                        if (leftValue !== null) {
+                            if (
+                                trySetChild(
+                                    children[1],
+                                    leftValue,
+                                    stepFrom([children[0].id])
+                                )
+                            )
+                                changed = true
+                        }
+                        if (rightValue !== null) {
+                            if (
+                                trySetChild(
+                                    children[0],
+                                    rightValue,
+                                    stepFrom([children[1].id])
+                                )
+                            )
+                                changed = true
+                        }
+                    }
+                    break
                 }
             }
         }
     }
 
-    return vars
+    return { variables: vars, provenance }
 }
 
 /**
@@ -516,10 +534,32 @@ export function evaluateArgument(
         return false
     })
 
-    // Run operator constraint propagation
-    const propagatedVars = propagateOperatorConstraints(ctx, assignment)
+    // A rejection strikes the premise it lives in: that premise stops
+    // constraining the evaluation and asserts nothing. The conclusion premise
+    // and derivation premises are exempt — a rejection recorded against
+    // either is ignored, and observably so, because the struck set is
+    // reported.
+    const struckPremiseIds = allRelevantPremises
+        .filter(
+            (pm) =>
+                pm.getId() !== ctx.conclusionPremiseId &&
+                pm.getPremiseType?.() !== "derivation" &&
+                pm
+                    .getExpressions()
+                    .some(
+                        (expr) =>
+                            assignment.operatorAssignments[expr.id] ===
+                            "rejected"
+                    )
+        )
+        .map((pm) => pm.getId())
+    const struckIds = new Set(struckPremiseIds)
+
+    const propagation = closeUnderAcceptedOperators(ctx, assignment, {
+        excludedPremiseIds: struckIds,
+    })
     const propagatedAssignment: TCoreExpressionAssignment = {
-        variables: propagatedVars,
+        variables: propagation.variables,
         operatorAssignments: assignment.operatorAssignments,
     }
 
@@ -571,21 +611,31 @@ export function evaluateArgument(
             pm.evaluate(propagatedAssignment, evalOpts)
         )
 
-        const isAdmissibleAssignment =
-            constraintEvaluations.reduce<TCoreTrivalentValue>(
-                (acc, result) => kleeneAnd(acc, result.rootValue ?? null),
-                true
-            )
-        const allSupportingPremisesTrue =
-            supportingEvaluations.reduce<TCoreTrivalentValue>(
+        const surviving = (
+            results: TCorePremiseEvaluationResult[]
+        ): TCorePremiseEvaluationResult[] =>
+            results.filter((result) => !struckIds.has(result.premiseId))
+
+        const isAdmissibleAssignment = surviving(
+            constraintEvaluations
+        ).reduce<TCoreTrivalentValue>(
+            (acc, result) => kleeneAnd(acc, result.rootValue ?? null),
+            true
+        )
+        const survivingSupport = surviving(supportingEvaluations)
+        const survivingSupportingPremisesTrue =
+            survivingSupport.reduce<TCoreTrivalentValue>(
                 (acc, result) => kleeneAnd(acc, result.rootValue ?? null),
                 true
             )
         const conclusionTrue: TCoreTrivalentValue =
             conclusionEvaluation.rootValue ?? null
-        const isCounterexample = kleeneAnd(
+        const premisesHoldConclusionFalse = kleeneAnd(
             isAdmissibleAssignment,
-            kleeneAnd(allSupportingPremisesTrue, kleeneNot(conclusionTrue))
+            kleeneAnd(
+                survivingSupportingPremisesTrue,
+                kleeneNot(conclusionTrue)
+            )
         )
 
         const includeExpressionValues = options?.includeExpressionValues ?? true
@@ -610,6 +660,17 @@ export function evaluateArgument(
                   ])
               )
             : undefined
+        const variableProvenance = includeDiagnostics
+            ? Object.fromEntries(
+                  referencedVariableIds.map((vid) => [
+                      vid,
+                      propagation.provenance[vid] ?? {
+                          value: null,
+                          origin: "unassigned" as const,
+                      },
+                  ])
+              )
+            : undefined
 
         return {
             ok: true,
@@ -623,12 +684,14 @@ export function evaluateArgument(
             conclusion: strip(conclusionEvaluation),
             supportingPremises: supportingEvaluations.map(strip),
             constraintPremises: constraintEvaluations.map(strip),
+            struckPremiseIds,
+            survivingSupportingPremiseCount: survivingSupport.length,
             isAdmissibleAssignment,
-            allSupportingPremisesTrue,
+            survivingSupportingPremisesTrue,
             conclusionTrue,
-            isCounterexample,
-            preservesTruthUnderAssignment: kleeneNot(isCounterexample),
+            premisesHoldConclusionFalse,
             propagatedVariableValues,
+            variableProvenance,
         }
     } catch (error) {
         return {
@@ -789,7 +852,7 @@ export function checkArgumentValidity(
             numAdmissibleAssignments += 1
         }
 
-        if (result.isCounterexample === true) {
+        if (result.premisesHoldConclusionFalse === true) {
             counterexamples.push({
                 assignment: result.assignment!,
                 result,

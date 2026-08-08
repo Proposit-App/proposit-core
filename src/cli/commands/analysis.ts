@@ -545,10 +545,12 @@ export function registerAnalysisCommands(
                 printLine(`grade:             ${grading.label}`)
                 printLine(`admissible:        ${result.isAdmissibleAssignment}`)
                 printLine(
-                    `all supporting:    ${result.allSupportingPremisesTrue}`
+                    `all supporting:    ${result.survivingSupportingPremisesTrue}`
                 )
                 printLine(`conclusion true:   ${result.conclusionTrue}`)
-                printLine(`counterexample:    ${result.isCounterexample}`)
+                printLine(
+                    `counterexample:    ${result.premisesHoldConclusionFalse}`
+                )
             }
         )
 

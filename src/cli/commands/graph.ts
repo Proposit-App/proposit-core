@@ -129,9 +129,9 @@ export function buildDotGraph(
             `<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="white">`,
             `<TR><TD COLSPAN="2"><FONT POINT-SIZE="14" COLOR="${gradeHtmlColor}"><B>${htmlEscape(grading.label)}</B></FONT></TD></TR>`,
             `<TR><TD ALIGN="LEFT">admissible</TD><TD ALIGN="RIGHT">${tri(r.isAdmissibleAssignment)}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">all supporting</TD><TD ALIGN="RIGHT">${tri(r.allSupportingPremisesTrue)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">all supporting</TD><TD ALIGN="RIGHT">${tri(r.survivingSupportingPremisesTrue)}</TD></TR>`,
             `<TR><TD ALIGN="LEFT">conclusion true</TD><TD ALIGN="RIGHT">${tri(r.conclusionTrue)}</TD></TR>`,
-            `<TR><TD ALIGN="LEFT">counterexample</TD><TD ALIGN="RIGHT">${tri(r.isCounterexample)}</TD></TR>`,
+            `<TR><TD ALIGN="LEFT">counterexample</TD><TD ALIGN="RIGHT">${tri(r.premisesHoldConclusionFalse)}</TD></TR>`,
             `</TABLE>`,
         ].join("")
 

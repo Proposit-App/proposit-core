@@ -1341,6 +1341,10 @@ export class PremiseEngine<
         return this.expressions.getChildExpressions(parentId)
     }
 
+    public getPremiseType(): string {
+        return this.premise.type
+    }
+
     public isInference(): boolean {
         const root = this.getRootExpression()
         return (
@@ -1566,12 +1570,6 @@ export class PremiseEngine<
                 throw new Error(`Expression "${expressionId}" was not found.`)
             }
 
-            const operatorState = assignment.operatorAssignments[expression.id]
-            if (operatorState === "rejected") {
-                expressionValues[expression.id] = false
-                return false
-            }
-
             if (expression.type === "variable") {
                 let value: TCoreTrivalentValue
                 if (options?.resolver) {
@@ -1661,10 +1659,7 @@ export class PremiseEngine<
         }
 
         let inferenceDiagnostic: TCorePremiseInferenceDiagnostic | undefined
-        if (
-            this.isInference() &&
-            assignment.operatorAssignments[rootExpressionId] !== "rejected"
-        ) {
+        if (this.isInference()) {
             const root = this.expressions.getExpression(rootExpressionId)
             if (root?.type === "operator") {
                 const children = this.expressions.getChildExpressions(root.id)

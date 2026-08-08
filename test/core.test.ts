@@ -1961,8 +1961,7 @@ describe("ArgumentEngine — roles and evaluation", () => {
         })
         expect(result.ok).toBe(true)
         expect(result.isAdmissibleAssignment).toBe(false)
-        expect(result.isCounterexample).toBe(false)
-        expect(result.preservesTruthUnderAssignment).toBe(true)
+        expect(result.premisesHoldConclusionFalse).toBe(false)
         expect(result.constraintPremises).toHaveLength(1)
     })
 
@@ -2081,10 +2080,9 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
         return {
             assignment: variables,
             admissible: result.isAdmissibleAssignment,
-            supportsTrue: result.allSupportingPremisesTrue,
+            supportsTrue: result.survivingSupportingPremisesTrue,
             conclusionTrue: result.conclusionTrue,
-            counterexample: result.isCounterexample,
-            preservesTruth: result.preservesTruthUnderAssignment,
+            counterexample: result.premisesHoldConclusionFalse,
         }
     }
 
@@ -2103,7 +2101,7 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
 
         const premisesTrue =
             evaluation.isAdmissibleAssignment === true &&
-            evaluation.allSupportingPremisesTrue === true
+            evaluation.survivingSupportingPremisesTrue === true
         const conclusionTrue = evaluation.conclusionTrue === true
 
         return {
@@ -2151,7 +2149,6 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
                 supportsTrue: true,
                 conclusionTrue: false,
                 counterexample: false,
-                preservesTruth: true,
             },
             {
                 assignment: { [VAR_P.id]: false, [VAR_Q.id]: true },
@@ -2159,7 +2156,6 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
                 supportsTrue: true,
                 conclusionTrue: false,
                 counterexample: true,
-                preservesTruth: false,
             },
             {
                 assignment: { [VAR_P.id]: true, [VAR_Q.id]: true },
@@ -2167,7 +2163,6 @@ describe("ArgumentEngine — complex argument scenarios across multiple evaluati
                 supportsTrue: true,
                 conclusionTrue: true,
                 counterexample: false,
-                preservesTruth: true,
             },
         ])
 
@@ -3165,7 +3160,7 @@ describe("PremiseEngine — three-valued evaluation", () => {
         expect(r3.rootValue).toBeNull()
     })
 
-    it("rejected operator evaluates to false and skips children", () => {
+    it("evaluates a rejected operator normally rather than forcing it false", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -3183,13 +3178,14 @@ describe("PremiseEngine — three-valued evaluation", () => {
             variables: { "var-p": true, "var-q": true },
             operatorAssignments: { "and-root": "rejected" },
         })
-        expect(result.rootValue).toBe(false)
-        // Children should NOT be in expressionValues because they were skipped
-        expect(result.expressionValues["e-p"]).toBeUndefined()
-        expect(result.expressionValues["e-q"]).toBeUndefined()
+        // A rejection is a decision about the step, not a truth value: the
+        // premise still evaluates from its variables.
+        expect(result.rootValue).toBe(true)
+        expect(result.expressionValues["e-p"]).toBe(true)
+        expect(result.expressionValues["e-q"]).toBe(true)
     })
 
-    it("rejected formula evaluates to false", () => {
+    it("evaluates a rejected formula wrapper normally", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         const { result: pm } = eng.createPremise()
@@ -3203,12 +3199,11 @@ describe("PremiseEngine — three-valued evaluation", () => {
             variables: { "var-p": true },
             operatorAssignments: { "f-root": "rejected" },
         })
-        expect(result.rootValue).toBe(false)
-        // Child skipped
-        expect(result.expressionValues["e-p"]).toBeUndefined()
+        expect(result.rootValue).toBe(true)
+        expect(result.expressionValues["e-p"]).toBe(true)
     })
 
-    it("rejected nested operator forces false while parent computes normally", () => {
+    it("leaves a parent unchanged when a nested operator is rejected", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -3238,23 +3233,19 @@ describe("PremiseEngine — three-valued evaluation", () => {
             makeVarExpr("e-r", "var-r", { parentId: "or-root", position: 1 })
         )
 
-        // Reject the AND operator, set C=true
-        // (false) or true → true
         const result = pm.evaluate({
             variables: { "var-p": true, "var-q": true, "var-r": true },
             operatorAssignments: { "and-child": "rejected" },
         })
         expect(result.rootValue).toBe(true)
-        // AND evaluates to false due to rejection
-        expect(result.expressionValues["and-child"]).toBe(false)
-        // Children of the rejected AND should be skipped
-        expect(result.expressionValues["e-p"]).toBeUndefined()
-        expect(result.expressionValues["e-q"]).toBeUndefined()
-        // R evaluates normally
+        // The rejected AND still evaluates from its children.
+        expect(result.expressionValues["and-child"]).toBe(true)
+        expect(result.expressionValues["e-p"]).toBe(true)
+        expect(result.expressionValues["e-q"]).toBe(true)
         expect(result.expressionValues["e-r"]).toBe(true)
     })
 
-    it("rejected inference root evaluates to false with no inference diagnostic", () => {
+    it("still reports an inference diagnostic for a rejected inference root", () => {
         const eng = new ArgumentEngine(ARG, aLib(), { behavior: "permissive" })
         eng.addVariable(VAR_P)
         eng.addVariable(VAR_Q)
@@ -3272,11 +3263,10 @@ describe("PremiseEngine — three-valued evaluation", () => {
             variables: { "var-p": true, "var-q": true },
             operatorAssignments: { imp: "rejected" },
         })
-        expect(result.rootValue).toBe(false)
-        expect(result.inferenceDiagnostic).toBeUndefined()
-        // Children should not have been evaluated
-        expect(result.expressionValues["e-p"]).toBeUndefined()
-        expect(result.expressionValues["e-q"]).toBeUndefined()
+        expect(result.rootValue).toBe(true)
+        expect(result.inferenceDiagnostic?.kind).toBe("implies")
+        expect(result.expressionValues["e-p"]).toBe(true)
+        expect(result.expressionValues["e-q"]).toBe(true)
     })
 })
 
@@ -3344,7 +3334,7 @@ describe("ArgumentEngine — three-valued evaluation", () => {
         expect(result.isAdmissibleAssignment).toBe(null)
     })
 
-    it("returns null for isCounterexample when conclusion is null", () => {
+    it("returns null for premisesHoldConclusionFalse when conclusion is null", () => {
         const { engine } = buildSimpleArgument()
         const result = engine.evaluate({
             variables: {
@@ -3358,10 +3348,10 @@ describe("ArgumentEngine — three-valued evaluation", () => {
         expect(result.ok).toBe(true)
         expect(result.isAdmissibleAssignment).toBe(true)
         expect(result.conclusionTrue).toBe(null)
-        expect(result.isCounterexample).toBe(null)
+        expect(result.premisesHoldConclusionFalse).toBe(null)
     })
 
-    it("rejected conclusion root makes conclusionTrue false", () => {
+    it("ignores a rejection recorded against the conclusion premise", () => {
         const { engine } = buildSimpleArgument()
         const result = engine.evaluate({
             variables: {
@@ -3373,23 +3363,8 @@ describe("ArgumentEngine — three-valued evaluation", () => {
             operatorAssignments: { "c-imp": "rejected" },
         })
         expect(result.ok).toBe(true)
-        expect(result.conclusionTrue).toBe(false)
-    })
-
-    it("preservesTruthUnderAssignment is null when isCounterexample is null", () => {
-        const { engine } = buildSimpleArgument()
-        const result = engine.evaluate({
-            variables: {
-                [VAR_A.id]: true,
-                [VAR_B.id]: null,
-                [VAR_C.id]: true,
-                [VAR_D.id]: true,
-            },
-            operatorAssignments: {},
-        })
-        expect(result.ok).toBe(true)
-        expect(result.isCounterexample).toBe(null)
-        expect(result.preservesTruthUnderAssignment).toBe(null)
+        expect(result.conclusionTrue).toBe(true)
+        expect(result.struckPremiseIds).toEqual([])
     })
 })
 
@@ -21063,7 +21038,7 @@ describe("evaluateArgument (standalone)", () => {
             expect(result[VAR_Q.id]).toBe(true)
         })
 
-        it("propagates rejected OR: all children become false", () => {
+        it("propagates nothing from a rejected OR", () => {
             const eng = new ArgumentEngine(ARG, aLib(), {
                 behavior: "permissive",
             })
@@ -21089,8 +21064,8 @@ describe("evaluateArgument (standalone)", () => {
                 variables: {},
                 operatorAssignments: { [orId]: "rejected" },
             })
-            expect(result[VAR_P.id]).toBe(false)
-            expect(result[VAR_Q.id]).toBe(false)
+            expect(result[VAR_P.id] ?? null).toBeNull()
+            expect(result[VAR_Q.id] ?? null).toBeNull()
         })
 
         it("never overwrites user-assigned values", () => {
@@ -21149,8 +21124,7 @@ describe("evaluateArgument (standalone)", () => {
                 operatorAssignments: {},
             })
             expect(result.ok).toBe(true)
-            expect(result.isCounterexample).toBe(false)
-            expect(result.preservesTruthUnderAssignment).toBe(true)
+            expect(result.premisesHoldConclusionFalse).toBe(false)
         })
 
         it("returns validation failure when no conclusion is set", () => {
@@ -21185,17 +21159,14 @@ describe("evaluateArgument (standalone)", () => {
             const ctx = ctxFrom(eng)
             const standaloneResult = evaluateArgument(ctx, assignment)
             expect(standaloneResult.ok).toBe(engineResult.ok)
-            expect(standaloneResult.isCounterexample).toBe(
-                engineResult.isCounterexample
+            expect(standaloneResult.premisesHoldConclusionFalse).toBe(
+                engineResult.premisesHoldConclusionFalse
             )
             expect(standaloneResult.conclusionTrue).toBe(
                 engineResult.conclusionTrue
             )
-            expect(standaloneResult.allSupportingPremisesTrue).toBe(
-                engineResult.allSupportingPremisesTrue
-            )
-            expect(standaloneResult.preservesTruthUnderAssignment).toBe(
-                engineResult.preservesTruthUnderAssignment
+            expect(standaloneResult.survivingSupportingPremisesTrue).toBe(
+                engineResult.survivingSupportingPremisesTrue
             )
         })
 

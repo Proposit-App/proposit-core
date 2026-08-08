@@ -193,8 +193,8 @@ describe("Evaluation no-op on naked-Q derivation premises", () => {
         // The argument-level summary truth fields must match — the
         // naked-Q derivation contributed nothing because it was skipped.
         expect(compareResult.conclusionTrue).toBe(baselineResult.conclusionTrue)
-        expect(compareResult.allSupportingPremisesTrue).toBe(
-            baselineResult.allSupportingPremisesTrue
+        expect(compareResult.survivingSupportingPremisesTrue).toBe(
+            baselineResult.survivingSupportingPremisesTrue
         )
         expect(compareResult.isAdmissibleAssignment).toBe(
             baselineResult.isAdmissibleAssignment

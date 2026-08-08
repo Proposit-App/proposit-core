@@ -582,7 +582,7 @@ export interface TArgumentEvaluation {
      * Evaluates the argument under a three-valued expression assignment.
      *
      * Variables may be `true`, `false`, or `null` (unknown). All result
-     * flags (`isAdmissibleAssignment`, `isCounterexample`, etc.) are
+     * flags (`isAdmissibleAssignment`, `premisesHoldConclusionFalse`, etc.) are
      * three-valued: `null` means indeterminate due to unknown variable
      * values.
      *
