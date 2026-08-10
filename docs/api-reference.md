@@ -351,7 +351,8 @@ Options:
 - `includeExpressionValues` (default `true`) — include per-expression truth maps.
 - `includeDiagnostics` (default `true`) — include inference diagnostics.
 - `strictUnknownAssignmentKeys` (default `false`) — reject assignment keys not referenced by evaluated premises.
-- `forcedTrueVariableIds` — variable IDs pinned `true` in the premise-set satisfiability search and never read back as reader assertions. `ArgumentEngine.evaluate` supplies its axiomatic-bound set automatically; standalone callers of `evaluateArgument` pass their own.
+- `forcedTrueVariableIds` — variable IDs the reader cannot be credited with: never read back as reader assertions, and left out of the reached-without-assertion counterfactual. `ArgumentEngine.evaluate` supplies its axiomatic-bound set automatically; standalone callers of `evaluateArgument` pass their own. Unless the next option is given, these are also pinned `true` in the satisfiability search.
+- `satisfiabilityForcedTrueVariableIds` — variable IDs pinned `true` in the premise-set satisfiability search, when that set differs from the one above. Defaults to it. `ArgumentEngine.evaluate` supplies every **grounded** variable here — citation as well as axiomatic — because whether the premises can hold together is a question about the argument, and a cited claim is taken at its source's word, exactly as `checkValidity` does. The two are separate deliberately: a reader may disagree with a source, so their assignment on a citation-bound variable is their own assertion and a citation must stay out of `forcedTrueVariableIds`. Widening that one instead is the mistake this option exists to prevent — it silently strips the reader's attribution and inverts the counterfactual.
 - `premiseSetSatisfiable` — a satisfiability answer the caller already has, which skips the search.
 
 ---

@@ -602,11 +602,20 @@ export interface TArgumentEvaluation {
      * the method returns early with `{ ok: false }` and the validation
      * details. Do not bypass `evaluate` to avoid this check.
      *
-     * Axiomatic-bound variables are forced `true` by this method's pre-pass,
-     * and are passed down as `forcedTrueVariableIds` so they are pinned in the
-     * satisfiability search and never read back as reader assertions. A
-     * caller's own `forcedTrueVariableIds` is unioned with that set, never
-     * substituted for it.
+     * Axiomatic-bound variables are forced `true` by this method's pre-pass and
+     * passed down as `forcedTrueVariableIds`, so they are never read back as
+     * reader assertions and never enter the reached-without-assertion
+     * counterfactual. A caller's own `forcedTrueVariableIds` is unioned with
+     * that set, never substituted for it.
+     *
+     * The premise-set satisfiability search is given a **wider** set —
+     * `satisfiabilityForcedTrueVariableIds`, every grounded variable, citation
+     * as well as axiomatic. Whether the premises can hold together is a
+     * question about the argument, so a cited claim is taken at its source's
+     * word there, exactly as `checkValidity` does. The two sets are separate
+     * because the narrower one also decides what counts as the reader's own
+     * assertion, and a reader may disagree with a source: a citation belongs in
+     * the satisfiability question and not in that one.
      *
      * @param assignment - The variable assignment and the reader's operator
      *   decisions.
