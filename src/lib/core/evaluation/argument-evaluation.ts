@@ -657,7 +657,12 @@ export function evaluateArgument(
                           ...constraintPremises,
                       ].filter((pm) => !struckIds.has(pm.getId())),
                       freeVariableIds: referencedVariableIds,
-                      forcedTrueVariableIds: options?.forcedTrueVariableIds,
+                      // Deliberately not `forcedTrueVariableIds`. That set
+                      // also decides what counts as a reader's assertion, and
+                      // a citation belongs in this question but not that one.
+                      forcedTrueVariableIds:
+                          options?.satisfiabilityForcedTrueVariableIds ??
+                          options?.forcedTrueVariableIds,
                   })
 
         // Contradicting premises license nothing: exclude every premise from

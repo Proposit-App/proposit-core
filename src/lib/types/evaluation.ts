@@ -182,11 +182,26 @@ export interface TCoreArgumentEvaluationOptions {
     /** Run argument/premise evaluability validation before evaluating. */
     validateFirst?: boolean
     /**
-     * Variable IDs pinned `true` in every row of the premise-set
-     * satisfiability search — typically axiomatic-bound variables, which the
-     * engine forces true. They are also never treated as reader assertions.
+     * Variable IDs the reader did not assign and cannot be credited with —
+     * typically axiomatic-bound variables, which the engine forces true. They
+     * are never treated as reader assertions and are left out of the
+     * reached-without-assertion counterfactual. Unless
+     * `satisfiabilityForcedTrueVariableIds` is given, they are also pinned
+     * `true` in every row of the premise-set satisfiability search.
      */
     forcedTrueVariableIds?: ReadonlySet<string>
+    /**
+     * Variable IDs pinned `true` in the premise-set satisfiability search,
+     * when that set differs from `forcedTrueVariableIds`. Defaults to it.
+     *
+     * The two are separate because a citation belongs in one and not the
+     * other. Asking whether the premises can hold at all takes a cited claim
+     * at its source's word, so a citation is pinned here. But a reader may
+     * disagree with a source, and their assignment on a citation-bound
+     * variable is their own assertion — so a citation must stay out of
+     * `forcedTrueVariableIds`, which is what decides that.
+     */
+    satisfiabilityForcedTrueVariableIds?: ReadonlySet<string>
     /**
      * Premise-set satisfiability computed by the caller. Supplying it skips
      * the search — `checkArgumentValidity` computes it once and threads it

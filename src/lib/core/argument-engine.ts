@@ -2853,12 +2853,24 @@ export class ArgumentEngine<
         for (const id of options?.forcedTrueVariableIds ?? []) {
             forcedTrueVariableIds.add(id)
         }
+        // Whether the premises can hold together is asked of the argument, not
+        // of the reader, so it takes a cited claim at its source's word —
+        // exactly as `checkValidity` does. This set stays separate from the one
+        // above because that one also decides what counts as the reader's own
+        // assertion, and a reader may disagree with a source.
+        const satisfiabilityForcedTrueVariableIds = new Set<string>(
+            this.getGroundedBoundVariableIds()
+        )
+        for (const id of forcedTrueVariableIds) {
+            satisfiabilityForcedTrueVariableIds.add(id)
+        }
         return evaluateArgumentStandalone(
             this.asEvaluationContext(),
             effectiveAssignment,
             {
                 ...options,
                 forcedTrueVariableIds,
+                satisfiabilityForcedTrueVariableIds,
             }
         )
     }
