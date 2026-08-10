@@ -2932,6 +2932,12 @@ export class ArgumentEngine<
      * Returns `true` iff the variable is claim-bound to a citation or
      * axiomatic claim — the "grounded" claim types that a default assignment
      * seeds `true`.
+     *
+     * Two callers, and they are not interchangeable with the narrower
+     * axiomatic-only collector: the default assignment seeds every grounded
+     * variable `true`, and `checkValidity` excludes every grounded variable
+     * from its enumeration. Evaluation's forced-assignment pre-pass uses the
+     * *narrow* set on purpose — grounded is not the same as unassignable.
      */
     private isGroundedVariable(variable: TCorePropositionalVariable): boolean {
         if (!isClaimBound(variable)) return false

@@ -54,9 +54,9 @@ describe("checkValidity treats a citation as given", () => {
         expect(counterexamples.length).toBeGreaterThan(0)
         const citationVariableId = built.variableId("C")
         for (const counterexample of counterexamples) {
-            expect(counterexample.assignment.variables[citationVariableId]).toBe(
-                true
-            )
+            expect(
+                counterexample.assignment.variables[citationVariableId]
+            ).toBe(true)
         }
     })
 

@@ -632,6 +632,13 @@ export interface TArgumentEvaluation {
      * threaded into each row, since the generated assignments carry no
      * operator decisions and the premise set never varies.
      *
+     * Grounded claim-bound variables — axiomatic *and* citation — are
+     * excluded from the enumeration and pinned `true` on every row, so an
+     * argument with `g` of them enumerates `2^(k - g)` assignments and no
+     * counterexample can rest on a cited claim reading false. Evaluation is
+     * deliberately different: it answers the reader's question, where a
+     * citation is only seeded true and remains assignable.
+     *
      * Calls `validateEvaluability()` (including derivation pre-flight)
      * before enumeration. If the argument is not evaluable, returns early
      * with an appropriate result rather than throwing.
