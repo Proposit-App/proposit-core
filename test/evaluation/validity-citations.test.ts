@@ -78,3 +78,70 @@ describe("checkValidity treats a citation as given", () => {
         expect(result.counterexamples ?? []).toHaveLength(0)
     })
 })
+
+// The carve-out is deliberately wider than the one evaluation uses. These pin
+// the boundary: widening the evaluate-time pre-pass to the grounded set would
+// make a reader's assignment on any citation-backed claim throw, and the
+// failure would surface deep in a consumer's review flow rather than here.
+describe("evaluation still lets a reader assign a citation", () => {
+    it("accepts a caller assignment on a citation-bound variable and reads it back", () => {
+        const built = buildArgument({
+            conclusion: implies(v("C"), v("Q")),
+            claimTypes: { C: "citation" },
+        })
+        const citationVariableId = built.variableId("C")
+
+        const result = built.engine.evaluate({
+            variables: { [citationVariableId]: false },
+            operatorAssignments: {},
+        })
+
+        expect(result.ok).toBe(true)
+        expect(result.assignment?.variables[citationVariableId]).toBe(false)
+    })
+
+    it("still refuses a caller assignment on an axiomatic-bound variable", () => {
+        const built = buildArgument({
+            conclusion: implies(v("X"), v("Q")),
+            claimTypes: { X: "axiomatic" },
+        })
+
+        expect(() =>
+            built.engine.evaluate({
+                variables: { [built.variableId("X")]: true },
+                operatorAssignments: {},
+            })
+        ).toThrow(/AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN/)
+    })
+
+    it("seeds a citation true in the default assignment", () => {
+        const built = buildArgument({
+            conclusion: implies(v("C"), v("Q")),
+            claimTypes: { C: "citation" },
+        })
+
+        const defaults = built.engine.deriveDefaultAssignment()
+
+        expect(defaults[built.variableId("C")]).toBe(true)
+    })
+})
+
+describe("validity still gives an axiom", () => {
+    it("excludes an axiomatic variable from the enumeration and pins it true", () => {
+        const built = buildArgument({
+            conclusion: v("Q"),
+            premises: [implies(and(v("X"), v("A")), v("Q"))],
+            claimTypes: { X: "axiomatic" },
+        })
+
+        const result = built.engine.checkValidity({ mode: "exhaustive" })
+
+        expect(result.ok).toBe(true)
+        expect(result.checkedVariableIds).not.toContain(built.variableId("X"))
+        for (const counterexample of result.counterexamples ?? []) {
+            expect(
+                counterexample.assignment.variables[built.variableId("X")]
+            ).toBe(true)
+        }
+    })
+})
