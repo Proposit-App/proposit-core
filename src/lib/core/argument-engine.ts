@@ -2802,11 +2802,33 @@ export class ArgumentEngine<
 
     /**
      * Returns IDs of claim-bound variables whose bound claim has type
-     * `"axiomatic"` — these are forced-true at evaluation time and must be
-     * excluded from `checkValidity`'s free-choice enumeration.
+     * `"axiomatic"` — these are forced-true at evaluation time.
      */
     private getAxiomaticBoundVariableIds(): Set<string> {
         return new Set(this.collectAxiomaticBoundVariables().map((v) => v.id))
+    }
+
+    /**
+     * Returns IDs of every grounded claim-bound variable — axiomatic *and*
+     * citation — for `checkValidity`'s carve-out.
+     *
+     * Deliberately wider than `getAxiomaticBoundVariableIds`, and the two must
+     * stay separate. Validity asks a structural question about the argument and
+     * generates its own rows, so a cited claim is what its source says: it gets
+     * no free column and is pinned true. Evaluation asks the *reader's*
+     * question, where a citation is merely seeded true by the default
+     * assignment and the reader may assign it either way — so
+     * `applyAxiomaticForcedAssignments` keeps the narrow set. Widening that
+     * pre-pass to this one would make a reader's assignment on any
+     * citation-backed claim throw `AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN`.
+     */
+    private getGroundedBoundVariableIds(): Set<string> {
+        const out = new Set<string>()
+        for (const variable of this.variables.toArray()) {
+            const base = variable as unknown as TCorePropositionalVariable
+            if (this.isGroundedVariable(base)) out.add(variable.id)
+        }
+        return out
     }
 
     public evaluate(
@@ -2844,15 +2866,18 @@ export class ArgumentEngine<
     public checkValidity(
         options?: TCoreValidityCheckOptions
     ): TCoreValidityCheckResult {
-        const axiomaticIds = this.getAxiomaticBoundVariableIds()
-        // Axiomatic-bound variables are both excluded from the 2^n enumeration
-        // and pinned to `true` in every generated assignment. Union the
-        // engine's axiomatic set with any explicit sets the caller passed.
-        const excludedVariableIds = new Set<string>(axiomaticIds)
+        const groundedIds = this.getGroundedBoundVariableIds()
+        // Grounded variables — axiomatic and citation alike — are both excluded
+        // from the 2^n enumeration and pinned to `true` in every generated
+        // assignment. A citation reports what its source says, so a failing
+        // case that only exists because the source said the opposite is not a
+        // fact about this argument. Union the engine's grounded set with any
+        // explicit sets the caller passed.
+        const excludedVariableIds = new Set<string>(groundedIds)
         for (const id of options?.excludedVariableIds ?? []) {
             excludedVariableIds.add(id)
         }
-        const forcedTrueVariableIds = new Set<string>(axiomaticIds)
+        const forcedTrueVariableIds = new Set<string>(groundedIds)
         for (const id of options?.forcedTrueVariableIds ?? []) {
             forcedTrueVariableIds.add(id)
         }
