@@ -88,10 +88,14 @@ describe("a reader may still disagree with a source", () => {
         expect(result.propagatedVariableValues![citation]).toBe(false)
     })
 
-    it("records that assignment as the reader's own", () => {
+    it("credits the reader with asserting a cited conclusion claim", () => {
+        // Attribution, not provenance, is what `forcedTrueVariableIds` governs:
+        // it drives `isReaderAsserted`, which decides both `assertedByReader`
+        // and which claims get an attribution entry at all. A citation swept
+        // into that set stops being anything the reader did.
         const built = buildArgument({
-            conclusion: v("Q"),
-            premises: [implies(v("C"), v("Q"))],
+            conclusion: v("C"),
+            premises: [implies(v("A"), v("C")), v("A")],
             claimTypes: { C: "citation" },
         })
         const citation = built.variableId("C")
@@ -101,9 +105,34 @@ describe("a reader may still disagree with a source", () => {
             operatorAssignments: {},
         })
 
-        // The reader said it. Not derived, not unassigned, and not swallowed by
-        // a forced-true set that exists for axioms.
-        expect(result.variableProvenance![citation].origin).toBe("asserted")
+        expect(result.conclusionAttribution?.assertedByReader).toBe(true)
+    })
+
+    it("keeps a cited claim in the reached-without-assertion counterfactual", () => {
+        // `conclusionClaimVariableIds` drops forced-true variables, so under
+        // the naive widening a citation-backed conclusion never gets the
+        // withhold-and-re-close treatment and the counterfactual answers from
+        // the reader's own assertion instead of despite it.
+        const built = buildArgument({
+            conclusion: v("C"),
+            premises: [implies(v("A"), v("C")), v("A")],
+            claimTypes: { C: "citation" },
+        })
+        const citation = built.variableId("C")
+
+        const result = built.engine.evaluate({
+            variables: { [citation]: true },
+            operatorAssignments: {},
+        })
+
+        // Withhold the reader's assertion and the conclusion no longer stands,
+        // so it was not reached without them. Under the naive widening the
+        // counterfactual is skipped entirely and the answer inverts to `true`
+        // — the argument claims to reach its conclusion on its own merits
+        // using a value the reader supplied.
+        expect(result.conclusionAttribution?.reachedWithoutAssertion).toBe(
+            false
+        )
     })
 
     it("still refuses an assignment on an axiomatic-bound variable", () => {
