@@ -1,0 +1,9 @@
+slug: 2026-08-10-checkvalidity-enumerates-citation-bound-variables-the-default-assignment-treats-as-given
+title: checkValidity enumerates citation-bound variables the default assignment treats
+  as given
+created: '2026-08-10'
+resolution: null
+effort: low
+complexity: medium
+tags:
+- bug
