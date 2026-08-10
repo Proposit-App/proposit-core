@@ -48,7 +48,16 @@ assignment — not only when someone asks for the exhaustive check.
 and threads it in via `options.premiseSetSatisfiable`, which
 `evaluateArgument` prefers when present (`argument-evaluation.ts:634-636`), so
 the check's per-row evaluations do not recompute it. Ordinary evaluation has no
-such shortcut: a 12-variable argument pays 4,096 rows × premises on every pass.
+such shortcut: it recomputes satisfiability on every pass.
+
+How much that costs depends on the answer. The walk returns on the first
+satisfying row (`satisfiability.ts:83`), so a satisfiable premise set often
+settles in a handful of rows — a 12-variable argument satisfied at mask 0 walks
+one row, not 4,096. The full `2^n` is paid when the set is unsatisfiable, when
+it is indeterminate, or when the first satisfying row falls late in the
+enumeration. Unsatisfiable is not the rare case it sounds like: it is what
+`argument-evaluation.ts:648-651` uses to suppress derivation argument-wide, so
+the expensive path is exactly the one that changes what the reader sees.
 
 ### Sweep
 
@@ -80,6 +89,9 @@ band by making the work smaller; it does not move either limit.
    resolver rather than through shared named variables.
 4. The reduction is measured, not assumed: the outcome records rows walked
    before and after on a real multi-premise argument.
+5. The dependency assumption the decomposition rests on is written on
+   `TEvaluablePremise.evaluate`, where an implementor of that interface will
+   read it.
 
 ## Non-goals
 
@@ -144,13 +156,58 @@ none of them. A graph built from named occurrence alone would place A and B in
 different components, and the decomposition would compose two independently
 satisfying assignments into one that does not satisfy the set — a wrong `true`.
 
-The closure must terminate on a cycle (A bound into B bound into A): mark
-in-progress premises and treat a re-entry as contributing nothing further, which
-matches the resolver's own behavior — its cache (`premise-resolver.ts:21`) is
-seeded only after the recursive evaluation returns, so a cycle there resolves
-through `assignment.variables[variableId] ?? null` (`:32`) rather than looping.
+The closure must terminate on a cycle (A bound into B bound into A) by marking
+in-progress premises and treating a re-entry as contributing nothing further.
+
+It cannot justify that by matching the resolver, because the resolver does not
+survive a cycle. `premise-resolver.ts:23` checks the cache, but
+`premise-resolver.ts:41` seeds it only *after* the recursive evaluation at `:39`
+returns, so a re-entrant lookup misses and recurses again — a cycle overflows
+the stack rather than falling through to `assignment.variables[variableId]` at
+`:32`. `argument-validation.ts:287` rejects such cycles for a validated
+argument, so this is not reachable through the normal path; the closure
+terminates defensively because it runs before any validation the caller may have
+skipped, not because the resolver would.
+
 Whatever the closure does on a cycle, the decomposed answer must equal the flat
-one; that is what the criterion checks, not the closure's internal choice.
+one wherever the flat one exists; that is what the criteria check, not the
+closure's internal choice.
+
+### Every component's rows still carry the forced-true variables
+
+`forcedTrueVariableIds` are filtered out before the graph is built, exactly as
+today (`satisfiability.ts:58-61`), so they are never nodes and never get
+columns. They must nonetheless be written into the `variables` map of **every**
+row of **every** component, as `satisfiability.ts:71-73` does today — including
+a component whose column set is empty.
+
+This is the likeliest way to get the implementation wrong: building each row
+from the component's own free variables alone drops the forced ones, so a
+premise that reads one resolves it through `assignment.variables[variableId] ??
+null` (`premise-resolver.ts:32`) and comes back `null` where it used to come
+back `true` or `false`. The failure is not a crash — it is a component
+answering `null`, which the fold turns into a `null` for the whole call where
+the flat walk returned `true` or `false`.
+
+### The premise interface does not guarantee what the decomposition assumes
+
+The decomposition is sound only if a premise's value depends on nothing beyond
+the variables it reaches. `TEvaluablePremise` (`argument-evaluation.ts:66`) does
+not say that: `evaluate` is unconstrained relative to `getExpressions()`, so a
+conforming implementation may return no expressions and still read
+`assignment.variables.x`. The flat walk varies `x` and would see the difference;
+a reachability scan drops `x` and would not. This is not hypothetical —
+`test/evaluation/satisfiability.test.ts:101` already supplies a double with
+`getExpressions: () => []` and a hand-written `evaluate`.
+
+The production implementation does obey it (`premise-engine.ts` reads variables
+only through its own expression tree), so the resolution is to **state the
+contract on the interface** rather than to narrow the parameter type: add to
+`TEvaluablePremise.evaluate`'s JSDoc that its result must depend only on the
+variables reachable from `getExpressions()` and, transitively, from the
+premises its internally-bound variables name. Then the assumption is written
+where an implementor reads it, and the soundness claim is scoped to
+implementations that honor it.
 
 ### Components and composition
 
@@ -182,9 +239,6 @@ still yields `null`, and by the fold that makes the whole answer `null` unless
 some other component is already `false` — which is a strictly better answer than
 today's unconditional `null`, and still sound.
 
-`forcedTrueVariableIds` are filtered out before the graph is built, exactly as
-today (`satisfiability.ts:58-61`), so they are never nodes.
-
 ### Cost of the reduction itself
 
 Building the closure is O(premises × variables) with small constants against a
@@ -204,22 +258,40 @@ in the design.
    through an internally premise-bound variable, and whose flat answer is
    `false`, still returns `false`. Removing step 2 of the closure from the
    implementation makes exactly this test fail.
-3. A fixture whose premises split into two disjoint groups of `k` variables each
-   walks at most `2·2^k + 1` rows, not `2^(2k)` — asserted by counting premise
-   evaluations, not by timing.
+3. A fixture holding **exactly one premise per component**, two components of
+   `k` variables each, produces at most `2·2^k` premise evaluations rather than
+   `2·2^(2k)`. One premise per component is what makes the count readable: a row
+   evaluates every premise in its component (`satisfiability.ts:79-82`) and lazy
+   resolution can add more (`premise-resolver.ts:39`), so with several premises
+   per component an evaluation count is not a row count. If a fixture with
+   several premises per component is wanted instead, the walk must be
+   instrumented to count rows directly. Not asserted by timing either way.
 4. A variable occurring only in the conclusion causes no additional rows: the
-   row count for an argument is unchanged when a conclusion-only variable is
-   added to it.
-5. An argument whose free variables exceed `SATISFIABILITY_VARIABLE_CEILING` but
-   whose largest component does not is answered `true` or `false`, where today
-   it returns `null`.
-6. A single component exceeding the ceiling still returns `null` for the call,
-   unless another component is `false`, in which case `false`.
-7. `pnpm run check` passes, and the existing evaluation suites pass unmodified —
+   premise-evaluation count for a fixture is unchanged when a conclusion-only
+   variable is added to the argument.
+5. An argument whose free variables exceed `SATISFIABILITY_VARIABLE_CEILING`,
+   whose largest component does not, and **every one of whose premises settles
+   to `true` or `false` under every assignment**, is answered `true` or `false`
+   where today it returns `null`. The determinacy clause is load-bearing: a
+   component under the ceiling still answers `null` if it holds a premise that
+   never resolves, so the fixture must be built from premises that always
+   settle, and the expected value stated outright rather than as "not `null`".
+6. A single component exceeding the ceiling returns `null` for the call, unless
+   another component is `false`, in which case `false`.
+7. `forcedTrueVariableIds` reach every component: a fixture whose premises split
+   into two components, where one component's only premise reads a forced-true
+   variable and no free variable at all, answers the same as the flat walk.
+   Omitting the forced-true variables from that component's row assignment makes
+   exactly this test fail.
+8. `TEvaluablePremise.evaluate` (`argument-evaluation.ts:66`) carries JSDoc
+   stating that its result must depend only on the variables reachable from
+   `getExpressions()` and transitively through internally premise-bound
+   variables.
+9. `pnpm run check` passes, and the existing evaluation suites pass unmodified —
    any test that needed editing to accommodate this change is a defect in the
    change, not in the test, and must be justified in the outcome.
-8. The outcome records rows walked before and after for at least one real
-   multi-premise argument from `examples/arguments/`.
+10. The outcome records rows walked before and after for at least one real
+    multi-premise argument from `examples/arguments/`.
 
 ## Risks
 
@@ -237,10 +309,18 @@ in the design.
 - **The hot path is the risky one.** `evaluateArgument` calls this on every
   evaluation; a regression here is a regression in every reader interaction, not
   in an opt-in check. The existing evaluation suites passing unmodified
-  (criterion 7) is the main guard.
-- **Cycles.** A premise-bound cycle must not hang the closure. The resolver's own
-  cycle behavior (`premise-resolver.ts:22-33`) is incidental rather than
-  designed, so the closure should not assume cycles are impossible.
+  (criterion 9) is the main guard.
+- **A premise that depends on more than it reaches.** The decomposition's
+  soundness rests on an invariant the `TEvaluablePremise` interface does not
+  state, and the test suite already contains a double that could violate it
+  (`test/evaluation/satisfiability.test.ts:101`). Criterion 8 writes the
+  contract down; it does not enforce it, and nothing can enforce it at the type
+  level. A future double that reads an unreachable variable will disagree with
+  the flat oracle and should be read as the double violating the contract — but
+  only if the contract is where an implementor will find it.
+- **Cycles.** A premise-bound cycle must not hang the closure. The resolver
+  overflows the stack on one today (`premise-resolver.ts:23,41`), so the closure
+  cannot borrow its termination behavior and must supply its own.
 
 ## Notes
 
@@ -248,3 +328,34 @@ The request scoped this to `argument-evaluation.ts:975`. Reading the code widene
 it: the second call site at `:637` is on the evaluation hot path and
 over-supplies variables the same way. This extends the request rather than
 contradicting it, and the design lands both by fixing the callee.
+
+### Review, 2026-08-10
+
+Reviewed before planning by Codex (gpt-5.6-sol, read-only, against the repo) and
+by the local model, independently. Both were asked to attack soundness. Six
+findings were accepted and are folded in above:
+
+1. The cycle rationale was wrong — the resolver recurses to a stack overflow
+   rather than falling through to `assignment.variables`. Design section
+   rewritten; the closure now terminates on its own account.
+2. "A 12-variable argument pays 4,096 rows on every pass" overstated the cost:
+   the walk returns on the first satisfying row. Problem section now separates
+   the satisfiable case from the expensive ones.
+3. `TEvaluablePremise` does not constrain `evaluate` to the variables
+   `getExpressions()` reaches, so the soundness assumption was unstated — and a
+   double violating it already exists in the suite. New design section and
+   criterion 8.
+4. Criterion 3 asserted a *row* bound by counting *premise evaluations*, which
+   are not the same number when a component holds several premises. Rewritten
+   around a one-premise-per-component fixture.
+5. Criterion 5 was false as written: a component under the ceiling can still
+   answer `null`. Determinacy is now required of the fixture.
+6. (Local model.) `forcedTrueVariableIds` must be written into every
+   component's rows, including a component with no columns, or a premise reading
+   one resolves `null`. New design section and criterion 7.
+
+Both reviewers independently concluded the decomposition itself is sound and the
+trivalent fold equivalent to the current `sawIndeterminateRow` logic, subject to
+the interface invariant in finding 3. Neither produced a counterexample. That is
+corroboration, not proof — criterion 1's differential oracle is what actually
+checks it.
