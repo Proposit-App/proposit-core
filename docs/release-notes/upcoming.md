@@ -24,3 +24,29 @@ This does not change what a reader may say. You can still disagree with a
 cited claim while reviewing, and doing so still moves the result; a citation is
 simply not something the _exhaustive check_ second-guesses on your behalf.
 Self-evident claims remain unassignable, as before.
+
+### Larger arguments can be checked for contradictory premises
+
+Before deciding what an argument establishes, the engine asks whether its
+premises can all hold at once — a premise set that contradicts itself licenses
+nothing. That question was answered by trying every combination of every claim
+in the argument together, which gets expensive quickly and was simply declined
+past a fixed size.
+
+Claims that cannot affect each other are no longer tried against each other.
+Most arguments split into small clusters — a few premises about one thing, a few
+about another — and each cluster is now settled on its own. A claim that appears
+only in the conclusion is not tried at all, since it cannot affect whether the
+premises hold.
+
+Two consequences:
+
+- Arguments that were too large to answer may now be answered. The size limit
+  applies to the largest cluster rather than to the whole argument.
+- Ordinary review is cheaper, because this question is asked every time an
+  argument is evaluated, not only when the exhaustive check is run.
+
+Answers are unchanged. Anything reported before is reported the same way now —
+there is simply less work behind it. Note that the saving depends on the shape
+of the argument: one where everything genuinely connects to everything costs
+exactly what it did before.

@@ -39,6 +39,48 @@ boundary pins were confirmed to discriminate: widening
 "accepts a caller assignment on a citation-bound variable" test and nothing
 else.
 
+### The satisfiability walk groups variables that cannot interact
+
+Commits `5431f0d..f6fef12`.
+
+`isPremiseSetSatisfiable` enumerated `2^n` over every free variable it was
+handed. Both call sites over-supplied: `checkArgumentValidity`
+(`argument-evaluation.ts:975`) and `evaluateArgument` (`:637`) each build their
+list from the conclusion **and** the premises, so a variable occurring only in
+the conclusion took a column in a walk about whether the premises can hold. The
+second of those runs on every evaluation, not only on the opt-in check.
+
+The premises are now split into groups that share no variable, each walked over
+its own columns, and the results folded — any group `false` → `false`, else any
+`null` → `null`, else `true`. Cost falls from `2^n` to `Σ 2^nᵢ`, and a variable
+no premise reaches gets no column anywhere.
+
+`SATISFIABILITY_VARIABLE_CEILING` (16) now bounds the **largest group** rather
+than the total, so an argument past the ceiling that decomposes is answered
+instead of declined. A `false` from any single group still settles the set even
+beside a group too large to have been walked.
+
+The relation is **reachability, not naming**: a premise reaches everything its
+internally premise-bound variables' bound premises reach, because
+`createPremiseBoundResolver` evaluates that premise's whole tree under the same
+assignment. A partition built from named occurrence alone puts two premises
+coupled through a bound variable in separate groups and composes two
+independently satisfying assignments into one that satisfies neither. The
+closure follows `boundPremiseId` transitively and terminates on a cycle by
+marking premises in progress — its own guard, not the resolver's, which recurses
+until the stack overflows.
+
+`TEvaluablePremise.evaluate` now carries the dependency contract this rests on,
+and `AGENTS.md` carries it as an invariant. Neither is enforceable at the type
+level.
+
+`test/evaluation/satisfiability-decomposition.test.ts` (16 tests) compares
+against a verbatim copy of the old flat walk rather than against expected
+values. Both risky halves were confirmed to discriminate: dropping the
+`boundPremiseId` recursion fails exactly the two coupling tests out of 2436 and
+nothing else — no pre-existing test catches it — and restricting the forced-true
+write to a group's own columns fails three, one of which is pre-existing.
+
 ## Known gap
 
 `evaluateArgument`'s own `isPremiseSetSatisfiable` call still receives only the
