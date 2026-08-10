@@ -1,0 +1,10 @@
+slug: 2026-08-10-evaluation-time-satisfiability-still-reads-citations-as-free-while-checkvalidity-gives-them
+title: Evaluation-time satisfiability still reads citations as free while checkValidity
+  gives them
+created: '2026-08-10'
+resolution: null
+priority: 3
+effort: medium
+complexity: high
+tags:
+- bug
