@@ -75,6 +75,23 @@ export interface TEvaluablePremise {
     getExpressions(): TCorePropositionalExpression[]
     getChildExpressions(parentId: string): TCorePropositionalExpression[]
     getVariables(): TCorePropositionalVariable[]
+    /**
+     * Evaluate this premise under an assignment.
+     *
+     * **The result must depend only on the variables this premise reaches** —
+     * those named by `getExpressions()`, plus, transitively, those reached by
+     * the premise behind any internally premise-bound variable among them.
+     * Reading a variable outside that set is outside the contract even though
+     * the whole assignment is in scope, and the type cannot express the
+     * restriction.
+     *
+     * It is load-bearing rather than tidy: the satisfiability search splits the
+     * premises into groups that share no reachable variable and walks each over
+     * its own columns alone. A premise that consults a variable it does not
+     * reach is walked without that variable varying, so it can report
+     * satisfiable for a set that is not — which suppresses, or fails to
+     * suppress, derivation across the whole argument.
+     */
     evaluate(
         assignment: TCoreResolvedAssignment,
         options?: {
