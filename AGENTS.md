@@ -35,7 +35,6 @@
 - Git commit messages should not include any co-authoring content
 - When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.
 - All TypeScript development work must use the `brain-style` skill (specifically its TypeScript sub-skill). Invoke it before writing or reviewing any TypeScript code to ensure naming conventions, casing rules, and style guidelines are followed. Use the TypeScript language server (LSP tool) to verify types, check for errors, and navigate definitions during development.
-- After a major set of changes, offer a version cut: `pnpm version patch|minor|major`, then `/tcw:tcw-cut-version` for bump sizing and the rename/tag mechanics.
 
 ## Researching the OpenAI API
 
