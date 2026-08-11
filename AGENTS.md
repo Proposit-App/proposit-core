@@ -35,7 +35,7 @@
 - Git commit messages should not include any co-authoring content
 - When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.
 - All TypeScript development work must use the `brain-style` skill (specifically its TypeScript sub-skill). Invoke it before writing or reviewing any TypeScript code to ensure naming conventions, casing rules, and style guidelines are followed. Use the TypeScript language server (LSP tool) to verify types, check for errors, and navigate definitions during development.
-- After a major set of changes, offer `pnpm version patch|minor|major` (patch for most, minor for feature work, major only when instructed), then follow `/tcw:tcw-cut-version` for the rename/tag mechanics.
+- After a major set of changes, offer a version cut: `pnpm version patch|minor|major`, then `/tcw:tcw-cut-version` for bump sizing and the rename/tag mechanics.
 
 ## Researching the OpenAI API
 
@@ -49,7 +49,7 @@ Opt-in live integration suites exercise the provider against the real Responses 
 
 ## Change requests
 
-Incoming cross-repo change requests and work items are tracked through `tcw work` (the Work axis of TCW), not a hand-managed folder. A request delegated from the root or escalated from a sibling arrives in this node's `tcw` inbox; adopt it with `tcw work inbox list` → `tcw work inbox show <entry>` → `tcw work inbox accept <entry>`, which converts it into a durable backlog item you then plan and drive. See the root `AGENTS.md` for the cross-node flow.
+Incoming cross-repo change requests arrive in this node's `tcw work` inbox. Adopt them with the `tcw-work` skill's inbox stage; the workspace root's `AGENTS.md` carries the two local caveats about `--title` and re-linking `--initiative`.
 
 ## Commands
 
