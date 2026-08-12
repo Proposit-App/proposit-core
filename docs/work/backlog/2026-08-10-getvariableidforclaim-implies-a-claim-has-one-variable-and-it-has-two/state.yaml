@@ -1,9 +1,0 @@
-slug: 2026-08-10-getvariableidforclaim-implies-a-claim-has-one-variable-and-it-has-two
-title: getVariableIdForClaim implies a claim has one variable, and it has two
-created: '2026-08-10'
-resolution: null
-priority: 5
-effort: low
-complexity: low
-tags:
-- bug
