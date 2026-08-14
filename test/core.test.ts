@@ -22924,6 +22924,38 @@ describe("validateDerivationStructure", () => {
         expect(result.violations).toHaveLength(1)
         expect(result.violations[0].code).toBe(DERIVATION_STRUCTURE_INVALID)
     })
+
+    it("accepts a consequent naming any variable bound to the derived claim", () => {
+        // The derived claim binds two variables; the consequent names the
+        // second. Variables arrive id-sorted, so a first-match lookup picks
+        // the other one and calls a well-formed premise malformed — both
+        // variables stand for the derived claim.
+        const { premise, expressions, variables } = makeNakedQ()
+        const secondVariableId = "00000000-0000-0000-0000-00000000a999"
+        const bothVariables: TCorePropositionalVariable[] = [
+            ...variables,
+            {
+                id: secondVariableId,
+                argumentId,
+                argumentVersion: 1,
+                symbol: "Q2",
+                claimId,
+                claimVersion: 1,
+                checksum: "x",
+            },
+        ]
+        const rootNamingSecond = expressions.map((e) => ({
+            ...e,
+            variableId: secondVariableId,
+        }))
+        const result = validateDerivationStructure(
+            premise,
+            rootNamingSecond,
+            bothVariables
+        )
+        expect(result.ok).toBe(true)
+        expect(result.violations).toHaveLength(0)
+    })
 })
 
 describe("ensureClaimBoundVariable", () => {

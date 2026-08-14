@@ -11,14 +11,17 @@ import { DERIVATION_STRUCTURE_INVALID } from "../types/validation.js"
  * Validate that a derivation premise's expression tree conforms to the
  * structural rules in the v0.11.0 spec:
  *
- *   - Root must be either a single variable expression for the derived
- *     claim's variable (naked form), or an `implies`/`iff` operator with
+ *   - Root must be either a single variable expression for a variable bound
+ *     to the derived claim (naked form), or an `implies`/`iff` operator with
  *     arity 2.
  *   - When the root is `implies`/`iff`:
  *       - position 0 (antecedent slot) is any valid expression tree.
- *       - position 1 (consequent slot) is exactly the variable expression
- *         for the derived claim's variable. No operator subtree, no other
- *         variable, no formula wrapper.
+ *       - position 1 (consequent slot) is exactly a variable expression for
+ *         a variable bound to the derived claim. No operator subtree, no
+ *         variable bound elsewhere, no formula wrapper.
+ *
+ * A claim may bind more than one variable, and each of them stands for that
+ * claim — so any of them satisfies the consequent slot.
  *
  * Returns a `TInvariantValidationResult` with one violation per detected
  * rule break, all using `DERIVATION_STRUCTURE_INVALID` (the message
@@ -34,11 +37,18 @@ export function validateDerivationStructure(
 ): TInvariantValidationResult {
     const violations: TInvariantValidationResult["violations"] = []
 
-    // 1. Locate the claim-bound variable for derivedClaimId.
-    const consequentVariable = variables.find(
-        (v) => isClaimBound(v) && v.claimId === premise.derivedClaimId
+    // 1. Locate the claim-bound variables for derivedClaimId. A claim may bind
+    // more than one, and each of them stands for the derived claim — so the
+    // consequent slot naming any of them is well-formed. Matching only the
+    // first would call a correct premise malformed on nothing but id order.
+    const consequentVariableIds = new Set(
+        variables
+            .filter(
+                (v) => isClaimBound(v) && v.claimId === premise.derivedClaimId
+            )
+            .map((v) => v.id)
     )
-    if (consequentVariable === undefined) {
+    if (consequentVariableIds.size === 0) {
         violations.push({
             entityType: "premise",
             entityId: premise.id,
@@ -74,14 +84,15 @@ export function validateDerivationStructure(
 
     // 3. Validate root shape.
 
-    // Naked form: root is a variable expression for the derived claim's variable.
+    // Naked form: root is a variable expression for a variable bound to the
+    // derived claim.
     if (root.type === "variable") {
-        if (root.variableId !== consequentVariable.id) {
+        if (!consequentVariableIds.has(root.variableId)) {
             violations.push({
                 entityType: "premise",
                 entityId: premise.id,
                 code: DERIVATION_STRUCTURE_INVALID,
-                message: `Naked-form root variable ${root.variableId} does not reference derivedClaimId's variable ${consequentVariable.id}`,
+                message: `Naked-form root variable ${root.variableId} is not bound to derivedClaimId ${premise.derivedClaimId} (bound variables: ${[...consequentVariableIds].join(", ")})`,
             })
         }
         return { ok: violations.length === 0, violations }
@@ -109,14 +120,14 @@ export function validateDerivationStructure(
         const consequent = children[1]
         if (
             consequent.type !== "variable" ||
-            consequent.variableId !== consequentVariable.id
+            !consequentVariableIds.has(consequent.variableId)
         ) {
             violations.push({
                 entityType: "premise",
                 entityId: premise.id,
                 code: DERIVATION_STRUCTURE_INVALID,
                 message:
-                    "Consequent slot (position 1) must be the variable expression for derivedClaimId's variable",
+                    "Consequent slot (position 1) must be a variable expression for a variable bound to derivedClaimId",
             })
         }
         return { ok: violations.length === 0, violations }

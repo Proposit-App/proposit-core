@@ -471,6 +471,48 @@ describe("claimId ↔ variableId accessors", () => {
         expect(premiseBound).toBeDefined()
         expect(eng.getClaimIdForVariable(premiseBound.id)).toBeUndefined()
     })
+
+    // A claim may bind more than one variable: `addVariable` enforces no
+    // per-claim uniqueness, and this platform's persisted shape routinely
+    // carries two (an authored variable plus a derivation-synthesized one).
+    function twoVariablesOnOneClaim(): {
+        eng: ArgumentEngine
+        claimId: string
+    } {
+        const { eng, claimLib } = makeEngine()
+        const claim = claimLib.create({ id: "q", type: "normal" })
+        for (const [id, symbol] of [
+            ["v-2", "Q2"],
+            ["v-1", "Q1"],
+        ] as const) {
+            eng.addVariable({
+                id,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                symbol,
+                claimId: claim.id,
+                claimVersion: claim.version,
+            })
+        }
+        return { eng, claimId: claim.id }
+    }
+
+    it("lists every variable bound to a claim, in id order", () => {
+        const { eng, claimId } = twoVariablesOnOneClaim()
+        expect(eng.getVariableIdsForClaim(claimId)).toEqual(["v-1", "v-2"])
+    })
+
+    it("lists nothing for a claim no variable binds", () => {
+        const { eng } = makeEngine()
+        expect(eng.getVariableIdsForClaim("nope")).toEqual([])
+    })
+
+    it("answers the singular accessor with the lowest-id bound variable", () => {
+        const { eng, claimId } = twoVariablesOnOneClaim()
+        // Deterministic — variables enumerate id-sorted — but arbitrary with
+        // respect to the claim, which is why the plural accessor exists.
+        expect(eng.getVariableIdForClaim(claimId)).toBe("v-1")
+    })
 })
 
 describe("an argument with no supporting premises", () => {
