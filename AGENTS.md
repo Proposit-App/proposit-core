@@ -113,6 +113,8 @@ Defined in the `brain-style` skill. Enforced by ESLint (`@typescript-eslint/nami
 
 ## Documentation Sync
 
+Before reporting any code change complete, invoke the `tcw:documentation-sync` skill to evaluate the entries below. When writing an implementation plan, include explicit documentation-update tasks for every entry whose trigger is expected to fire.
+
 - `README.md` [Public-CLI-API] — Concepts, usage examples, and CLI sections
 - `README.md` "Invalid Constructions" section [Validation-Rules] — Update when adding, removing, or changing validation rules, thrown errors, error codes, operator constraints, cascade behaviors, or grammar config options
 - `docs/api-reference.md` [Public-API] — Full API reference for engines, standalone functions, and types; update when public API changes
@@ -128,5 +130,5 @@ Defined in the `brain-style` skill. Enforced by ESLint (`@typescript-eslint/nami
 - `src/lib/core/fork-library.ts` [Public-API] — JSDoc for ForkLibrary; update when ForkLibrary public methods change
 - `src/lib/core/fork-namespace.ts` [Public-API] — JSDoc for ForkNamespace; update when ForkNamespace public methods change
 - `examples/arguments/*.yaml` [Argument-Schema] — Example argument YAML files used by `test/examples.test.ts`; update when core argument schemas (`src/lib/schemata/`) or CLI-extended schemas (`src/cli/schemata.ts`, YAML import shape) change
-- `docs/release-notes/upcoming.md` [Public-API] — User-facing release notes; plain language, no jargon
-- `docs/changelogs/upcoming.md` [Any-Code-Change] — Developer changelog with commit hash ranges
+- `docs/release-notes/upcoming.md` [Public-API]
+- `docs/changelogs/upcoming.md` [Any-Code-Change]
