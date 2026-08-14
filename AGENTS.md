@@ -35,7 +35,6 @@
 - Git commit messages should not include any co-authoring content
 - When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.
 - All TypeScript development work must use the `brain-style` skill (specifically its TypeScript sub-skill). Invoke it before writing or reviewing any TypeScript code to ensure naming conventions, casing rules, and style guidelines are followed. Use the TypeScript language server (LSP tool) to verify types, check for errors, and navigate definitions during development.
-- After completing a major set of changes, offer to cut a new version via `pnpm version patch|minor|major`. Use `patch` for most changes, `minor` for major feature work, and `major` only when explicitly instructed. When versioning, rename `docs/release-notes/upcoming.md` to `docs/release-notes/v{version}.md` and `docs/changelogs/upcoming.md` to `docs/changelogs/v{version}.md`, then start fresh `upcoming.md` files for subsequent work. After the version bump commit, create a git tag at that commit: `git tag v{version}`. This tag triggers the release and docs deployment workflows.
 
 ## Researching the OpenAI API
 
@@ -49,7 +48,7 @@ Opt-in live integration suites exercise the provider against the real Responses 
 
 ## Change requests
 
-Incoming cross-repo change requests and work items are tracked through `tcw work` (the Work axis of TCW), not a hand-managed folder. A request delegated from the root or escalated from a sibling arrives in this node's `tcw` inbox; adopt it with `tcw work inbox list` → `tcw work inbox show <entry>` → `tcw work inbox accept <entry>`, which converts it into a durable backlog item you then plan and drive. See the root `AGENTS.md` for the cross-node flow.
+Incoming cross-repo change requests arrive in this node's `tcw work` inbox. Adopt them with the `tcw-work` skill's inbox stage; the workspace root's `AGENTS.md` carries the two local caveats about `--title` and re-linking `--initiative`.
 
 ## Commands
 
