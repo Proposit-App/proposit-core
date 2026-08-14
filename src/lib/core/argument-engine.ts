@@ -2901,8 +2901,37 @@ export class ArgumentEngine<
     }
 
     /**
-     * Returns the ID of the claim-bound variable bound to `claimId` in this
-     * argument, or `undefined` if no such variable exists. Pure lookup — it
+     * Returns the IDs of every claim-bound variable bound to `claimId` in this
+     * argument, in the engine's id-sorted variable order, or `[]` when none is.
+     * Pure lookup — it never creates a variable (contrast
+     * `ensureClaimBoundVariable`).
+     *
+     * A claim may bind more than one variable: `addVariable` enforces no
+     * per-claim uniqueness, so an argument can carry several variables
+     * standing for the same proposition, each reached — and valued —
+     * independently by evaluation. Any translation that must not lose one of
+     * them (reading propagated values back onto a claim, say) belongs here
+     * rather than on the singular accessor.
+     *
+     * @since 4.1.0
+     */
+    public getVariableIdsForClaim(claimId: string): string[] {
+        const ids: string[] = []
+        for (const variable of this.variables.toArray()) {
+            const base = variable as unknown as TCorePropositionalVariable
+            if (
+                isClaimBound(base) &&
+                (base as unknown as TClaimBoundVariable).claimId === claimId
+            ) {
+                ids.push(variable.id)
+            }
+        }
+        return ids
+    }
+
+    /**
+     * Returns the ID of the lowest-id claim-bound variable bound to `claimId`
+     * in this argument, or `undefined` if no variable is. Pure lookup — it
      * never creates a variable (contrast `ensureClaimBoundVariable`).
      *
      * The engine's evaluation surface is variable-keyed, but consumers key
@@ -2910,19 +2939,16 @@ export class ArgumentEngine<
      * `getClaimIdForVariable`) is the documented seam for translating between
      * the two.
      *
+     * **It answers for one variable, and a claim may bind several.** The pick
+     * is deterministic and snapshot-stable — variables enumerate sorted by id
+     * — but arbitrary with respect to the claim: it is not "the authored one"
+     * or "the one an evaluation settled". When a claim may bind more than one
+     * and losing the others would be wrong, use `getVariableIdsForClaim`.
+     *
      * @since 3.1.0
      */
     public getVariableIdForClaim(claimId: string): string | undefined {
-        for (const variable of this.variables.toArray()) {
-            const base = variable as unknown as TCorePropositionalVariable
-            if (
-                isClaimBound(base) &&
-                (base as unknown as TClaimBoundVariable).claimId === claimId
-            ) {
-                return variable.id
-            }
-        }
-        return undefined
+        return this.getVariableIdsForClaim(claimId)[0]
     }
 
     /**

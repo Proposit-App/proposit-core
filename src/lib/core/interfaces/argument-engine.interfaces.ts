@@ -700,11 +700,31 @@ export interface TArgumentEvaluation {
         options?: TCoreArgumentEvaluationOptions
     ): TCoreArgumentEvaluationResult
     /**
-     * Returns the ID of the claim-bound variable bound to `claimId`, or
-     * `undefined` if none exists. Pure lookup — never creates a variable
+     * Returns the IDs of every claim-bound variable bound to `claimId`, in
+     * id-sorted order, or `[]` when none is. Pure lookup — never creates a
+     * variable (contrast `ensureClaimBoundVariable`).
+     *
+     * A claim may bind more than one variable — `addVariable` enforces no
+     * per-claim uniqueness — and each is valued independently by evaluation.
+     * Use this, not the singular accessor, wherever dropping the others would
+     * be wrong.
+     *
+     * @param claimId - The claim whose bound variables to look up.
+     * @returns The variable IDs, id-sorted; empty when the claim binds none.
+     *
+     * @since 4.1.0
+     */
+    getVariableIdsForClaim(claimId: string): string[]
+    /**
+     * Returns the ID of the lowest-id claim-bound variable bound to `claimId`,
+     * or `undefined` if none exists. Pure lookup — never creates a variable
      * (contrast `ensureClaimBoundVariable`). The documented seam, with its
      * inverse, for translating between the variable-keyed evaluation surface
      * and consumers' `claimId`-keyed state.
+     *
+     * A claim may bind several variables. The pick among them is deterministic
+     * (variables enumerate id-sorted) but arbitrary with respect to the claim
+     * — reach for `getVariableIdsForClaim` when that matters.
      *
      * @param claimId - The claim whose bound variable to look up.
      * @returns The variable ID, or `undefined`.

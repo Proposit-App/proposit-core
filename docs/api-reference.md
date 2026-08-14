@@ -434,9 +434,19 @@ Convenience that merges caller `overrides` (`TCoreVariableAssignment`) over `der
 
 ---
 
+### `getVariableIdsForClaim(claimId)` → `string[]` (since 4.1.0)
+
+Returns the IDs of **every** claim-bound variable bound to `claimId`, in the engine's id-sorted variable order, or `[]` when the claim binds none. **Pure lookup — never creates a variable** (contrast `ensureClaimBoundVariable`).
+
+**A claim may bind more than one variable.** `addVariable` enforces no per-claim uniqueness, so an argument can carry several variables standing for the same proposition — and evaluation reaches and values each of them independently, so two variables on one claim can end up with different (even opposite) settled values. Any translation that must not lose one of them — reading propagated values back onto a claim, deciding what a claim's chip should show — belongs on this accessor, not the singular one below.
+
+---
+
 ### `getVariableIdForClaim(claimId)` → `string | undefined` (since 3.1.0)
 
-Returns the ID of the claim-bound variable bound to `claimId`, or `undefined` if none exists. **Pure lookup — never creates a variable** (contrast `ensureClaimBoundVariable`). This accessor and its inverse are the documented seam for translating between the variable-keyed evaluation surface (`deriveDefaultAssignment`, `evaluate`) and consumers' `claimId`-keyed state.
+Returns the ID of the **lowest-id** claim-bound variable bound to `claimId`, or `undefined` if none exists. **Pure lookup — never creates a variable** (contrast `ensureClaimBoundVariable`). This accessor and its inverse are the documented seam for translating between the variable-keyed evaluation surface (`deriveDefaultAssignment`, `evaluate`) and consumers' `claimId`-keyed state.
+
+It answers for one variable, and a claim may bind several. The pick is deterministic and snapshot-stable — variables enumerate sorted by id — but it is arbitrary _with respect to the claim_: lowest-id is not "the authored one" and not "the one an evaluation settled". Use it where a claim is known to bind one variable, or where any of them will do; use `getVariableIdsForClaim` otherwise.
 
 ---
 
