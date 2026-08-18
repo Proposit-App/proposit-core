@@ -13,8 +13,8 @@ per claim — an authored variable and a derivation-synthesized one.
 `ensureClaimBoundVariable` is idempotent and reuses the first match, so the
 engine never creates the second itself, but it does not prevent one either.
 Evaluation then reaches and values each independently, so the two can settle
-differently — `@proposit/shared` reports that case as
-`TReviewOverlay.conflictedClaimIds`.
+differently — `@proposit/shared` resolves that case to `CONTESTED` on
+`TReviewOverlay.claimPropagatedValues`.
 
 ## Changed
 
