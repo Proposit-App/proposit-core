@@ -2,7 +2,7 @@
 // own assertion, recompute closure from what is left, and ask again.
 
 import { describe, it, expect } from "vitest"
-import { buildArgument, implies, v } from "./fixtures.js"
+import { and, buildArgument, implies, not, or, v } from "./fixtures.js"
 
 describe("conclusion attribution", () => {
     it("reports a conclusion the reader supplied as not reached by the argument", () => {
@@ -159,5 +159,134 @@ describe("conclusion attribution", () => {
         })
 
         expect(result.claimAttribution).toBeUndefined()
+    })
+
+    it("reports the reported shape as unreached with nothing left open", () => {
+        // Every claim answered `true`, every step granted, and the conclusion
+        // still is not reached on the argument's own merits: the single
+        // supporting premise forces nothing the reader had not already said.
+        const built = buildArgument({
+            conclusion: implies(or(v("A"), not(v("B"))), v("C")),
+            premises: [implies(v("A"), and(v("B"), v("C")))],
+        })
+
+        const result = built.engine.evaluate({
+            variables: {
+                [built.variableId("A")]: true,
+                [built.variableId("B")]: true,
+                [built.variableId("C")]: true,
+                [built.variableId("D")]: true,
+            },
+            operatorAssignments: {
+                [built.conclusionRootId]: "accepted",
+                [built.rootIds[0]]: "accepted",
+            },
+        })
+
+        expect(result.conclusionTrue).toBe(true)
+        expect(result.premisesHoldConclusionFalse).toBe(false)
+        expect(result.struckPremiseIds).toEqual([])
+        expect(result.survivingSupportingPremiseCount).toBe(1)
+        expect(result.premiseSetSatisfiable).toBe(true)
+        expect(result.contestedVariableIds).toEqual([])
+        expect(result.conclusionAttribution).toEqual({
+            assertedByReader: true,
+            reachedWithoutAssertion: false,
+        })
+        // Nothing is left open: every entry traces back to the reader.
+        expect(
+            Object.values(result.variableProvenance!).map((p) => p.origin)
+        ).toEqual(["asserted", "asserted", "asserted"])
+    })
+
+    it("records what provenance reports for a bare-variable derivation premise", () => {
+        // (a) A derivation premise whose tree is the bare derived claim.
+        //
+        // This cannot express "the derivation premise asserts the synthesized
+        // variable alone". `buildArgument` swaps the freshly created premise's
+        // naked-Q placeholder root for the tree given, and `v("C")` binds
+        // claim C's *authored* variable — so the swap reproduces naked-Q form,
+        // which the evaluator skips. The premise exists but contributes
+        // nothing, and provenance is identical to the no-derivation case.
+        const bare = buildArgument({
+            conclusion: implies(or(v("A"), not(v("B"))), v("C")),
+            premises: [implies(v("A"), and(v("B"), v("C")))],
+            derivations: [{ derivedClaim: "C", tree: v("C") }],
+        })
+
+        const bareResult = bare.engine.evaluate({
+            variables: {
+                [bare.variableId("A")]: true,
+                [bare.variableId("B")]: true,
+                [bare.variableId("C")]: true,
+                [bare.variableId("D")]: true,
+            },
+            operatorAssignments: {
+                [bare.conclusionRootId]: "accepted",
+                [bare.rootIds[0]]: "accepted",
+            },
+        })
+
+        expect(bareResult.survivingSupportingPremiseCount).toBe(1)
+        expect(
+            Object.entries(bareResult.variableProvenance!)
+                .map(([id, p]) => [id, p.origin] as const)
+                .sort()
+        ).toEqual(
+            [
+                [bare.variableId("A"), "asserted"],
+                [bare.variableId("B"), "asserted"],
+                [bare.variableId("C"), "asserted"],
+            ].sort()
+        )
+
+        // (b) A derivation premise carrying a real antecedent. Its consequent
+        // is still claim A's authored variable — the same one the reader
+        // answered — so every entry reads `asserted` and none reads
+        // `unassigned`. A shape where the derivation's consequent is a
+        // *second*, engine-synthesized variable on the same claim is not
+        // reachable through `buildArgument`: `ensureClaimBoundVariable` reuses
+        // the authored variable the fixture already created.
+        const derived = buildArgument({
+            conclusion: implies(or(v("A"), not(v("B"))), v("C")),
+            premises: [implies(v("A"), and(v("B"), v("C")))],
+            derivations: [
+                {
+                    derivedClaim: "A",
+                    tree: implies(or(v("P8"), v("P9")), v("A")),
+                },
+            ],
+        })
+
+        const derivedResult = derived.engine.evaluate({
+            variables: {
+                [derived.variableId("A")]: true,
+                [derived.variableId("B")]: true,
+                [derived.variableId("C")]: true,
+                [derived.variableId("D")]: true,
+                [derived.variableId("P8")]: true,
+                [derived.variableId("P9")]: true,
+            },
+            operatorAssignments: {
+                [derived.conclusionRootId]: "accepted",
+                [derived.rootIds[0]]: "accepted",
+                [derived.rootIds[1]]: "accepted",
+            },
+        })
+
+        expect(derivedResult.survivingSupportingPremiseCount).toBe(2)
+        expect(
+            Object.entries(derivedResult.variableProvenance!)
+                .map(([id, p]) => [id, p.origin] as const)
+                .sort()
+        ).toEqual(
+            [
+                [derived.variableId("A"), "asserted"],
+                [derived.variableId("B"), "asserted"],
+                [derived.variableId("C"), "asserted"],
+                [derived.variableId("P8"), "asserted"],
+                [derived.variableId("P9"), "asserted"],
+            ].sort()
+        )
     })
 })
