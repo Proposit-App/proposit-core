@@ -110,25 +110,3 @@ All relative imports in `src/cli/` and `src/lib/` must end in `.js`. Directory i
 ## Naming conventions
 
 Defined in the `brain-style` skill. Enforced by ESLint (`@typescript-eslint/naming-convention` and `check-file/filename-naming-convention`).
-
-## Documentation Sync
-
-Before reporting any code change complete, invoke the `tcw:documentation-sync` skill to evaluate the entries below. When writing an implementation plan, include explicit documentation-update tasks for every entry whose trigger is expected to fire.
-
-- `README.md` [Public-CLI-API] — Concepts, usage examples, and CLI sections
-- `README.md` "Invalid Constructions" section [Validation-Rules] — Update when adding, removing, or changing validation rules, thrown errors, error codes, operator constraints, cascade behaviors, or grammar config options
-- `docs/api-reference.md` [Public-API] — Full API reference for engines, standalone functions, and types; update when public API changes
-- `AGENTS.md` [Routing] — Repo scope, the invariants list, and routing pointers (`CLAUDE.md` is a symlink to this file). Fires only when a NEW easy-to-violate invariant or a NEW canonical doc route is introduced — NOT when an API detail changes (that belongs to `docs/api-reference.md`).
-- `CLI_EXAMPLES.md` [Public-CLI-API] — Walkthrough examples and the complete script
-- `scripts/smoke-test.sh` [Public-CLI-API] — Add coverage for new commands, flags, or behaviors
-- `src/lib/core/interfaces/argument-engine.interfaces.ts` [Public-Engine-API] — JSDoc for ArgumentEngine interface methods; update when ArgumentEngine public method signatures, parameters, return types, or thrown errors change
-- `src/lib/core/interfaces/premise-engine.interfaces.ts` [Public-Engine-API] — JSDoc for PremiseEngine interface methods; update when PremiseEngine public method signatures, parameters, return types, or thrown errors change
-- `src/lib/core/interfaces/shared.interfaces.ts` [Public-Engine-API] — JSDoc for shared engine interfaces (TDisplayable, THierarchicalChecksummable); update when shared method signatures change
-- `src/lib/core/interfaces/library.interfaces.ts` [Public-Engine-API] — JSDoc for `TClaimLookup`, `TClaimConnectionLookup`, `TClaimConnectionLibraryManagement`, and library snapshot interfaces (including `TClaimLibrarySnapshot`, `TClaimConnectionLibrarySnapshot`, `TArgumentLibrarySnapshot`, `TForkLibrarySnapshot`, `TPropositCoreSnapshot`); update when library interface signatures change
-- `src/lib/core/proposit-core.ts` [Public-API] — JSDoc for PropositCore; update when PropositCore public methods change
-- `src/lib/core/argument-library.ts` [Public-API] — JSDoc for ArgumentLibrary; update when ArgumentLibrary public methods change
-- `src/lib/core/fork-library.ts` [Public-API] — JSDoc for ForkLibrary; update when ForkLibrary public methods change
-- `src/lib/core/fork-namespace.ts` [Public-API] — JSDoc for ForkNamespace; update when ForkNamespace public methods change
-- `examples/arguments/*.yaml` [Argument-Schema] — Example argument YAML files used by `test/examples.test.ts`; update when core argument schemas (`src/lib/schemata/`) or CLI-extended schemas (`src/cli/schemata.ts`, YAML import shape) change
-- `docs/release-notes/upcoming.md` [Public-API]
-- `docs/changelogs/upcoming.md` [Any-Code-Change]

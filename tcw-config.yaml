@@ -7,3 +7,93 @@ work:
     tags:
         - bug
         - product
+    documentation:
+        - path: README.md
+          trigger: Public-CLI-API
+          description: Concepts, usage examples, and CLI sections.
+        - path: README.md#invalid-constructions
+          trigger: Validation-Rules
+          description: >-
+              The "Invalid Constructions" section of `README.md`. Update when adding, removing,
+              or changing validation rules, thrown errors, error codes, operator
+              constraints, cascade behaviors, or grammar config options.
+        - path: docs/api-reference.md
+          trigger: Public-API
+          description: >-
+              Full API reference for engines, standalone functions, and types;
+              update when the public API changes.
+        - path: AGENTS.md
+          trigger: Routing
+          description: >-
+              Repo scope, the invariants list, and routing pointers (`CLAUDE.md`
+              is a symlink to this file). Fires only when a NEW easy-to-violate
+              invariant or a NEW canonical doc route is introduced — NOT when an
+              API detail changes (that belongs to `docs/api-reference.md`).
+        - path: CLI_EXAMPLES.md
+          trigger: Public-CLI-API
+          description: Walkthrough examples and the complete script.
+        - path: scripts/smoke-test.sh
+          trigger: Public-CLI-API
+          description: Add coverage for new commands, flags, or behaviors.
+        - path: src/lib/core/interfaces/argument-engine.interfaces.ts
+          trigger: Public-Engine-API
+          description: >-
+              JSDoc for ArgumentEngine interface methods; update when
+              ArgumentEngine public method signatures, parameters, return types,
+              or thrown errors change.
+        - path: src/lib/core/interfaces/premise-engine.interfaces.ts
+          trigger: Public-Engine-API
+          description: >-
+              JSDoc for PremiseEngine interface methods; update when
+              PremiseEngine public method signatures, parameters, return types,
+              or thrown errors change.
+        - path: src/lib/core/interfaces/shared.interfaces.ts
+          trigger: Public-Engine-API
+          description: >-
+              JSDoc for shared engine interfaces (TDisplayable,
+              THierarchicalChecksummable); update when shared method signatures
+              change.
+        - path: src/lib/core/interfaces/library.interfaces.ts
+          trigger: Public-Engine-API
+          description: >-
+              JSDoc for `TClaimLookup`, `TClaimConnectionLookup`,
+              `TClaimConnectionLibraryManagement`, and library snapshot
+              interfaces (including `TClaimLibrarySnapshot`,
+              `TClaimConnectionLibrarySnapshot`, `TArgumentLibrarySnapshot`,
+              `TForkLibrarySnapshot`, `TPropositCoreSnapshot`); update when
+              library interface signatures change.
+        - path: src/lib/core/proposit-core.ts
+          trigger: Public-API
+          description: >-
+              JSDoc for PropositCore; update when PropositCore public methods
+              change.
+        - path: src/lib/core/argument-library.ts
+          trigger: Public-API
+          description: >-
+              JSDoc for ArgumentLibrary; update when ArgumentLibrary public
+              methods change.
+        - path: src/lib/core/fork-library.ts
+          trigger: Public-API
+          description: >-
+              JSDoc for ForkLibrary; update when ForkLibrary public methods
+              change.
+        - path: src/lib/core/fork-namespace.ts
+          trigger: Public-API
+          description: >-
+              JSDoc for ForkNamespace; update when ForkNamespace public methods
+              change.
+        - path: examples/arguments/*.yaml
+          trigger: Argument-Schema
+          description: >-
+              Example argument YAML files used by `test/examples.test.ts`;
+              update when core argument schemas (`src/lib/schemata/`) or
+              CLI-extended schemas (`src/cli/schemata.ts`, YAML import shape)
+              change.
+        - path: docs/release-notes/upcoming.md
+          trigger: Public-API
+          description: >-
+              Release notes for the next published version, written for the
+              developers who consume this package.
+        - path: docs/changelogs/upcoming.md
+          trigger: Any-Code-Change
+          description: Developer changelog; technical, grouped by category.
