@@ -707,7 +707,23 @@ export function evaluateArgument(
             (acc, result) => belnapAnd(acc, result.rootValue ?? null),
             true
         )
-        const survivingSupport = surviving(supportingEvaluations)
+        // A derivation premise is engine-synthesized wiring: it records
+        // that a claim follows from its citation or axiom, not something the
+        // author offered in support of the conclusion. The exclusion is by
+        // premise type on purpose — `listSupportingPremises` selects on
+        // `isInference()`, true of any implies/iff root, which cannot tell a
+        // populated derivation premise from authored support. Without this, a
+        // reader's answer about a claim no authored premise references moves
+        // the aggregate.
+        const derivationPremiseIds = new Set(
+            supportingPremises
+                .filter((pm) => pm.getPremiseType?.() === "derivation")
+                .map((pm) => pm.getId())
+        )
+        const authoredSupport = supportingEvaluations.filter(
+            (result) => !derivationPremiseIds.has(result.premiseId)
+        )
+        const survivingSupport = surviving(authoredSupport)
         const survivingSupportingPremisesTrue =
             survivingSupport.reduce<TCoreQuadrivalentValue>(
                 (acc, result) => belnapAnd(acc, result.rootValue ?? null),
@@ -721,7 +737,7 @@ export function evaluateArgument(
         // the conclusion failed. An argument authored with no supporting
         // premises is the entailment-from-nothing case and keeps its answer.
         const allSupportStruck =
-            supportingEvaluations.length > 0 && survivingSupport.length === 0
+            authoredSupport.length > 0 && survivingSupport.length === 0
         const premisesHoldConclusionFalse = allSupportStruck
             ? null
             : belnapAnd(
