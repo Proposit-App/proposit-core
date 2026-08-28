@@ -1,5 +1,34 @@
 # Upcoming
 
+## Fixed
+
+### The surviving-supporting-premises aggregate no longer counts derivation premises
+
+`survivingSupportingPremisesTrue`, `survivingSupportingPremiseCount` and
+`allSupportStruck` now range over authored supporting premises only. Premises
+with `type: "derivation"` are excluded.
+
+The fold in `evaluateArgument` ranged over everything
+`listSupportingPremises()` returned, and that method selects by tree shape —
+`isInference()`, true of any `implies`/`iff` root. A citation- or axiom-backed
+derivation premise is `IMPLIES(source, Q)`, so it satisfied that test and
+landed in the aggregate. The naked-Q filter on the evaluation context could not
+catch it either: `isNakedQDerivationPremise` requires a `variable` root, which
+a populated derivation premise does not have. The consequence was that a
+reader's answer about a claim no authored premise references moved
+`survivingSupportingPremisesTrue` and inflated the count.
+
+The exclusion is by premise type, at the fold, deliberately. Filtering at the
+bucket split instead would move the premise into `constraintPremises` and flip
+`isAdmissibleAssignment` — the same defect under a different field.
+
+Everything above the fold is unchanged: the bucket split, the striking rule
+(derivation premises were already exempt), the satisfiability search, the
+propagation closure, and both reported per-premise lists. `checkValidity` is
+unchanged — a derivation premise is a genuine logical constraint and belongs in
+that search. `ArgumentEngine.listSupportingPremises` still returns derivation
+premises, which is correct: every derivation premise has `role='supporting'`.
+
 ## Testing
 
 ### Characterisation coverage for attribution on an all-asserted argument

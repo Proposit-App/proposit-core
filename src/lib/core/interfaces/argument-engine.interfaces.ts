@@ -591,8 +591,10 @@ export interface TArgumentEvaluation {
      * search over the premise set alone.
      *
      * The result is a set of orthogonal facts, not a single outcome. In
-     * particular `survivingSupportingPremisesTrue` is vacuously `true` when
-     * every supporting premise is struck, so whether the argument reached its
+     * particular `survivingSupportingPremisesTrue` covers the argument's
+     * authored supporting premises — derivation premises are excluded, being
+     * engine wiring rather than authored support — and is vacuously `true`
+     * when every one of them is struck, so whether the argument reached its
      * conclusion is `conclusionAttribution.reachedWithoutAssertion` and never
      * that field. A rejected operator strikes its whole premise and asserts
      * nothing.

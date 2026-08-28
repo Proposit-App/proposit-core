@@ -544,7 +544,7 @@ flowchart LR
 
 Assignments use `TCoreExpressionAssignment`, which carries both variable truth values (three-valued: `true`, `false`, or `null` for unknown) and the reader's operator decisions (`"accepted"`, `"rejected"`, or absent).
 
-**An operator decision is not a truth value.** `"accepted"` grants the step, so propagation may derive values through it. `"rejected"` withholds the step and strikes the whole premise the operator lives in from the evaluated set — it asserts nothing, and never forces the expression or its children to `false`. The conclusion premise and derivation premises are never struck; a struck premise is still evaluated and still returned, so you can render it crossed out.
+**An operator decision is not a truth value.** `"accepted"` grants the step, so propagation may derive values through it. `"rejected"` withholds the step and strikes the whole premise the operator lives in from the evaluated set — it asserts nothing, and never forces the expression or its children to `false`. The conclusion premise and derivation premises are never struck; a struck premise is still evaluated and still returned, so you can render it crossed out. Derivation premises are also not counted among the supporting premises: `survivingSupportingPremisesTrue` and `survivingSupportingPremiseCount` range over authored support only, so a reader's answer about a claim the argument reaches only through its citation does not move them.
 
 ```typescript
 const result = eng.evaluate({
