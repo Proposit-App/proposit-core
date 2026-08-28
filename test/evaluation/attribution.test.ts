@@ -246,7 +246,9 @@ describe("conclusion attribution", () => {
         // `unassigned`. A shape where the derivation's consequent is a
         // *second*, engine-synthesized variable on the same claim is not
         // reachable through `buildArgument`: `ensureClaimBoundVariable` reuses
-        // the authored variable the fixture already created.
+        // the authored variable the fixture already created. The derivation
+        // premise is excluded from the surviving count by type, so the count
+        // is the single authored supporting premise.
         const derived = buildArgument({
             conclusion: implies(or(v("A"), not(v("B"))), v("C")),
             premises: [implies(v("A"), and(v("B"), v("C")))],
@@ -274,7 +276,7 @@ describe("conclusion attribution", () => {
             },
         })
 
-        expect(derivedResult.survivingSupportingPremiseCount).toBe(2)
+        expect(derivedResult.survivingSupportingPremiseCount).toBe(1)
         expect(
             Object.entries(derivedResult.variableProvenance!)
                 .map(([id, p]) => [id, p.origin] as const)
