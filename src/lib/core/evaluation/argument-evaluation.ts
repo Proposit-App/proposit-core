@@ -26,6 +26,7 @@ import {
     belnapAnd,
     belnapNot,
     belnapOr,
+    belnapXor,
     belnapImplies,
     belnapIff,
     hasFalseComponent,
@@ -155,6 +156,12 @@ export function evaluateSubtree(
         case "or":
             return children.reduce<TCoreQuadrivalentValue>(
                 (acc, child) => belnapOr(acc, recurse(child)),
+                false
+            )
+        case "xor":
+            // `false` is the identity for parity, as `true` is for `and`.
+            return children.reduce<TCoreQuadrivalentValue>(
+                (acc, child) => belnapXor(acc, recurse(child)),
                 false
             )
         case "implies":
@@ -296,6 +303,11 @@ export function closeUnderAcceptedOperators(
             case "or":
                 return children.reduce<TCoreQuadrivalentValue>(
                     (acc, child) => belnapOr(acc, resolveValue(child.id)),
+                    false
+                )
+            case "xor":
+                return children.reduce<TCoreQuadrivalentValue>(
+                    (acc, child) => belnapXor(acc, resolveValue(child.id)),
                     false
                 )
             case "implies": {
@@ -454,6 +466,62 @@ export function closeUnderAcceptedOperators(
                             .filter((_, other) => other !== index)
                             .map((sibling) => sibling.id)
                         if (mergeIntoChild(child, true, stepFrom(consumed)))
+                            changed = true
+                    }
+                    break
+                }
+                case "xor": {
+                    // A ⊻ B ⊻ C accepted (= odd parity): a child is determined
+                    // exactly when its siblings are. Each sibling readable only
+                    // one way fixes a parity bit, and the child takes whatever
+                    // remainder makes the count odd. A sibling readable *both*
+                    // ways leaves both parities open, so both answers merge in
+                    // and the child lands on CONTESTED. A sibling readable
+                    // neither way carries no parity at all, and nothing is
+                    // forced — parity depends on every operand, so one unknown
+                    // operand hides the whole relation.
+                    //
+                    // Both triggers read truth components, which the closure
+                    // only ever gains. A later pass can therefore add a forced
+                    // value but never retract one — including when a sibling
+                    // becomes readable both ways, whose CONTESTED answer
+                    // subsumes the single value an earlier pass merged. That is
+                    // what keeps the closure monotone, and so order-independent.
+                    for (const [index, child] of children.entries()) {
+                        const siblings = children.filter(
+                            (_, other) => other !== index
+                        )
+                        const siblingValues = siblings.map((sibling) =>
+                            resolveValue(sibling.id)
+                        )
+                        const everySiblingReadable = siblingValues.every(
+                            (value) =>
+                                hasTrueComponent(value) ||
+                                hasFalseComponent(value)
+                        )
+                        if (!everySiblingReadable) continue
+
+                        const step = stepFrom(
+                            siblings.map((sibling) => sibling.id)
+                        )
+                        const anySiblingAmbiguous = siblingValues.some(
+                            (value) =>
+                                hasTrueComponent(value) &&
+                                hasFalseComponent(value)
+                        )
+                        if (anySiblingAmbiguous) {
+                            if (mergeIntoChild(child, true, step))
+                                changed = true
+                            if (mergeIntoChild(child, false, step))
+                                changed = true
+                            continue
+                        }
+
+                        const trueSiblings =
+                            siblingValues.filter(hasTrueComponent).length
+                        if (
+                            mergeIntoChild(child, trueSiblings % 2 === 0, step)
+                        )
                             changed = true
                     }
                     break

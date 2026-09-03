@@ -13,7 +13,7 @@ export type TNode =
     | { kind: "var"; name: string }
     | {
           kind: "op"
-          operator: "not" | "and" | "or" | "implies" | "iff"
+          operator: "not" | "and" | "or" | "xor" | "implies" | "iff"
           kids: TNode[]
       }
 
@@ -31,6 +31,11 @@ export const and = (...kids: TNode[]): TNode => ({
 export const or = (...kids: TNode[]): TNode => ({
     kind: "op",
     operator: "or",
+    kids,
+})
+export const xor = (...kids: TNode[]): TNode => ({
+    kind: "op",
+    operator: "xor",
     kids,
 })
 export const implies = (left: TNode, right: TNode): TNode => ({
