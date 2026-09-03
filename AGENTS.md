@@ -48,6 +48,8 @@ Opt-in live integration suites exercise the provider against the real Responses 
 
 ## Change requests
 
+This node's board lives in the `proposit-orchestration` repository. Its location is declared twice — a path relative to this checkout, for a workspace that has that repository beside this one, and the repository it comes from, for a checkout that does not. The local path wins whenever it resolves, so a workstation holding the whole workspace contacts nothing; elsewhere, `tcw provision` obtains what is missing.
+
 Incoming cross-repo change requests arrive in this node's `tcw work` inbox. Adopt them with the `tcw-work` skill's inbox stage; the workspace root's `AGENTS.md` carries the two local caveats about `--title` and re-linking `--initiative`.
 
 ## Commands
