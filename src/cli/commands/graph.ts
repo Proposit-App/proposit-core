@@ -54,6 +54,8 @@ function operatorLabel(op: string): string {
             return "AND"
         case "or":
             return "OR"
+        case "xor":
+            return "XOR"
         case "implies":
             return "IMPLIES"
         case "iff":

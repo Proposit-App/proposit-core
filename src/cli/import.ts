@@ -39,6 +39,7 @@ function validateRootOnly(
             break
         case "and":
         case "or":
+        case "xor":
             for (const operand of ast.operands) {
                 validateRootOnly(operand, false, premiseIndex, premiseTitle)
             }
@@ -62,6 +63,7 @@ function collectVariableNames(ast: TFormulaAST, names: Set<string>): void {
             break
         case "and":
         case "or":
+        case "xor":
             for (const operand of ast.operands) {
                 collectVariableNames(operand, names)
             }
@@ -129,7 +131,8 @@ function buildExpressions(
             return id
         }
         case "and":
-        case "or": {
+        case "or":
+        case "xor": {
             // Non-not operators cannot be direct children of operators.
             // When this node has an operator parent, insert a formula wrapper.
             let effectiveParentId = parentId

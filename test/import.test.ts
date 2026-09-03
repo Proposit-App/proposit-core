@@ -321,6 +321,97 @@ describe("parseFormula", () => {
 })
 
 // ---------------------------------------------------------------------------
+// parseFormula — exclusive disjunction
+// ---------------------------------------------------------------------------
+
+describe("parseFormula — exclusive disjunction", () => {
+    const xorOfPandQ: TFormulaAST = {
+        type: "xor",
+        operands: [
+            { type: "variable", name: "P" },
+            { type: "variable", name: "Q" },
+        ],
+    }
+
+    it.each([
+        ["\u22BB", "P \u22BB Q"],
+        ["\u2295", "P \u2295 Q"],
+        ["^", "P ^ Q"],
+        ["xor", "P xor Q"],
+        ["XOR", "P XOR Q"],
+    ])("parses exclusive disjunction written as %s", (_token, input) => {
+        expect(parseFormula(input)).toEqual(xorOfPandQ)
+    })
+
+    it("flattens a chain into one node with three operands", () => {
+        expect(parseFormula("P \u22BB Q \u22BB R")).toEqual({
+            type: "xor",
+            operands: [
+                { type: "variable", name: "P" },
+                { type: "variable", name: "Q" },
+                { type: "variable", name: "R" },
+            ],
+        })
+    })
+
+    it("binds looser than disjunction", () => {
+        expect(parseFormula("P \u2228 Q \u22BB R")).toEqual({
+            type: "xor",
+            operands: [
+                {
+                    type: "or",
+                    operands: [
+                        { type: "variable", name: "P" },
+                        { type: "variable", name: "Q" },
+                    ],
+                },
+                { type: "variable", name: "R" },
+            ],
+        })
+    })
+
+    it("binds looser than conjunction", () => {
+        expect(parseFormula("P \u2227 Q \u22BB R")).toEqual({
+            type: "xor",
+            operands: [
+                {
+                    type: "and",
+                    operands: [
+                        { type: "variable", name: "P" },
+                        { type: "variable", name: "Q" },
+                    ],
+                },
+                { type: "variable", name: "R" },
+            ],
+        })
+    })
+
+    it("binds tighter than implication, leaving the implication on top", () => {
+        expect(parseFormula("P \u22BB Q \u2192 R")).toEqual({
+            type: "implies",
+            left: {
+                type: "xor",
+                operands: [
+                    { type: "variable", name: "P" },
+                    { type: "variable", name: "Q" },
+                ],
+            },
+            right: { type: "variable", name: "R" },
+        })
+    })
+
+    it("negates a single operand, not the whole exclusive disjunction", () => {
+        expect(parseFormula("\u00ACP \u22BB Q")).toEqual({
+            type: "xor",
+            operands: [
+                { type: "not", operand: { type: "variable", name: "P" } },
+                { type: "variable", name: "Q" },
+            ],
+        })
+    })
+})
+
+// ---------------------------------------------------------------------------
 // importArgumentFromYaml
 // ---------------------------------------------------------------------------
 
@@ -642,5 +733,91 @@ premises:
         const arg = engine.getArgument() as Record<string, unknown>
         expect(arg.version).toBe(0)
         expect(arg.published).toBe(false)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// importArgumentFromYaml — exclusive disjunction
+// ---------------------------------------------------------------------------
+
+describe("importArgumentFromYaml — exclusive disjunction", () => {
+    it("declares the variables named inside an exclusive disjunction", () => {
+        const yaml = `
+metadata:
+  title: Xor variables
+premises:
+  - formula: "P ⊻ Q"
+    role: conclusion
+  - formula: "P ⊻ Q"
+    role: supporting
+`
+        const { engine } = importArgumentFromYaml(yaml)
+        const vars = engine.collectReferencedVariables()
+        expect(vars.bySymbol.P).toBeDefined()
+        expect(vars.bySymbol.Q).toBeDefined()
+    })
+
+    it("builds an xor operator expression over both operands", () => {
+        const yaml = `
+metadata:
+  title: Xor tree
+premises:
+  - formula: "P ⊻ Q"
+    role: conclusion
+  - formula: "P ⊻ Q"
+    role: supporting
+`
+        const { engine } = importArgumentFromYaml(yaml)
+        const premise = engine.listPremises()[0]
+        const root = premise.getRootExpression()
+        expect(root).toBeDefined()
+        expect(root).toMatchObject({ type: "operator", operator: "xor" })
+
+        const children = premise.getChildExpressions(root!.id)
+        expect(children).toHaveLength(2)
+        expect(children.map((c) => c.type)).toEqual(["variable", "variable"])
+
+        const symbolById = new Map(
+            engine.getVariables().map((v) => [v.id, v.symbol])
+        )
+        expect(
+            children.map((c) =>
+                symbolById.get((c as { variableId: string }).variableId)
+            )
+        ).toEqual(["P", "Q"])
+    })
+
+    it("wraps a nested exclusive disjunction in a formula buffer", () => {
+        const yaml = `
+metadata:
+  title: Nested xor
+premises:
+  - formula: "(P ⊻ Q) → R"
+    role: conclusion
+  - formula: "(P ⊻ Q) → R"
+    role: supporting
+`
+        const { engine } = importArgumentFromYaml(yaml)
+        const premise = engine.listPremises()[0]
+        const root = premise.getRootExpression()!
+        expect(root).toMatchObject({ type: "operator", operator: "implies" })
+
+        const [left, right] = premise.getChildExpressions(root.id)
+        expect(left).toMatchObject({ type: "formula" })
+        expect(right).toMatchObject({ type: "variable" })
+
+        const [wrapped] = premise.getChildExpressions(left.id)
+        expect(wrapped).toMatchObject({ type: "operator", operator: "xor" })
+        expect(premise.getChildExpressions(wrapped.id)).toHaveLength(2)
+    })
+
+    it("rejects an implication nested inside an exclusive disjunction", () => {
+        const yaml = `
+metadata:
+  title: Implication under xor
+premises:
+  - formula: "(P → Q) ⊻ R"
+`
+        expect(() => importArgumentFromYaml(yaml)).toThrow(/root/i)
     })
 })

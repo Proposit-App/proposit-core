@@ -43,3 +43,31 @@ describe("buildDotGraph", () => {
         })
     })
 })
+
+describe("buildDotGraph — operator node labels", () => {
+    it("labels an exclusive-disjunction node XOR", () => {
+        const core = new PropositCore()
+        const argData = { id: crypto.randomUUID(), version: 0 }
+        core.arguments.create(argData)
+        const engine = core.arguments.get(argData.id)!
+        // Assistive behavior runs AN-3 after every mutation, which collapses
+        // an operator that has no children yet — the node under test.
+        engine.setBehavior("permissive")
+        engine.createPremise({ title: "Exclusive" })
+        const premise = engine.listPremises()[0]
+
+        premise.addExpression({
+            id: crypto.randomUUID(),
+            argumentId: argData.id,
+            argumentVersion: 0,
+            premiseId: premise.getId(),
+            type: "operator",
+            operator: "xor",
+            parentId: null,
+            position: 0,
+        })
+
+        const dot = buildDotGraph(engine, core)
+        expect(dot).toContain('label="XOR"')
+    })
+})

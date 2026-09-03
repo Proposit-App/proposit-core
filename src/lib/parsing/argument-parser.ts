@@ -73,6 +73,7 @@ function validateRootOnly(
             break
         case "and":
         case "or":
+        case "xor":
             for (const operand of ast.operands) {
                 validateRootOnly(operand, false, premiseMiniId)
             }
@@ -96,6 +97,7 @@ function collectVariableNames(ast: TFormulaAST, names: Set<string>): void {
             break
         case "and":
         case "or":
+        case "xor":
             for (const operand of ast.operands) {
                 collectVariableNames(operand, names)
             }
@@ -164,7 +166,8 @@ function buildExpressions(
             return id
         }
         case "and":
-        case "or": {
+        case "or":
+        case "xor": {
             addExpression({
                 id,
                 argumentId,

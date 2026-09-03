@@ -37,6 +37,7 @@ function collectAtoms(ast: TFormulaAST, out: Set<string>): void {
             return
         case "and":
         case "or":
+        case "xor":
             for (const child of ast.operands) collectAtoms(child, out)
             return
         case "implies":

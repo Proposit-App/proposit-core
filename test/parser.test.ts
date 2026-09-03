@@ -298,3 +298,100 @@ describe("ArgumentParser — a mapping hook returning undefined", () => {
         }
     })
 })
+
+describe("ArgumentParser — exclusive disjunction", () => {
+    it("sees the symbols an xor operand names when checking declarations", () => {
+        const response = buildResponse({
+            claims: [
+                { miniId: "c1", role: "premise", type: "normal" },
+                { miniId: "c2", role: "conclusion", type: "normal" },
+            ],
+            variables: [
+                { miniId: "v1", symbol: "A", claimMiniId: "c1" },
+                { miniId: "v2", symbol: "Concl", claimMiniId: "c2" },
+            ],
+            premises: [
+                { miniId: "p1", formula: "A ⊻ Undeclared" },
+                { miniId: "p2", formula: "Concl" },
+            ],
+            conclusionPremiseMiniId: "p2",
+        })
+
+        expect(() => new ArgumentParser().build(response)).toThrow(
+            /undeclared variable symbol "Undeclared"/
+        )
+    })
+
+    it("builds an xor operator expression over every operand", () => {
+        const response = buildResponse({
+            claims: [
+                { miniId: "c1", role: "premise", type: "normal" },
+                { miniId: "c2", role: "premise", type: "normal" },
+                { miniId: "c3", role: "premise", type: "normal" },
+                { miniId: "c4", role: "conclusion", type: "normal" },
+            ],
+            variables: [
+                { miniId: "v1", symbol: "A", claimMiniId: "c1" },
+                { miniId: "v2", symbol: "B", claimMiniId: "c2" },
+                { miniId: "v3", symbol: "C", claimMiniId: "c3" },
+                { miniId: "v4", symbol: "Concl", claimMiniId: "c4" },
+            ],
+            premises: [
+                { miniId: "p1", formula: "A ⊻ B ⊻ C" },
+                { miniId: "p2", formula: "Concl" },
+            ],
+            conclusionPremiseMiniId: "p2",
+        })
+
+        const result = new ArgumentParser().build(response)
+        const premise = result.engine
+            .listPremises()
+            .find((p) =>
+                p
+                    .getExpressions()
+                    .some((e) => e.type === "operator" && e.operator === "xor")
+            )
+        expect(premise).toBeDefined()
+
+        const root = premise!.getRootExpression()!
+        expect(root).toMatchObject({ type: "operator", operator: "xor" })
+
+        const children = premise!.getChildExpressions(root.id)
+        expect(children).toHaveLength(3)
+
+        const symbolById = new Map(
+            result.engine.getVariables().map((v) => [v.id, v.symbol])
+        )
+        expect(
+            children.map((c) =>
+                symbolById.get((c as { variableId: string }).variableId)
+            )
+        ).toEqual(["A", "B", "C"])
+    })
+
+    it("rejects an implication nested inside an exclusive disjunction", () => {
+        const response = buildResponse({
+            claims: [
+                { miniId: "c1", role: "premise", type: "normal" },
+                { miniId: "c2", role: "premise", type: "normal" },
+                { miniId: "c3", role: "premise", type: "normal" },
+                { miniId: "c4", role: "conclusion", type: "normal" },
+            ],
+            variables: [
+                { miniId: "v1", symbol: "A", claimMiniId: "c1" },
+                { miniId: "v2", symbol: "B", claimMiniId: "c2" },
+                { miniId: "v3", symbol: "C", claimMiniId: "c3" },
+                { miniId: "v4", symbol: "Concl", claimMiniId: "c4" },
+            ],
+            premises: [
+                { miniId: "p1", formula: "(A → B) ⊻ C" },
+                { miniId: "p2", formula: "Concl" },
+            ],
+            conclusionPremiseMiniId: "p2",
+        })
+
+        expect(() => new ArgumentParser().build(response)).toThrow(
+            /must be at the root of a formula/
+        )
+    })
+})

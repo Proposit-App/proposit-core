@@ -205,3 +205,53 @@ describe("formulaValidationStage — TStage wiring", () => {
         )
     })
 })
+
+describe("validateFormulas — exclusive disjunction", () => {
+    it("audits the atoms an xor node holds", () => {
+        const compilation: TFormulaCompilationOutput = {
+            premises: [
+                {
+                    premiseMiniId: "p1",
+                    formula: "A xor Unknown",
+                    roleHint: "freeform",
+                    sourceRelationId: "r1",
+                },
+            ],
+            conclusionPremiseMiniId: "p1",
+            derivationBacking: [],
+        }
+        const result = validateFormulas({
+            compilation,
+            variables: buildVars([["c1", "A"]]),
+        })
+        expect(result.failures).toHaveLength(1)
+        expect(result.failures[0]).toMatchObject({
+            code: FORMULA_VALIDATION_FAILURE_CODES.symbolUnresolved,
+            context: { unresolvedSymbol: "Unknown" },
+        })
+    })
+
+    it("emits no failure when every xor operand is a known symbol", () => {
+        const compilation: TFormulaCompilationOutput = {
+            premises: [
+                {
+                    premiseMiniId: "p1",
+                    formula: "A ⊻ B ⊻ C",
+                    roleHint: "freeform",
+                    sourceRelationId: "r1",
+                },
+            ],
+            conclusionPremiseMiniId: "p1",
+            derivationBacking: [],
+        }
+        const result = validateFormulas({
+            compilation,
+            variables: buildVars([
+                ["c1", "A"],
+                ["c2", "B"],
+                ["c3", "C"],
+            ]),
+        })
+        expect(result.failures).toEqual([])
+    })
+})
