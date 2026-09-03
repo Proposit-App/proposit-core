@@ -19,11 +19,16 @@ Formula
   = _ expr:Implication _ { return expr; }
 
 Implication
-  = left:Disjunction _ op:("→" / "->" / "↔" / "<->" / "implies"i / "iff"i) _ right:Disjunction {
+  = left:ExclusiveDisjunction _ op:("→" / "->" / "↔" / "<->" / "implies"i / "iff"i) _ right:ExclusiveDisjunction {
       const type = (op === "→" || op === "->" || op.toLowerCase() === "implies") ? "implies" : "iff";
       return binaryNode(type, left, right);
     }
-  / Disjunction
+  / ExclusiveDisjunction
+
+ExclusiveDisjunction
+  = first:Disjunction rest:(_ ("⊻" / "⊕" / "^" / "xor"i) _ d:Disjunction { return d; })* {
+      return naryNode("xor", first, rest);
+    }
 
 Disjunction
   = first:Conjunction rest:(_ ("∨" / "||" / "or"i) _ c:Conjunction { return c; })* {

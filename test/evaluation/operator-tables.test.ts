@@ -5,6 +5,7 @@ import {
     belnapImplies,
     belnapNot,
     belnapOr,
+    belnapXor,
     hasFalseComponent,
     hasTrueComponent,
     joinKnowledge,
@@ -115,6 +116,60 @@ describe("four-valued operator tables", () => {
         expect(belnapAnd(F, N)).toBe(F)
         expect(belnapOr(T, N)).toBe(T)
         expect(belnapOr(F, N)).toBe(N)
+    })
+})
+
+describe("four-valued XOR", () => {
+    /**
+     * Parity: told true iff some way of reading the operands has an odd number
+     * of them true, told false iff some way has an even number. On
+     * `{null, true, false}` this is exactly strong Kleene XOR, and `null`
+     * absorbs — a parity depends on every operand, so knowing nothing about one
+     * means knowing nothing about the result.
+     */
+    it("matches the parity table on every pair", () => {
+        checkBinary(belnapXor, [
+            //        T  F  N  B
+            /* T */ [F, T, N, B],
+            /* F */ [T, F, N, B],
+            /* N */ [N, N, N, N],
+            /* B */ [B, B, N, B],
+        ])
+    })
+
+    it("is associative, so flattening a nested xor preserves its value", () => {
+        for (const a of VALUES) {
+            for (const b of VALUES) {
+                for (const c of VALUES) {
+                    expect(
+                        `(${label(a)}^${label(b)})^${label(c)} = ${label(belnapXor(belnapXor(a, b), c))}`
+                    ).toBe(
+                        `(${label(a)}^${label(b)})^${label(c)} = ${label(belnapXor(a, belnapXor(b, c)))}`
+                    )
+                }
+            }
+        }
+    })
+
+    it("is commutative", () => {
+        for (const a of VALUES) {
+            for (const b of VALUES) {
+                expect(belnapXor(a, b)).toBe(belnapXor(b, a))
+            }
+        }
+    })
+
+    it("folds to classical parity on two-valued operands", () => {
+        expect(belnapXor(belnapXor(T, T), T)).toBe(T)
+        expect(belnapXor(belnapXor(T, T), F)).toBe(F)
+        expect(belnapXor(belnapXor(T, F), F)).toBe(T)
+        expect(belnapXor(belnapXor(F, F), F)).toBe(F)
+    })
+
+    it("absorbs null even against contested, which is where it leaves not-iff", () => {
+        expect(belnapXor(N, B)).toBe(N)
+        expect(belnapXor(B, N)).toBe(N)
+        expect(belnapNot(belnapIff(N, B))).toBe(F)
     })
 })
 

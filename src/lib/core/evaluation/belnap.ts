@@ -101,6 +101,41 @@ export function belnapOr(
     )
 }
 
+/**
+ * Belnap exclusive disjunction (parity): told true iff some reading of the
+ * operands makes an odd number of them true, told false iff some reading makes
+ * an even number.
+ *
+ * This is written from the components rather than composed out of
+ * `and`/`or`/`not`, and the difference is load-bearing. The composed reading
+ * `(a ∧ ¬b) ∨ (¬a ∧ b)` agrees with this everywhere except `xor(null,
+ * contested)`, where it answers `false`; that single cell costs associativity,
+ * and 8 of the 64 triples then disagree depending on how they are bracketed.
+ * A variadic operator cannot afford that — flattening a nested xor is an
+ * auto-normalization rule, and the parser already collapses `a ⊻ b ⊻ c` into
+ * one node, so a fold-order-dependent answer would make normalization change
+ * what a formula means.
+ *
+ * Restricted to `{null, true, false}` this is exactly strong Kleene XOR, and
+ * `null` absorbs throughout: a parity depends on every operand, so knowing
+ * nothing about one is knowing nothing about the result. `iff` is composed and
+ * keeps its own answer, which is why `xor(a, b)` and `not(iff(a, b))` part
+ * company at that one cell — `iff` is binary and never has to associate.
+ */
+export function belnapXor(
+    a: TCoreQuadrivalentValue,
+    b: TCoreQuadrivalentValue
+): TCoreQuadrivalentValue {
+    const aTrue = hasTrueComponent(a)
+    const aFalse = hasFalseComponent(a)
+    const bTrue = hasTrueComponent(b)
+    const bFalse = hasFalseComponent(b)
+    return fromComponents(
+        ((aTrue && bFalse) || (aFalse && bTrue) ? TRUE_COMPONENT : 0) |
+            ((aTrue && bTrue) || (aFalse && bFalse) ? FALSE_COMPONENT : 0)
+    )
+}
+
 /** Belnap material implication: NOT a OR b. */
 export function belnapImplies(
     a: TCoreQuadrivalentValue,

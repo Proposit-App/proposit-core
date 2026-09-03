@@ -75,6 +75,7 @@ export const CoreLogicalOperatorType = Type.Union([
     Type.Literal("not"), // unary
     Type.Literal("and"), // variadic (≥2)
     Type.Literal("or"), // variadic (≥2)
+    Type.Literal("xor"), // variadic (≥2)
     Type.Literal("implies"), // binary (ordered)
     Type.Literal("iff"), // binary (unordered but fixed 2)
 ])

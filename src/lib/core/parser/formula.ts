@@ -6,6 +6,7 @@ export type TFormulaAST =
     | { type: "not"; operand: TFormulaAST }
     | { type: "and"; operands: TFormulaAST[] }
     | { type: "or"; operands: TFormulaAST[] }
+    | { type: "xor"; operands: TFormulaAST[] }
     | { type: "implies"; left: TFormulaAST; right: TFormulaAST }
     | { type: "iff"; left: TFormulaAST; right: TFormulaAST }
 
