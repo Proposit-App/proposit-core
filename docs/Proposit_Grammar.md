@@ -22,13 +22,19 @@ that the rest of this document describes.
 
 ### 1.1 Quick Reference
 
-| Operator      | Unicode | ASCII  | Arity          | Example |
-| ------------- | ------- | ------ | -------------- | ------- |
-| Negation      | `¬`     | `!`    | Unary (prefix) | `¬P`    |
-| Conjunction   | `∧`     | `&&`   | Binary/n-ary   | `P ∧ Q` |
-| Disjunction   | `∨`     | `\|\|` | Binary/n-ary   | `P ∨ Q` |
-| Implication   | `→`     | `->`   | Binary         | `P → Q` |
-| Biconditional | `↔`     | `<->`  | Binary         | `P ↔ Q` |
+| Operator              | Unicode | ASCII  | Arity          | Example |
+| --------------------- | ------- | ------ | -------------- | ------- |
+| Negation              | `¬`     | `!`    | Unary (prefix) | `¬P`    |
+| Conjunction           | `∧`     | `&&`   | Binary/n-ary   | `P ∧ Q` |
+| Disjunction           | `∨`     | `\|\|` | Binary/n-ary   | `P ∨ Q` |
+| Exclusive disjunction | `⊻`     | `^`    | Binary/n-ary   | `P ⊻ Q` |
+| Implication           | `→`     | `->`   | Binary         | `P → Q` |
+| Biconditional         | `↔`     | `<->`  | Binary         | `P ↔ Q` |
+
+Every operator also accepts its name as a word, case-insensitively: `not`,
+`and`, `or`, `xor`, `implies`, `iff`. Exclusive disjunction additionally
+accepts `⊕`, so notation copied from a source that writes XOR that way still
+parses; `⊻` is what the library renders.
 
 ### 1.2 Operator Precedence
 
@@ -37,7 +43,10 @@ From highest to lowest binding strength:
 1. `¬` / `!` (negation) — tightest binding, right-associative prefix
 2. `∧` / `&&` (conjunction) — left-associative
 3. `∨` / `||` (disjunction) — left-associative
-4. `→` / `->` and `↔` / `<->` (implication, biconditional) — lowest precedence, non-associative
+4. `⊻` / `^` (exclusive disjunction) — left-associative, binds looser than `∨`
+5. `→` / `->` and `↔` / `<->` (implication, biconditional) — lowest precedence, non-associative
+
+So `P ∨ Q ⊻ R` is `(P ∨ Q) ⊻ R`, and `P ⊻ Q → R` is `(P ⊻ Q) → R`.
 
 Parentheses `( )` override precedence.
 
