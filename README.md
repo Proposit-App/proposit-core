@@ -816,7 +816,7 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 
 | Invalid construction                                             | Rule code | Tier        |
 | ---------------------------------------------------------------- | --------- | ----------- |
-| `and` or `or` operator with fewer than 2 children                | `E-1`     | Evaluable   |
+| `and`, `or` or `xor` operator with fewer than 2 children         | `E-1`     | Evaluable   |
 | Variable binding does not resolve                                | `E-3`     | Evaluable   |
 | Axiomatic-bound variable assignment supplied to `evaluate`       | `E-4`     | Evaluable   |
 | Derivation premise expression tree lacks the consequent variable | `E-5`     | Evaluable   |
@@ -825,7 +825,7 @@ In v1.0 the engine no longer throws on non-`not` operators placed as direct chil
 | Non-`not` operator placed directly under another operator        | `P-1`     | Presentable |
 | `not(not(x))` chain in the tree                                  | `P-2`     | Presentable |
 | `formula` wrapping no operator (leaf or single `not`)            | `P-3`     | Presentable |
-| Single-child `and` / `or`                                        | `P-4`     | Presentable |
+| Single-child `and` / `or` / `xor`                                | `P-4`     | Presentable |
 | Same-operator parent/grandchild separated only by `formula`      | `P-5`     | Presentable |
 | Premise-bound variable expression marked as an enthymeme         | `P-6`     | Presentable |
 | Operator or formula expression marked as an enthymeme            | `P-6`     | Presentable |

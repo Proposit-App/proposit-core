@@ -203,7 +203,7 @@ export function registerExpressionCommands(
         )
         .option(
             "--operator <op>",
-            "Operator (for type=operator): not,and,or,implies,iff"
+            "Operator (for type=operator): not,and,or,xor,implies,iff"
         )
         .action(async (premiseId: string, opts: TCreateExpressionOptions) => {
             const id = await runCreateExpression(
