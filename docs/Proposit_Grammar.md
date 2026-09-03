@@ -416,7 +416,7 @@ Required for `evaluate()` and `checkValidity()` to run.
 
 #### E-1 — Variadic operator arity floor
 
-`and` and `or` each have at least two children.
+`and`, `or` and `xor` each have at least two children.
 
 > _Pre-1.0 engine collapsed 0/1-child and/or operators via auto-normalization. The 1.0 engine accepts these states Structurally and reports them as Evaluable violations._
 
@@ -580,19 +580,19 @@ exempt — it can be a direct child of any operator.
 #### P-3 — Formula has operator descendant
 
 A `formula` node's bounded subtree (stopping at the next nested formula)
-contains at least one binary operator. Formulas wrapping a leaf or a
-single `not` are not Presentable.
+contains at least one variadic connective (`and`, `or`, `xor`). Formulas
+wrapping a leaf or a single `not` are not Presentable.
 
-- **Invalid:** `formula(a)` (leaf wrapper); `formula(NOT(a))` (no binary descendant).
-- **Valid:** `formula(AND(a, b))`.
+- **Invalid:** `formula(a)` (leaf wrapper); `formula(NOT(a))` (no connective descendant).
+- **Valid:** `formula(AND(a, b))`; `formula(XOR(a, b))`.
 - **Validator:** `validateP3`.
 
-#### P-4 — No single-child binary operator
+#### P-4 — No single-child variadic connective
 
-`and` and `or` with exactly one child are not Presentable. (Also fails
-E-1 — this rule is included in the Presentable inventory for clarity.)
+`and`, `or` and `xor` with exactly one child are not Presentable. (Also
+fails E-1 — this rule is included in the Presentable inventory for clarity.)
 
-- **Invalid:** `AND(a)`; `OR(a)`.
+- **Invalid:** `AND(a)`; `OR(a)`; `XOR(a)`.
 - **Valid:** `AND(a, b)` and any larger arity.
 - **Validator:** `validateP4`.
 
