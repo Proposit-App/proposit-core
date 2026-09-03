@@ -6,11 +6,32 @@ import type {
     TExpressionUpdate,
 } from "./expression-manager.js"
 
-const PERMITTED_OPERATOR_SWAPS: Record<string, string | undefined> = {
-    and: "or",
-    or: "and",
-    implies: "iff",
-    iff: "implies",
+// Operators are grouped by the arity they impose on their children.
+// A swap is permitted exactly when both operators sit in the same group,
+// because only then does the existing child set remain legal without
+// being rewritten. `not` is unary and sits in no group: it is neither a
+// swap source nor a swap target (use `toggleNegation`).
+//
+// Kept as `string[]` rather than the narrow operator union so
+// `.includes(...)` accepts a widened value read from runtime data.
+const VARIADIC_OPERATORS: string[] = ["and", "or", "xor"]
+const BINARY_OPERATORS: string[] = ["implies", "iff"]
+
+/**
+ * Whether `updateExpression` may change an operator expression from
+ * `fromOperator` to `toOperator` — true iff both belong to the same
+ * arity class.
+ */
+function isPermittedOperatorSwap(
+    fromOperator: string,
+    toOperator: string
+): boolean {
+    return (
+        (VARIADIC_OPERATORS.includes(fromOperator) &&
+            VARIADIC_OPERATORS.includes(toOperator)) ||
+        (BINARY_OPERATORS.includes(fromOperator) &&
+            BINARY_OPERATORS.includes(toOperator))
+    )
 }
 
 /**
@@ -425,10 +446,9 @@ export function validateUpdateExpression<
                 `Expression "${expressionId}" is not an operator expression; cannot update operator.`
             )
         }
-        const permitted = PERMITTED_OPERATOR_SWAPS[expression.operator]
-        if (permitted !== updates.operator) {
+        if (!isPermittedOperatorSwap(expression.operator, updates.operator)) {
             throw new Error(
-                `Changing operator from "${expression.operator}" to "${updates.operator}" is not a permitted operator change. Permitted: and↔or, implies↔iff.`
+                `Changing operator from "${expression.operator}" to "${updates.operator}" is not a permitted operator change. An operator may only be changed within its arity class: variadic (${VARIADIC_OPERATORS.join(", ")}) or binary (${BINARY_OPERATORS.join(", ")}). "not" is unary and belongs to neither.`
             )
         }
     }

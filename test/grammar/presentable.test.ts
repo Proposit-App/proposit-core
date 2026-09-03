@@ -133,6 +133,33 @@ describe("grammar/presentable", () => {
         })
     })
 
+    describe("P-1 formula buffer, xor", () => {
+        it("rejects AND(XOR(...), ...) — XOR is a direct child of AND", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("and", { id: "e-and" }),
+                    makeOperatorExpression("xor", {
+                        id: "e-xor",
+                        parentId: "e-and",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-d",
+                        parentId: "e-and",
+                        position: 1,
+                    }),
+                ],
+            })
+            const violations = validateP1(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "presentable",
+                code: "P-1",
+                expressionId: "e-xor",
+            })
+        })
+    })
+
     describe("P-2 no double negation", () => {
         it("rejects NOT(NOT(x))", () => {
             const ctx = buildContext({
@@ -287,6 +314,30 @@ describe("grammar/presentable", () => {
             })
             expect(validateP3(ctx)).toEqual([])
         })
+
+        it("accepts formula(XOR(...)) — xor is a variadic connective and justifies its buffer", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeFormulaExpression({ id: "e-formula" }),
+                    makeOperatorExpression("xor", {
+                        id: "e-xor",
+                        parentId: "e-formula",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-a",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        parentId: "e-xor",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateP3(ctx)).toEqual([])
+        })
     })
 
     describe("P-4 no single-child binary operator", () => {
@@ -343,6 +394,50 @@ describe("grammar/presentable", () => {
                     makeVariableExpression({
                         id: "e-c",
                         parentId: "e-and",
+                        position: 2,
+                    }),
+                ],
+            })
+            expect(validateP4(ctx)).toEqual([])
+        })
+
+        it("rejects XOR with 1 child", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("xor", { id: "e-xor" }),
+                    makeVariableExpression({
+                        id: "e-x",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                ],
+            })
+            const violations = validateP4(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "presentable",
+                code: "P-4",
+                expressionId: "e-xor",
+            })
+        })
+
+        it("accepts XOR with 3 children", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("xor", { id: "e-xor" }),
+                    makeVariableExpression({
+                        id: "e-a",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        parentId: "e-xor",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "e-c",
+                        parentId: "e-xor",
                         position: 2,
                     }),
                 ],
@@ -449,6 +544,114 @@ describe("grammar/presentable", () => {
                     makeVariableExpression({
                         id: "e-c",
                         parentId: "e-or",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "e-d",
+                        parentId: "e-and",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateP5(ctx)).toEqual([])
+        })
+
+        it("rejects XOR(formula(XOR(B, C)), D) — same-operator absorbable through formula", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("xor", { id: "e-xor-outer" }),
+                    makeFormulaExpression({
+                        id: "e-formula",
+                        parentId: "e-xor-outer",
+                        position: 0,
+                    }),
+                    makeOperatorExpression("xor", {
+                        id: "e-xor-inner",
+                        parentId: "e-formula",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        parentId: "e-xor-inner",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-c",
+                        parentId: "e-xor-inner",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "e-d",
+                        parentId: "e-xor-outer",
+                        position: 1,
+                    }),
+                ],
+            })
+            const violations = validateP5(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "presentable",
+                code: "P-5",
+                expressionId: "e-formula",
+            })
+        })
+
+        it("accepts XOR(formula(OR(B, C)), D) — different operator types, no absorption", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("xor", { id: "e-xor" }),
+                    makeFormulaExpression({
+                        id: "e-formula",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeOperatorExpression("or", {
+                        id: "e-or",
+                        parentId: "e-formula",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        parentId: "e-or",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-c",
+                        parentId: "e-or",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "e-d",
+                        parentId: "e-xor",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateP5(ctx)).toEqual([])
+        })
+
+        it("accepts AND(formula(XOR(B, C)), D) — different operator types, no absorption", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("and", { id: "e-and" }),
+                    makeFormulaExpression({
+                        id: "e-formula",
+                        parentId: "e-and",
+                        position: 0,
+                    }),
+                    makeOperatorExpression("xor", {
+                        id: "e-xor",
+                        parentId: "e-formula",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-c",
+                        parentId: "e-xor",
                         position: 1,
                     }),
                     makeVariableExpression({

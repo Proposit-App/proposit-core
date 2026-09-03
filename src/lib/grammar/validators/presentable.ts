@@ -3,14 +3,17 @@
 // P-1 formula buffer between operators
 // P-2 no double negation
 // P-3 formula has operator descendant
-// P-4 no single-child binary operator (largely redundant with E-1, kept
+// P-4 no single-child variadic operator (largely redundant with E-1, kept
 //     for clarity in the rule inventory)
 // P-5 no operator-of-same-type adjacency through a formula
 // P-6 enthymeme marks a claim-bound variable
 
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
-import type { TCorePropositionalExpression } from "../../schemata/index.js"
+import type {
+    TCoreLogicalOperatorType,
+    TCorePropositionalExpression,
+} from "../../schemata/index.js"
 import { isPremiseBound } from "../../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "../bounded-subtree.js"
 
@@ -49,7 +52,7 @@ function buildExpressionsById(
 
 /**
  * P-1 — Formula buffer between operators. A non-`not` operator (`and`,
- * `or`, `implies`, `iff`) is never a direct child of another operator
+ * `or`, `xor`, `implies`, `iff`) is never a direct child of another operator
  * expression. `not` is exempt — it can be a direct child of any
  * operator.
  *
@@ -107,8 +110,8 @@ export function validateP2(ctx: TValidatorContext): readonly TViolation[] {
 /**
  * P-3 — Formula has operator descendant. A `formula` node's bounded
  * subtree (stopping at the next nested formula) contains at least one
- * binary operator (`and` or `or`). Formulas wrapping a leaf or a single
- * `not` chain are not Presentable.
+ * variadic connective (`and`, `or` or `xor`). Formulas wrapping a leaf or
+ * a single `not` chain are not Presentable.
  */
 export function validateP3(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
@@ -126,7 +129,7 @@ export function validateP3(ctx: TValidatorContext): readonly TViolation[] {
             violations.push({
                 tier: "presentable",
                 code: "P-3",
-                message: `formula ${f.id} has no binary operator (and/or) descendant in its bounded subtree`,
+                message: `formula ${f.id} has no variadic connective (and/or/xor) descendant in its bounded subtree`,
                 argumentId: ctx.argument.id,
                 premiseId: f.premiseId,
                 expressionId: f.id,
@@ -137,16 +140,16 @@ export function validateP3(ctx: TValidatorContext): readonly TViolation[] {
 }
 
 /**
- * P-4 — No single-child binary operator. `and` / `or` with exactly one
- * child is not Presentable. Largely redundant with E-1 (variadic arity
- * ≥ 2), kept for clarity in the rule inventory.
+ * P-4 — No single-child variadic operator. `and` / `or` / `xor` with
+ * exactly one child is not Presentable. Largely redundant with E-1
+ * (variadic arity ≥ 2), kept for clarity in the rule inventory.
  */
 export function validateP4(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     const children = buildChildMap(ctx.expressions)
     for (const e of ctx.expressions) {
         if (e.type !== "operator") continue
-        if (e.operator !== "and" && e.operator !== "or") continue
+        if (!isVariadicOperator(e.operator)) continue
         const count = (children.get(e.id) ?? []).length
         if (count === 1) {
             violations.push({
@@ -164,22 +167,23 @@ export function validateP4(ctx: TValidatorContext): readonly TViolation[] {
 
 /**
  * P-5 — No operator-of-same-type adjacency through a formula. When a
- * parent operator (`and` / `or`) has a `formula` child whose only
+ * parent operator (`and` / `or` / `xor`) has a `formula` child whose only
  * descendant operator (after peeling through transparent formula
  * buffers) is the same operator, the inner operator should be absorbed
  * into the parent.
  *
  * Example: `AND(formula(AND(b, c)), d)` should be `AND(b, c, d)`.
  *
- * The rule applies to `and` / `or` only — `implies` / `iff` are root-
- * only per S-5 and cannot appear as a child operator.
+ * The rule applies to the variadic connectives only — `implies` / `iff`
+ * are root-only per S-5 and cannot appear as a child operator, and `not`
+ * is unary so there is nothing to absorb.
  */
 export function validateP5(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     const children = buildChildMap(ctx.expressions)
     for (const parent of ctx.expressions) {
         if (parent.type !== "operator") continue
-        if (parent.operator !== "and" && parent.operator !== "or") continue
+        if (!isVariadicOperator(parent.operator)) continue
         const parentOp = parent.operator
         for (const child of children.get(parent.id) ?? []) {
             if (child.type !== "formula") continue
@@ -200,12 +204,23 @@ export function validateP5(ctx: TValidatorContext): readonly TViolation[] {
 }
 
 /**
- * Returns the operator kind (`and` / `or` / `implies` / `iff`) of the
- * single operator expression inside a `formula`'s bounded subtree —
- * stopping at any nested formula. Returns `undefined` if the formula
- * contains no operator, or more than one operator at the same level,
- * or contains a `not` operator anywhere (different shape; not the
- * absorption case P-5 targets).
+ * The variadic connectives — the operators that take 2..n operands and
+ * therefore have an arity floor (E-1) rather than a fixed arity, and that
+ * absorb a same-operator child through a formula buffer (P-5). `not` is
+ * unary and `implies` / `iff` are binary and root-only (S-5).
+ */
+function isVariadicOperator(
+    operator: TCoreLogicalOperatorType
+): operator is "and" | "or" | "xor" {
+    return operator === "and" || operator === "or" || operator === "xor"
+}
+
+/**
+ * Returns the operator kind of the single operator expression inside a
+ * `formula`'s bounded subtree — stopping at any nested formula. Returns
+ * `undefined` if the formula contains no operator, or more than one
+ * operator at the same level, or contains a `not` operator anywhere
+ * (different shape; not the absorption case P-5 targets).
  *
  * This is a deliberate simplification: P-5 fires on the canonical
  * `parent(formula(sameOp(...)))` shape where the formula immediately
@@ -215,14 +230,14 @@ export function validateP5(ctx: TValidatorContext): readonly TViolation[] {
 function singleOperatorInsideFormula(
     formula: TCorePropositionalExpression,
     children: TChildMap
-): "and" | "or" | "implies" | "iff" | undefined {
+): Exclude<TCoreLogicalOperatorType, "not"> | undefined {
     const kids = children.get(formula.id) ?? []
     if (kids.length !== 1) return undefined
     const inner = kids[0]
     if (inner.type !== "operator") return undefined
     // Exclude `not` — P-5 targets the absorption case where the parent
-    // and inner operators are the same `and` / `or` / `implies` / `iff`
-    // kind. A NOT inside the formula is a different shape (not absorbable).
+    // and inner operators are the same variadic connective. A NOT inside
+    // the formula is a different shape (not absorbable).
     if (inner.operator === "not") return undefined
     return inner.operator
 }

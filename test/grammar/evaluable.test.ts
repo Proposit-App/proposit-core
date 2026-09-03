@@ -116,6 +116,82 @@ describe("grammar/evaluable", () => {
             })
             expect(validateE1(ctx)).toEqual([])
         })
+
+        it("returns a violation when 'xor' has 0 children", () => {
+            const ctx = buildContext({
+                expressions: [makeOperatorExpression("xor", { id: "e-xor" })],
+            })
+            const violations = validateE1(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "evaluable",
+                code: "E-1",
+                expressionId: "e-xor",
+            })
+        })
+
+        it("returns a violation when 'xor' has 1 child", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("xor", { id: "e-xor" }),
+                    makeVariableExpression({
+                        id: "x-0",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                ],
+            })
+            const violations = validateE1(ctx)
+            expect(violations).toHaveLength(1)
+            expect(violations[0]).toMatchObject({
+                tier: "evaluable",
+                code: "E-1",
+                expressionId: "e-xor",
+            })
+        })
+
+        it("returns an empty array when 'xor' has 2 children", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("xor", { id: "e-xor" }),
+                    makeVariableExpression({
+                        id: "x-0",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "x-1",
+                        parentId: "e-xor",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateE1(ctx)).toEqual([])
+        })
+
+        it("returns an empty array when 'xor' has 3 children — it is variadic, not binary", () => {
+            const ctx = buildContext({
+                expressions: [
+                    makeOperatorExpression("xor", { id: "e-xor" }),
+                    makeVariableExpression({
+                        id: "x-0",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "x-1",
+                        parentId: "e-xor",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "x-2",
+                        parentId: "e-xor",
+                        position: 2,
+                    }),
+                ],
+            })
+            expect(validateE1(ctx)).toEqual([])
+        })
     })
 
     // E-2 is reserved — see spec §4.2. No test block.

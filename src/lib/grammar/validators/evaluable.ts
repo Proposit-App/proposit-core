@@ -1,7 +1,7 @@
 // Evaluable-tier validators (E-1, E-3..E-7). Code 'E-2' is reserved — see
 // spec §4.2 (formula non-emptiness was promoted to Structural as S-13).
 //
-// E-1  variadic operator arity floor (and/or have ≥ 2 children)
+// E-1  variadic operator arity floor (and/or/xor have ≥ 2 children)
 // E-3  variable binding resolves
 // E-4  axiomatic-binding constraint (runtime guard; AST-level no-op,
 //      documented in JSDoc)
@@ -29,16 +29,22 @@ function childCounts(
 }
 
 /**
- * E-1 — Variadic operator arity floor. `and` and `or` each have at least
- * two children. (Unary `not`/`formula` are constrained Structurally per
- * S-12/S-13; binary `implies`/`iff` per S-8.)
+ * E-1 — Variadic operator arity floor. `and`, `or` and `xor` each have at
+ * least two children. (Unary `not`/`formula` are constrained Structurally
+ * per S-12/S-13; binary `implies`/`iff` per S-8.)
  */
 export function validateE1(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []
     const counts = childCounts(ctx.expressions)
     for (const e of ctx.expressions) {
         if (e.type !== "operator") continue
-        if (e.operator !== "and" && e.operator !== "or") continue
+        if (
+            e.operator !== "and" &&
+            e.operator !== "or" &&
+            e.operator !== "xor"
+        ) {
+            continue
+        }
         const count = counts.get(e.id) ?? 0
         if (count < 2) {
             violations.push({

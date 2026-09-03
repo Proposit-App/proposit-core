@@ -168,7 +168,7 @@ describe("grammar/structural", () => {
         it("returns a violation when operator expression has an unknown operator", () => {
             const malformed = {
                 ...makeOperatorExpression("and", { id: "e-1" }),
-                operator: "xor" as unknown as "and",
+                operator: "nand" as unknown as "and",
             } as TCorePropositionalExpression
             const ctx = buildContext({ expressions: [malformed] })
             const violations = validateS2(ctx)
@@ -187,10 +187,18 @@ describe("grammar/structural", () => {
                     makeOperatorExpression("not", { id: "e-not" }),
                     makeOperatorExpression("and", { id: "e-and" }),
                     makeOperatorExpression("or", { id: "e-or" }),
+                    makeOperatorExpression("xor", { id: "e-xor" }),
                     makeOperatorExpression("implies", { id: "e-impl" }),
                     makeOperatorExpression("iff", { id: "e-iff" }),
                     makeFormulaExpression({ id: "e-formula" }),
                 ],
+            })
+            expect(validateS2(ctx)).toEqual([])
+        })
+
+        it("accepts 'xor' as a legal operator", () => {
+            const ctx = buildContext({
+                expressions: [makeOperatorExpression("xor", { id: "e-xor" })],
             })
             expect(validateS2(ctx)).toEqual([])
         })
@@ -435,6 +443,50 @@ describe("grammar/structural", () => {
             })
             expect(validateS5(ctx)).toEqual([])
         })
+
+        it("returns an empty array for a nested XOR — xor is not root-only", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("and", {
+                        id: "e-and",
+                        premiseId: "p-1",
+                        parentId: null,
+                    }),
+                    makeFormulaExpression({
+                        id: "e-formula",
+                        premiseId: "p-1",
+                        parentId: "e-and",
+                        position: 0,
+                    }),
+                    makeOperatorExpression("xor", {
+                        id: "e-xor",
+                        premiseId: "p-1",
+                        parentId: "e-formula",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-a",
+                        premiseId: "p-1",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "e-b",
+                        premiseId: "p-1",
+                        parentId: "e-xor",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "e-c",
+                        premiseId: "p-1",
+                        parentId: "e-and",
+                        position: 1,
+                    }),
+                ],
+            })
+            expect(validateS5(ctx)).toEqual([])
+        })
     })
 
     describe("S-6 premise type discriminator consistency", () => {
@@ -633,6 +685,37 @@ describe("grammar/structural", () => {
                         premiseId: "p-1",
                         parentId: "e-impl",
                         position: 1,
+                    }),
+                ],
+            })
+            expect(validateS8(ctx)).toEqual([])
+        })
+
+        it("returns an empty array for a 3-child XOR — xor is variadic, not binary", () => {
+            const ctx = buildContext({
+                premises: [makeFreeformPremise({ id: "p-1" })],
+                expressions: [
+                    makeOperatorExpression("xor", {
+                        id: "e-xor",
+                        premiseId: "p-1",
+                    }),
+                    makeVariableExpression({
+                        id: "c-0",
+                        premiseId: "p-1",
+                        parentId: "e-xor",
+                        position: 0,
+                    }),
+                    makeVariableExpression({
+                        id: "c-1",
+                        premiseId: "p-1",
+                        parentId: "e-xor",
+                        position: 1,
+                    }),
+                    makeVariableExpression({
+                        id: "c-2",
+                        premiseId: "p-1",
+                        parentId: "e-xor",
+                        position: 2,
                     }),
                 ],
             })
@@ -908,7 +991,7 @@ describe("grammar/structural", () => {
     })
 
     describe("S-14 derivation premise root operator", () => {
-        it.each(["and", "or", "not", "formula"] as const)(
+        it.each(["and", "or", "xor", "not", "formula"] as const)(
             "returns a violation when a derivation premise root is %s",
             (op) => {
                 const ctx = buildContext({

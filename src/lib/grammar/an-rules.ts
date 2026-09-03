@@ -169,8 +169,8 @@ function collapseOneDoubleNegationInPremise<
  *      operator's slot. `not` is unary so 1-child `not` is its
  *      Presentable form and is NOT collapsed by AN-3.
  *   3. Formula with 0 children → removed.
- *   4. Formula with 1 child whose bounded subtree contains no binary
- *      operator (`and`/`or`) → child promoted (the formula is
+ *   4. Formula with 1 child whose bounded subtree contains no variadic
+ *      connective (`and`/`or`/`xor`) → child promoted (the formula is
  *      unjustified per P-3, so it disappears).
  *
  * Bounded-subtree traversal stops at nested formulas (each formula
@@ -252,7 +252,7 @@ function collapseOneAN3InPremise<
                     (id) => pe.getExpression(id)
                 )
             ) {
-                // Unjustified formula (no binary operator in bounded
+                // Unjustified formula (no variadic connective in bounded
                 // subtree) — promote single child.
                 pe.removeExpression(expr.id, false)
                 return true
@@ -268,9 +268,10 @@ function collapseOneAN3InPremise<
  *
  * Walks each premise's expression tree for the absorption shape
  * `OUTER_OP → (..., ) formula → INNER_OP (same
- * operator) → [c1, c2, …, cN]`, with both operators being `and` or
- * `or` (S-5 restricts `implies`/`iff` to roots, so they never appear in
- * AN-4-firing positions). For each match:
+ * operator) → [c1, c2, …, cN]`, with both operators being one of the
+ * variadic connectives `and`, `or`, `xor` (S-5 restricts `implies`/`iff`
+ * to roots, so they never appear in AN-4-firing positions; `not` is unary
+ * and has nothing to absorb). For each match:
  *
  *   1. Compute target positions for the N inner children under the
  *      outer operator using the legacy spacing algorithm from
@@ -336,10 +337,16 @@ function absorbOneSameOperatorInPremise<
     TVar extends TCorePropositionalVariable,
 >(pe: PremiseEngine<TArg, TPremise, TExpr, TVar>): boolean {
     for (const inner of pe.getExpressions()) {
-        // Only and/or inner operators absorb (S-5 keeps implies/iff at
+        // Only the variadic connectives absorb (S-5 keeps implies/iff at
         // root; not is unary so absorption doesn't apply).
         if (inner.type !== "operator") continue
-        if (inner.operator !== "and" && inner.operator !== "or") continue
+        if (
+            inner.operator !== "and" &&
+            inner.operator !== "or" &&
+            inner.operator !== "xor"
+        ) {
+            continue
+        }
 
         const formulaId = inner.parentId
         if (formulaId === null) continue

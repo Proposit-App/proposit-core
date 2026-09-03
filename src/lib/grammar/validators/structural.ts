@@ -113,12 +113,19 @@ export function validateS1(ctx: TValidatorContext): readonly TViolation[] {
 // runtime data — the whole point of S-2 is to detect deserialized data
 // whose discriminant value doesn't match the legal union at compile time.
 const validExpressionTypes: string[] = ["variable", "operator", "formula"]
-const validOperatorTypes: string[] = ["not", "and", "or", "implies", "iff"]
+const validOperatorTypes: string[] = [
+    "not",
+    "and",
+    "or",
+    "xor",
+    "implies",
+    "iff",
+]
 
 /**
  * S-2 — Operator types. Every expression's `type` is one of `variable`,
  * `operator`, `formula`. For operator-typed expressions, the `operator`
- * field is one of `not`, `and`, `or`, `implies`, `iff`.
+ * field is one of `not`, `and`, `or`, `xor`, `implies`, `iff`.
  */
 export function validateS2(ctx: TValidatorContext): readonly TViolation[] {
     const violations: TViolation[] = []

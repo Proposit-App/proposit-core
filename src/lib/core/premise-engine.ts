@@ -38,6 +38,7 @@ import {
     belnapImplies,
     belnapNot,
     belnapOr,
+    belnapXor,
 } from "./evaluation/belnap.js"
 import {
     buildDirectionalVacuity,
@@ -1484,7 +1485,9 @@ export class PremiseEngine<
             }
 
             if (
-                (expr.operator === "and" || expr.operator === "or") &&
+                (expr.operator === "and" ||
+                    expr.operator === "or" ||
+                    expr.operator === "xor") &&
                 children.length < 2
             ) {
                 issues.push(
@@ -1617,6 +1620,16 @@ export class PremiseEngine<
                     value = children.reduce<TCoreQuadrivalentValue>(
                         (acc, child) =>
                             belnapOr(acc, evaluateExpression(child.id)),
+                        false
+                    )
+                    break
+                // Seeded `false` because that is xor's identity, not because
+                // `or` is: parity counts the true operands, so seeding `true`
+                // would report every operand count with the opposite parity.
+                case "xor":
+                    value = children.reduce<TCoreQuadrivalentValue>(
+                        (acc, child) =>
+                            belnapXor(acc, evaluateExpression(child.id)),
                         false
                     )
                     break
@@ -2069,6 +2082,8 @@ export class PremiseEngine<
                 return "↔"
             case "not":
                 return "¬"
+            case "xor":
+                return "⊻"
         }
     }
 

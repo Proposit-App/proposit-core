@@ -493,9 +493,11 @@ export class ExpressionManager<
      * fields (`id`, `parentId`, `type`, `argumentId`, `argumentVersion`,
      * `checksum`) are forbidden.
      *
-     * Operator changes are restricted to permitted swaps: `and`/`or` and
-     * `implies`/`iff`. Variable ID changes require the expression to be of
-     * type `"variable"`.
+     * Operator changes are restricted to swaps within an arity class:
+     * variadic (`and`, `or`, `xor`) or binary (`implies`, `iff`). `not` is
+     * unary and belongs to neither class, so it can be neither the source
+     * nor the target of a swap. Variable ID changes require the expression
+     * to be of type `"variable"`.
      *
      * @throws If the expression does not exist.
      * @throws If a forbidden field is present in `updates`.
@@ -901,6 +903,10 @@ export class ExpressionManager<
                 `Operator expression "${parentId}" with "${operator}" can only have two children.`
             )
         }
+        // The variadic operators (`and`, `or`, `xor`) have no upper bound
+        // and so no branch here. Their >= 2 floor is an Evaluable-tier
+        // concern (E-1), not a mutation-time throw — a tree is built one
+        // child at a time and is transiently under-filled.
     }
 
     private reparent(

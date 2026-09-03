@@ -1,8 +1,8 @@
 // Shared helper for "formula bounded subtree" traversal.
 //
-// P-3 justifies a formula iff its bounded subtree contains a binary
-// operator (`and` or `or`). The traversal stops at any *nested* formula
-// — each formula is its own P-3 scope.
+// P-3 justifies a formula iff its bounded subtree contains a variadic
+// connective (`and`, `or` or `xor`). The traversal stops at any *nested*
+// formula — each formula is its own P-3 scope.
 //
 // Two consumers need this check at different points in the engine's
 // lifecycle:
@@ -25,20 +25,22 @@ import type { TCorePropositionalExpression } from "../schemata/index.js"
 
 /**
  * Returns `true` iff the subtree rooted at `expressionId` contains a
- * binary operator (`and` or `or`). Traversal stops at nested formulas
- * (each formula starts a new P-3 scope).
+ * variadic connective (`and`, `or` or `xor`). Traversal stops at nested
+ * formulas (each formula starts a new P-3 scope).
  *
  * The starting node itself counts: if the caller asks "does formula
- * F's bounded subtree contain a binary operator?", they pass F's
+ * F's bounded subtree contain a variadic connective?", they pass F's
  * **child** (not F itself) — because traversal stops at the first
  * nested formula encountered, and starting at F would immediately
  * stop. (Equivalently: callers may iterate F's children and call this
  * helper on each child, or pass F's only child for the typical
  * `formula(x)` case.)
  *
- * Note: `implies` and `iff` are intentionally excluded from the binary-
- * operator check. S-5 restricts both to premise roots, so they cannot
- * appear as formula descendants in a Structural-valid tree.
+ * Note: `implies` and `iff` are intentionally excluded. S-5 restricts both
+ * to premise roots, so they cannot appear as formula descendants in a
+ * Structural-valid tree. `xor` is not root-restricted and is included:
+ * omitting it would make AN-3 strip the very buffer AN-1 inserts around a
+ * nested `xor`, and `applyANToFixedPoint` would oscillate to its cap.
  *
  * @param expressionId Subtree root id.
  * @param lookup `(id) => children` — must return live children at
@@ -62,7 +64,9 @@ export function hasBinaryOperatorInBoundedSubtree(
         const cursor = stack.pop()!
         if (
             cursor.type === "operator" &&
-            (cursor.operator === "and" || cursor.operator === "or")
+            (cursor.operator === "and" ||
+                cursor.operator === "or" ||
+                cursor.operator === "xor")
         ) {
             return true
         }

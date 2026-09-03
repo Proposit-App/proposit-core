@@ -13,13 +13,14 @@ import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
 import { ClaimLibrary } from "../../src/lib/core/claim-library.js"
 import { EMPTY_CLAIM_LOOKUP } from "../../src/lib/utils/lookup.js"
 import type { TExpressionInput } from "../../src/lib/core/expression-manager.js"
+import type { TCoreLogicalOperatorType } from "../../src/lib/schemata/index.js"
 import { makeArgument } from "./fixtures.js"
 
 const ARG = makeArgument()
 
 function opExpr(
     id: string,
-    operator: "not" | "and" | "or" | "implies" | "iff",
+    operator: TCoreLogicalOperatorType,
     parentId: string | null,
     premiseId: string,
     position = 0
@@ -225,5 +226,250 @@ describe("Mutations throw on Structural violations", () => {
                 ).toThrow()
             })
         }
+    })
+})
+
+// -- Operator swap arity classes --
+//
+// `updateExpression({ operator })` may only move an operator to another
+// operator of the same arity class: variadic (`and`, `or`, `xor`) or
+// binary (`implies`, `iff`). `not` is unary and belongs to neither, so
+// it can neither be swapped away from nor swapped to.
+
+const ALL_OPERATORS: TCoreLogicalOperatorType[] = [
+    "not",
+    "and",
+    "or",
+    "xor",
+    "implies",
+    "iff",
+]
+
+// The ordered pairs permitted before `xor` existed. None of these may
+// stop being permitted — widening the rule must lose nothing.
+const PERMITTED_BEFORE_XOR = [
+    "and->or",
+    "or->and",
+    "implies->iff",
+    "iff->implies",
+] as const
+
+// The ordered pairs `xor` adds, and the only ones it may add.
+const PERMITTED_ADDED_BY_XOR = [
+    "and->xor",
+    "xor->and",
+    "or->xor",
+    "xor->or",
+] as const
+
+const EXPECTED_PERMITTED_SWAPS = new Set<string>([
+    ...PERMITTED_BEFORE_XOR,
+    ...PERMITTED_ADDED_BY_XOR,
+])
+
+/**
+ * Builds a fresh premise whose root is `from` (with the children that
+ * operator legally takes) and attempts to swap it to `to`.
+ */
+function attemptOperatorSwap(
+    from: TCoreLogicalOperatorType,
+    to: TCoreLogicalOperatorType
+): { permitted: boolean; message: string } {
+    const claimLib = new ClaimLibrary()
+    claimLib.create({ id: "claim-p", type: "normal" })
+    claimLib.create({ id: "claim-q", type: "normal" })
+    const eng = new ArgumentEngine(ARG, claimLib, { behavior: "permissive" })
+    eng.addVariable({
+        id: "v-p",
+        argumentId: ARG.id,
+        argumentVersion: ARG.version,
+        symbol: "P",
+        claimId: "claim-p",
+        claimVersion: 0,
+    })
+    eng.addVariable({
+        id: "v-q",
+        argumentId: ARG.id,
+        argumentVersion: ARG.version,
+        symbol: "Q",
+        claimId: "claim-q",
+        claimVersion: 0,
+    })
+    const { result: pe } = eng.createPremise()
+    const premiseId = pe.getId()
+    pe.addExpression(opExpr("op-1", from, null, premiseId))
+    pe.addExpression(varExpr("x-1", "v-p", "op-1", premiseId, 0))
+    if (from !== "not") {
+        pe.addExpression(varExpr("x-2", "v-q", "op-1", premiseId, 1))
+    }
+    try {
+        pe.updateExpression("op-1", { operator: to })
+        return { permitted: true, message: "" }
+    } catch (error) {
+        return { permitted: false, message: (error as Error).message }
+    }
+}
+
+describe("Operator swaps are permitted within an arity class", () => {
+    it("permits exactly the pre-xor set plus the xor pairs, over every ordered pair", () => {
+        const permitted: string[] = []
+        for (const from of ALL_OPERATORS) {
+            for (const to of ALL_OPERATORS) {
+                if (from === to) continue
+                if (attemptOperatorSwap(from, to).permitted) {
+                    permitted.push(`${from}->${to}`)
+                }
+            }
+        }
+        expect(new Set(permitted)).toEqual(EXPECTED_PERMITTED_SWAPS)
+    })
+
+    it("keeps every swap that was permitted before xor existed", () => {
+        for (const pair of PERMITTED_BEFORE_XOR) {
+            const [from, to] = pair.split("->") as [
+                TCoreLogicalOperatorType,
+                TCoreLogicalOperatorType,
+            ]
+            expect({
+                pair,
+                permitted: attemptOperatorSwap(from, to).permitted,
+            }).toEqual({ pair, permitted: true })
+        }
+    })
+
+    it("permits or -> and, which a one-successor-per-operator table would refuse", () => {
+        expect(attemptOperatorSwap("or", "and").permitted).toBe(true)
+    })
+
+    it("permits xor against both other variadic operators in both directions", () => {
+        for (const pair of PERMITTED_ADDED_BY_XOR) {
+            const [from, to] = pair.split("->") as [
+                TCoreLogicalOperatorType,
+                TCoreLogicalOperatorType,
+            ]
+            expect({
+                pair,
+                permitted: attemptOperatorSwap(from, to).permitted,
+            }).toEqual({ pair, permitted: true })
+        }
+    })
+
+    it("refuses every swap that crosses the variadic / binary boundary", () => {
+        const variadic: TCoreLogicalOperatorType[] = ["and", "or", "xor"]
+        const binary: TCoreLogicalOperatorType[] = ["implies", "iff"]
+        for (const v of variadic) {
+            for (const b of binary) {
+                expect({
+                    pair: `${v}->${b}`,
+                    permitted: attemptOperatorSwap(v, b).permitted,
+                }).toEqual({ pair: `${v}->${b}`, permitted: false })
+                expect({
+                    pair: `${b}->${v}`,
+                    permitted: attemptOperatorSwap(b, v).permitted,
+                }).toEqual({ pair: `${b}->${v}`, permitted: false })
+            }
+        }
+    })
+
+    it("leaves not unswappable in both directions", () => {
+        for (const other of ALL_OPERATORS) {
+            if (other === "not") continue
+            expect({
+                pair: `not->${other}`,
+                permitted: attemptOperatorSwap("not", other).permitted,
+            }).toEqual({ pair: `not->${other}`, permitted: false })
+            expect({
+                pair: `${other}->not`,
+                permitted: attemptOperatorSwap(other, "not").permitted,
+            }).toEqual({ pair: `${other}->not`, permitted: false })
+        }
+    })
+
+    it("names the arity classes in the refusal message, without claiming a fixed pair list", () => {
+        const { message } = attemptOperatorSwap("and", "implies")
+        expect(message).toContain('from "and" to "implies"')
+        expect(message).toContain("and, or, xor")
+        expect(message).toContain("implies, iff")
+        expect(message).toContain("not")
+        expect(message).not.toContain("Permitted: and↔or, implies↔iff.")
+    })
+})
+
+describe("xor takes the variadic child limit", () => {
+    /** Builds a premise rooted at `xor` with `childCount` variable children. */
+    function addXorChildren(childCount: number): () => void {
+        const claimLib = new ClaimLibrary()
+        const eng = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
+        for (let i = 0; i < childCount; i++) {
+            claimLib.create({ id: `claim-${i}`, type: "normal" })
+            eng.addVariable({
+                id: `v-${i}`,
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                symbol: `S${i}`,
+                claimId: `claim-${i}`,
+                claimVersion: 0,
+            })
+        }
+        const { result: pe } = eng.createPremise()
+        const premiseId = pe.getId()
+        pe.addExpression(opExpr("xor-1", "xor", null, premiseId))
+        return () => {
+            for (let i = 0; i < childCount; i++) {
+                pe.addExpression(
+                    varExpr(`x-${i}`, `v-${i}`, "xor-1", premiseId, i)
+                )
+            }
+        }
+    }
+
+    for (const childCount of [2, 3, 4]) {
+        it(`accepts ${childCount} children under xor`, () => {
+            expect(addXorChildren(childCount)).not.toThrow()
+        })
+    }
+
+    it("does not cap xor at two children the way iff is capped", () => {
+        const claimLib = new ClaimLibrary()
+        const eng = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
+        const { result: pe } = eng.createPremise()
+        const premiseId = pe.getId()
+        pe.addExpression(opExpr("iff-1", "iff", null, premiseId))
+        pe.addExpression(opExpr("n-0", "not", "iff-1", premiseId, 0))
+        pe.addExpression(opExpr("n-1", "not", "iff-1", premiseId, 1))
+        expect(() =>
+            pe.addExpression(opExpr("n-2", "not", "iff-1", premiseId, 2))
+        ).toThrow(/two children/)
+    })
+
+    it("defers the >= 2 floor to the Evaluable tier rather than throwing at mutation time", () => {
+        const claimLib = new ClaimLibrary()
+        claimLib.create({ id: "claim-p", type: "normal" })
+        const eng = new ArgumentEngine(ARG, claimLib, {
+            behavior: "permissive",
+        })
+        eng.addVariable({
+            id: "v-p",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: "P",
+            claimId: "claim-p",
+            claimVersion: 0,
+        })
+        const { result: pe } = eng.createPremise()
+        const premiseId = pe.getId()
+        pe.addExpression(opExpr("xor-1", "xor", null, premiseId))
+        // One child: legal to build, illegal to evaluate.
+        expect(() =>
+            pe.addExpression(varExpr("x-0", "v-p", "xor-1", premiseId, 0))
+        ).not.toThrow()
+        const underfilled = eng
+            .validate("evaluable")
+            .filter((v) => v.code === "E-1" && v.expressionId === "xor-1")
+        expect(underfilled.length).toBe(1)
     })
 })

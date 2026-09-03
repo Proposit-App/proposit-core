@@ -260,6 +260,136 @@ describe("applyAN3 — collapse 0/1-child operator/formula", () => {
         expect(afterIds).toEqual(beforeIds)
     })
 
+    it("preserves a 1-child formula whose bounded subtree contains a XOR", () => {
+        // formula → XOR(a, c). xor is a variadic connective in the same
+        // family as and/or, so the buffer is justified per P-3 and AN-3
+        // must NOT collapse it. If it does, AN-1 re-inserts the buffer on
+        // the next pass and applyANToFixedPoint oscillates.
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varC = allVars.find((v) => v.boundPremiseId === peC.getId())!
+
+        peB.addExpression({
+            id: "formula-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "xor-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "xor",
+            parentId: "formula-root",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varA.id,
+            parentId: "xor-1",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varC.id,
+            parentId: "xor-1",
+            position: 1,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN3(eng)
+
+        expect(changed).toBe(false)
+        const afterIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+        expect(afterIds).toEqual(beforeIds)
+    })
+
+    it("collapses a 1-child XOR by promoting its single child", () => {
+        const eng = makePermissiveEngine()
+        const { result: peA } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+
+        peB.addExpression({
+            id: "xor-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "xor",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varA.id,
+            parentId: "xor-1",
+            position: 0,
+        })
+
+        const changed = applyAN3(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        expect(after.map((e) => e.id)).toEqual(["ve-a"])
+        expect(after[0].parentId).toBeNull()
+    })
+
+    it("collapses a XOR operator with zero children", () => {
+        const eng = makePermissiveEngine()
+        const { result: pe } = eng.createPremise()
+        pe.addExpression({
+            id: "xor-root",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: pe.getId(),
+            type: "operator",
+            operator: "xor",
+            parentId: null,
+            position: 0,
+        })
+        expect(pe.getExpressions()).toHaveLength(1)
+
+        applyAN3(eng)
+
+        expect(pe.getExpressions()).toHaveLength(0)
+    })
+
     it("issues PremiseEngine.removeExpression(_, false) calls for AN-3 collapses (native code path)", () => {
         // Spy-style guard that locks down the public-API drive. A
         // 0-child AND collapses via a single removeExpression call;
@@ -784,6 +914,167 @@ describe("applyAN4 — absorb same-operator adjacency through a formula", () => 
         const veD = after.find((e) => e.id === "ve-d")!
         expect(veC.parentId).toBe("and-outer")
         expect(veD.parentId).toBe("and-outer")
+    })
+
+    it("absorbs XOR(a, formula(XOR(c, d))) into XOR(a, c, d) (same pattern, XOR operator)", () => {
+        const { eng, peB, varAId, varCId, varDId } =
+            setupFourPremisesWithCrossVars()
+        peB.addExpression({
+            id: "xor-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "xor",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "xor-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "xor-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "xor-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "xor",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varCId,
+            parentId: "xor-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varDId,
+            parentId: "xor-inner",
+            position: 1,
+        })
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(true)
+        const after = peB.getExpressions()
+        expect(after.map((e) => e.id).sort()).toEqual([
+            "ve-a",
+            "ve-c",
+            "ve-d",
+            "xor-outer",
+        ])
+        const veA = after.find((e) => e.id === "ve-a")!
+        const veC = after.find((e) => e.id === "ve-c")!
+        const veD = after.find((e) => e.id === "ve-d")!
+        expect(veC.parentId).toBe("xor-outer")
+        expect(veD.parentId).toBe("xor-outer")
+        expect(veA.position).toBeLessThan(veC.position)
+        expect(veC.position).toBeLessThan(veD.position)
+    })
+
+    it("does NOT absorb an OR inner into a XOR outer (different operator types)", () => {
+        const { eng, peB, varAId, varCId, varDId } =
+            setupFourPremisesWithCrossVars()
+        peB.addExpression({
+            id: "xor-outer",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "xor",
+            parentId: null,
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-a",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varAId,
+            parentId: "xor-outer",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "xor-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            id: "or-inner",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "operator",
+            operator: "or",
+            parentId: "formula-buf",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-c",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varCId,
+            parentId: "or-inner",
+            position: 0,
+        })
+        peB.addExpression({
+            id: "ve-d",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId: varDId,
+            parentId: "or-inner",
+            position: 1,
+        })
+
+        const beforeIds = peB
+            .getExpressions()
+            .map((e) => e.id)
+            .sort()
+
+        const changed = applyAN4(eng)
+
+        expect(changed).toBe(false)
+        expect(
+            peB
+                .getExpressions()
+                .map((e) => e.id)
+                .sort()
+        ).toEqual(beforeIds)
     })
 
     it("does NOT absorb when outer and inner operators differ (OR-outer with AND-inner)", () => {

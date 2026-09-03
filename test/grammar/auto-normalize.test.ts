@@ -35,6 +35,7 @@ import { ClaimLibrary } from "../../src/lib/core/claim-library.js"
 import { EMPTY_CLAIM_LOOKUP } from "../../src/lib/utils/lookup.js"
 import type { TExpressionInput } from "../../src/lib/core/expression-manager.js"
 import { POSITION_INITIAL } from "../../src/lib/utils/position.js"
+import type { TCoreLogicalOperatorType } from "../../src/lib/schemata/index.js"
 import { makeArgument } from "./fixtures.js"
 
 /**
@@ -72,7 +73,7 @@ const ARG = makeArgument()
 
 function opExpr(
     id: string,
-    operator: "not" | "and" | "or" | "implies" | "iff",
+    operator: TCoreLogicalOperatorType,
     parentId: string | null,
     position: number = POSITION_INITIAL
 ): TExpressionInput {
@@ -171,6 +172,83 @@ describe("ArgumentEngine.behavior bridges to AN cleanup", () => {
         )
         expect(formulaBetween).toBeDefined()
         expect(and.parentId).toBe(formulaBetween!.id)
+    })
+
+    it("assistive mode: post-hook AN-1 buffers a XOR under an OR and the buffer survives", () => {
+        // Same shape as the AND-under-OR case, with XOR as the inner
+        // operator. AN-1 must insert the buffer, and the AN pass must
+        // then settle: a buffer AN-3 does not recognize as justified is
+        // stripped and re-inserted until the convergence cap throws.
+        const { eng, vP, vQ } = makeEngineWithVars("permissive")
+        const { result: pe1 } = eng.createPremise()
+        const premiseId = pe1.getId()
+        pe1.addExpression(opExpr("or-1", "or", null))
+        pe1.addExpression(opExpr("xor-1", "xor", "or-1", 100))
+        pe1.addExpression({
+            id: "var-1",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "xor-1",
+            position: 0,
+        })
+        pe1.addExpression({
+            id: "var-2",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vQ,
+            parentId: "xor-1",
+            position: 1,
+        })
+        pe1.addExpression({
+            id: "var-3",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId,
+            type: "variable",
+            variableId: vP,
+            parentId: "or-1",
+            position: 200,
+        })
+
+        expect(
+            pe1.getExpressions().find((e) => e.id === "xor-1")!.parentId
+        ).toBe("or-1")
+
+        eng.setBehavior("assistive")
+
+        const { result: pe2 } = eng.createPremise()
+        expect(() =>
+            pe2.addExpression({
+                id: "trigger-var",
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: pe2.getId(),
+                type: "variable",
+                variableId: vP,
+                parentId: null,
+                position: 0,
+            })
+        ).not.toThrow()
+
+        const exprs = pe1.getExpressions()
+        const xor = exprs.find((e) => e.id === "xor-1")!
+        const formulaBetween = exprs.find(
+            (e) => e.type === "formula" && e.parentId === "or-1"
+        )
+        expect(formulaBetween).toBeDefined()
+        expect(xor.parentId).toBe(formulaBetween!.id)
+        // Both operands stayed under the XOR.
+        expect(
+            exprs
+                .filter((e) => e.parentId === "xor-1")
+                .map((e) => e.id)
+                .sort()
+        ).toEqual(["var-1", "var-2"])
     })
 
     it("permissive mode: AND under OR is allowed with no formula buffer", () => {

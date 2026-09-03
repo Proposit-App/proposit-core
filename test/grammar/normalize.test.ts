@@ -20,13 +20,14 @@ import { EMPTY_CLAIM_LOOKUP } from "../../src/lib/utils/lookup.js"
 import type { TExpressionInput } from "../../src/lib/core/expression-manager.js"
 import type { TCorePropositionalExpression } from "../../src/lib/schemata/index.js"
 import { POSITION_INITIAL } from "../../src/lib/utils/position.js"
+import type { TCoreLogicalOperatorType } from "../../src/lib/schemata/index.js"
 import { makeArgument } from "./fixtures.js"
 
 const ARG = makeArgument()
 
 function opExpr(
     id: string,
-    operator: "not" | "and" | "or" | "implies" | "iff",
+    operator: TCoreLogicalOperatorType,
     parentId: string | null,
     position: number = POSITION_INITIAL
 ): TExpressionInput {
@@ -196,6 +197,146 @@ describe("ArgumentEngine.normalize(tier?)", () => {
         pe.addExpression(opExpr("and-root", "and", null))
 
         expect(() => eng.normalize()).not.toThrow()
+    })
+
+    it("converges on a nested XOR: buffers it and absorbs the inner XOR", () => {
+        // XOR(a, formula(XOR(c, d))) must normalize to XOR(a, c, d) — the
+        // same AN-4 absorption and/or get. A buffer that AN-3 wrongly
+        // treats as unjustified would be stripped and re-inserted by AN-1
+        // every iteration, tripping the convergence cap instead.
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+        })
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peD } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varC = allVars.find((v) => v.boundPremiseId === peC.getId())!
+        const varD = allVars.find((v) => v.boundPremiseId === peD.getId())!
+
+        const varExpr = (
+            id: string,
+            variableId: string,
+            parentId: string,
+            position: number
+        ): TExpressionInput => ({
+            id,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId,
+            parentId,
+            position,
+        })
+
+        peB.addExpression({
+            ...opExpr("xor-outer", "xor", null, 0),
+            premiseId: peB.getId(),
+        })
+        peB.addExpression(varExpr("ve-a", varA.id, "xor-outer", 0))
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "xor-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            ...opExpr("xor-inner", "xor", "formula-buf", 0),
+            premiseId: peB.getId(),
+        })
+        peB.addExpression(varExpr("ve-c", varC.id, "xor-inner", 0))
+        peB.addExpression(varExpr("ve-d", varD.id, "xor-inner", 1))
+
+        expect(() => eng.normalize()).not.toThrow()
+
+        const after = peB.getExpressions()
+        expect(after.map((e) => e.id).sort()).toEqual([
+            "ve-a",
+            "ve-c",
+            "ve-d",
+            "xor-outer",
+        ])
+        expect(hasP1Violation(after)).toBe(false)
+    })
+
+    it("keeps the formula buffer around a XOR nested under an AND", () => {
+        // AND(a, formula(XOR(c, d))) is already Presentable: the buffer is
+        // justified because xor is a variadic connective, and the two
+        // operators differ so nothing absorbs. normalize() must leave it
+        // exactly as it is.
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+        })
+        const { result: peA } = eng.createPremise()
+        const { result: peC } = eng.createPremise()
+        const { result: peD } = eng.createPremise()
+        const { result: peB } = eng.createPremise()
+        const allVars = peB.getVariables() as {
+            id: string
+            boundPremiseId?: string
+        }[]
+        const varA = allVars.find((v) => v.boundPremiseId === peA.getId())!
+        const varC = allVars.find((v) => v.boundPremiseId === peC.getId())!
+        const varD = allVars.find((v) => v.boundPremiseId === peD.getId())!
+
+        const varExpr = (
+            id: string,
+            variableId: string,
+            parentId: string,
+            position: number
+        ): TExpressionInput => ({
+            id,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "variable",
+            variableId,
+            parentId,
+            position,
+        })
+
+        peB.addExpression({
+            ...opExpr("and-outer", "and", null, 0),
+            premiseId: peB.getId(),
+        })
+        peB.addExpression(varExpr("ve-a", varA.id, "and-outer", 0))
+        peB.addExpression({
+            id: "formula-buf",
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: peB.getId(),
+            type: "formula",
+            parentId: "and-outer",
+            position: 1,
+        })
+        peB.addExpression({
+            ...opExpr("xor-inner", "xor", "formula-buf", 0),
+            premiseId: peB.getId(),
+        })
+        peB.addExpression(varExpr("ve-c", varC.id, "xor-inner", 0))
+        peB.addExpression(varExpr("ve-d", varD.id, "xor-inner", 1))
+
+        const before = peB
+            .getExpressions()
+            .map((e) => `${e.id}@${e.parentId ?? "root"}`)
+            .sort()
+
+        expect(() => eng.normalize()).not.toThrow()
+
+        const after = peB
+            .getExpressions()
+            .map((e) => `${e.id}@${e.parentId ?? "root"}`)
+            .sort()
+        expect(after).toEqual(before)
     })
 
     it("is safe to call on an empty engine (no premises)", () => {
