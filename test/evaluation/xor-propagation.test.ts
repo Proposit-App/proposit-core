@@ -39,7 +39,8 @@ function evaluateGrantedXor(
 const valueOf = (
     outcome: ReturnType<typeof evaluateGrantedXor>,
     name: string
-): unknown => outcome.result.variableProvenance?.[outcome.variableId(name)]?.value
+): unknown =>
+    outcome.result.variableProvenance?.[outcome.variableId(name)]?.value
 
 describe("a granted xor step forces the parity remainder", () => {
     it("forces the last operand false when the others are an odd number of trues", () => {
@@ -53,24 +54,27 @@ describe("a granted xor step forces the parity remainder", () => {
     })
 
     it("counts parity across three operands rather than stopping at one", () => {
-        const evenSiblings = evaluateGrantedXor(
-            { A: true, B: true, C: null },
-            ["A", "B", "C"]
-        )
+        const evenSiblings = evaluateGrantedXor({ A: true, B: true, C: null }, [
+            "A",
+            "B",
+            "C",
+        ])
         expect(valueOf(evenSiblings, "C")).toBe(true)
 
-        const oddSiblings = evaluateGrantedXor(
-            { A: true, B: false, C: null },
-            ["A", "B", "C"]
-        )
+        const oddSiblings = evaluateGrantedXor({ A: true, B: false, C: null }, [
+            "A",
+            "B",
+            "C",
+        ])
         expect(valueOf(oddSiblings, "C")).toBe(false)
     })
 
     it("forces nothing while any sibling is still unanswered", () => {
-        const outcome = evaluateGrantedXor(
-            { A: true, B: null, C: null },
-            ["A", "B", "C"]
-        )
+        const outcome = evaluateGrantedXor({ A: true, B: null, C: null }, [
+            "A",
+            "B",
+            "C",
+        ])
         // Unforced reads as either an absent provenance entry or a null one;
         // what matters is that the closure committed to neither truth value.
         expect(valueOf(outcome, "B") ?? null).toBe(null)

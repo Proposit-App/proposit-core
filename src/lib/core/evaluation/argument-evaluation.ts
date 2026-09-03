@@ -519,9 +519,7 @@ export function closeUnderAcceptedOperators(
 
                         const trueSiblings =
                             siblingValues.filter(hasTrueComponent).length
-                        if (
-                            mergeIntoChild(child, trueSiblings % 2 === 0, step)
-                        )
+                        if (mergeIntoChild(child, trueSiblings % 2 === 0, step))
                             changed = true
                     }
                     break
