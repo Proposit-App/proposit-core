@@ -1,8 +1,13 @@
 /**
- * Integration test — hits the real OpenAI API.
+ * Integration test — hits the real OpenAI API, and costs tokens.
  *
- * Requires OPENAI_API_KEY in .env.development (or already in env).
- * Skipped automatically when no key is available.
+ * Opt-in, on the same two conditions as the other live suites:
+ * `RUN_LIVE_LLM_TESTS=1` AND an `OPENAI_API_KEY` (env, or
+ * `.env.development`). CI sets neither.
+ *
+ * Gating on the key alone is the wrong question — it bills every developer who
+ * merely has one exported, on every `pnpm run test`, and turns an unreachable
+ * host into a failing test run rather than a skipped suite.
  */
 import fs from "node:fs"
 import path from "node:path"
@@ -34,8 +39,15 @@ function loadApiKey(): string | undefined {
 }
 
 const apiKey = loadApiKey()
+const optInEnabled = process.env.RUN_LIVE_LLM_TESTS === "1"
 
-const describeIf = apiKey ? describe : describe.skip
+const describeIf = optInEnabled && apiKey ? describe : describe.skip
+
+if (optInEnabled && !apiKey) {
+    console.warn(
+        "[parse-api] RUN_LIVE_LLM_TESTS=1 but OPENAI_API_KEY is not set — skipping the live parse suite."
+    )
+}
 
 // ---------------------------------------------------------------------------
 // Tests
