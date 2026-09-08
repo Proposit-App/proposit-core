@@ -70,13 +70,14 @@ An **expression** is a node in the rooted expression tree managed by a `PremiseE
 - **Operator expression** (`"operator"`) — an interior node that applies a logical operator to its children.
 - **Formula expression** (`"formula"`) — a transparent unary wrapper, equivalent to parentheses around its single child.
 
-The five supported operators and their arities are:
+The six supported operators and their arities are:
 
 | Operator  | Symbol | Arity          |
 | --------- | ------ | -------------- |
 | `not`     | ¬      | unary (= 1)    |
 | `and`     | ∧      | variadic (≥ 2) |
 | `or`      | ∨      | variadic (≥ 2) |
+| `xor`     | ⊻      | variadic (≥ 2) |
 | `implies` | →      | binary (= 2)   |
 | `iff`     | ↔      | binary (= 2)   |
 

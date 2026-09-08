@@ -128,6 +128,15 @@ implies  (root, parentId=null)
 
 When no `--position`, `--before`, or `--after` is specified, the expression is appended as the last child. For binary operators like `implies`, children at position 0 and 1 represent the antecedent and consequent respectively.
 
+`--operator` accepts `not`, `and`, `or`, `xor`, `implies` and `iff`. The variadic
+operators — `and`, `or`, `xor` — take two or more children, so `xor` is written the
+same way as `or`:
+
+```bash
+proposit-core <argument-id> latest expressions create <premise-id> \
+  --type operator --operator xor
+```
+
 ### Premise 1: P → Q
 
 ```bash
