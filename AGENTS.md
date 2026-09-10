@@ -33,7 +33,6 @@
 ## Generic instructions
 
 - Git commit messages should not include any co-authoring content
-- When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.
 - All TypeScript development work must use the `brain-style` skill (specifically its TypeScript sub-skill). Invoke it before writing or reviewing any TypeScript code to ensure naming conventions, casing rules, and style guidelines are followed. Use the TypeScript language server (LSP tool) to verify types, check for errors, and navigate definitions during development.
 
 ## Researching the OpenAI API
@@ -96,9 +95,9 @@ For the full design detail, route by topic:
 
 ## Testing
 
-**Run a new test against the unchanged code and read which ones fail, before writing the fix.** A pin that passes before the change proves nothing, and the failure mode is not "I forgot to run it" — it is measuring something _adjacent_ to the claim. Three times in two days: a counterexample-list assertion whose fixture's only counterexample was already correct; a row-count assertion that the first-satisfying-row early return made identical either way; a `variableProvenance` assertion aimed at a defect that lives in `claimAttribution`. Each looked like coverage. Before trusting a pin, name the exact field the change writes and assert on **that field**; where a plausible wrong fix exists, implement it, confirm the pin fails, and revert.
+Tests live under `test/`: `core.test.ts` (the largest suite) plus per-area dirs — `test/grammar/` (per-tier suites), `test/extensions/<provider>/`, and `test/integration/`. All tests build their own fixtures inline — no shared `beforeEach` state.
 
-Tests live under `test/`: `core.test.ts` (the largest suite) plus per-area dirs — `test/grammar/` (per-tier suites), `test/extensions/<provider>/`, and `test/integration/`. All tests build their own fixtures inline — no shared `beforeEach` state. Add a new feature's tests to the matching file/dir, not by default to `core.test.ts`.
+How a test earns trust here — proving a new pin fails before the fix, and reproducing a reported bug before anyone attempts one — is bound to the `implement` stage rather than written here, so it arrives when it applies: `tcw work stage prompt implement <slug>`.
 
 ## Linting notes
 

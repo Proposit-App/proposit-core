@@ -22,6 +22,17 @@ work:
     tags:
         - bug
         - product
+        - tech-debt
+    lifecycle:
+        stages:
+            implement:
+                prompt:
+                    - builtin: true
+                    # Node-local, so a `file:` binding reaches it. The three
+                    # proposit-app packages share theirs through a script
+                    # because they are three nodes in one repository; this one
+                    # is a repository of its own and needs no such indirection.
+                    - file: docs/lifecycle/implement.md
     documentation:
         - path: README.md
           trigger: Public-CLI-API
