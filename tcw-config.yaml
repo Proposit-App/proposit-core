@@ -22,6 +22,7 @@ work:
     tags:
         - bug
         - product
+        - tech-debt
     lifecycle:
         stages:
             implement:
