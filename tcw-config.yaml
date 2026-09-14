@@ -23,6 +23,8 @@ work:
         - bug
         - product
         - tech-debt
+    tracker:
+        candidate-query: project = PRPI AND component = core AND status = "To Do" AND (assignee = currentUser() OR assignee IS EMPTY)
     lifecycle:
         stages:
             implement:
