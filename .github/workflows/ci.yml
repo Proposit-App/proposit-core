@@ -1,13 +1,38 @@
 name: CI
 
+# CI minutes are paid for, so the default is not to spend them. A push to a
+# feature branch raises no run at all, and a pull request raises one whose job
+# skips unless something asks for it. Two things always run the checks anyway: a
+# push to `main`, and a pull request opened by Dependabot.
+#
+# To run them on a feature branch regardless, either add the `run-ci` label to
+# its pull request — which runs the checks then and on every push afterwards,
+# since the label stays applied — or start a run from Actions → CI → Run workflow
+# against the branch. The label has to exist in the repository before it can be
+# applied; create it once under Issues → Labels.
+#
+# A job skipped by its `if` still reports a conclusion, so this gate is safe to
+# leave in place under a required status check — unlike a path filter, which
+# skips the workflow entirely and reports nothing.
 on:
     push:
-        branches: ["**"]
+        branches: ["main"]
     pull_request:
         branches: [main]
+        # `labeled` is listed so that applying `run-ci` starts a run on a pull
+        # request that is already open; naming any type means naming the three
+        # defaults too.
+        types: [opened, synchronize, reopened, labeled]
+    workflow_dispatch:
 
 jobs:
     check:
+        # Everything except an unlabelled pull request that Dependabot did not
+        # open.
+        if: >-
+            github.event_name != 'pull_request'
+            || github.event.pull_request.user.login == 'dependabot[bot]'
+            || contains(github.event.pull_request.labels.*.name, 'run-ci')
         runs-on: ubuntu-latest
 
         steps:
