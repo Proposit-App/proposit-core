@@ -34,7 +34,6 @@ jobs:
             || github.event.pull_request.user.login == 'dependabot[bot]'
             || contains(github.event.pull_request.labels.*.name, 'run-ci')
         runs-on: ubuntu-latest
-
         steps:
             - uses: actions/checkout@v4
 
