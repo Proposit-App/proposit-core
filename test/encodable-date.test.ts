@@ -33,6 +33,18 @@ describe("EncodableDate", () => {
         expect(Value.Check(EncodableDate, {})).toBe(false)
     })
 
+    it("rejects a Date instance that holds no time, which JSON.stringify would turn into null", () => {
+        const invalid = new Date("nonsense")
+        expect(Value.Check(EncodableDate, invalid)).toBe(false)
+        expect(
+            Value.Check(RecordSchema, {
+                createdAt: invalid,
+                archivedAt: null,
+                title: "a",
+            })
+        ).toBe(false)
+    })
+
     it("reports an invalid-date error for a value it rejects", () => {
         const errors = [...Value.Errors(EncodableDate, "not a date")]
         expect(errors).toHaveLength(1)
