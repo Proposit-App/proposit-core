@@ -29,7 +29,9 @@ export function formatDate(d: Date): string {
 }
 
 export function formatSingleAuthor(author: TAuthor): string {
+    if (!("givenNames" in author)) return author.name
     const initials = author.givenNames
+        .trim()
         .split(/\s+/)
         .map((name) => `${name.charAt(0)}.`)
         .join(" ")

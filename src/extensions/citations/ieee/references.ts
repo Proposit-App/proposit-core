@@ -108,14 +108,18 @@ const BaseReferenceSchema = Type.Object({
 })
 
 // ---------------------------------------------------------------------------
-// Structured author name
+// Author name
 // ---------------------------------------------------------------------------
-export const AuthorSchema = Type.Object({
+export const PersonalAuthorSchema = Type.Object({
     givenNames: Type.String({
         minLength: 1,
         description: "Full given/first names (e.g. Jane Marie)",
     }),
-    familyName: Type.String({ minLength: 1, description: "Family/last name" }),
+    familyName: Type.String({
+        minLength: 1,
+        description:
+            "Family/last name, including any particle (e.g. van Beethoven)",
+    }),
     suffix: Type.Optional(
         Type.String({
             minLength: 1,
@@ -123,6 +127,29 @@ export const AuthorSchema = Type.Object({
         })
     ),
 })
+export type TPersonalAuthor = Static<typeof PersonalAuthorSchema>
+
+// An organisation or a one-part name, rendered exactly as written. Extra keys
+// are refused so that a value cannot belong to both author shapes.
+export const NamedAuthorSchema = Type.Object(
+    {
+        name: Type.String({
+            minLength: 1,
+            pattern: "\\S",
+            description:
+                "Organisation or single name, as it should appear (e.g. Reuters, Aristotle)",
+        }),
+    },
+    { additionalProperties: false }
+)
+export type TNamedAuthor = Static<typeof NamedAuthorSchema>
+
+// Tell the two apart with `"givenNames" in author`. TypeScript accepts
+// `{ name, suffix }` as a `TAuthor` literal; the schema does not.
+export const AuthorSchema = Type.Union([
+    PersonalAuthorSchema,
+    NamedAuthorSchema,
+])
 export type TAuthor = Static<typeof AuthorSchema>
 
 // ---------------------------------------------------------------------------

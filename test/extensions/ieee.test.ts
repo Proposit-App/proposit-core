@@ -882,3 +882,62 @@ describe("buildSegments conditional else", () => {
         expect(texts({})).toEqual(["else"])
     })
 })
+
+describe("single-name authors", () => {
+    const rendered = (ref: TIEEEReference) =>
+        formatCitationParts(ref)
+            .segments.map((s) => s.text)
+            .join("")
+
+    it("accepts an organisation or a one-word name as an author", async () => {
+        const { AuthorSchema } =
+            await import("../../src/extensions/citations/ieee/references.js")
+        expect(Value.Check(AuthorSchema, { name: "Reuters" })).toBe(true)
+        expect(Value.Check(AuthorSchema, { name: "Aristotle" })).toBe(true)
+        expect(Value.Check(AuthorSchema, author("Jane", "Smith"))).toBe(true)
+    })
+
+    it("rejects a single name with anything beside it, or with no text", async () => {
+        const { AuthorSchema } =
+            await import("../../src/extensions/citations/ieee/references.js")
+        expect(
+            Value.Check(AuthorSchema, { name: "Reuters", suffix: "Jr." })
+        ).toBe(false)
+        expect(Value.Check(AuthorSchema, { name: "" })).toBe(false)
+        expect(Value.Check(AuthorSchema, { name: " " })).toBe(false)
+        expect(Value.Check(AuthorSchema, {})).toBe(false)
+    })
+
+    it("validates and renders a Book whose author is a single name", () => {
+        for (const name of ["Reuters", "Aristotle"]) {
+            const book = { ...validBook(), authors: [{ name }] }
+            expect(Value.Check(IEEEReferenceSchema, book)).toBe(true)
+            expect(Value.Check(RelaxedBookReferenceSchema, book)).toBe(true)
+            expect(rendered(book)).toMatch(new RegExp(`^${name}, `))
+        }
+    })
+
+    it("keeps a particle with the family name", () => {
+        expect(
+            formatSingleAuthor({
+                givenNames: "Ludwig",
+                familyName: "van Beethoven",
+            })
+        ).toBe("L. van Beethoven")
+    })
+
+    it("ignores space around the given names", () => {
+        expect(
+            formatSingleAuthor({ givenNames: " Jane", familyName: "Smith" })
+        ).toBe("J. Smith")
+    })
+
+    it("lists a single name beside a personal name", () => {
+        expect(
+            formatNamesInCitation([
+                { givenNames: "John", familyName: "Smith" },
+                { name: "Reuters" },
+            ])
+        ).toBe("J. Smith and Reuters")
+    })
+})
