@@ -1,8 +1,32 @@
 # Upcoming
 
-### Documentation
+## Added
 
-- The README operator table, `CLI_EXAMPLES.md` and `scripts/smoke-test.sh` now
-  cover `xor`. The operator shipped in v5.0.0, but these three files still
-  described a five-operator set, and the smoke test never exercised a swap
-  within the variadic arity class.
+- `NamedAuthorSchema` / `TNamedAuthor`: `{ name }` (non-blank, no other keys),
+  rendered verbatim by `formatSingleAuthor`. `PersonalAuthorSchema` /
+  `TPersonalAuthor` export today's personal-name shape under its own name.
+- `SocialMediaReferenceSchema` gains optional `username` (no leading `@`, no
+  whitespace or brackets), `postTitle`, `postBody`, `websiteTitle` (each
+  non-blank) and `accessedDate`.
+- `TCitationSegment["role"]` gains `"username"` and `"body"`.
+- `TSegmentInstructionConditional` gains an optional `else` branch, emitted
+  exactly when `then` is not.
+
+## Changed
+
+- **Breaking (types):** `AuthorSchema` / `TAuthor` are now the union of the
+  personal and named shapes, in every author field of every reference type.
+- **Breaking (types):** `SocialMediaReferenceSchema.author` is optional.
+- `SOCIAL_MEDIA_TEMPLATE` renders the University of Melbourne IEEE social
+  media style: `{author} [@{username}], "{postTitle}" | {postBody},
+{websiteTitle | platform}, {postDate}. Accessed: {accessedDate}. Available:
+{url}`, each optional part omitted with its separator when absent. Replaces
+  the `. `-separated `[Online]. Available:` layout.
+- `formatSingleAuthor` trims `givenNames` before taking initials, so a leading
+  space no longer renders a stray `.`.
+
+## Fixed
+
+- `EncodableDate` rejects a `Date` whose time is NaN (an Invalid Date). Only
+  the string branch checked this, so an Invalid Date validated and was then
+  written as `null` by `JSON.stringify`.
