@@ -861,3 +861,24 @@ describe("segment template config", () => {
         expect(BOOK_TEMPLATE.length).toBeGreaterThan(0)
     })
 })
+
+describe("buildSegments conditional else", () => {
+    it("emits the else branch when the field is absent or, with checkLength, an empty array", async () => {
+        const { buildSegments } =
+            await import("../../src/extensions/citations/ieee/segment-builder.js")
+        const template = [
+            {
+                type: "conditional" as const,
+                field: "items",
+                checkLength: true,
+                then: [{ type: "separator" as const, text: "then" }],
+                else: [{ type: "separator" as const, text: "else" }],
+            },
+        ]
+        const texts = (ref: Record<string, unknown>) =>
+            buildSegments(ref, template).map((s) => s.text)
+        expect(texts({ items: ["a"] })).toEqual(["then"])
+        expect(texts({ items: [] })).toEqual(["else"])
+        expect(texts({})).toEqual(["else"])
+    })
+})

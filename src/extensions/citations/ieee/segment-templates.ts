@@ -29,6 +29,8 @@ export interface TSegmentInstructionConditional {
     field: string
     checkLength?: boolean
     then: TSegmentInstruction[]
+    /** Emitted exactly when `then` is not. */
+    else?: TSegmentInstruction[]
 }
 
 export type TSegmentInstruction =

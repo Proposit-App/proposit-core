@@ -92,14 +92,15 @@ function emitInstructions(
             }
             case "conditional": {
                 const value = ref[instr.field]
-                if (value === undefined) break
-                if (
-                    instr.checkLength &&
-                    Array.isArray(value) &&
-                    value.length === 0
-                )
-                    break
-                emitInstructions(ref, instr.then, segs)
+                const present =
+                    value !== undefined &&
+                    !(
+                        instr.checkLength &&
+                        Array.isArray(value) &&
+                        value.length === 0
+                    )
+                if (present) emitInstructions(ref, instr.then, segs)
+                else if (instr.else) emitInstructions(ref, instr.else, segs)
                 break
             }
         }
