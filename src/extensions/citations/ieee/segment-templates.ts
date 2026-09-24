@@ -29,6 +29,8 @@ export interface TSegmentInstructionConditional {
     field: string
     checkLength?: boolean
     then: TSegmentInstruction[]
+    /** Emitted exactly when `then` is not. */
+    else?: TSegmentInstruction[]
 }
 
 export type TSegmentInstruction =
@@ -1117,21 +1119,114 @@ export const BLOG_TEMPLATE: TSegmentInstruction[] = [
     },
 ]
 
-// SocialMedia: author(single), ". ", platform, ". ", postDate(date), ". ", "[Online]. Available: ", url(link)
+// SocialMedia: [author, [" [@", username, "]"], ", " | "[@", username, "]", ", "], ["title"(quoted), ", " | body, ", "], websiteTitle | platform, ", ", postDate(date), ". ", ["Accessed: ", accessedDate, ". "], "Available: ", url(link)
+// Follows the University of Melbourne's IEEE social media style.
 export const SOCIAL_MEDIA_TEMPLATE: TSegmentInstruction[] = [
     {
-        type: "segment",
-        source: { kind: "singleAuthor", field: "author" },
-        role: "authors",
-        style: "plain",
+        type: "conditional",
+        field: "author",
+        then: [
+            {
+                type: "segment",
+                source: { kind: "singleAuthor", field: "author" },
+                role: "authors",
+                style: "plain",
+            },
+            {
+                type: "conditional",
+                field: "username",
+                then: [
+                    { type: "separator", text: " " },
+                    {
+                        type: "segment",
+                        source: { kind: "literal", text: "[@" },
+                        role: "prefix",
+                    },
+                    {
+                        type: "segment",
+                        source: { kind: "string", field: "username" },
+                        role: "username",
+                    },
+                    {
+                        type: "segment",
+                        source: { kind: "literal", text: "]" },
+                        role: "suffix",
+                    },
+                ],
+            },
+            { type: "separator", text: ", " },
+        ],
+        else: [
+            {
+                type: "conditional",
+                field: "username",
+                then: [
+                    {
+                        type: "segment",
+                        source: { kind: "literal", text: "[@" },
+                        role: "prefix",
+                    },
+                    {
+                        type: "segment",
+                        source: { kind: "string", field: "username" },
+                        role: "username",
+                    },
+                    {
+                        type: "segment",
+                        source: { kind: "literal", text: "]" },
+                        role: "suffix",
+                    },
+                    { type: "separator", text: ", " },
+                ],
+            },
+        ],
     },
-    { type: "separator", text: ". " },
     {
-        type: "segment",
-        source: { kind: "string", field: "platform" },
-        role: "platform",
+        type: "conditional",
+        field: "postTitle",
+        then: [
+            {
+                type: "segment",
+                source: { kind: "string", field: "postTitle" },
+                role: "title",
+                style: "quoted",
+            },
+            { type: "separator", text: ", " },
+        ],
+        else: [
+            {
+                type: "conditional",
+                field: "postBody",
+                then: [
+                    {
+                        type: "segment",
+                        source: { kind: "string", field: "postBody" },
+                        role: "body",
+                    },
+                    { type: "separator", text: ", " },
+                ],
+            },
+        ],
     },
-    { type: "separator", text: ". " },
+    {
+        type: "conditional",
+        field: "websiteTitle",
+        then: [
+            {
+                type: "segment",
+                source: { kind: "string", field: "websiteTitle" },
+                role: "platform",
+            },
+        ],
+        else: [
+            {
+                type: "segment",
+                source: { kind: "string", field: "platform" },
+                role: "platform",
+            },
+        ],
+    },
+    { type: "separator", text: ", " },
     {
         type: "segment",
         source: { kind: "date", field: "postDate" },
@@ -1139,8 +1234,25 @@ export const SOCIAL_MEDIA_TEMPLATE: TSegmentInstruction[] = [
     },
     { type: "separator", text: ". " },
     {
+        type: "conditional",
+        field: "accessedDate",
+        then: [
+            {
+                type: "segment",
+                source: { kind: "literal", text: "Accessed: " },
+                role: "prefix",
+            },
+            {
+                type: "segment",
+                source: { kind: "date", field: "accessedDate" },
+                role: "accessedDate",
+            },
+            { type: "separator", text: ". " },
+        ],
+    },
+    {
         type: "segment",
-        source: { kind: "literal", text: "[Online]. Available: " },
+        source: { kind: "literal", text: "Available: " },
         role: "prefix",
     },
     {

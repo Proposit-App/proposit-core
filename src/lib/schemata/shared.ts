@@ -11,10 +11,15 @@ import Type, { type Static, type TSchema, type TSchemaOptions } from "typebox"
  * mistakenly supplied where a date belongs still fails validation.
  */
 function toDate(value: unknown): Date | undefined {
-    if (value instanceof Date) return value
-    if (typeof value !== "string") return undefined
-    const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? undefined : date
+    const date =
+        value instanceof Date
+            ? value
+            : typeof value === "string"
+              ? new Date(value)
+              : undefined
+    // An Invalid Date is still a `Date`, and `JSON.stringify` writes it as
+    // `null` — after validation has already passed it.
+    return date === undefined || Number.isNaN(date.getTime()) ? undefined : date
 }
 
 /**
