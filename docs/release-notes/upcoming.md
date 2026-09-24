@@ -63,5 +63,8 @@ author and any of the new fields, and renders it in the old format.
 
 ## Fixed
 
+`formatSingleAuthor` ignores space around `givenNames` when taking initials, so
+`" Jane "` gives `J.` rather than `. J. .`.
+
 `EncodableDate` now rejects an Invalid Date (`new Date("nonsense")`). It used
 to validate and then be written as `null` in JSON.
