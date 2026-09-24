@@ -926,7 +926,7 @@ describe("single-name authors", () => {
         ).toBe("L. van Beethoven")
     })
 
-    it("ignores space around the given names", () => {
+    it("ignores a leading space in the given names", () => {
         expect(
             formatSingleAuthor({ givenNames: " Jane", familyName: "Smith" })
         ).toBe("J. Smith")

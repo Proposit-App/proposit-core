@@ -30,3 +30,10 @@
 - `EncodableDate` rejects a `Date` whose time is NaN (an Invalid Date). Only
   the string branch checked this, so an Invalid Date validated and was then
   written as `null` by `JSON.stringify`.
+
+## Documentation
+
+- The README operator table, `CLI_EXAMPLES.md` and `scripts/smoke-test.sh` now
+  cover `xor`. The operator shipped in v5.0.0, but these three files still
+  described a five-operator set, and the smoke test never exercised a swap
+  within the variadic arity class.

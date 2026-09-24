@@ -1,7 +1,7 @@
 # Upcoming
 
 This is a major release. Every value that was valid before is still valid,
-but three published types are wider, which breaks code that reads them under
+apart from an Invalid Date (see Fixed), but three published types are wider, which breaks code that reads them under
 strict TypeScript.
 
 ## Added
@@ -50,6 +50,12 @@ breaks or closing punctuation.
 - **`TSocialMediaReference["author"]` is optional.**
 - **`TCitationSegment["role"]` has two more members**, so an exhaustive
   `switch` over it needs two more cases.
+
+Because an author is now one of two shapes, `Value.Errors` on an invalid
+personal author reports the real problem first and then three more errors from
+the named shape it also failed (`required name`, `additionalProperties`,
+`anyOf`). A form that maps every error to a field should use the first error
+at each path.
 
 A client still on 5.x rejects a `{ name }` author and a Social Media citation
 without an `author`. It accepts a Social Media citation that has a personal
