@@ -43,6 +43,8 @@ export interface TCitationSegment {
         | "patentNumber"
         | "country"
         | "platform"
+        | "username"
+        | "body"
         | "separator"
         | "prefix"
         | "suffix"

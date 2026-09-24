@@ -941,3 +941,149 @@ describe("single-name authors", () => {
         ).toBe("J. Smith and Reuters")
     })
 })
+
+describe("SocialMedia", () => {
+    const url = "https://example.com/p/1"
+    const full = {
+        type: "SocialMedia" as const,
+        author: author("John Kim", "Author"),
+        username: "user",
+        postTitle: "Title",
+        websiteTitle: "Site",
+        platform: "Reddit",
+        postDate: new Date(1995, 7, 12),
+        url,
+        accessedDate: new Date(2026, 8, 1),
+    }
+    const withBody = (() => {
+        const { postTitle: _t, websiteTitle: _w, ...rest } = full
+        return { ...rest, postBody: "Some text", platform: "X" }
+    })()
+    const without = <K extends keyof typeof full>(...keys: K[]) => {
+        const ref: Record<string, unknown> = { ...full }
+        for (const key of keys) delete ref[key]
+        return ref as TIEEEReference
+    }
+    const rendered = (ref: TIEEEReference) =>
+        formatCitationParts(ref)
+            .segments.map((s) =>
+                s.style === "quoted" ? `"${s.text}"` : s.text
+            )
+            .join("")
+
+    it("renders a titled post with handle, site and access date", () => {
+        expect(rendered(full)).toBe(
+            `J. K. Author [@user], "Title", Site, Aug. 12, 1995. Accessed: Sep. 1, 2026. Available: ${url}`
+        )
+    })
+
+    it("renders the post body when there is no title, and the platform when there is no website title", () => {
+        expect(rendered(withBody)).toBe(
+            `J. K. Author [@user], Some text, X, Aug. 12, 1995. Accessed: Sep. 1, 2026. Available: ${url}`
+        )
+    })
+
+    it("prefers the title when both a title and a body are given", () => {
+        const text = rendered({ ...full, postBody: "Some text" })
+        expect(text).toContain(`"Title", Site`)
+        expect(text).not.toContain("Some text")
+    })
+
+    it("starts at the handle when there is no author", () => {
+        expect(rendered(without("author"))).toMatch(/^\[@user\], "Title", /)
+    })
+
+    it("follows the author with a comma when there is no handle", () => {
+        expect(rendered(without("username"))).toMatch(
+            /^J\. K\. Author, "Title", /
+        )
+    })
+
+    it("starts at the site when there is no author, handle, title or body", () => {
+        expect(
+            rendered(without("author", "username", "postTitle", "websiteTitle"))
+        ).toMatch(/^Reddit, Aug\. 12, 1995\. /)
+    })
+
+    it("ends at the URL, with no access date, when none is given", () => {
+        const ref = without("accessedDate")
+        expect(rendered(ref)).toMatch(
+            new RegExp(`, Aug\\. 12, 1995\\. Available: ${url}$`)
+        )
+        const segments = formatCitationParts(ref).segments
+        expect(segments[segments.length - 1]).toMatchObject({ role: "url" })
+    })
+
+    it("emits each part under its own role", () => {
+        const pairs = (ref: TIEEEReference) =>
+            formatCitationParts(ref).segments.map((s) => [s.role, s.text])
+        const tail = [
+            ["separator", ", "],
+            ["date", "Aug. 12, 1995"],
+            ["separator", ". "],
+            ["prefix", "Accessed: "],
+            ["accessedDate", "Sep. 1, 2026"],
+            ["separator", ". "],
+            ["prefix", "Available: "],
+            ["url", url],
+        ]
+        const head = [
+            ["authors", "J. K. Author"],
+            ["separator", " "],
+            ["prefix", "[@"],
+            ["username", "user"],
+            ["suffix", "]"],
+            ["separator", ", "],
+        ]
+        expect(pairs(full)).toEqual([
+            ...head,
+            ["title", "Title"],
+            ["separator", ", "],
+            ["platform", "Site"],
+            ...tail,
+        ])
+        expect(pairs(withBody)).toEqual([
+            ...head,
+            ["body", "Some text"],
+            ["separator", ", "],
+            ["platform", "X"],
+            ...tail,
+        ])
+    })
+
+    it("still validates and renders a citation holding only the original four fields", async () => {
+        const {
+            SocialMediaReferenceSchema,
+            RelaxedSocialMediaReferenceSchema,
+        } = await import("../../src/extensions/citations/ieee/index.js")
+        const old = {
+            type: "SocialMedia" as const,
+            author: author("Jane Q.", "Doe"),
+            platform: "X",
+            postDate: new Date(2026, 2, 5),
+            url,
+        }
+        expect(Value.Check(SocialMediaReferenceSchema, old)).toBe(true)
+        expect(Value.Check(IEEEReferenceSchema, old)).toBe(true)
+        expect(Value.Check(RelaxedSocialMediaReferenceSchema, old)).toBe(true)
+        expect(rendered(old)).toBe(
+            `J. Q. Doe, X, Mar. 5, 2026. Available: ${url}`
+        )
+    })
+
+    it("validates the new fields", async () => {
+        const { SocialMediaReferenceSchema } =
+            await import("../../src/extensions/citations/ieee/index.js")
+        const check = (patch: Record<string, unknown>) =>
+            Value.Check(SocialMediaReferenceSchema, { ...full, ...patch })
+        expect(check({})).toBe(true)
+        expect(check({ username: "user@mastodon.social" })).toBe(true)
+        expect(check({ username: "@user" })).toBe(false)
+        expect(check({ username: "a b" })).toBe(false)
+        expect(check({ username: "a]b" })).toBe(false)
+        expect(check({ postTitle: " " })).toBe(false)
+        expect(check({ postBody: " " })).toBe(false)
+        expect(check({ websiteTitle: " " })).toBe(false)
+        expect(check({ accessedDate: new Date("nonsense") })).toBe(false)
+    })
+})

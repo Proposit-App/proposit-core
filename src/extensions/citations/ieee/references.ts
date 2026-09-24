@@ -768,7 +768,37 @@ export const SocialMediaReferenceSchema = Type.Intersect([
     BaseReferenceSchema,
     Type.Object({
         type: Type.Literal("SocialMedia"),
-        author: AuthorSchema,
+        author: Type.Optional(AuthorSchema),
+        username: Type.Optional(
+            Type.String({
+                pattern: "^[^@\\s\\[\\]][^\\s\\[\\]]*$",
+                description:
+                    "The poster's handle, without its leading @ (e.g. jdoe, jdoe@mastodon.social)",
+            })
+        ),
+        postTitle: Type.Optional(
+            Type.String({
+                minLength: 1,
+                pattern: "\\S",
+                description: "Title of the post, for a post that has one",
+            })
+        ),
+        postBody: Type.Optional(
+            Type.String({
+                minLength: 1,
+                pattern: "\\S",
+                description:
+                    "Text of the post, cited in place of a title when it has none",
+            })
+        ),
+        websiteTitle: Type.Optional(
+            Type.String({
+                minLength: 1,
+                pattern: "\\S",
+                description:
+                    "Title of the website, cited in place of the platform name",
+            })
+        ),
         platform: Type.String({
             minLength: 1,
             description: "Social media platform name",
@@ -779,6 +809,7 @@ export const SocialMediaReferenceSchema = Type.Intersect([
             minLength: 1,
             description: "URL of the post",
         }),
+        accessedDate: Type.Optional(EncodableDate),
     }),
 ])
 export type TSocialMediaReference = Static<typeof SocialMediaReferenceSchema>
