@@ -32,7 +32,10 @@ export {
     llmStage,
     LlmStageRetryExhaustedError,
 } from "./llm-stage-helpers.js"
-export type { TLlmStageConfig } from "./llm-stage-helpers.js"
+export type {
+    TLlmOutputCheckFailure,
+    TLlmStageConfig,
+} from "./llm-stage-helpers.js"
 
 // -- Deterministic --
 

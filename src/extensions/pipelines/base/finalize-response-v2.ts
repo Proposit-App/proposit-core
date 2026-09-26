@@ -46,6 +46,7 @@ import {
     type TSegmentationOutput,
     type TVariableAssignmentOutput,
 } from "./stages/schemas.js"
+import { NO_ARGUMENT_STRUCTURE_FAILURE } from "./stages/conclusion-selection.js"
 import {
     nearestOccurrence,
     resolveSourceAnchor,
@@ -121,7 +122,7 @@ function firstNonEmptyString(value: unknown): string | undefined {
 
 export const FINALIZE_V2_FAILURE_TEXTS = {
     noClaims: "No claims could be extracted from the input.",
-    noConclusion: "No single conclusion could be selected.",
+    noConclusion: NO_ARGUMENT_STRUCTURE_FAILURE.message,
 } as const
 
 /**

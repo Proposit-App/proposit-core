@@ -151,6 +151,13 @@ function now(): number {
 // -- LLM-stage seam (package-internal) ----------------------------------
 
 /**
+ * Why an output that matched its schema is still unusable, as returned by
+ * an `llmStage`'s `checkOutput`. `message` is what a reader is shown if
+ * the retries run out, so it should be plain.
+ */
+export type TLlmOutputCheckFailure = { code: string; message: string }
+
+/**
  * The resolved `llmStage` config the seam functions operate on (defaults
  * merged into `retryPolicy`). Package-internal — not exported.
  */
@@ -164,6 +171,11 @@ export type TLlmStageConfig<TOutput> = {
     maxOutputTokens?: number
     /** The resolved retry policy (factory defaults already merged). */
     retryPolicy: TRetryPolicy
+    /** See `llmStage`'s `checkOutput`. */
+    checkOutput?: (
+        output: TOutput,
+        ctx: TStageContext
+    ) => TLlmOutputCheckFailure | undefined
     /**
      * Phantom field carrying the stage's structured-output type `TOutput`
      * through the seam (so `buildLlmRequest` / `validateLlmOutcome` recover
@@ -309,10 +321,11 @@ function clampMaxLengthStrings(
 
 function checkLlmOutput<TOutput>(
     cfg: TLlmStageConfig<TOutput>,
-    output: unknown
-): { valid: boolean; validationError?: string } {
+    output: unknown,
+    ctx: TStageContext | undefined
+): { valid: boolean; validationError?: string; code?: string } {
     if (Value.Check(cfg.outputSchema, output)) {
-        return { valid: true }
+        return checkOutputContent(cfg, output as TOutput, ctx)
     }
     // OpenAI strict structured-output IGNORES JSON-Schema string `maxLength`,
     // so a model can return an over-long string the schema forbids — a
@@ -321,13 +334,28 @@ function checkLlmOutput<TOutput>(
     // than rejecting the output and halting the pipeline.
     clampMaxLengthStrings(cfg.id, cfg.outputSchema, output)
     if (Value.Check(cfg.outputSchema, output)) {
-        return { valid: true }
+        return checkOutputContent(cfg, output as TOutput, ctx)
     }
     const errors = [...Value.Errors(cfg.outputSchema, output)]
     const validationError = errors
         .map((e) => `${e.instancePath}: ${e.message}`)
         .join("; ")
     return { valid: false, validationError }
+}
+
+// The stage's own content check, run once the output matches its schema.
+// It needs the stage context, so it is skipped when there is none — a
+// `completeStage` call that was not given the upstream outputs.
+function checkOutputContent<TOutput>(
+    cfg: TLlmStageConfig<TOutput>,
+    output: TOutput,
+    ctx: TStageContext | undefined
+): { valid: boolean; validationError?: string; code?: string } {
+    const failure =
+        ctx !== undefined ? cfg.checkOutput?.(output, ctx) : undefined
+    return failure === undefined
+        ? { valid: true }
+        : { valid: false, validationError: failure.message, code: failure.code }
 }
 
 /**
@@ -347,7 +375,8 @@ export function validateLlmOutcome<TOutput>(
     cfg: TLlmStageConfig<TOutput>,
     rawText: string | undefined,
     status: TResponseStatus,
-    incompleteReason: string | undefined
+    incompleteReason: string | undefined,
+    ctx?: TStageContext
 ): {
     outcome: "completed" | "failed" | "skipped"
     output?: TOutput
@@ -375,7 +404,7 @@ export function validateLlmOutcome<TOutput>(
                 validationError: message,
             }
         }
-        const checked = checkLlmOutput(cfg, parsed)
+        const checked = checkLlmOutput(cfg, parsed, ctx)
         if (checked.valid) {
             return { outcome: "completed", output: parsed as TOutput }
         }
@@ -385,7 +414,7 @@ export function validateLlmOutcome<TOutput>(
             outcome: "failed",
             failure: {
                 reason: "schema_validation",
-                code: OUTPUT_SCHEMA_INVALID,
+                code: checked.code ?? OUTPUT_SCHEMA_INVALID,
                 message: validationError,
             },
             validationError,
@@ -554,7 +583,7 @@ async function runLlmStageAttempt<TOutput>(
 
         // Shared validation core (same check the launch/complete path
         // runs via validateLlmOutcome's completed branch).
-        const checked = checkLlmOutput(cfg, response.output)
+        const checked = checkLlmOutput(cfg, response.output, ctx)
         const validationPassed = checked.valid
         const validationError = checked.validationError
 
@@ -586,7 +615,7 @@ async function runLlmStageAttempt<TOutput>(
             const validationMessage = validationError!
             const lastError: TLastError = {
                 reason: "schema_validation",
-                code: OUTPUT_SCHEMA_INVALID,
+                code: checked.code ?? OUTPUT_SCHEMA_INVALID,
                 message: validationMessage,
             }
             const retryable = policy.retryOn.includes("schema_validation")
@@ -676,6 +705,19 @@ export function llmStage<TOutput>(config: {
     tools?: readonly TToolSpec[]
     retry?: Partial<TRetryPolicy>
     maxOutputTokens?: number
+    /**
+     * A check of the output's content, run once it matches the schema. A
+     * returned failure is handled exactly like a schema mismatch: the
+     * attempt is retried under the stage's retry policy (`schema_validation`
+     * must be in `retryOn`), and when the attempts run out the stage fails
+     * with that failure's code and message. It reads the stage context, so
+     * on the launch/complete path it runs only when `completeStage` is
+     * given the upstream outputs.
+     */
+    checkOutput?: (
+        output: TOutput,
+        ctx: TStageContext
+    ) => TLlmOutputCheckFailure | undefined
 }): TStage<TOutput> {
     const policy: TRetryPolicy = {
         ...DEFAULT_RETRY_POLICY,
@@ -693,6 +735,7 @@ export function llmStage<TOutput>(config: {
         tools: config.tools,
         maxOutputTokens: config.maxOutputTokens,
         retryPolicy: policy,
+        checkOutput: config.checkOutput,
     }
 
     const stage: TStage<TOutput> = {

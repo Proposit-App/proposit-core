@@ -29,7 +29,11 @@ export {
     StageAbortedError,
     SubPipelineFailedError,
 } from "./stage-helpers.js"
-export type { TRetryPolicy, TRetryReason } from "./stage-helpers.js"
+export type {
+    TLlmOutputCheckFailure,
+    TRetryPolicy,
+    TRetryReason,
+} from "./stage-helpers.js"
 
 export { executePipeline, PipelineConfigurationError } from "./scheduler.js"
 export type { TExecutePipelineDeps } from "./scheduler.js"

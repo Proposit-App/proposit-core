@@ -13,7 +13,12 @@
 //   - the cross-repo wire id is `argument-ingestion-scribe`.
 
 import { describe, expect, it } from "vitest"
-import { executePipeline } from "../../../src/lib/index.js"
+import {
+    completeStage,
+    executePipeline,
+    launchStage,
+} from "../../../src/lib/index.js"
+import { STAGE_IDS } from "../../../src/extensions/pipelines/base/stages/index.js"
 import { createScribePipeline } from "../../../src/extensions/pipelines/ingestion/scribe/index.js"
 import { basicsExtension } from "../../../src/extensions/pipelines/base/index.js"
 import { createMockLlmProvider, type TMockCallRecord } from "../../mocks/llm.js"
@@ -101,9 +106,10 @@ function happyStructureOutput(): unknown {
     }
 }
 
+/** Run scribe; `structures` answer the structure stage's attempts in turn. */
 function runScribe(
     extract: unknown,
-    structure: unknown
+    ...structures: unknown[]
 ): Promise<{
     output: TParsedArgumentResponse | null
     failures: readonly { code: string; message: string; severity: string }[]
@@ -111,7 +117,10 @@ function runScribe(
     const llm = createMockLlmProvider({
         responses: {
             extract: [{ kind: "ok", output: extract }],
-            "scribe-structure": [{ kind: "ok", output: structure }],
+            "scribe-structure": structures.map((output) => ({
+                kind: "ok" as const,
+                output,
+            })),
         },
     })
     return executePipeline(
@@ -267,21 +276,51 @@ describe("createScribePipeline", () => {
         expect(result.output!.failureText).toBeTruthy()
     })
 
-    it("a structure output with an unresolvable conclusion surfaces a processing failure, not a crash", async () => {
-        // Claims exist, but structure names no relations and no
-        // conclusion candidate — the conclusion adapter resolves null
-        // and records NO_SINGLE_CONCLUSION; the run does not throw.
-        const result = await runScribe(happyExtractOutput(), {
-            relations: [],
-            conclusionCandidates: [],
-            conclusionTitle: "",
-            rationale: "no argument structure",
-        })
-        expect(result.output).not.toBeNull()
-        const failureCodes = result.failures.map((f) => f.code)
-        expect(failureCodes).toContain("NO_SINGLE_CONCLUSION")
-        // Degraded, not crashed: a defined response with argument: null.
-        expect(result.output!.argument).toBeNull()
+    const noStructure = {
+        relations: [],
+        conclusionCandidates: [],
+        conclusionTitle: "",
+        rationale: "no argument structure",
+    }
+
+    it("asks again when structure finds nothing to connect two claims", async () => {
+        const result = await runScribe(
+            happyExtractOutput(),
+            noStructure,
+            happyStructureOutput()
+        )
+        expect(result.output!.argument).not.toBeNull()
+        expect(result.failures.map((f) => f.code)).not.toContain(
+            "NO_ARGUMENT_STRUCTURE"
+        )
+    })
+
+    it("fails the import in plain words when the second answer is empty too", async () => {
+        const result = await runScribe(
+            happyExtractOutput(),
+            noStructure,
+            noStructure
+        )
+        expect(result.output).toBeNull()
+        const failure = result.failures.find(
+            (f) => f.code === "NO_ARGUMENT_STRUCTURE"
+        )
+        expect(failure?.severity).toBe("error")
+        expect(failure?.message).toBe(
+            "Couldn't work out how these claims connect to a conclusion."
+        )
+    })
+
+    it("asks again when structure names relations but no conclusion candidate", async () => {
+        const result = await runScribe(
+            happyExtractOutput(),
+            {
+                ...(happyStructureOutput() as Record<string, unknown>),
+                conclusionCandidates: [],
+            },
+            happyStructureOutput()
+        )
+        expect(result.output!.argument).not.toBeNull()
     })
 
     // -- Source anchors --
@@ -367,5 +406,86 @@ describe("createScribePipeline", () => {
                     ?.relationId
             ).toBeUndefined()
         }
+    })
+})
+
+describe("createScribePipeline — structure checked out of process", () => {
+    // What the launch and complete calls see: the two slots structure reads,
+    // with two normal claims, so an answer naming no structure is refused.
+    const upstream = {
+        [STAGE_IDS.claimCanonicalization]: {
+            outcome: "completed" as const,
+            output: { canonicalClaims: [], mentionToClaim: [] },
+        },
+        [STAGE_IDS.claimTypeClassification]: {
+            outcome: "completed" as const,
+            output: {
+                classifications: [
+                    { miniId: "c1", type: "normal", sourceString: null },
+                    { miniId: "c2", type: "normal", sourceString: null },
+                ],
+            },
+        },
+    }
+    const empty = {
+        status: "completed" as const,
+        rawResponseId: "resp_s",
+        output: JSON.stringify({
+            relations: [],
+            conclusionCandidates: [],
+            conclusionTitle: "",
+            rationale: "none",
+        }),
+    }
+    const deps = { llm: createMockLlmProvider({ responses: {} }) }
+
+    it("refuses an empty answer as retryable when given the upstream outputs", async () => {
+        const result = await completeStage(
+            createScribePipeline(basicsExtension),
+            STAGE_IDS.scribeStructure,
+            empty,
+            deps,
+            1,
+            { upstream, input: { text: INPUT_TEXT } }
+        )
+        expect(result.outcome).toBe("failed")
+        expect(result.retryReason).toBe("schema_validation")
+        expect(result.failures[0]).toMatchObject({
+            code: "NO_ARGUMENT_STRUCTURE",
+            message:
+                "Couldn't work out how these claims connect to a conclusion.",
+        })
+    })
+
+    it("checks only the schema when not given them", async () => {
+        const result = await completeStage(
+            createScribePipeline(basicsExtension),
+            STAGE_IDS.scribeStructure,
+            empty,
+            deps
+        )
+        expect(result.outcome).toBe("completed")
+    })
+
+    it("re-launches with the retry note after a refused answer", async () => {
+        let sentUser = ""
+        await launchStage(
+            createScribePipeline(basicsExtension),
+            STAGE_IDS.scribeStructure,
+            upstream,
+            { text: INPUT_TEXT },
+            {
+                ...deps,
+                submitBackgroundResponse: (req) => {
+                    sentUser = req.userMessage
+                    return Promise.resolve({
+                        responseId: "resp_2",
+                        status: "queued",
+                    })
+                },
+            },
+            2
+        )
+        expect(sentUser).toContain("Your previous response failed")
     })
 })

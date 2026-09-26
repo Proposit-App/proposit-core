@@ -202,7 +202,7 @@ describe("scribe attaches every source claim to the claim it supports", () => {
         // wins on document order.
         const result = await runScribe(
             extractOutput(),
-            structureOutput(["c1"], [])
+            structureOutput(["c1"], ["c99"])
         )
         const conclusion = result.output?.argument?.claims.find(
             (c) => (c as { role?: string }).role === "conclusion"

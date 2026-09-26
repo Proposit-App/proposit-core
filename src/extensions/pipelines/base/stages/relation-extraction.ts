@@ -19,6 +19,7 @@ import {
 } from "./schemas.js"
 import type { TReasoningEffort } from "../../../../lib/llm/types.js"
 import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
+import { checkArgumentStructure } from "./conclusion-selection.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
@@ -49,7 +50,7 @@ For each relation emit:
 - The conclusion of the argument is identified in a separate stage; do NOT emit a special "conclusion" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.
 - Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.
 
-If there are no relations to emit, return \`{ "relations": [] }\`.`
+Whenever there are at least two normal-typed claims, emit at least one relation: the input is an argument, and its claims connect somehow. Return \`{ "relations": [] }\` only when there are fewer than two normal-typed claims.`
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     const canon = ctx.get<TClaimCanonicalizationOutput>(
@@ -112,6 +113,7 @@ export function createRelationExtractionStage(
             options?.reasoningEffort ?? RELATION_EXTRACTION_REASONING,
         retry: options?.retry,
         buildPrompt,
+        checkOutput: (output, ctx) => checkArgumentStructure(ctx, output),
     })
 }
 

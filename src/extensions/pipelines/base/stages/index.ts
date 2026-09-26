@@ -57,8 +57,10 @@ export {
     conclusionSelectionStage,
     createConclusionSelectionStage,
     selectFallbackConclusion,
+    checkArgumentStructure,
     CONCLUSION_SELECTION_STAGE_DEFAULTS,
     CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
+    NO_ARGUMENT_STRUCTURE_FAILURE,
 } from "./conclusion-selection.js"
 export {
     formulaCompilationStage,
