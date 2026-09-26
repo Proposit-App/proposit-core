@@ -1,11 +1,12 @@
-// Attaching scribe's source (citation) claims to the claims they support.
+// Attaching scribe's source claims — citations and axioms — to the claims
+// they support.
 //
 // A source becomes derivation backing only as the antecedent of an
 // inference relation (`sortInferenceRelations`). `structure` is the only
 // stage that emits relations, and it is shown the claim list, never the
-// text, so it cannot tell which claim a link sits beside — and it may
-// leave a source out altogether. A source attached to nothing backs
-// nothing and is lost downstream.
+// text, so it cannot tell which claim a link or an appeal to a principle
+// sits beside — and it may leave a source out altogether. A source
+// attached to nothing backs nothing and is lost downstream.
 //
 // So each source gets extra single-antecedent relations `[source] →
 // supported`: first to every normal claim `extract` named for it (the
@@ -16,6 +17,10 @@
 // mention ends before the source's begins. A relation
 // with only a source antecedent compiles to backing and no freeform
 // premise, so nothing else about the argument changes.
+//
+// An axiom is never attached to a claim a citation backs: grammar rule D-3
+// forbids one derivation mixing the two. Citations are attached first and
+// the axiom is dropped with a warning.
 
 import type {
     TClaimMention,
@@ -29,6 +34,7 @@ import type { TScribeExtractOutput } from "./schemas.js"
 export const SOURCE_ATTACHMENT_FAILURE_CODES = {
     invalidSource: "SOURCE_ATTACHMENT_INVALID_SOURCE",
     invalidTarget: "SOURCE_ATTACHMENT_INVALID_TARGET",
+    mixed: "SOURCE_ATTACHMENT_MIXED",
     unattached: "SOURCE_ATTACHMENT_UNATTACHED",
 } as const
 
@@ -121,9 +127,9 @@ function claimByPosition(
 }
 
 /**
- * The relations that attach each source claim to what it supports, to be
- * published alongside `structure`'s own. See the file comment for the
- * order in which a target is chosen.
+ * The relations that attach each citation and axiomatic claim to what it
+ * supports, to be published alongside `structure`'s own. See the file
+ * comment for the order in which a target is chosen.
  */
 export function buildSourceRelations(args: {
     extract: TScribeExtractOutput | undefined
@@ -149,17 +155,42 @@ export function buildSourceRelations(args: {
     // Read off what the compiler will make of structure's relations, so a
     // relation it drops (an unknown claim id, say) attaches nothing here
     // either. Its warnings are the compiler's to report, not this stage's.
-    const attachedByStructure = new Set(
-        [
-            ...sortInferenceRelations({
-                relations: [...args.structureRelations],
-                typeByClaimMiniId: args.typeByMiniId,
-            }).derivationBacking.values(),
-        ].flat()
+    const structureBacking = sortInferenceRelations({
+        relations: [...args.structureRelations],
+        typeByClaimMiniId: args.typeByMiniId,
+    }).derivationBacking
+    const attachedByStructure = new Set([...structureBacking.values()].flat())
+    // Claims a citation backs. An axiom may not join them: one derivation
+    // mixing axioms and citations breaks grammar rule D-3.
+    const backedByCitation = new Set(
+        [...structureBacking]
+            .filter(([, supporters]) =>
+                supporters.some(
+                    (id) => args.typeByMiniId.get(id) === "citation"
+                )
+            )
+            .map(([consequent]) => consequent)
     )
 
     const relations: TInferenceRelation[] = []
-    const attach = (sourceMiniId: string, supportedMiniId: string) => {
+    const attach = (
+        sourceMiniId: string,
+        sourceType: TClaimType,
+        supportedMiniId: string
+    ) => {
+        if (
+            sourceType === "axiomatic" &&
+            backedByCitation.has(supportedMiniId)
+        ) {
+            args.addFailure({
+                code: SOURCE_ATTACHMENT_FAILURE_CODES.mixed,
+                message: `Axiom "${sourceMiniId}" supports "${supportedMiniId}", which a citation already backs; one claim cannot be backed by both, so the axiom was not attached.`,
+                severity: "warning",
+                context: { sourceMiniId, supportedMiniId },
+            })
+            return
+        }
+        if (sourceType === "citation") backedByCitation.add(supportedMiniId)
         relations.push({
             relationId: `source-${sourceMiniId}-${supportedMiniId}`,
             type: "inference",
@@ -172,10 +203,10 @@ export function buildSourceRelations(args: {
 
     for (const entry of args.extract?.sourceSupport ?? []) {
         const sourceType = args.typeByMiniId.get(entry.sourceMiniId)
-        if (sourceType === "citation") continue
+        if (sourceType === "citation" || sourceType === "axiomatic") continue
         args.addFailure({
             code: SOURCE_ATTACHMENT_FAILURE_CODES.invalidSource,
-            message: `"${entry.sourceMiniId}" was paired as a source for "${entry.supportedMiniId}", but it is ${sourceType === undefined ? "not a known claim" : `a ${sourceType} claim`}; only a citation claim is a source. Ignoring the pairing.`,
+            message: `"${entry.sourceMiniId}" was paired as a source for "${entry.supportedMiniId}", but it is ${sourceType === undefined ? "not a known claim" : `a ${sourceType} claim`}; only a citation or axiomatic claim is a source. Ignoring the pairing.`,
             severity: "warning",
             context: {
                 sourceMiniId: entry.sourceMiniId,
@@ -184,48 +215,53 @@ export function buildSourceRelations(args: {
         })
     }
 
-    for (const claim of claims) {
-        if (args.typeByMiniId.get(claim.miniId) !== "citation") continue
-        const sourceMiniId = claim.miniId
+    // Citations first, so an axiom sees every claim a citation backs.
+    for (const sourceType of ["citation", "axiomatic"] as const) {
+        const label = sourceType === "citation" ? "Source" : "Axiom"
+        for (const claim of claims) {
+            if (args.typeByMiniId.get(claim.miniId) !== sourceType) continue
+            const sourceMiniId = claim.miniId
 
-        const named = new Set<string>()
-        for (const entry of args.extract?.sourceSupport ?? []) {
-            if (entry.sourceMiniId !== sourceMiniId) continue
-            const targetType = args.typeByMiniId.get(entry.supportedMiniId)
-            if (targetType !== "normal") {
+            const named = new Set<string>()
+            for (const entry of args.extract?.sourceSupport ?? []) {
+                if (entry.sourceMiniId !== sourceMiniId) continue
+                const targetType = args.typeByMiniId.get(entry.supportedMiniId)
+                if (targetType !== "normal") {
+                    args.addFailure({
+                        code: SOURCE_ATTACHMENT_FAILURE_CODES.invalidTarget,
+                        message: `${label} "${sourceMiniId}" was said to support "${entry.supportedMiniId}", which is ${targetType === undefined ? "not a known claim" : `a ${targetType} claim`}; a ${label.toLowerCase()} can only support a normal claim.`,
+                        severity: "warning",
+                        context: {
+                            sourceMiniId,
+                            supportedMiniId: entry.supportedMiniId,
+                        },
+                    })
+                    continue
+                }
+                named.add(entry.supportedMiniId)
+            }
+            for (const supportedMiniId of named) {
+                attach(sourceMiniId, sourceType, supportedMiniId)
+            }
+            if (named.size > 0 || attachedByStructure.has(sourceMiniId))
+                continue
+
+            const supportedMiniId = claimByPosition(
+                rangesOf(claim.mentionIds),
+                normalRanges,
+                args.inputText
+            )
+            if (supportedMiniId === undefined) {
                 args.addFailure({
-                    code: SOURCE_ATTACHMENT_FAILURE_CODES.invalidTarget,
-                    message: `Source "${sourceMiniId}" was said to support "${entry.supportedMiniId}", which is ${targetType === undefined ? "not a known claim" : `a ${targetType} claim`}; a source can only support a normal claim.`,
+                    code: SOURCE_ATTACHMENT_FAILURE_CODES.unattached,
+                    message: `${label} "${sourceMiniId}" supports no claim: none was named for it, and no normal claim is stated where it appears or before it.`,
                     severity: "warning",
-                    context: {
-                        sourceMiniId,
-                        supportedMiniId: entry.supportedMiniId,
-                    },
+                    context: { sourceMiniId },
                 })
                 continue
             }
-            named.add(entry.supportedMiniId)
+            attach(sourceMiniId, sourceType, supportedMiniId)
         }
-        for (const supportedMiniId of named) {
-            attach(sourceMiniId, supportedMiniId)
-        }
-        if (named.size > 0 || attachedByStructure.has(sourceMiniId)) continue
-
-        const supportedMiniId = claimByPosition(
-            rangesOf(claim.mentionIds),
-            normalRanges,
-            args.inputText
-        )
-        if (supportedMiniId === undefined) {
-            args.addFailure({
-                code: SOURCE_ATTACHMENT_FAILURE_CODES.unattached,
-                message: `Source "${sourceMiniId}" supports no claim: none was named for it, and no normal claim is stated where it appears or before it.`,
-                severity: "warning",
-                context: { sourceMiniId },
-            })
-            continue
-        }
-        attach(sourceMiniId, supportedMiniId)
     }
     return relations
 }
