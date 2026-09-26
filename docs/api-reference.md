@@ -2164,20 +2164,26 @@ type TIngestionSourceAnchor = {
 
 ##### `locateSourceAnchor(input, quote, hintUtf16)` → `TSourceAnchorMatch | undefined`
 
-The locator behind the above, exported for consumers doing the same job over their own stored text. It returns `{ anchor: TIngestionSourceAnchor; occurrences: number }`, where `occurrences` is how many candidate ranges the hint chose between — greater than one means the quote is not unique in the input and the result is a tie-break rather than a certainty.
+The locator behind the above, exported for consumers doing the same job over their own stored text. It returns `{ anchor: TIngestionSourceAnchor; occurrences: number; approximate?: TApproximateAnchorRule }`, where `occurrences` is how many candidate ranges the hint chose between — greater than one means the quote is not unique in the input and the result is a tie-break rather than a certainty — and `approximate` is set only when the quote was not in the input as written.
 
-Empty and whitespace-only quotes return `undefined`; the quote is trimmed before matching. The ladder is exact match, then a whitespace-insensitive retry where any run of whitespace matches any other (a model that flattens a line break to a space still resolves) — nothing approximate beyond that. On a whitespace-insensitive hit the returned `quote` is the input's text for the matched range, which is what preserves the slice invariant.
+Empty and whitespace-only quotes return `undefined`; the quote is trimmed before matching. The ladder is exact match, then a whitespace-insensitive retry where any run of whitespace matches any other (a model that flattens a line break to a space still resolves), then both again with the quote's first character re-cased. Last comes a conservative approximate match over words, with quote marks, dashes, ellipses, case and each word's edge punctuation folded, whose rule `approximate` names:
+
+- `"normalized"` / `"reworded"` — the passage with the fewest changed words (none, or some). Accepted only when the quote has at least five words, at most one word in eight changed and three in all, and no separate passage matches as well; two equally good passages give `undefined`.
+- `"joined"` — only when no passage qualifies: the quote's longest run of words found word for word in the input, when it is at least eight words, or at least five and 60% of the quote. The anchor covers that run alone; a repeated run is a tie the hint breaks.
+
+On any hit other than an exact one the returned `quote` is the input's text for the matched range, never the model's wording, which is what preserves the slice invariant.
 
 `hintUtf16` chooses among repeated occurrences — the occurrence whose start is nearest wins — and never affects _whether_ a quote matches, so a wrong hint degrades to a different occurrence of the same text rather than to a wrong span. `SOURCE_ANCHOR_CONTEXT_CHARS` (32) is the amount of surrounding input carried on each side, clamped at both ends of the input.
 
 ##### Resolution notes
 
-Finalize reports each resolution it could not make cleanly through `ctx.addFailure`, so they arrive on `PipelineResult.failures`. Both are `severity: "warning"` and neither stops assembly; the codes are exported as `SOURCE_ANCHOR_NOTE_CODES`.
+Finalize reports each resolution it could not make cleanly through `ctx.addFailure`, so they arrive on `PipelineResult.failures`. All are `severity: "warning"` and none stops assembly; the codes are exported as `SOURCE_ANCHOR_NOTE_CODES`.
 
-| Code                       | Meaning                                                                                                                                           |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SOURCE_ANCHOR_UNRESOLVED` | The quote was not found in the input. No anchor was emitted. `context` carries the quote plus the `mentionId` or `relationId` it came from.       |
-| `SOURCE_ANCHOR_AMBIGUOUS`  | The quote occurs more than once. The occurrence nearest the reported position was used; `context` adds `occurrences` and the chosen `startUtf16`. |
+| Code                        | Meaning                                                                                                                                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SOURCE_ANCHOR_UNRESOLVED`  | The quote was not found in the input. No anchor was emitted. `context` carries the quote plus the `mentionId` or `relationId` it came from.                                                                |
+| `SOURCE_ANCHOR_AMBIGUOUS`   | The quote occurs more than once. The occurrence nearest the reported position was used; `context` adds `occurrences` and the chosen `startUtf16`.                                                          |
+| `SOURCE_ANCHOR_APPROXIMATE` | The quote is not in the input as written; it was anchored to the nearest passage. `context` adds `rule` (`normalized`, `reworded` or `joined`), the `anchoredQuote` actually stored, and its `startUtf16`. |
 
 | `SOURCE_ANCHOR_INPUT_UNAVAILABLE` | The pipeline input carried no `text`, so no quote was looked up at all. Emitted **once**, in place of the per-quote notes, and it carries no quote — the cause is the input shape, not the model. |
 An empty relation evidence quote is not reported — it is a legal "no span to cite", not a failed lookup. Watching the unresolved rate is how a consumer detects a model that has started paraphrasing instead of quoting, which would otherwise take anchor coverage toward zero in silence.
