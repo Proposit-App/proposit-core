@@ -1172,8 +1172,8 @@
               "mentionIds": [
                 "c2-m"
               ],
-              "suggestedSymbol": "commute_reduction",
-              "title": "Remote work cuts commuting",
+              "suggestedSymbol": "remote_commute_reduction",
+              "title": "Remote work cuts commuting time",
               "body": "Working remotely also reduces commuting time.",
               "type": "normal"
             },
@@ -1182,8 +1182,8 @@
               "mentionIds": [
                 "c3-m"
               ],
-              "suggestedSymbol": "better_work_life_balance",
-              "title": "Less commuting aids balance",
+              "suggestedSymbol": "less_commute_better_balance",
+              "title": "Less commuting improves balance",
               "body": "Reducing commuting time improves work-life balance.",
               "type": "normal"
             }
@@ -1235,10 +1235,10 @@
         },
         "tokenUsage": {
           "input": 1328,
-          "output": 301,
+          "output": 304,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0648356ef8227ff4006ab72d6c580087d2b4f171645355f50c"
+        "rawResponseId": "resp_0988257aa28af838006ab731fcdc6087d281fee8f62c72007b"
       }
     },
     {
@@ -1355,6 +1355,123 @@
           "reasoning": 0
         },
         "rawResponseId": "resp_03301b2640e7043e006ab72d6e871487d2b469bf4b55332faf"
+      }
+    },
+    {
+      "hash": "e0d42324aad7557e53a94820119f27c6b7a522df2d86b8c6cfd94d3bd83774e9",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=remote_productivity fields={\"title\":\"Remote work boosts productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal symbol=remote_commute_reduction fields={\"title\":\"Remote work cuts commuting time\",\"body\":\"Working remotely also reduces commuting time.\"}\n  [c3] type=normal symbol=less_commute_better_balance fields={\"title\":\"Less commuting improves balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c2",
+                "c3"
+              ],
+              "consequent": "c1",
+              "title": "Commute savings to productivity",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c1"
+          ],
+          "conclusionTitle": "Productivity supported by commute gains",
+          "rationale": "c1 is best supported by c2 and c3, while c2 and c3 function as supporting premises rather than endpoints."
+        },
+        "tokenUsage": {
+          "input": 711,
+          "output": 116,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_02c868058bb88f06006ab731fed54487d2b09d2707c357131d"
       }
     }
   ]
