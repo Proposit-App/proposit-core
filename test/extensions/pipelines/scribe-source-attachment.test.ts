@@ -122,7 +122,8 @@ type TRunResult = {
 
 async function runScribe(
     extract: unknown,
-    structure: unknown
+    structure: unknown,
+    text: string = INPUT_TEXT
 ): Promise<TRunResult> {
     let counter = 0
     const llm = createMockLlmProvider({
@@ -133,7 +134,7 @@ async function runScribe(
     })
     return (await executePipeline(
         createScribePipeline(basicsExtension),
-        { text: INPUT_TEXT },
+        { text },
         {
             llm,
             generateId: () => {
@@ -186,25 +187,6 @@ describe("scribe attaches every source claim to the claim it supports", () => {
         expect(invalid.every((f) => f.severity === "warning")).toBe(true)
     })
 
-    it("leaves a source with no overlapping or earlier claim unattached, and says so", async () => {
-        // c2's quote moves to the very start of the text, before every
-        // normal claim's mention and overlapping none of them.
-        const mentions = {
-            ...MENTIONS,
-            c2: { mentionId: "c2-m", text: "Trump took" },
-            c1: { mentionId: "c1-m", text: "foreign payments" },
-        }
-        const result = await runScribe(
-            extractOutput([], mentions),
-            structureOutput()
-        )
-        expect(backing(result)).toEqual({ c3: ["c4"] })
-        const unattached = result.failures.filter(
-            (f) => f.code === "SOURCE_ATTACHMENT_UNATTACHED"
-        )
-        expect(unattached.map((f) => f.context?.sourceMiniId)).toEqual(["c2"])
-    })
-
     it("adds no fallback for a source structure already attached", async () => {
         const result = await runScribe(
             extractOutput(),
@@ -227,5 +209,202 @@ describe("scribe attaches every source claim to the claim it supports", () => {
         ) as { miniId?: string } | undefined
         expect(conclusion?.miniId).toBe("c5")
         expect(backing(result)).toEqual({ c1: ["c2"], c3: ["c4"] })
+    })
+
+    it("falls back when structure's relation using the source is dropped", async () => {
+        // An unknown antecedent makes the compiler drop the whole relation,
+        // so the source it names backs nothing unless it is attached here.
+        const result = await runScribe(
+            extractOutput(),
+            structureOutput(["c1", "c2", "c3", "c99"])
+        )
+        expect(backing(result)).toEqual({ c1: ["c2"], c3: ["c4"] })
+    })
+
+    it("warns about a pairing whose source is unknown or not a citation", async () => {
+        const result = await runScribe(
+            extractOutput([
+                { sourceMiniId: "c1", supportedMiniId: "c3" },
+                { sourceMiniId: "c77", supportedMiniId: "c3" },
+            ]),
+            structureOutput()
+        )
+        expect(backing(result)).toEqual({ c1: ["c2"], c3: ["c4"] })
+        const invalid = result.failures.filter(
+            (f) => f.code === "SOURCE_ATTACHMENT_INVALID_SOURCE"
+        )
+        expect(invalid.map((f) => f.context?.sourceMiniId).sort()).toEqual([
+            "c1",
+            "c77",
+        ])
+        expect(invalid.every((f) => f.severity === "warning")).toBe(true)
+    })
+})
+
+type TClaimSpec = { id: string; type: "normal" | "citation"; quote: string }
+
+/** An extract payload for `text`, one mention per claim, no pairings. */
+function extractFor(text: string, claims: TClaimSpec[]): unknown {
+    return {
+        canonicalClaims: claims.map((c) => ({
+            miniId: c.id,
+            mentionIds: [`${c.id}-m`],
+            suggestedSymbol: `Claim_${c.id}`,
+            type: c.type,
+            title: `Claim ${c.id}`,
+            ...(c.type === "citation"
+                ? {
+                      url: `https://source.example/${c.id}`,
+                      citationTypeGuess: "Website",
+                  }
+                : { body: `Claim ${c.id}.` }),
+        })),
+        mentionToClaim: claims.map((c) => ({
+            mentionId: `${c.id}-m`,
+            claimMiniId: c.id,
+        })),
+        mentions: claims.map((c) => {
+            const start = text.indexOf(c.quote)
+            return {
+                mentionId: `${c.id}-m`,
+                segmentId: "",
+                text: c.quote,
+                span: { start, end: start + c.quote.length },
+            }
+        }),
+        sourceSupport: [],
+    }
+}
+
+function relationTo(consequent: string, antecedents: string[]): unknown {
+    return {
+        relations: [
+            {
+                relationId: "r1",
+                type: "inference",
+                antecedents,
+                consequent,
+                title: "Step",
+                evidence: { segmentIds: [], quote: "" },
+            },
+        ],
+        conclusionCandidates: [consequent],
+        conclusionTitle: "Upshot",
+        rationale: "The consequent supports nothing further.",
+    }
+}
+
+describe("scribe's position fallback for an unpaired source", () => {
+    it("attaches a leading link to the claim later in its own sentence", async () => {
+        // "According to <link>, <claim>." — the claim follows the link, and
+        // the previous sentence's claim is the wrong one to back.
+        const text =
+            "Summers are longer now. According to [a report](https://report.example/heat), global temperatures rose. So the climate is changing."
+        const result = await runScribe(
+            extractFor(text, [
+                { id: "c1", type: "normal", quote: "Summers are longer now." },
+                {
+                    id: "c2",
+                    type: "citation",
+                    quote: "According to [a report](https://report.example/heat)",
+                },
+                {
+                    id: "c3",
+                    type: "normal",
+                    quote: "global temperatures rose.",
+                },
+                {
+                    id: "c4",
+                    type: "normal",
+                    quote: "the climate is changing.",
+                },
+            ]),
+            relationTo("c4", ["c1", "c3"]),
+            text
+        )
+        expect(backing(result)).toEqual({ c3: ["c2"] })
+    })
+
+    it("attaches a leading link with nothing before it", async () => {
+        const text =
+            "According to [a report](https://report.example/heat), global temperatures rose. So the climate is changing."
+        const result = await runScribe(
+            extractFor(text, [
+                {
+                    id: "c1",
+                    type: "citation",
+                    quote: "According to [a report](https://report.example/heat)",
+                },
+                {
+                    id: "c2",
+                    type: "normal",
+                    quote: "global temperatures rose.",
+                },
+                {
+                    id: "c3",
+                    type: "normal",
+                    quote: "the climate is changing.",
+                },
+            ]),
+            relationTo("c3", ["c2"]),
+            text
+        )
+        expect(backing(result)).toEqual({ c2: ["c1"] })
+        expect(
+            result.failures.filter(
+                (f) => f.code === "SOURCE_ATTACHMENT_UNATTACHED"
+            )
+        ).toEqual([])
+    })
+
+    it("picks the claim the source's mention overlaps most", async () => {
+        const text =
+            "Wages fell and prices rose sharply this year ([data](https://data.example/x)). So workers are worse off."
+        const result = await runScribe(
+            extractFor(text, [
+                { id: "c1", type: "normal", quote: "Wages fell" },
+                {
+                    id: "c2",
+                    type: "normal",
+                    quote: "prices rose sharply this year",
+                },
+                {
+                    id: "c3",
+                    type: "citation",
+                    quote: "Wages fell and prices rose sharply this year ([data](https://data.example/x))",
+                },
+                {
+                    id: "c4",
+                    type: "normal",
+                    quote: "workers are worse off.",
+                },
+            ]),
+            relationTo("c4", ["c1", "c2"]),
+            text
+        )
+        expect(backing(result)).toEqual({ c2: ["c3"] })
+    })
+
+    it("leaves a source with no claim in its sentence or before it unattached, and says so", async () => {
+        const text =
+            "Sources: https://first.example/intro.\nIt is raining. So the ground is wet."
+        const result = await runScribe(
+            extractFor(text, [
+                {
+                    id: "c1",
+                    type: "citation",
+                    quote: "Sources: https://first.example/intro.",
+                },
+                { id: "c2", type: "normal", quote: "It is raining." },
+                { id: "c3", type: "normal", quote: "the ground is wet." },
+            ]),
+            relationTo("c3", ["c2"]),
+            text
+        )
+        expect(backing(result)).toEqual({})
+        const unattached = result.failures.filter(
+            (f) => f.code === "SOURCE_ATTACHMENT_UNATTACHED"
+        )
+        expect(unattached.map((f) => f.context?.sourceMiniId)).toEqual(["c1"])
     })
 })

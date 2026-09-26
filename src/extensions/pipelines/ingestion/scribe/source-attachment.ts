@@ -12,7 +12,8 @@
 // one stage that reads the text); failing that, when `structure` did not
 // use it either, to a claim chosen by where the mentions sit — the
 // normal claim whose mention overlaps the source's most, else the nearest
-// normal claim whose mention ends before the source's begins. A relation
+// normal claim in the same sentence, else the nearest normal claim whose
+// mention ends before the source's begins. A relation
 // with only a source antecedent compiles to backing and no freeform
 // premise, so nothing else about the argument changes.
 
@@ -22,9 +23,11 @@ import type {
     TInferenceRelation,
 } from "../../base/stages/index.js"
 import { locateSourceAnchor } from "../../base/source-anchors.js"
+import { sortInferenceRelations } from "../../base/stages/formula-compilation.js"
 import type { TScribeExtractOutput } from "./schemas.js"
 
 export const SOURCE_ATTACHMENT_FAILURE_CODES = {
+    invalidSource: "SOURCE_ATTACHMENT_INVALID_SOURCE",
     invalidTarget: "SOURCE_ATTACHMENT_INVALID_TARGET",
     unattached: "SOURCE_ATTACHMENT_UNATTACHED",
 } as const
@@ -59,37 +62,62 @@ function overlapLength(a: TRange, b: TRange): number {
     return Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start))
 }
 
-/** The normal claim a source's mentions sit on or just after, if any. */
+// A sentence ends at a terminator followed by whitespace (closing quotes and
+// brackets allowed in between), or at a line break. The dots inside a URL
+// are followed by more of the URL, so they never count.
+const SENTENCE_BREAK = /[.!?]["')\]]*\s|\n/
+
+/**
+ * The normal claim a source's mentions belong to, if any: the one whose
+ * mention overlaps a source mention most; else the nearest one in the same
+ * sentence, on either side ("According to <link>, <claim>."); else the
+ * nearest one that ends before the source begins.
+ */
 function claimByPosition(
     sourceRanges: TRange[],
-    normalRanges: { miniId: string; ranges: TRange[] }[]
+    normalRanges: { miniId: string; ranges: TRange[] }[],
+    inputText: string
 ): string | undefined {
-    let best: { miniId: string; overlap: number } | undefined
+    let overlapping: { miniId: string; overlap: number } | undefined
+    let sameSentence: { miniId: string; gap: number } | undefined
+    let preceding: { miniId: string; end: number } | undefined
     for (const claim of normalRanges) {
         for (const range of claim.ranges) {
             for (const source of sourceRanges) {
                 const overlap = overlapLength(range, source)
-                if (
-                    overlap > 0 &&
-                    (best === undefined || overlap > best.overlap)
+                if (overlap > 0) {
+                    if (
+                        overlapping === undefined ||
+                        overlap > overlapping.overlap
+                    )
+                        overlapping = { miniId: claim.miniId, overlap }
+                    continue
+                }
+                const [gapStart, gapEnd] =
+                    range.end <= source.start
+                        ? [range.end, source.start]
+                        : [source.end, range.start]
+                const gap = gapEnd - gapStart
+                // From the earlier mention's last character, which is where
+                // a sentence it closes has its terminator.
+                const between = inputText.slice(
+                    Math.max(0, gapStart - 1),
+                    gapEnd
                 )
-                    best = { miniId: claim.miniId, overlap }
+                if (
+                    !SENTENCE_BREAK.test(between) &&
+                    (sameSentence === undefined || gap < sameSentence.gap)
+                )
+                    sameSentence = { miniId: claim.miniId, gap }
+                if (
+                    range.end <= source.start &&
+                    (preceding === undefined || range.end > preceding.end)
+                )
+                    preceding = { miniId: claim.miniId, end: range.end }
             }
         }
     }
-    if (best !== undefined) return best.miniId
-
-    if (sourceRanges.length === 0) return undefined
-    const sourceStart = Math.min(...sourceRanges.map((r) => r.start))
-    let nearest: { miniId: string; end: number } | undefined
-    for (const claim of normalRanges) {
-        for (const range of claim.ranges) {
-            if (range.end > sourceStart) continue
-            if (nearest === undefined || range.end > nearest.end)
-                nearest = { miniId: claim.miniId, end: range.end }
-        }
-    }
-    return nearest?.miniId
+    return (overlapping ?? sameSentence ?? preceding)?.miniId
 }
 
 /**
@@ -118,10 +146,16 @@ export function buildSourceRelations(args: {
     const normalRanges = claims
         .filter((c) => args.typeByMiniId.get(c.miniId) === "normal")
         .map((c) => ({ miniId: c.miniId, ranges: rangesOf(c.mentionIds) }))
+    // Read off what the compiler will make of structure's relations, so a
+    // relation it drops (an unknown claim id, say) attaches nothing here
+    // either. Its warnings are the compiler's to report, not this stage's.
     const attachedByStructure = new Set(
-        args.structureRelations
-            .filter((r) => args.typeByMiniId.get(r.consequent) === "normal")
-            .flatMap((r) => r.antecedents)
+        [
+            ...sortInferenceRelations({
+                relations: [...args.structureRelations],
+                typeByClaimMiniId: args.typeByMiniId,
+            }).derivationBacking.values(),
+        ].flat()
     )
 
     const relations: TInferenceRelation[] = []
@@ -133,6 +167,20 @@ export function buildSourceRelations(args: {
             consequent: supportedMiniId,
             title: "",
             evidence: { segmentIds: [], quote: "" },
+        })
+    }
+
+    for (const entry of args.extract?.sourceSupport ?? []) {
+        const sourceType = args.typeByMiniId.get(entry.sourceMiniId)
+        if (sourceType === "citation") continue
+        args.addFailure({
+            code: SOURCE_ATTACHMENT_FAILURE_CODES.invalidSource,
+            message: `"${entry.sourceMiniId}" was paired as a source for "${entry.supportedMiniId}", but it is ${sourceType === undefined ? "not a known claim" : `a ${sourceType} claim`}; only a citation claim is a source. Ignoring the pairing.`,
+            severity: "warning",
+            context: {
+                sourceMiniId: entry.sourceMiniId,
+                supportedMiniId: entry.supportedMiniId,
+            },
         })
     }
 
@@ -165,7 +213,8 @@ export function buildSourceRelations(args: {
 
         const supportedMiniId = claimByPosition(
             rangesOf(claim.mentionIds),
-            normalRanges
+            normalRanges,
+            args.inputText
         )
         if (supportedMiniId === undefined) {
             args.addFailure({
