@@ -3,7 +3,7 @@
         "claims": [
             {
                 "miniId": "c1",
-                "title": "Remote work improves productivity",
+                "title": "Remote work boosts productivity",
                 "body": "Working remotely improves productivity for many people.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -15,12 +15,12 @@
                         "suffix": " Working remotely also reduces c"
                     }
                 ],
-                "role": "conclusion"
+                "role": "intermediate"
             },
             {
                 "miniId": "c2",
-                "title": "Remote work reduces commuting",
-                "body": "Working remotely reduces commuting time.",
+                "title": "Remote work cuts commuting",
+                "body": "Working remotely also reduces commuting time.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -35,7 +35,7 @@
             },
             {
                 "miniId": "c3",
-                "title": "Less commuting improves balance",
+                "title": "Less commuting aids balance",
                 "body": "Reducing commuting time improves work-life balance.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -47,44 +47,44 @@
                         "suffix": ""
                     }
                 ],
-                "role": "premise"
+                "role": "conclusion"
             }
         ],
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "remote_work_productivity",
+                "symbol": "remote_productivity",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "remote_work_reduces_commute_time",
+                "symbol": "commute_reduction",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "p1",
+                "symbol": "better_work_life_balance",
                 "claimMiniId": "c3"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(remote_work_reduces_commute_time and p1) implies remote_work_productivity",
-                "title": "Balance benefits from less commuting"
+                "formula": "commute_reduction implies better_work_life_balance",
+                "title": "Commute savings support balance"
             },
             {
                 "miniId": "gid-5",
-                "formula": "remote_work_productivity",
-                "title": "End benefit claim"
+                "formula": "better_work_life_balance",
+                "title": "Balance as the endpoint"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
         "derivationBacking": [],
-        "title": "Remote work improves productivity"
+        "title": "Less commuting aids balance"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c1 is the best conclusion because c2 and c3 together support it, while c2 and c3 function as supporting premises.",
+    "selectionRationale": "c3 is the only claim supported by another claim and does not itself support any further claim, so it is the best conclusion candidate.",
     "processingFailures": []
 }

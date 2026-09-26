@@ -40,10 +40,10 @@
                 "type": "normal",
                 "sourceAnchors": [
                     {
-                        "quote": "the ground is wet.",
-                        "startUtf16": 60,
+                        "quote": "Therefore, the ground is wet.",
+                        "startUtf16": 49,
                         "endUtf16": 78,
-                        "prefix": " wet. It is raining. Therefore, ",
+                        "prefix": "ground gets wet. It is raining. ",
                         "suffix": ""
                     }
                 ],
@@ -53,7 +53,7 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "rain_implies_wet_ground",
+                "symbol": "rain_wets_ground",
                 "claimMiniId": "c1"
             },
             {
@@ -70,13 +70,13 @@
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(rain_implies_wet_ground and it_is_raining) implies ground_is_wet",
-                "title": "Applying the rain rule"
+                "formula": "(rain_wets_ground and it_is_raining) implies ground_is_wet",
+                "title": "Rain implies wet ground"
             },
             {
                 "miniId": "gid-5",
                 "formula": "ground_is_wet",
-                "title": "Result of the rainfall"
+                "title": "Wet-ground inference"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -85,6 +85,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is best supported by the other claims, while c1 functions as a rule and c2 as the factual trigger.",
+    "selectionRationale": "c3 is the supported end claim: c1 and c2 together imply that the ground is wet, and nothing else follows from it.",
     "processingFailures": []
 }
