@@ -273,6 +273,20 @@ describe("createScribePipeline", () => {
         )
     })
 
+    it("an over-long conclusion claim title gives an argument title that ends on a whole word", async () => {
+        const extract = happyExtractOutput() as {
+            canonicalClaims: { miniId: string; title: string }[]
+            mentionToClaim: unknown
+        }
+        // c2 is the fixture's conclusion; the argument title reuses its title.
+        extract.canonicalClaims.find((c) => c.miniId === "c2")!.title =
+            "Trump is the most corrupt major U.S. politician in history"
+        const result = await runScribe(extract, happyStructureOutput())
+        expect((result.output!.argument as { title?: string }).title).toBe(
+            "Trump is the most corrupt major U.S. politician…"
+        )
+    })
+
     it("an empty claim set yields a valid argument: null response (no throw)", async () => {
         const result = await runScribe(
             {
