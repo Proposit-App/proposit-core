@@ -107,8 +107,8 @@ export function createExtractStage(
 /**
  * Adapter — republish `extract`'s canonical claims under the
  * canonicalization slot scholar's deterministic stages + finalize read,
- * clearing any citation url the input does not contain
- * (`SOURCE_URL_NOT_IN_TEXT_FAILURE_CODE`).
+ * after `settleCitations` has checked their urls and merged citations of
+ * the same page.
  *
  * It picks the two keys rather than passing the whole output through:
  * the canonicalization envelope is `additionalProperties: false`, so
@@ -126,32 +126,119 @@ export function createExtractCanonicalizationAdapterStage(
         dependsOn: [STAGE_IDS.extract],
         outputSchema: buildResponseSchema(extension),
         fn: (ctx) => {
-            const extract = ctx.get<TScribeExtractOutput>(STAGE_IDS.extract)
-            const inputText = (ctx.input as TIngestionInput).text
+            const settled = settleCitations(
+                ctx.get<TScribeExtractOutput>(STAGE_IDS.extract),
+                (ctx.input as TIngestionInput).text,
+                ctx.addFailure
+            )
             return {
-                canonicalClaims: (extract?.canonicalClaims ?? []).map(
-                    (claim) => {
-                        const url = (claim as Record<string, unknown>).url
-                        if (
-                            claim.type !== "citation" ||
-                            typeof url !== "string" ||
-                            url.trim().length === 0 ||
-                            isUrlInText(url.trim(), inputText)
-                        )
-                            return claim
-                        ctx.addFailure({
-                            code: SOURCE_URL_NOT_IN_TEXT_FAILURE_CODE,
-                            message: `Citation "${claim.miniId}" gave the url "${url}", which does not appear in the input; the url was cleared and the citation kept.`,
-                            severity: "warning",
-                            context: { miniId: claim.miniId, url },
-                        })
-                        return { ...claim, url: "" }
-                    }
-                ),
-                mentionToClaim: extract?.mentionToClaim ?? [],
+                canonicalClaims: settled?.canonicalClaims ?? [],
+                mentionToClaim: settled?.mentionToClaim ?? [],
             }
         },
     })
+}
+
+type TAddFailure = TStageContext["addFailure"]
+
+/**
+ * `extract`'s output with its citations settled: a url the input does not
+ * contain is cleared (`SOURCE_URL_NOT_IN_TEXT_FAILURE_CODE`), one it
+ * contains in a slightly different form takes the text's form, and
+ * citations of the same page are merged into one
+ * (`SOURCE_DUPLICATE_MERGED_FAILURE_CODE`) — the first, unless it is an
+ * archive copy and the original is also cited. The kept citation takes
+ * the merged ones' mentions and supports what any of them supported.
+ *
+ * Deterministic, so every stage that reads `extract` directly can call it
+ * and see the same claim set; only one of them should report.
+ */
+export function settleCitations(
+    extract: TScribeExtractOutput | undefined,
+    inputText: string,
+    addFailure: TAddFailure
+): TScribeExtractOutput | undefined {
+    if (extract === undefined) return undefined
+    const claims = extract.canonicalClaims.map((claim) => {
+        const url = (claim as Record<string, unknown>).url
+        if (
+            claim.type !== "citation" ||
+            typeof url !== "string" ||
+            url.trim().length === 0
+        )
+            return claim
+        const found = findUrlInText(url.trim(), inputText)
+        if (found !== undefined) return { ...claim, url: found }
+        addFailure({
+            code: SOURCE_URL_NOT_IN_TEXT_FAILURE_CODE,
+            message: `Citation "${claim.miniId}" gave the url "${url}", which does not appear in the input; the url was cleared and the citation kept.`,
+            severity: "warning",
+            context: { miniId: claim.miniId, url },
+        })
+        return { ...claim, url: "" }
+    })
+
+    const groups = new Map<string, typeof claims>()
+    for (const claim of claims) {
+        const url = (claim as Record<string, unknown>).url
+        if (claim.type !== "citation" || typeof url !== "string" || url === "")
+            continue
+        const key = citationUrlKey(url)
+        groups.set(key, [...(groups.get(key) ?? []), claim])
+    }
+    const keptByMiniId = new Map<string, string>()
+    const mergedMentions = new Map<string, string[]>()
+    for (const group of groups.values()) {
+        if (group.length < 2) continue
+        const kept =
+            group.find(
+                (c) =>
+                    !ARCHIVE_URL.test(
+                        (c as Record<string, unknown>).url as string
+                    )
+            ) ?? group[0]
+        const merged = group.filter((c) => c !== kept)
+        for (const c of merged) keptByMiniId.set(c.miniId, kept.miniId)
+        mergedMentions.set(kept.miniId, [
+            ...new Set(group.flatMap((c) => [...c.mentionIds])),
+        ])
+        addFailure({
+            code: SOURCE_DUPLICATE_MERGED_FAILURE_CODE,
+            message: `Citations ${merged.map((c) => `"${c.miniId}"`).join(", ")} cite the same page as "${kept.miniId}" and were merged into it.`,
+            severity: "warning",
+            context: {
+                keptMiniId: kept.miniId,
+                mergedMiniIds: merged.map((c) => c.miniId),
+            },
+        })
+    }
+    if (keptByMiniId.size === 0) return { ...extract, canonicalClaims: claims }
+
+    const resolve = (miniId: string) => keptByMiniId.get(miniId) ?? miniId
+    const seenSupport = new Set<string>()
+    return {
+        ...extract,
+        canonicalClaims: claims
+            .filter((c) => !keptByMiniId.has(c.miniId))
+            .map((c) => {
+                const mentionIds = mergedMentions.get(c.miniId)
+                return mentionIds === undefined ? c : { ...c, mentionIds }
+            }),
+        mentionToClaim: extract.mentionToClaim.map((entry) => ({
+            ...entry,
+            claimMiniId: resolve(entry.claimMiniId),
+        })),
+        sourceSupport: extract.sourceSupport.flatMap((entry) => {
+            const settled = {
+                sourceMiniId: resolve(entry.sourceMiniId),
+                supportedMiniId: resolve(entry.supportedMiniId),
+            }
+            const key = `${settled.sourceMiniId}\u0000${settled.supportedMiniId}`
+            if (seenSupport.has(key)) return []
+            seenSupport.add(key)
+            return [settled]
+        }),
+    }
 }
 
 /**
@@ -165,32 +252,80 @@ export function createExtractCanonicalizationAdapterStage(
 export const SOURCE_URL_NOT_IN_TEXT_FAILURE_CODE = "SOURCE_URL_NOT_IN_TEXT"
 
 /**
- * Whether `url` appears in `text` as written, scheme included, allowing
- * only differences that cannot change where the link goes: the case of the
- * scheme and host, and a trailing slash.
+ * Warning code for citations merged because their urls name the same page.
+ * A reference list often links one work several ways — an archive copy
+ * beside the original, `/index.html` beside `/` — and each became its own
+ * citation claim. `context` carries `keptMiniId` and `mergedMiniIds`.
  */
-export function isUrlInText(url: string, text: string): boolean {
-    const match = /^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)(.*)$/i.exec(url)
-    if (match === null) return false
-    const origin = match[1].toLowerCase()
-    const path = match[2].replace(/\/$/, "")
+export const SOURCE_DUPLICATE_MERGED_FAILURE_CODE = "SOURCE_DUPLICATE_MERGED"
+
+/** A Wayback Machine copy: `web.archive.org/web/<timestamp>[flag_]/<url>`. */
+const ARCHIVE_URL =
+    /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:www\.)?web\.archive\.org\/web\/\d+[a-z_]*\/(.+)$/i
+
+/**
+ * What two citation urls must share to name the same page: the url with
+ * an archive copy unwrapped to its original, http and https treated alike,
+ * the host lowercased and without a leading "www.", and the fragment, a
+ * trailing "index.html" or "index.htm" and a trailing slash dropped.
+ */
+export function citationUrlKey(url: string): string {
+    const archived = ARCHIVE_URL.exec(url.trim())
+    if (archived !== null) return citationUrlKey(archived[1])
+    const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?/i.exec(
+        url.trim()
+    )
+    if (match === null) return url.trim()
+    const scheme = match[1].toLowerCase()
+    const host = match[2].toLowerCase().replace(/^www\./, "")
+    const path = match[3].replace(/\/index\.html?$/i, "").replace(/\/$/, "")
+    const prefix = scheme === "http" || scheme === "https" ? "" : `${scheme}:`
+    return `${prefix}//${host}${path}${match[4] ?? ""}`
+}
+
+/**
+ * The url as the input writes it, if the input contains it: the same link
+ * with only differences that cannot change where it goes — the case of the
+ * scheme and host, http for https or the reverse, and a trailing slash.
+ */
+export function findUrlInText(url: string, text: string): string | undefined {
+    const match = /^([a-z][a-z0-9+.-]*):(\/\/[^/?#]*)(.*)$/i.exec(url)
+    if (match === null) return undefined
+    const scheme = match[1].toLowerCase()
+    const isWeb = scheme === "http" || scheme === "https"
+    const authority = match[2].toLowerCase()
+    const path = match[3].replace(/\/$/, "")
     const lowerText = text.toLowerCase()
     for (
-        let at = lowerText.indexOf(origin);
+        let at = lowerText.indexOf(authority);
         at !== -1;
-        at = lowerText.indexOf(origin, at + 1)
+        at = lowerText.indexOf(authority, at + 1)
     ) {
-        const rest = text.slice(at + origin.length)
+        const textScheme = /([a-z][a-z0-9+.-]*):$/.exec(
+            lowerText.slice(Math.max(0, at - 16), at)
+        )?.[1]
+        if (
+            textScheme === undefined ||
+            (isWeb
+                ? textScheme !== "http" && textScheme !== "https"
+                : textScheme !== scheme)
+        )
+            continue
+        const rest = text.slice(at + authority.length)
+        if (!rest.startsWith(path)) continue
         // The text's link must end where this one does, give or take its
         // own trailing slash, so neither a longer host nor a longer path
-        // matches. A sentence's closing full stop is not part of a link.
-        if (
-            rest.startsWith(path) &&
-            !/^\.?[\w\-~%]/.test(rest.slice(path.length))
+        // matches. Punctuation closing a sentence or clause is not part of
+        // a link.
+        const trailingSlash = rest.startsWith("/", path.length) ? 1 : 0
+        const after = rest.slice(path.length + trailingSlash)
+        if (/^[.,;:!?]?[^\s)\]>"'<.,;:!?]/.test(after)) continue
+        return text.slice(
+            at - textScheme.length - 1,
+            at + authority.length + path.length + trailingSlash
         )
-            return true
     }
-    return false
+    return undefined
 }
 
 /**

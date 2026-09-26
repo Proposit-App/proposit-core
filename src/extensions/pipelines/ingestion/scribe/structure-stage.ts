@@ -38,6 +38,7 @@ import {
     type TScribeStructureOutput,
 } from "./schemas.js"
 import { buildSourceRelations } from "./source-attachment.js"
+import { settleCitations } from "./extract-stage.js"
 
 export const STRUCTURE_MODEL = "gpt-6-sol"
 
@@ -125,7 +126,8 @@ export function createStructureStage(
 /**
  * Adapter — republish `structure`'s relations under the
  * relation-extraction slot, together with the relations that attach each
- * source claim to the claim it supports (`buildSourceRelations`).
+ * source claim to the claim it supports (`buildSourceRelations`), read
+ * off the same settled citations the canonicalization slot carries.
  */
 export const structureRelationAdapterStage: TStage<TRelationExtractionOutput> =
     deterministicStage<TRelationExtractionOutput>({
@@ -140,7 +142,14 @@ export const structureRelationAdapterStage: TStage<TRelationExtractionOutput> =
             const structureRelations =
                 ctx.get<TScribeStructureOutput>(STAGE_IDS.scribeStructure)
                     ?.relations ?? []
-            const extract = ctx.get<TScribeExtractOutput>(STAGE_IDS.extract)
+            // Settled again rather than read from the canonicalization slot:
+            // attachment needs the mentions and source pairings too, which
+            // that slot does not carry. The adapter there has reported.
+            const extract = settleCitations(
+                ctx.get<TScribeExtractOutput>(STAGE_IDS.extract),
+                (ctx.input as TIngestionInput).text,
+                () => undefined
+            )
             const sourceRelations = buildSourceRelations({
                 extract,
                 structureRelations,
