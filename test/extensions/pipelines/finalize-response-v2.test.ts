@@ -337,6 +337,20 @@ describe("finalizeResponseV2 — authored relation titles", () => {
         expect(title.endsWith("…")).toBe(true)
     })
 
+    it("composes when the authored title names a claim by its id", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "Inference from c2"
+        expect(titleOf(outputs, "p1")).toBe(
+            'If "Forcing Hormuz open is too risky" then "No realistic off-ramp exists"'
+        )
+    })
+
+    it("keeps an authored title where a claim-id pattern is part of a word", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "Risks of abc12 tankers"
+        expect(titleOf(outputs, "p1")).toBe("Risks of abc12 tankers")
+    })
+
     it("leaves the machine formula untouched when a title is authored", () => {
         const outputs = buildHormuzOutputs()
         relationsOf(outputs)[0].title = "Limits of the crowd's power"
@@ -446,6 +460,12 @@ describe("finalizeResponseV2 — authored conclusion titles", () => {
     it("composes when the authored conclusion title is whitespace-only", () => {
         const outputs = buildHormuzOutputs()
         selectionOf(outputs).title = "   "
+        expect(titleOf(outputs, "p3")).toBe("The US should not strike")
+    })
+
+    it("composes when the authored conclusion title names a claim by its id", () => {
+        const outputs = buildHormuzOutputs()
+        selectionOf(outputs).title = "Inference from c1"
         expect(titleOf(outputs, "p3")).toBe("The US should not strike")
     })
 

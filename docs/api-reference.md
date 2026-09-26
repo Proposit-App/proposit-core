@@ -2135,7 +2135,7 @@ The authored title names the **inferential move** — what the step does in the 
 
 Resolution, per premise:
 
-- The authored title is trimmed. Empty or whitespace-only counts as **absent**.
+- The authored title is trimmed. Empty or whitespace-only counts as **absent**, and so does a title naming a claim by its internal id (a word like `c1`), which a reader never sees.
 - It is clamped to 80 characters (an over-long one is truncated with an ellipsis, never rejected — strict structured output ignores JSON-Schema `maxLength`, and discarding a completed run over a long string is the worse failure).
 - Absent, the title is **composed** from the LLM-authored claim titles behind the premise: `If "<antecedent>" and "<antecedent>" then "<consequent>"` for a relation-derived premise, and the conclusion claim's own title for the conclusion premise. Composition is the floor, so a model that omits the field never fails a run.
 

@@ -65,7 +65,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "Socrates_Is_Mortal",
-                "title": "Inference from c1"
+                "title": "Socrates is mortal"
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
