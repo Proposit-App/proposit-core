@@ -227,8 +227,8 @@ export const RelationExtractionOutputSchema = Type.Object({
             consequent: Type.String(),
             // A short noun phrase naming the inferential move, used as
             // the title of the premise this relation compiles into.
-            // Plain `Type.String()` on purpose: strict structured output
-            // ignores `maxLength`, so the length cap is applied where the
+            // Plain `Type.String()` on purpose: a model can overshoot a
+            // length it is given, so the length cap is applied where the
             // title is read rather than being a validation gate that
             // could discard an otherwise complete run.
             title: Type.String(),

@@ -235,27 +235,29 @@ describe("ingestion claim-record schema — free-text length steering", () => {
         return citation
     }
 
-    it("shrinks the free-text `title` to 45 and appends the budget to its description", () => {
+    it("sends the free-text `title` with no maxLength and a 45-character budget in its description", () => {
         const props = (
             citationClaimBranch() as {
                 properties: {
-                    title: { maxLength: number; description: string }
+                    title: { maxLength?: number; description: string }
                 }
             }
         ).properties
-        // basics title maxLength 50 → floor(50 * 0.9) = 45.
-        expect(props.title.maxLength).toBe(45)
+        // basics title maxLength 50 → floor(50 * 0.9) = 45, stated in
+        // prose only: a model that enforces maxLength stops generating
+        // at the cap and leaves the title cut off mid-word.
+        expect(props.title).not.toHaveProperty("maxLength")
         expect(props.title.description).toMatch(/at most 45 characters$/)
     })
 
-    it("shrinks the free-text `url` to 450, appends the budget, and carries no `format` on the wire schema", () => {
+    it("sends the free-text `url` with no maxLength, a 450-character budget, and no `format` on the wire schema", () => {
         const props = (
             citationClaimBranch() as {
-                properties: { url: { maxLength: number; description: string } }
+                properties: { url: { maxLength?: number; description: string } }
             }
         ).properties
-        // basics url maxLength 500 → floor(500 * 0.9) = 450.
-        expect(props.url.maxLength).toBe(450)
+        // basics url maxLength 500 → floor(500 * 0.9) = 450, in prose.
+        expect(props.url).not.toHaveProperty("maxLength")
         expect(props.url.description).toMatch(/at most 450 characters$/)
         // The converted strict-mode wire schema must not carry a
         // `format` — OpenAI strict mode rejects formats outside its

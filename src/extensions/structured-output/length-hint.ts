@@ -13,18 +13,18 @@
 // This helper restores a *steering* projection for free-text String
 // fields, shared so the shrink math, hint wording, and exact-value
 // exemption rule live in exactly one place. It does NOT enforce the
-// true limit — a post-hoc clamp against the original (unshrunk) schema
-// remains the only thing that truncates. The projection only nudges
-// the model toward the limit:
+// true limit — a post-hoc clamp against the original schema remains the
+// only thing that shortens, and it ends on a whole word. The projection
+// only nudges the model toward the limit: it appends a *shrunk* budget
+// (`floor(original * SHRINK)`) to `description`, so a model reading the
+// schema sees the cap with headroom below the real one.
 //
-//   * Project a *shrunk* `maxLength` (`floor(original * SHRINK)`,
-//     floored at 1). On a respected-`maxLength` consumer (a local
-//     llama-server compiling to GBNF) this caps output strictly below
-//     the true limit. On OpenAI strict mode the value is ignored, so
-//     it is an inert structural placeholder there.
-//   * Append the budget to `description` so a model reading the prose
-//     schema sees the cap explicitly — this is what steers OpenAI,
-//     which ignores `maxLength` but does read `description`.
+// A free-text field carries no `maxLength` on the wire. A model that
+// enforces it — a local llama-server compiling the schema to a grammar,
+// and newer OpenAI models in strict mode — stops generating at the cap,
+// which cuts the value off mid-word ("…major politicians since 177")
+// with nothing downstream able to repair it. Prose steering plus the
+// word-boundary clamp keeps every value whole.
 //
 // Exact-value fields are exempt from both. A String that declares a
 // `format` (e.g. `uri`) or a very small `maxLength` is not free text:
@@ -36,8 +36,8 @@
 import type { TSchema } from "typebox"
 
 /**
- * Fraction of a free-text field's declared `maxLength` to project into
- * the wire schema — leaving headroom below the true cap so the model's
+ * Fraction of a free-text field's declared `maxLength` to state as its
+ * budget in the wire schema's `description` — leaving headroom below the true cap so the model's
  * tendency to overshoot lands under the real limit rather than past it.
  *
  * ponytail: tunable heuristic knob. Lower it (e.g. 0.85, 0.8) if
@@ -90,8 +90,8 @@ function isExactValueField(fields: TStringLengthFields): boolean {
  * Project a TypeBox String node into the wire-schema String object,
  * applying free-text length steering.
  *
- * - A free-text String with a `maxLength` gets a shrunk `maxLength` and
- *   a `description` ending `…at most <shrunk> characters`.
+ * - A free-text String with a `maxLength` gets no `maxLength` and a
+ *   `description` ending `…at most <shrunk> characters`.
  * - An exact-value String (declares a `format`, or a very small
  *   `maxLength`) keeps its original `maxLength`/`description` and gets
  *   no hint.
@@ -130,16 +130,12 @@ export function projectStringLengthHint(
         return exact
     }
 
-    // Free-text field: shrink the cap and restate the budget in prose.
+    // Free-text field: state the shrunk budget in prose only.
     const shrunk = Math.max(1, Math.floor(fields.maxLength * SHRINK))
     const budgetHint = `at most ${String(shrunk)} characters`
     const description =
         fields.description !== undefined
             ? `${fields.description}; ${budgetHint}`
             : budgetHint
-    return {
-        type: "string",
-        maxLength: shrunk,
-        description,
-    }
+    return { type: "string", description }
 }

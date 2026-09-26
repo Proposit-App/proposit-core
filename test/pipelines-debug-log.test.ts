@@ -297,9 +297,10 @@ describe("debug helpers emit on console.debug when env var is on", () => {
             },
         }
         const result = await executePipeline(pipeline, {}, { llm })
-        // Clamp truncated "way too long" (12) → "way t" (5); stage passes.
+        // Clamp shortened "way too long" (12) to its first word plus an
+        // ellipsis, within the cap of 5; stage passes.
         expect(result.stageOutcomes).toMatchObject({ titler: "completed" })
-        expect(result.output).toEqual({ title: "way t" })
+        expect(result.output).toEqual({ title: "way…" })
 
         const truncLine = capture.lines
             .filter((line) => line.startsWith(PROPOSIT_PIPELINE_DEBUG_PREFIX))
