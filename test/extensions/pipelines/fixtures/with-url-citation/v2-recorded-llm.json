@@ -833,11 +833,11 @@
       }
     },
     {
-      "hash": "bc159ec8c0bbb22a05ea8b1bcd51402de8333b7626219b8276831bf4ed620014",
+      "hash": "e68468694ccc19e84c9ae31482cb1662a9530138cd75cbc1313bd00cc5c554c7",
       "stageId": "relation-extraction",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nWhenever there are at least two normal-typed claims, emit at least one relation: the input is an argument, and its claims connect somehow. Return `{ \"relations\": [] }` only when there are fewer than two normal-typed claims.",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nEmit the relations the author actually argues. An argument with at least two normal-typed claims has at least one, so look for it before concluding there is none. Never invent support the author does not give: if the claims genuinely do not connect, return `{ \"relations\": [] }`.",
         "userMessage": "Canonical claims (with refined types):\n  [c1] type=citation symbol=NASA_Reports_Warming fields={\"title\":\"NASA reports global temperature rise\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal symbol=Global_Temperatures_Rise fields={\"title\":\"Global temperatures have risen\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal symbol=Warming_Causes_Extreme_Weather fields={\"title\":\"Warming increases extreme weather\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c4] type=normal symbol=Extreme_Weather_More_Frequent fields={\"title\":\"Extreme weather is becoming more frequent\",\"body\":\"Extreme weather events are occurring more frequently.\"}\n\nSegments:\n  [s1] \"According to [NASA's climate report](https://climate.nasa.gov/evidence/), global temperatures have risen significantly over the past century.\"\n  [s2] \"Rising global temperatures cause more frequent extreme weather events.\"\n  [s3] \"Therefore, we are seeing more frequent extreme weather events.\"\n\nEmit every inference relationship as a relations array.",
         "outputSchema": {
           "type": "object",
@@ -911,7 +911,7 @@
                 "c1"
               ],
               "consequent": "c2",
-              "title": "NASA as temperature evidence",
+              "title": "NASA as evidence of warming",
               "evidence": {
                 "segmentIds": [
                   "s1"
@@ -927,7 +927,7 @@
                 "c3"
               ],
               "consequent": "c4",
-              "title": "Applying warming's weather effect",
+              "title": "Applying warming’s effect on weather",
               "evidence": {
                 "segmentIds": [
                   "s1",
@@ -940,11 +940,11 @@
           ]
         },
         "tokenUsage": {
-          "input": 963,
-          "output": 362,
-          "reasoning": 199
+          "input": 972,
+          "output": 518,
+          "reasoning": 353
         },
-        "rawResponseId": "resp_060a153b6195d433006ab740bc82c087d28982f7a37e812bf2"
+        "rawResponseId": "resp_096b3d9fd2071770006ab744aad08087d285bf1ad076685eec"
       }
     },
     {
@@ -982,15 +982,15 @@
           "conclusionCandidates": [
             "c4"
           ],
-          "rationale": "c4 is the terminal claim supported jointly by c2 and c3, while c2 is an intermediate claim.",
-          "title": "Joint-premise inference"
+          "rationale": "c4 is supported by c2 and c3 and is not used to support any further claim.",
+          "title": "Combining the supporting claims"
         },
         "tokenUsage": {
           "input": 590,
-          "output": 103,
-          "reasoning": 45
+          "output": 54,
+          "reasoning": 0
         },
-        "rawResponseId": "resp_07cadb770b653ec9006ab740c113fc87d28f667efcafe3b3ab"
+        "rawResponseId": "resp_04f0f037029cc370006ab744b0060487d2ba57ed09199dffed"
       }
     }
   ]

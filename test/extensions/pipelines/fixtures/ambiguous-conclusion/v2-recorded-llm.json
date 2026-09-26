@@ -2,12 +2,12 @@
   "version": 1,
   "records": [
     {
-      "hash": "bf7912a93eb3a653cc0a90d510c16d5a5560d2fbc9a3947271907a05c893342a",
+      "hash": "fce9d2f90d6750c8ac7220d59eb62475b5d8ae9ac6c00430fe78f9cbc49473fa",
       "stageId": "segmentation",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: segmentation -->\nYou are the first stage of an argument-ingestion pipeline. Your job is to split the supplied input text into a list of segments.\n\nReturn an object with a single key `segments` whose value is the array of segments.\n\nA segment is a sentence-or-thereabouts span of text — a self-contained clause that a human could read on its own. Sentence-final punctuation usually marks segment boundaries; bullet items in a list count as separate segments; multi-clause sentences split into one segment per major clause when the clauses each carry their own assertion.\n\nAssign each segment a short stable id like \"s1\", \"s2\", ... in left-to-right order, copy the segment's text verbatim (no rewriting), and record the character \"span\" as an object with \"start\" (inclusive) and \"end\" (exclusive) character offsets into the input. Whitespace between segments is owned by neither segment.\n\nCover the input completely: every non-whitespace character must fall inside some segment's span. Do not invent text. Do not classify segments — that is a later stage's job.",
-        "userMessage": "Input text:\n\nWorking remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance.",
+        "userMessage": "Input text:\n\nWorking remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance. So companies should let employees work remotely.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -79,98 +79,32 @@
                 "start": 102,
                 "end": 153
               }
+            },
+            {
+              "segmentId": "s4",
+              "text": "So companies should let employees work remotely.",
+              "span": {
+                "start": 154,
+                "end": 202
+              }
             }
           ]
         },
         "tokenUsage": {
-          "input": 336,
-          "output": 415,
-          "reasoning": 314
+          "input": 344,
+          "output": 437,
+          "reasoning": 309
         },
-        "rawResponseId": "resp_0296058d79301da2006ab740d2a3d887d2ab5142eb1e63ed89"
+        "rawResponseId": "resp_0a0a3e90664becb2006ab7452ecfd087d28c4e9d32196e8db6"
       }
     },
     {
-      "hash": "0ec7fb418021d07bc7ec96520acd37d8be49706e7b93a8dded9c5474271dce59",
-      "stageId": "axiom-indicator-detection",
-      "request": {
-        "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: axiom-indicator-detection -->\nYou scan the segments of an argument for axiom indicators — explicit signals that the author is invoking a self-evident truth as bottom-level support.\n\nRecognized indicator patterns include (non-exhaustive):\n- \"by definition\"\n- \"tautologically\", \"necessarily true\"\n- \"by convention\"\n- \"is true a priori\"\n- \"as a matter of (logic | mathematics | definition)\"\n- \"trivially\"\n\nReturn an object with a single key `axioms` whose value is the array of detected indicators. For each detected indicator emit:\n- a fresh \"axiomId\" (ax1, ax2, ...)\n- the list of \"segmentIds\" the indicator occurs in (usually one; sometimes two when the indicator straddles a clause)\n- the \"indicator\" — the verbatim trigger phrase\n- the character \"spans\" — one span object (\"start\" inclusive, \"end\" exclusive) per occurrence, relative to the SEGMENT'S TEXT\n\nHedging phrases (\"clearly\", \"obviously\", \"of course\") are NOT axiom indicators on their own — they are stylistic emphasis. Return `{ \"axioms\": [] }` when no indicators are present.",
-        "userMessage": "Segments:\n\n[s1] \"Working remotely improves productivity for many people.\"\n[s2] \"Working remotely also reduces commuting time.\"\n[s3] \"Reducing commuting time improves work-life balance.\"\n\nDetect every axiom indicator.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "axioms"
-          ],
-          "properties": {
-            "axioms": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "axiomId",
-                  "segmentIds",
-                  "indicator",
-                  "spans"
-                ],
-                "properties": {
-                  "axiomId": {
-                    "type": "string"
-                  },
-                  "segmentIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "indicator": {
-                    "type": "string"
-                  },
-                  "spans": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "required": [
-                        "start",
-                        "end"
-                      ],
-                      "properties": {
-                        "start": {
-                          "type": "number",
-                          "description": "Inclusive character offset where the span begins (relative to the parent text)."
-                        },
-                        "end": {
-                          "type": "number",
-                          "description": "Exclusive character offset where the span ends (relative to the parent text)."
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "axioms": []
-        },
-        "tokenUsage": {
-          "input": 409,
-          "output": 19,
-          "reasoning": 0
-        },
-        "rawResponseId": "resp_0cf976cf302829d5006ab740d7d6f087d2ad1d548bcfe99c89"
-      }
-    },
-    {
-      "hash": "66d8b9b1df9c7dff8c29e64a88ea2b2b8f7c661999e1c564dd05a1c3f27372b6",
+      "hash": "7e27d9abe5e19d11f0d5761a5f9050791683bac0ddb9dcafd3d87565d88de476",
       "stageId": "citation-source-detection",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: citation-source-detection -->\nYou scan the segments of an argument for explicit references to external sources of evidence.\n\nA source reference is any of:\n- a Markdown link: `[label](url)`\n- a named source: \"according to X\", \"as reported in Y\", \"the X report\"\n- a bracketed citation marker: `[1]`, `[Smith 2024]`\n- a fully-qualified URL\n\nReturn an object with a single key `sources` whose value is the array of detected source references. For each detected source emit:\n- a fresh \"sourceId\" (src1, src2, ...)\n- the list of \"segmentIds\" the source occurs in (almost always one; multi-segment when one citation spans a clause boundary)\n- a short \"sourceString\" — the human-readable label (e.g. \"NASA climate report\", \"Smith 2024\")\n- the \"url\" field — the URL when one is present, otherwise null\n- the character \"spans\" — one span object (\"start\" inclusive, \"end\" exclusive) per occurrence, relative to the SEGMENT'S TEXT\n\nDo not detect mere mentions of people, organizations, or studies that are not invoked as supporting evidence. Quote attribution alone (\"Bob said X\") is not a citation unless Bob's saying is being used to support a claim. Return `{ \"sources\": [] }` when no sources are present.",
-        "userMessage": "Segments:\n\n[s1] \"Working remotely improves productivity for many people.\"\n[s2] \"Working remotely also reduces commuting time.\"\n[s3] \"Reducing commuting time improves work-life balance.\"\n\nDetect every citation/source reference.",
+        "userMessage": "Segments:\n\n[s1] \"Working remotely improves productivity for many people.\"\n[s2] \"Working remotely also reduces commuting time.\"\n[s3] \"Reducing commuting time improves work-life balance.\"\n[s4] \"So companies should let employees work remotely.\"\n\nDetect every citation/source reference.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -242,20 +176,94 @@
           "sources": []
         },
         "tokenUsage": {
-          "input": 456,
+          "input": 468,
           "output": 17,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0132c1b5b4dff924006ab740d7da6887d282ff4a71ce97887a"
+        "rawResponseId": "resp_0b4617119f25d396006ab74534254487d2af158be1df7267f6"
       }
     },
     {
-      "hash": "d5299c17b760ce640647df2f7c937b3727cc7fbe29c5996ba9326f2395589f3c",
+      "hash": "c58871dce2192d07c8b3d787f1fd7cb5bbcfa2725691be49683272fdae091abb",
+      "stageId": "axiom-indicator-detection",
+      "request": {
+        "model": "gpt-6-sol",
+        "systemPrompt": "<!-- stage-id: axiom-indicator-detection -->\nYou scan the segments of an argument for axiom indicators — explicit signals that the author is invoking a self-evident truth as bottom-level support.\n\nRecognized indicator patterns include (non-exhaustive):\n- \"by definition\"\n- \"tautologically\", \"necessarily true\"\n- \"by convention\"\n- \"is true a priori\"\n- \"as a matter of (logic | mathematics | definition)\"\n- \"trivially\"\n\nReturn an object with a single key `axioms` whose value is the array of detected indicators. For each detected indicator emit:\n- a fresh \"axiomId\" (ax1, ax2, ...)\n- the list of \"segmentIds\" the indicator occurs in (usually one; sometimes two when the indicator straddles a clause)\n- the \"indicator\" — the verbatim trigger phrase\n- the character \"spans\" — one span object (\"start\" inclusive, \"end\" exclusive) per occurrence, relative to the SEGMENT'S TEXT\n\nHedging phrases (\"clearly\", \"obviously\", \"of course\") are NOT axiom indicators on their own — they are stylistic emphasis. Return `{ \"axioms\": [] }` when no indicators are present.",
+        "userMessage": "Segments:\n\n[s1] \"Working remotely improves productivity for many people.\"\n[s2] \"Working remotely also reduces commuting time.\"\n[s3] \"Reducing commuting time improves work-life balance.\"\n[s4] \"So companies should let employees work remotely.\"\n\nDetect every axiom indicator.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "axioms"
+          ],
+          "properties": {
+            "axioms": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "axiomId",
+                  "segmentIds",
+                  "indicator",
+                  "spans"
+                ],
+                "properties": {
+                  "axiomId": {
+                    "type": "string"
+                  },
+                  "segmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "indicator": {
+                    "type": "string"
+                  },
+                  "spans": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "start",
+                        "end"
+                      ],
+                      "properties": {
+                        "start": {
+                          "type": "number",
+                          "description": "Inclusive character offset where the span begins (relative to the parent text)."
+                        },
+                        "end": {
+                          "type": "number",
+                          "description": "Exclusive character offset where the span ends (relative to the parent text)."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "output": {
+          "axioms": []
+        },
+        "tokenUsage": {
+          "input": 421,
+          "output": 19,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_05934bc22dc706ce006ab74534247c87d2b5a7fb787c1def7f"
+      }
+    },
+    {
+      "hash": "d5d8b34f97a13b06860a755d749f4ca1c3122c2a4909a9ffa64d9cc544a65eac",
       "stageId": "claim-mention-extraction",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: claim-mention-extraction -->\nYou extract textual \"claim mentions\" from segments of an argument. A mention is any contiguous span of text that asserts a proposition the author is making — a sentence-or-clause-sized chunk that a reader would read as a single assertion.\n\nReturn an object with a single key `mentions` whose value is the array of extracted mentions. For each mention emit:\n- a fresh \"mentionId\" (m1, m2, ...; unique across all segments)\n- the \"segmentId\" the mention belongs to\n- the verbatim \"text\" of the mention (copy from the input — do not rewrite)\n- the character \"span\" (an object with \"start\" inclusive, \"end\" exclusive) relative to the SEGMENT'S TEXT (not the original input)\n\nA single segment can produce multiple mentions when it asserts multiple things. Most segments produce one mention. Do NOT deduplicate — if the same proposition is reasserted in a later segment, emit it as a separate mention there too. Do NOT classify the mention. Do NOT include connectives, hedges, or discourse markers in the span when they are not part of the asserted proposition.\n\nIf a segment is purely a discourse marker (e.g., \"Therefore,\" or \"Moreover,\"), emit no mention for it. If there are no mentions at all, return `{ \"mentions\": [] }`.",
-        "userMessage": "Segments:\n\n[s1] \"Working remotely improves productivity for many people.\"\n[s2] \"Working remotely also reduces commuting time.\"\n[s3] \"Reducing commuting time improves work-life balance.\"\n\nExtract every claim mention.",
+        "userMessage": "Segments:\n\n[s1] \"Working remotely improves productivity for many people.\"\n[s2] \"Working remotely also reduces commuting time.\"\n[s3] \"Reducing commuting time improves work-life balance.\"\n[s4] \"So companies should let employees work remotely.\"\n\nExtract every claim mention.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -334,24 +342,33 @@
                 "start": 0,
                 "end": 51
               }
+            },
+            {
+              "mentionId": "m4",
+              "segmentId": "s4",
+              "text": "companies should let employees work remotely.",
+              "span": {
+                "start": 3,
+                "end": 48
+              }
             }
           ]
         },
         "tokenUsage": {
-          "input": 421,
-          "output": 320,
-          "reasoning": 200
+          "input": 433,
+          "output": 491,
+          "reasoning": 339
         },
-        "rawResponseId": "resp_05d409d0d1c36299006ab740d7dbc887d2a6cb67c7d86f9a24"
+        "rawResponseId": "resp_0f5bc3adc087526e006ab7453427c887d28694d855fb75431c"
       }
     },
     {
-      "hash": "bb0d8a77e28e9575aad6d8440c375f5a2615ecaa5d0ea015170b3849fc803c7b",
+      "hash": "2b35a571ac051a0407579046768e39f6284c7adb73a31a6be71081fcdc7c4eb2",
       "stageId": "claim-canonicalization",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here. BOTH claims list that mention in their `mentionIds` — the split is one span giving rise to two claims, and a claim with no `mentionIds` loses its link back to the source text entirely. (`mentionToClaim` is unaffected: it still maps that mention to exactly one claim — the normal-typed one.)\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
-        "userMessage": "Input text:\n\nWorking remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance.\n\nClaim mentions:\n  [m1 @ s1] \"Working remotely improves productivity for many people.\"\n  [m2 @ s2] \"Working remotely also reduces commuting time.\"\n  [m3 @ s3] \"Reducing commuting time improves work-life balance.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nProduce the canonicalClaims + mentionToClaim object.",
+        "userMessage": "Input text:\n\nWorking remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance. So companies should let employees work remotely.\n\nClaim mentions:\n  [m1 @ s1] \"Working remotely improves productivity for many people.\"\n  [m2 @ s2] \"Working remotely also reduces commuting time.\"\n  [m3 @ s3] \"Reducing commuting time improves work-life balance.\"\n  [m4 @ s4] \"companies should let employees work remotely.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nProduce the canonicalClaims + mentionToClaim object.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -678,7 +695,7 @@
               ],
               "suggestedSymbol": "RemoteWork_CutsCommute",
               "title": "Remote work reduces commuting time",
-              "body": "Working remotely reduces commuting time.",
+              "body": "Working remotely reduces employees' commuting time.",
               "type": "normal"
             },
             {
@@ -689,6 +706,16 @@
               "suggestedSymbol": "LessCommute_BetterBalance",
               "title": "Less commuting improves work-life balance",
               "body": "Reducing commuting time improves work-life balance.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c4",
+              "mentionIds": [
+                "m4"
+              ],
+              "suggestedSymbol": "Companies_AllowRemoteWork",
+              "title": "Companies should allow remote work",
+              "body": "Companies should let employees work remotely.",
               "type": "normal"
             }
           ],
@@ -704,24 +731,28 @@
             {
               "mentionId": "m3",
               "claimMiniId": "c3"
+            },
+            {
+              "mentionId": "m4",
+              "claimMiniId": "c4"
             }
           ]
         },
         "tokenUsage": {
-          "input": 1527,
-          "output": 201,
+          "input": 1551,
+          "output": 260,
           "reasoning": 0
         },
-        "rawResponseId": "resp_09d1b8e4349261ef006ab740db90c887d28607c3ac41b5cb19"
+        "rawResponseId": "resp_04df0af46ba2df88006ab7453970ac87d2800ccf4d2c1e7925"
       }
     },
     {
-      "hash": "8170cbcb2b5c578b34f56646bf6361a7568cfe38026337cdcf66de74ef9d58b8",
+      "hash": "b4ae15c351040730c8a5dbd3669bcc8130881e1c7ed210129f811ef592ad1a88",
       "stageId": "claim-type-classification",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
-        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=normal suggestedSymbol=RemoteWork_Productivity fields={\"title\":\"Remote work improves productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal suggestedSymbol=RemoteWork_CutsCommute fields={\"title\":\"Remote work reduces commuting time\",\"body\":\"Working remotely reduces commuting time.\"}\n  [c3] type=normal suggestedSymbol=LessCommute_BetterBalance fields={\"title\":\"Less commuting improves work-life balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
+        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=normal suggestedSymbol=RemoteWork_Productivity fields={\"title\":\"Remote work improves productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal suggestedSymbol=RemoteWork_CutsCommute fields={\"title\":\"Remote work reduces commuting time\",\"body\":\"Working remotely reduces employees' commuting time.\"}\n  [c3] type=normal suggestedSymbol=LessCommute_BetterBalance fields={\"title\":\"Less commuting improves work-life balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n  [c4] type=normal suggestedSymbol=Companies_AllowRemoteWork fields={\"title\":\"Companies should allow remote work\",\"body\":\"Companies should let employees work remotely.\"}\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -790,24 +821,29 @@
               "miniId": "c3",
               "type": "normal",
               "sourceString": null
+            },
+            {
+              "miniId": "c4",
+              "type": "normal",
+              "sourceString": null
             }
           ]
         },
         "tokenUsage": {
-          "input": 542,
-          "output": 65,
+          "input": 580,
+          "output": 80,
           "reasoning": 0
         },
-        "rawResponseId": "resp_08c5bdb36a114f81006ab740de1f6087d287c6cb17d8b9d4dc"
+        "rawResponseId": "resp_0ccbe299c2ab767c006ab7453c3e5c87d2822ba4835da15bfd"
       }
     },
     {
-      "hash": "7969043f41dcfcfe00147e3b83fcaf1d673ea389c5e8655bad14b8e89e4db588",
+      "hash": "5b15894a13b1ea2cec63ac0734b7b4ce0a22fa13be00c4da8e74c5acedfdfbc8",
       "stageId": "relation-extraction",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nWhenever there are at least two normal-typed claims, emit at least one relation: the input is an argument, and its claims connect somehow. Return `{ \"relations\": [] }` only when there are fewer than two normal-typed claims.",
-        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=RemoteWork_Productivity fields={\"title\":\"Remote work improves productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal symbol=RemoteWork_CutsCommute fields={\"title\":\"Remote work reduces commuting time\",\"body\":\"Working remotely reduces commuting time.\"}\n  [c3] type=normal symbol=LessCommute_BetterBalance fields={\"title\":\"Less commuting improves work-life balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n\nSegments:\n  [s1] \"Working remotely improves productivity for many people.\"\n  [s2] \"Working remotely also reduces commuting time.\"\n  [s3] \"Reducing commuting time improves work-life balance.\"\n\nEmit every inference relationship as a relations array.",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nEmit the relations the author actually argues. An argument with at least two normal-typed claims has at least one, so look for it before concluding there is none. Never invent support the author does not give: if the claims genuinely do not connect, return `{ \"relations\": [] }`.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=RemoteWork_Productivity fields={\"title\":\"Remote work improves productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal symbol=RemoteWork_CutsCommute fields={\"title\":\"Remote work reduces commuting time\",\"body\":\"Working remotely reduces employees' commuting time.\"}\n  [c3] type=normal symbol=LessCommute_BetterBalance fields={\"title\":\"Less commuting improves work-life balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n  [c4] type=normal symbol=Companies_AllowRemoteWork fields={\"title\":\"Companies should allow remote work\",\"body\":\"Companies should let employees work remotely.\"}\n\nSegments:\n  [s1] \"Working remotely improves productivity for many people.\"\n  [s2] \"Working remotely also reduces commuting time.\"\n  [s3] \"Reducing commuting time improves work-life balance.\"\n  [s4] \"So companies should let employees work remotely.\"\n\nEmit every inference relationship as a relations array.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -877,35 +913,39 @@
               "relationId": "r1",
               "type": "inference",
               "antecedents": [
-                "c2"
+                "c1",
+                "c2",
+                "c3"
               ],
-              "consequent": "c3",
-              "title": "From shorter commutes to better balance",
+              "consequent": "c4",
+              "title": "Benefits as grounds for adoption",
               "evidence": {
                 "segmentIds": [
+                  "s1",
                   "s2",
-                  "s3"
+                  "s3",
+                  "s4"
                 ],
-                "quote": "Working remotely also reduces commuting time. Reducing commuting time improves work-life balance."
+                "quote": "Working remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance. So companies should let employees work remotely."
               }
             }
           ]
         },
         "tokenUsage": {
-          "input": 881,
-          "output": 348,
-          "reasoning": 260
+          "input": 941,
+          "output": 343,
+          "reasoning": 229
         },
-        "rawResponseId": "resp_093bd5460fcc3f60006ab740df5f6087d292cd3994a7af3971"
+        "rawResponseId": "resp_0ea530cfce4e16c8006ab7453d7a2887d28c618037e30917d2"
       }
     },
     {
-      "hash": "4c8ac47794d2a22272c3e090c6474a8f2467765e9b6fb0bfc501f3367705318a",
+      "hash": "a2fe306aeb07c3fc274921817925e80decf9bcb62c1beb956a43766d05d7be95",
       "stageId": "conclusion-selection",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the inference relation graph from `relation-extraction` (each relation's antecedents jointly imply its consequent)\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n- `title` — for your FIRST candidate only: a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Return an empty string when `conclusionCandidates` is empty.\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
-        "userMessage": "Per-claim types:\n  [c1] type=normal\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] antecedents=[c2] consequent=c3\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
+        "userMessage": "Per-claim types:\n  [c1] type=normal\n  [c2] type=normal\n  [c3] type=normal\n  [c4] type=normal\n\nRelations:\n  [r1] antecedents=[c1,c2,c3] consequent=c4\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -932,17 +972,17 @@
       "response": {
         "output": {
           "conclusionCandidates": [
-            "c3"
+            "c4"
           ],
-          "rationale": "c3 is the only claim supported by a relation, with c2 as its antecedent.",
-          "title": "Inference from supporting claim"
+          "rationale": "c4 is the sole claim supported by a relation and is not used to support another claim.",
+          "title": "Combining the supporting claims"
         },
         "tokenUsage": {
-          "input": 564,
-          "output": 95,
-          "reasoning": 41
+          "input": 577,
+          "output": 53,
+          "reasoning": 0
         },
-        "rawResponseId": "resp_0a15bab4730e01f6006ab740e43e0487d296b027d29fb15890"
+        "rawResponseId": "resp_02abc812ca6a854b006ab74542195487d2a950953ab5794c16"
       }
     }
   ]

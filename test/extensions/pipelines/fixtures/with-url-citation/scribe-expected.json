@@ -103,7 +103,7 @@
             {
                 "miniId": "gid-6",
                 "formula": "ExtremeWeatherMoreFrequent",
-                "title": "Observed trend from cause and effect"
+                "title": "From a causal link to an observed trend"
             }
         ],
         "conclusionPremiseMiniId": "gid-6",
@@ -117,6 +117,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "The reported temperature rise and the claimed causal link jointly support the conclusion that extreme weather is becoming more frequent.",
+    "selectionRationale": "The reported temperature rise and its asserted effect on extreme weather support c4, which supports no further claim.",
     "processingFailures": []
 }

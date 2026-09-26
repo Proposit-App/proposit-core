@@ -15,7 +15,7 @@
                         "suffix": " Working remotely also reduces c"
                     }
                 ],
-                "role": "conclusion"
+                "role": "premise"
             },
             {
                 "miniId": "c2",
@@ -44,10 +44,26 @@
                         "startUtf16": 102,
                         "endUtf16": 153,
                         "prefix": "ly also reduces commuting time. ",
-                        "suffix": ""
+                        "suffix": " So companies should let employe"
                     }
                 ],
                 "role": "premise"
+            },
+            {
+                "miniId": "c4",
+                "title": "Companies should allow remote work",
+                "body": "Companies should let employees work remotely.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "So companies should let employees work remotely.",
+                        "startUtf16": 154,
+                        "endUtf16": 202,
+                        "prefix": "ime improves work-life balance. ",
+                        "suffix": ""
+                    }
+                ],
+                "role": "conclusion"
             }
         ],
         "variables": [
@@ -58,33 +74,38 @@
             },
             {
                 "miniId": "gid-2",
-                "symbol": "RemoteWorkReducesCommute",
+                "symbol": "RemoteWorkCutsCommutes",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "ShorterCommuteImprovesBalance",
+                "symbol": "LessCommutingImprovesBalance",
                 "claimMiniId": "c3"
+            },
+            {
+                "miniId": "gid-4",
+                "symbol": "AllowRemoteWork",
+                "claimMiniId": "c4"
             }
         ],
         "premises": [
             {
-                "miniId": "gid-4",
-                "formula": "(RemoteWorkReducesCommute and ShorterCommuteImprovesBalance) implies RemoteWorkProductivity",
-                "title": "Commute savings as a productivity pathway"
+                "miniId": "gid-5",
+                "formula": "(RemoteWorkProductivity and RemoteWorkCutsCommutes and LessCommutingImprovesBalance) implies AllowRemoteWork",
+                "title": "Productivity and balance as reasons for adoption"
             },
             {
-                "miniId": "gid-5",
-                "formula": "RemoteWorkProductivity",
-                "title": "From time savings to productivity"
+                "miniId": "gid-6",
+                "formula": "AllowRemoteWork",
+                "title": "Workplace policy from employee benefits"
             }
         ],
-        "conclusionPremiseMiniId": "gid-5",
+        "conclusionPremiseMiniId": "gid-6",
         "derivationBacking": [],
-        "title": "Remote work improves productivity"
+        "title": "Companies should allow remote work"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "The commuting and work-life balance claims provide a possible, though incomplete, reason for the productivity claim.",
+    "selectionRationale": "The productivity benefit and the work-life balance benefit from reduced commuting support allowing remote work.",
     "processingFailures": []
 }

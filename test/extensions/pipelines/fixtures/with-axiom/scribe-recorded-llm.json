@@ -462,11 +462,11 @@
       }
     },
     {
-      "hash": "d67f2620765ea544670672360ca34e26ca96aef04d94c695d66c1c05bd107730",
+      "hash": "0513084ed2d9af0b2a6876aeb7d16e01b13d78e498a7992a9b177c8835996048",
       "stageId": "scribe-structure",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's `title` — the step that reaches the conclusion already has its own. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nWhenever there are at least two normal-typed claims, emit at least one relation and at least one conclusion candidate: the input is an argument, and its claims connect somehow. Only with fewer than two normal-typed claims may `relations` or `conclusionCandidates` be empty.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's `title` — the step that reaches the conclusion already has its own. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nEmit the relations and conclusion the author actually argues. An argument with at least two normal-typed claims has at least one relation and one conclusion candidate, so look for them before concluding there are none. Never invent support the author does not give: if the claims genuinely do not connect, return `relations` and `conclusionCandidates` empty.\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=axiomatic symbol=BachelorDefinition fields={\"axiom\":\"A bachelor is an unmarried man\"}\n  [c2] type=normal symbol=JohnIsBachelor fields={\"title\":\"John is a bachelor\",\"body\":\"John is a bachelor.\"}\n  [c3] type=normal symbol=JohnIsUnmarried fields={\"title\":\"John is unmarried\",\"body\":\"John is unmarried.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
         "outputSchema": {
           "type": "object",
@@ -557,7 +557,7 @@
                 "c2"
               ],
               "consequent": "c3",
-              "title": "Applying the bachelor definition",
+              "title": "Definitional instantiation",
               "evidence": {
                 "segmentIds": [],
                 "quote": ""
@@ -567,15 +567,15 @@
           "conclusionCandidates": [
             "c3"
           ],
-          "conclusionTitle": "Definitional deduction",
-          "rationale": "John’s being a bachelor, together with the definition of bachelor, entails that he is unmarried."
+          "conclusionTitle": "Applying the bachelor definition",
+          "rationale": "The definition of bachelor, together with the claim that John is a bachelor, implies that John is unmarried."
         },
         "tokenUsage": {
-          "input": 777,
-          "output": 144,
-          "reasoning": 36
+          "input": 789,
+          "output": 165,
+          "reasoning": 54
         },
-        "rawResponseId": "resp_04d3e64631966e4c006ab740b13f7887d2877ff86955208a95"
+        "rawResponseId": "resp_0a994b4775bd4110006ab744ad25d087d2901680cebe74729a"
       }
     }
   ]

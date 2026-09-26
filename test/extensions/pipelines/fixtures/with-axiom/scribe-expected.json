@@ -70,12 +70,12 @@
             {
                 "miniId": "gid-4",
                 "formula": "JohnIsBachelor implies JohnIsUnmarried",
-                "title": "Applying the bachelor definition"
+                "title": "Definitional instantiation"
             },
             {
                 "miniId": "gid-5",
                 "formula": "JohnIsUnmarried",
-                "title": "Definitional deduction"
+                "title": "Applying the bachelor definition"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -89,6 +89,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "John’s being a bachelor, together with the definition of bachelor, entails that he is unmarried.",
+    "selectionRationale": "The definition of bachelor, together with the claim that John is a bachelor, implies that John is unmarried.",
     "processingFailures": []
 }

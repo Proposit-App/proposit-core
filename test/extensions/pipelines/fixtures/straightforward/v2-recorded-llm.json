@@ -802,11 +802,11 @@
       }
     },
     {
-      "hash": "e4fd0c10d4a92e4d55d461ea3cae3d8d87045a9dcb5cabe02e077d860030d11f",
+      "hash": "035990db1b5321765e8dd4ec57c79ddb93c65762eb03c573be05adea4522fafe",
       "stageId": "relation-extraction",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nWhenever there are at least two normal-typed claims, emit at least one relation: the input is an argument, and its claims connect somehow. Return `{ \"relations\": [] }` only when there are fewer than two normal-typed claims.",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nEmit the relations the author actually argues. An argument with at least two normal-typed claims has at least one, so look for it before concluding there is none. Never invent support the author does not give: if the claims genuinely do not connect, return `{ \"relations\": [] }`.",
         "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal symbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nSegments:\n  [s1] \"If it rains, the ground gets wet.\"\n  [s2] \"It is raining.\"\n  [s3] \"Therefore, the ground is wet.\"\n\nEmit every inference relationship as a relations array.",
         "outputSchema": {
           "type": "object",
@@ -881,24 +881,24 @@
                 "c2"
               ],
               "consequent": "c3",
-              "title": "Applying the rain conditional",
+              "title": "Applying the rain condition",
               "evidence": {
                 "segmentIds": [
                   "s1",
                   "s2",
                   "s3"
                 ],
-                "quote": "Therefore, the ground is wet."
+                "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet."
               }
             }
           ]
         },
         "tokenUsage": {
-          "input": 865,
-          "output": 157,
-          "reasoning": 75
+          "input": 874,
+          "output": 93,
+          "reasoning": 0
         },
-        "rawResponseId": "resp_0dddc64b36d3b555006ab7409f944887d2a17bca0344251721"
+        "rawResponseId": "resp_0ef68bc867479e46006ab744a784bc87d2856673046ee3a386"
       }
     },
     {
@@ -936,15 +936,15 @@
           "conclusionCandidates": [
             "c3"
           ],
-          "rationale": "c3 is supported by c1 and c2 and is the only terminal claim.",
-          "title": "Combining two premises"
+          "rationale": "c3 is the only claim supported by the relation, with c1 and c2 serving as its premises.",
+          "title": "Joint support from two premises"
         },
         "tokenUsage": {
           "input": 566,
-          "output": 50,
+          "output": 56,
           "reasoning": 0
         },
-        "rawResponseId": "resp_047da8586927cd92006ab740a3680887d29036ca45fd12b60f"
+        "rawResponseId": "resp_0905b84363d8a347006ab744a94a1c87d2a9b8203f0198d2e3"
       }
     }
   ]
