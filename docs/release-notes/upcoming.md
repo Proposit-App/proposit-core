@@ -1,16 +1,1 @@
 # Upcoming
-
-## Fixed
-
-### Scribe attaches every linked source to the claim it supports
-
-Arguments imported with `createScribePipeline` could come back with source
-(citation) claims that backed nothing: `derivationBacking` only listed a source
-when the structure stage happened to use it as an antecedent, and that stage
-never sees the text. Now each source backs the claim it is offered as evidence
-for — the one the extract stage names, or, failing that, the claim stated where
-the link sits or just before it. The extract stage is also told to make every
-link offered as evidence its own source claim. Expect more `derivationBacking`
-entries from scribe runs, and two new warnings in `processingFailures`:
-`SOURCE_ATTACHMENT_INVALID_TARGET` and `SOURCE_ATTACHMENT_UNATTACHED`. The
-pipeline's version is now 1.1.0.
