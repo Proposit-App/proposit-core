@@ -512,13 +512,24 @@ function resolveAuthoredTitle(authored: unknown): string | undefined {
  * claim.
  */
 function resolveAuthoredConclusionTitle(
-    conclusion: TConclusionSelectionOutput | undefined
+    conclusion: TConclusionSelectionOutput | undefined,
+    relations: readonly TInferenceRelation[]
 ): string | undefined {
     if (conclusion === undefined) return undefined
     const { conclusionMiniId, conclusionCandidates } = conclusion
     if (conclusionMiniId === null) return undefined
     if (conclusionMiniId !== conclusionCandidates[0]) return undefined
-    return resolveAuthoredTitle(conclusion.title)
+    const authored = resolveAuthoredTitle(conclusion.title)
+    if (authored === undefined) return undefined
+    // The model can name the concluding step with the phrase it already
+    // gave the step that reaches the conclusion. Two premises under one
+    // title read as a duplicate, so that title is left to the step and the
+    // conclusion falls back to its composed title.
+    const key = authored.toLowerCase()
+    const taken = relations.some(
+        (r) => resolveAuthoredTitle(r.title)?.toLowerCase() === key
+    )
+    return taken ? undefined : authored
 }
 
 type TTitleComposerMaps = {
@@ -811,7 +822,10 @@ export function finalizeResponseV2(
         relationById: new Map(relations.map((r) => [r.relationId, r])),
     }
 
-    const authoredConclusionTitle = resolveAuthoredConclusionTitle(conclusion)
+    const authoredConclusionTitle = resolveAuthoredConclusionTitle(
+        conclusion,
+        relations
+    )
 
     const finalPremises: TPremiseFinalForm[] = compilation.premises.map((p) => {
         const premise: TPremiseFinalForm = {

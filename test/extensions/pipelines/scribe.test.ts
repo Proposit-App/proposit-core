@@ -170,6 +170,27 @@ describe("createScribePipeline", () => {
         expect(titles).toContain("Wet ground as the upshot")
     })
 
+    it("never gives the conclusion premise a step premise's title", async () => {
+        // The model can name the concluding step with the very phrase it
+        // gave the relation that reaches the conclusion, which shows two
+        // premises under one title.
+        const structure = happyStructureOutput() as {
+            conclusionTitle: string
+        }
+        structure.conclusionTitle = " rain as the cause of WETNESS "
+        const result = await runScribe(happyExtractOutput(), structure)
+        const premises = result.output!.argument!.premises as {
+            miniId: string
+            title?: string
+        }[]
+        const conclusionId = result.output!.argument!.conclusionPremiseMiniId
+        const conclusion = premises.find((p) => p.miniId === conclusionId)
+        expect(conclusion?.title).toBe("The ground is wet")
+        expect(
+            premises.filter((p) => p.title === "Rain as the cause of wetness")
+        ).toHaveLength(1)
+    })
+
     it("the structure stage prompt carries each claim's title/body, not just ids", async () => {
         // Regression: the structure prompt was built from the type slot
         // alone (`[c1] type=normal`), omitting the claim text. A real model
