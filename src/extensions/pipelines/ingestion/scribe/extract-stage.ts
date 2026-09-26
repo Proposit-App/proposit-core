@@ -266,21 +266,37 @@ const ARCHIVE_URL =
 /**
  * What two citation urls must share to name the same page: the url with
  * an archive copy unwrapped to its original, http and https treated alike,
- * the host lowercased and without a leading "www.", and the fragment, a
- * trailing "index.html" or "index.htm" and a trailing slash dropped.
+ * the host lowercased and without a leading "www.", a trailing
+ * "index.html" or "index.htm" and a trailing slash dropped, and a DOI
+ * read the same through either resolver with its path percent-decoded.
+ * The fragment is kept: it names a place in the page, as a page number
+ * names one in a book.
  */
 export function citationUrlKey(url: string): string {
     const archived = ARCHIVE_URL.exec(url.trim())
     if (archived !== null) return citationUrlKey(archived[1])
-    const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?/i.exec(
-        url.trim()
-    )
+    const match =
+        /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/i.exec(
+            url.trim()
+        )
     if (match === null) return url.trim()
     const scheme = match[1].toLowerCase()
-    const host = match[2].toLowerCase().replace(/^www\./, "")
-    const path = match[3].replace(/\/index\.html?$/i, "").replace(/\/$/, "")
+    let host = match[2].toLowerCase().replace(/^www\./, "")
+    let path = match[3].replace(/\/index\.html?$/i, "").replace(/\/$/, "")
+    if (host === "dx.doi.org" || host === "doi.org") {
+        host = "doi.org"
+        path = safeDecodeUri(path)
+    }
     const prefix = scheme === "http" || scheme === "https" ? "" : `${scheme}:`
-    return `${prefix}//${host}${path}${match[4] ?? ""}`
+    return `${prefix}//${host}${path}${match[4] ?? ""}${match[5] ?? ""}`
+}
+
+function safeDecodeUri(text: string): string {
+    try {
+        return decodeURIComponent(text)
+    } catch {
+        return text
+    }
 }
 
 /**
