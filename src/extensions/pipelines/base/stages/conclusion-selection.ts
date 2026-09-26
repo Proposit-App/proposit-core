@@ -18,6 +18,7 @@ import {
     STAGE_IDS,
     ConclusionSelectionLlmOutputSchema,
     ConclusionSelectionOutputSchema,
+    type TClaimCanonicalizationOutput,
     type TClaimTypeClassificationEntry,
     type TClaimTypeClassificationOutput,
     type TConclusionSelectionLlmOutput,
@@ -49,7 +50,7 @@ export const NO_ARGUMENT_STRUCTURE_FAILURE = {
 
 /**
  * `llmStage` content check shared by the stages that propose an argument's
- * structure: once there are at least two normal claims, the model must
+ * structure: once at least two canonical claims are normal, the model must
  * name at least one relation and — when `conclusionCandidates` is given —
  * at least one conclusion candidate. With fewer there is nothing to
  * connect, so an empty answer is accepted. A failure retries the stage;
@@ -62,11 +63,25 @@ export function checkArgumentStructure(
         conclusionCandidates?: readonly string[]
     }
 ): TLlmOutputCheckFailure | undefined {
-    const normalClaims = (
-        ctx.get<TClaimTypeClassificationOutput>(
-            STAGE_IDS.claimTypeClassification
-        )?.classifications ?? []
-    ).filter((entry) => entry.type === "normal").length
+    // Count claims the way the structure prompts list them: each canonical
+    // claim once, typed by its classification when it has one. Counting
+    // raw classification entries would let a repeated or unknown id demand
+    // a relation among claims the model was never shown.
+    const typeByMiniId = new Map<string, string>()
+    for (const entry of ctx.get<TClaimTypeClassificationOutput>(
+        STAGE_IDS.claimTypeClassification
+    )?.classifications ?? []) {
+        typeByMiniId.set(entry.miniId, entry.type)
+    }
+    const normalClaims = new Set(
+        (
+            ctx.get<TClaimCanonicalizationOutput>(
+                STAGE_IDS.claimCanonicalization
+            )?.canonicalClaims ?? []
+        )
+            .filter((c) => (typeByMiniId.get(c.miniId) ?? c.type) === "normal")
+            .map((c) => c.miniId)
+    ).size
     if (normalClaims < 2) return undefined
     if (output.relations.length === 0) return NO_ARGUMENT_STRUCTURE_FAILURE
     if (output.conclusionCandidates?.length === 0) {

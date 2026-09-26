@@ -18,8 +18,11 @@ import {
     type TConclusionSelectionOutput,
     type TRelationExtractionOutput,
 } from "../../../../src/extensions/pipelines/base/stages/index.js"
+import type { TStageContext } from "../../../../src/lib/pipelines/types.js"
 import {
     CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE,
+    NO_ARGUMENT_STRUCTURE_FAILURE,
+    checkArgumentStructure,
     conclusionSelectionStage,
     selectFallbackConclusion,
 } from "../../../../src/extensions/pipelines/base/stages/conclusion-selection.js"
@@ -424,5 +427,80 @@ describe("selectFallbackConclusion (exported helper)", () => {
 
     it("returns null when there are no relations", () => {
         expect(selectFallbackConclusion([], [])).toBeNull()
+    })
+})
+
+describe("checkArgumentStructure", () => {
+    function contextWith(
+        canonicalClaims: { miniId: string; type: string }[],
+        classifications: { miniId: string; type: string }[]
+    ): TStageContext {
+        const slots: Record<string, unknown> = {
+            [STAGE_IDS.claimCanonicalization]: {
+                canonicalClaims: canonicalClaims.map((c) => ({
+                    ...c,
+                    mentionIds: [],
+                    suggestedSymbol: c.miniId.toUpperCase(),
+                })),
+                mentionToClaim: [],
+            },
+            [STAGE_IDS.claimTypeClassification]: {
+                classifications: classifications.map((c) => ({
+                    ...c,
+                    sourceString: null,
+                })),
+            },
+        }
+        return { get: (id: string) => slots[id] } as unknown as TStageContext
+    }
+    const empty = { relations: [], conclusionCandidates: [] }
+
+    it("demands structure once two canonical claims are normal", () => {
+        const ctx = contextWith(
+            [
+                { miniId: "c1", type: "normal" },
+                { miniId: "c2", type: "normal" },
+            ],
+            []
+        )
+        expect(checkArgumentStructure(ctx, empty)).toBe(
+            NO_ARGUMENT_STRUCTURE_FAILURE
+        )
+    })
+
+    it("counts a repeated classification of one claim once", () => {
+        const ctx = contextWith(
+            [
+                { miniId: "c1", type: "normal" },
+                { miniId: "c2", type: "citation" },
+            ],
+            [
+                { miniId: "c1", type: "normal" },
+                { miniId: "c1", type: "normal" },
+            ]
+        )
+        expect(checkArgumentStructure(ctx, empty)).toBeUndefined()
+    })
+
+    it("ignores a classification naming no canonical claim", () => {
+        const ctx = contextWith(
+            [
+                { miniId: "c1", type: "normal" },
+                { miniId: "c2", type: "citation" },
+            ],
+            [{ miniId: "c9", type: "normal" }]
+        )
+        expect(checkArgumentStructure(ctx, empty)).toBeUndefined()
+    })
+
+    it("uses the classification over the canonical type, as the prompts do", () => {
+        const ctx = contextWith(
+            [
+                { miniId: "c1", type: "normal" },
+                { miniId: "c2", type: "normal" },
+            ],
+            [{ miniId: "c2", type: "axiomatic" }]
+        )
+        expect(checkArgumentStructure(ctx, empty)).toBeUndefined()
     })
 })
