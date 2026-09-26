@@ -325,16 +325,15 @@ describe("finalizeResponseV2 — authored relation titles", () => {
 
     it("clamps an over-long authored title rather than failing the run", () => {
         const outputs = buildHormuzOutputs()
-        relationsOf(outputs)[0].title = "x".repeat(500)
+        relationsOf(outputs)[0].title = "risky ".repeat(80)
         const ctx = buildContextStub(outputs)
         const response = finalizeResponseV2({ ctx, extension: basicsExtension })
         // The run completes — an unusable length is a display problem,
         // not grounds for discarding a finished pipeline run.
         expect(response.failureText).toBeNull()
         expect(response.argument).not.toBeNull()
-        const title = titleOf(outputs, "p1")
-        expect(title).toHaveLength(80)
-        expect(title.endsWith("…")).toBe(true)
+        // Shortened to whole words within the cap of 80, never mid-word.
+        expect(titleOf(outputs, "p1")).toBe("risky ".repeat(13).trim() + "…")
     })
 
     it("composes when the authored title names a claim by its id", () => {
@@ -471,10 +470,9 @@ describe("finalizeResponseV2 — authored conclusion titles", () => {
 
     it("clamps an over-long authored conclusion title", () => {
         const outputs = buildHormuzOutputs()
-        selectionOf(outputs).title = "y".repeat(500)
-        const title = titleOf(outputs, "p3")
-        expect(title).toHaveLength(80)
-        expect(title.endsWith("…")).toBe(true)
+        selectionOf(outputs).title = "strike ".repeat(80)
+        // Shortened to whole words within the cap of 80, never mid-word.
+        expect(titleOf(outputs, "p3")).toBe("strike ".repeat(11).trim() + "…")
     })
 })
 

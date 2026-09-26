@@ -30,6 +30,7 @@ import type {
     TResponseStatus,
     TToolSpec,
 } from "../llm/types.js"
+import { shortenToLength } from "../parsing/clamp-max-lengths.js"
 import { debugMaxLengthTruncation } from "./debug-log.js"
 import {
     LLM_NON_RETRYABLE_ERROR,
@@ -283,8 +284,8 @@ export function buildLlmRequest<TOutput>(
 // against the stage schema and format the validation error. Used by both
 // the in-process loop (output already parsed by the provider) and
 // `validateLlmOutcome`'s completed branch (output parsed from raw text).
-// Truncate every string longer than its schema's `maxLength` to that cap,
-// mutating `value` in place. Driven off the validator's own `maxLength`
+// Shorten every string longer than its schema's `maxLength` to fit that
+// cap, ending on a whole word (`shortenToLength`), mutating `value` in place. Driven off the validator's own `maxLength`
 // errors (which carry the JSON-pointer path + the limit), so it handles
 // nested objects, arrays, and discriminated unions without walking the
 // schema by hand. Re-runs because a union surfaces a failing variant's
@@ -295,7 +296,7 @@ export function buildLlmRequest<TOutput>(
 // Truncation is non-fatal (ingestion output is human-proofread before
 // publish), so it does not surface to the caller. It does emit a
 // debug-gated breadcrumb per clipped field — the only signal of whether
-// the upstream length steering (shrunk wire `maxLength` + budget hint)
+// the upstream length steering (the budget hint in `description`)
 // is still letting overshoots through. `stageId` tags the breadcrumb so
 // it groups with the stage's other diagnostic lines.
 function clampMaxLengthStrings(
@@ -316,7 +317,11 @@ function clampMaxLengthStrings(
                     limit,
                     originalLength: current.length,
                 })
-                Pointer.Set(value, err.instancePath, current.slice(0, limit))
+                Pointer.Set(
+                    value,
+                    err.instancePath,
+                    shortenToLength(current, limit)
+                )
                 changed = true
             }
         }

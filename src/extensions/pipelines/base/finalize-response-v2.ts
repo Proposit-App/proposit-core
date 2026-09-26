@@ -32,6 +32,7 @@
 // list (which would require widening `TStageContext`).
 
 import type { TParsedArgumentResponse } from "../../../lib/parsing/index.js"
+import { shortenToLength } from "../../../lib/parsing/clamp-max-lengths.js"
 import type { TStageContext } from "../../../lib/pipelines/index.js"
 import {
     STAGE_IDS,
@@ -527,8 +528,8 @@ const AUTHORED_PREMISE_TITLE_CAP = 80
  * `undefined` when there is nothing usable, which is the caller's cue to
  * compose a title instead.
  *
- * Clamping lives here rather than in the schema because strict
- * structured output ignores JSON-Schema `maxLength`: making the length a
+ * Clamping lives here rather than in the schema because the model is
+ * only told the length in prose and can overshoot it: making the length a
  * validation gate would let one long string discard a completed
  * pipeline run. The value is typed `unknown` because a caller-composed
  * pipeline can populate these slots itself, with no schema check between
@@ -542,9 +543,7 @@ function resolveAuthoredTitle(authored: unknown): string | undefined {
     const trimmed = authored.trim()
     if (trimmed.length === 0) return undefined
     if (CLAIM_ID_PATTERN.test(trimmed)) return undefined
-    return trimmed.length <= AUTHORED_PREMISE_TITLE_CAP
-        ? trimmed
-        : trimmed.slice(0, AUTHORED_PREMISE_TITLE_CAP - 1) + "…"
+    return shortenToLength(trimmed, AUTHORED_PREMISE_TITLE_CAP)
 }
 
 /**
@@ -700,9 +699,7 @@ function buildArgumentTitle(
         (conclusionClaim?.title as string | undefined) ??
         (conclusionClaim?.axiom as string | undefined) ??
         "Argument"
-    return candidateTitle.length <= cap
-        ? candidateTitle
-        : candidateTitle.slice(0, cap - 1) + "…"
+    return shortenToLength(candidateTitle, cap)
 }
 
 export type TFinalizeResponseV2Input = {

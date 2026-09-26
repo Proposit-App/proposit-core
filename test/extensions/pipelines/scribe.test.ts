@@ -256,6 +256,23 @@ describe("createScribePipeline", () => {
         expect(titles).toContain(longTitle.slice(0, 50))
     })
 
+    it("an over-long worded claim title is shortened at a word boundary and marked with an ellipsis", async () => {
+        const longTitle =
+            "Middle East deals are worth hundreds of millions of dollars to the family"
+        const extract = happyExtractOutput() as {
+            canonicalClaims: { title: string }[]
+            mentionToClaim: unknown
+        }
+        extract.canonicalClaims[0].title = longTitle
+        const result = await runScribe(extract, happyStructureOutput())
+        const titles = (
+            result.output!.argument!.claims as { title?: string }[]
+        ).map((c) => c.title)
+        expect(titles).toContain(
+            "Middle East deals are worth hundreds of millions…"
+        )
+    })
+
     it("an empty claim set yields a valid argument: null response (no throw)", async () => {
         const result = await runScribe(
             {

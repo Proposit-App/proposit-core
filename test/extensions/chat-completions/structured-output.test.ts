@@ -165,7 +165,7 @@ describe("typeboxToJsonSchema", () => {
         expect(typeboxToJsonSchema(Type.Null())).toEqual({ type: "null" })
     })
 
-    it("shrinks a free-text String's maxLength and appends the budget to its description", () => {
+    it("states a free-text String's budget in its description and sends no maxLength", () => {
         const schema = Type.Object({
             title: Type.String({
                 maxLength: 100,
@@ -173,12 +173,12 @@ describe("typeboxToJsonSchema", () => {
             }),
         })
         const json = typeboxToJsonSchema(schema) as {
-            properties: { title: { maxLength: number; description: string } }
+            properties: { title: Record<string, unknown> }
         }
-        // A respected-maxLength consumer (local llama-server → GBNF)
-        // caps strictly below the true limit, so output lands under it.
-        expect(json.properties.title.maxLength).toBe(90)
-        expect(json.properties.title.description).toBe(
+        // A model that enforces a schema maxLength stops generating at
+        // the cap, which leaves the value cut off mid-word.
+        expect(json.properties.title).not.toHaveProperty("maxLength")
+        expect(json.properties.title.description as string).toBe(
             "A short title; at most 90 characters"
         )
     })

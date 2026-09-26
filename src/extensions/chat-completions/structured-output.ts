@@ -27,10 +27,9 @@
 //
 // The converter ignores TypeBox `$id` and other metadata on inner
 // types — only structural fields are projected. The one exception is a
-// String field's length budget: a free-text String's `maxLength` /
-// `description` are projected (shrunk + a budget hint). On this path a
-// respected `maxLength` caps output strictly below the true limit —
-// see `projectStringLengthHint`.
+// String field's length budget: a free-text String's budget is stated
+// in its `description`, never as a `maxLength` a grammar would cut the
+// value off at — see `projectStringLengthHint`.
 
 import type { TSchema } from "typebox"
 import { projectStringLengthHint } from "../structured-output/length-hint.js"
@@ -84,10 +83,8 @@ export function typeboxToJsonSchema(
     const kind = kindOf(schema)
     switch (kind) {
         case "String":
-            // Free-text String fields project a shrunk `maxLength` + a
-            // budget hint in `description`; exact-value fields keep
-            // their original limit. A GBNF-compiling consumer respects
-            // `maxLength`, so the shrunk cap keeps output below the true
+            // Free-text String fields get a budget hint in `description`
+            // and no `maxLength`; exact-value fields keep their original
             // limit.
             return projectStringLengthHint(schema)
         case "Number":

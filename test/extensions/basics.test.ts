@@ -142,6 +142,24 @@ describe("Basics extension", () => {
             expect((parsedArg.title as string).length).toBeLessThanOrEqual(50)
         })
 
+        it("should shorten a worded claim title at a word boundary, not mid-word", () => {
+            const resp = basicsResponse()
+            const arg = resp.argument as Record<string, unknown>
+            const claims = arg.claims as Record<string, unknown>[]
+            claims[0].title =
+                "Comparison covers major politicians since 1776 and beyond"
+
+            const parser = new BasicsArgumentParser()
+            const validated = parser.validate(resp)
+            const claim = validated.argument!.claims[0] as Record<
+                string,
+                unknown
+            >
+            expect(claim.title).toBe(
+                "Comparison covers major politicians since 1776…"
+            )
+        })
+
         it("should truncate claim bodies exceeding maxLength instead of throwing", () => {
             const resp = basicsResponse()
             const arg = resp.argument as Record<string, unknown>

@@ -15,32 +15,30 @@ import {
 } from "../../../src/extensions/structured-output/length-hint.js"
 
 describe("projectStringLengthHint", () => {
-    it("shrinks a free-text String's maxLength and appends the budget to description", () => {
+    it("sends no maxLength for a free-text String and appends the shrunk budget to description", () => {
         const projected = projectStringLengthHint(
             Type.String({ maxLength: 100, description: "A short title" })
         )
         expect(projected).toEqual({
             type: "string",
-            maxLength: 90,
             description: "A short title; at most 90 characters",
         })
     })
 
-    it("floors the shrunk maxLength and never drops below 1", () => {
-        // floor(100 * 0.9) = 90 — confirm the floor, not a round.
-        const ninety = projectStringLengthHint(
-            Type.String({ maxLength: 100 })
-        ) as { maxLength: number }
-        expect(ninety.maxLength).toBe(Math.floor(100 * SHRINK))
-
-        // A tiny-but-not-exempt value still cannot shrink to 0. (Use a
-        // value above the exact-value threshold to exercise the floor
-        // rather than the exemption.)
-        const small = projectStringLengthHint(
-            Type.String({ maxLength: 17 })
-        ) as { maxLength: number }
-        expect(small.maxLength).toBeGreaterThanOrEqual(1)
-        expect(small.maxLength).toBe(Math.max(1, Math.floor(17 * SHRINK)))
+    it("floors the shrunk budget rather than rounding it", () => {
+        // floor(100 * 0.9) = 90, floor(17 * 0.9) = 15.
+        expect(
+            projectStringLengthHint(Type.String({ maxLength: 100 }))
+        ).toEqual({
+            type: "string",
+            description: `at most ${String(Math.floor(100 * SHRINK))} characters`,
+        })
+        expect(projectStringLengthHint(Type.String({ maxLength: 17 }))).toEqual(
+            {
+                type: "string",
+                description: `at most ${String(Math.floor(17 * SHRINK))} characters`,
+            }
+        )
     })
 
     it("supplies a description of just the budget when the source has none", () => {
@@ -49,7 +47,6 @@ describe("projectStringLengthHint", () => {
         )
         expect(projected).toEqual({
             type: "string",
-            maxLength: 45,
             description: "at most 45 characters",
         })
     })

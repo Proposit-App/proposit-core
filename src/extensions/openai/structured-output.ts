@@ -34,9 +34,10 @@
 //
 // The converter ignores TypeBox `$id` and other metadata on inner
 // types — only structural fields are projected. The one exception is a
-// String field's length budget: a free-text String's `maxLength` /
-// `description` are projected (shrunk + a budget hint) to steer the
-// model below its declared cap — see `projectStringLengthHint`.
+// String field's length budget: a free-text String's budget is stated
+// in its `description` to steer the model below its declared cap, never
+// as a `maxLength` the model would stop generating at — see
+// `projectStringLengthHint`.
 
 import type { TSchema } from "typebox"
 import { projectStringLengthHint } from "../structured-output/length-hint.js"
@@ -88,11 +89,9 @@ export function typeboxToOpenAiSchema(schema: TSchema): TOpenAiJsonSchema {
     const kind = kindOf(schema)
     switch (kind) {
         case "String":
-            // Free-text String fields project a shrunk `maxLength` + a
-            // budget hint in `description` so the model is steered below
-            // the declared cap; exact-value fields keep their original
-            // limit. Strict mode ignores `maxLength` (the `description`
-            // hint is what steers OpenAI), but the field is harmless.
+            // Free-text String fields get a budget hint in `description`
+            // and no `maxLength`; exact-value fields keep their original
+            // limit.
             return projectStringLengthHint(schema)
         case "Number":
             return { type: "number" }
