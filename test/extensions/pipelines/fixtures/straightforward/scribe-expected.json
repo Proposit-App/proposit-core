@@ -1,90 +1,90 @@
 {
-  "argument": {
-    "claims": [
-      {
-        "miniId": "c1",
-        "title": "Rain makes the ground wet",
-        "body": "If it rains, the ground gets wet.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "If it rains, the ground gets wet.",
-            "startUtf16": 0,
-            "endUtf16": 33,
-            "prefix": "",
-            "suffix": " It is raining. Therefore, the g"
-          }
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "Rain makes the ground wet",
+                "body": "If it rains, the ground gets wet.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "If it rains, the ground gets wet.",
+                        "startUtf16": 0,
+                        "endUtf16": 33,
+                        "prefix": "",
+                        "suffix": " It is raining. Therefore, the g"
+                    }
+                ],
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "It is raining",
+                "body": "It is raining.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "It is raining.",
+                        "startUtf16": 34,
+                        "endUtf16": 48,
+                        "prefix": " it rains, the ground gets wet. ",
+                        "suffix": " Therefore, the ground is wet."
+                    }
+                ],
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "The ground is wet",
+                "body": "The ground is wet.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Therefore, the ground is wet.",
+                        "startUtf16": 49,
+                        "endUtf16": 78,
+                        "prefix": "ground gets wet. It is raining. ",
+                        "suffix": ""
+                    }
+                ],
+                "role": "conclusion"
+            }
         ],
-        "role": "premise"
-      },
-      {
-        "miniId": "c2",
-        "title": "It is raining",
-        "body": "It is raining.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "It is raining.",
-            "startUtf16": 34,
-            "endUtf16": 48,
-            "prefix": " it rains, the ground gets wet. ",
-            "suffix": " Therefore, the ground is wet."
-          }
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "RainWetsGround",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "ItIsRaining",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "GroundIsWet",
+                "claimMiniId": "c3"
+            }
         ],
-        "role": "premise"
-      },
-      {
-        "miniId": "c3",
-        "title": "The ground is wet",
-        "body": "The ground is wet.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "Therefore, the ground is wet.",
-            "startUtf16": 49,
-            "endUtf16": 78,
-            "prefix": "ground gets wet. It is raining. ",
-            "suffix": ""
-          }
+        "premises": [
+            {
+                "miniId": "gid-4",
+                "formula": "(RainWetsGround and ItIsRaining) implies GroundIsWet",
+                "title": "Applying the rain condition"
+            },
+            {
+                "miniId": "gid-5",
+                "formula": "GroundIsWet",
+                "title": "Deduction from a satisfied condition"
+            }
         ],
-        "role": "conclusion"
-      }
-    ],
-    "variables": [
-      {
-        "miniId": "gid-1",
-        "symbol": "RainWetsGround",
-        "claimMiniId": "c1"
-      },
-      {
-        "miniId": "gid-2",
-        "symbol": "ItIsRaining",
-        "claimMiniId": "c2"
-      },
-      {
-        "miniId": "gid-3",
-        "symbol": "GroundIsWet",
-        "claimMiniId": "c3"
-      }
-    ],
-    "premises": [
-      {
-        "miniId": "gid-4",
-        "formula": "(RainWetsGround and ItIsRaining) implies GroundIsWet",
-        "title": "Applying the rain condition"
-      },
-      {
-        "miniId": "gid-5",
-        "formula": "GroundIsWet",
-        "title": "Deduction from a satisfied condition"
-      }
-    ],
-    "conclusionPremiseMiniId": "gid-5",
-    "derivationBacking": [],
-    "title": "The ground is wet"
-  },
-  "failureText": null,
-  "uncategorizedText": null,
-  "selectionRationale": "The conditional claim and the fact that it is raining jointly support the ground being wet.",
-  "processingFailures": []
+        "conclusionPremiseMiniId": "gid-5",
+        "derivationBacking": [],
+        "title": "The ground is wet"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "The conditional claim and the fact that it is raining jointly support the ground being wet.",
+    "processingFailures": []
 }

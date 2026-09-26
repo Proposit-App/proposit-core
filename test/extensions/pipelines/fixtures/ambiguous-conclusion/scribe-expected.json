@@ -1,90 +1,90 @@
 {
-  "argument": {
-    "claims": [
-      {
-        "miniId": "c1",
-        "title": "Remote work improves productivity",
-        "body": "Working remotely improves productivity for many people.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "Working remotely improves productivity for many people.",
-            "startUtf16": 0,
-            "endUtf16": 55,
-            "prefix": "",
-            "suffix": " Working remotely also reduces c"
-          }
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "Remote work improves productivity",
+                "body": "Working remotely improves productivity for many people.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Working remotely improves productivity for many people.",
+                        "startUtf16": 0,
+                        "endUtf16": 55,
+                        "prefix": "",
+                        "suffix": " Working remotely also reduces c"
+                    }
+                ],
+                "role": "conclusion"
+            },
+            {
+                "miniId": "c2",
+                "title": "Remote work reduces commuting time",
+                "body": "Working remotely reduces commuting time.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Working remotely also reduces commuting time.",
+                        "startUtf16": 56,
+                        "endUtf16": 101,
+                        "prefix": "s productivity for many people. ",
+                        "suffix": " Reducing commuting time improve"
+                    }
+                ],
+                "role": "premise"
+            },
+            {
+                "miniId": "c3",
+                "title": "Less commuting improves work-life balance",
+                "body": "Reducing commuting time improves work-life balance.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Reducing commuting time improves work-life balance.",
+                        "startUtf16": 102,
+                        "endUtf16": 153,
+                        "prefix": "ly also reduces commuting time. ",
+                        "suffix": ""
+                    }
+                ],
+                "role": "premise"
+            }
         ],
-        "role": "conclusion"
-      },
-      {
-        "miniId": "c2",
-        "title": "Remote work reduces commuting time",
-        "body": "Working remotely reduces commuting time.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "Working remotely also reduces commuting time.",
-            "startUtf16": 56,
-            "endUtf16": 101,
-            "prefix": "s productivity for many people. ",
-            "suffix": " Reducing commuting time improve"
-          }
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "RemoteWorkProductivity",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "RemoteWorkReducesCommute",
+                "claimMiniId": "c2"
+            },
+            {
+                "miniId": "gid-3",
+                "symbol": "ShorterCommuteImprovesBalance",
+                "claimMiniId": "c3"
+            }
         ],
-        "role": "premise"
-      },
-      {
-        "miniId": "c3",
-        "title": "Less commuting improves work-life balance",
-        "body": "Reducing commuting time improves work-life balance.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "Reducing commuting time improves work-life balance.",
-            "startUtf16": 102,
-            "endUtf16": 153,
-            "prefix": "ly also reduces commuting time. ",
-            "suffix": ""
-          }
+        "premises": [
+            {
+                "miniId": "gid-4",
+                "formula": "(RemoteWorkReducesCommute and ShorterCommuteImprovesBalance) implies RemoteWorkProductivity",
+                "title": "Commute savings as a productivity pathway"
+            },
+            {
+                "miniId": "gid-5",
+                "formula": "RemoteWorkProductivity",
+                "title": "From time savings to productivity"
+            }
         ],
-        "role": "premise"
-      }
-    ],
-    "variables": [
-      {
-        "miniId": "gid-1",
-        "symbol": "RemoteWorkProductivity",
-        "claimMiniId": "c1"
-      },
-      {
-        "miniId": "gid-2",
-        "symbol": "RemoteWorkReducesCommute",
-        "claimMiniId": "c2"
-      },
-      {
-        "miniId": "gid-3",
-        "symbol": "ShorterCommuteImprovesBalance",
-        "claimMiniId": "c3"
-      }
-    ],
-    "premises": [
-      {
-        "miniId": "gid-4",
-        "formula": "(RemoteWorkReducesCommute and ShorterCommuteImprovesBalance) implies RemoteWorkProductivity",
-        "title": "Commute savings as a productivity pathway"
-      },
-      {
-        "miniId": "gid-5",
-        "formula": "RemoteWorkProductivity",
-        "title": "From time savings to productivity"
-      }
-    ],
-    "conclusionPremiseMiniId": "gid-5",
-    "derivationBacking": [],
-    "title": "Remote work improves productivity"
-  },
-  "failureText": null,
-  "uncategorizedText": null,
-  "selectionRationale": "The commuting and work-life balance claims provide a possible, though incomplete, reason for the productivity claim.",
-  "processingFailures": []
+        "conclusionPremiseMiniId": "gid-5",
+        "derivationBacking": [],
+        "title": "Remote work improves productivity"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "The commuting and work-life balance claims provide a possible, though incomplete, reason for the productivity claim.",
+    "processingFailures": []
 }

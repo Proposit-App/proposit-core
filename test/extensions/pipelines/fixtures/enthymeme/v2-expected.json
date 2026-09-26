@@ -1,79 +1,79 @@
 {
-  "parity": "strict",
-  "argument": {
-    "claims": [
-      {
-        "miniId": "c1",
-        "title": "Socrates is a man",
-        "body": "Socrates is a man.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "Socrates is a man.",
-            "startUtf16": 0,
-            "endUtf16": 18,
-            "prefix": "",
-            "suffix": " Therefore, Socrates is mortal."
-          }
+    "parity": "strict",
+    "argument": {
+        "claims": [
+            {
+                "miniId": "c1",
+                "title": "Socrates is a man",
+                "body": "Socrates is a man.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Socrates is a man.",
+                        "startUtf16": 0,
+                        "endUtf16": 18,
+                        "prefix": "",
+                        "suffix": " Therefore, Socrates is mortal."
+                    }
+                ],
+                "role": "premise"
+            },
+            {
+                "miniId": "c2",
+                "title": "Socrates is mortal",
+                "body": "Socrates is mortal.",
+                "type": "normal",
+                "sourceAnchors": [
+                    {
+                        "quote": "Socrates is mortal.",
+                        "startUtf16": 30,
+                        "endUtf16": 49,
+                        "prefix": "Socrates is a man. Therefore, ",
+                        "suffix": ""
+                    }
+                ],
+                "role": "conclusion"
+            }
         ],
-        "role": "premise"
-      },
-      {
-        "miniId": "c2",
-        "title": "Socrates is mortal",
-        "body": "Socrates is mortal.",
-        "type": "normal",
-        "sourceAnchors": [
-          {
-            "quote": "Socrates is mortal.",
-            "startUtf16": 30,
-            "endUtf16": 49,
-            "prefix": "Socrates is a man. Therefore, ",
-            "suffix": ""
-          }
+        "variables": [
+            {
+                "miniId": "gid-1",
+                "symbol": "Socrates_Is_Man",
+                "claimMiniId": "c1"
+            },
+            {
+                "miniId": "gid-2",
+                "symbol": "Socrates_Is_Mortal",
+                "claimMiniId": "c2"
+            }
         ],
-        "role": "conclusion"
-      }
-    ],
-    "variables": [
-      {
-        "miniId": "gid-1",
-        "symbol": "Socrates_Is_Man",
-        "claimMiniId": "c1"
-      },
-      {
-        "miniId": "gid-2",
-        "symbol": "Socrates_Is_Mortal",
-        "claimMiniId": "c2"
-      }
-    ],
-    "premises": [
-      {
-        "miniId": "gid-3",
-        "formula": "Socrates_Is_Man implies Socrates_Is_Mortal",
-        "title": "From manhood to mortality",
-        "sourceAnchors": [
-          {
-            "quote": "Therefore, Socrates is mortal.",
-            "startUtf16": 19,
-            "endUtf16": 49,
-            "prefix": "Socrates is a man. ",
-            "suffix": ""
-          }
-        ]
-      },
-      {
-        "miniId": "gid-4",
-        "formula": "Socrates_Is_Mortal",
-        "title": "Inference from the supporting claim"
-      }
-    ],
-    "conclusionPremiseMiniId": "gid-4",
-    "derivationBacking": [],
-    "title": "Socrates is mortal"
-  },
-  "failureText": null,
-  "uncategorizedText": null,
-  "selectionRationale": "c2 is supported by c1 and is the terminal claim in the argument.",
-  "processingFailures": []
+        "premises": [
+            {
+                "miniId": "gid-3",
+                "formula": "Socrates_Is_Man implies Socrates_Is_Mortal",
+                "title": "From manhood to mortality",
+                "sourceAnchors": [
+                    {
+                        "quote": "Therefore, Socrates is mortal.",
+                        "startUtf16": 19,
+                        "endUtf16": 49,
+                        "prefix": "Socrates is a man. ",
+                        "suffix": ""
+                    }
+                ]
+            },
+            {
+                "miniId": "gid-4",
+                "formula": "Socrates_Is_Mortal",
+                "title": "Inference from the supporting claim"
+            }
+        ],
+        "conclusionPremiseMiniId": "gid-4",
+        "derivationBacking": [],
+        "title": "Socrates is mortal"
+    },
+    "failureText": null,
+    "uncategorizedText": null,
+    "selectionRationale": "c2 is supported by c1 and is the terminal claim in the argument.",
+    "processingFailures": []
 }
