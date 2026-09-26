@@ -99,7 +99,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "(Global_Temperatures_Rise and Warming_Causes_Extreme_Weather) implies Extreme_Weather_More_Frequent",
-                "title": "Applying warming's weather effect",
+                "title": "Applying warming’s effect on weather",
                 "sourceAnchors": [
                     {
                         "quote": "Therefore, we are seeing more frequent extreme weather events.",
@@ -113,7 +113,7 @@
             {
                 "miniId": "gid-6",
                 "formula": "Extreme_Weather_More_Frequent",
-                "title": "Joint-premise inference"
+                "title": "Combining the supporting claims"
             }
         ],
         "conclusionPremiseMiniId": "gid-6",
@@ -127,6 +127,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c4 is the terminal claim supported jointly by c2 and c3, while c2 is an intermediate claim.",
+    "selectionRationale": "c4 is supported by c2 and c3 and is not used to support any further claim.",
     "processingFailures": []
 }

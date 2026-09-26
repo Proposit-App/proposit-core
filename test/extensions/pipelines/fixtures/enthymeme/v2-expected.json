@@ -51,13 +51,13 @@
             {
                 "miniId": "gid-3",
                 "formula": "Socrates_Is_Man implies Socrates_Is_Mortal",
-                "title": "From manhood to mortality",
+                "title": "From humanity to mortality",
                 "sourceAnchors": [
                     {
-                        "quote": "Therefore, Socrates is mortal.",
-                        "startUtf16": 19,
+                        "quote": "Socrates is a man. Therefore, Socrates is mortal.",
+                        "startUtf16": 0,
                         "endUtf16": 49,
-                        "prefix": "Socrates is a man. ",
+                        "prefix": "",
                         "suffix": ""
                     }
                 ]
@@ -65,7 +65,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "Socrates_Is_Mortal",
-                "title": "Inference from the supporting claim"
+                "title": "Inference from c1"
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
@@ -74,6 +74,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is supported by c1 and is the terminal claim in the argument.",
+    "selectionRationale": "c2 is supported by c1 and is the terminal claim in the relation graph.",
     "processingFailures": []
 }

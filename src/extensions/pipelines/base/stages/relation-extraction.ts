@@ -50,7 +50,7 @@ For each relation emit:
 - The conclusion of the argument is identified in a separate stage; do NOT emit a special "conclusion" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.
 - Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.
 
-Whenever there are at least two normal-typed claims, emit at least one relation: the input is an argument, and its claims connect somehow. Return \`{ "relations": [] }\` only when there are fewer than two normal-typed claims.`
+Emit the relations the author actually argues. An argument with at least two normal-typed claims has at least one, so look for it before concluding there is none. Never invent support the author does not give: if the claims genuinely do not connect, return \`{ "relations": [] }\`.`
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     const canon = ctx.get<TClaimCanonicalizationOutput>(

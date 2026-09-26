@@ -72,13 +72,13 @@
             {
                 "miniId": "gid-4",
                 "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "Applying the rain conditional",
+                "title": "Applying the rain condition",
                 "sourceAnchors": [
                     {
-                        "quote": "Therefore, the ground is wet.",
-                        "startUtf16": 49,
+                        "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.",
+                        "startUtf16": 0,
                         "endUtf16": 78,
-                        "prefix": "ground gets wet. It is raining. ",
+                        "prefix": "",
                         "suffix": ""
                     }
                 ]
@@ -86,7 +86,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "Ground_Is_Wet",
-                "title": "Combining two premises"
+                "title": "Joint support from two premises"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -95,6 +95,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is supported by c1 and c2 and is the only terminal claim.",
+    "selectionRationale": "c3 is the only claim supported by the relation, with c1 and c2 serving as its premises.",
     "processingFailures": []
 }

@@ -441,7 +441,23 @@ describe("createScribePipeline — structure checked out of process", () => {
     const upstream = {
         [STAGE_IDS.claimCanonicalization]: {
             outcome: "completed" as const,
-            output: { canonicalClaims: [], mentionToClaim: [] },
+            output: {
+                canonicalClaims: [
+                    {
+                        miniId: "c1",
+                        mentionIds: [],
+                        suggestedSymbol: "A",
+                        type: "normal",
+                    },
+                    {
+                        miniId: "c2",
+                        mentionIds: [],
+                        suggestedSymbol: "B",
+                        type: "normal",
+                    },
+                ],
+                mentionToClaim: [],
+            },
         },
         [STAGE_IDS.claimTypeClassification]: {
             outcome: "completed" as const,

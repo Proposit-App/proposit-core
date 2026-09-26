@@ -76,7 +76,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "GroundIsWet",
-                "title": "Deduction from a satisfied condition"
+                "title": "From condition to result"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -85,6 +85,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "The conditional claim and the fact that it is raining jointly support the ground being wet.",
+    "selectionRationale": "The rain condition and the fact that it is raining together support the conclusion that the ground is wet.",
     "processingFailures": []
 }

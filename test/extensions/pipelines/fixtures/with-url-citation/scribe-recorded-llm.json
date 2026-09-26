@@ -492,11 +492,11 @@
       }
     },
     {
-      "hash": "0d2da4366b7ef4e1d655b990f3e77d37fd9a897e9b6eb233986f1bc396492a8d",
+      "hash": "d9d0297d13b0c643beeea493ded14d49449005e346f6cb2868d32a2f16f82cdb",
       "stageId": "scribe-structure",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's `title` — the step that reaches the conclusion already has its own. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nWhenever there are at least two normal-typed claims, emit at least one relation and at least one conclusion candidate: the input is an argument, and its claims connect somehow. Only with fewer than two normal-typed claims may `relations` or `conclusionCandidates` be empty.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's `title` — the step that reaches the conclusion already has its own. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nEmit the relations and conclusion the author actually argues. An argument with at least two normal-typed claims has at least one relation and one conclusion candidate, so look for them before concluding there are none. Never invent support the author does not give: if the claims genuinely do not connect, return `relations` and `conclusionCandidates` empty.\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=GlobalTemperaturesRise fields={\"title\":\"Global temperatures have risen\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c2] type=citation symbol=NasaClimateEvidence fields={\"title\":\"NASA reports rising global temperatures\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c3] type=normal symbol=WarmingIncreasesExtremeWeather fields={\"title\":\"Warming increases extreme weather\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c4] type=normal symbol=ExtremeWeatherMoreFrequent fields={\"title\":\"Extreme weather is becoming more frequent\",\"body\":\"Extreme weather events are occurring more frequently.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
         "outputSchema": {
           "type": "object",
@@ -586,7 +586,7 @@
                 "c2"
               ],
               "consequent": "c1",
-              "title": "Evidence for the warming trend",
+              "title": "NASA evidence for the warming trend",
               "evidence": {
                 "segmentIds": [],
                 "quote": ""
@@ -610,15 +610,15 @@
           "conclusionCandidates": [
             "c4"
           ],
-          "conclusionTitle": "Observed trend from cause and effect",
-          "rationale": "The reported temperature rise and the claimed causal link jointly support the conclusion that extreme weather is becoming more frequent."
+          "conclusionTitle": "From a causal link to an observed trend",
+          "rationale": "The reported temperature rise and its asserted effect on extreme weather support c4, which supports no further claim."
         },
         "tokenUsage": {
-          "input": 846,
-          "output": 278,
-          "reasoning": 118
+          "input": 858,
+          "output": 221,
+          "reasoning": 58
         },
-        "rawResponseId": "resp_02e82708d1603d74006ab740a8374c87d2a674c698601c43da"
+        "rawResponseId": "resp_013d7ee09315f29c006ab744a9e8ec87d2bf1721172a3fdf67"
       }
     }
   ]

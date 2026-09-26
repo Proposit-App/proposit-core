@@ -55,7 +55,7 @@ Emit:
 - \`conclusionTitle\` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's \`title\` — the step that reaches the conclusion already has its own. Return an empty string when \`conclusionCandidates\` is empty.
 - \`rationale\` — one sentence explaining your best pick (or why none qualifies).
 
-Whenever there are at least two normal-typed claims, emit at least one relation and at least one conclusion candidate: the input is an argument, and its claims connect somehow. Only with fewer than two normal-typed claims may \`relations\` or \`conclusionCandidates\` be empty.
+Emit the relations and conclusion the author actually argues. An argument with at least two normal-typed claims has at least one relation and one conclusion candidate, so look for them before concluding there are none. Never invent support the author does not give: if the claims genuinely do not connect, return \`relations\` and \`conclusionCandidates\` empty.
 
 Output ONLY the schema-shaped object. No prose.`
 
