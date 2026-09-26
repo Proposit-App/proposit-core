@@ -1,100 +1,100 @@
 {
-    "parity": "strict",
-    "argument": {
-        "claims": [
-            {
-                "miniId": "c1",
-                "title": "Rain wets the ground",
-                "body": "If it rains, the ground gets wet.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "the ground gets wet",
-                        "startUtf16": 13,
-                        "endUtf16": 32,
-                        "prefix": "If it rains, ",
-                        "suffix": ". It is raining. Therefore, the "
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c2",
-                "title": "It is raining",
-                "body": "Rain is currently falling.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "It is raining.",
-                        "startUtf16": 34,
-                        "endUtf16": 48,
-                        "prefix": " it rains, the ground gets wet. ",
-                        "suffix": " Therefore, the ground is wet."
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c3",
-                "title": "The ground is wet",
-                "body": "The ground is wet.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "the ground is wet.",
-                        "startUtf16": 60,
-                        "endUtf16": 78,
-                        "prefix": " wet. It is raining. Therefore, ",
-                        "suffix": ""
-                    }
-                ],
-                "role": "conclusion"
-            }
+  "parity": "strict",
+  "argument": {
+    "claims": [
+      {
+        "miniId": "c1",
+        "title": "Rain wets the ground",
+        "body": "If it rains, the ground gets wet.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "If it rains, the ground gets wet.",
+            "startUtf16": 0,
+            "endUtf16": 33,
+            "prefix": "",
+            "suffix": " It is raining. Therefore, the g"
+          }
         ],
-        "variables": [
-            {
-                "miniId": "gid-1",
-                "symbol": "Rain_Wets_Ground",
-                "claimMiniId": "c1"
-            },
-            {
-                "miniId": "gid-2",
-                "symbol": "It_Is_Raining",
-                "claimMiniId": "c2"
-            },
-            {
-                "miniId": "gid-3",
-                "symbol": "Ground_Is_Wet",
-                "claimMiniId": "c3"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c2",
+        "title": "It is raining",
+        "body": "It is raining.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "It is raining.",
+            "startUtf16": 34,
+            "endUtf16": 48,
+            "prefix": " it rains, the ground gets wet. ",
+            "suffix": " Therefore, the ground is wet."
+          }
         ],
-        "premises": [
-            {
-                "miniId": "gid-4",
-                "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "Modus ponens",
-                "sourceAnchors": [
-                    {
-                        "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.",
-                        "startUtf16": 0,
-                        "endUtf16": 78,
-                        "prefix": "",
-                        "suffix": ""
-                    }
-                ]
-            },
-            {
-                "miniId": "gid-5",
-                "formula": "Ground_Is_Wet",
-                "title": "Joint support inference"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c3",
+        "title": "The ground is wet",
+        "body": "The ground is wet.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "the ground is wet.",
+            "startUtf16": 60,
+            "endUtf16": 78,
+            "prefix": " wet. It is raining. Therefore, ",
+            "suffix": ""
+          }
         ],
-        "conclusionPremiseMiniId": "gid-5",
-        "derivationBacking": [],
-        "title": "The ground is wet"
-    },
-    "failureText": null,
-    "uncategorizedText": null,
-    "selectionRationale": "c3 is the sole supported consequent and terminal claim in the relation graph, with c1 and c2 jointly serving as its support.",
-    "processingFailures": []
+        "role": "conclusion"
+      }
+    ],
+    "variables": [
+      {
+        "miniId": "gid-1",
+        "symbol": "Rain_Wets_Ground",
+        "claimMiniId": "c1"
+      },
+      {
+        "miniId": "gid-2",
+        "symbol": "It_Is_Raining",
+        "claimMiniId": "c2"
+      },
+      {
+        "miniId": "gid-3",
+        "symbol": "Ground_Is_Wet",
+        "claimMiniId": "c3"
+      }
+    ],
+    "premises": [
+      {
+        "miniId": "gid-4",
+        "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
+        "title": "Applying the rain conditional",
+        "sourceAnchors": [
+          {
+            "quote": "Therefore, the ground is wet.",
+            "startUtf16": 49,
+            "endUtf16": 78,
+            "prefix": "ground gets wet. It is raining. ",
+            "suffix": ""
+          }
+        ]
+      },
+      {
+        "miniId": "gid-5",
+        "formula": "Ground_Is_Wet",
+        "title": "Combining two premises"
+      }
+    ],
+    "conclusionPremiseMiniId": "gid-5",
+    "derivationBacking": [],
+    "title": "The ground is wet"
+  },
+  "failureText": null,
+  "uncategorizedText": null,
+  "selectionRationale": "c3 is supported by c1 and c2 and is the only terminal claim.",
+  "processingFailures": []
 }

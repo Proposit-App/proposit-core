@@ -1,134 +1,124 @@
 {
-    "argument": {
-        "claims": [
-            {
-                "miniId": "c1",
-                "title": "NASA climate report evidence",
-                "url": "https://climate.nasa.gov/evidence/",
-                "type": "citation",
-                "sourceAnchors": [
-                    {
-                        "quote": "[NASA's climate report](https://climate.nasa.gov/evidence/)",
-                        "startUtf16": 13,
-                        "endUtf16": 72,
-                        "prefix": "According to ",
-                        "suffix": ", global temperatures have risen"
-                    }
-                ],
-                "role": "premise",
-                "citation": {
-                    "type": "unparsed",
-                    "text": "NASA climate report evidence",
-                    "citationTypeGuess": "Website",
-                    "url": "https://climate.nasa.gov/evidence/"
-                }
-            },
-            {
-                "miniId": "c2",
-                "title": "Global temperatures rose",
-                "body": "Global temperatures have risen significantly over the past century.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "global temperatures have risen significantly over the past century.",
-                        "startUtf16": 74,
-                        "endUtf16": 141,
-                        "prefix": "://climate.nasa.gov/evidence/), ",
-                        "suffix": " Rising global temperatures caus"
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c3",
-                "title": "Warming increases extreme weather",
-                "body": "Rising global temperatures cause more frequent extreme weather events.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "Rising global temperatures cause more frequent extreme weather events.",
-                        "startUtf16": 142,
-                        "endUtf16": 212,
-                        "prefix": "ficantly over the past century. ",
-                        "suffix": " Therefore, we are seeing more f"
-                    },
-                    {
-                        "quote": "Therefore, we are seeing more frequent extreme weather events.",
-                        "startUtf16": 213,
-                        "endUtf16": 275,
-                        "prefix": "requent extreme weather events. ",
-                        "suffix": ""
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c4",
-                "title": "More extreme weather occurs",
-                "body": "More frequent extreme weather events are occurring.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "we are seeing more frequent extreme weather events.",
-                        "startUtf16": 224,
-                        "endUtf16": 275,
-                        "prefix": "reme weather events. Therefore, ",
-                        "suffix": ""
-                    }
-                ],
-                "role": "conclusion"
-            }
+  "argument": {
+    "claims": [
+      {
+        "miniId": "c1",
+        "title": "Global temperatures have risen",
+        "body": "Global temperatures have risen significantly over the past century.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "global temperatures have risen significantly over the past century.",
+            "startUtf16": 74,
+            "endUtf16": 141,
+            "prefix": "://climate.nasa.gov/evidence/), ",
+            "suffix": " Rising global temperatures caus"
+          }
         ],
-        "variables": [
-            {
-                "miniId": "gid-1",
-                "symbol": "nasa_climate_report",
-                "claimMiniId": "c1"
-            },
-            {
-                "miniId": "gid-2",
-                "symbol": "global_temps_rise",
-                "claimMiniId": "c2"
-            },
-            {
-                "miniId": "gid-3",
-                "symbol": "warming_causes_extreme_weather",
-                "claimMiniId": "c3"
-            },
-            {
-                "miniId": "gid-4",
-                "symbol": "more_extreme_weather",
-                "claimMiniId": "c4"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c2",
+        "title": "NASA reports rising global temperatures",
+        "url": "https://climate.nasa.gov/evidence/",
+        "type": "citation",
+        "sourceAnchors": [
+          {
+            "quote": "[NASA's climate report](https://climate.nasa.gov/evidence/)",
+            "startUtf16": 13,
+            "endUtf16": 72,
+            "prefix": "According to ",
+            "suffix": ", global temperatures have risen"
+          }
         ],
-        "premises": [
-            {
-                "miniId": "gid-5",
-                "formula": "global_temps_rise implies warming_causes_extreme_weather",
-                "title": "Temperature rise to weather risk"
-            },
-            {
-                "miniId": "gid-6",
-                "formula": "warming_causes_extreme_weather implies more_extreme_weather",
-                "title": "Causal chain to observed events"
-            },
-            {
-                "miniId": "gid-7",
-                "formula": "more_extreme_weather",
-                "title": "Observed weather outcome"
-            }
+        "role": "premise",
+        "citation": {
+          "type": "unparsed",
+          "text": "NASA reports rising global temperatures",
+          "citationTypeGuess": "Website",
+          "url": "https://climate.nasa.gov/evidence/"
+        }
+      },
+      {
+        "miniId": "c3",
+        "title": "Warming increases extreme weather",
+        "body": "Rising global temperatures cause more frequent extreme weather events.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "Rising global temperatures cause more frequent extreme weather events.",
+            "startUtf16": 142,
+            "endUtf16": 212,
+            "prefix": "ficantly over the past century. ",
+            "suffix": " Therefore, we are seeing more f"
+          }
         ],
-        "conclusionPremiseMiniId": "gid-7",
-        "derivationBacking": [
-            {
-                "derivedClaimMiniId": "c2",
-                "supportingClaimMiniIds": ["c1"]
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c4",
+        "title": "Extreme weather is becoming more frequent",
+        "body": "Extreme weather events are occurring more frequently.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "we are seeing more frequent extreme weather events.",
+            "startUtf16": 224,
+            "endUtf16": 275,
+            "prefix": "reme weather events. Therefore, ",
+            "suffix": ""
+          }
         ],
-        "title": "More extreme weather occurs"
-    },
-    "failureText": null,
-    "uncategorizedText": null,
-    "selectionRationale": "c4 is the final claim supported by the others and does not support any further claim, so it is the best conclusion candidate.",
-    "processingFailures": []
+        "role": "conclusion"
+      }
+    ],
+    "variables": [
+      {
+        "miniId": "gid-1",
+        "symbol": "GlobalTemperaturesRise",
+        "claimMiniId": "c1"
+      },
+      {
+        "miniId": "gid-2",
+        "symbol": "NasaClimateEvidence",
+        "claimMiniId": "c2"
+      },
+      {
+        "miniId": "gid-3",
+        "symbol": "WarmingIncreasesExtremeWeather",
+        "claimMiniId": "c3"
+      },
+      {
+        "miniId": "gid-4",
+        "symbol": "ExtremeWeatherMoreFrequent",
+        "claimMiniId": "c4"
+      }
+    ],
+    "premises": [
+      {
+        "miniId": "gid-5",
+        "formula": "(GlobalTemperaturesRise and WarmingIncreasesExtremeWeather) implies ExtremeWeatherMoreFrequent",
+        "title": "Applying the warming–weather link"
+      },
+      {
+        "miniId": "gid-6",
+        "formula": "ExtremeWeatherMoreFrequent",
+        "title": "Observed trend from cause and effect"
+      }
+    ],
+    "conclusionPremiseMiniId": "gid-6",
+    "derivationBacking": [
+      {
+        "derivedClaimMiniId": "c1",
+        "supportingClaimMiniIds": [
+          "c2"
+        ]
+      }
+    ],
+    "title": "Extreme weather is becoming more frequent"
+  },
+  "failureText": null,
+  "uncategorizedText": null,
+  "selectionRationale": "The reported temperature rise and the claimed causal link jointly support the conclusion that extreme weather is becoming more frequent.",
+  "processingFailures": []
 }

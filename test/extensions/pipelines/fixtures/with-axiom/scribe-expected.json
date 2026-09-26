@@ -1,90 +1,96 @@
 {
-    "argument": {
-        "claims": [
-            {
-                "miniId": "c1",
-                "title": "Bachelor means unmarried man",
-                "body": "A bachelor is an unmarried man.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "By definition, a bachelor is an unmarried man.",
-                        "startUtf16": 0,
-                        "endUtf16": 46,
-                        "prefix": "",
-                        "suffix": " John is a bachelor. Therefore, "
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c2",
-                "title": "John is a bachelor",
-                "body": "John is a bachelor.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "John is a bachelor.",
-                        "startUtf16": 47,
-                        "endUtf16": 66,
-                        "prefix": "a bachelor is an unmarried man. ",
-                        "suffix": " Therefore, John is unmarried."
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c3",
-                "title": "John is unmarried",
-                "body": "John is unmarried.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "Therefore, John is unmarried.",
-                        "startUtf16": 67,
-                        "endUtf16": 96,
-                        "prefix": "arried man. John is a bachelor. ",
-                        "suffix": ""
-                    }
-                ],
-                "role": "conclusion"
-            }
+  "argument": {
+    "claims": [
+      {
+        "miniId": "c1",
+        "axiom": "A bachelor is an unmarried man",
+        "type": "axiomatic",
+        "sourceAnchors": [
+          {
+            "quote": "By definition, a bachelor is an unmarried man.",
+            "startUtf16": 0,
+            "endUtf16": 46,
+            "prefix": "",
+            "suffix": " John is a bachelor. Therefore, "
+          }
         ],
-        "variables": [
-            {
-                "miniId": "gid-1",
-                "symbol": "bachelor_def",
-                "claimMiniId": "c1"
-            },
-            {
-                "miniId": "gid-2",
-                "symbol": "john_is_bachelor",
-                "claimMiniId": "c2"
-            },
-            {
-                "miniId": "gid-3",
-                "symbol": "john_unmarried",
-                "claimMiniId": "c3"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c2",
+        "title": "John is a bachelor",
+        "body": "John is a bachelor.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "John is a bachelor.",
+            "startUtf16": 47,
+            "endUtf16": 66,
+            "prefix": "a bachelor is an unmarried man. ",
+            "suffix": " Therefore, John is unmarried."
+          }
         ],
-        "premises": [
-            {
-                "miniId": "gid-4",
-                "formula": "(bachelor_def and john_is_bachelor) implies john_unmarried",
-                "title": "Definition applied to John"
-            },
-            {
-                "miniId": "gid-5",
-                "formula": "john_unmarried",
-                "title": "Derived unmarried status"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c3",
+        "title": "John is unmarried",
+        "body": "John is unmarried.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "John is unmarried.",
+            "startUtf16": 78,
+            "endUtf16": 96,
+            "prefix": " John is a bachelor. Therefore, ",
+            "suffix": ""
+          }
         ],
-        "conclusionPremiseMiniId": "gid-5",
-        "derivationBacking": [],
-        "title": "John is unmarried"
-    },
-    "failureText": null,
-    "uncategorizedText": null,
-    "selectionRationale": "c3 is the only claim supported by the definition and the fact that John is a bachelor, so it is the conclusion.",
-    "processingFailures": []
+        "role": "conclusion"
+      }
+    ],
+    "variables": [
+      {
+        "miniId": "gid-1",
+        "symbol": "BachelorDefinition",
+        "claimMiniId": "c1"
+      },
+      {
+        "miniId": "gid-2",
+        "symbol": "JohnIsBachelor",
+        "claimMiniId": "c2"
+      },
+      {
+        "miniId": "gid-3",
+        "symbol": "JohnIsUnmarried",
+        "claimMiniId": "c3"
+      }
+    ],
+    "premises": [
+      {
+        "miniId": "gid-4",
+        "formula": "JohnIsBachelor implies JohnIsUnmarried",
+        "title": "Applying the bachelor definition"
+      },
+      {
+        "miniId": "gid-5",
+        "formula": "JohnIsUnmarried",
+        "title": "Definitional deduction"
+      }
+    ],
+    "conclusionPremiseMiniId": "gid-5",
+    "derivationBacking": [
+      {
+        "derivedClaimMiniId": "c3",
+        "supportingClaimMiniIds": [
+          "c1"
+        ]
+      }
+    ],
+    "title": "John is unmarried"
+  },
+  "failureText": null,
+  "uncategorizedText": null,
+  "selectionRationale": "John’s being a bachelor, together with the definition of bachelor, entails that he is unmarried.",
+  "processingFailures": []
 }

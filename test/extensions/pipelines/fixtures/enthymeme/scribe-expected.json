@@ -1,69 +1,69 @@
 {
-    "argument": {
-        "claims": [
-            {
-                "miniId": "c1",
-                "title": "Socrates is a man",
-                "body": "Socrates is a man.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "Socrates is a man.",
-                        "startUtf16": 0,
-                        "endUtf16": 18,
-                        "prefix": "",
-                        "suffix": " Therefore, Socrates is mortal."
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c2",
-                "title": "Socrates is mortal",
-                "body": "Socrates is mortal.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "Socrates is mortal.",
-                        "startUtf16": 30,
-                        "endUtf16": 49,
-                        "prefix": "Socrates is a man. Therefore, ",
-                        "suffix": ""
-                    }
-                ],
-                "role": "conclusion"
-            }
+  "argument": {
+    "claims": [
+      {
+        "miniId": "c1",
+        "title": "Socrates is a man",
+        "body": "Socrates is a man.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "Socrates is a man.",
+            "startUtf16": 0,
+            "endUtf16": 18,
+            "prefix": "",
+            "suffix": " Therefore, Socrates is mortal."
+          }
         ],
-        "variables": [
-            {
-                "miniId": "gid-1",
-                "symbol": "socrates_is_man",
-                "claimMiniId": "c1"
-            },
-            {
-                "miniId": "gid-2",
-                "symbol": "socrates_is_mortal",
-                "claimMiniId": "c2"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c2",
+        "title": "Socrates is mortal",
+        "body": "Socrates is mortal.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "Socrates is mortal.",
+            "startUtf16": 30,
+            "endUtf16": 49,
+            "prefix": "Socrates is a man. Therefore, ",
+            "suffix": ""
+          }
         ],
-        "premises": [
-            {
-                "miniId": "gid-3",
-                "formula": "socrates_is_man implies socrates_is_mortal",
-                "title": "Human mortality inference"
-            },
-            {
-                "miniId": "gid-4",
-                "formula": "socrates_is_mortal",
-                "title": "Socrates is mortal"
-            }
-        ],
-        "conclusionPremiseMiniId": "gid-4",
-        "derivationBacking": [],
-        "title": "Socrates is mortal"
-    },
-    "failureText": null,
-    "uncategorizedText": null,
-    "selectionRationale": "c2 is best supported by c1 and does not support any further claim.",
-    "processingFailures": []
+        "role": "conclusion"
+      }
+    ],
+    "variables": [
+      {
+        "miniId": "gid-1",
+        "symbol": "SocratesIsMan",
+        "claimMiniId": "c1"
+      },
+      {
+        "miniId": "gid-2",
+        "symbol": "SocratesIsMortal",
+        "claimMiniId": "c2"
+      }
+    ],
+    "premises": [
+      {
+        "miniId": "gid-3",
+        "formula": "SocratesIsMan implies SocratesIsMortal",
+        "title": "Mortality inferred from humanity"
+      },
+      {
+        "miniId": "gid-4",
+        "formula": "SocratesIsMortal",
+        "title": "Applying a general mortality principle"
+      }
+    ],
+    "conclusionPremiseMiniId": "gid-4",
+    "derivationBacking": [],
+    "title": "Socrates is mortal"
+  },
+  "failureText": null,
+  "uncategorizedText": null,
+  "selectionRationale": "The claim that Socrates is a man supports the intended conclusion that he is mortal, assuming the unstated premise that all men are mortal.",
+  "processingFailures": []
 }

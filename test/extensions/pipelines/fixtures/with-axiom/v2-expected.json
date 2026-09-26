@@ -1,104 +1,106 @@
 {
-    "parity": "strict",
-    "argument": {
-        "claims": [
-            {
-                "miniId": "c1",
-                "axiom": "A bachelor is an unmarried man by definition.",
-                "type": "axiomatic",
-                "sourceAnchors": [
-                    {
-                        "quote": "a bachelor is an unmarried man.",
-                        "startUtf16": 15,
-                        "endUtf16": 46,
-                        "prefix": "By definition, ",
-                        "suffix": " John is a bachelor. Therefore, "
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c2",
-                "title": "John is a bachelor",
-                "body": "John is a bachelor.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "John is a bachelor.",
-                        "startUtf16": 47,
-                        "endUtf16": 66,
-                        "prefix": "a bachelor is an unmarried man. ",
-                        "suffix": " Therefore, John is unmarried."
-                    }
-                ],
-                "role": "premise"
-            },
-            {
-                "miniId": "c3",
-                "title": "John is unmarried",
-                "body": "John is unmarried.",
-                "type": "normal",
-                "sourceAnchors": [
-                    {
-                        "quote": "John is unmarried.",
-                        "startUtf16": 78,
-                        "endUtf16": 96,
-                        "prefix": " John is a bachelor. Therefore, ",
-                        "suffix": ""
-                    }
-                ],
-                "role": "conclusion"
-            }
+  "parity": "strict",
+  "argument": {
+    "claims": [
+      {
+        "miniId": "c1",
+        "axiom": "A bachelor is an unmarried man by definition.",
+        "type": "axiomatic",
+        "sourceAnchors": [
+          {
+            "quote": "a bachelor is an unmarried man.",
+            "startUtf16": 15,
+            "endUtf16": 46,
+            "prefix": "By definition, ",
+            "suffix": " John is a bachelor. Therefore, "
+          }
         ],
-        "variables": [
-            {
-                "miniId": "gid-1",
-                "symbol": "Bachelor_Unmarried",
-                "claimMiniId": "c1"
-            },
-            {
-                "miniId": "gid-2",
-                "symbol": "John_Bachelor",
-                "claimMiniId": "c2"
-            },
-            {
-                "miniId": "gid-3",
-                "symbol": "John_Unmarried",
-                "claimMiniId": "c3"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c2",
+        "title": "John is a bachelor",
+        "body": "John is a bachelor.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "John is a bachelor.",
+            "startUtf16": 47,
+            "endUtf16": 66,
+            "prefix": "a bachelor is an unmarried man. ",
+            "suffix": " Therefore, John is unmarried."
+          }
         ],
-        "premises": [
-            {
-                "miniId": "gid-4",
-                "formula": "John_Bachelor implies John_Unmarried",
-                "title": "Definition applied to John",
-                "sourceAnchors": [
-                    {
-                        "quote": "By definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.",
-                        "startUtf16": 0,
-                        "endUtf16": 96,
-                        "prefix": "",
-                        "suffix": ""
-                    }
-                ]
-            },
-            {
-                "miniId": "gid-5",
-                "formula": "John_Unmarried",
-                "title": "Applying the principle"
-            }
+        "role": "premise"
+      },
+      {
+        "miniId": "c3",
+        "title": "John is unmarried",
+        "body": "John is unmarried.",
+        "type": "normal",
+        "sourceAnchors": [
+          {
+            "quote": "John is unmarried.",
+            "startUtf16": 78,
+            "endUtf16": 96,
+            "prefix": " John is a bachelor. Therefore, ",
+            "suffix": ""
+          }
         ],
-        "conclusionPremiseMiniId": "gid-5",
-        "derivationBacking": [
-            {
-                "derivedClaimMiniId": "c3",
-                "supportingClaimMiniIds": ["c1"]
-            }
-        ],
-        "title": "John is unmarried"
-    },
-    "failureText": null,
-    "uncategorizedText": null,
-    "selectionRationale": "c3 is the only normal claim supported by an inference relation and serves as the terminal consequent of the argument.",
-    "processingFailures": []
+        "role": "conclusion"
+      }
+    ],
+    "variables": [
+      {
+        "miniId": "gid-1",
+        "symbol": "Bachelor_UnmarriedMan",
+        "claimMiniId": "c1"
+      },
+      {
+        "miniId": "gid-2",
+        "symbol": "John_Bachelor",
+        "claimMiniId": "c2"
+      },
+      {
+        "miniId": "gid-3",
+        "symbol": "John_Unmarried",
+        "claimMiniId": "c3"
+      }
+    ],
+    "premises": [
+      {
+        "miniId": "gid-4",
+        "formula": "John_Bachelor implies John_Unmarried",
+        "title": "Applying the definition to John",
+        "sourceAnchors": [
+          {
+            "quote": "By definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.",
+            "startUtf16": 0,
+            "endUtf16": 96,
+            "prefix": "",
+            "suffix": ""
+          }
+        ]
+      },
+      {
+        "miniId": "gid-5",
+        "formula": "John_Unmarried",
+        "title": "Inference from combined premises"
+      }
+    ],
+    "conclusionPremiseMiniId": "gid-5",
+    "derivationBacking": [
+      {
+        "derivedClaimMiniId": "c3",
+        "supportingClaimMiniIds": [
+          "c1"
+        ]
+      }
+    ],
+    "title": "John is unmarried"
+  },
+  "failureText": null,
+  "uncategorizedText": null,
+  "selectionRationale": "c3 is the only claim supported by a relation and is not used to support another claim.",
+  "processingFailures": []
 }
