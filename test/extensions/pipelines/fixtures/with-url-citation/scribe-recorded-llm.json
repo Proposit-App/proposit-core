@@ -1199,7 +1199,7 @@
               "mentionIds": [
                 "c1-m"
               ],
-              "suggestedSymbol": "NASAClimateReport",
+              "suggestedSymbol": "nasa_climate_report",
               "title": "NASA climate report evidence",
               "url": "https://climate.nasa.gov/evidence/",
               "citationTypeGuess": "Website",
@@ -1210,18 +1210,19 @@
               "mentionIds": [
                 "c2-m"
               ],
-              "suggestedSymbol": "GlobalTempsRisen",
-              "title": "Global temperatures have risen",
+              "suggestedSymbol": "global_temps_rise",
+              "title": "Global temperatures rose",
               "body": "Global temperatures have risen significantly over the past century.",
               "type": "normal"
             },
             {
               "miniId": "c3",
               "mentionIds": [
-                "c3-m"
+                "c3-m",
+                "c3-m2"
               ],
-              "suggestedSymbol": "TempsCauseExtremeWeather",
-              "title": "Warmer temperatures increase extremes",
+              "suggestedSymbol": "warming_causes_extreme_weather",
+              "title": "Warming increases extreme weather",
               "body": "Rising global temperatures cause more frequent extreme weather events.",
               "type": "normal"
             },
@@ -1230,8 +1231,8 @@
               "mentionIds": [
                 "c4-m"
               ],
-              "suggestedSymbol": "MoreExtremeWeather",
-              "title": "More extreme weather events occur",
+              "suggestedSymbol": "more_extreme_weather",
+              "title": "More extreme weather occurs",
               "body": "More frequent extreme weather events are occurring.",
               "type": "normal"
             }
@@ -1250,6 +1251,10 @@
               "claimMiniId": "c3"
             },
             {
+              "mentionId": "c3-m2",
+              "claimMiniId": "c3"
+            },
+            {
               "mentionId": "c4-m",
               "claimMiniId": "c4"
             }
@@ -1260,8 +1265,8 @@
               "segmentId": "",
               "text": "[NASA's climate report](https://climate.nasa.gov/evidence/)",
               "span": {
-                "start": 11,
-                "end": 70
+                "start": 10,
+                "end": 69
               }
             },
             {
@@ -1269,7 +1274,7 @@
               "segmentId": "",
               "text": "global temperatures have risen significantly over the past century.",
               "span": {
-                "start": 72,
+                "start": 71,
                 "end": 139
               }
             },
@@ -1283,11 +1288,20 @@
               }
             },
             {
+              "mentionId": "c3-m2",
+              "segmentId": "",
+              "text": "Therefore, we are seeing more frequent extreme weather events.",
+              "span": {
+                "start": 213,
+                "end": 275
+              }
+            },
+            {
               "mentionId": "c4-m",
               "segmentId": "",
               "text": "we are seeing more frequent extreme weather events.",
               "span": {
-                "start": 223,
+                "start": 224,
                 "end": 275
               }
             }
@@ -1301,10 +1315,10 @@
         },
         "tokenUsage": {
           "input": 1354,
-          "output": 434,
+          "output": 493,
           "reasoning": 0
         },
-        "rawResponseId": "resp_001550f4615f323c006ab72d94039c87d283e98d6bc903684f"
+        "rawResponseId": "resp_02c150551b4ec738006ab737188f2887d2906e14bd4433859c"
       }
     },
     {
@@ -1796,6 +1810,135 @@
           "reasoning": 0
         },
         "rawResponseId": "resp_051787f6bc19e40d006ab72d9701bc87d2b68806b435103290"
+      }
+    },
+    {
+      "hash": "058be34e6f7106bf056aea4f552cb06545eb12d4f79fa40efd4962b37467cff2",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's `title` — the step that reaches the conclusion already has its own. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=citation symbol=nasa_climate_report fields={\"title\":\"NASA climate report evidence\",\"url\":\"https://climate.nasa.gov/evidence/\",\"citationTypeGuess\":\"Website\"}\n  [c2] type=normal symbol=global_temps_rise fields={\"title\":\"Global temperatures rose\",\"body\":\"Global temperatures have risen significantly over the past century.\"}\n  [c3] type=normal symbol=warming_causes_extreme_weather fields={\"title\":\"Warming increases extreme weather\",\"body\":\"Rising global temperatures cause more frequent extreme weather events.\"}\n  [c4] type=normal symbol=more_extreme_weather fields={\"title\":\"More extreme weather occurs\",\"body\":\"More frequent extreme weather events are occurring.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c2"
+              ],
+              "consequent": "c3",
+              "title": "Temperature rise to weather risk",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
+                "c3"
+              ],
+              "consequent": "c4",
+              "title": "Causal chain to observed events",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c4"
+          ],
+          "conclusionTitle": "Observed weather outcome",
+          "rationale": "c4 is the final claim supported by the others and does not support any further claim, so it is the best conclusion candidate."
+        },
+        "tokenUsage": {
+          "input": 780,
+          "output": 157,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_01dc7986c628eed9006ab7371b08b087d2998884c8685abeb2"
       }
     }
   ]

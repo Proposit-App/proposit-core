@@ -71,12 +71,12 @@
             {
                 "miniId": "gid-4",
                 "formula": "(rain_wets_ground and it_is_raining) implies ground_is_wet",
-                "title": "Rain implies wet ground"
+                "title": "Apply rain condition"
             },
             {
                 "miniId": "gid-5",
                 "formula": "ground_is_wet",
-                "title": "Wet-ground inference"
+                "title": "Derived wetness"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -85,6 +85,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the supported end claim: c1 and c2 together imply that the ground is wet, and nothing else follows from it.",
+    "selectionRationale": "c3 is the only claim supported by the others, via c1 and c2 together implying that the ground is wet.",
     "processingFailures": []
 }

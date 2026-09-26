@@ -16,7 +16,9 @@
 // Every anchor returned here satisfies
 // `input.slice(startUtf16, endUtf16) === quote`; a quote that cannot be
 // located yields no anchor at all, never an anchor at an unverified
-// offset.
+// offset. A quote the model reworded or spliced can still be located,
+// conservatively, and the match then says so — its anchor quote is the
+// input's text, not the model's.
 
 /** Characters of surrounding input carried on either side of a quote. */
 export const SOURCE_ANCHOR_CONTEXT_CHARS = 32
@@ -242,6 +244,168 @@ function nearestRange(
 export type TSourceAnchorMatch = {
     anchor: TIngestionSourceAnchor
     occurrences: number
+    /**
+     * Set when the quote was not in the input as written and the anchor is
+     * the nearest passage instead — see `approximateRange` for each rule.
+     * The anchor is still the input's own text for its range.
+     */
+    approximate?: TApproximateAnchorRule
+}
+
+/**
+ * How an approximate anchor was found: `normalized` — equal once quote
+ * marks, dashes, ellipses, case and edge punctuation are folded;
+ * `reworded` — a few words differ; `joined` — the quote splices passages,
+ * and the anchor is its longest word-for-word run.
+ */
+export type TApproximateAnchorRule = "normalized" | "reworded" | "joined"
+
+type TWord = { start: number; end: number; key: string }
+
+/** A word's comparison key: folded punctuation and case, edges stripped. */
+function wordKey(word: string): string {
+    const folded = word
+        .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
+        .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+        .replace(/[\u2010-\u2015\u2212]/g, "-")
+        .replace(/\u2026/g, "...")
+        .toLowerCase()
+    const stripped = folded.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, "")
+    return stripped.length > 0 ? stripped : folded
+}
+
+/** The whitespace-separated words of `text`, with their ranges. */
+function wordsOf(text: string): TWord[] {
+    return [...text.matchAll(/\S+/g)].map((m) => ({
+        start: m.index,
+        end: m.index + m[0].length,
+        key: wordKey(m[0]),
+    }))
+}
+
+/** Quotes shorter than this are never matched loosely. */
+const APPROXIMATE_MIN_WORDS = 5
+
+/**
+ * The input range a non-verbatim quote most plausibly came from, or
+ * `undefined`. Deliberately conservative, since a wrong highlight is worse
+ * than none:
+ *
+ * - **Reworded.** The passage with the fewest changed words (word-level
+ *   edit distance, over a passage of any start and length). Accepted when
+ *   the quote has at least five words, at most one word in eight changed
+ *   and at most three in all, and no passage outside the winner does as
+ *   well — two equally good passages give no anchor.
+ * - **Joined.** Only when no passage qualifies: the quote's longest run of
+ *   words found word-for-word in the input, if it is at least eight words
+ *   long, or at least five and 60% of the quote. The anchor covers that run
+ *   alone.
+ */
+function approximateRange(
+    input: string,
+    quote: string,
+    hintUtf16: number
+): { start: number; end: number; rule: TApproximateAnchorRule } | undefined {
+    const q = wordsOf(quote).map((w) => w.key)
+    const t = wordsOf(input)
+    const n = q.length
+    if (n < APPROXIMATE_MIN_WORDS || t.length === 0) return undefined
+    const allowed = Math.min(3, Math.floor(n / 8))
+
+    // Edit distance of the quote to the best passage ending at each word,
+    // with that passage's first word (free start: row 0 is all zeros).
+    let dist = new Array<number>(t.length + 1).fill(0)
+    let from = Array.from({ length: t.length + 1 }, (_, j) => j)
+    for (let i = 1; i <= n; i++) {
+        const nextDist = new Array<number>(t.length + 1)
+        const nextFrom = new Array<number>(t.length + 1)
+        nextDist[0] = i
+        nextFrom[0] = 0
+        for (let j = 1; j <= t.length; j++) {
+            // Cheapest step; on a tie the earliest start, so a word the
+            // quote dropped stays inside the passage instead of cutting it.
+            const steps = [
+                {
+                    cost: dist[j - 1] + (q[i - 1] === t[j - 1].key ? 0 : 1),
+                    start: from[j - 1],
+                },
+                { cost: dist[j] + 1, start: from[j] },
+                { cost: nextDist[j - 1] + 1, start: nextFrom[j - 1] },
+            ]
+            const step = steps.reduce((a, b) =>
+                b.cost < a.cost || (b.cost === a.cost && b.start < a.start)
+                    ? b
+                    : a
+            )
+            nextDist[j] = step.cost
+            nextFrom[j] = step.start
+        }
+        dist = nextDist
+        from = nextFrom
+    }
+
+    const candidates: { first: number; last: number; cost: number }[] = []
+    for (let j = 1; j <= t.length; j++) {
+        if (dist[j] <= allowed && from[j] < j) {
+            candidates.push({ first: from[j], last: j - 1, cost: dist[j] })
+        }
+    }
+    if (candidates.length > 0) {
+        const cost = Math.min(...candidates.map((c) => c.cost))
+        const tied = candidates.filter((c) => c.cost === cost)
+        // Passages overlapping one another are the same place read with a
+        // word more or less; prefer the quote's own length, then the hint.
+        const best = tied.reduce((a, b) => {
+            const lengthA = Math.abs(a.last - a.first + 1 - n)
+            const lengthB = Math.abs(b.last - b.first + 1 - n)
+            if (lengthA !== lengthB) return lengthA < lengthB ? a : b
+            return Math.abs(t[a.first].start - hintUtf16) <=
+                Math.abs(t[b.first].start - hintUtf16)
+                ? a
+                : b
+        })
+        const rival = candidates.some(
+            (c) =>
+                (c.last < best.first || c.first > best.last) &&
+                c.cost <= best.cost
+        )
+        if (rival) return undefined
+        return {
+            start: t[best.first].start,
+            end: t[best.last].end,
+            rule: cost === 0 ? "normalized" : "reworded",
+        }
+    }
+
+    // Longest run of consecutive words shared by quote and input.
+    let run = 0
+    let runEnds: number[] = []
+    let previous = new Array<number>(t.length + 1).fill(0)
+    for (let i = 1; i <= n; i++) {
+        const current = new Array<number>(t.length + 1).fill(0)
+        for (let j = 1; j <= t.length; j++) {
+            if (q[i - 1] !== t[j - 1].key) continue
+            current[j] = previous[j - 1] + 1
+            if (current[j] > run) {
+                run = current[j]
+                runEnds = [j - 1]
+            } else if (current[j] === run && !runEnds.includes(j - 1)) {
+                runEnds.push(j - 1)
+            }
+        }
+        previous = current
+    }
+    if (!(run >= 8 || (run >= APPROXIMATE_MIN_WORDS && run >= 0.6 * n))) {
+        return undefined
+    }
+    // The same run found twice is an exact tie; the hint breaks it.
+    const last = runEnds.reduce((a, b) =>
+        Math.abs(t[a - run + 1].start - hintUtf16) <=
+        Math.abs(t[b - run + 1].start - hintUtf16)
+            ? a
+            : b
+    )
+    return { start: t[last - run + 1].start, end: t[last].end, rule: "joined" }
 }
 
 /**
@@ -253,8 +417,9 @@ export type TSourceAnchorMatch = {
  * same text", never to a wrong span.
  *
  * The ladder is exact match, then whitespace-insensitive match, then
- * both again with the quote's first character re-cased. Nothing
- * approximate: a quote that still does not match yields `undefined`.
+ * both again with the quote's first character re-cased, and last an
+ * approximate match (`approximateRange`), which the result marks. A quote
+ * that matches none of them yields `undefined`.
  */
 export function locateSourceAnchor(
     input: string,
@@ -278,10 +443,20 @@ export function locateSourceAnchor(
     )
 
     const range = nearestRange(ranges, hintUtf16)
-    return range === undefined
+    if (range !== undefined) {
+        return {
+            anchor: buildAnchor(input, range.start, range.end),
+            occurrences: ranges.length,
+        }
+    }
+    // Word boundaries are whitespace, so an approximate range can never
+    // split a surrogate pair.
+    const approximate = approximateRange(input, trimmed, hintUtf16)
+    return approximate === undefined
         ? undefined
         : {
-              anchor: buildAnchor(input, range.start, range.end),
-              occurrences: ranges.length,
+              anchor: buildAnchor(input, approximate.start, approximate.end),
+              occurrences: 1,
+              approximate: approximate.rule,
           }
 }

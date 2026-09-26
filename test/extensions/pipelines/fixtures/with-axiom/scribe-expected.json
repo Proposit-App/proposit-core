@@ -53,12 +53,12 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "bachelor_definition",
+                "symbol": "bachelor_def",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "john_bachelor",
+                "symbol": "john_is_bachelor",
                 "claimMiniId": "c2"
             },
             {
@@ -70,13 +70,13 @@
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(bachelor_definition and john_bachelor) implies john_unmarried",
-                "title": "Definition applied"
+                "formula": "(bachelor_def and john_is_bachelor) implies john_unmarried",
+                "title": "Definition applied to John"
             },
             {
                 "miniId": "gid-5",
                 "formula": "john_unmarried",
-                "title": "Definition applied"
+                "title": "Derived unmarried status"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -85,6 +85,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the supported end claim, inferred from the definition in c1 and the fact in c2.",
+    "selectionRationale": "c3 is the only claim supported by the definition and the fact that John is a bachelor, so it is the conclusion.",
     "processingFailures": []
 }
