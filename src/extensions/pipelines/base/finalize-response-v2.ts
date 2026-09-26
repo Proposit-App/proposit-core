@@ -13,7 +13,8 @@
 //   - When `formula-compilation.conclusionPremiseMiniId` is null
 //     (conclusion-selection returned null, or the conclusion claim
 //     wasn't resolvable to a symbol): `{ argument: null,
-//     failureText: "No single conclusion could be selected.", ... }`.
+//     failureText: "Couldn't work out how these claims connect to a
+//     conclusion.", ... }` (`FINALIZE_V2_FAILURE_TEXTS.noConclusion`).
 //
 //   - Otherwise: assemble the full argument from the canonical claims
 //     (with per-claim role derived from `relation-extraction` +
@@ -541,6 +542,15 @@ function resolveAuthoredTitle(authored: unknown): string | undefined {
 }
 
 /**
+ * The form two titles are compared in when checking for duplicates:
+ * surrounding space and letter case are ignored, so "Tacit consent" and
+ * " tacit consent" count as the same title.
+ */
+function titleKey(title: string): string {
+    return title.trim().toLowerCase()
+}
+
+/**
  * The conclusion title the model authored, when it is safe to use.
  *
  * The model authors exactly one, describing `conclusionCandidates[0]`.
@@ -550,11 +560,6 @@ function resolveAuthoredTitle(authored: unknown): string | undefined {
  * composition, which can be redundant but is never about the wrong
  * claim.
  */
-/** The form two titles are compared in: case and surrounding space ignored. */
-function titleKey(title: string): string {
-    return title.trim().toLowerCase()
-}
-
 function resolveAuthoredConclusionTitle(
     conclusion: TConclusionSelectionOutput | undefined,
     relations: readonly TInferenceRelation[]
