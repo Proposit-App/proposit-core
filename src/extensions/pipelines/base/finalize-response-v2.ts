@@ -522,8 +522,10 @@ const AUTHORED_PREMISE_TITLE_CAP = 80
 /**
  * Normalize a model-authored title: trim it, treat empty or
  * whitespace-only as absent, and clamp an over-long one rather than
- * rejecting it. Returns `undefined` when there is nothing usable, which
- * is the caller's cue to compose a title instead.
+ * rejecting it. A title that names a claim by its internal id ("Inference
+ * from c1") is absent too, since a reader never sees those ids. Returns
+ * `undefined` when there is nothing usable, which is the caller's cue to
+ * compose a title instead.
  *
  * Clamping lives here rather than in the schema because strict
  * structured output ignores JSON-Schema `maxLength`: making the length a
@@ -532,10 +534,14 @@ const AUTHORED_PREMISE_TITLE_CAP = 80
  * pipeline can populate these slots itself, with no schema check between
  * it and this read.
  */
+/** A canonical claim id (`c1`, `c2`, ...) standing as a word of its own. */
+const CLAIM_ID_PATTERN = /\bc\d+\b/
+
 function resolveAuthoredTitle(authored: unknown): string | undefined {
     if (typeof authored !== "string") return undefined
     const trimmed = authored.trim()
     if (trimmed.length === 0) return undefined
+    if (CLAIM_ID_PATTERN.test(trimmed)) return undefined
     return trimmed.length <= AUTHORED_PREMISE_TITLE_CAP
         ? trimmed
         : trimmed.slice(0, AUTHORED_PREMISE_TITLE_CAP - 1) + "…"
