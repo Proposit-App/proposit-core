@@ -162,6 +162,31 @@ describe("parseFormula", () => {
         })
     })
 
+    it("reads a symbol that begins with an operator word as one symbol", () => {
+        // Seen on a real import: "NotProofOfGod" was read as "not ProofOfGod".
+        expect(parseFormula("A implies NotProofOfGod")).toEqual({
+            type: "implies",
+            left: { type: "variable", name: "A" },
+            right: { type: "variable", name: "NotProofOfGod" },
+        })
+        expect(parseFormula("Orders and Andes")).toEqual({
+            type: "and",
+            operands: [
+                { type: "variable", name: "Orders" },
+                { type: "variable", name: "Andes" },
+            ],
+        })
+        expect(parseFormula("not P")).toEqual({
+            type: "not",
+            operand: { type: "variable", name: "P" },
+        })
+        expect(parseFormula("not(P)")).toEqual({
+            type: "not",
+            operand: { type: "variable", name: "P" },
+        })
+        expect(() => parseFormula("P andQ")).toThrow()
+    })
+
     it("negation binds tighter than conjunction", () => {
         // \u00ACP \u2227 Q  =  (\u00ACP) \u2227 Q
         expect(parseFormula("\u00ACP \u2227 Q")).toEqual({
