@@ -246,7 +246,8 @@ function finalize(outputs: Record<string, unknown>): {
 
 // Collect the non-fatal notes finalize emits through `ctx.addFailure`.
 function finalizeFailures(
-    outputs: Record<string, unknown>
+    outputs: Record<string, unknown>,
+    text = INPUT_TEXT
 ): { code: string; message: string; context?: Record<string, unknown> }[] {
     const failures: {
         code: string
@@ -254,7 +255,7 @@ function finalizeFailures(
         context?: Record<string, unknown>
     }[] = []
     const ctx: TStageContext = {
-        ...buildContextStub(outputs),
+        ...buildContextStub(outputs, text),
         addFailure: (failure) => {
             failures.push(failure)
         },
@@ -347,6 +348,35 @@ describe("finalizeResponseV2 — anchor resolution is reported, not silent", () 
         expect(ambiguous).toHaveLength(2)
         expect(ambiguous.map((f) => f.context?.mentionId)).toEqual(["m1", "m2"])
         expect(ambiguous[0].context?.occurrences).toBe(2)
+    })
+
+    it("reports a loose quote that matches two passages equally, with no anchor", () => {
+        const text =
+            "The committee approved the new budget for the city today. " +
+            "The committee approved the new budget for the county today."
+        const outputs = buildOutputs()
+        const relations = outputs[
+            STAGE_IDS.relationExtraction
+        ] as TRelationExtractionOutput
+        relations.relations[0].evidence.quote =
+            "The committee approved the new budget for the town today"
+        const failures = finalizeFailures(outputs, text)
+
+        const ambiguous = failures.filter(
+            (f) =>
+                f.code === "SOURCE_ANCHOR_AMBIGUOUS" &&
+                f.context?.relationId === "r1"
+        )
+        expect(ambiguous).toHaveLength(1)
+        expect(ambiguous[0].context?.occurrences).toBe(2)
+        expect(ambiguous[0].context?.startUtf16).toBe(undefined)
+        expect(
+            failures.filter(
+                (f) =>
+                    f.code === "SOURCE_ANCHOR_UNRESOLVED" &&
+                    f.context?.relationId === "r1"
+            )
+        ).toEqual([])
     })
 
     it("reports every note as a warning, never an error", () => {

@@ -47,10 +47,9 @@ import {
     type TVariableAssignmentOutput,
 } from "./stages/schemas.js"
 import {
-    locateSourceAnchor,
     nearestOccurrence,
+    resolveSourceAnchor,
     type TIngestionSourceAnchor,
-    type TSourceAnchorMatch,
 } from "./source-anchors.js"
 import type { TIngestionExtension, TIngestionInput } from "./types.js"
 import { IEEE_REFERENCE_TYPES } from "../../citations/ieee/references.js"
@@ -256,11 +255,13 @@ function resolveSegmentStarts(
 }
 
 /**
- * Non-fatal note codes for anchor resolution. None stops assembly:
- * an unresolved quote yields no anchor, an ambiguous one yields the
- * nearest-hint winner, and an approximate one yields the nearest passage. Both are reported because silence here is
- * indistinguishable from success — a model that starts paraphrasing
- * would otherwise take anchor coverage to zero with no signal.
+ * Non-fatal note codes for anchor resolution. None stops assembly: an
+ * unresolved quote yields no anchor; an ambiguous one yields the
+ * occurrence nearest the reported position when the quote is verbatim,
+ * and no anchor when it is only approximately in the input; an approximate
+ * one yields the nearest passage. Every one of them is reported because
+ * silence here is indistinguishable from success — a model that starts
+ * paraphrasing would otherwise take anchor coverage to zero with no signal.
  */
 export const SOURCE_ANCHOR_NOTE_CODES = {
     unresolved: "SOURCE_ANCHOR_UNRESOLVED",
@@ -272,7 +273,7 @@ export const SOURCE_ANCHOR_NOTE_CODES = {
 /** Emit the note for one attempted resolution, if there is one to emit. */
 function noteResolution(args: {
     ctx: TStageContext
-    match: TSourceAnchorMatch | undefined
+    match: ReturnType<typeof resolveSourceAnchor>
     quote: string
     subject: Record<string, string>
 }): void {
@@ -285,6 +286,19 @@ function noteResolution(args: {
             message: `Quote for ${subjectText} was not found in the input; no source anchor was emitted.`,
             severity: "warning",
             context: { ...args.subject, quote: args.quote },
+        })
+        return
+    }
+    if ("ambiguousPassages" in args.match) {
+        args.ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.ambiguous,
+            message: `Quote for ${subjectText} is not in the input as written and ${String(args.match.ambiguousPassages)} passages match it equally well; no source anchor was emitted.`,
+            severity: "warning",
+            context: {
+                ...args.subject,
+                quote: args.quote,
+                occurrences: args.match.ambiguousPassages,
+            },
         })
         return
     }
@@ -356,14 +370,16 @@ function buildAnchorByMentionId(args: {
         const hint =
             (segmentStartById.get(mention.segmentId) ?? 0) +
             (offsetInSegment ?? mention.span.start)
-        const match = locateSourceAnchor(args.inputText, mention.text, hint)
+        const match = resolveSourceAnchor(args.inputText, mention.text, hint)
         noteResolution({
             ctx: args.ctx,
             match,
             quote: mention.text,
             subject: { mentionId: mention.mentionId },
         })
-        if (match !== undefined) out.set(mention.mentionId, match.anchor)
+        if (match !== undefined && "anchor" in match) {
+            out.set(mention.mentionId, match.anchor)
+        }
     }
     return out
 }
@@ -398,7 +414,7 @@ function relationAnchor(args: {
         .filter((start): start is number => start !== undefined)
     const hint = starts.length > 0 ? Math.min(...starts) : 0
     const quote = args.relation.evidence.quote
-    const match = locateSourceAnchor(args.inputText, quote, hint)
+    const match = resolveSourceAnchor(args.inputText, quote, hint)
     // An empty evidence quote is a legal "no span to cite" the fast
     // pipeline's prompt explicitly permits, not a failure to find one,
     // so it is not reported.
@@ -410,7 +426,7 @@ function relationAnchor(args: {
             subject: { relationId: args.relation.relationId },
         })
     }
-    return match?.anchor
+    return match !== undefined && "anchor" in match ? match.anchor : undefined
 }
 
 /**

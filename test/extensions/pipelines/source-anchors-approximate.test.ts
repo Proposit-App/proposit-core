@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest"
 import { locateSourceAnchor } from "../../../src/extensions/pipelines/base/index.js"
+import { resolveSourceAnchor } from "../../../src/extensions/pipelines/base/source-anchors.js"
 
 // Two paragraphs of the r/changemyview post whose import produced both
 // failures this covers.
@@ -99,5 +100,86 @@ describe("locateSourceAnchor — quotes not copied verbatim", () => {
         )
         expect(match).toBeDefined()
         expect(match!.approximate).toBe(undefined)
+    })
+
+    it("matches a combining accent against the precomposed letter", () => {
+        const input = "The caf\u00e9 on the corner closed after the storm."
+        const match = locateSourceAnchor(
+            input,
+            "The cafe\u0301 on the corner closed after the storm.",
+            0
+        )
+        expect(match?.approximate).toBe("normalized")
+        expect(match?.anchor.quote).toBe(input)
+    })
+
+    it("reads a dash between words as a word break", () => {
+        const input =
+            "The strike ended\u2014and the mills reopened within the week."
+        const match = locateSourceAnchor(
+            input,
+            "The strike ended and the mills reopened within the week.",
+            0
+        )
+        expect(match?.approximate).toBe("normalized")
+        expect(match?.anchor.quote).toBe(input)
+        expect(
+            input.slice(match!.anchor.startUtf16, match!.anchor.endUtf16)
+        ).toBe(match!.anchor.quote)
+    })
+})
+
+describe("locateSourceAnchor — a quote joined from several passages", () => {
+    // Twelve words the quote below shares with the input, in order; the
+    // tests take the first `k` of them as the verbatim run.
+    const RUN =
+        "the harbour authority raised its fees twice during the long dry summer"
+    const firstWords = (k: number): string =>
+        RUN.split(" ").slice(0, k).join(" ")
+
+    it("gives no anchor for a run of seven words", () => {
+        const input = `Last year ${firstWords(7)} and then stopped.`
+        const quote = `Critics say ${firstWords(7)} without asking anyone.`
+        expect(locateSourceAnchor(input, quote, 0)).toBe(undefined)
+    })
+
+    it("anchors to a run of eight words found once", () => {
+        const input = `Last year ${firstWords(8)} and then stopped.`
+        const quote = `Critics say ${firstWords(8)} without asking anyone.`
+        const match = locateSourceAnchor(input, quote, 0)
+        expect(match?.approximate).toBe("joined")
+        expect(match?.anchor.quote).toBe(firstWords(8))
+        expect(match?.occurrences).toBe(1)
+    })
+
+    it("gives no anchor for a run shorter than half the quote", () => {
+        const input = `Last year ${firstWords(8)} and then stopped.`
+        const quote =
+            `${firstWords(8)} while nine other ports across the region ` +
+            "lowered theirs to win back the shipping lines"
+        expect(locateSourceAnchor(input, quote, 0)).toBe(undefined)
+    })
+
+    it("gives no anchor when the run appears twice, and says why", () => {
+        const input =
+            `In spring ${firstWords(8)} again. ` +
+            `By autumn ${firstWords(8)} once more.`
+        const quote = `Critics say ${firstWords(8)} without asking anyone.`
+        expect(locateSourceAnchor(input, quote, 0)).toBe(undefined)
+        expect(resolveSourceAnchor(input, quote, 0)).toEqual({
+            ambiguousPassages: 2,
+        })
+    })
+
+    it("does not attach a claim to a stock phrase it shares with the input", () => {
+        const input =
+            "It was one of the most important days. Taxes rose sharply."
+        expect(
+            locateSourceAnchor(
+                input,
+                "Education is one of the most important priorities",
+                0
+            )
+        ).toBe(undefined)
     })
 })
