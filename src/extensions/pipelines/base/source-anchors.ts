@@ -262,9 +262,14 @@ export type TApproximateAnchorRule = "normalized" | "reworded" | "joined"
 
 type TWord = { start: number; end: number; key: string }
 
-/** A word's comparison key: folded punctuation and case, edges stripped. */
+/**
+ * A word's comparison key: canonical Unicode composition (NFC, so a
+ * precomposed "é" equals "e" plus a combining accent), folded punctuation
+ * and case, edges stripped.
+ */
 function wordKey(word: string): string {
     const folded = word
+        .normalize("NFC")
         .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
         .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
         .replace(/[\u2010-\u2015\u2212]/g, "-")
@@ -274,21 +279,38 @@ function wordKey(word: string): string {
     return stripped.length > 0 ? stripped : folded
 }
 
-/** The whitespace-separated words of `text`, with their ranges. */
+/**
+ * The words of `text`, with their ranges in `text` itself. Words are
+ * separated by whitespace and by em and en dashes, so "ended—and" is the
+ * two words of "ended and"; a dash standing alone, however it is typed
+ * ("—", "-", "--"), is no word at all.
+ */
 function wordsOf(text: string): TWord[] {
-    return [...text.matchAll(/\S+/g)].map((m) => ({
-        start: m.index,
-        end: m.index + m[0].length,
-        key: wordKey(m[0]),
-    }))
+    return [...text.matchAll(/[^\s\u2013\u2014]+/g)]
+        .filter((m) => !/^[-\u2010-\u2015\u2212]+$/.test(m[0]))
+        .map((m) => ({
+            start: m.index,
+            end: m.index + m[0].length,
+            key: wordKey(m[0]),
+        }))
 }
 
 /** Quotes shorter than this are never matched loosely. */
 const APPROXIMATE_MIN_WORDS = 5
 
+/** The shortest word-for-word run a joined quote may be anchored to. */
+const JOINED_MIN_RUN_WORDS = 8
+
 /**
- * The input range a non-verbatim quote most plausibly came from, or
- * `undefined`. Deliberately conservative, since a wrong highlight is worse
+ * Why a quote got no approximate anchor although more than one passage came
+ * close: `ambiguousPassages` places in the input matched it equally well.
+ */
+type TAmbiguousApproximation = { ambiguousPassages: number }
+
+/**
+ * The input range a non-verbatim quote most plausibly came from;
+ * `ambiguousPassages` when several passages tie, or `undefined` when none
+ * qualifies. Deliberately conservative, since a wrong highlight is worse
  * than none:
  *
  * - **Reworded.** The passage with the fewest changed words (word-level
@@ -298,14 +320,20 @@ const APPROXIMATE_MIN_WORDS = 5
  *   well — two equally good passages give no anchor.
  * - **Joined.** Only when no passage qualifies: the quote's longest run of
  *   words found word-for-word in the input, if it is at least eight words
- *   long, or at least five and 60% of the quote. The anchor covers that run
- *   alone.
+ *   long, at least half the quote, and found in exactly one place — a run
+ *   the input repeats, or two different runs of that length, give no
+ *   anchor. The anchor covers that run alone. A shorter run is too likely
+ *   to be a stock phrase ("one of the most important") that says nothing
+ *   about where the quote came from.
  */
 function approximateRange(
     input: string,
     quote: string,
     hintUtf16: number
-): { start: number; end: number; rule: TApproximateAnchorRule } | undefined {
+):
+    | { start: number; end: number; rule: TApproximateAnchorRule }
+    | TAmbiguousApproximation
+    | undefined {
     const q = wordsOf(quote).map((w) => w.key)
     const t = wordsOf(input)
     const n = q.length
@@ -364,12 +392,14 @@ function approximateRange(
                 ? a
                 : b
         })
-        const rival = candidates.some(
+        const rivals = candidates.filter(
             (c) =>
                 (c.last < best.first || c.first > best.last) &&
                 c.cost <= best.cost
         )
-        if (rival) return undefined
+        if (rivals.length > 0) {
+            return { ambiguousPassages: rivals.length + 1 }
+        }
         return {
             start: t[best.first].start,
             end: t[best.last].end,
@@ -395,37 +425,27 @@ function approximateRange(
         }
         previous = current
     }
-    if (!(run >= 8 || (run >= APPROXIMATE_MIN_WORDS && run >= 0.6 * n))) {
-        return undefined
-    }
-    // The same run found twice is an exact tie; the hint breaks it.
-    const last = runEnds.reduce((a, b) =>
-        Math.abs(t[a - run + 1].start - hintUtf16) <=
-        Math.abs(t[b - run + 1].start - hintUtf16)
-            ? a
-            : b
-    )
+    if (run < JOINED_MIN_RUN_WORDS || 2 * run < n) return undefined
+    // Every place a longest run ends, whether the same words repeated or a
+    // different run of equal length: more than one is no anchor.
+    if (runEnds.length > 1) return { ambiguousPassages: runEnds.length }
+    const last = runEnds[0]
     return { start: t[last - run + 1].start, end: t[last].end, rule: "joined" }
 }
 
 /**
- * Locate `quote` in `input`, returning a verified match or `undefined`.
+ * Locate `quote` in `input`: a verified match, `ambiguousPassages` when the
+ * quote is not in the input as written and several passages resemble it
+ * equally, or `undefined` when nothing resembles it.
  *
- * `hintUtf16` selects among repeated occurrences — the occurrence whose
- * start sits nearest the hint wins. It never affects *whether* a quote
- * matches, so a wrong hint degrades to "picked another occurrence of the
- * same text", never to a wrong span.
- *
- * The ladder is exact match, then whitespace-insensitive match, then
- * both again with the quote's first character re-cased, and last an
- * approximate match (`approximateRange`), which the result marks. A quote
- * that matches none of them yields `undefined`.
+ * `locateSourceAnchor` is this without the distinction between the two
+ * misses, which only the finalize notes need.
  */
-export function locateSourceAnchor(
+export function resolveSourceAnchor(
     input: string,
     quote: string,
     hintUtf16: number
-): TSourceAnchorMatch | undefined {
+): TSourceAnchorMatch | TAmbiguousApproximation | undefined {
     const trimmed = quote.trim()
     if (trimmed.length === 0) return undefined
 
@@ -449,14 +469,38 @@ export function locateSourceAnchor(
             occurrences: ranges.length,
         }
     }
-    // Word boundaries are whitespace, so an approximate range can never
-    // split a surrogate pair.
+    // Words break only at whitespace and at dashes, which are single code
+    // units, so an approximate range can never split a surrogate pair.
     const approximate = approximateRange(input, trimmed, hintUtf16)
-    return approximate === undefined
-        ? undefined
-        : {
-              anchor: buildAnchor(input, approximate.start, approximate.end),
-              occurrences: 1,
-              approximate: approximate.rule,
-          }
+    if (approximate === undefined || "ambiguousPassages" in approximate) {
+        return approximate
+    }
+    // One, truly: an approximate match with a rival is no match at all.
+    return {
+        anchor: buildAnchor(input, approximate.start, approximate.end),
+        occurrences: 1,
+        approximate: approximate.rule,
+    }
+}
+
+/**
+ * Locate `quote` in `input`, returning a verified match or `undefined`.
+ *
+ * `hintUtf16` selects among repeated occurrences — the occurrence whose
+ * start sits nearest the hint wins. It never affects *whether* a quote
+ * matches, so a wrong hint degrades to "picked another occurrence of the
+ * same text", never to a wrong span.
+ *
+ * The ladder is exact match, then whitespace-insensitive match, then
+ * both again with the quote's first character re-cased, and last an
+ * approximate match (`approximateRange`), which the result marks. A quote
+ * that matches none of them yields `undefined`.
+ */
+export function locateSourceAnchor(
+    input: string,
+    quote: string,
+    hintUtf16: number
+): TSourceAnchorMatch | undefined {
+    const resolved = resolveSourceAnchor(input, quote, hintUtf16)
+    return resolved !== undefined && "anchor" in resolved ? resolved : undefined
 }
