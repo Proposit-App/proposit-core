@@ -10,7 +10,8 @@
 //     relation-extraction + conclusion-selection slots.
 //
 // `extract`'s output schema is the per-extension canonicalization
-// schema widened with the mention slot (`buildExtractOutputSchema`);
+// schema widened with the mention slot and the source pairings
+// (`buildExtractOutputSchema`);
 // `structure` needs a bespoke schema. Both are defined here.
 
 import Type, { type Static, type TSchema } from "typebox"
@@ -31,11 +32,28 @@ import type { TIngestionExtension } from "../../base/types.js"
  * because the schema is built per-extension.
  */
 export type TScribeExtractOutput = TClaimCanonicalizationOutput &
-    TClaimMentionExtractionOutput
+    TClaimMentionExtractionOutput & {
+        sourceSupport: TScribeSourceSupport[]
+    }
+
+/**
+ * One source (citation) claim and the normal claim it supports, as
+ * `extract` reads it off the text. `structure` never sees the text, so
+ * this is the only place the pairing is known.
+ */
+export const ScribeSourceSupportSchema = Type.Object(
+    {
+        sourceMiniId: Type.String(),
+        supportedMiniId: Type.String(),
+    },
+    { additionalProperties: false }
+)
+export type TScribeSourceSupport = Static<typeof ScribeSourceSupportSchema>
 
 /**
  * `extract`'s output: the per-extension canonicalization shape, plus the
- * mentions whose quoted text becomes each claim's source anchor.
+ * mentions whose quoted text becomes each claim's source anchor, plus
+ * which claim each source supports.
  *
  * The mentions ride along on the one stage that is given the input text,
  * rather than coming from a stage of their own — scribe's whole point is
@@ -58,6 +76,7 @@ export function buildExtractOutputSchema(
         {
             ...canonicalization.properties,
             mentions: ClaimMentionExtractionOutputSchema.properties.mentions,
+            sourceSupport: Type.Array(ScribeSourceSupportSchema),
         },
         { additionalProperties: false }
     )

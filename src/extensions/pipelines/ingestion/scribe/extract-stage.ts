@@ -43,6 +43,8 @@ export const EXTRACT_SYSTEM_PROMPT = `You read a raw argument and emit its canon
 
 For each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.
 
+Every explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.
+
 Also emit \`mentions\` — where in the input each claim is stated. One entry per place a claim is made:
 - \`mentionId\` — "<claim miniId>-m" for the first mention of a claim, then "-m2", "-m3", ... for further ones (e.g. "c1-m", "c1-m2").
 - \`text\` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.
@@ -57,6 +59,7 @@ Each canonical claim carries:
 - \`suggestedSymbol\` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.
 - the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).
 - \`mentionToClaim\` — one \`{ "mentionId": "...", "claimMiniId": "..." }\` entry per mention id you used.
+- \`sourceSupport\` — one \`{ "sourceMiniId": "...", "supportedMiniId": "..." }\` entry per citation claim: the citation's miniId, and the miniId of the normal claim it is offered as evidence for — usually the claim stated in the same sentence as the link, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.
 
 Style:
 - Third-person, present-tense, active voice.
@@ -70,7 +73,7 @@ function buildExtractPrompt(ctx: TStageContext): {
 } {
     const input = ctx.input as TIngestionInput
     const system = `<!-- stage-id: ${STAGE_IDS.extract} -->\n${EXTRACT_SYSTEM_PROMPT}`
-    const user = `Input text:\n\n${input.text}\n\nProduce the canonicalClaims + mentions + mentionToClaim object.`
+    const user = `Input text:\n\n${input.text}\n\nProduce the canonicalClaims + mentions + mentionToClaim + sourceSupport object.`
     return { system, user }
 }
 
@@ -80,7 +83,7 @@ function buildExtractPrompt(ctx: TStageContext): {
  * so the cheap model is asked for the same extension-shaped claim
  * records (title/body/url/axiom) scholar's canonicalizer produces —
  * without which finalize would assemble empty claims — plus the quoted
- * spans those claims came from.
+ * spans those claims came from, plus which claim each source supports.
  */
 export function createExtractStage(
     extension: TIngestionExtension,

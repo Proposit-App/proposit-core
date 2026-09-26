@@ -26,11 +26,17 @@ import {
     type TConclusionSelectionOutput,
     type TRelationExtractionOutput,
 } from "../../base/stages/index.js"
-import type { TLlmStageOptionsOverride } from "../../base/types.js"
+import { resolveClaimTypes } from "../../base/stages/formula-compilation.js"
+import type {
+    TIngestionInput,
+    TLlmStageOptionsOverride,
+} from "../../base/types.js"
 import {
     ScribeStructureOutputSchema,
+    type TScribeExtractOutput,
     type TScribeStructureOutput,
 } from "./schemas.js"
+import { buildSourceRelations } from "./source-attachment.js"
 
 export const STRUCTURE_MODEL = "gpt-5.4-mini"
 
@@ -114,18 +120,38 @@ export function createStructureStage(
 
 /**
  * Adapter — republish `structure`'s relations under the
- * relation-extraction slot.
+ * relation-extraction slot, together with the relations that attach each
+ * source claim to the claim it supports (`buildSourceRelations`).
  */
 export const structureRelationAdapterStage: TStage<TRelationExtractionOutput> =
     deterministicStage<TRelationExtractionOutput>({
         id: STAGE_IDS.relationExtraction,
-        dependsOn: [STAGE_IDS.scribeStructure],
+        dependsOn: [
+            STAGE_IDS.scribeStructure,
+            STAGE_IDS.extract,
+            STAGE_IDS.claimTypeClassification,
+        ],
         outputSchema: RelationExtractionOutputSchema,
-        fn: (ctx) => ({
-            relations:
+        fn: (ctx) => {
+            const structureRelations =
                 ctx.get<TScribeStructureOutput>(STAGE_IDS.scribeStructure)
-                    ?.relations ?? [],
-        }),
+                    ?.relations ?? []
+            const extract = ctx.get<TScribeExtractOutput>(STAGE_IDS.extract)
+            const sourceRelations = buildSourceRelations({
+                extract,
+                structureRelations,
+                typeByMiniId: resolveClaimTypes({
+                    classifications:
+                        ctx.get<TClaimTypeClassificationOutput>(
+                            STAGE_IDS.claimTypeClassification
+                        )?.classifications ?? [],
+                    canonicalClaims: extract?.canonicalClaims ?? [],
+                }),
+                inputText: (ctx.input as TIngestionInput).text,
+                addFailure: ctx.addFailure,
+            })
+            return { relations: [...structureRelations, ...sourceRelations] }
+        },
     })
 
 /**
@@ -142,7 +168,6 @@ export const structureConclusionAdapterStage: TStage<TConclusionSelectionOutput>
         dependsOn: [
             STAGE_IDS.scribeStructure,
             STAGE_IDS.claimTypeClassification,
-            STAGE_IDS.relationExtraction,
         ],
         outputSchema: ConclusionSelectionOutputSchema,
         fn: (ctx) => {
@@ -155,9 +180,10 @@ export const structureConclusionAdapterStage: TStage<TConclusionSelectionOutput>
                 ctx.get<TClaimTypeClassificationOutput>(
                     STAGE_IDS.claimTypeClassification
                 )?.classifications ?? []
-            const relations =
-                ctx.get<TRelationExtractionOutput>(STAGE_IDS.relationExtraction)
-                    ?.relations ?? []
+            // `structure`'s own relations, not the published slot: the
+            // source relations added there would make each supported claim
+            // look like a candidate conclusion to the graph fallback.
+            const relations = structure?.relations ?? []
 
             const normalMiniIds = new Set(
                 classifications

@@ -78,6 +78,7 @@ function happyExtractOutput(): unknown {
             { mentionId: "c1-m", claimMiniId: "c1" },
             { mentionId: "c2-m", claimMiniId: "c2" },
         ],
+        sourceSupport: [],
     }
 }
 
@@ -227,7 +228,12 @@ describe("createScribePipeline", () => {
 
     it("an empty claim set yields a valid argument: null response (no throw)", async () => {
         const result = await runScribe(
-            { canonicalClaims: [], mentionToClaim: [], mentions: [] },
+            {
+                canonicalClaims: [],
+                mentionToClaim: [],
+                mentions: [],
+                sourceSupport: [],
+            },
             {
                 relations: [],
                 conclusionCandidates: [],
