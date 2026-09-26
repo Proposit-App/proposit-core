@@ -4,9 +4,24 @@
 // response schema). These are pure helpers with no captured state.
 
 import type { TSchema } from "typebox"
-import type { TToolSpec } from "../../lib/llm/types.js"
+import type { TReasoningEffort, TToolSpec } from "../../lib/llm/types.js"
 import { typeboxToOpenAiSchema } from "./structured-output.js"
 import type { TOpenAiTool } from "./types.js"
+
+// -- reasoning effort --
+
+/**
+ * The effort to send `model`. GPT-6 models reject `minimal` with a 400, so
+ * it becomes `low`, the nearest setting they accept; a configured
+ * `minimal` — such as a consumer's environment override written for
+ * GPT-5 — must not fail a run once the model changes under it.
+ */
+export function reasoningEffortForModel(
+    model: string,
+    effort: TReasoningEffort
+): TReasoningEffort {
+    return effort === "minimal" && model.startsWith("gpt-6") ? "low" : effort
+}
 
 // -- tool translation --
 

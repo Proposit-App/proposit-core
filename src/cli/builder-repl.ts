@@ -20,7 +20,7 @@ import type { TTurnResult } from "../lib/conversation/turn.js"
 import type { TExecuteTurnDeps } from "../lib/conversation/turn.js"
 import type { TStage } from "../lib/pipelines/types.js"
 
-const DEFAULT_MODEL = "gpt-5.5"
+const DEFAULT_MODEL = "gpt-6-sol"
 const DEFAULT_API_KEY =
     process.env.PROPOSIT_API_KEY ?? process.env.OPENAI_API_KEY
 

@@ -18,6 +18,8 @@
 // apply to external wire formats.
 /* eslint-disable @typescript-eslint/naming-convention */
 
+import type { TReasoningEffort } from "../../lib/llm/types.js"
+
 // Default Responses-API endpoint. Shared by the provider factory and
 // the standalone retrieval API so both resolve the same base URL when
 // no `baseUrl` override is supplied.
@@ -98,7 +100,7 @@ export type TOpenAiResponsesRequestBody = {
     text: { format: TOpenAiTextFormat; verbosity?: "low" | "medium" | "high" }
     tools?: TOpenAiTool[]
     max_output_tokens?: number
-    reasoning?: { effort: "minimal" | "low" | "medium" | "high" }
+    reasoning?: { effort: TReasoningEffort }
     stream?: boolean
     background?: boolean
     store?: boolean

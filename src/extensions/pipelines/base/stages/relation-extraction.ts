@@ -3,7 +3,7 @@
 // `inference`: its `antecedents` claims, taken together, imply its
 // `consequent` claim.
 //
-// This stage uses gpt-5.5 with reasoning_effort=high — it's the most
+// This stage uses reasoning_effort=high — it's the most
 // subtle judgement call in the pipeline. The output is a graph; the
 // conclusion + the inference graph drive the formula-compilation stage
 // that comes next.
@@ -17,16 +17,13 @@ import {
     type TRelationExtractionOutput,
     type TSegmentationOutput,
 } from "./schemas.js"
+import type { TReasoningEffort } from "../../../../lib/llm/types.js"
 import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const RELATION_EXTRACTION_MODEL = "gpt-5.5"
-export const RELATION_EXTRACTION_REASONING:
-    | "minimal"
-    | "low"
-    | "medium"
-    | "high" = "high"
+export const RELATION_EXTRACTION_MODEL = "gpt-6-sol"
+export const RELATION_EXTRACTION_REASONING: TReasoningEffort = "high"
 
 export const RELATION_EXTRACTION_SYSTEM_PROMPT = `You identify inference relationships between canonical claims in an argument.
 

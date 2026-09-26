@@ -227,6 +227,39 @@ describe("createOpenAiResponsesProvider — request shape", () => {
         expect(body.reasoning).toEqual({ effort: "high" })
     })
 
+    it("sends low in place of minimal to a GPT-6 model, and minimal to others", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockImplementation(() =>
+                Promise.resolve(
+                    buildSuccessResponse({ body: { answer: "ok" } })
+                )
+            )
+        const provider = createOpenAiResponsesProvider({
+            apiKey: "sk-test",
+            stream: false,
+            fetch: asFetch(fetchMock),
+        })
+        for (const model of ["gpt-6-sol", "gpt-5.4"]) {
+            await provider.respond({
+                model,
+                systemPrompt: "sys",
+                userMessage: "usr",
+                outputSchema: simpleSchema,
+                reasoningEffort: "minimal",
+            })
+        }
+        const efforts = fetchMock.mock.calls.map(
+            ([, init]) =>
+                (
+                    JSON.parse((init as RequestInit).body as string) as {
+                        reasoning?: { effort: string }
+                    }
+                ).reasoning?.effort
+        )
+        expect(efforts).toEqual(["low", "minimal"])
+    })
+
     it("translates each TToolSpec kind into the Responses-API tool shape", async () => {
         const fetchMock: TFetchMock = vi
             .fn()
@@ -2836,6 +2869,23 @@ describe("submitBackgroundResponse", () => {
         // terse-output steering as the initial request, or background
         // ingestion would lose it.
         expect(body.text?.verbosity).toBe("low")
+    })
+
+    it("sends low in place of minimal to a GPT-6 model", async () => {
+        const fetchMock: TFetchMock = vi
+            .fn()
+            .mockResolvedValue(
+                buildSubmitEnvelope({ id: "resp_bg_e", status: "queued" })
+            )
+        await submitBackgroundResponse(
+            { ...req, model: "gpt-6-sol", reasoningEffort: "minimal" },
+            { apiKey: "k", fetch: asFetch(fetchMock) }
+        )
+        const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+        const body = JSON.parse(init.body as string) as {
+            reasoning?: { effort: string }
+        }
+        expect(body.reasoning).toEqual({ effort: "low" })
     })
 
     it("returns the terminal status on a terminal-on-submit envelope (no throw, no poll)", async () => {

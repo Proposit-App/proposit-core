@@ -14,7 +14,7 @@ import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const CITATION_SOURCE_DETECTION_MODEL = "gpt-5.4-mini"
+export const CITATION_SOURCE_DETECTION_MODEL = "gpt-6-sol"
 
 export const CITATION_SOURCE_DETECTION_SYSTEM_PROMPT = `You scan the segments of an argument for explicit references to external sources of evidence.
 

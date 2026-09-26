@@ -71,7 +71,7 @@ export type TIngestionInput = {
  * different backend without forking the stages — e.g. pointing the
  * whole v2 pipeline at a local model
  * (`{ llm: { defaults: { model: "local-coder" } } }`) for cost-free
- * local development. Each stage keeps its own hard-coded `gpt-5.x`
+ * local development. Each stage keeps its own hard-coded model
  * default when no override is supplied, so production behavior is
  * unchanged.
  *

@@ -302,7 +302,7 @@ describe("createScholarPipeline — LLM-options threading", () => {
         await executePipeline(pipeline, { text: "Hi." }, { llm: provider })
         const segRec = records.find((r) => r.stageId === STAGE_IDS.segmentation)
         expect(segRec).toBeDefined()
-        expect(segRec!.model).toBe("gpt-5.4-mini")
+        expect(segRec!.model).toBe("gpt-6-sol")
     })
 
     it("REGRESSION: a `model` override actually REACHES the built llmStage request", async () => {

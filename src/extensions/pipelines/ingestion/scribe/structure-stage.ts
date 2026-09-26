@@ -38,7 +38,7 @@ import {
 } from "./schemas.js"
 import { buildSourceRelations } from "./source-attachment.js"
 
-export const STRUCTURE_MODEL = "gpt-5.4-mini"
+export const STRUCTURE_MODEL = "gpt-6-sol"
 
 /** Internal default knobs for scribe's `structure` stage. */
 export const STRUCTURE_STAGE_DEFAULTS: TLlmStageOptionsOverride = {

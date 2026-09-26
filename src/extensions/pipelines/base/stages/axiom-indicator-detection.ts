@@ -13,7 +13,7 @@ import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const AXIOM_INDICATOR_DETECTION_MODEL = "gpt-5.4-mini"
+export const AXIOM_INDICATOR_DETECTION_MODEL = "gpt-6-sol"
 
 export const AXIOM_INDICATOR_DETECTION_SYSTEM_PROMPT = `You scan the segments of an argument for axiom indicators — explicit signals that the author is invoking a self-evident truth as bottom-level support.
 

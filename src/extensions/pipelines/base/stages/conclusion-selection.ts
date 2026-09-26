@@ -12,7 +12,7 @@
 // selected.'". The full ranked list rides along on the stage output for
 // consumers that want to offer alternates.
 //
-// This is a strong-reasoning stage: gpt-5.5 with reasoning_effort=medium.
+// This is a strong-reasoning stage: reasoning_effort=medium.
 
 import {
     STAGE_IDS,
@@ -25,16 +25,13 @@ import {
     type TInferenceRelation,
     type TRelationExtractionOutput,
 } from "./schemas.js"
+import type { TReasoningEffort } from "../../../../lib/llm/types.js"
 import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const CONCLUSION_SELECTION_MODEL = "gpt-5.5"
-export const CONCLUSION_SELECTION_REASONING:
-    | "minimal"
-    | "low"
-    | "medium"
-    | "high" = "medium"
+export const CONCLUSION_SELECTION_MODEL = "gpt-6-sol"
+export const CONCLUSION_SELECTION_REASONING: TReasoningEffort = "medium"
 
 export const CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE =
     "NO_SINGLE_CONCLUSION"
