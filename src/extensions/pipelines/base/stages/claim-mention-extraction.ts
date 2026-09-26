@@ -15,7 +15,7 @@ import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const CLAIM_MENTION_EXTRACTION_MODEL = "gpt-5.4"
+export const CLAIM_MENTION_EXTRACTION_MODEL = "gpt-6-sol"
 
 export const CLAIM_MENTION_EXTRACTION_SYSTEM_PROMPT = `You extract textual "claim mentions" from segments of an argument. A mention is any contiguous span of text that asserts a proposition the author is making — a sentence-or-clause-sized chunk that a reader would read as a single assertion.
 

@@ -4,7 +4,7 @@
         "claims": [
             {
                 "miniId": "c1",
-                "title": "NASA reports temperature rise",
+                "title": "NASA reports global temperature rise",
                 "url": "https://climate.nasa.gov/evidence/",
                 "type": "citation",
                 "sourceAnchors": [
@@ -19,14 +19,14 @@
                 "role": "premise",
                 "citation": {
                     "type": "unparsed",
-                    "text": "NASA reports temperature rise",
-                    "citationTypeGuess": "GovernmentPublication",
+                    "text": "NASA reports global temperature rise",
+                    "citationTypeGuess": "Website",
                     "url": "https://climate.nasa.gov/evidence/"
                 }
             },
             {
                 "miniId": "c2",
-                "title": "Temperatures rose over a century",
+                "title": "Global temperatures have risen",
                 "body": "Global temperatures have risen significantly over the past century.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -42,7 +42,7 @@
             },
             {
                 "miniId": "c3",
-                "title": "Warming causes extreme weather",
+                "title": "Warming increases extreme weather",
                 "body": "Rising global temperatures cause more frequent extreme weather events.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -58,8 +58,8 @@
             },
             {
                 "miniId": "c4",
-                "title": "Extreme weather occurs more often",
-                "body": "More frequent extreme weather events are occurring now.",
+                "title": "Extreme weather is becoming more frequent",
+                "body": "Extreme weather events are occurring more frequently.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -76,12 +76,12 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "NASA_Temp_Rise",
+                "symbol": "NASA_Reports_Warming",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "Temps_Rose_Century",
+                "symbol": "Global_Temperatures_Rise",
                 "claimMiniId": "c2"
             },
             {
@@ -91,29 +91,29 @@
             },
             {
                 "miniId": "gid-4",
-                "symbol": "Extreme_Weather_Increases",
+                "symbol": "Extreme_Weather_More_Frequent",
                 "claimMiniId": "c4"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-5",
-                "formula": "(Temps_Rose_Century and Warming_Causes_Extreme_Weather) implies Extreme_Weather_Increases",
-                "title": "Applying warming's effects",
+                "formula": "(Global_Temperatures_Rise and Warming_Causes_Extreme_Weather) implies Extreme_Weather_More_Frequent",
+                "title": "Applying warming's weather effect",
                 "sourceAnchors": [
                     {
-                        "quote": "Rising global temperatures cause more frequent extreme weather events. Therefore, we are seeing more frequent extreme weather events.",
-                        "startUtf16": 142,
+                        "quote": "Therefore, we are seeing more frequent extreme weather events.",
+                        "startUtf16": 213,
                         "endUtf16": 275,
-                        "prefix": "ficantly over the past century. ",
+                        "prefix": "requent extreme weather events. ",
                         "suffix": ""
                     }
                 ]
             },
             {
                 "miniId": "gid-6",
-                "formula": "Extreme_Weather_Increases",
-                "title": "Combining authority with premise"
+                "formula": "Extreme_Weather_More_Frequent",
+                "title": "Joint-premise inference"
             }
         ],
         "conclusionPremiseMiniId": "gid-6",
@@ -123,10 +123,10 @@
                 "supportingClaimMiniIds": ["c1"]
             }
         ],
-        "title": "Extreme weather occurs more often"
+        "title": "Extreme weather is becoming more frequent"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c4 is the terminal supported normal claim, inferred from c2 and c3, while c2 functions as an intermediate supported claim.",
+    "selectionRationale": "c4 is the terminal claim supported jointly by c2 and c3, while c2 is an intermediate claim.",
     "processingFailures": []
 }

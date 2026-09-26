@@ -317,11 +317,46 @@ describe("createScholarPipeline — happy path", () => {
 })
 
 describe("createScholarPipeline — failure paths", () => {
-    it("emits `argument: null` + 'No single conclusion could be selected.' when no claim is supported by a relation", async () => {
+    it("asks relation-extraction again, then fails in plain words, when three claims get no relation", async () => {
         const responses = buildHappyMockResponses()
-        // No support relations → nothing is terminal → the conclusion
-        // fallback has no candidate, so the pipeline reports the genuine
-        // no-conclusion outcome rather than auto-picking one.
+        const empty = {
+            kind: "ok" as const,
+            output: { relations: [] } satisfies TRelationExtractionOutput,
+        }
+        responses[STAGE_IDS.relationExtraction] = [empty, empty]
+        const result = await executePipeline(
+            createScholarPipeline(basicsExtension),
+            { text: "A. B. C." },
+            { llm: createMockLlmProvider({ responses }) }
+        )
+        expect(result.output).toBeNull()
+        const failure = result.failures.find(
+            (f) => f.code === "NO_ARGUMENT_STRUCTURE"
+        )
+        expect(failure?.stage).toBe(STAGE_IDS.relationExtraction)
+        expect(failure?.message).toBe(
+            "Couldn't work out how these claims connect to a conclusion."
+        )
+    })
+
+    it("emits `argument: null` and a plain failure text when no claim is supported by a relation", async () => {
+        const responses = buildHappyMockResponses()
+        // One normal claim, so no relation is owed and none is asked for
+        // again; with nothing supported the conclusion fallback has no
+        // candidate, and the pipeline reports the no-conclusion outcome
+        // rather than auto-picking one.
+        responses[STAGE_IDS.claimTypeClassification] = [
+            {
+                kind: "ok",
+                output: {
+                    classifications: [
+                        { miniId: "c1", type: "normal", sourceString: null },
+                        { miniId: "c2", type: "axiomatic", sourceString: null },
+                        { miniId: "c3", type: "axiomatic", sourceString: null },
+                    ],
+                },
+            },
+        ]
         responses[STAGE_IDS.relationExtraction] = [
             {
                 kind: "ok",
@@ -348,7 +383,9 @@ describe("createScholarPipeline — failure paths", () => {
         expect(result.output).not.toBeNull()
         const out = result.output!
         expect(out.argument).toBeNull()
-        expect(out.failureText).toBe("No single conclusion could be selected.")
+        expect(out.failureText).toBe(
+            "Couldn't work out how these claims connect to a conclusion."
+        )
     })
 
     it("emits `argument: null` + 'No claims could be extracted from the input.' when canonicalization returns empty claims", async () => {

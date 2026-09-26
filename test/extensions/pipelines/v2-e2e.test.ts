@@ -290,11 +290,17 @@ describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 const provider = countingLlmProvider(
                     buildProviderForMode(fixtureDir)
                 )
+                // A recording can hold a retried attempt (a model answer the
+                // stage refused), which replays as one more call.
+                let retries = 0
                 const pipeline = createScholarPipeline(basicsExtension)
                 const input = { text: readInput(fixtureDir) }
                 const result = await executePipeline(pipeline, input, {
                     llm: provider,
                     generateId: createDeterministicGenerateId(),
+                    onEvent: (event) => {
+                        if (event.kind === "stage:retry") retries += 1
+                    },
                 })
 
                 if (mode === "record") {
@@ -394,7 +400,9 @@ describe(`scholar ingestion pipeline — golden corpus (${mode} mode)`, () => {
                 // same thing; in `record` mode a transient API retry makes
                 // this fail on the count rather than on the underlying
                 // error, so read it as a symptom there, not a cause.
-                expect(provider.callCount()).toBe(SCHOLAR_LLM_STAGE_COUNT)
+                expect(provider.callCount()).toBe(
+                    SCHOLAR_LLM_STAGE_COUNT + retries
+                )
             }
         )
     }

@@ -18,7 +18,7 @@ import { optional } from "../../../../lib/pipelines/types.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const CLAIM_TYPE_CLASSIFICATION_MODEL = "gpt-5.4"
+export const CLAIM_TYPE_CLASSIFICATION_MODEL = "gpt-6-sol"
 
 export const CLAIM_TYPE_CLASSIFICATION_SYSTEM_PROMPT = `You confirm or revise the type of each canonical claim in an argument-ingestion pipeline.
 

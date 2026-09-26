@@ -21,7 +21,7 @@ import {
     isAbortError,
     readSseEnvelope,
 } from "./openai-parsing.js"
-import { deriveSchemaName } from "./openai-tools.js"
+import { deriveSchemaName, reasoningEffortForModel } from "./openai-tools.js"
 import { typeboxToOpenAiSchema } from "./structured-output.js"
 import {
     classifyHttpError,
@@ -314,7 +314,9 @@ export async function submitBackgroundResponse<T>(
         body.max_output_tokens = req.maxOutputTokens
     }
     if (req.reasoningEffort) {
-        body.reasoning = { effort: req.reasoningEffort }
+        body.reasoning = {
+            effort: reasoningEffortForModel(req.model, req.reasoningEffort),
+        }
     }
 
     const submit = await callOnce({

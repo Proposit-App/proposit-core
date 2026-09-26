@@ -20,7 +20,7 @@
             {
                 "miniId": "c2",
                 "title": "Remote work reduces commuting time",
-                "body": "Working remotely also reduces commuting time.",
+                "body": "Working remotely reduces commuting time.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -35,7 +35,7 @@
             },
             {
                 "miniId": "c3",
-                "title": "Less commuting improves balance",
+                "title": "Less commuting improves work-life balance",
                 "body": "Reducing commuting time improves work-life balance.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -53,30 +53,30 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "remote_productivity",
+                "symbol": "RemoteWorkProductivity",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "remote_commute_time",
+                "symbol": "RemoteWorkReducesCommute",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "commute_balance",
+                "symbol": "ShorterCommuteImprovesBalance",
                 "claimMiniId": "c3"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(remote_commute_time and commute_balance) implies remote_productivity",
-                "title": "Time savings and balance gains"
+                "formula": "(RemoteWorkReducesCommute and ShorterCommuteImprovesBalance) implies RemoteWorkProductivity",
+                "title": "Commute savings as a productivity pathway"
             },
             {
                 "miniId": "gid-5",
-                "formula": "remote_productivity",
-                "title": "Supported productivity claim"
+                "formula": "RemoteWorkProductivity",
+                "title": "From time savings to productivity"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -85,6 +85,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c1 is the best conclusion because c2 and c3 provide support for it, while c1 does not support any further claim.",
+    "selectionRationale": "The commuting and work-life balance claims provide a possible, though incomplete, reason for the productivity claim.",
     "processingFailures": []
 }

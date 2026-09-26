@@ -37,25 +37,25 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "socrates_is_man",
+                "symbol": "SocratesIsMan",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "socrates_is_mortal",
+                "symbol": "SocratesIsMortal",
                 "claimMiniId": "c2"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-3",
-                "formula": "socrates_is_man implies socrates_is_mortal",
-                "title": "Human mortality inference"
+                "formula": "SocratesIsMan implies SocratesIsMortal",
+                "title": "Mortality inferred from humanity"
             },
             {
                 "miniId": "gid-4",
-                "formula": "socrates_is_mortal",
-                "title": "Socrates is mortal"
+                "formula": "SocratesIsMortal",
+                "title": "Applying a general mortality principle"
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
@@ -64,6 +64,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is best supported by c1 and does not support any further claim.",
+    "selectionRationale": "The claim that Socrates is a man supports the intended conclusion that he is mortal, assuming the unstated premise that all men are mortal.",
     "processingFailures": []
 }

@@ -18,9 +18,28 @@ import Type, { type Static, type TSchema } from "typebox"
  * downstream request can be chained to a specific upstream response. */
 export type TResponseId = string
 
-export type TLlmModel = "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"
+export type TLlmModel =
+    | "gpt-6-sol"
+    | "gpt-6-luna"
+    | "gpt-5.5"
+    | "gpt-5.4"
+    | "gpt-5.4-mini"
+    | "gpt-5.4-nano"
 
-export type TReasoningEffort = "minimal" | "low" | "medium" | "high"
+/**
+ * How hard a reasoning model thinks. Not every model takes every value:
+ * `minimal` is a GPT-5 setting that GPT-6 rejects, and `none`, `xhigh` and
+ * `max` are GPT-6 settings. The OpenAI providers send `low` in place of
+ * `minimal` to a GPT-6 model, so a configured `minimal` never fails a run.
+ */
+export type TReasoningEffort =
+    | "none"
+    | "minimal"
+    | "low"
+    | "medium"
+    | "high"
+    | "xhigh"
+    | "max"
 
 export type TToolSpec =
     | { kind: "web_search" }

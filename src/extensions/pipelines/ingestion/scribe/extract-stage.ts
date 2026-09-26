@@ -32,7 +32,7 @@ import {
     type TScribeExtractOutput,
 } from "./schemas.js"
 
-export const EXTRACT_MODEL = "gpt-5.4-mini"
+export const EXTRACT_MODEL = "gpt-6-sol"
 
 /** Internal default knobs for scribe's `extract` stage. */
 export const EXTRACT_STAGE_DEFAULTS: TLlmStageOptionsOverride = {

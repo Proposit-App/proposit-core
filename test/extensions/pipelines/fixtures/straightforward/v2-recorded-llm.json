@@ -2,10 +2,10 @@
   "version": 1,
   "records": [
     {
-      "hash": "6781e7a33ad30bca52cfafb293ac5de405c53f94ecda52b25964e64d8541d7f8",
+      "hash": "8eb3c60fb9cf6b0ad3418d1276803be0656d25fa7a08480b324753b2d402238d",
       "stageId": "segmentation",
       "request": {
-        "model": "gpt-5.4-mini",
+        "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: segmentation -->\nYou are the first stage of an argument-ingestion pipeline. Your job is to split the supplied input text into a list of segments.\n\nReturn an object with a single key `segments` whose value is the array of segments.\n\nA segment is a sentence-or-thereabouts span of text — a self-contained clause that a human could read on its own. Sentence-final punctuation usually marks segment boundaries; bullet items in a list count as separate segments; multi-clause sentences split into one segment per major clause when the clauses each carry their own assertion.\n\nAssign each segment a short stable id like \"s1\", \"s2\", ... in left-to-right order, copy the segment's text verbatim (no rewriting), and record the character \"span\" as an object with \"start\" (inclusive) and \"end\" (exclusive) character offsets into the input. Whitespace between segments is owned by neither segment.\n\nCover the input completely: every non-whitespace character must fall inside some segment's span. Do not invent text. Do not classify segments — that is a later stage's job.",
         "userMessage": "Input text:\n\nIf it rains, the ground gets wet. It is raining. Therefore, the ground is wet.",
         "outputSchema": {
@@ -84,113 +84,17 @@
         },
         "tokenUsage": {
           "input": 332,
-          "output": 95,
-          "reasoning": 0
+          "output": 293,
+          "reasoning": 196
         },
-        "rawResponseId": "resp_0932f7015783fdf2006a720beee278819cabf708507b4c05d4"
+        "rawResponseId": "resp_03e16257b580e5cf006ab7409336fc87d2b7a57e222693d265"
       }
     },
     {
-      "hash": "555e7b0b2ade0ba5d723112b8ef33f88eacef62c18f7d740f20e9592f6b05bea",
-      "stageId": "claim-mention-extraction",
-      "request": {
-        "model": "gpt-5.4",
-        "systemPrompt": "<!-- stage-id: claim-mention-extraction -->\nYou extract textual \"claim mentions\" from segments of an argument. A mention is any contiguous span of text that asserts a proposition the author is making — a sentence-or-clause-sized chunk that a reader would read as a single assertion.\n\nReturn an object with a single key `mentions` whose value is the array of extracted mentions. For each mention emit:\n- a fresh \"mentionId\" (m1, m2, ...; unique across all segments)\n- the \"segmentId\" the mention belongs to\n- the verbatim \"text\" of the mention (copy from the input — do not rewrite)\n- the character \"span\" (an object with \"start\" inclusive, \"end\" exclusive) relative to the SEGMENT'S TEXT (not the original input)\n\nA single segment can produce multiple mentions when it asserts multiple things. Most segments produce one mention. Do NOT deduplicate — if the same proposition is reasserted in a later segment, emit it as a separate mention there too. Do NOT classify the mention. Do NOT include connectives, hedges, or discourse markers in the span when they are not part of the asserted proposition.\n\nIf a segment is purely a discourse marker (e.g., \"Therefore,\" or \"Moreover,\"), emit no mention for it. If there are no mentions at all, return `{ \"mentions\": [] }`.",
-        "userMessage": "Segments:\n\n[s1] \"If it rains, the ground gets wet.\"\n[s2] \"It is raining.\"\n[s3] \"Therefore, the ground is wet.\"\n\nExtract every claim mention.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "mentions"
-          ],
-          "properties": {
-            "mentions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "mentionId",
-                  "segmentId",
-                  "text",
-                  "span"
-                ],
-                "properties": {
-                  "mentionId": {
-                    "type": "string"
-                  },
-                  "segmentId": {
-                    "type": "string"
-                  },
-                  "text": {
-                    "type": "string"
-                  },
-                  "span": {
-                    "type": "object",
-                    "required": [
-                      "start",
-                      "end"
-                    ],
-                    "properties": {
-                      "start": {
-                        "type": "number",
-                        "description": "Inclusive character offset where the span begins (relative to the parent text)."
-                      },
-                      "end": {
-                        "type": "number",
-                        "description": "Exclusive character offset where the span ends (relative to the parent text)."
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "mentions": [
-            {
-              "mentionId": "m1",
-              "segmentId": "s1",
-              "text": "the ground gets wet",
-              "span": {
-                "start": 13,
-                "end": 33
-              }
-            },
-            {
-              "mentionId": "m2",
-              "segmentId": "s2",
-              "text": "It is raining.",
-              "span": {
-                "start": 0,
-                "end": 14
-              }
-            },
-            {
-              "mentionId": "m3",
-              "segmentId": "s3",
-              "text": "the ground is wet.",
-              "span": {
-                "start": 11,
-                "end": 29
-              }
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 417,
-          "output": 108,
-          "reasoning": 0
-        },
-        "rawResponseId": "resp_04d29210090fc762006a720bf35aec819e987108e7cd02f18f"
-      }
-    },
-    {
-      "hash": "92d2009f4a1ad3b970c8b70e71235d8f5ace8c361e0832c236c404dc5a0d5ce2",
+      "hash": "4648612ec70f4b480e65edc91c925ef676672a4ef99b69d5833e66009964532c",
       "stageId": "citation-source-detection",
       "request": {
-        "model": "gpt-5.4-mini",
+        "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: citation-source-detection -->\nYou scan the segments of an argument for explicit references to external sources of evidence.\n\nA source reference is any of:\n- a Markdown link: `[label](url)`\n- a named source: \"according to X\", \"as reported in Y\", \"the X report\"\n- a bracketed citation marker: `[1]`, `[Smith 2024]`\n- a fully-qualified URL\n\nReturn an object with a single key `sources` whose value is the array of detected source references. For each detected source emit:\n- a fresh \"sourceId\" (src1, src2, ...)\n- the list of \"segmentIds\" the source occurs in (almost always one; multi-segment when one citation spans a clause boundary)\n- a short \"sourceString\" — the human-readable label (e.g. \"NASA climate report\", \"Smith 2024\")\n- the \"url\" field — the URL when one is present, otherwise null\n- the character \"spans\" — one span object (\"start\" inclusive, \"end\" exclusive) per occurrence, relative to the SEGMENT'S TEXT\n\nDo not detect mere mentions of people, organizations, or studies that are not invoked as supporting evidence. Quote attribution alone (\"Bob said X\") is not a citation unless Bob's saying is being used to support a claim. Return `{ \"sources\": [] }` when no sources are present.",
         "userMessage": "Segments:\n\n[s1] \"If it rains, the ground gets wet.\"\n[s2] \"It is raining.\"\n[s3] \"Therefore, the ground is wet.\"\n\nDetect every citation/source reference.",
         "outputSchema": {
@@ -268,14 +172,14 @@
           "output": 17,
           "reasoning": 0
         },
-        "rawResponseId": "resp_04b0021ba71885df006a720bf06c30819eb95c67aff84259ab"
+        "rawResponseId": "resp_0aadfcfbfea68bc1006ab740978cbc87d28471a36ece8ba6f1"
       }
     },
     {
-      "hash": "87c6f595a426859e49ba9e97eec97544fdd602c8b79e13a71178c55ae49cfb3f",
+      "hash": "66e9207ca70ba98bc26f530b2fef38e7c39c547970d807e2e90d26a2a0e610d6",
       "stageId": "axiom-indicator-detection",
       "request": {
-        "model": "gpt-5.4-mini",
+        "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: axiom-indicator-detection -->\nYou scan the segments of an argument for axiom indicators — explicit signals that the author is invoking a self-evident truth as bottom-level support.\n\nRecognized indicator patterns include (non-exhaustive):\n- \"by definition\"\n- \"tautologically\", \"necessarily true\"\n- \"by convention\"\n- \"is true a priori\"\n- \"as a matter of (logic | mathematics | definition)\"\n- \"trivially\"\n\nReturn an object with a single key `axioms` whose value is the array of detected indicators. For each detected indicator emit:\n- a fresh \"axiomId\" (ax1, ax2, ...)\n- the list of \"segmentIds\" the indicator occurs in (usually one; sometimes two when the indicator straddles a clause)\n- the \"indicator\" — the verbatim trigger phrase\n- the character \"spans\" — one span object (\"start\" inclusive, \"end\" exclusive) per occurrence, relative to the SEGMENT'S TEXT\n\nHedging phrases (\"clearly\", \"obviously\", \"of course\") are NOT axiom indicators on their own — they are stylistic emphasis. Return `{ \"axioms\": [] }` when no indicators are present.",
         "userMessage": "Segments:\n\n[s1] \"If it rains, the ground gets wet.\"\n[s2] \"It is raining.\"\n[s3] \"Therefore, the ground is wet.\"\n\nDetect every axiom indicator.",
         "outputSchema": {
@@ -342,617 +246,111 @@
           "output": 19,
           "reasoning": 0
         },
-        "rawResponseId": "resp_03921d6faa4aa426006a720bf032f0819cb5b2e6398e3b6007"
+        "rawResponseId": "resp_0b4c6e5d5e747590006ab74097916087d2a3a2d3beae674f3d"
       }
     },
     {
-      "hash": "716295ab67924285b953145f9e7c88245777f2fb5b53aa3466c42ed18536779b",
-      "stageId": "claim-canonicalization",
+      "hash": "e662edc0a2c7711e6ce22cbee055d0d496fc6620105aa30fc0df2d5faeabc151",
+      "stageId": "claim-mention-extraction",
       "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here.\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
-        "userMessage": "Input text:\n\nIf it rains, the ground gets wet. It is raining. Therefore, the ground is wet.\n\nClaim mentions:\n  [m1 @ s1] \"the ground gets wet\"\n  [m2 @ s2] \"It is raining.\"\n  [m3 @ s3] \"the ground is wet.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nProduce the canonicalClaims + mentionToClaim object.",
+        "model": "gpt-6-sol",
+        "systemPrompt": "<!-- stage-id: claim-mention-extraction -->\nYou extract textual \"claim mentions\" from segments of an argument. A mention is any contiguous span of text that asserts a proposition the author is making — a sentence-or-clause-sized chunk that a reader would read as a single assertion.\n\nReturn an object with a single key `mentions` whose value is the array of extracted mentions. For each mention emit:\n- a fresh \"mentionId\" (m1, m2, ...; unique across all segments)\n- the \"segmentId\" the mention belongs to\n- the verbatim \"text\" of the mention (copy from the input — do not rewrite)\n- the character \"span\" (an object with \"start\" inclusive, \"end\" exclusive) relative to the SEGMENT'S TEXT (not the original input)\n\nA single segment can produce multiple mentions when it asserts multiple things. Most segments produce one mention. Do NOT deduplicate — if the same proposition is reasserted in a later segment, emit it as a separate mention there too. Do NOT classify the mention. Do NOT include connectives, hedges, or discourse markers in the span when they are not part of the asserted proposition.\n\nIf a segment is purely a discourse marker (e.g., \"Therefore,\" or \"Moreover,\"), emit no mention for it. If there are no mentions at all, return `{ \"mentions\": [] }`.",
+        "userMessage": "Segments:\n\n[s1] \"If it rains, the ground gets wet.\"\n[s2] \"It is raining.\"\n[s3] \"Therefore, the ground is wet.\"\n\nExtract every claim mention.",
         "outputSchema": {
           "type": "object",
           "required": [
-            "canonicalClaims",
-            "mentionToClaim"
+            "mentions"
           ],
           "properties": {
-            "canonicalClaims": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "title",
-                      "body",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "title": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "A short title summarizing the claim"
-                      },
-                      "body": {
-                        "type": "string",
-                        "maxLength": 500,
-                        "description": "A detailed description of the claim"
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "normal",
-                        "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "title",
-                      "url",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "title": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "A short title summarizing the claim"
-                      },
-                      "url": {
-                        "type": "string",
-                        "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim"
-                      },
-                      "citationTypeGuess": {
-                        "anyOf": [
-                          {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "const": "Book"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Website"
-                              },
-                              {
-                                "type": "string",
-                                "const": "BookChapter"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Handbook"
-                              },
-                              {
-                                "type": "string",
-                                "const": "TechnicalReport"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Standard"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Thesis"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Patent"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Dictionary"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Encyclopedia"
-                              },
-                              {
-                                "type": "string",
-                                "const": "JournalArticle"
-                              },
-                              {
-                                "type": "string",
-                                "const": "MagazineArticle"
-                              },
-                              {
-                                "type": "string",
-                                "const": "NewspaperArticle"
-                              },
-                              {
-                                "type": "string",
-                                "const": "ConferencePaper"
-                              },
-                              {
-                                "type": "string",
-                                "const": "ConferenceProceedings"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Dataset"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Software"
-                              },
-                              {
-                                "type": "string",
-                                "const": "OnlineDocument"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Blog"
-                              },
-                              {
-                                "type": "string",
-                                "const": "SocialMedia"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Preprint"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Video"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Podcast"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Course"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Presentation"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Interview"
-                              },
-                              {
-                                "type": "string",
-                                "const": "PersonalCommunication"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Email"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Law"
-                              },
-                              {
-                                "type": "string",
-                                "const": "CourtCase"
-                              },
-                              {
-                                "type": "string",
-                                "const": "GovernmentPublication"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Datasheet"
-                              },
-                              {
-                                "type": "string",
-                                "const": "ProductManual"
-                              }
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "const": "unknown"
-                          }
-                        ]
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "citation",
-                        "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "axiom",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "axiom": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "The axiom supporting the claim"
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "axiomatic",
-                        "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                ]
-              }
-            },
-            "mentionToClaim": {
+            "mentions": {
               "type": "array",
               "items": {
                 "type": "object",
                 "required": [
                   "mentionId",
-                  "claimMiniId"
+                  "segmentId",
+                  "text",
+                  "span"
                 ],
                 "properties": {
                   "mentionId": {
                     "type": "string"
                   },
-                  "claimMiniId": {
+                  "segmentId": {
                     "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "span": {
+                    "type": "object",
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "start": {
+                        "type": "number",
+                        "description": "Inclusive character offset where the span begins (relative to the parent text)."
+                      },
+                      "end": {
+                        "type": "number",
+                        "description": "Exclusive character offset where the span ends (relative to the parent text)."
+                      }
+                    }
                   }
                 }
               }
             }
-          },
-          "additionalProperties": false
+          }
         }
       },
       "response": {
         "output": {
-          "canonicalClaims": [
-            {
-              "miniId": "c1",
-              "mentionIds": [
-                "m1"
-              ],
-              "suggestedSymbol": "Rain_Wets_Ground",
-              "title": "Rain wets the ground",
-              "body": "If it rains, the ground gets wet.",
-              "type": "normal"
-            },
-            {
-              "miniId": "c2",
-              "mentionIds": [
-                "m2"
-              ],
-              "suggestedSymbol": "It_Is_Raining",
-              "title": "It is raining",
-              "body": "Rain is occurring.",
-              "type": "normal"
-            },
-            {
-              "miniId": "c3",
-              "mentionIds": [
-                "m3"
-              ],
-              "suggestedSymbol": "Ground_Is_Wet",
-              "title": "The ground is wet",
-              "body": "The ground is wet.",
-              "type": "normal"
-            }
-          ],
-          "mentionToClaim": [
+          "mentions": [
             {
               "mentionId": "m1",
-              "claimMiniId": "c1"
+              "segmentId": "s1",
+              "text": "If it rains, the ground gets wet.",
+              "span": {
+                "start": 0,
+                "end": 33
+              }
             },
             {
               "mentionId": "m2",
-              "claimMiniId": "c2"
+              "segmentId": "s2",
+              "text": "It is raining.",
+              "span": {
+                "start": 0,
+                "end": 14
+              }
             },
             {
               "mentionId": "m3",
-              "claimMiniId": "c3"
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 1447,
-          "output": 189,
-          "reasoning": 0
-        },
-        "rawResponseId": "resp_0c8dbfd0c2c3ba84006a72029ec4b081929659e26439d54b2e"
-      }
-    },
-    {
-      "hash": "054c574d11a42a1f19ff5dbf7a4ba8ad8d1eef113e4d4af2325be1f7d3bb200e",
-      "stageId": "claim-type-classification",
-      "request": {
-        "model": "gpt-5.4",
-        "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
-        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=normal suggestedSymbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal suggestedSymbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal suggestedSymbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "classifications"
-          ],
-          "properties": {
-            "classifications": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "miniId",
-                  "type",
-                  "sourceString"
-                ],
-                "properties": {
-                  "miniId": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "const": "normal"
-                      },
-                      {
-                        "type": "string",
-                        "const": "citation"
-                      },
-                      {
-                        "type": "string",
-                        "const": "axiomatic"
-                      }
-                    ]
-                  },
-                  "sourceString": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "classifications": [
-            {
-              "miniId": "c1",
-              "type": "normal",
-              "sourceString": null
-            },
-            {
-              "miniId": "c2",
-              "type": "normal",
-              "sourceString": null
-            },
-            {
-              "miniId": "c3",
-              "type": "normal",
-              "sourceString": null
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 530,
-          "output": 65,
-          "reasoning": 0
-        },
-        "rawResponseId": "resp_054986cc941e115e006a3e7270066081a29dcf3cc4f52684c0"
-      }
-    },
-    {
-      "hash": "899f0ac5739e3b3f2f5c4b4d8e9bdf9a383603d2398b957a1a2e993f2b36d67c",
-      "stageId": "relation-extraction",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify support relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per supporting relationship. Return an object with a single key `relations` whose value is the array. There are three relation kinds:\n\n- `\"support\"` — a single claim S supports another claim T. Use this for ordinary \"P, therefore Q\" support edges where the supporting evidence is a single normal-typed proposition.\n- `\"joint-support\"` — multiple claims S1, S2, ... jointly support T. Use this when the author commits to a syllogistic step that requires ALL of the sources to hold (e.g. major premise + minor premise → conclusion).\n- `\"derivation-support\"` — a citation-typed or axiomatic-typed claim S supports a normal-typed claim T. Use this exclusively for relations whose source is \"citation\" or \"axiomatic\". The shape is otherwise identical to `\"support\"`.\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- the `type`\n- `sources` — an array of supporting claim miniIds (length 1 for support and derivation-support; length ≥ 2 for joint-support)\n- `target` — the supported claim's miniId\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from S to T, don't emit a relation between them.\n- Do not double-count. If two claims share an axiomatic backing, that's one derivation-support relation per claim, not a joint-support pair.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the support edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely in this MVP — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
-        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal symbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nSegments:\n  [s1] \"If it rains, the ground gets wet.\"\n  [s2] \"It is raining.\"\n  [s3] \"Therefore, the ground is wet.\"\n\nEmit every support relationship as a relations array.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "relations"
-          ],
-          "properties": {
-            "relations": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "relationId",
-                  "type",
-                  "sources",
-                  "target",
-                  "evidence"
-                ],
-                "properties": {
-                  "relationId": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "const": "support"
-                      },
-                      {
-                        "type": "string",
-                        "const": "joint-support"
-                      },
-                      {
-                        "type": "string",
-                        "const": "derivation-support"
-                      }
-                    ]
-                  },
-                  "sources": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "target": {
-                    "type": "string"
-                  },
-                  "evidence": {
-                    "type": "object",
-                    "required": [
-                      "segmentIds",
-                      "quote"
-                    ],
-                    "properties": {
-                      "segmentIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "quote": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "relations": [
-            {
-              "relationId": "r1",
-              "type": "joint-support",
-              "sources": [
-                "c1",
-                "c2"
-              ],
-              "target": "c3",
-              "evidence": {
-                "segmentIds": [
-                  "s1",
-                  "s2",
-                  "s3"
-                ],
-                "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet."
+              "segmentId": "s3",
+              "text": "the ground is wet.",
+              "span": {
+                "start": 11,
+                "end": 29
               }
             }
           ]
         },
         "tokenUsage": {
-          "input": 741,
-          "output": 461,
-          "reasoning": 374
-        }
-      }
-    },
-    {
-      "hash": "ddef100c16a15963bcb4956ad810db1b39c276aa9107243edb6dfd2554ba3f75",
-      "stageId": "conclusion-selection",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the support relation graph from `relation-extraction`\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
-        "userMessage": "Per-claim types:\n  [c1] type=normal\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] joint-support: sources=[c1,c2] target=c3\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "conclusionCandidates",
-            "rationale"
-          ],
-          "properties": {
-            "conclusionCandidates": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "rationale": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "conclusionCandidates": [
-            "c3"
-          ],
-          "rationale": "c3 is the sole target of the joint-support relation from c1 and c2 and is therefore the terminal supported claim."
+          "input": 417,
+          "output": 282,
+          "reasoning": 168
         },
-        "tokenUsage": {
-          "input": 454,
-          "output": 69,
-          "reasoning": 15
-        }
+        "rawResponseId": "resp_09dcb8946d07eb27006ab740978c8087d2ae144d635af3c7fe"
       }
     },
     {
-      "hash": "3c18c630396f48520910a1e46d2f2d59291aa3f7f5cb30617b2badde0328a49f",
+      "hash": "b58e2bea94282e3740a1db294bead5d2cb5eee5a905d78460cfdda8790e187c2",
       "stageId": "claim-canonicalization",
       "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here.\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
+        "model": "gpt-6-sol",
+        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here. BOTH claims list that mention in their `mentionIds` — the split is one span giving rise to two claims, and a claim with no `mentionIds` loses its link back to the source text entirely. (`mentionToClaim` is unaffected: it still maps that mention to exactly one claim — the normal-typed one.)\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Input text:\n\nIf it rains, the ground gets wet. It is raining. Therefore, the ground is wet.\n\nClaim mentions:\n  [m1 @ s1] \"If it rains, the ground gets wet.\"\n  [m2 @ s2] \"It is raining.\"\n  [m3 @ s3] \"the ground is wet.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nProduce the canonicalClaims + mentionToClaim object.",
         "outputSchema": {
           "type": "object",
@@ -1310,156 +708,20 @@
           ]
         },
         "tokenUsage": {
-          "input": 1451,
-          "output": 215,
-          "reasoning": 24
-        },
-        "rawResponseId": "resp_0207bb203b3cbd56006a3e726d4fd4819e8da57bf8107554e5"
-      }
-    },
-    {
-      "hash": "e2e22863dc7ae58a86d9bab3a91946a1f94a1de0afe0f95b1fba354fdf7d901a",
-      "stageId": "relation-extraction",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
-        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal symbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nSegments:\n  [s1] \"If it rains, the ground gets wet.\"\n  [s2] \"It is raining.\"\n  [s3] \"Therefore, the ground is wet.\"\n\nEmit every inference relationship as a relations array.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "relations"
-          ],
-          "properties": {
-            "relations": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "relationId",
-                  "type",
-                  "antecedents",
-                  "consequent",
-                  "evidence"
-                ],
-                "properties": {
-                  "relationId": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "type": "string",
-                    "const": "inference"
-                  },
-                  "antecedents": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "consequent": {
-                    "type": "string"
-                  },
-                  "evidence": {
-                    "type": "object",
-                    "required": [
-                      "segmentIds",
-                      "quote"
-                    ],
-                    "properties": {
-                      "segmentIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "quote": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "relations": [
-            {
-              "relationId": "r1",
-              "type": "inference",
-              "antecedents": [
-                "c1",
-                "c2"
-              ],
-              "consequent": "c3",
-              "evidence": {
-                "segmentIds": [
-                  "s1",
-                  "s2",
-                  "s3"
-                ],
-                "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet."
-              }
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 729,
-          "output": 188,
-          "reasoning": 100
-        },
-        "rawResponseId": "resp_0494975fb1ad1333006a3e72711fe881a290f88a3f3c122a36"
-      }
-    },
-    {
-      "hash": "519ce75707c42f73599fd8e1be04b560a71f725b8837c3f077208c03dc5b491d",
-      "stageId": "conclusion-selection",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the inference relation graph from `relation-extraction` (each relation's antecedents jointly imply its consequent)\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
-        "userMessage": "Per-claim types:\n  [c1] type=normal\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] antecedents=[c1,c2] consequent=c3\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "conclusionCandidates",
-            "rationale"
-          ],
-          "properties": {
-            "conclusionCandidates": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "rationale": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "conclusionCandidates": [
-            "c3"
-          ],
-          "rationale": "c3 is the sole normal claim supported by the only inference relation, with c1 and c2 serving jointly as premises."
-        },
-        "tokenUsage": {
-          "input": 463,
-          "output": 52,
+          "input": 1517,
+          "output": 189,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0bcbf75e6c2110e1006a3e727423408191a617136ca88d6bd2"
+        "rawResponseId": "resp_0cf646ce13735623006ab7409b48bc87d2842c82b9b6242735"
       }
     },
     {
-      "hash": "74cb7fc43ffe32454d3ea8a77d1f4eca34f5d2c5bc8250b5dcad683c83816e09",
+      "hash": "8477dd588c570902759d953bfd80651d2c8ccb919caaf5d1fc4585bc75ebfca4",
       "stageId": "claim-type-classification",
       "request": {
-        "model": "gpt-5.4",
+        "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
-        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=normal suggestedSymbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal suggestedSymbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"Rain is occurring.\"}\n  [c3] type=normal suggestedSymbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
+        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=normal suggestedSymbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal suggestedSymbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal suggestedSymbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -1536,16 +798,16 @@
           "output": 65,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0dab4da352208b4a006a7202a1639c8192adba827f35d7e3dc"
+        "rawResponseId": "resp_03f6ab5494ad79b2006ab7409dd72c87d2830c1fade582085d"
       }
     },
     {
-      "hash": "10bad495ed4e92810884a8c3f4f1aa6428202f891d84b2377dc2e33fa3c538e9",
+      "hash": "e4fd0c10d4a92e4d55d461ea3cae3d8d87045a9dcb5cabe02e077d860030d11f",
       "stageId": "relation-extraction",
       "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
-        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"Rain is occurring.\"}\n  [c3] type=normal symbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nSegments:\n  [s1] \"If it rains, the ground gets wet.\"\n  [s2] \"It is raining.\"\n  [s3] \"Therefore, the ground is wet.\"\n\nEmit every inference relationship as a relations array.",
+        "model": "gpt-6-sol",
+        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nWhenever there are at least two normal-typed claims, emit at least one relation: the input is an argument, and its claims connect somehow. Return `{ \"relations\": [] }` only when there are fewer than two normal-typed claims.",
+        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"It is raining.\"}\n  [c3] type=normal symbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nSegments:\n  [s1] \"If it rains, the ground gets wet.\"\n  [s2] \"It is raining.\"\n  [s3] \"Therefore, the ground is wet.\"\n\nEmit every inference relationship as a relations array.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -1619,31 +881,31 @@
                 "c2"
               ],
               "consequent": "c3",
-              "title": "Modus ponens",
+              "title": "Applying the rain conditional",
               "evidence": {
                 "segmentIds": [
                   "s1",
                   "s2",
                   "s3"
                 ],
-                "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet."
+                "quote": "Therefore, the ground is wet."
               }
             }
           ]
         },
         "tokenUsage": {
-          "input": 813,
-          "output": 197,
-          "reasoning": 102
+          "input": 865,
+          "output": 157,
+          "reasoning": 75
         },
-        "rawResponseId": "resp_0fb0ca2c0041a317006a7202a2ffc08192a4f9f89c03e07c1a"
+        "rawResponseId": "resp_0dddc64b36d3b555006ab7409f944887d2a17bca0344251721"
       }
     },
     {
-      "hash": "d8e5e77c7c3afb995fee3c17d8560e079fa32ae7cd7e855bc8a31fb4b2c2cd02",
+      "hash": "1454d43a65985377d5bbc7b9b69d8d9f8c34fce8e755d7fd4eacf9dc3b71cc05",
       "stageId": "conclusion-selection",
       "request": {
-        "model": "gpt-5.5",
+        "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: conclusion-selection -->\nYou select the conclusion claim of an argument from the canonical claim set and the relation graph.\n\nYou receive:\n- the per-claim type map (normal / citation / axiomatic)\n- the inference relation graph from `relation-extraction` (each relation's antecedents jointly imply its consequent)\n\nEmit:\n- `conclusionCandidates` — an array of canonical claim miniIds ordered by DECREASING confidence: the first element is your single best pick for the conclusion. Return exactly one when the conclusion is clear; return several (best first) only when multiple claims are genuinely plausible conclusions. Return an empty array ONLY when the input has no argument structure at all.\n- `rationale` — a one-sentence explanation of your ordering and best pick (or, for an empty array, why no claim is a conclusion)\n- `title` — for your FIRST candidate only: a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Return an empty string when `conclusionCandidates` is empty.\n\n## Selection rules\n\n1. The conclusion is the claim that no other claim is meant to support but is itself the terminus of one or more support edges. In a clean argument it's the \"therefore X\" claim — list it first.\n2. When several distinct claims are each terminal and plausibly the point, include them all, ordered best first. Do not abstain just because more than one is plausible.\n3. Citation-typed and axiomatic-typed claims are never conclusions — never include them as candidates; they are always sources of support.\n4. If no claim is supported by any relation (a single-statement input), return an empty array; there is no argument to select a conclusion from.\n\nAlways name your best candidate first rather than abstaining. Only an input with no argument structure yields an empty array.",
         "userMessage": "Per-claim types:\n  [c1] type=normal\n  [c2] type=normal\n  [c3] type=normal\n\nRelations:\n  [r1] antecedents=[c1,c2] consequent=c3\n\nList the conclusion candidate miniIds, best first (empty array only if there is no argument).",
         "outputSchema": {
@@ -1674,571 +936,15 @@
           "conclusionCandidates": [
             "c3"
           ],
-          "rationale": "c3 is the sole supported consequent and terminal claim in the relation graph, with c1 and c2 jointly serving as its support.",
-          "title": "Joint support inference"
+          "rationale": "c3 is supported by c1 and c2 and is the only terminal claim.",
+          "title": "Combining two premises"
         },
         "tokenUsage": {
           "input": 566,
-          "output": 87,
-          "reasoning": 26
-        },
-        "rawResponseId": "resp_04ae6678d2c9221b006a720c017450819ebd48b1ce8acb69dd"
-      }
-    },
-    {
-      "hash": "886bce30e23134e32d388c8b20a36b573c7470025d79b20f610af901d588ecbf",
-      "stageId": "claim-canonicalization",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: claim-canonicalization -->\nYou merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.\n\nYou are given:\n- the raw input text (for full context)\n- the segmented breakdown of the text\n- the list of every claim mention extracted from those segments\n- optionally, the detected citation sources + axiom indicators\n\nYour output has two parts:\n\n1. `canonicalClaims` — an array of canonical claims, one entry per distinct proposition the author makes. Two mentions that assert the same proposition (even when phrased differently across the text) merge into a single canonical claim. Each canonical claim carries:\n   - `miniId` — assign in canonicalization order: c1, c2, c3, ...\n   - `mentionIds` — list of the mention ids that resolved to this claim\n   - `type` — one of \"normal\", \"citation\", or \"axiomatic\" (see below)\n   - `suggestedSymbol` — a short PascalCase-or-snake_case identifier summarizing the claim (e.g. \"Rain_Wets_Ground\", \"NASA_Temp_Rise\", \"Socrates_Mortal\"). Use letters, digits, and underscores only; start with a letter or underscore; keep under 32 characters; aim for under 20. AVOID single letters and generic names like \"Claim1\".\n   - the extension fields described in your output schema (title, body, url, axiom — whichever apply to the claim's `type`)\n\n2. `mentionToClaim` — an array of `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entries, one per input mention. Every input mentionId must appear in exactly one entry; the mapping is total. (We surface this as a list rather than a map because the response schema does not allow arbitrary string keys.)\n\n## Claim types\n\n- `\"normal\"` — a primary proposition the argument argues for or from.\n- `\"citation\"` — a claim whose content is \"the cited source asserts X\". Use this type when one of the citation sources covers the same span(s) as the mention. Populate `url` (the URL if present), `title` (a short human-readable label), and `citationTypeGuess` (your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema — e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", … — or \"unknown\" when no IEEE type fits or you cannot tell).\n- `\"axiomatic\"` — a claim invoked as self-evident truth. Use this type when an axiom indicator (e.g. \"by definition\") covers or precedes the mention. Populate `axiom` with the gist of the self-evident proposition.\n\nWhen a mention is the antecedent of \"according to X, P\", split it into two claims: a citation-typed claim for the source itself + a normal-typed claim for the proposition. The two are connected via a relation in a later stage, not here. BOTH claims list that mention in their `mentionIds` — the split is one span giving rise to two claims, and a claim with no `mentionIds` loses its link back to the source text entirely. (`mentionToClaim` is unaffected: it still maps that mention to exactly one claim — the normal-typed one.)\n\n## Style\n\n- Claim titles + bodies are written in third-person, present-tense, active voice.\n- State the proposition itself — never prepend an author-attributive reporting frame such as \"The author claims that…\", \"The author argues…\", \"The writer believes…\", or \"According to the author…\". Write *what is asserted*, not *that someone asserts it*: emit \"Rain wets the ground,\" not \"The author claims that rain wets the ground.\" This applies to the `title`, `body`, and `axiom` prose for the argument's own (normal / axiomatic) claims.\n- Titles are short (≤ 50 characters); bodies fill in the detail.\n- For citation claims, the title summarizes what the source asserts (e.g. \"NASA reports temperature rise\"); the URL goes in `url`. This source attribution is intentional and is NOT removed by the rule above — that rule targets only author-attribution of the argument's own claims, never the cited-source framing of a citation claim.\n- For axiomatic claims, the `axiom` field captures the self-evident proposition as a bare declarative statement (e.g. \"A bachelor is an unmarried man by definition.\").\n\nOutput ONLY the schema-shaped object. No prose.",
-        "userMessage": "Input text:\n\nIf it rains, the ground gets wet. It is raining. Therefore, the ground is wet.\n\nClaim mentions:\n  [m1 @ s1] \"the ground gets wet\"\n  [m2 @ s2] \"It is raining.\"\n  [m3 @ s3] \"the ground is wet.\"\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nProduce the canonicalClaims + mentionToClaim object.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "canonicalClaims",
-            "mentionToClaim"
-          ],
-          "properties": {
-            "canonicalClaims": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "title",
-                      "body",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "title": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "A short title summarizing the claim"
-                      },
-                      "body": {
-                        "type": "string",
-                        "maxLength": 500,
-                        "description": "A detailed description of the claim"
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "normal",
-                        "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "title",
-                      "url",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "title": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "A short title summarizing the claim"
-                      },
-                      "url": {
-                        "type": "string",
-                        "maxLength": 500,
-                        "description": "The URL of the citation supporting the claim"
-                      },
-                      "citationTypeGuess": {
-                        "anyOf": [
-                          {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "const": "Book"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Website"
-                              },
-                              {
-                                "type": "string",
-                                "const": "BookChapter"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Handbook"
-                              },
-                              {
-                                "type": "string",
-                                "const": "TechnicalReport"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Standard"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Thesis"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Patent"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Dictionary"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Encyclopedia"
-                              },
-                              {
-                                "type": "string",
-                                "const": "JournalArticle"
-                              },
-                              {
-                                "type": "string",
-                                "const": "MagazineArticle"
-                              },
-                              {
-                                "type": "string",
-                                "const": "NewspaperArticle"
-                              },
-                              {
-                                "type": "string",
-                                "const": "ConferencePaper"
-                              },
-                              {
-                                "type": "string",
-                                "const": "ConferenceProceedings"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Dataset"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Software"
-                              },
-                              {
-                                "type": "string",
-                                "const": "OnlineDocument"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Blog"
-                              },
-                              {
-                                "type": "string",
-                                "const": "SocialMedia"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Preprint"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Video"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Podcast"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Course"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Presentation"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Interview"
-                              },
-                              {
-                                "type": "string",
-                                "const": "PersonalCommunication"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Email"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Law"
-                              },
-                              {
-                                "type": "string",
-                                "const": "CourtCase"
-                              },
-                              {
-                                "type": "string",
-                                "const": "GovernmentPublication"
-                              },
-                              {
-                                "type": "string",
-                                "const": "Datasheet"
-                              },
-                              {
-                                "type": "string",
-                                "const": "ProductManual"
-                              }
-                            ]
-                          },
-                          {
-                            "type": "string",
-                            "const": "unknown"
-                          }
-                        ]
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "citation",
-                        "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "required": [
-                      "miniId",
-                      "mentionIds",
-                      "suggestedSymbol",
-                      "axiom",
-                      "type"
-                    ],
-                    "properties": {
-                      "miniId": {
-                        "type": "string",
-                        "description": "Sequential canonicalization id (c1, c2, ...)."
-                      },
-                      "mentionIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        },
-                        "description": "Mention ids merged into this canonical claim."
-                      },
-                      "suggestedSymbol": {
-                        "type": "string",
-                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
-                      },
-                      "axiom": {
-                        "type": "string",
-                        "maxLength": 50,
-                        "description": "The axiom supporting the claim"
-                      },
-                      "type": {
-                        "type": "string",
-                        "const": "axiomatic",
-                        "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                ]
-              }
-            },
-            "mentionToClaim": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "mentionId",
-                  "claimMiniId"
-                ],
-                "properties": {
-                  "mentionId": {
-                    "type": "string"
-                  },
-                  "claimMiniId": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "response": {
-        "output": {
-          "canonicalClaims": [
-            {
-              "miniId": "c1",
-              "mentionIds": [
-                "m1"
-              ],
-              "suggestedSymbol": "Rain_Wets_Ground",
-              "title": "Rain wets the ground",
-              "body": "If it rains, the ground gets wet.",
-              "type": "normal"
-            },
-            {
-              "miniId": "c2",
-              "mentionIds": [
-                "m2"
-              ],
-              "suggestedSymbol": "It_Is_Raining",
-              "title": "It is raining",
-              "body": "Rain is currently falling.",
-              "type": "normal"
-            },
-            {
-              "miniId": "c3",
-              "mentionIds": [
-                "m3"
-              ],
-              "suggestedSymbol": "Ground_Is_Wet",
-              "title": "The ground is wet",
-              "body": "The ground is wet.",
-              "type": "normal"
-            }
-          ],
-          "mentionToClaim": [
-            {
-              "mentionId": "m1",
-              "claimMiniId": "c1"
-            },
-            {
-              "mentionId": "m2",
-              "claimMiniId": "c2"
-            },
-            {
-              "mentionId": "m3",
-              "claimMiniId": "c3"
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 1513,
-          "output": 350,
-          "reasoning": 158
-        },
-        "rawResponseId": "resp_025ad736c66bc139006a720bf6c580819e854e3b988cfb39fa"
-      }
-    },
-    {
-      "hash": "090747f28edfd1e8b7b99694b13c2fb8ef3695a0e33bc4df12a4b3b756bdd928",
-      "stageId": "claim-type-classification",
-      "request": {
-        "model": "gpt-5.4",
-        "systemPrompt": "<!-- stage-id: claim-type-classification -->\nYou confirm or revise the type of each canonical claim in an argument-ingestion pipeline.\n\nReturn an object with a single key `classifications` whose value is an array of per-claim entries. For each canonical claim you receive (id, the canonicalizer's draft `type`, and the claim's body/title/url/axiom fields), emit one entry with:\n- `miniId` — the canonical claim's miniId (copy verbatim)\n- `type` — one of \"normal\", \"citation\", \"axiomatic\"\n- `sourceString` — populate when type is \"citation\" with the source label (or url) the claim is built on; null otherwise\n\nUse the supplied detected citation sources + axiom indicators as evidence. Override the canonicalizer's draft only when the evidence clearly contradicts it. The default is to confirm the draft. Be conservative — a wrong override here cascades into wrong support edges downstream.\n\nEvery input claim must appear in `classifications` exactly once.\n\n## Type rules\n\n- `\"normal\"` — primary reasoning content; the default.\n- `\"citation\"` — content is \"the cited source says/shows X\" AND a citation source covers the claim. The claim's title/body summarizes what the source asserts; the URL (when present) names the source.\n- `\"axiomatic\"` — content is invoked as self-evidently true AND an axiom indicator (e.g. \"by definition\") covers or precedes the claim.",
-        "userMessage": "Canonical claims (with the canonicalizer's draft type):\n  [c1] type=normal suggestedSymbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal suggestedSymbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"Rain is currently falling.\"}\n  [c3] type=normal suggestedSymbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nDetected citation sources:\n  (none)\n\nDetected axiom indicators:\n  (none)\n\nEmit the per-claim type map.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "classifications"
-          ],
-          "properties": {
-            "classifications": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "miniId",
-                  "type",
-                  "sourceString"
-                ],
-                "properties": {
-                  "miniId": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "const": "normal"
-                      },
-                      {
-                        "type": "string",
-                        "const": "citation"
-                      },
-                      {
-                        "type": "string",
-                        "const": "axiomatic"
-                      }
-                    ]
-                  },
-                  "sourceString": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "classifications": [
-            {
-              "miniId": "c1",
-              "type": "normal",
-              "sourceString": null
-            },
-            {
-              "miniId": "c2",
-              "type": "normal",
-              "sourceString": null
-            },
-            {
-              "miniId": "c3",
-              "type": "normal",
-              "sourceString": null
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 531,
-          "output": 65,
+          "output": 50,
           "reasoning": 0
         },
-        "rawResponseId": "resp_0d4cf7622a23a90a006a720bfcbe2081a28379366bc1bd8caf"
-      }
-    },
-    {
-      "hash": "56ee836f7e7efec92df0478516d79e089cb1ff200dd9de250f7d3c14428c900c",
-      "stageId": "relation-extraction",
-      "request": {
-        "model": "gpt-5.5",
-        "systemPrompt": "<!-- stage-id: relation-extraction -->\nYou identify inference relationships between canonical claims in an argument.\n\nGiven the canonical claim set, the per-claim type map, and the original segments, emit one entry per inference. Return an object with a single key `relations` whose value is the array.\n\nAn `inference` relation says: the claims in `antecedents`, taken together, imply the claim in `consequent`. Use a SINGLE antecedent for an ordinary \"P, therefore Q\" step; use MULTIPLE antecedents when the author commits to a step that requires ALL of them to hold together (e.g. major premise + minor premise → conclusion).\n\nFor each relation emit:\n- a fresh `relationId` (r1, r2, ...)\n- `type` — always `\"inference\"`\n- `antecedents` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent\n- `consequent` — the implied claim's miniId\n- `title` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `evidence.segmentIds` — the segments that ground the relation (often a single segment containing a \"therefore\", \"so\", \"because\")\n- `evidence.quote` — a short verbatim quote from the input that justifies the relation\n\n`antecedents` and `consequent` are CLAIM miniIds — NOT source citations. A citation-typed or axiomatic-typed claim may appear in `antecedents` (the pipeline routes it to where it belongs); do not special-case it. A citation/axiomatic claim is never a `consequent`.\n\n## Conservatism rules\n\n- Do not invent relations. If the author doesn't actually argue from the antecedents to the consequent, don't emit a relation.\n- Do not double-count. If several claims share the same backing, emit one relation per consequent, not a redundant pairing.\n- The conclusion of the argument is identified in a separate stage; do NOT emit a special \"conclusion\" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.\n- Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.\n\nIf there are no relations to emit, return `{ \"relations\": [] }`.",
-        "userMessage": "Canonical claims (with refined types):\n  [c1] type=normal symbol=Rain_Wets_Ground fields={\"title\":\"Rain wets the ground\",\"body\":\"If it rains, the ground gets wet.\"}\n  [c2] type=normal symbol=It_Is_Raining fields={\"title\":\"It is raining\",\"body\":\"Rain is currently falling.\"}\n  [c3] type=normal symbol=Ground_Is_Wet fields={\"title\":\"The ground is wet\",\"body\":\"The ground is wet.\"}\n\nSegments:\n  [s1] \"If it rains, the ground gets wet.\"\n  [s2] \"It is raining.\"\n  [s3] \"Therefore, the ground is wet.\"\n\nEmit every inference relationship as a relations array.",
-        "outputSchema": {
-          "type": "object",
-          "required": [
-            "relations"
-          ],
-          "properties": {
-            "relations": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "relationId",
-                  "type",
-                  "antecedents",
-                  "consequent",
-                  "title",
-                  "evidence"
-                ],
-                "properties": {
-                  "relationId": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "type": "string",
-                    "const": "inference"
-                  },
-                  "antecedents": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "consequent": {
-                    "type": "string"
-                  },
-                  "title": {
-                    "type": "string"
-                  },
-                  "evidence": {
-                    "type": "object",
-                    "required": [
-                      "segmentIds",
-                      "quote"
-                    ],
-                    "properties": {
-                      "segmentIds": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "quote": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "response": {
-        "output": {
-          "relations": [
-            {
-              "relationId": "r1",
-              "type": "inference",
-              "antecedents": [
-                "c1",
-                "c2"
-              ],
-              "consequent": "c3",
-              "title": "Modus ponens",
-              "evidence": {
-                "segmentIds": [
-                  "s1",
-                  "s2",
-                  "s3"
-                ],
-                "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet."
-              }
-            }
-          ]
-        },
-        "tokenUsage": {
-          "input": 814,
-          "output": 145,
-          "reasoning": 50
-        },
-        "rawResponseId": "resp_002a5c84619c222b006a720bfdd900819f98a16d53cba81ca2"
+        "rawResponseId": "resp_047da8586927cd92006ab740a3680887d29036ca45fd12b60f"
       }
     }
   ]

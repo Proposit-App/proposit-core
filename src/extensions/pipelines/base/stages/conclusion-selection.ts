@@ -12,7 +12,7 @@
 // selected.'". The full ranked list rides along on the stage output for
 // consumers that want to offer alternates.
 //
-// This is a strong-reasoning stage: gpt-5.5 with reasoning_effort=medium.
+// This is a strong-reasoning stage: reasoning_effort=medium.
 
 import {
     STAGE_IDS,
@@ -25,19 +25,55 @@ import {
     type TInferenceRelation,
     type TRelationExtractionOutput,
 } from "./schemas.js"
+import type { TReasoningEffort } from "../../../../lib/llm/types.js"
 import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
+import type { TLlmOutputCheckFailure } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const CONCLUSION_SELECTION_MODEL = "gpt-5.5"
-export const CONCLUSION_SELECTION_REASONING:
-    | "minimal"
-    | "low"
-    | "medium"
-    | "high" = "medium"
+export const CONCLUSION_SELECTION_MODEL = "gpt-6-sol"
+export const CONCLUSION_SELECTION_REASONING: TReasoningEffort = "medium"
 
 export const CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE =
     "NO_SINGLE_CONCLUSION"
+
+/**
+ * The failure a stage reports when the model found no structure in claims
+ * that must have some, and what a reader is shown when retrying did not
+ * help.
+ */
+export const NO_ARGUMENT_STRUCTURE_FAILURE = {
+    code: "NO_ARGUMENT_STRUCTURE",
+    message: "Couldn't work out how these claims connect to a conclusion.",
+} as const
+
+/**
+ * `llmStage` content check shared by the stages that propose an argument's
+ * structure: once there are at least two normal claims, the model must
+ * name at least one relation and — when `conclusionCandidates` is given —
+ * at least one conclusion candidate. With fewer there is nothing to
+ * connect, so an empty answer is accepted. A failure retries the stage;
+ * see `llmStage`'s `checkOutput`.
+ */
+export function checkArgumentStructure(
+    ctx: TStageContext,
+    output: {
+        relations: readonly unknown[]
+        conclusionCandidates?: readonly string[]
+    }
+): TLlmOutputCheckFailure | undefined {
+    const normalClaims = (
+        ctx.get<TClaimTypeClassificationOutput>(
+            STAGE_IDS.claimTypeClassification
+        )?.classifications ?? []
+    ).filter((entry) => entry.type === "normal").length
+    if (normalClaims < 2) return undefined
+    if (output.relations.length === 0) return NO_ARGUMENT_STRUCTURE_FAILURE
+    if (output.conclusionCandidates?.length === 0) {
+        return NO_ARGUMENT_STRUCTURE_FAILURE
+    }
+    return undefined
+}
 
 export const CONCLUSION_SELECTION_SYSTEM_PROMPT = `You select the conclusion claim of an argument from the canonical claim set and the relation graph.
 

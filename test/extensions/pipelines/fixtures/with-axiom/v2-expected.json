@@ -53,7 +53,7 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "Bachelor_Unmarried",
+                "symbol": "Bachelor_UnmarriedMan",
                 "claimMiniId": "c1"
             },
             {
@@ -71,7 +71,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "John_Bachelor implies John_Unmarried",
-                "title": "Definition applied to John",
+                "title": "Applying the definition to John",
                 "sourceAnchors": [
                     {
                         "quote": "By definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.",
@@ -85,7 +85,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "John_Unmarried",
-                "title": "Applying the principle"
+                "title": "Inference from combined premises"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -99,6 +99,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the only normal claim supported by an inference relation and serves as the terminal consequent of the argument.",
+    "selectionRationale": "c3 is the only claim supported by a relation and is not used to support another claim.",
     "processingFailures": []
 }

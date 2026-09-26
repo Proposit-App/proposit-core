@@ -11,7 +11,7 @@
 // canonical claim's miniId — useful for downstream stages (and
 // finalize) that want to trace evidence back to the text.
 //
-// This is a strong-reasoning stage: `gpt-5.5` with
+// This is a strong-reasoning stage, with
 // `reasoningEffort: 'medium'`.
 
 import Type, { type TSchema } from "typebox"
@@ -23,6 +23,7 @@ import {
     type TCitationSourceDetectionOutput,
     type TClaimCanonicalizationOutput,
 } from "./schemas.js"
+import type { TReasoningEffort } from "../../../../lib/llm/types.js"
 import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
 import { optional } from "../../../../lib/pipelines/types.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
@@ -32,12 +33,8 @@ import type {
     TLlmStageOptionsOverride,
 } from "../types.js"
 
-export const CLAIM_CANONICALIZATION_MODEL = "gpt-5.5"
-export const CLAIM_CANONICALIZATION_REASONING:
-    | "minimal"
-    | "low"
-    | "medium"
-    | "high" = "medium"
+export const CLAIM_CANONICALIZATION_MODEL = "gpt-6-sol"
+export const CLAIM_CANONICALIZATION_REASONING: TReasoningEffort = "medium"
 
 export const CLAIM_CANONICALIZATION_SYSTEM_PROMPT = `You merge raw claim mentions into a single canonical set of claims for an argument-ingestion pipeline.
 

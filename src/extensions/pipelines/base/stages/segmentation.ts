@@ -19,7 +19,7 @@ import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TIngestionInput, TLlmStageOptionsOverride } from "../types.js"
 
-export const SEGMENTATION_MODEL = "gpt-5.4-mini"
+export const SEGMENTATION_MODEL = "gpt-6-sol"
 
 // **Output cap (v1.3.1 fix for the segmentation-truncation
 // regression).** Segmentation emits an array of `{ segmentId, text,

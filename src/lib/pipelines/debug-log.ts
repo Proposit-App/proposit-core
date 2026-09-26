@@ -28,7 +28,7 @@
 //
 //     [proposit/pipeline] [pipeline:start] {"pipelineId":"argument-ingestion-scholar","pipelineVersion":"1.0.0","stageCount":12,"rootStages":["segmentation"]}
 //     [proposit/pipeline] [stage:start] {"stageId":"segmentation","deps":[]}
-//     [proposit/pipeline] [llm:request] {"stageId":"segmentation","model":"gpt-5.4-mini","maxOutputTokens":8192,"systemPromptLen":876,"userMessageLen":15601,"systemPromptHead":"<!-- stage-id: segmentation -->\\nYou are the first stage of an argument-ingestion pipeline..."}
+//     [proposit/pipeline] [llm:request] {"stageId":"segmentation","model":"gpt-6-sol","maxOutputTokens":8192,"systemPromptLen":876,"userMessageLen":15601,"systemPromptHead":"<!-- stage-id: segmentation -->\\nYou are the first stage of an argument-ingestion pipeline..."}
 //     [proposit/pipeline] [llm:response] {"stageId":"segmentation","status":"completed","outputTextLen":4218,"tokenUsage":{"input":4012,"output":1056,"reasoning":0}}
 //     [proposit/pipeline] [stage:end] {"stageId":"segmentation","status":"completed","durationMs":3127,"tokenUsage":{"input":4012,"output":1056,"reasoning":0}}
 

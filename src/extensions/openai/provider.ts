@@ -44,6 +44,7 @@ import { typeboxToOpenAiSchema } from "./structured-output.js"
 import {
     deriveSchemaName,
     findFunctionHandler,
+    reasoningEffortForModel,
     translateTools,
 } from "./openai-tools.js"
 import { fetchResponseEnvelope } from "./openai-http.js"
@@ -216,7 +217,12 @@ export function createOpenAiResponsesProvider(
                 body.max_output_tokens = req.maxOutputTokens
             }
             if (req.reasoningEffort) {
-                body.reasoning = { effort: req.reasoningEffort }
+                body.reasoning = {
+                    effort: reasoningEffortForModel(
+                        req.model,
+                        req.reasoningEffort
+                    ),
+                }
             }
             if (tools) {
                 body.tools = tools
@@ -226,7 +232,7 @@ export function createOpenAiResponsesProvider(
                 stageId: debugStageId,
                 model: req.model,
                 maxOutputTokens: req.maxOutputTokens,
-                reasoningEffort: req.reasoningEffort,
+                reasoningEffort: body.reasoning?.effort,
                 systemPromptLen: req.systemPrompt.length,
                 userMessageLen: req.userMessage.length,
                 systemPromptHead: req.systemPrompt,

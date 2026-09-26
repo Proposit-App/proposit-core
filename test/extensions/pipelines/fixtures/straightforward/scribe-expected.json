@@ -3,7 +3,7 @@
         "claims": [
             {
                 "miniId": "c1",
-                "title": "Rain wets the ground",
+                "title": "Rain makes the ground wet",
                 "body": "If it rains, the ground gets wet.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -35,7 +35,7 @@
             },
             {
                 "miniId": "c3",
-                "title": "Ground is wet",
+                "title": "The ground is wet",
                 "body": "The ground is wet.",
                 "type": "normal",
                 "sourceAnchors": [
@@ -53,38 +53,38 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "rain_wets_ground",
+                "symbol": "RainWetsGround",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "it_is_raining",
+                "symbol": "ItIsRaining",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "ground_is_wet",
+                "symbol": "GroundIsWet",
                 "claimMiniId": "c3"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(rain_wets_ground and it_is_raining) implies ground_is_wet",
-                "title": "Apply rain condition"
+                "formula": "(RainWetsGround and ItIsRaining) implies GroundIsWet",
+                "title": "Applying the rain condition"
             },
             {
                 "miniId": "gid-5",
-                "formula": "ground_is_wet",
-                "title": "Derived wetness"
+                "formula": "GroundIsWet",
+                "title": "Deduction from a satisfied condition"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
         "derivationBacking": [],
-        "title": "Ground is wet"
+        "title": "The ground is wet"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the only claim supported by the others, via c1 and c2 together implying that the ground is wet.",
+    "selectionRationale": "The conditional claim and the fact that it is raining jointly support the ground being wet.",
     "processingFailures": []
 }

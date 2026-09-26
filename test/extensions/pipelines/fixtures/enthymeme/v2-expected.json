@@ -5,7 +5,7 @@
             {
                 "miniId": "c1",
                 "title": "Socrates is a man",
-                "body": "Socrates belongs to the class of men.",
+                "body": "Socrates is a man.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -21,7 +21,7 @@
             {
                 "miniId": "c2",
                 "title": "Socrates is mortal",
-                "body": "Socrates has the property of mortality.",
+                "body": "Socrates is mortal.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -38,34 +38,34 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "Socrates_Man",
+                "symbol": "Socrates_Is_Man",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "Socrates_Mortal",
+                "symbol": "Socrates_Is_Mortal",
                 "claimMiniId": "c2"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-3",
-                "formula": "Socrates_Man implies Socrates_Mortal",
-                "title": "Mortality from humanity",
+                "formula": "Socrates_Is_Man implies Socrates_Is_Mortal",
+                "title": "From manhood to mortality",
                 "sourceAnchors": [
                     {
-                        "quote": "Socrates is a man. Therefore, Socrates is mortal.",
-                        "startUtf16": 0,
+                        "quote": "Therefore, Socrates is mortal.",
+                        "startUtf16": 19,
                         "endUtf16": 49,
-                        "prefix": "",
+                        "prefix": "Socrates is a man. ",
                         "suffix": ""
                     }
                 ]
             },
             {
                 "miniId": "gid-4",
-                "formula": "Socrates_Mortal",
-                "title": "Single-step inference"
+                "formula": "Socrates_Is_Mortal",
+                "title": "Inference from the supporting claim"
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
@@ -74,6 +74,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is the sole supported claim and terminal consequent of the only relation, while c1 functions as its support.",
+    "selectionRationale": "c2 is supported by c1 and is the terminal claim in the argument.",
     "processingFailures": []
 }

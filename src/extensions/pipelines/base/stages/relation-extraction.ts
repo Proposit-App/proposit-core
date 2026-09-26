@@ -3,7 +3,7 @@
 // `inference`: its `antecedents` claims, taken together, imply its
 // `consequent` claim.
 //
-// This stage uses gpt-5.5 with reasoning_effort=high — it's the most
+// This stage uses reasoning_effort=high — it's the most
 // subtle judgement call in the pipeline. The output is a graph; the
 // conclusion + the inference graph drive the formula-compilation stage
 // that comes next.
@@ -17,16 +17,14 @@ import {
     type TRelationExtractionOutput,
     type TSegmentationOutput,
 } from "./schemas.js"
+import type { TReasoningEffort } from "../../../../lib/llm/types.js"
 import { llmStage } from "../../../../lib/pipelines/stage-helpers.js"
+import { checkArgumentStructure } from "./conclusion-selection.js"
 import type { TStage, TStageContext } from "../../../../lib/pipelines/types.js"
 import type { TLlmStageOptionsOverride } from "../types.js"
 
-export const RELATION_EXTRACTION_MODEL = "gpt-5.5"
-export const RELATION_EXTRACTION_REASONING:
-    | "minimal"
-    | "low"
-    | "medium"
-    | "high" = "high"
+export const RELATION_EXTRACTION_MODEL = "gpt-6-sol"
+export const RELATION_EXTRACTION_REASONING: TReasoningEffort = "high"
 
 export const RELATION_EXTRACTION_SYSTEM_PROMPT = `You identify inference relationships between canonical claims in an argument.
 
@@ -39,7 +37,7 @@ For each relation emit:
 - \`type\` — always \`"inference"\`
 - \`antecedents\` — an array of the supporting claim miniIds (one or more) whose conjunction implies the consequent
 - \`consequent\` — the implied claim's miniId
-- \`title\` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: "Limits of the crowd's power", "Residence as tacit consent", "Principle over survival".
+- \`title\` — a short noun phrase naming what this step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: "Limits of the crowd's power", "Residence as tacit consent", "Principle over survival". Every relation's title must differ from every other relation's — two steps never share a name.
 - \`evidence.segmentIds\` — the segments that ground the relation (often a single segment containing a "therefore", "so", "because")
 - \`evidence.quote\` — a short verbatim quote from the input that justifies the relation
 
@@ -52,7 +50,7 @@ For each relation emit:
 - The conclusion of the argument is identified in a separate stage; do NOT emit a special "conclusion" relation here. Just emit the inference edges you see; the conclusion stage selects from your output.
 - Avoid attack/rebuttal relations entirely for now — the pipeline does not yet handle them.
 
-If there are no relations to emit, return \`{ "relations": [] }\`.`
+Whenever there are at least two normal-typed claims, emit at least one relation: the input is an argument, and its claims connect somehow. Return \`{ "relations": [] }\` only when there are fewer than two normal-typed claims.`
 
 function buildPrompt(ctx: TStageContext): { system: string; user: string } {
     const canon = ctx.get<TClaimCanonicalizationOutput>(
@@ -115,6 +113,7 @@ export function createRelationExtractionStage(
             options?.reasoningEffort ?? RELATION_EXTRACTION_REASONING,
         retry: options?.retry,
         buildPrompt,
+        checkOutput: (output, ctx) => checkArgumentStructure(ctx, output),
     })
 }
 

@@ -9,11 +9,11 @@
                 "type": "normal",
                 "sourceAnchors": [
                     {
-                        "quote": "the ground gets wet",
-                        "startUtf16": 13,
-                        "endUtf16": 32,
-                        "prefix": "If it rains, ",
-                        "suffix": ". It is raining. Therefore, the "
+                        "quote": "If it rains, the ground gets wet.",
+                        "startUtf16": 0,
+                        "endUtf16": 33,
+                        "prefix": "",
+                        "suffix": " It is raining. Therefore, the g"
                     }
                 ],
                 "role": "premise"
@@ -21,7 +21,7 @@
             {
                 "miniId": "c2",
                 "title": "It is raining",
-                "body": "Rain is currently falling.",
+                "body": "It is raining.",
                 "type": "normal",
                 "sourceAnchors": [
                     {
@@ -72,13 +72,13 @@
             {
                 "miniId": "gid-4",
                 "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "Modus ponens",
+                "title": "Applying the rain conditional",
                 "sourceAnchors": [
                     {
-                        "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.",
-                        "startUtf16": 0,
+                        "quote": "Therefore, the ground is wet.",
+                        "startUtf16": 49,
                         "endUtf16": 78,
-                        "prefix": "",
+                        "prefix": "ground gets wet. It is raining. ",
                         "suffix": ""
                     }
                 ]
@@ -86,7 +86,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "Ground_Is_Wet",
-                "title": "Joint support inference"
+                "title": "Combining two premises"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -95,6 +95,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c3 is the sole supported consequent and terminal claim in the relation graph, with c1 and c2 jointly serving as its support.",
+    "selectionRationale": "c3 is supported by c1 and c2 and is the only terminal claim.",
     "processingFailures": []
 }

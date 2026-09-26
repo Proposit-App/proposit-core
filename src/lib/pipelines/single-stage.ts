@@ -16,6 +16,7 @@ import type {
     TPipelineEvent,
     TProcessingFailure,
     TStage,
+    TStageContext,
     TStageStatus,
 } from "./types.js"
 import { depId } from "./types.js"
@@ -443,6 +444,11 @@ export async function launchStage(
  * `outcome: "skipped"` with no `ProcessingFailure`.
  *
  * `stageId` must name an LLM stage; a non-LLM stage throws.
+ *
+ * `context` — the same `upstream` records and `input` the launch was given
+ * — lets a stage's content check (`llmStage`'s `checkOutput`) run here as
+ * it does in-process. Without it that check is skipped and only the schema
+ * is checked.
  */
 // eslint-disable-next-line @typescript-eslint/require-await
 export async function completeStage(
@@ -450,16 +456,33 @@ export async function completeStage(
     stageId: string,
     retrieved: TRetrievedResponse,
     deps: TExecuteStageDeps,
-    attempt = 1
+    attempt = 1,
+    context?: {
+        upstream: Readonly<Record<string, TStageOutcomeRecord>>
+        input: unknown
+    }
 ): Promise<TExecuteStageResult> {
-    const { cfg } = requireLlmStage(pipeline, stageId, "completeStage")
+    const { stage, cfg } = requireLlmStage(pipeline, stageId, "completeStage")
     const emit = deps.onEvent ?? noopEmit
+
+    let ctx: TStageContext | undefined
+    if (context !== undefined) {
+        const allowedDeps = new Set(stage.dependsOn.map((d) => depId(d)))
+        const state = buildSingleShotState(
+            context.upstream,
+            allowedDeps,
+            Value.Parse(pipeline.inputSchema, context.input),
+            deps
+        )
+        ctx = makeStageContext(state, allowedDeps, stageId)
+    }
 
     const validated = validateLlmOutcome(
         cfg,
         retrieved.output,
         retrieved.status,
-        retrieved.incompleteReason
+        retrieved.incompleteReason,
+        ctx
     )
 
     // The output shown on stage:llm-call is the parsed value when the

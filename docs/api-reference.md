@@ -1849,7 +1849,7 @@ type TLlmResponse<T> = {
 }
 ```
 
-`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local model alias like `"local-coder"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in background-stream mode from the first `response.created` SSE event so a caller can persist the id before a possible crash. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
+`model` is a free-form `string` (not constrained to the `TLlmModel` literal union `"gpt-6-sol" | "gpt-6-luna" | "gpt-5.5" | "gpt-5.4" | "gpt-5.4-mini" | "gpt-5.4-nano"`) so callers can target any backend model — including a local model alias like `"local-coder"` — without a core change. `onResponseCreated` (since v1.10.0) is an optional callback a provider may invoke **mid-flight**, as soon as the upstream response id is known and before `respond()` resolves; the OpenAI provider fires it in background-stream mode from the first `response.created` SSE event so a caller can persist the id before a possible crash. It is invoked at most once per call; synchronous providers leave it uncalled and surface the id only via `TLlmResponse.rawResponseId` at completion. `TReasoningEffort` is `"none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"`. Not every model takes every value: `minimal` is a GPT-5 setting that GPT-6 rejects, and `none`, `xhigh` and `max` are GPT-6 settings. The OpenAI provider and `submitBackgroundResponse` send `low` in place of `minimal` to any `gpt-6*` model, so a configured `minimal` never fails a run. `_typeMarker` is a phantom field with no runtime presence; it exists solely so the type system can carry the structured-output type `T` from `outputSchema` into `TLlmResponse<T>`. Providers and mocks ignore it.
 
 `TToolSpec` is a discriminated union over `kind`:
 
@@ -1902,9 +1902,11 @@ The **launch** half of the launch/complete split for an **LLM-background stage**
 - Emits `stage:start`, `stage:llm-request`, and `stage:llm-response-created` (from the submit's returned id) — **NO `stage:llm-call` / `stage:end`** (the completion side emits those, in a later invocation).
 - `attempt` (default 1) lets a re-launch rebuild the retry-suffixed user message for attempt 2+. (The exact prior-attempt validation error does not cross the durable suspend, so the re-launch suffix carries a generic prior-error note; the suffix wrapper text matches the in-process loop's phrasing.)
 
-### `completeStage(pipeline, stageId, retrieved, deps, attempt?)` → `Promise<TExecuteStageResult>` (since v1.11.0)
+### `completeStage(pipeline, stageId, retrieved, deps, attempt?, context?)` → `Promise<TExecuteStageResult>` (since v1.11.0)
 
 The **complete** half: given the **retrieved** background response (from the OpenAI extension's `retrieveResponse`), validate it into a `TExecuteStageResult`. `retrieved.output` is **RAW assistant text**, so `completeStage` parses it against the stage's `outputSchema` first (a parse throw is a retryable `schema_validation` failure), then `Value.Check`s the parsed object. A non-`completed` status is classified per the table below. Emits `stage:llm-call` + `stage:end` (**NO `stage:start`** — that fired in the launch invocation). `tokenUsage` is taken directly from `retrieved.tokenUsage` (the per-`ctx` token side-channel cannot bridge the two invocations). `stageId` must name an LLM stage.
+
+`context` (since v5.2.0) is `{ upstream, input }` — the same records and input the launch was given. With it, a stage's content check (`llmStage`'s `checkOutput`) runs here exactly as it does in-process; a refused output is `failed` with `retryReason: "schema_validation"` and the check's own `code` and `message`. Without it only the schema is checked, so a stage with a content check accepts what the in-process loop would have asked again for.
 
 On a **retryable** failure the result carries `retryReason` (a reason code, not a boolean); a **fail-fast** failure carries none. The durable orchestrator's re-launch predicate is therefore just `retryReason != null && retryCount < maxAttempts` — core already did the `retryOn` filtering.
 
@@ -1930,6 +1932,8 @@ This mapping is a deliberate `lib/`-side **mirror** of the OpenAI provider's cla
 The routing predicate for an out-of-process orchestrator driving a pipeline stage-by-stage. Returns `true` iff `stage` is an **LLM-background stage** — one built by `llmStage` that carries the resolved LLM config and is therefore driven by `launchStage` / `completeStage`; `false` for deterministic and sub-pipeline stages (drive those with `executeStage`). It **mirrors exactly** the guard `launchStage` / `completeStage` apply internally, so a consumer can route each stage to the right driver up front — `deterministic: !isLlmStage(stage)` — instead of maintaining a hand-written stage-id allowlist that drifts from the pipeline, or catching the thrown `PipelineConfigurationError` as control flow.
 
 The predicate keys on the **carrier of the returned stage**, not on whether a stage ever touches an LLM internally. A factory that builds an inner `llmStage` and invokes its `run` but returns a plain `{ id, dependsOn, outputSchema, run }` literal (the default `conclusion-selection` stage) carries no config, so `isLlmStage` returns `false` for it — agreeing with `launchStage`, which rejects it and requires `executeStage`.
+
+`llmStage` takes an optional `checkOutput(output, ctx)` (since v5.2.0), run once an output matches the schema. Returning `{ code, message }` (`TLlmOutputCheckFailure`) refuses the output: it is retried exactly like a schema mismatch — under the stage's retry policy, so only when `schema_validation` is in `retryOn` — and when the attempts run out the stage fails with that code and message, so the message should be one a reader can be shown.
 
 > The seam that backs the in-process `llmStage` loop and the launch/complete split (the prompt-build + parse/validate functions, and the internal config carrier on `llmStage`'s returned stage) is **package-internal**. `llmStage`'s public return type stays `TStage<TOutput>` — it does NOT widen.
 
@@ -2135,9 +2139,15 @@ Resolution, per premise:
 - It is clamped to 80 characters (an over-long one is truncated with an ellipsis, never rejected — strict structured output ignores JSON-Schema `maxLength`, and discarding a completed run over a long string is the worse failure).
 - Absent, the title is **composed** from the LLM-authored claim titles behind the premise: `If "<antecedent>" and "<antecedent>" then "<consequent>"` for a relation-derived premise, and the conclusion claim's own title for the conclusion premise. Composition is the floor, so a model that omits the field never fails a run.
 
+**No two premises share a title.** A relation-derived premise whose authored title repeats an earlier premise's (case and surrounding space ignored) is composed instead, as the conclusion is when its title repeats a step's. If the composed title repeats one too, it is kept and finalize records a `PREMISE_TITLE_DUPLICATE` warning naming the premise.
+
 **The conclusion title is used only when it describes the resolved conclusion.** The model authors one conclusion title, for `conclusionCandidates[0]`. The resolved `conclusionMiniId` is the first candidate that is a known normal claim, or `selectFallbackConclusion`'s relation-graph pick when the model names none usable — so it is not necessarily that first candidate. `finalizeResponseV2` uses the authored title only when `conclusionMiniId === conclusionCandidates[0]`, and composes otherwise. A composed conclusion title can be redundant; it is never about a different claim.
 
 `title` is a required field on `RelationExtractionOutputSchema`'s relation entries and on both conclusion-selection schemas, so a consumer-built stage filling those slots must supply it — `""` selects composition.
+
+#### When the model finds no argument
+
+Once there are at least two normal claims, the stage that proposes the argument's structure must name at least one relation — and, in the fast pipeline's `structure` stage, at least one conclusion candidate. `checkArgumentStructure` enforces it as the `checkOutput` of scribe's `structure` stage and scholar's `relation-extraction` stage, and both prompts say so. An empty answer is asked for again once (the default retry policy), in-process and — when `completeStage` is given `context` — out of process. If the second answer is empty too the stage fails with `NO_ARGUMENT_STRUCTURE` and the message "Couldn't work out how these claims connect to a conclusion." (`NO_ARGUMENT_STRUCTURE_FAILURE`), and the run has no output. A run that still ends without a conclusion some other way — fewer than two normal claims, or candidates that resolve to no claim — returns `argument: null` with that same sentence as `failureText`.
 
 #### Source anchors
 
@@ -2230,7 +2240,7 @@ const pipeline = createScholarPipeline(basicsExtension, {
 // await executePipeline(pipeline, { text }, { llm: createChatCompletionsProvider() })
 ```
 
-Each scholar stage keeps its own hard-coded `gpt-5.x` default, and each scribe stage defaults to `gpt-5.4-mini`, when no override is supplied — so production behavior is unchanged.
+Every scholar and scribe stage defaults to `gpt-6-sol` when no override is supplied (since v5.2.0), and keeps its own reasoning effort: `relation-extraction` `high`, `claim-canonicalization` and `conclusion-selection` `medium`, and the rest — scribe's two stages included — the model's default.
 
 ---
 
