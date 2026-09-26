@@ -300,6 +300,29 @@ describe("finalizeResponseV2 — anchor resolution is reported, not silent", () 
         expect(unresolved[0].context?.quote).toBe("a sentence never written")
     })
 
+    it("reports a quote anchored only approximately, naming the rule", () => {
+        const outputs = buildOutputs()
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m3")!.text =
+            "Escalation COSTS more than delay"
+
+        const failures = finalizeFailures(outputs)
+        expect(
+            failures.filter((f) => f.code === "SOURCE_ANCHOR_UNRESOLVED")
+        ).toEqual([])
+        const approximate = failures.filter(
+            (f) => f.code === "SOURCE_ANCHOR_APPROXIMATE"
+        )
+        expect(approximate).toHaveLength(1)
+        expect(approximate[0].context?.mentionId).toBe("m3")
+        expect(approximate[0].context?.rule).toBe("normalized")
+        expect(approximate[0].context?.anchoredQuote).toBe(
+            "Escalation costs more than delay."
+        )
+    })
+
     it("reports a relation evidence quote that cannot be found", () => {
         const outputs = buildOutputs()
         const relations = outputs[

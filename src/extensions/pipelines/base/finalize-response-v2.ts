@@ -256,15 +256,16 @@ function resolveSegmentStarts(
 }
 
 /**
- * Non-fatal note codes for anchor resolution. Neither stops assembly:
- * an unresolved quote yields no anchor, and an ambiguous one yields the
- * nearest-hint winner. Both are reported because silence here is
+ * Non-fatal note codes for anchor resolution. None stops assembly:
+ * an unresolved quote yields no anchor, an ambiguous one yields the
+ * nearest-hint winner, and an approximate one yields the nearest passage. Both are reported because silence here is
  * indistinguishable from success — a model that starts paraphrasing
  * would otherwise take anchor coverage to zero with no signal.
  */
 export const SOURCE_ANCHOR_NOTE_CODES = {
     unresolved: "SOURCE_ANCHOR_UNRESOLVED",
     ambiguous: "SOURCE_ANCHOR_AMBIGUOUS",
+    approximate: "SOURCE_ANCHOR_APPROXIMATE",
     inputUnavailable: "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
 } as const
 
@@ -284,6 +285,21 @@ function noteResolution(args: {
             message: `Quote for ${subjectText} was not found in the input; no source anchor was emitted.`,
             severity: "warning",
             context: { ...args.subject, quote: args.quote },
+        })
+        return
+    }
+    if (args.match.approximate !== undefined) {
+        args.ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.approximate,
+            message: `Quote for ${subjectText} is not in the input as written; it was anchored to the nearest passage (${args.match.approximate}).`,
+            severity: "warning",
+            context: {
+                ...args.subject,
+                quote: args.quote,
+                rule: args.match.approximate,
+                anchoredQuote: args.match.anchor.quote,
+                startUtf16: args.match.anchor.startUtf16,
+            },
         })
         return
     }

@@ -19,6 +19,7 @@ export {
     SOURCE_ANCHOR_CONTEXT_CHARS,
 } from "./source-anchors.js"
 export type {
+    TApproximateAnchorRule,
     TIngestionSourceAnchor,
     TSourceAnchorMatch,
 } from "./source-anchors.js"
