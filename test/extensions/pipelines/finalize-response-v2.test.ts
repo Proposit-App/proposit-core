@@ -347,6 +347,69 @@ describe("finalizeResponseV2 — authored relation titles", () => {
     })
 })
 
+describe("finalizeResponseV2 — distinct premise titles", () => {
+    function finalizeWithFailures(outputs: Record<string, unknown>) {
+        const failures: { code: string; context?: Record<string, unknown> }[] =
+            []
+        const ctx: TStageContext = {
+            ...buildContextStub(outputs),
+            addFailure: (failure) => {
+                failures.push(failure)
+            },
+        }
+        const out = finalizeResponseV2({ ctx, extension: basicsExtension })
+        const argument = out.argument as unknown as {
+            premises: { miniId: string; title: string }[]
+        }
+        return { argument, failures }
+    }
+
+    it("composes the later of two steps given the same authored title", () => {
+        const outputs = buildHormuzOutputs()
+        relationsOf(outputs)[0].title = "Naming the wager"
+        relationsOf(outputs)[1].title = "  naming THE wager "
+        const { argument, failures } = finalizeWithFailures(outputs)
+        const titles = argument.premises.map((p) => p.title)
+        expect(titles[0]).toBe("Naming the wager")
+        expect(titles[1]).toBe(
+            'If "No realistic off-ramp exists" and "Diplomacy beats escalation" then "The US should not strike"'
+        )
+        expect(
+            failures.filter((f) => f.code === "PREMISE_TITLE_DUPLICATE")
+        ).toEqual([])
+    })
+
+    it("keeps a repeated title it cannot replace, and warns", () => {
+        const outputs = buildHormuzOutputs()
+        // The later step's composed title is exactly the earlier step's
+        // authored one, so there is nothing distinct to fall back to.
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        for (const [miniId, title] of [
+            ["c2", "A"],
+            ["c3", "B"],
+            ["c4", "C"],
+        ]) {
+            ;(
+                canon.canonicalClaims.find(
+                    (c) => c.miniId === miniId
+                ) as Record<string, unknown>
+            ).title = title
+        }
+        const composed = 'If "A" and "B" then "C"'
+        relationsOf(outputs)[0].title = composed
+        relationsOf(outputs)[1].title = composed
+        const { argument, failures } = finalizeWithFailures(outputs)
+        expect(argument.premises[1].title).toBe(composed)
+        const duplicates = failures.filter(
+            (f) => f.code === "PREMISE_TITLE_DUPLICATE"
+        )
+        expect(duplicates).toHaveLength(1)
+        expect(duplicates[0].context?.premiseMiniId).toBe("p2")
+    })
+})
+
 describe("finalizeResponseV2 — authored conclusion titles", () => {
     it("uses the authored title when the resolved conclusion is the first candidate", () => {
         const outputs = buildHormuzOutputs()

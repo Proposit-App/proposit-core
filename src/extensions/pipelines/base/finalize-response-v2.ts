@@ -124,6 +124,12 @@ export const FINALIZE_V2_FAILURE_TEXTS = {
     noConclusion: "No single conclusion could be selected.",
 } as const
 
+/**
+ * Warning code for a premise whose title repeats an earlier premise's and
+ * could not be replaced by a distinct composed one.
+ */
+const PREMISE_TITLE_DUPLICATE = "PREMISE_TITLE_DUPLICATE"
+
 type TPremiseFinalForm = {
     miniId: string
     formula: string
@@ -543,6 +549,11 @@ function resolveAuthoredTitle(authored: unknown): string | undefined {
  * composition, which can be redundant but is never about the wrong
  * claim.
  */
+/** The form two titles are compared in: case and surrounding space ignored. */
+function titleKey(title: string): string {
+    return title.trim().toLowerCase()
+}
+
 function resolveAuthoredConclusionTitle(
     conclusion: TConclusionSelectionOutput | undefined,
     relations: readonly TInferenceRelation[]
@@ -557,10 +568,11 @@ function resolveAuthoredConclusionTitle(
     // gave the step that reaches the conclusion. Two premises under one
     // title read as a duplicate, so that title is left to the step and the
     // conclusion falls back to its composed title.
-    const key = authored.toLowerCase()
-    const taken = relations.some(
-        (r) => resolveAuthoredTitle(r.title)?.toLowerCase() === key
-    )
+    const key = titleKey(authored)
+    const taken = relations.some((r) => {
+        const title = resolveAuthoredTitle(r.title)
+        return title !== undefined && titleKey(title) === key
+    })
     return taken ? undefined : authored
 }
 
@@ -597,7 +609,9 @@ function buildPremiseTitle(
     premise: TCompiledPremise,
     maps: TTitleComposerMaps,
     /** Guard-resolved authored conclusion title, if one is usable. */
-    authoredConclusionTitle: string | undefined
+    authoredConclusionTitle: string | undefined,
+    /** Title keys (`titleKey`) already given to earlier premises. */
+    taken: ReadonlySet<string>
 ): string {
     if (premise.roleHint === "conclusion") {
         if (authoredConclusionTitle !== undefined) {
@@ -625,8 +639,12 @@ function buildPremiseTitle(
         premise.sourceRelationId !== null
             ? maps.relationById.get(premise.sourceRelationId)
             : undefined
+    // A title an earlier step already carries is left to that step; this
+    // one is composed instead, as the conclusion is.
     const authored = resolveAuthoredTitle(relation?.title)
-    if (authored !== undefined) return authored
+    if (authored !== undefined && !taken.has(titleKey(authored))) {
+        return authored
+    }
     if (relation === undefined) {
         // No resolvable source relation — fall back to the raw formula
         // so the title is never empty. (Should not occur in practice:
@@ -859,15 +877,27 @@ export function finalizeResponseV2(
         relations
     )
 
+    const takenTitles = new Set<string>()
     const finalPremises: TPremiseFinalForm[] = compilation.premises.map((p) => {
+        const title = buildPremiseTitle(
+            p,
+            titleComposerMaps,
+            authoredConclusionTitle,
+            takenTitles
+        )
+        if (takenTitles.has(titleKey(title))) {
+            ctx.addFailure({
+                code: PREMISE_TITLE_DUPLICATE,
+                message: `Premise ${p.premiseMiniId} has the same title as an earlier premise, and no distinct title could be composed for it.`,
+                severity: "warning",
+                context: { premiseMiniId: p.premiseMiniId, title },
+            })
+        }
+        takenTitles.add(titleKey(title))
         const premise: TPremiseFinalForm = {
             miniId: p.premiseMiniId,
             formula: p.formula,
-            title: buildPremiseTitle(
-                p,
-                titleComposerMaps,
-                authoredConclusionTitle
-            ),
+            title,
         }
         // The conclusion premise is synthesized from a bare symbol and
         // has no source relation, so it has no evidence quote to anchor.
