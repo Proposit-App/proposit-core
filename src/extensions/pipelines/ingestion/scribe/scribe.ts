@@ -57,7 +57,7 @@ import {
 } from "./structure-stage.js"
 
 const PIPELINE_ID = "argument-ingestion-scribe"
-const PIPELINE_VERSION = "1.0.0"
+const PIPELINE_VERSION = "1.1.0"
 
 /**
  * Options for `createScribePipeline`. Same `{ llm }` surface as scholar:

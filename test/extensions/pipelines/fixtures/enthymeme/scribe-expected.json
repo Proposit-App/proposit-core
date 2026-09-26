@@ -37,25 +37,25 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "socrates_is_a_man",
+                "symbol": "Socrates_is_a_man",
                 "claimMiniId": "c1"
             },
             {
                 "miniId": "gid-2",
-                "symbol": "socrates_is_mortal",
+                "symbol": "Socrates_is_mortal",
                 "claimMiniId": "c2"
             }
         ],
         "premises": [
             {
                 "miniId": "gid-3",
-                "formula": "socrates_is_a_man implies socrates_is_mortal",
-                "title": "Man to mortal"
+                "formula": "Socrates_is_a_man implies Socrates_is_mortal",
+                "title": "Human mortality"
             },
             {
                 "miniId": "gid-4",
-                "formula": "socrates_is_mortal",
-                "title": "Mortality inference"
+                "formula": "Socrates_is_mortal",
+                "title": "Human mortality"
             }
         ],
         "conclusionPremiseMiniId": "gid-4",
@@ -64,6 +64,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "c2 is the supported claim and nothing else depends on it, so it is the best conclusion candidate.",
+    "selectionRationale": "c2 is best supported by c1 and nothing else depends on it.",
     "processingFailures": []
 }

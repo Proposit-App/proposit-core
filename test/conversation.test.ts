@@ -470,6 +470,7 @@ describe("e2e: distill → scribe pipeline", () => {
                 { mentionId: "c1-m", claimMiniId: "c1" },
                 { mentionId: "c2-m", claimMiniId: "c2" },
             ],
+            sourceSupport: [],
         }
         const scribeStructureOutput = {
             relations: [

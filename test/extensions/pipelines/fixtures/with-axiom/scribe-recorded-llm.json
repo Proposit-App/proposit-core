@@ -662,6 +662,584 @@
         },
         "rawResponseId": "resp_0571c4de70f9c99e006a7205e5d81c819d9acae2c997baa930"
       }
+    },
+    {
+      "hash": "3968c1df334e945122612b7c9bd504a400c8c5c5ff8fef796cd8c3bf30021bbe",
+      "stageId": "extract",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEvery explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.\n\nAlso emit `mentions` — where in the input each claim is stated. One entry per place a claim is made:\n- `mentionId` — \"<claim miniId>-m\" for the first mention of a claim, then \"-m2\", \"-m3\", ... for further ones (e.g. \"c1-m\", \"c1-m2\").\n- `text` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.\n- `span` — approximate `{ start, end }` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.\n- `segmentId` — the empty string.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — the `mentionId`s of every mention that states this claim.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per mention id you used.\n- `sourceSupport` — one `{ \"sourceMiniId\": \"...\", \"supportedMiniId\": \"...\" }` entry per citation claim: the citation's miniId, and the miniId of the normal claim it is offered as evidence for — usually the claim stated in the same sentence as the link, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Input text:\n\nBy definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.\n\nProduce the canonicalClaims + mentions + mentionToClaim + sourceSupport object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "canonicalClaims",
+            "mentionToClaim",
+            "mentions",
+            "sourceSupport"
+          ],
+          "properties": {
+            "canonicalClaims": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "body",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "body": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "A detailed description of the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "normal",
+                        "description": "Primary reasoning claim type. Can have premises and be cited as evidence for other claims."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "title",
+                      "url",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "A short title summarizing the claim"
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "The URL of the citation supporting the claim"
+                      },
+                      "citationTypeGuess": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "Book"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Website"
+                              },
+                              {
+                                "type": "string",
+                                "const": "BookChapter"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Handbook"
+                              },
+                              {
+                                "type": "string",
+                                "const": "TechnicalReport"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Standard"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Thesis"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Patent"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dictionary"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Encyclopedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "JournalArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "MagazineArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "NewspaperArticle"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferencePaper"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ConferenceProceedings"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Dataset"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Software"
+                              },
+                              {
+                                "type": "string",
+                                "const": "OnlineDocument"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Blog"
+                              },
+                              {
+                                "type": "string",
+                                "const": "SocialMedia"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Preprint"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Video"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Podcast"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Course"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Presentation"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Interview"
+                              },
+                              {
+                                "type": "string",
+                                "const": "PersonalCommunication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Email"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Law"
+                              },
+                              {
+                                "type": "string",
+                                "const": "CourtCase"
+                              },
+                              {
+                                "type": "string",
+                                "const": "GovernmentPublication"
+                              },
+                              {
+                                "type": "string",
+                                "const": "Datasheet"
+                              },
+                              {
+                                "type": "string",
+                                "const": "ProductManual"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "string",
+                            "const": "unknown"
+                          }
+                        ]
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "citation",
+                        "description": "Cited content claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in a citation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "miniId",
+                      "mentionIds",
+                      "suggestedSymbol",
+                      "axiom",
+                      "type"
+                    ],
+                    "properties": {
+                      "miniId": {
+                        "type": "string",
+                        "description": "Sequential canonicalization id (c1, c2, ...)."
+                      },
+                      "mentionIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Mention ids merged into this canonical claim."
+                      },
+                      "suggestedSymbol": {
+                        "type": "string",
+                        "description": "Snake_case / PascalCase identifier proposal for the claim's logical variable. ≤ 32 chars; letters / digits / underscores; starts with letter or underscore."
+                      },
+                      "axiom": {
+                        "type": "string",
+                        "maxLength": 50,
+                        "description": "The axiom supporting the claim"
+                      },
+                      "type": {
+                        "type": "string",
+                        "const": "axiomatic",
+                        "description": "Self-evident invoked claim type. Cannot have premises or be cited as evidence for other claims, but can serve as a supporting claim in an invocation relationship."
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "mentionToClaim": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mentionId",
+                  "claimMiniId"
+                ],
+                "properties": {
+                  "mentionId": {
+                    "type": "string"
+                  },
+                  "claimMiniId": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "mentions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mentionId",
+                  "segmentId",
+                  "text",
+                  "span"
+                ],
+                "properties": {
+                  "mentionId": {
+                    "type": "string"
+                  },
+                  "segmentId": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "span": {
+                    "type": "object",
+                    "required": [
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "start": {
+                        "type": "number",
+                        "description": "Inclusive character offset where the span begins (relative to the parent text)."
+                      },
+                      "end": {
+                        "type": "number",
+                        "description": "Exclusive character offset where the span ends (relative to the parent text)."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "sourceSupport": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "sourceMiniId",
+                  "supportedMiniId"
+                ],
+                "properties": {
+                  "sourceMiniId": {
+                    "type": "string"
+                  },
+                  "supportedMiniId": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "canonicalClaims": [
+            {
+              "miniId": "c1",
+              "mentionIds": [
+                "c1-m"
+              ],
+              "suggestedSymbol": "bachelor_definition",
+              "title": "Bachelor means unmarried man",
+              "body": "A bachelor is an unmarried man.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c2",
+              "mentionIds": [
+                "c2-m"
+              ],
+              "suggestedSymbol": "john_bachelor",
+              "title": "John is a bachelor",
+              "body": "John is a bachelor.",
+              "type": "normal"
+            },
+            {
+              "miniId": "c3",
+              "mentionIds": [
+                "c3-m"
+              ],
+              "suggestedSymbol": "john_unmarried",
+              "title": "John is unmarried",
+              "body": "John is unmarried.",
+              "type": "normal"
+            }
+          ],
+          "mentionToClaim": [
+            {
+              "mentionId": "c1-m",
+              "claimMiniId": "c1"
+            },
+            {
+              "mentionId": "c2-m",
+              "claimMiniId": "c2"
+            },
+            {
+              "mentionId": "c3-m",
+              "claimMiniId": "c3"
+            }
+          ],
+          "mentions": [
+            {
+              "mentionId": "c1-m",
+              "segmentId": "",
+              "text": "By definition, a bachelor is an unmarried man.",
+              "span": {
+                "start": 0,
+                "end": 46
+              }
+            },
+            {
+              "mentionId": "c2-m",
+              "segmentId": "",
+              "text": "John is a bachelor.",
+              "span": {
+                "start": 47,
+                "end": 67
+              }
+            },
+            {
+              "mentionId": "c3-m",
+              "segmentId": "",
+              "text": "Therefore, John is unmarried.",
+              "span": {
+                "start": 68,
+                "end": 97
+              }
+            }
+          ],
+          "sourceSupport": []
+        },
+        "tokenUsage": {
+          "input": 1325,
+          "output": 287,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_074bf7c3cbaf9780006ab72d67fa8c87d2a52c92bed0f250b8"
+      }
+    },
+    {
+      "hash": "928ed2b2784b11e1f8a09532289af65d4444af1cc804f993d55521b27d74254b",
+      "stageId": "scribe-structure",
+      "request": {
+        "model": "gpt-5.4-mini",
+        "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\".\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim. Return an empty array only when there is no argument structure.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nOutput ONLY the schema-shaped object. No prose.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=bachelor_definition fields={\"title\":\"Bachelor means unmarried man\",\"body\":\"A bachelor is an unmarried man.\"}\n  [c2] type=normal symbol=john_bachelor fields={\"title\":\"John is a bachelor\",\"body\":\"John is a bachelor.\"}\n  [c3] type=normal symbol=john_unmarried fields={\"title\":\"John is unmarried\",\"body\":\"John is unmarried.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "relations",
+            "conclusionCandidates",
+            "conclusionTitle",
+            "rationale"
+          ],
+          "properties": {
+            "relations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "relationId",
+                  "type",
+                  "antecedents",
+                  "consequent",
+                  "title",
+                  "evidence"
+                ],
+                "properties": {
+                  "relationId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "const": "inference"
+                  },
+                  "antecedents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "consequent": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "required": [
+                      "segmentIds",
+                      "quote"
+                    ],
+                    "properties": {
+                      "segmentIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "conclusionCandidates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "conclusionTitle": {
+              "type": "string"
+            },
+            "rationale": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "response": {
+        "output": {
+          "relations": [
+            {
+              "relationId": "r1",
+              "type": "inference",
+              "antecedents": [
+                "c1",
+                "c2"
+              ],
+              "consequent": "c3",
+              "title": "Definition applied",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            }
+          ],
+          "conclusionCandidates": [
+            "c3"
+          ],
+          "conclusionTitle": "Definition applied",
+          "rationale": "c3 is the supported end claim, inferred from the definition in c1 and the fact in c2."
+        },
+        "tokenUsage": {
+          "input": 696,
+          "output": 105,
+          "reasoning": 0
+        },
+        "rawResponseId": "resp_0520e498e3d5b9a2006ab72d6a995487d2ab0fef8e7830f730"
+      }
     }
   ]
 }
