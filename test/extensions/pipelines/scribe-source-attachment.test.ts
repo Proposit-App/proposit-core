@@ -484,8 +484,9 @@ describe("scribe keeps only a citation url that the text contains", () => {
         expect(invented.url).toBe("")
         expect((invented.citation as { url?: string }).url).toBeUndefined()
         // Differs from the text only in scheme and host case and a
-        // trailing slash, so it is the author's link.
-        expect(claimOf(result, "c3").url).toBe("https://data.example/wages/")
+        // trailing slash, so it is the author's link — stored as the text
+        // writes it.
+        expect(claimOf(result, "c3").url).toBe("HTTPS://Data.Example/wages")
         expect(backing(result)).toEqual({ c1: ["c2", "c3"] })
         const warnings = codes(result, "SOURCE_URL_NOT_IN_TEXT")
         expect(warnings.map((f) => f.context?.miniId)).toEqual(["c2"])
@@ -505,6 +506,128 @@ describe("scribe keeps only a citation url that the text contains", () => {
                 (f) => f.context?.miniId
             )
         ).toEqual(["c2", "c3"])
+    })
+
+    it("does not accept a url that stops a path segment short of the text's", async () => {
+        const result = await run({
+            c2: "https://data.example",
+            c3: "https://data.example/",
+        })
+        expect(claimOf(result, "c2").url).toBe("")
+        expect(claimOf(result, "c3").url).toBe("")
+    })
+
+    it("accepts http for https and keeps the text's form", async () => {
+        // Seen on a Wikipedia import: the text links the https page and the
+        // model gave it as http, which cleared the only thing identifying
+        // the source.
+        const result = await run({
+            c2: "http://www.gutenberg.org/",
+            c3: "http://data.example/wages",
+        })
+        expect(claimOf(result, "c2").url).toBe("")
+        expect(claimOf(result, "c3").url).toBe("HTTPS://Data.Example/wages")
+        expect(
+            codes(result, "SOURCE_URL_NOT_IN_TEXT").map(
+                (f) => f.context?.miniId
+            )
+        ).toEqual(["c2"])
+    })
+
+    it("does not accept a different scheme for http or https", async () => {
+        const result = await run({
+            c2: "ftp://data.example/wages",
+            c3: "https://data.example/wages",
+        })
+        expect(claimOf(result, "c2").url).toBe("")
+        expect(claimOf(result, "c3").url).toBe("HTTPS://Data.Example/wages")
+    })
+})
+
+describe("scribe merges citations of the same page", () => {
+    const text =
+        "Belief is a wager (http://bet.example/a, https://bet.example/a). " +
+        "Stanford covers it (https://plato.example/wager/index.html; http://plato.example/wager/). " +
+        "God may exist (https://web.archive.org/web/20190213131607/http://www.stat.example/wager.pdf; http://stat.example/wager.pdf). " +
+        "The IEP agrees (https://iep.example/pasc-wag/ and https://iep.example/p/pasc-wag.htm). " +
+        "So one should believe."
+    const specs: TClaimSpec[] = [
+        { id: "c1", type: "normal", quote: "Belief is a wager" },
+        { id: "c2", type: "normal", quote: "God may exist" },
+        { id: "c3", type: "normal", quote: "one should believe." },
+        { id: "s1", type: "citation", quote: "http://bet.example/a" },
+        { id: "s2", type: "citation", quote: "https://bet.example/a" },
+        {
+            id: "s3",
+            type: "citation",
+            quote: "https://plato.example/wager/index.html",
+        },
+        { id: "s4", type: "citation", quote: "http://plato.example/wager/" },
+        {
+            id: "s5",
+            type: "citation",
+            quote: "https://web.archive.org/web/20190213131607/http://www.stat.example/wager.pdf",
+        },
+        { id: "s6", type: "citation", quote: "http://stat.example/wager.pdf" },
+        { id: "s7", type: "citation", quote: "https://iep.example/pasc-wag/" },
+        {
+            id: "s8",
+            type: "citation",
+            quote: "https://iep.example/p/pasc-wag.htm",
+        },
+    ]
+    // Each citation's url is the one its mention quotes.
+    const claims = specs.map((c) =>
+        c.type === "citation" ? { ...c, url: c.quote } : c
+    )
+
+    async function run(): Promise<TRunResult> {
+        return runScribe(
+            extractFor(text, claims, [
+                { sourceMiniId: "s1", supportedMiniId: "c1" },
+                { sourceMiniId: "s2", supportedMiniId: "c1" },
+                { sourceMiniId: "s3", supportedMiniId: "c1" },
+                { sourceMiniId: "s4", supportedMiniId: "c1" },
+                { sourceMiniId: "s4", supportedMiniId: "c2" },
+                { sourceMiniId: "s5", supportedMiniId: "c2" },
+                { sourceMiniId: "s6", supportedMiniId: "c2" },
+                { sourceMiniId: "s7", supportedMiniId: "c2" },
+                { sourceMiniId: "s8", supportedMiniId: "c2" },
+            ]),
+            relationTo("c3", ["c1", "c2"]),
+            text
+        )
+    }
+
+    it("keeps one citation per page and backs the union of its targets once each", async () => {
+        const result = await run()
+        const citations = (result.output?.argument?.claims ?? [])
+            .filter((c) => (c as { type?: string }).type === "citation")
+            .map((c) => (c as { miniId: string }).miniId)
+        // http and https; index.html and a trailing slash; an archive copy
+        // and its original (the original kept). Different paths stay apart.
+        expect(citations).toEqual(["s1", "s3", "s6", "s7", "s8"])
+        expect(backing(result)).toEqual({
+            c1: ["s1", "s3"],
+            c2: ["s3", "s6", "s7", "s8"],
+        })
+    })
+
+    it("keeps the merged citations' mentions on the kept one", async () => {
+        const result = await run()
+        const anchors = claimOf(result, "s6").sourceAnchors as unknown[]
+        expect(anchors).toHaveLength(2)
+    })
+
+    it("reports each merge", async () => {
+        const result = await run()
+        const merged = codes(result, "SOURCE_DUPLICATE_MERGED")
+        expect(merged.map((f) => f.context)).toEqual([
+            { keptMiniId: "s1", mergedMiniIds: ["s2"] },
+            { keptMiniId: "s3", mergedMiniIds: ["s4"] },
+            { keptMiniId: "s6", mergedMiniIds: ["s5"] },
+        ])
+        expect(merged.every((f) => f.severity === "warning")).toBe(true)
     })
 })
 
