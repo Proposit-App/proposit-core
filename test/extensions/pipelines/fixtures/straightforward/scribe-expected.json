@@ -53,7 +53,7 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "RainWetsGround",
+                "symbol": "RainMakesGroundWet",
                 "claimMiniId": "c1"
             },
             {
@@ -70,13 +70,13 @@
         "premises": [
             {
                 "miniId": "gid-4",
-                "formula": "(RainWetsGround and ItIsRaining) implies GroundIsWet",
+                "formula": "(RainMakesGroundWet and ItIsRaining) implies GroundIsWet",
                 "title": "Applying the rain condition"
             },
             {
                 "miniId": "gid-5",
                 "formula": "GroundIsWet",
-                "title": "From condition to result"
+                "title": "Deduction from rain"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -85,6 +85,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "The rain condition and the fact that it is raining together support the conclusion that the ground is wet.",
+    "selectionRationale": "The conditional claim and the assertion that it is raining together imply that the ground is wet.",
     "processingFailures": []
 }

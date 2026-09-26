@@ -2,11 +2,11 @@
   "version": 1,
   "records": [
     {
-      "hash": "1c5fcdc630a42f28c8c2f085bbf08ebb9169ffde9e3911612fff702aabd2e60e",
+      "hash": "d9f44712dba034f42e3ca868e4db99f62eb732626ed75c13098d11df2a3f9c44",
       "stageId": "extract",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEvery explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.\n\nAlso emit `mentions` — where in the input each claim is stated. One entry per place a claim is made:\n- `mentionId` — \"<claim miniId>-m\" for the first mention of a claim, then \"-m2\", \"-m3\", ... for further ones (e.g. \"c1-m\", \"c1-m2\").\n- `text` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.\n- `span` — approximate `{ start, end }` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.\n- `segmentId` — the empty string.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — the `mentionId`s of every mention that states this claim.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per mention id you used.\n- `sourceSupport` — one `{ \"sourceMiniId\": \"...\", \"supportedMiniId\": \"...\" }` entry per citation claim: the citation's miniId, and the miniId of the normal claim it is offered as evidence for — usually the claim stated in the same sentence as the link, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEvery explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.\n\nLines that begin with \"> \" quote someone else, usually the person the author is replying to. They are not the author's claims: never emit a claim from them, and use them only to understand what the author is responding to.\n\nAlso emit `mentions` — where in the input each claim is stated. One entry per place a claim is made:\n- `mentionId` — \"<claim miniId>-m\" for the first mention of a claim, then \"-m2\", \"-m3\", ... for further ones (e.g. \"c1-m\", \"c1-m2\").\n- `text` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.\n- `span` — approximate `{ start, end }` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.\n- `segmentId` — the empty string.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — the `mentionId`s of every mention that states this claim.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `url` (citation claims only) — a URL copied from the input exactly as written, scheme included. Never build one from a site name, domain or title (\"www.example.org\" is not \"https://www.example.org/\"); when the input gives the source no URL, use the empty string.\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per mention id you used.\n- `sourceSupport` — one `{ \"sourceMiniId\": \"...\", \"supportedMiniId\": \"...\" }` entry per citation claim and per axiomatic claim: its miniId, and the miniId of the normal claim it is offered as evidence for, or invoked to justify — usually the claim stated in the same sentence, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Input text:\n\nWorking remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance. So companies should let employees work remotely.\n\nProduce the canonicalClaims + mentions + mentionToClaim + sourceSupport object.",
         "outputSchema": {
           "type": "object",
@@ -393,7 +393,7 @@
               "mentionIds": [
                 "c2-m"
               ],
-              "suggestedSymbol": "RemoteWorkCutsCommutes",
+              "suggestedSymbol": "RemoteWorkReducesCommute",
               "title": "Remote work reduces commuting time",
               "body": "Working remotely reduces commuting time.",
               "type": "normal"
@@ -403,7 +403,7 @@
               "mentionIds": [
                 "c3-m"
               ],
-              "suggestedSymbol": "LessCommutingImprovesBalance",
+              "suggestedSymbol": "ShorterCommuteImprovesBalance",
               "title": "Less commuting improves work-life balance",
               "body": "Reducing commuting time improves work-life balance.",
               "type": "normal"
@@ -444,7 +444,7 @@
               "text": "Working remotely improves productivity for many people.",
               "span": {
                 "start": 0,
-                "end": 54
+                "end": 55
               }
             },
             {
@@ -452,8 +452,8 @@
               "segmentId": "",
               "text": "Working remotely also reduces commuting time.",
               "span": {
-                "start": 55,
-                "end": 102
+                "start": 56,
+                "end": 106
               }
             },
             {
@@ -461,8 +461,8 @@
               "segmentId": "",
               "text": "Reducing commuting time improves work-life balance.",
               "span": {
-                "start": 103,
-                "end": 156
+                "start": 107,
+                "end": 160
               }
             },
             {
@@ -470,28 +470,28 @@
               "segmentId": "",
               "text": "So companies should let employees work remotely.",
               "span": {
-                "start": 157,
-                "end": 205
+                "start": 161,
+                "end": 209
               }
             }
           ],
           "sourceSupport": []
         },
         "tokenUsage": {
-          "input": 1336,
-          "output": 647,
-          "reasoning": 61
+          "input": 1450,
+          "output": 640,
+          "reasoning": 41
         },
-        "rawResponseId": "resp_0c519c23f0e2ae17006ab7452ec28087d2b51d70833ddc0af6"
+        "rawResponseId": "resp_082a0daa4ca197f5006ab7548d1f6487d29b166833021f9124"
       }
     },
     {
-      "hash": "dc3e9599829722b05b548fe7f521e64165c6b5b029458e2628672a13949bb4e4",
+      "hash": "8f72e46673cefad7cf1922f43bc9bf833e6d0551fc429b2b68917e4c204c24eb",
       "stageId": "scribe-structure",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's `title` — the step that reaches the conclusion already has its own. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nEmit the relations and conclusion the author actually argues. An argument with at least two normal-typed claims has at least one relation and one conclusion candidate, so look for them before concluding there are none. Never invent support the author does not give: if the claims genuinely do not connect, return `relations` and `conclusionCandidates` empty.\n\nOutput ONLY the schema-shaped object. No prose.",
-        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=RemoteWorkProductivity fields={\"title\":\"Remote work improves productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal symbol=RemoteWorkCutsCommutes fields={\"title\":\"Remote work reduces commuting time\",\"body\":\"Working remotely reduces commuting time.\"}\n  [c3] type=normal symbol=LessCommutingImprovesBalance fields={\"title\":\"Less commuting improves work-life balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n  [c4] type=normal symbol=AllowRemoteWork fields={\"title\":\"Companies should allow remote work\",\"body\":\"Companies should let employees work remotely.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=normal symbol=RemoteWorkProductivity fields={\"title\":\"Remote work improves productivity\",\"body\":\"Working remotely improves productivity for many people.\"}\n  [c2] type=normal symbol=RemoteWorkReducesCommute fields={\"title\":\"Remote work reduces commuting time\",\"body\":\"Working remotely reduces commuting time.\"}\n  [c3] type=normal symbol=ShorterCommuteImprovesBalance fields={\"title\":\"Less commuting improves work-life balance\",\"body\":\"Reducing commuting time improves work-life balance.\"}\n  [c4] type=normal symbol=AllowRemoteWork fields={\"title\":\"Companies should allow remote work\",\"body\":\"Companies should let employees work remotely.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -577,12 +577,24 @@
               "relationId": "r1",
               "type": "inference",
               "antecedents": [
-                "c1",
+                "c1"
+              ],
+              "consequent": "c4",
+              "title": "Productivity as a reason for adoption",
+              "evidence": {
+                "segmentIds": [],
+                "quote": ""
+              }
+            },
+            {
+              "relationId": "r2",
+              "type": "inference",
+              "antecedents": [
                 "c2",
                 "c3"
               ],
               "consequent": "c4",
-              "title": "Productivity and balance as reasons for adoption",
+              "title": "Work-life balance as a reason for adoption",
               "evidence": {
                 "segmentIds": [],
                 "quote": ""
@@ -592,15 +604,15 @@
           "conclusionCandidates": [
             "c4"
           ],
-          "conclusionTitle": "Workplace policy from employee benefits",
-          "rationale": "The productivity benefit and the work-life balance benefit from reduced commuting support allowing remote work."
+          "conclusionTitle": "Policy case from employee benefits",
+          "rationale": "The productivity and commuting-related benefits provide reasons for the recommendation that companies allow remote work."
         },
         "tokenUsage": {
-          "input": 845,
-          "output": 197,
-          "reasoning": 82
+          "input": 846,
+          "output": 272,
+          "reasoning": 113
         },
-        "rawResponseId": "resp_0445b133972129ba006ab7453418c887d28c5ccc50b2e9fc76"
+        "rawResponseId": "resp_0e722330d4aa47c1006ab75492c40487d2a510b4e350fe24d1"
       }
     }
   ]

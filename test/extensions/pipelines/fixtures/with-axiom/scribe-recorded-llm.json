@@ -2,11 +2,11 @@
   "version": 1,
   "records": [
     {
-      "hash": "62c0ff22da7b646ce965e66d8f87fc4f3be21a69ad2bac65b6ab994bdc2e3218",
+      "hash": "9f252df31fe627a88fa0d6532480015e14616112316e45acff458a1818cee190",
       "stageId": "extract",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEvery explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.\n\nAlso emit `mentions` — where in the input each claim is stated. One entry per place a claim is made:\n- `mentionId` — \"<claim miniId>-m\" for the first mention of a claim, then \"-m2\", \"-m3\", ... for further ones (e.g. \"c1-m\", \"c1-m2\").\n- `text` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.\n- `span` — approximate `{ start, end }` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.\n- `segmentId` — the empty string.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — the `mentionId`s of every mention that states this claim.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per mention id you used.\n- `sourceSupport` — one `{ \"sourceMiniId\": \"...\", \"supportedMiniId\": \"...\" }` entry per citation claim: the citation's miniId, and the miniId of the normal claim it is offered as evidence for — usually the claim stated in the same sentence as the link, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEvery explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.\n\nLines that begin with \"> \" quote someone else, usually the person the author is replying to. They are not the author's claims: never emit a claim from them, and use them only to understand what the author is responding to.\n\nAlso emit `mentions` — where in the input each claim is stated. One entry per place a claim is made:\n- `mentionId` — \"<claim miniId>-m\" for the first mention of a claim, then \"-m2\", \"-m3\", ... for further ones (e.g. \"c1-m\", \"c1-m2\").\n- `text` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.\n- `span` — approximate `{ start, end }` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.\n- `segmentId` — the empty string.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — the `mentionId`s of every mention that states this claim.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `url` (citation claims only) — a URL copied from the input exactly as written, scheme included. Never build one from a site name, domain or title (\"www.example.org\" is not \"https://www.example.org/\"); when the input gives the source no URL, use the empty string.\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per mention id you used.\n- `sourceSupport` — one `{ \"sourceMiniId\": \"...\", \"supportedMiniId\": \"...\" }` entry per citation claim and per axiomatic claim: its miniId, and the miniId of the normal claim it is offered as evidence for, or invoked to justify — usually the claim stated in the same sentence, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Input text:\n\nBy definition, a bachelor is an unmarried man. John is a bachelor. Therefore, John is unmarried.\n\nProduce the canonicalClaims + mentions + mentionToClaim + sourceSupport object.",
         "outputSchema": {
           "type": "object",
@@ -383,7 +383,7 @@
               "mentionIds": [
                 "c1-m"
               ],
-              "suggestedSymbol": "BachelorDefinition",
+              "suggestedSymbol": "BachelorIsUnmarriedMan",
               "axiom": "A bachelor is an unmarried man",
               "type": "axiomatic"
             },
@@ -429,7 +429,7 @@
               "text": "By definition, a bachelor is an unmarried man.",
               "span": {
                 "start": 0,
-                "end": 45
+                "end": 47
               }
             },
             {
@@ -437,37 +437,42 @@
               "segmentId": "",
               "text": "John is a bachelor.",
               "span": {
-                "start": 46,
-                "end": 65
+                "start": 48,
+                "end": 67
               }
             },
             {
               "mentionId": "c3-m",
               "segmentId": "",
-              "text": "John is unmarried.",
+              "text": "Therefore, John is unmarried.",
               "span": {
-                "start": 77,
-                "end": 95
+                "start": 68,
+                "end": 97
               }
             }
           ],
-          "sourceSupport": []
+          "sourceSupport": [
+            {
+              "sourceMiniId": "c1",
+              "supportedMiniId": "c3"
+            }
+          ]
         },
         "tokenUsage": {
-          "input": 1325,
-          "output": 532,
-          "reasoning": 250
+          "input": 1439,
+          "output": 400,
+          "reasoning": 97
         },
-        "rawResponseId": "resp_01fe1b836346782d006ab740abebe487d2bb9d75b3c4048592"
+        "rawResponseId": "resp_017b36e7a02d74f1006ab75485da4c87d2b6e9bba32115e490"
       }
     },
     {
-      "hash": "0513084ed2d9af0b2a6876aeb7d16e01b13d78e498a7992a9b177c8835996048",
+      "hash": "0af8f72411dc264e91dc2a2caaff36807e185a4833861062776098e2c5f13dcb",
       "stageId": "scribe-structure",
       "request": {
         "model": "gpt-6-sol",
         "systemPrompt": "<!-- stage-id: scribe-structure -->\nYou read a canonical claim set — each claim's id, type, and content fields (title/body) — and emit the argument's structure.\n\nEmit:\n- `relations` — the inference edges between claims. Each relation: a stable `relationId` (r1, r2, ...), a `type` of \"inference\", an `antecedents` array of the claim miniIds whose conjunction implies the consequent (one or more; citation- or axiomatic-typed claims may appear here, but never as the consequent), a single `consequent` claim miniId, a `title`, and an `evidence` object, which is always exactly { segmentIds: [], quote: \"\" } — you are shown the claims, not the text they came from, so you have nothing to quote.\n- each relation's `title` — a short noun phrase naming what that step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. Examples: \"Limits of the crowd's power\", \"Residence as tacit consent\", \"Principle over survival\". Every relation's title must differ from every other relation's — two steps never share a name.\n- `conclusionCandidates` — the claim miniIds that could be the argument's conclusion, ordered by DECREASING confidence (best first). The conclusion is the claim other claims support but that supports nothing further. Never list a citation- or axiomatic-typed claim.\n- `conclusionTitle` — for your FIRST candidate only: a short noun phrase naming what the concluding step DOES in the argument — the inferential move, not the proposition. Do not restate the consequent: that claim's own title is already shown directly beneath this one. Aim for under 60 characters. It must differ from every relation's `title` — the step that reaches the conclusion already has its own. Return an empty string when `conclusionCandidates` is empty.\n- `rationale` — one sentence explaining your best pick (or why none qualifies).\n\nEmit the relations and conclusion the author actually argues. An argument with at least two normal-typed claims has at least one relation and one conclusion candidate, so look for them before concluding there are none. Never invent support the author does not give: if the claims genuinely do not connect, return `relations` and `conclusionCandidates` empty.\n\nOutput ONLY the schema-shaped object. No prose.",
-        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=axiomatic symbol=BachelorDefinition fields={\"axiom\":\"A bachelor is an unmarried man\"}\n  [c2] type=normal symbol=JohnIsBachelor fields={\"title\":\"John is a bachelor\",\"body\":\"John is a bachelor.\"}\n  [c3] type=normal symbol=JohnIsUnmarried fields={\"title\":\"John is unmarried\",\"body\":\"John is unmarried.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
+        "userMessage": "Canonical claims (with types + content fields):\n  [c1] type=axiomatic symbol=BachelorIsUnmarriedMan fields={\"axiom\":\"A bachelor is an unmarried man\"}\n  [c2] type=normal symbol=JohnIsBachelor fields={\"title\":\"John is a bachelor\",\"body\":\"John is a bachelor.\"}\n  [c3] type=normal symbol=JohnIsUnmarried fields={\"title\":\"John is unmarried\",\"body\":\"John is unmarried.\"}\n\nEmit the relations + conclusionCandidates + rationale object.",
         "outputSchema": {
           "type": "object",
           "required": [
@@ -557,7 +562,7 @@
                 "c2"
               ],
               "consequent": "c3",
-              "title": "Definitional instantiation",
+              "title": "Applying the bachelor definition",
               "evidence": {
                 "segmentIds": [],
                 "quote": ""
@@ -567,15 +572,15 @@
           "conclusionCandidates": [
             "c3"
           ],
-          "conclusionTitle": "Applying the bachelor definition",
-          "rationale": "The definition of bachelor, together with the claim that John is a bachelor, implies that John is unmarried."
+          "conclusionTitle": "Definitional deduction",
+          "rationale": "The definition of bachelor and the claim that John is a bachelor together imply that John is unmarried."
         },
         "tokenUsage": {
-          "input": 789,
-          "output": 165,
-          "reasoning": 54
+          "input": 793,
+          "output": 173,
+          "reasoning": 65
         },
-        "rawResponseId": "resp_0a994b4775bd4110006ab744ad25d087d2901680cebe74729a"
+        "rawResponseId": "resp_0b18d21bbc52e012006ab7548a3c6087d2988cf221f1f0e547"
       }
     }
   ]

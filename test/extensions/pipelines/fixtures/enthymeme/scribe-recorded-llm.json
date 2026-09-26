@@ -2,11 +2,11 @@
   "version": 1,
   "records": [
     {
-      "hash": "beee98d75d3e6ca3b660035efee8cc7bb489a25169b6af677a9a98a7eee47224",
+      "hash": "f20fb36370a644415053a2412112b3c7d0a805ba63ac8401d660fa3aa600463e",
       "stageId": "extract",
       "request": {
         "model": "gpt-6-sol",
-        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEvery explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.\n\nAlso emit `mentions` — where in the input each claim is stated. One entry per place a claim is made:\n- `mentionId` — \"<claim miniId>-m\" for the first mention of a claim, then \"-m2\", \"-m3\", ... for further ones (e.g. \"c1-m\", \"c1-m2\").\n- `text` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.\n- `span` — approximate `{ start, end }` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.\n- `segmentId` — the empty string.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — the `mentionId`s of every mention that states this claim.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per mention id you used.\n- `sourceSupport` — one `{ \"sourceMiniId\": \"...\", \"supportedMiniId\": \"...\" }` entry per citation claim: the citation's miniId, and the miniId of the normal claim it is offered as evidence for — usually the claim stated in the same sentence as the link, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
+        "systemPrompt": "<!-- stage-id: extract -->\nYou read a raw argument and emit its canonical claim set in one pass.\n\nFor each distinct proposition the author makes, emit one canonical claim. Two phrasings of the same proposition merge into a single claim.\n\nEvery explicit link or URL the author offers as evidence becomes its own citation claim — one per distinct link, even when several links sit in one sentence or a link backs a claim you also emit as a normal claim.\n\nLines that begin with \"> \" quote someone else, usually the person the author is replying to. They are not the author's claims: never emit a claim from them, and use them only to understand what the author is responding to.\n\nAlso emit `mentions` — where in the input each claim is stated. One entry per place a claim is made:\n- `mentionId` — \"<claim miniId>-m\" for the first mention of a claim, then \"-m2\", \"-m3\", ... for further ones (e.g. \"c1-m\", \"c1-m2\").\n- `text` — the span of the input that states the claim, COPIED CHARACTER FOR CHARACTER from the input. Never reword, summarize, translate, correct, or join separated passages with an ellipsis, and do not change capitalization or punctuation — copy the first character exactly as the input has it, upper- or lower-case. Prefer the shortest span that states the claim on its own — usually one sentence or clause. A span that is not present in the input verbatim is discarded, and the claim loses its link back to the source.\n- `span` — approximate `{ start, end }` character offsets of that text in the input. A rough estimate is fine; the text is what is trusted.\n- `segmentId` — the empty string.\n\nEach canonical claim carries:\n- `miniId` — assign in order: c1, c2, c3, ...\n- `mentionIds` — the `mentionId`s of every mention that states this claim.\n- `type` — \"normal\" (a primary proposition), \"citation\" (content is \"the cited source asserts X\"; populate `url` + `title`, and set `citationTypeGuess`), or \"axiomatic\" (invoked as self-evident; populate `axiom`).\n- `url` (citation claims only) — a URL copied from the input exactly as written, scheme included. Never build one from a site name, domain or title (\"www.example.org\" is not \"https://www.example.org/\"); when the input gives the source no URL, use the empty string.\n- `citationTypeGuess` (citation claims only) — your best guess at the source's IEEE reference type, chosen from the allowed values in your output schema (e.g. \"JournalArticle\", \"NewspaperArticle\", \"Book\", \"Website\", \"GovernmentPublication\", …). Use \"unknown\" when no IEEE type fits or you cannot tell.\n- `suggestedSymbol` — a short PascalCase-or-snake_case identifier (letters/digits/underscores, starts with a letter or underscore, under 32 chars). Avoid single letters and generic names.\n- the extension fields your output schema requires (title, body, url, axiom — whichever apply to the claim's type).\n- `mentionToClaim` — one `{ \"mentionId\": \"...\", \"claimMiniId\": \"...\" }` entry per mention id you used.\n- `sourceSupport` — one `{ \"sourceMiniId\": \"...\", \"supportedMiniId\": \"...\" }` entry per citation claim and per axiomatic claim: its miniId, and the miniId of the normal claim it is offered as evidence for, or invoked to justify — usually the claim stated in the same sentence, or just before it. The supported claim must be a normal claim, never a citation or axiomatic one.\n\nStyle:\n- Third-person, present-tense, active voice.\n- State the proposition itself — never \"The author claims that ...\". For a citation claim, the title summarizes what the source asserts.\n\nOutput ONLY the schema-shaped object. No prose.",
         "userMessage": "Input text:\n\nSocrates is a man. Therefore, Socrates is mortal.\n\nProduce the canonicalClaims + mentions + mentionToClaim + sourceSupport object.",
         "outputSchema": {
           "type": "object",
@@ -432,11 +432,11 @@
           "sourceSupport": []
         },
         "tokenUsage": {
-          "input": 1318,
-          "output": 373,
-          "reasoning": 159
+          "input": 1432,
+          "output": 409,
+          "reasoning": 195
         },
-        "rawResponseId": "resp_063a1824bec8ada8006ab740bdb5d487d282f1088506948f19"
+        "rawResponseId": "resp_09f999eba4ea0cc4006ab75495efa887d2b74885bfe9c39f81"
       }
     },
     {
@@ -534,7 +534,7 @@
                 "c1"
               ],
               "consequent": "c2",
-              "title": "Applying human mortality",
+              "title": "Inference from humanity to mortality",
               "evidence": {
                 "segmentIds": [],
                 "quote": ""
@@ -544,15 +544,15 @@
           "conclusionCandidates": [
             "c2"
           ],
-          "conclusionTitle": "From humanity to mortality",
-          "rationale": "Socrates’ being a man is offered as the basis for concluding that he is mortal."
+          "conclusionTitle": "Applying a general property to Socrates",
+          "rationale": "The claim that Socrates is a man supports the conclusion that he is mortal, relying on the implicit premise that all men are mortal."
         },
         "tokenUsage": {
           "input": 773,
-          "output": 275,
-          "reasoning": 171
+          "output": 206,
+          "reasoning": 89
         },
-        "rawResponseId": "resp_073578029cb4c256006ab744b7736487d29fb7558df8045635"
+        "rawResponseId": "resp_03f6720d2750c647006ab7549c182c87d2b9059994d1632e77"
       }
     }
   ]
