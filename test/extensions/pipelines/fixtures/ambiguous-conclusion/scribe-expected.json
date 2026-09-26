@@ -74,12 +74,12 @@
             },
             {
                 "miniId": "gid-2",
-                "symbol": "RemoteWorkCutsCommutes",
+                "symbol": "RemoteWorkReducesCommute",
                 "claimMiniId": "c2"
             },
             {
                 "miniId": "gid-3",
-                "symbol": "LessCommutingImprovesBalance",
+                "symbol": "ShorterCommuteImprovesBalance",
                 "claimMiniId": "c3"
             },
             {
@@ -91,21 +91,26 @@
         "premises": [
             {
                 "miniId": "gid-5",
-                "formula": "(RemoteWorkProductivity and RemoteWorkCutsCommutes and LessCommutingImprovesBalance) implies AllowRemoteWork",
-                "title": "Productivity and balance as reasons for adoption"
+                "formula": "RemoteWorkProductivity implies AllowRemoteWork",
+                "title": "Productivity as a reason for adoption"
             },
             {
                 "miniId": "gid-6",
+                "formula": "(RemoteWorkReducesCommute and ShorterCommuteImprovesBalance) implies AllowRemoteWork",
+                "title": "Work-life balance as a reason for adoption"
+            },
+            {
+                "miniId": "gid-7",
                 "formula": "AllowRemoteWork",
-                "title": "Workplace policy from employee benefits"
+                "title": "Policy case from employee benefits"
             }
         ],
-        "conclusionPremiseMiniId": "gid-6",
+        "conclusionPremiseMiniId": "gid-7",
         "derivationBacking": [],
         "title": "Companies should allow remote work"
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "The productivity benefit and the work-life balance benefit from reduced commuting support allowing remote work.",
+    "selectionRationale": "The productivity and commuting-related benefits provide reasons for the recommendation that companies allow remote work.",
     "processingFailures": []
 }

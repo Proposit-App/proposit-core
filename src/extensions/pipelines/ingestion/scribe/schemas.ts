@@ -37,8 +37,8 @@ export type TScribeExtractOutput = TClaimCanonicalizationOutput &
     }
 
 /**
- * One source (citation) claim and the normal claim it supports, as
- * `extract` reads it off the text. `structure` never sees the text, so
+ * One source claim (a citation or an axiom) and the normal claim it
+ * supports, as `extract` reads it off the text. `structure` never sees the text, so
  * this is the only place the pairing is known.
  */
 export const ScribeSourceSupportSchema = Type.Object(

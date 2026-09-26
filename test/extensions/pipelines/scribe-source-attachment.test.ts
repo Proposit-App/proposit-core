@@ -241,23 +241,37 @@ describe("scribe attaches every source claim to the claim it supports", () => {
     })
 })
 
-type TClaimSpec = { id: string; type: "normal" | "citation"; quote: string }
+type TClaimSpec = {
+    id: string
+    type: "normal" | "citation" | "axiomatic"
+    quote: string
+    url?: string
+}
 
-/** An extract payload for `text`, one mention per claim, no pairings. */
-function extractFor(text: string, claims: TClaimSpec[]): unknown {
+function claimFields(c: TClaimSpec): Record<string, unknown> {
+    if (c.type === "citation")
+        return {
+            title: `Claim ${c.id}`,
+            url: c.url ?? `https://source.example/${c.id}`,
+            citationTypeGuess: "Website",
+        }
+    if (c.type === "axiomatic") return { axiom: `Axiom ${c.id}` }
+    return { title: `Claim ${c.id}`, body: `Claim ${c.id}.` }
+}
+
+/** An extract payload for `text`, one mention per claim. */
+function extractFor(
+    text: string,
+    claims: TClaimSpec[],
+    sourceSupport: { sourceMiniId: string; supportedMiniId: string }[] = []
+): unknown {
     return {
         canonicalClaims: claims.map((c) => ({
             miniId: c.id,
             mentionIds: [`${c.id}-m`],
             suggestedSymbol: `Claim_${c.id}`,
             type: c.type,
-            title: `Claim ${c.id}`,
-            ...(c.type === "citation"
-                ? {
-                      url: `https://source.example/${c.id}`,
-                      citationTypeGuess: "Website",
-                  }
-                : { body: `Claim ${c.id}.` }),
+            ...claimFields(c),
         })),
         mentionToClaim: claims.map((c) => ({
             mentionId: `${c.id}-m`,
@@ -272,7 +286,7 @@ function extractFor(text: string, claims: TClaimSpec[]): unknown {
                 span: { start, end: start + c.quote.length },
             }
         }),
-        sourceSupport: [],
+        sourceSupport,
     }
 }
 
@@ -406,5 +420,179 @@ describe("scribe's position fallback for an unpaired source", () => {
             (f) => f.code === "SOURCE_ATTACHMENT_UNATTACHED"
         )
         expect(unattached.map((f) => f.context?.sourceMiniId)).toEqual(["c1"])
+    })
+})
+
+function codes(result: TRunResult, code: string): TRunResult["failures"] {
+    return result.failures.filter((f) => f.code === code)
+}
+
+function claimOf(result: TRunResult, miniId: string): Record<string, unknown> {
+    return result.output?.argument?.claims.find(
+        (c) => (c as { miniId?: string }).miniId === miniId
+    ) as Record<string, unknown>
+}
+
+describe("scribe keeps only a citation url that the text contains", () => {
+    // Seen on a Wikipedia import with no URLs in its text: the reference
+    // list's bare site names ("www.gutenberg.org") became invented links.
+    const text =
+        'Pascal wrote the Pensées. "The Project Gutenberg eBook of Pascal\'s Pensées". www.gutenberg.org. ' +
+        "The data is at HTTPS://Data.Example/wages. So wagers are rational."
+
+    async function run(urls: { c2: string; c3: string }): Promise<TRunResult> {
+        return runScribe(
+            extractFor(
+                text,
+                [
+                    {
+                        id: "c1",
+                        type: "normal",
+                        quote: "Pascal wrote the Pensées.",
+                    },
+                    {
+                        id: "c2",
+                        type: "citation",
+                        quote: "www.gutenberg.org.",
+                        url: urls.c2,
+                    },
+                    {
+                        id: "c3",
+                        type: "citation",
+                        quote: "The data is at HTTPS://Data.Example/wages.",
+                        url: urls.c3,
+                    },
+                    { id: "c4", type: "normal", quote: "wagers are rational." },
+                ],
+                [
+                    { sourceMiniId: "c2", supportedMiniId: "c1" },
+                    { sourceMiniId: "c3", supportedMiniId: "c1" },
+                ]
+            ),
+            relationTo("c4", ["c1"]),
+            text
+        )
+    }
+
+    it("clears a url built from a site name and warns, keeping the citation", async () => {
+        const result = await run({
+            c2: "https://www.gutenberg.org/",
+            c3: "https://data.example/wages/",
+        })
+        const invented = claimOf(result, "c2")
+        expect(invented.type).toBe("citation")
+        expect(invented.url).toBe("")
+        expect((invented.citation as { url?: string }).url).toBeUndefined()
+        // Differs from the text only in scheme and host case and a
+        // trailing slash, so it is the author's link.
+        expect(claimOf(result, "c3").url).toBe("https://data.example/wages/")
+        expect(backing(result)).toEqual({ c1: ["c2", "c3"] })
+        const warnings = codes(result, "SOURCE_URL_NOT_IN_TEXT")
+        expect(warnings.map((f) => f.context?.miniId)).toEqual(["c2"])
+        expect(warnings[0].context?.url).toBe("https://www.gutenberg.org/")
+        expect(warnings[0].severity).toBe("warning")
+    })
+
+    it("does not accept a url that is longer or shorter than the text's", async () => {
+        const result = await run({
+            c2: "https://data.example/wag",
+            c3: "https://data.example/wages-2024",
+        })
+        expect(claimOf(result, "c2").url).toBe("")
+        expect(claimOf(result, "c3").url).toBe("")
+        expect(
+            codes(result, "SOURCE_URL_NOT_IN_TEXT").map(
+                (f) => f.context?.miniId
+            )
+        ).toEqual(["c2", "c3"])
+    })
+})
+
+describe("scribe attaches axioms like sources", () => {
+    const text =
+        "Everyone deserves dignity. So prisoners deserve humane conditions. Prison food is poor ([report](https://report.example/food)). So prisons must improve."
+    const claims: TClaimSpec[] = [
+        { id: "c1", type: "axiomatic", quote: "Everyone deserves dignity." },
+        {
+            id: "c2",
+            type: "normal",
+            quote: "prisoners deserve humane conditions.",
+        },
+        { id: "c3", type: "normal", quote: "Prison food is poor" },
+        {
+            id: "c4",
+            type: "citation",
+            quote: "([report](https://report.example/food))",
+            url: "https://report.example/food",
+        },
+        { id: "c5", type: "normal", quote: "prisons must improve." },
+    ]
+
+    it("attaches an axiom to the claim extract names for it", async () => {
+        const result = await runScribe(
+            extractFor(text, claims, [
+                { sourceMiniId: "c1", supportedMiniId: "c2" },
+            ]),
+            relationTo("c5", ["c2", "c3"]),
+            text
+        )
+        expect(backing(result)).toEqual({ c2: ["c1"], c3: ["c4"] })
+    })
+
+    it("attaches an unpaired axiom by where its mention sits", async () => {
+        const result = await runScribe(
+            extractFor(text, claims),
+            relationTo("c5", ["c2", "c3"]),
+            text
+        )
+        // Nothing precedes the axiom in its sentence or before it, so it
+        // is unattached — and says so, rather than silently backing
+        // nothing.
+        expect(backing(result)).toEqual({ c3: ["c4"] })
+        expect(
+            codes(result, "SOURCE_ATTACHMENT_UNATTACHED").map(
+                (f) => f.context?.sourceMiniId
+            )
+        ).toEqual(["c1"])
+    })
+
+    it("attaches an unpaired axiom to the claim in its own sentence", async () => {
+        const inline =
+            "Prisoners deserve humane conditions, since everyone deserves dignity. So prisons must improve."
+        const result = await runScribe(
+            extractFor(inline, [
+                {
+                    id: "c1",
+                    type: "normal",
+                    quote: "Prisoners deserve humane conditions",
+                },
+                {
+                    id: "c2",
+                    type: "axiomatic",
+                    quote: "everyone deserves dignity.",
+                },
+                { id: "c3", type: "normal", quote: "prisons must improve." },
+            ]),
+            relationTo("c3", ["c1"]),
+            inline
+        )
+        expect(backing(result)).toEqual({ c1: ["c2"] })
+    })
+
+    it("does not attach an axiom to a claim a source already backs, and warns", async () => {
+        const result = await runScribe(
+            extractFor(text, claims, [
+                { sourceMiniId: "c1", supportedMiniId: "c3" },
+                { sourceMiniId: "c4", supportedMiniId: "c3" },
+            ]),
+            relationTo("c5", ["c2", "c3"]),
+            text
+        )
+        expect(backing(result)).toEqual({ c3: ["c4"] })
+        const mixed = codes(result, "SOURCE_ATTACHMENT_MIXED")
+        expect(mixed.map((f) => f.context)).toEqual([
+            { sourceMiniId: "c1", supportedMiniId: "c3" },
+        ])
+        expect(mixed[0].severity).toBe("warning")
     })
 })

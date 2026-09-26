@@ -39,10 +39,10 @@
                 "type": "normal",
                 "sourceAnchors": [
                     {
-                        "quote": "John is unmarried.",
-                        "startUtf16": 78,
+                        "quote": "Therefore, John is unmarried.",
+                        "startUtf16": 67,
                         "endUtf16": 96,
-                        "prefix": " John is a bachelor. Therefore, ",
+                        "prefix": "arried man. John is a bachelor. ",
                         "suffix": ""
                     }
                 ],
@@ -52,7 +52,7 @@
         "variables": [
             {
                 "miniId": "gid-1",
-                "symbol": "BachelorDefinition",
+                "symbol": "BachelorIsUnmarriedMan",
                 "claimMiniId": "c1"
             },
             {
@@ -70,12 +70,12 @@
             {
                 "miniId": "gid-4",
                 "formula": "JohnIsBachelor implies JohnIsUnmarried",
-                "title": "Definitional instantiation"
+                "title": "Applying the bachelor definition"
             },
             {
                 "miniId": "gid-5",
                 "formula": "JohnIsUnmarried",
-                "title": "Applying the bachelor definition"
+                "title": "Definitional deduction"
             }
         ],
         "conclusionPremiseMiniId": "gid-5",
@@ -89,6 +89,6 @@
     },
     "failureText": null,
     "uncategorizedText": null,
-    "selectionRationale": "The definition of bachelor, together with the claim that John is a bachelor, implies that John is unmarried.",
+    "selectionRationale": "The definition of bachelor and the claim that John is a bachelor together imply that John is unmarried.",
     "processingFailures": []
 }

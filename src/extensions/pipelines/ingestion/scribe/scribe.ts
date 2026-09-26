@@ -11,7 +11,7 @@
 // DAG:
 //
 //   extract ──┬─ (adapter) claim-canonicalization ─┬─ claim-reference-validation
-//             ├─ (adapter) claim-type-classification ┤
+//             │    └─ (adapter) claim-type-classification ┤
 //             │                                      └─ variable-assignment
 //             └─ (adapter) claim-mention-extraction
 //   structure ─┬─ (adapter) relation-extraction
