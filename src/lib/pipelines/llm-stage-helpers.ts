@@ -227,7 +227,12 @@ export function applyRetrySuffix(
     validationError: string,
     errorCap: number
 ): string {
-    const truncated = truncateValidationError(validationError, errorCap)
+    // A check's message is a sentence; its own full stop would double the
+    // one the wrapper adds.
+    const truncated = truncateValidationError(
+        validationError,
+        errorCap
+    ).replace(/\.$/, "")
     return (
         baseUser +
         "\n\nYour previous response failed schema validation: " +

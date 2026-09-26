@@ -295,6 +295,32 @@ describe("createScribePipeline", () => {
         )
     })
 
+    it("tells the model why its first answer was refused", async () => {
+        const prompts: string[] = []
+        const llm = createMockLlmProvider({
+            responses: {
+                extract: [{ kind: "ok", output: happyExtractOutput() }],
+                "scribe-structure": [
+                    { kind: "ok", output: noStructure },
+                    { kind: "ok", output: happyStructureOutput() },
+                ],
+            },
+            onCall: (call) => {
+                if (call.stageId === "scribe-structure") {
+                    prompts.push(call.userMessage)
+                }
+            },
+        })
+        await executePipeline(
+            createScribePipeline(basicsExtension),
+            { text: INPUT_TEXT },
+            { llm, generateId: createDeterministicGenerateId() }
+        )
+        expect(prompts[1]).toContain(
+            "failed schema validation: Couldn't work out how these claims connect to a conclusion. Please retry"
+        )
+    })
+
     it("fails the import in plain words when the second answer is empty too", async () => {
         const result = await runScribe(
             happyExtractOutput(),
