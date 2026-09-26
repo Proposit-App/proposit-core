@@ -550,6 +550,8 @@ describe("scribe merges citations of the same page", () => {
         "Stanford covers it (https://plato.example/wager/index.html; http://plato.example/wager/). " +
         "God may exist (https://web.archive.org/web/20190213131607/http://www.stat.example/wager.pdf; http://stat.example/wager.pdf). " +
         "The IEP agrees (https://iep.example/pasc-wag/ and https://iep.example/p/pasc-wag.htm). " +
+        "Pensées (https://gut.example/p.htm#p_229, https://gut.example/p.htm#p_233, http://gut.example/p.htm#p_233). " +
+        "A book (https://dx.doi.org/10.4324/9781315888347, https://doi.org/10.4324%2F9781315888347). " +
         "So one should believe."
     const specs: TClaimSpec[] = [
         { id: "c1", type: "normal", quote: "Belief is a wager" },
@@ -575,6 +577,31 @@ describe("scribe merges citations of the same page", () => {
             type: "citation",
             quote: "https://iep.example/p/pasc-wag.htm",
         },
+        {
+            id: "s9",
+            type: "citation",
+            quote: "https://gut.example/p.htm#p_229",
+        },
+        {
+            id: "s10",
+            type: "citation",
+            quote: "https://gut.example/p.htm#p_233",
+        },
+        {
+            id: "s11",
+            type: "citation",
+            quote: "http://gut.example/p.htm#p_233",
+        },
+        {
+            id: "s12",
+            type: "citation",
+            quote: "https://dx.doi.org/10.4324/9781315888347",
+        },
+        {
+            id: "s13",
+            type: "citation",
+            quote: "https://doi.org/10.4324%2F9781315888347",
+        },
     ]
     // Each citation's url is the one its mention quotes.
     const claims = specs.map((c) =>
@@ -593,6 +620,11 @@ describe("scribe merges citations of the same page", () => {
                 { sourceMiniId: "s6", supportedMiniId: "c2" },
                 { sourceMiniId: "s7", supportedMiniId: "c2" },
                 { sourceMiniId: "s8", supportedMiniId: "c2" },
+                { sourceMiniId: "s9", supportedMiniId: "c1" },
+                { sourceMiniId: "s10", supportedMiniId: "c1" },
+                { sourceMiniId: "s11", supportedMiniId: "c1" },
+                { sourceMiniId: "s12", supportedMiniId: "c1" },
+                { sourceMiniId: "s13", supportedMiniId: "c1" },
             ]),
             relationTo("c3", ["c1", "c2"]),
             text
@@ -605,10 +637,21 @@ describe("scribe merges citations of the same page", () => {
             .filter((c) => (c as { type?: string }).type === "citation")
             .map((c) => (c as { miniId: string }).miniId)
         // http and https; index.html and a trailing slash; an archive copy
-        // and its original (the original kept). Different paths stay apart.
-        expect(citations).toEqual(["s1", "s3", "s6", "s7", "s8"])
+        // and its original (the original kept); one DOI through either
+        // resolver, its slash encoded or not. Different paths, and
+        // different places in one page, stay apart.
+        expect(citations).toEqual([
+            "s1",
+            "s3",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s10",
+            "s12",
+        ])
         expect(backing(result)).toEqual({
-            c1: ["s1", "s3"],
+            c1: ["s1", "s10", "s12", "s3", "s9"],
             c2: ["s3", "s6", "s7", "s8"],
         })
     })
@@ -626,6 +669,8 @@ describe("scribe merges citations of the same page", () => {
             { keptMiniId: "s1", mergedMiniIds: ["s2"] },
             { keptMiniId: "s3", mergedMiniIds: ["s4"] },
             { keptMiniId: "s6", mergedMiniIds: ["s5"] },
+            { keptMiniId: "s10", mergedMiniIds: ["s11"] },
+            { keptMiniId: "s12", mergedMiniIds: ["s13"] },
         ])
         expect(merged.every((f) => f.severity === "warning")).toBe(true)
     })
