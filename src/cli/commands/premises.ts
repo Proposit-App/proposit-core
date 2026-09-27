@@ -249,18 +249,12 @@ export function registerPremiseCommands(
         .description("Update premise metadata")
         .option("--title <new_title>", "New title")
         .option("--clear-title", "Remove the title")
-        .option(
-            "--enthymeme",
-            "Mark this premise as left unspoken in the natural-language original"
-        )
-        .option("--no-enthymeme", "Remove the unspoken mark")
         .action(
             async (
                 premiseId: string,
                 opts: {
                     title?: string
                     clearTitle?: boolean
-                    enthymeme?: boolean
                 }
             ) => {
                 await assertNotPublished(argumentId, version)
@@ -287,19 +281,9 @@ export function registerPremiseCommands(
                         pm.updateExtras({ title: opts.title })
                         updated = true
                     }
-                    if (opts.enthymeme === true) {
-                        pm.updateExtras({ enthymeme: true })
-                        updated = true
-                    } else if (opts.enthymeme === false) {
-                        // `undefined` deletes the key. An entity that carries
-                        // the key at all hashes differently from one that omits
-                        // it, so unmarking must restore the original absence.
-                        pm.updateExtras({ enthymeme: undefined })
-                        updated = true
-                    }
                     if (!updated) {
                         errorExit(
-                            "No updates specified. Use --title, --clear-title, --enthymeme, or --no-enthymeme."
+                            "No updates specified. Use --title or --clear-title."
                         )
                     }
                 } catch (err) {

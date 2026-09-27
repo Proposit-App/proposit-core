@@ -510,19 +510,20 @@ proposit-core origins show $DOC
 proposit-core origins show $DOC --text
 ```
 
-### Anchor a premise to a span
+### Anchor an expression to a span
 
 ```bash
 proposit-core origins anchor add --document $DOC \
     --argument <argument-id> --version 0 \
-    --target premise --target-id <premise-id> \
+    --target expression --target-id <expression-id> \
     --start 0 --end 12
 # → <anchor-id>
 ```
 
-`--target` is `expression`, `premise`, or `argument`. A global claim cannot be
-anchored: a claim is shared by reference across arguments, so its provenance is
-a property of _this_ argument's use of it.
+`--target` is `expression` or `argument`. A global claim cannot be anchored: a
+claim is shared by reference across arguments, so its provenance is a property
+of _this_ argument's use of it. A premise cannot be anchored either: it has no
+content of its own, so its claims' expressions carry the provenance.
 
 The argument version must already be linked to the document — `origins attach`
 creates that link, `origins link` adds one for an argument that already has the
@@ -537,7 +538,7 @@ an anchor whose span leaves the document is refused:
 ```bash
 proposit-core origins anchor add --document $DOC \
     --argument <argument-id> --version 0 \
-    --target premise --target-id <premise-id> --start 0 --end 99999
+    --target expression --target-id <expression-id> --start 0 --end 99999
 # → ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE: origin anchor "…" spans [0, 99999) of a
 #   document 74 code points long
 
@@ -570,17 +571,15 @@ supply. It is always declared by an author — nothing infers it — and it can 
 declared on an argument with no source text at all.
 
 ```bash
-proposit-core <argument-id> latest premises update <premise-id> --enthymeme
 proposit-core <argument-id> latest expressions mark <premise-id> <expression-id> --enthymeme
 
 # Unmark — removes the field rather than storing false, which restores the
-# entity's original checksum.
-proposit-core <argument-id> latest premises update <premise-id> --no-enthymeme
+# expression's original checksum.
 proposit-core <argument-id> latest expressions mark <premise-id> <expression-id> --no-enthymeme
 ```
 
-Only a claim-bound variable expression can meaningfully be marked — a
-premise-bound variable's truth is derived from another premise rather than
+Only a claim-bound variable expression can meaningfully be marked. A premise
+cannot be marked at all: it has no content of its own. A premise-bound variable's truth is derived from another premise rather than
 asserted, so there is nothing for a speaker to have suppressed, and an operator
 or formula has no assertion at all. Marking one does not throw (mutations throw
 only on Structural violations); it is reported as `P-6` by the library's

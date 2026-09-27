@@ -246,8 +246,8 @@ function singleOperatorInsideFormula(
  * P-6 — An enthymeme marks a claim-bound variable. An expression carrying
  * `enthymeme: true` is a variable expression, and its variable is claim-bound.
  *
- * The TypeScript types confine the annotation to variable expressions and
- * premises, but the entity schemas stay open for app-level fields, so a mark
+ * The TypeScript types confine the annotation to variable expressions, but
+ * the entity schemas stay open for app-level fields, so a mark
  * on an operator or formula expression is reachable through the library API
  * and shifts that expression's checksum. Both halves are reported here because
  * neither is expressible in the schema: an operator has no assertion to

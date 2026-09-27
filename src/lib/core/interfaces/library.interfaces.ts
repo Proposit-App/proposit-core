@@ -274,8 +274,8 @@ export interface TOriginLookup<
         argumentVersion: number
     ): TAnchor[]
     /**
-     * Returns every anchor pointing at one target — a claim expression, a
-     * premise, or the argument itself.
+     * Returns every anchor pointing at one target — a claim expression or
+     * the argument itself.
      */
     getAnchorsForTarget(
         targetType: TOriginAnchorTargetType,

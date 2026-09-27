@@ -25,14 +25,10 @@ export const OriginStanceSchema = Type.Union(
 export type TOriginStance = Static<typeof OriginStanceSchema>
 
 export const OriginAnchorTargetTypeSchema = Type.Union(
-    [
-        Type.Literal("expression"),
-        Type.Literal("premise"),
-        Type.Literal("argument"),
-    ],
+    [Type.Literal("expression"), Type.Literal("argument")],
     {
         description:
-            "What an anchor points at. Argument-scoped only: a global claim is excluded because a claim is shared by reference across arguments, so 'where did it come from' has no single answer — the provenance belongs to this argument's use of it.",
+            "What an anchor points at. Argument-scoped only: a global claim is excluded because a claim is shared by reference across arguments, so 'where did it come from' has no single answer — the provenance belongs to this argument's use of it. A premise is excluded because it has no content of its own; its claims, through their expressions, carry the provenance.",
     }
 )
 export type TOriginAnchorTargetType = Static<

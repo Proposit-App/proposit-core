@@ -7,6 +7,7 @@ import { ForkLibrary } from "../../lib/core/fork-library.js"
 import { OriginLibrary } from "../../lib/core/origin-library.js"
 import type { TClaimLookup } from "../../lib/core/interfaces/library.interfaces.js"
 import { getStateDir } from "../config.js"
+import { errorExit } from "../output.js"
 
 function claimsPath(): string {
     return path.join(getStateDir(), "claims.json")
@@ -20,44 +21,62 @@ export function axiomsPath(): string {
     return path.join(getStateDir(), "axioms.json")
 }
 
-export async function readClaimLibrary(): Promise<ClaimLibrary> {
+/**
+ * Reads a library file's snapshot and hands it to `load`. Only a missing file
+ * means "no library yet". Any other failure stops the command: returning an
+ * empty library instead would let the command's next write save it over the
+ * file and erase everything in it.
+ */
+async function readLibraryFile<T>(
+    filePath: string,
+    load: (snapshot: never) => T,
+    empty: () => T
+): Promise<T> {
+    let content: string
     try {
-        const content = await fs.readFile(claimsPath(), "utf-8")
-        const snapshot = JSON.parse(content) as ReturnType<
-            ClaimLibrary["snapshot"]
-        >
-        return ClaimLibrary.fromSnapshot(snapshot)
-    } catch {
-        return new ClaimLibrary()
+        content = await fs.readFile(filePath, "utf-8")
+    } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") return empty()
+        return errorExit(`Could not read ${filePath}: ${String(err)}`)
     }
+    try {
+        return load(JSON.parse(content) as never)
+    } catch (err) {
+        errorExit(
+            `Could not load ${filePath}: ${err instanceof Error ? err.message : String(err)}`
+        )
+    }
+}
+
+export async function readClaimLibrary(): Promise<ClaimLibrary> {
+    return readLibraryFile(
+        claimsPath(),
+        (snapshot: ReturnType<ClaimLibrary["snapshot"]>) =>
+            ClaimLibrary.fromSnapshot(snapshot),
+        () => new ClaimLibrary()
+    )
 }
 
 export async function readCitationLibrary(
     claimLookup: TClaimLookup
 ): Promise<ClaimCitationLibrary> {
-    try {
-        const content = await fs.readFile(citationsPath(), "utf-8")
-        const snapshot = JSON.parse(content) as ReturnType<
-            ClaimCitationLibrary["snapshot"]
-        >
-        return ClaimCitationLibrary.fromSnapshot(snapshot, claimLookup)
-    } catch {
-        return new ClaimCitationLibrary(claimLookup)
-    }
+    return readLibraryFile(
+        citationsPath(),
+        (snapshot: ReturnType<ClaimCitationLibrary["snapshot"]>) =>
+            ClaimCitationLibrary.fromSnapshot(snapshot, claimLookup),
+        () => new ClaimCitationLibrary(claimLookup)
+    )
 }
 
 export async function readAxiomLibrary(
     claimLookup: TClaimLookup
 ): Promise<ClaimAxiomLibrary> {
-    try {
-        const content = await fs.readFile(axiomsPath(), "utf-8")
-        const snapshot = JSON.parse(content) as ReturnType<
-            ClaimAxiomLibrary["snapshot"]
-        >
-        return ClaimAxiomLibrary.fromSnapshot(snapshot, claimLookup)
-    } catch {
-        return new ClaimAxiomLibrary(claimLookup)
-    }
+    return readLibraryFile(
+        axiomsPath(),
+        (snapshot: ReturnType<ClaimAxiomLibrary["snapshot"]>) =>
+            ClaimAxiomLibrary.fromSnapshot(snapshot, claimLookup),
+        () => new ClaimAxiomLibrary(claimLookup)
+    )
 }
 
 export function originsPath(): string {
@@ -65,15 +84,20 @@ export function originsPath(): string {
 }
 
 export async function readOriginLibrary(): Promise<OriginLibrary> {
-    try {
-        const content = await fs.readFile(originsPath(), "utf-8")
-        const snapshot = JSON.parse(content) as ReturnType<
-            OriginLibrary["snapshot"]
-        >
-        return OriginLibrary.fromSnapshot(snapshot)
-    } catch {
-        return new OriginLibrary()
-    }
+    return readLibraryFile(
+        originsPath(),
+        (snapshot: ReturnType<OriginLibrary["snapshot"]>) =>
+            OriginLibrary.fromSnapshot({
+                ...snapshot,
+                // Anchors on premises were allowed before 5.3.0. A premise has
+                // no content of its own, so they are dropped rather than
+                // refused, and the next write saves the file without them.
+                anchors: snapshot.anchors.filter(
+                    (a) => (a.targetType as string) !== "premise"
+                ),
+            }),
+        () => new OriginLibrary()
+    )
 }
 
 export async function writeOriginLibrary(
@@ -111,15 +135,12 @@ function forksPath(): string {
 }
 
 export async function readForkLibrary(): Promise<ForkLibrary> {
-    try {
-        const content = await fs.readFile(forksPath(), "utf-8")
-        const snapshot = JSON.parse(content) as ReturnType<
-            ForkLibrary["snapshot"]
-        >
-        return ForkLibrary.fromSnapshot(snapshot)
-    } catch {
-        return new ForkLibrary()
-    }
+    return readLibraryFile(
+        forksPath(),
+        (snapshot: ReturnType<ForkLibrary["snapshot"]>) =>
+            ForkLibrary.fromSnapshot(snapshot),
+        () => new ForkLibrary()
+    )
 }
 
 export async function writeForkLibrary(library: ForkLibrary): Promise<void> {

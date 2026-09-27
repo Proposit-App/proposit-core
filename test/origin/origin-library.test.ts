@@ -46,8 +46,8 @@ function anchorFor(
         argumentId: "arg-1",
         argumentVersion: 0,
         documentId: "doc-1",
-        targetType: "premise" as const,
-        targetId: "prem-1",
+        targetType: "expression" as const,
+        targetId: "expr-0",
         exact: quote,
         startCodePoint: start,
         endCodePoint: start + codePointLength(quote),
@@ -200,12 +200,34 @@ describe("OriginLibrary — anchors", () => {
         )
         expect(origins.getAnchorsForArgument("arg-1", 0)).toHaveLength(2)
         expect(
-            origins.getAnchorsForTarget("premise", "prem-1").map((a) => a.id)
+            origins.getAnchorsForTarget("expression", "expr-0").map((a) => a.id)
         ).toEqual(["anchor-1"])
         expect(
             origins.getAnchorsForTarget("expression", "expr-1").map((a) => a.id)
         ).toEqual(["anchor-2"])
         expect(origins.getAnchorsForTarget("argument", "arg-1")).toEqual([])
+    })
+
+    it("refuses an anchor on a premise, and reports one loaded from a snapshot", () => {
+        const { origins } = withDocument()
+        const onPremise = anchorFor(SOURCE, "Therefore", {
+            targetType: "premise",
+            targetId: "prem-1",
+        }) as unknown as Parameters<OriginLibrary["addAnchor"]>[0]
+        expect(() => origins.addAnchor(onPremise)).toThrow(
+            /ORIGIN_ANCHOR_SCHEMA_INVALID/
+        )
+        expect(origins.getAllAnchors()).toHaveLength(0)
+
+        // A snapshot is loaded even when inconsistent, so it can be repaired;
+        // validate() is what names the premise anchor.
+        const restored = OriginLibrary.fromSnapshot({
+            ...origins.snapshot(),
+            anchors: [{ ...onPremise, checksum: "cafe" }],
+        })
+        expect(restored.validate().violations.map((v) => v.code)).toContain(
+            "ORIGIN_ANCHOR_SCHEMA_INVALID"
+        )
     })
 
     it("keeps the optional prefix and suffix context", () => {
@@ -264,7 +286,7 @@ describe("OriginLibrary — anchors", () => {
         origins.addAnchor(anchorFor(SOURCE, "Therefore"))
         origins.removeAnchor("anchor-1")
         expect(origins.getAnchorsForArgument("arg-1", 0)).toEqual([])
-        expect(origins.getAnchorsForTarget("premise", "prem-1")).toEqual([])
+        expect(origins.getAnchorsForTarget("expression", "expr-0")).toEqual([])
         expect(origins.getAnchor("anchor-1")).toBeUndefined()
     })
 })
@@ -487,8 +509,8 @@ describe("OriginLibrary — documents whose text contains adjacent invisibles", 
             argumentId: "arg-1",
             argumentVersion: 0,
             documentId: "doc-1",
-            targetType: "premise",
-            targetId: "prem-1",
+            targetType: "expression",
+            targetId: "expr-0",
             exact: quote,
             startCodePoint: start,
             endCodePoint: start + codePointLength(quote),
@@ -530,8 +552,8 @@ describe("OriginLibrary — cost of validating on every mutation", () => {
                 argumentId: "arg-1",
                 argumentVersion: 0,
                 documentId: "doc-0",
-                targetType: "premise",
-                targetId: `prem-${i}`,
+                targetType: "expression",
+                targetId: `expr-${i}`,
                 exact: quote,
                 startCodePoint: 0,
                 endCodePoint: 11,
@@ -652,8 +674,8 @@ describe("OriginLibrary — an inconsistent library stays repairable", () => {
                 argumentId: "arg-1",
                 argumentVersion: 0,
                 documentId: "doc-1",
-                targetType: "premise" as const,
-                targetId: `prem-${i}`,
+                targetType: "expression" as const,
+                targetId: `expr-${i}`,
                 exact: "All swans",
                 startCodePoint: 0,
                 endCodePoint: 9,

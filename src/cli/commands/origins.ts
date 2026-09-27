@@ -11,7 +11,7 @@ import type { TOriginAnchorTargetType } from "../../lib/schemata/index.js"
 import { listVersionNumbers } from "../storage/arguments.js"
 
 const STANCES = ["representation", "seed"] as const
-const TARGET_TYPES = ["expression", "premise", "argument"] as const
+const TARGET_TYPES = ["expression", "argument"] as const
 
 function parseIntegerOption(value: string, label: string): number {
     const parsed = Number(value)

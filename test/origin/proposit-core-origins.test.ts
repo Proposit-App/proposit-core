@@ -152,7 +152,6 @@ describe("PropositCore full-fidelity origin round-trip", () => {
             position: 1,
             enthymeme: true,
         } as TExpressionInput<TCorePropositionalExpression>)
-        premise.setExtras({ ...premise.getExtras(), enthymeme: true })
         engine.flushChecksums()
 
         core.origins.addDocument({ id: "doc-1", text: SOURCE })
@@ -180,12 +179,12 @@ describe("PropositCore full-fidelity origin round-trip", () => {
             ...spanOf("All swans observed so far are white."),
         })
         core.origins.addAnchor({
-            id: "anchor-premise",
+            id: "anchor-argument",
             argumentId: "arg-1",
             argumentVersion: 1,
             documentId: "doc-1",
-            targetType: "premise",
-            targetId: "prem-1",
+            targetType: "argument",
+            targetId: "arg-1",
             ...spanOf("all swans are white."),
         })
         return core
@@ -214,16 +213,15 @@ describe("PropositCore full-fidelity origin round-trip", () => {
             restored.origins.getAnchorsForTarget("expression", "expr-1")
         ).toHaveLength(1)
         expect(
-            restored.origins.getAnchorsForTarget("premise", "prem-1")
+            restored.origins.getAnchorsForTarget("argument", "arg-1")
         ).toHaveLength(1)
     })
 
-    it("carries the enthymeme marks on both the expression and the premise", () => {
+    it("carries the enthymeme mark on the expression", () => {
         const core = buildCore()
         const restored = PropositCore.fromSnapshot(core.snapshot())
         const argument = restored.snapshot().arguments.arguments[0]
         const premise = argument.premises[0]
-        expect(premise.premise.enthymeme).toBe(true)
         const expression = premise.expressions.expressions.find(
             (e) => e.id === "expr-1"
         )
@@ -242,7 +240,11 @@ describe("PropositCore full-fidelity origin round-trip", () => {
         // JSON round-trip preserves, which predates this work.
         expect(restored.snapshot().origins).toEqual(snapshot.origins)
         expect(restored.validate().ok).toBe(true)
-        const premise = restored.snapshot().arguments.arguments[0].premises[0]
-        expect(premise.premise.enthymeme).toBe(true)
+        const expression = restored
+            .snapshot()
+            .arguments.arguments[0].premises[0].expressions.expressions.find(
+                (e) => e.id === "expr-1"
+            )
+        expect(expression).toMatchObject({ enthymeme: true })
     })
 })

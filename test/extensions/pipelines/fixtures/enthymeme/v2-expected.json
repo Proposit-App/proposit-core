@@ -51,16 +51,7 @@
             {
                 "miniId": "gid-3",
                 "formula": "Socrates_Is_Man implies Socrates_Is_Mortal",
-                "title": "From humanity to mortality",
-                "sourceAnchors": [
-                    {
-                        "quote": "Socrates is a man. Therefore, Socrates is mortal.",
-                        "startUtf16": 0,
-                        "endUtf16": 49,
-                        "prefix": "",
-                        "suffix": ""
-                    }
-                ]
+                "title": "From humanity to mortality"
             },
             {
                 "miniId": "gid-4",

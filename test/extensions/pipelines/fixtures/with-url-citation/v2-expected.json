@@ -99,16 +99,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "(Global_Temperatures_Rise and Warming_Causes_Extreme_Weather) implies Extreme_Weather_More_Frequent",
-                "title": "Applying warming’s effect on weather",
-                "sourceAnchors": [
-                    {
-                        "quote": "Therefore, we are seeing more frequent extreme weather events.",
-                        "startUtf16": 213,
-                        "endUtf16": 275,
-                        "prefix": "requent extreme weather events. ",
-                        "suffix": ""
-                    }
-                ]
+                "title": "Applying warming’s effect on weather"
             },
             {
                 "miniId": "gid-6",

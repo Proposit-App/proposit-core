@@ -71,16 +71,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "John_Bachelor implies John_Unmarried",
-                "title": "Applying the bachelor definition",
-                "sourceAnchors": [
-                    {
-                        "quote": "Therefore, John is unmarried.",
-                        "startUtf16": 67,
-                        "endUtf16": 96,
-                        "prefix": "arried man. John is a bachelor. ",
-                        "suffix": ""
-                    }
-                ]
+                "title": "Applying the bachelor definition"
             },
             {
                 "miniId": "gid-5",

@@ -8,7 +8,8 @@ import { CHECKSUM_FIXTURES } from "./checksum-fixtures.js"
 
 // The most dangerous change in this area is not a bug in new code — it is a
 // silent shift in the checksum of every premise and expression that already
-// exists. `entityChecksum` includes a field only `if (field in entity)`, and
+// exists. The mark lives on variable expressions only; premises used to carry
+// it too, and their checksums ignore it now. `entityChecksum` includes a field only `if (field in entity)`, and
 // `createChecksumConfig` unions additional fields onto the defaults rather
 // than replacing them, so adding an optional field to the schema and to the
 // default field set is backward compatible with no migration.
@@ -73,8 +74,10 @@ describe("enthymeme is checksum-neutral for entities that lack it", () => {
     })
 })
 
-describe("a present enthymeme key does change the checksum", () => {
-    for (const [name, kind, entity] of CHECKSUM_FIXTURES) {
+describe("a present enthymeme key does change an expression's checksum", () => {
+    for (const [name, kind, entity] of CHECKSUM_FIXTURES.filter(
+        ([, kind]) => kind === "expression"
+    )) {
         const baseline = entityChecksum(entity, fieldsFor(kind))
 
         it(`${name} — enthymeme: null hashes differently from absent`, () => {
@@ -124,4 +127,24 @@ describe("a present enthymeme key does change the checksum", () => {
             )
         ).not.toBe(entityChecksum(entity, extendedFieldsFor(kind)))
     })
+})
+
+describe("a premise's enthymeme key does not affect its checksum", () => {
+    // Premises no longer carry the mark. One stored before that must hash as
+    // if unmarked, whatever value it holds.
+    for (const [name, kind, entity] of CHECKSUM_FIXTURES.filter(
+        ([, kind]) => kind === "premise"
+    )) {
+        it(`${name} hashes the same with or without the key`, () => {
+            const baseline = entityChecksum(entity, fieldsFor(kind))
+            for (const value of [true, false, null]) {
+                expect(
+                    entityChecksum(
+                        { ...entity, enthymeme: value },
+                        fieldsFor(kind)
+                    )
+                ).toBe(baseline)
+            }
+        })
+    }
 })

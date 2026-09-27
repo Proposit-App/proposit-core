@@ -33,8 +33,8 @@ const minimalAnchor = {
     argumentId: "arg-1",
     argumentVersion: 0,
     documentId: "doc-1",
-    targetType: "premise",
-    targetId: "prem-1",
+    targetType: "expression",
+    targetId: "expr-1",
     exact: "source text",
     startCodePoint: 17,
     endCodePoint: 28,
@@ -102,7 +102,7 @@ describe("origin link schema", () => {
 
 describe("origin anchor schema", () => {
     it("accepts each argument-scoped target type", () => {
-        for (const targetType of ["expression", "premise", "argument"]) {
+        for (const targetType of ["expression", "argument"]) {
             expect(
                 Value.Check(CoreOriginAnchorSchema, {
                     ...minimalAnchor,
@@ -110,6 +110,15 @@ describe("origin anchor schema", () => {
                 })
             ).toBe(true)
         }
+    })
+
+    it("rejects a premise target — a premise has no content of its own, only its claims do", () => {
+        expect(
+            Value.Check(CoreOriginAnchorSchema, {
+                ...minimalAnchor,
+                targetType: "premise",
+            })
+        ).toBe(false)
     })
 
     it("rejects a claim target — provenance belongs to an argument's use of a claim", () => {

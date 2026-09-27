@@ -1,5 +1,5 @@
 // Unit tests for the source anchors `finalizeResponseV2` attaches to
-// claims and premises.
+// claims. Premises carry none: a premise has no content of its own.
 //
 // Same idiom as `finalize-response-v2.test.ts`: a `TStageContext` stub
 // serving canned stage outputs, so the assertions stay decoupled from a
@@ -324,18 +324,18 @@ describe("finalizeResponseV2 — anchor resolution is reported, not silent", () 
         )
     })
 
-    it("reports a relation evidence quote that cannot be found", () => {
+    it("does not resolve a relation's evidence quote, so reports nothing about it", () => {
         const outputs = buildOutputs()
         const relations = outputs[
             STAGE_IDS.relationExtraction
         ] as TRelationExtractionOutput
         relations.relations[0].evidence.quote = "a clause never written"
 
-        const unresolved = finalizeFailures(outputs).filter(
-            (f) => f.code === "SOURCE_ANCHOR_UNRESOLVED"
-        )
-        expect(unresolved).toHaveLength(1)
-        expect(unresolved[0].context?.relationId).toBe("r1")
+        expect(
+            finalizeFailures(outputs).filter(
+                (f) => f.context?.relationId !== undefined
+            )
+        ).toEqual([])
     })
 
     it("reports that a repeated quote was disambiguated by position", () => {
@@ -350,41 +350,13 @@ describe("finalizeResponseV2 — anchor resolution is reported, not silent", () 
         expect(ambiguous[0].context?.occurrences).toBe(2)
     })
 
-    it("reports a loose quote that matches two passages equally, with no anchor", () => {
-        const text =
-            "The committee approved the new budget for the city today. " +
-            "The committee approved the new budget for the county today."
-        const outputs = buildOutputs()
-        const relations = outputs[
-            STAGE_IDS.relationExtraction
-        ] as TRelationExtractionOutput
-        relations.relations[0].evidence.quote =
-            "The committee approved the new budget for the town today"
-        const failures = finalizeFailures(outputs, text)
-
-        const ambiguous = failures.filter(
-            (f) =>
-                f.code === "SOURCE_ANCHOR_AMBIGUOUS" &&
-                f.context?.relationId === "r1"
-        )
-        expect(ambiguous).toHaveLength(1)
-        expect(ambiguous[0].context?.occurrences).toBe(2)
-        expect(ambiguous[0].context?.startUtf16).toBe(undefined)
-        expect(
-            failures.filter(
-                (f) =>
-                    f.code === "SOURCE_ANCHOR_UNRESOLVED" &&
-                    f.context?.relationId === "r1"
-            )
-        ).toEqual([])
-    })
-
     it("reports every note as a warning, never an error", () => {
         const outputs = buildOutputs()
-        const relations = outputs[
-            STAGE_IDS.relationExtraction
-        ] as TRelationExtractionOutput
-        relations.relations[0].evidence.quote = "a clause never written"
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m3")!.text =
+            "a sentence never written"
         for (const failure of finalizeFailures(outputs)) {
             expect((failure as unknown as { severity: string }).severity).toBe(
                 "warning"
@@ -464,31 +436,12 @@ describe("finalizeResponseV2 — claim source anchors", () => {
     })
 })
 
-describe("finalizeResponseV2 — premise source anchors", () => {
-    it("anchors a relation-derived premise to its evidence quote", () => {
-        const p1 = finalize(buildOutputs()).premises.find(
-            (p) => p.miniId === "p1"
-        )!
-        expect(p1.sourceAnchors).toHaveLength(1)
-        expect(p1.sourceAnchors![0].quote).toBe("so we should wait")
-    })
-
-    it("leaves the conclusion premise unanchored — it has no source relation", () => {
-        const p2 = finalize(buildOutputs()).premises.find(
-            (p) => p.miniId === "p2"
-        )!
-        expect("sourceAnchors" in p2).toBe(false)
-    })
-
-    it("omits the key when the evidence quote is absent from the input", () => {
-        const outputs = buildOutputs()
-        const relations = outputs[
-            STAGE_IDS.relationExtraction
-        ] as TRelationExtractionOutput
-        relations.relations[0].evidence.quote = "a clause never written"
-
-        const p1 = finalize(outputs).premises.find((p) => p.miniId === "p1")!
-        expect("sourceAnchors" in p1).toBe(false)
+describe("finalizeResponseV2 — premises carry no source anchors", () => {
+    it("omits the key on every premise, even when its relation's evidence quote is in the input", () => {
+        expect(INPUT_TEXT).toContain("so we should wait")
+        for (const premise of finalize(buildOutputs()).premises) {
+            expect("sourceAnchors" in premise).toBe(false)
+        }
     })
 })
 
@@ -521,16 +474,6 @@ describe("finalizeResponseV2 — segment offsets are located, not trusted", () =
             0,
             INPUT_TEXT.lastIndexOf("The risk"),
         ])
-    })
-
-    it("resolves a relation's evidence quote despite a drifted segment span", () => {
-        const outputs = buildOutputs()
-        driftLastSegment(outputs, 30)
-
-        const p1 = finalize(outputs).premises.find((p) => p.miniId === "p1")!
-        expect(p1.sourceAnchors![0].startUtf16).toBe(
-            INPUT_TEXT.indexOf("so we should wait")
-        )
     })
 
     it("falls back to the model's span when a segment cannot be located", () => {
@@ -795,9 +738,9 @@ describe("finalizeResponseV2 — foreign input shapes", () => {
 describe("finalizeResponseV2 — pipelines without segmentation", () => {
     // The fast pipeline collapses segmentation and mention extraction
     // into one call and emits synthetic mention ids, so no mention
-    // record exists to anchor a claim against. Relation evidence still
-    // does, so premises stay anchored.
-    it("leaves claims unanchored but still anchors relation-derived premises", () => {
+    // record exists to anchor a claim against, and premises are never
+    // anchored, so nothing is.
+    it("leaves claims and premises unanchored", () => {
         const outputs = buildOutputs()
         delete outputs[STAGE_IDS.segmentation]
         delete outputs[STAGE_IDS.claimMentionExtraction]
@@ -806,7 +749,8 @@ describe("finalizeResponseV2 — pipelines without segmentation", () => {
         for (const claim of claims) {
             expect("sourceAnchors" in claim).toBe(false)
         }
-        const p1 = premises.find((p) => p.miniId === "p1")!
-        expect(p1.sourceAnchors![0].quote).toBe("so we should wait")
+        for (const premise of premises) {
+            expect("sourceAnchors" in premise).toBe(false)
+        }
     })
 })

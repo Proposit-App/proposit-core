@@ -231,6 +231,19 @@ EXPR_S4=$($CLI "$ARG" latest expressions create "$P4" \
   --type variable --variable-id "$S" \
   --parent-id "$AND4")
 
+# `and`, `or` and `xor` share an arity class, so a root with two children
+# swaps between them without touching the children. With more than two
+# children the same command splits the operator instead, and needs
+# --source-child-id and --target-child-id.
+$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" xor
+echo "P4 with the root swapped to xor:"
+$CLI "$ARG" latest premises render "$P4"
+# Expected: (R ⊻ S)
+
+$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" and
+echo "P4 restored to and:"
+$CLI "$ARG" latest premises render "$P4"
+
 # Insert W before S (so order is R, W, S)
 $CLI "$ARG" latest expressions create "$P4" \
   --type variable --variable-id "$W" \
@@ -245,16 +258,6 @@ echo "P4 with relative positioning:"
 $CLI "$ARG" latest premises render "$P4"
 # Expected: (R ∧ W ∧ S ∧ T)
 
-# `and`, `or` and `xor` share an arity class, so the root swaps between them
-# without touching the children.
-$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" xor
-echo "P4 with the root swapped to xor:"
-$CLI "$ARG" latest premises render "$P4"
-# Expected: (R ⊻ W ⊻ S ⊻ T)
-
-$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" and
-echo "P4 restored to and:"
-$CLI "$ARG" latest premises render "$P4"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5g. EXPRESSIONS — formula wrapper
@@ -624,20 +627,30 @@ section "9o. origins — anchor add / remove"
 
 # "If it rains" occupies code points [0, 12) of the normalized text.
 ANCHOR=$($CLI origins anchor add --document "$DOC" --argument "$ARG" \
-    --version 0 --target premise --target-id "$P1" --start 0 --end 12)
+    --version 0 --target argument --target-id "$ARG" --start 0 --end 12)
 echo "ANCHOR=$ANCHOR"
 $CLI origins show "$DOC"
 
 # A span running past the end of the document must be refused rather than
 # stored at an offset nothing can verify.
 if $CLI origins anchor add --document "$DOC" --argument "$ARG" \
-    --version 0 --target premise --target-id "$P1" --start 0 --end 99999 \
+    --version 0 --target argument --target-id "$ARG" --start 0 --end 99999 \
     2>/tmp/proposit-origin-err1; then
     echo "FAIL: out-of-range anchor should have errored"
     exit 1
 fi
 cat /tmp/proposit-origin-err1
 rm -f /tmp/proposit-origin-err1
+
+# A premise has no content of its own, so it cannot be an anchor target.
+if $CLI origins anchor add --document "$DOC" --argument "$ARG" \
+    --version 0 --target premise --target-id "$P1" --start 0 --end 12 \
+    2>/tmp/proposit-origin-err5; then
+    echo "FAIL: an anchor on a premise should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err5
+rm -f /tmp/proposit-origin-err5
 
 # An unknown stance must be refused.
 if $CLI origins attach "$SOURCE_FILE" --argument "$ARG" --version 0 \
@@ -662,10 +675,14 @@ $CLI origins show "$DOC"
 
 section "9o. enthymeme marks"
 
-# Mark a premise unspoken, then unmark it.
-$CLI "$ARG" latest premises update "$P1" --enthymeme
-$CLI "$ARG" latest premises show "$P1" --json
-$CLI "$ARG" latest premises update "$P1" --no-enthymeme
+# Only expressions carry the mark; a premise has no content of its own.
+if $CLI "$ARG" latest premises update "$P1" --enthymeme \
+    2>/tmp/proposit-origin-err6; then
+    echo "FAIL: marking a premise unspoken should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err6
+rm -f /tmp/proposit-origin-err6
 
 # Mark a claim-bound variable expression unspoken, then unmark it.
 MARK_EXPR=$($CLI "$ARG" latest expressions list "$P1" --json \

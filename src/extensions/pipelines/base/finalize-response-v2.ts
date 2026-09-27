@@ -204,13 +204,14 @@ function stripCanonicalizerOnlyFields(
 
 // -- Source anchors --
 //
-// The pipeline knows where each claim and each inference came from, but
-// only as data spread across three stages: `segmentation` holds
-// input-relative segment spans, `claim-mention-extraction` holds
-// *segment-relative* mention spans plus the mention text, and
-// `relation-extraction` holds a quote per relation. Finalize is the
-// first place all three are in scope at once, so it is where they become
-// a usable reference back into the input.
+// The pipeline knows where each claim came from, but only as data spread
+// across two stages: `segmentation` holds input-relative segment spans,
+// and `claim-mention-extraction` holds *segment-relative* mention spans
+// plus the mention text. Finalize is the first place both are in scope at
+// once, so it is where they become a usable reference back into the
+// input. Only claims are anchored: a premise has no content of its own,
+// so the quote `relation-extraction` records per relation is not
+// resolved into one.
 //
 // Only quoted text crosses the boundary as fact; the model's offsets are
 // used to choose among repeated occurrences and are never emitted
@@ -409,33 +410,6 @@ function claimAnchors(
         anchors.push(anchor)
     }
     return anchors
-}
-
-/** The anchor for a relation's evidence quote, if it can be located. */
-function relationAnchor(args: {
-    ctx: TStageContext
-    inputText: string
-    relation: TInferenceRelation
-    segmentStartById: Map<string, number>
-}): TIngestionSourceAnchor | undefined {
-    const starts = args.relation.evidence.segmentIds
-        .map((id) => args.segmentStartById.get(id))
-        .filter((start): start is number => start !== undefined)
-    const hint = starts.length > 0 ? Math.min(...starts) : 0
-    const quote = args.relation.evidence.quote
-    const match = resolveSourceAnchor(args.inputText, quote, hint)
-    // An empty evidence quote is a legal "no span to cite" the fast
-    // pipeline's prompt explicitly permits, not a failure to find one,
-    // so it is not reported.
-    if (quote.trim().length > 0) {
-        noteResolution({
-            ctx: args.ctx,
-            match,
-            quote,
-            subject: { relationId: args.relation.relationId },
-        })
-    }
-    return match !== undefined && "anchor" in match ? match.anchor : undefined
 }
 
 /**
@@ -903,30 +877,7 @@ export function finalizeResponseV2(
             })
         }
         takenTitles.add(titleKey(title))
-        const premise: TPremiseFinalForm = {
-            miniId: p.premiseMiniId,
-            formula: p.formula,
-            title,
-        }
-        // The conclusion premise is synthesized from a bare symbol and
-        // has no source relation, so it has no evidence quote to anchor.
-        const relation =
-            p.sourceRelationId !== null
-                ? titleComposerMaps.relationById.get(p.sourceRelationId)
-                : undefined
-        const anchor =
-            inputAvailable && relation !== undefined
-                ? relationAnchor({
-                      ctx,
-                      inputText,
-                      relation,
-                      segmentStartById,
-                  })
-                : undefined
-        if (anchor !== undefined) {
-            premise.sourceAnchors = [anchor]
-        }
-        return premise
+        return { miniId: p.premiseMiniId, formula: p.formula, title }
     })
 
     const argument: TArgumentFinalForm = {
