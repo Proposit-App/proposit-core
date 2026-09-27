@@ -72,16 +72,7 @@
             {
                 "miniId": "gid-4",
                 "formula": "(Rain_Wets_Ground and It_Is_Raining) implies Ground_Is_Wet",
-                "title": "Applying the rain condition",
-                "sourceAnchors": [
-                    {
-                        "quote": "If it rains, the ground gets wet. It is raining. Therefore, the ground is wet.",
-                        "startUtf16": 0,
-                        "endUtf16": 78,
-                        "prefix": "",
-                        "suffix": ""
-                    }
-                ]
+                "title": "Applying the rain condition"
             },
             {
                 "miniId": "gid-5",

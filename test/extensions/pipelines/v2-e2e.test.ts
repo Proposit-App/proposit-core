@@ -227,24 +227,9 @@ function assertSourceAnchors(
             assertAnchorResolves(anchor, input)
         }
     }
+    // A premise has no content of its own, so none is anchored.
     for (const premise of argument.premises) {
-        if (premise.miniId === argument.conclusionPremiseMiniId) {
-            // Synthesized from a bare symbol — no source relation, so
-            // nothing to quote.
-            expect("sourceAnchors" in premise).toBe(false)
-            continue
-        }
-        // A relation-derived premise is anchored only when its evidence
-        // quote is verbatim. Models sometimes elide with an ellipsis
-        // instead, and an unlocatable quote is deliberately dropped
-        // rather than guessed at, so this is not required of every
-        // premise — which premises carry anchors is pinned exactly by
-        // the golden comparison above. What is required here is that
-        // whatever is emitted resolves against the input.
-        for (const anchor of premise.sourceAnchors ?? []) {
-            expect(anchor.quote.length).toBeGreaterThan(0)
-            assertAnchorResolves(anchor, input)
-        }
+        expect("sourceAnchors" in premise).toBe(false)
     }
 }
 

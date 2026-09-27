@@ -93,16 +93,7 @@
             {
                 "miniId": "gid-5",
                 "formula": "(RemoteWork_Productivity and RemoteWork_CutsCommute and LessCommute_BetterBalance) implies Companies_AllowRemoteWork",
-                "title": "Benefits as grounds for adoption",
-                "sourceAnchors": [
-                    {
-                        "quote": "Working remotely improves productivity for many people. Working remotely also reduces commuting time. Reducing commuting time improves work-life balance. So companies should let employees work remotely.",
-                        "startUtf16": 0,
-                        "endUtf16": 202,
-                        "prefix": "",
-                        "suffix": ""
-                    }
-                ]
+                "title": "Benefits as grounds for adoption"
             },
             {
                 "miniId": "gid-6",
