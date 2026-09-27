@@ -57,6 +57,20 @@ describe("CLI library readers", () => {
             expect(await fs.readFile(filePath, "utf-8")).toBe("{ not json")
         })
 
+        it(`${file}: an unreadable file stops the command with its path`, async () => {
+            const filePath = path.join(stateDir, file)
+            await fs.writeFile(filePath, "{}")
+            await fs.chmod(filePath, 0o000)
+            try {
+                await expect(read()).rejects.toThrow("process.exit(1)")
+                expect(stderrWrite).toHaveBeenCalledWith(
+                    expect.stringContaining(filePath)
+                )
+            } finally {
+                await fs.chmod(filePath, 0o644)
+            }
+        })
+
         it(`${file}: a missing file gives an empty library`, async () => {
             await expect(read()).resolves.toBeDefined()
         })

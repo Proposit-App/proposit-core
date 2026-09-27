@@ -37,7 +37,7 @@ async function readLibraryFile<T>(
         content = await fs.readFile(filePath, "utf-8")
     } catch (err) {
         if ((err as NodeJS.ErrnoException).code === "ENOENT") return empty()
-        throw err
+        return errorExit(`Could not read ${filePath}: ${String(err)}`)
     }
     try {
         return load(JSON.parse(content) as never)
