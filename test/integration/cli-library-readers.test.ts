@@ -62,3 +62,46 @@ describe("CLI library readers", () => {
         })
     }
 })
+
+describe("CLI origin library read", () => {
+    it("drops a stored anchor on a premise and keeps the rest", async () => {
+        const { OriginLibrary } =
+            await import("../../src/lib/core/origin-library.js")
+        const origins = new OriginLibrary()
+        origins.addDocument({ id: "doc-1", text: "All swans are white." })
+        origins.addLink({
+            id: "link-1",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            stance: "seed",
+        })
+        const kept = origins.addAnchor({
+            id: "anchor-expression",
+            argumentId: "arg-1",
+            argumentVersion: 0,
+            documentId: "doc-1",
+            targetType: "expression",
+            targetId: "expr-1",
+            exact: "All swans",
+            startCodePoint: 0,
+            endCodePoint: 9,
+        })
+        const snapshot = origins.snapshot()
+        snapshot.anchors.push({
+            ...kept,
+            id: "anchor-premise",
+            targetType: "premise" as never,
+            targetId: "prem-1",
+        })
+        await fs.writeFile(
+            path.join(stateDir, "origins.json"),
+            JSON.stringify(snapshot)
+        )
+
+        const loaded = await readOriginLibrary()
+        expect(loaded.getAllAnchors().map((a) => a.id)).toEqual([
+            "anchor-expression",
+        ])
+    })
+})

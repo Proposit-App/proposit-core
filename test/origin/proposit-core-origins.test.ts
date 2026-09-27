@@ -180,12 +180,12 @@ describe("PropositCore full-fidelity origin round-trip", () => {
             ...spanOf("All swans observed so far are white."),
         })
         core.origins.addAnchor({
-            id: "anchor-premise",
+            id: "anchor-argument",
             argumentId: "arg-1",
             argumentVersion: 1,
             documentId: "doc-1",
-            targetType: "premise",
-            targetId: "prem-1",
+            targetType: "argument",
+            targetId: "arg-1",
             ...spanOf("all swans are white."),
         })
         return core
@@ -214,7 +214,7 @@ describe("PropositCore full-fidelity origin round-trip", () => {
             restored.origins.getAnchorsForTarget("expression", "expr-1")
         ).toHaveLength(1)
         expect(
-            restored.origins.getAnchorsForTarget("premise", "prem-1")
+            restored.origins.getAnchorsForTarget("argument", "arg-1")
         ).toHaveLength(1)
     })
 

@@ -624,20 +624,30 @@ section "9o. origins — anchor add / remove"
 
 # "If it rains" occupies code points [0, 12) of the normalized text.
 ANCHOR=$($CLI origins anchor add --document "$DOC" --argument "$ARG" \
-    --version 0 --target premise --target-id "$P1" --start 0 --end 12)
+    --version 0 --target argument --target-id "$ARG" --start 0 --end 12)
 echo "ANCHOR=$ANCHOR"
 $CLI origins show "$DOC"
 
 # A span running past the end of the document must be refused rather than
 # stored at an offset nothing can verify.
 if $CLI origins anchor add --document "$DOC" --argument "$ARG" \
-    --version 0 --target premise --target-id "$P1" --start 0 --end 99999 \
+    --version 0 --target argument --target-id "$ARG" --start 0 --end 99999 \
     2>/tmp/proposit-origin-err1; then
     echo "FAIL: out-of-range anchor should have errored"
     exit 1
 fi
 cat /tmp/proposit-origin-err1
 rm -f /tmp/proposit-origin-err1
+
+# A premise has no content of its own, so it cannot be an anchor target.
+if $CLI origins anchor add --document "$DOC" --argument "$ARG" \
+    --version 0 --target premise --target-id "$P1" --start 0 --end 12 \
+    2>/tmp/proposit-origin-err5; then
+    echo "FAIL: an anchor on a premise should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err5
+rm -f /tmp/proposit-origin-err5
 
 # An unknown stance must be refused.
 if $CLI origins attach "$SOURCE_FILE" --argument "$ARG" --version 0 \

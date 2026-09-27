@@ -87,7 +87,15 @@ export async function readOriginLibrary(): Promise<OriginLibrary> {
     return readLibraryFile(
         originsPath(),
         (snapshot: ReturnType<OriginLibrary["snapshot"]>) =>
-            OriginLibrary.fromSnapshot(snapshot),
+            OriginLibrary.fromSnapshot({
+                ...snapshot,
+                // Anchors on premises were allowed before 5.3.0. A premise has
+                // no content of its own, so they are dropped rather than
+                // refused, and the next write saves the file without them.
+                anchors: snapshot.anchors.filter(
+                    (a) => (a.targetType as string) !== "premise"
+                ),
+            }),
         () => new OriginLibrary()
     )
 }
