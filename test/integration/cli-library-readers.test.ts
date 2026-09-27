@@ -1,0 +1,64 @@
+import fs from "node:fs/promises"
+import path from "node:path"
+import os from "node:os"
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest"
+import {
+    readAxiomLibrary,
+    readCitationLibrary,
+    readClaimLibrary,
+    readForkLibrary,
+    readOriginLibrary,
+} from "../../src/cli/storage/libraries.js"
+import { ClaimLibrary } from "../../src/lib/core/claim-library.js"
+
+// A library file that exists but cannot be loaded must stop the command. If
+// the reader handed back an empty library instead, the command's next write
+// would save that empty library over the file and erase everything in it.
+
+let stateDir: string
+let stderrWrite: ReturnType<typeof vi.spyOn>
+const originalHome = process.env.PROPOSIT_HOME
+
+beforeEach(async () => {
+    stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "proposit-readers-"))
+    process.env.PROPOSIT_HOME = stateDir
+    vi.spyOn(process, "exit").mockImplementation((code) => {
+        throw new Error(`process.exit(${String(code)})`)
+    })
+    stderrWrite = vi
+        .spyOn(process.stderr, "write")
+        .mockImplementation(() => true)
+})
+
+afterEach(async () => {
+    vi.restoreAllMocks()
+    if (originalHome === undefined) delete process.env.PROPOSIT_HOME
+    else process.env.PROPOSIT_HOME = originalHome
+    await fs.rm(stateDir, { recursive: true, force: true })
+})
+
+const readers: [string, () => Promise<unknown>][] = [
+    ["claims.json", readClaimLibrary],
+    ["citations.json", () => readCitationLibrary(new ClaimLibrary())],
+    ["axioms.json", () => readAxiomLibrary(new ClaimLibrary())],
+    ["origins.json", readOriginLibrary],
+    ["forks.json", readForkLibrary],
+]
+
+describe("CLI library readers", () => {
+    for (const [file, read] of readers) {
+        it(`${file}: a corrupt file stops the command and is left untouched`, async () => {
+            const filePath = path.join(stateDir, file)
+            await fs.writeFile(filePath, "{ not json")
+            await expect(read()).rejects.toThrow("process.exit(1)")
+            expect(stderrWrite).toHaveBeenCalledWith(
+                expect.stringContaining(filePath)
+            )
+            expect(await fs.readFile(filePath, "utf-8")).toBe("{ not json")
+        })
+
+        it(`${file}: a missing file gives an empty library`, async () => {
+            await expect(read()).resolves.toBeDefined()
+        })
+    }
+})
