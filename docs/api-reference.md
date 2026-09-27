@@ -968,7 +968,7 @@ Removing a link that still has anchors throws `ORIGIN_ANCHOR_LINK_NOT_FOUND` —
 
 ### `addAnchor(anchor)` → `TAnchor`
 
-Records the span of a document one argument part derives from. `targetType` is `'expression' | 'premise' | 'argument'` — a global claim is excluded, because a claim is shared by reference across arguments and its provenance is a property of _this_ argument's use of it.
+Records the span of a document one argument part derives from. `targetType` is `'expression' | 'argument'`. A global claim is excluded, because a claim is shared by reference across arguments and its provenance is a property of _this_ argument's use of it. A premise is excluded because it has no content of its own: its claims, through their expressions, carry the provenance. Before 5.3.0 `'premise'` was accepted; `addAnchor` now refuses it with `ORIGIN_ANCHOR_SCHEMA_INVALID`, and `validate()` reports one restored from a snapshot the same way.
 
 Positions are counted in Unicode code points. The library rejects an anchor whose `[startCodePoint, endCodePoint)` slice of the document does **not** equal its own `exact` quote (`ORIGIN_ANCHOR_QUOTE_MISMATCH`), and one whose span leaves the document (`ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE`). A mis-measured anchor therefore fails at creation rather than highlighting the wrong passage.
 
@@ -1064,19 +1064,21 @@ Used for content identity only, never for authentication. The 32-bit FNV-1a `com
 
 ## The `enthymeme` annotation
 
-An optional, `true`-only field on `CorePropositionalVariableExpressionSchema` and on both `CorePremiseSchema` variants: the author's declaration that this content goes unspoken in the natural-language original. It is deliberately **not** part of the origin library, because it must be expressible on an argument with no source text at all.
+An optional, `true`-only field on `CorePropositionalVariableExpressionSchema`: the author's declaration that this content goes unspoken in the natural-language original. It is deliberately **not** part of the origin library, because it must be expressible on an argument with no source text at all.
 
-Set it through the existing surfaces — `ArgumentEngine.patchExpressionAppFields(expressionId, { enthymeme: true })` for an expression, and the premise extras round-trip for a premise. No new mutator exists, and none is needed.
+Only variable expressions carry it. Premises did too before 5.3.0; a premise has no content of its own, so the mark belongs to its claims' expressions. `CorePremiseSchema` no longer declares the field, and the default `premiseFields` checksum set no longer includes it, so a premise still holding the key hashes as if unmarked.
+
+Set it through `ArgumentEngine.patchExpressionAppFields(expressionId, { enthymeme: true })`. No new mutator exists, and none is needed.
 
 The schema is `Type.Optional(Type.Literal(true))` — the field is present and `true`, or absent. Both `null` and `false` are rejected: each is a _present_ value, and a present key changes the entity's checksum. `false` is refused explicitly because it is the likelier of the two to arrive by accident, from an unchecked form control or an ORM default.
 
-`"enthymeme"` is included in the default `expressionFields` and `premiseFields` checksum sets. Adding it was backward compatible with **no migration**, because `entityChecksum` includes a field only when the key is present on the entity and `createChecksumConfig` unions additional fields onto the defaults. That guarantee is conditional:
+`"enthymeme"` is included in the default `expressionFields` checksum set. Adding it was backward compatible with **no migration**, because `entityChecksum` includes a field only when the key is present on the entity and `createChecksumConfig` unions additional fields onto the defaults. That guarantee is conditional:
 
-> **An unmarked entity must omit the key entirely.** Persisting `enthymeme: null` — or `false` — makes the key present, changes the checksum of every premise and expression in existence, and breaks hierarchical checksums and sync detection. `Type.Optional(Type.Literal(true))` is what refuses both at the schema boundary, and unmarking must delete the field rather than set it to `false`.
+> **An unmarked entity must omit the key entirely.** Persisting `enthymeme: null` — or `false` — makes the key present, changes the checksum of every variable expression in existence, and breaks hierarchical checksums and sync detection. `Type.Optional(Type.Literal(true))` is what refuses both at the schema boundary, and unmarking must delete the field rather than set it to `false`.
 
 `validate('presentable')` reports `P-6`, at no lower tier, for either misuse: a mark on a **premise-bound** variable expression, whose truth is derived from another premise's evaluation rather than asserted; and a mark on an **operator or formula** expression, which the TypeScript types forbid but the open entity schemas admit at runtime. Per the standing rule that only Structural violations throw, neither throws at mutation time.
 
-Clearing the mark **deletes** the key rather than setting it to `undefined`, so the entity returns to the exact shape — and the exact checksum — it had before it was marked. Both routes do this: `patchExpressionAppFields(id, { enthymeme: undefined })` for an expression, and `updateExtras({ enthymeme: undefined })` for a premise. It applies to any field cleared this way, not only this one.
+Clearing the mark **deletes** the key rather than setting it to `undefined`, so the entity returns to the exact shape — and the exact checksum — it had before it was marked. `patchExpressionAppFields(id, { enthymeme: undefined })` does this, as does a premise's `updateExtras` for any field it clears.
 
 ---
 
@@ -2151,7 +2153,7 @@ Once at least two canonical claims are normal (each counted once, typed by its c
 
 #### Source anchors
 
-Both pipelines attach an optional `sourceAnchors` array to the claims and premises in their finalized output, referring each back to the text the pipeline was given.
+Both pipelines attach an optional `sourceAnchors` array to the claims in their finalized output, referring each back to the text the pipeline was given. Premises carry none: a premise has no content of its own. (Before 5.3.0, a premise compiled from a relation carried an anchor for the relation's `evidence.quote`.)
 
 ```typescript
 type TIngestionSourceAnchor = {
@@ -2167,8 +2169,7 @@ type TIngestionSourceAnchor = {
 
 `input.slice(startUtf16, endUtf16) === quote` holds for every emitted anchor: offsets are produced by locating the quote in the input, never copied from the model. A quote that cannot be located yields **no anchor** rather than one at an unverified offset, and an entity with no resolvable anchor **omits the key entirely** rather than carrying an empty array.
 
-- **Claims** carry one anchor per canonicalizer mention that resolved to them, in `mentionIds` order and deduped by range. Only the thorough pipeline produces them — the fast pipeline has no segmentation or mention stage.
-- **Premises** compiled from a relation carry one anchor for that relation's `evidence.quote`. The conclusion premise is synthesized from a bare symbol, has no source relation, and carries none.
+Each claim carries one anchor per mention that resolved to it, in `mentionIds` order and deduped by range.
 
 `prefix` and `suffix` are always well-formed UTF-16. The window is measured in code units, so a non-BMP character straddling its boundary would otherwise strand a lone surrogate — which Postgres rejects on insert into `json`/`jsonb` and a `TextEncoder` round-trip silently rewrites to U+FFFD, breaking the re-locate path the context exists to serve. The window shrinks by one code unit instead, so an emoji on the boundary is dropped whole rather than halved.
 
@@ -2368,7 +2369,7 @@ type TParsedClaim = {
 
 A claim as emitted by the LLM. `miniId` is a short identifier scoped to the response; the parser resolves it to a real UUID via `claimLibrary.create()`. `additionalProperties: true` preserves extension fields, which `mapClaim` can pluck out. Note: the pre-v0.12.2 `citationMiniIds` field was removed — support edges are now formula-derived (see `ArgumentParser.build`).
 
-The ingestion pipelines additionally attach an optional `sourceAnchors: TIngestionSourceAnchor[]` to each claim and premise they emit — see [Source anchors](#source-anchors). It rides through as an extension field, so a `mapClaim` **or `mapPremise`** implementation that plucks fields by name must name it explicitly in _both_ hooks or it is silently dropped from whichever one omits it — claims and premises are anchored independently.
+The ingestion pipelines additionally attach an optional `sourceAnchors: TIngestionSourceAnchor[]` to each claim they emit — see [Source anchors](#source-anchors). It rides through as an extension field, so a `mapClaim` implementation that plucks fields by name must name it explicitly or it is silently dropped.
 
 #### `TParsedVariable`
 

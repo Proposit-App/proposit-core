@@ -613,7 +613,7 @@ this content goes unspoken in the natural-language original — is a
 variable expression, and its variable is **claim-bound**.
 
 Neither half is expressible in the schema. The TypeScript types confine
-the annotation to variable expressions and premises, but the entity
+the annotation to variable expressions, but the entity
 schemas stay open for app-level fields, so a mark on an operator or
 formula expression is reachable at runtime and shifts that expression's
 checksum with nothing else reporting it. And claim-boundness is a
@@ -627,7 +627,7 @@ An expression whose `variableId` resolves to nothing is not reported
 here — a dangling reference is a Structural concern.
 
 - **Invalid:** a variable expression with `enthymeme: true` whose variable is premise-bound; an operator or formula expression with `enthymeme: true`.
-- **Valid:** the mark on a claim-bound variable expression; a premise marked `enthymeme: true`; any expression with the field absent.
+- **Valid:** the mark on a claim-bound variable expression; any expression with the field absent. A premise does not carry the mark (it has no content of its own); a premise holding the key as an app field is ignored.
 - **Validator:** `validateP6`.
 
 ## 4. Engine behavior and auto-normalization

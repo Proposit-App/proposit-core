@@ -1063,9 +1063,10 @@ derive from which span of that text, and which parts the original left unspoken.
 # Store a source text and link it to an argument version.
 DOC=$(proposit-core origins attach ./speech.txt --argument "$ARG" --version 0 --stance seed)
 
-# Record that a premise derives from code points [0, 12) of that text.
+# Record that a claim's expression derives from code points [0, 12) of that
+# text. Anchors target an expression or the argument, never a premise.
 proposit-core origins anchor add --document "$DOC" --argument "$ARG" \
-    --version 0 --target premise --target-id "$PREMISE" --start 0 --end 12
+    --version 0 --target expression --target-id "$EXPR" --start 0 --end 12
 
 proposit-core origins show "$DOC"
 ```
@@ -1104,12 +1105,12 @@ Anchoring requires a link first: an anchor's argument version must already be
 linked to the document, because the link carries the stance that gives the
 anchor its meaning. Persist in that order — document, link, anchors.
 
-**Unspoken content.** An author can mark a premise or a claim-bound variable
-expression as an _enthymeme_ — content the natural-language original left for
-the audience to supply:
+**Unspoken content.** An author can mark a claim-bound variable expression as an
+_enthymeme_ — content the natural-language original left for the audience to
+supply. A premise cannot be marked: it has no content of its own, so the mark
+belongs to its claims' expressions.
 
 ```bash
-proposit-core "$ARG" latest premises update "$PREMISE" --enthymeme
 proposit-core "$ARG" latest expressions mark "$PREMISE" "$EXPR" --enthymeme
 ```
 
