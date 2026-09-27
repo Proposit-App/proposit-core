@@ -231,6 +231,19 @@ EXPR_S4=$($CLI "$ARG" latest expressions create "$P4" \
   --type variable --variable-id "$S" \
   --parent-id "$AND4")
 
+# `and`, `or` and `xor` share an arity class, so a root with two children
+# swaps between them without touching the children. With more than two
+# children the same command splits the operator instead, and needs
+# --source-child-id and --target-child-id.
+$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" xor
+echo "P4 with the root swapped to xor:"
+$CLI "$ARG" latest premises render "$P4"
+# Expected: (R ⊻ S)
+
+$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" and
+echo "P4 restored to and:"
+$CLI "$ARG" latest premises render "$P4"
+
 # Insert W before S (so order is R, W, S)
 $CLI "$ARG" latest expressions create "$P4" \
   --type variable --variable-id "$W" \
@@ -245,16 +258,6 @@ echo "P4 with relative positioning:"
 $CLI "$ARG" latest premises render "$P4"
 # Expected: (R ∧ W ∧ S ∧ T)
 
-# `and`, `or` and `xor` share an arity class, so the root swaps between them
-# without touching the children.
-$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" xor
-echo "P4 with the root swapped to xor:"
-$CLI "$ARG" latest premises render "$P4"
-# Expected: (R ⊻ W ⊻ S ⊻ T)
-
-$CLI "$ARG" latest expressions change-operator "$P4" "$AND4" and
-echo "P4 restored to and:"
-$CLI "$ARG" latest premises render "$P4"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5g. EXPRESSIONS — formula wrapper
