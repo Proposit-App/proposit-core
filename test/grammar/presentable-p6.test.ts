@@ -95,9 +95,14 @@ describe("grammar/presentable P-6 enthymeme marks a claim-bound variable", () =>
         expect(validateP6(ctx)).toHaveLength(0)
     })
 
-    it("ignores a marked premise — a premise has no variable binding to check", () => {
+    it("ignores a premise carrying the key as an app field — only expressions carry the mark", () => {
         const ctx = buildContext({
-            premises: [makeFreeformPremise({ id: "p-1", enthymeme: true })],
+            premises: [
+                {
+                    ...makeFreeformPremise({ id: "p-1" }),
+                    enthymeme: true,
+                } as ReturnType<typeof makeFreeformPremise>,
+            ],
             expressions: [],
             variables: [],
         })

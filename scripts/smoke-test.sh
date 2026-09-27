@@ -675,10 +675,14 @@ $CLI origins show "$DOC"
 
 section "9o. enthymeme marks"
 
-# Mark a premise unspoken, then unmark it.
-$CLI "$ARG" latest premises update "$P1" --enthymeme
-$CLI "$ARG" latest premises show "$P1" --json
-$CLI "$ARG" latest premises update "$P1" --no-enthymeme
+# Only expressions carry the mark; a premise has no content of its own.
+if $CLI "$ARG" latest premises update "$P1" --enthymeme \
+    2>/tmp/proposit-origin-err6; then
+    echo "FAIL: marking a premise unspoken should have errored"
+    exit 1
+fi
+cat /tmp/proposit-origin-err6
+rm -f /tmp/proposit-origin-err6
 
 # Mark a claim-bound variable expression unspoken, then unmark it.
 MARK_EXPR=$($CLI "$ARG" latest expressions list "$P1" --json \

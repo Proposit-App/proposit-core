@@ -20,15 +20,6 @@ const baseExpression = {
     variableId: "44444444-4444-4444-8444-444444444444",
 }
 
-const basePremise = {
-    id: "55555555-5555-4555-8555-555555555555",
-    argumentId: "22222222-2222-4222-8222-222222222222",
-    argumentVersion: 0,
-    checksum: "bbbbbbbb",
-    descendantChecksum: null,
-    combinedChecksum: "bbbbbbbb",
-}
-
 describe("enthymeme on the propositional schemas", () => {
     it("accepts a variable expression with and without the field", () => {
         expect(
@@ -45,30 +36,15 @@ describe("enthymeme on the propositional schemas", () => {
         ).toBe(true)
     })
 
-    it("accepts a freeform premise with and without the field", () => {
-        const premise = { ...basePremise, type: "freeform" as const }
-        expect(Value.Check(CoreFreeformPremiseSchema, premise)).toBe(true)
+    it("does not declare the field on either premise schema", () => {
+        // A premise has no content of its own; only its claims' expressions
+        // carry the mark.
+        expect(Object.keys(CoreFreeformPremiseSchema.properties)).not.toContain(
+            "enthymeme"
+        )
         expect(
-            Value.Check(CoreFreeformPremiseSchema, {
-                ...premise,
-                enthymeme: true,
-            })
-        ).toBe(true)
-    })
-
-    it("accepts a derivation premise with and without the field", () => {
-        const premise = {
-            ...basePremise,
-            type: "derivation" as const,
-            derivedClaimId: "66666666-6666-4666-8666-666666666666",
-        }
-        expect(Value.Check(CoreDerivationPremiseSchema, premise)).toBe(true)
-        expect(
-            Value.Check(CoreDerivationPremiseSchema, {
-                ...premise,
-                enthymeme: true,
-            })
-        ).toBe(true)
+            Object.keys(CoreDerivationPremiseSchema.properties)
+        ).not.toContain("enthymeme")
     })
 
     it("rejects a non-boolean value", () => {
@@ -90,21 +66,6 @@ describe("enthymeme on the propositional schemas", () => {
                 enthymeme: false,
             })
         ).toBe(false)
-        expect(
-            Value.Check(CoreFreeformPremiseSchema, {
-                ...basePremise,
-                type: "freeform",
-                enthymeme: false,
-            })
-        ).toBe(false)
-        expect(
-            Value.Check(CoreDerivationPremiseSchema, {
-                ...basePremise,
-                type: "derivation",
-                derivedClaimId: "66666666-6666-4666-8666-666666666666",
-                enthymeme: false,
-            })
-        ).toBe(false)
     })
 
     it("rejects null — absence is the unmarked state, not null", () => {
@@ -114,13 +75,6 @@ describe("enthymeme on the propositional schemas", () => {
         expect(
             Value.Check(CorePropositionalVariableExpressionSchema, {
                 ...baseExpression,
-                enthymeme: null,
-            })
-        ).toBe(false)
-        expect(
-            Value.Check(CoreFreeformPremiseSchema, {
-                ...basePremise,
-                type: "freeform",
                 enthymeme: null,
             })
         ).toBe(false)

@@ -8,11 +8,12 @@ import type {
     TCorePropositionalVariable,
 } from "../../src/lib/schemata/index.js"
 import type { TExpressionInput } from "../../src/lib/core/expression-manager.js"
+import { createChecksumConfig } from "../../src/lib/consts.js"
 
 // Marking content unspoken needs no new mutation API: an expression takes the
-// field through the existing `patchExpressionAppFields`, and a premise through
-// the existing extras round-trip. Both routes are exercised here because the
-// consuming layer builds its authoring surface on them, and because the
+// field through the existing `patchExpressionAppFields`. The premise extras
+// round-trip is exercised too, with an app field, because clearing a field
+// through it must delete the key just as the expression route does. And the
 // standing rule is that only Structural violations throw at mutation time —
 // a premise-bound variable marked unspoken must mutate cleanly and surface at
 // `validate('presentable')` instead.
@@ -25,7 +26,14 @@ function makeEngine() {
         TCorePremise,
         TCorePropositionalExpression,
         TCorePropositionalVariable
-    >({ id: "arg-1", version: 1 }, claims, { behavior: "permissive" })
+    >({ id: "arg-1", version: 1 }, claims, {
+        behavior: "permissive",
+        // An app field the premise checksum covers, so clearing it through
+        // the extras round-trip can be seen to restore the checksum.
+        checksumConfig: createChecksumConfig({
+            premiseFields: new Set(["appLabel"]),
+        }),
+    })
 }
 
 function seedSingleVariablePremise(engine: ReturnType<typeof makeEngine>) {
@@ -80,7 +88,7 @@ describe("marking content unspoken", () => {
         expect(after.checksum).not.toBe(before.checksum)
     })
 
-    it("removes a premise mark by deleting the key, not blanking it", () => {
+    it("clears a premise field by deleting the key, not blanking it", () => {
         // The mirror of the expression assertion below. `updateExtras` spreads
         // its updates into the extras object, so an `undefined` value used to
         // *create* the key — the same failure the expression path had.
@@ -88,17 +96,17 @@ describe("marking content unspoken", () => {
         const premise = seedSingleVariablePremise(engine)
         const original = engine.snapshot().premises[0].premise.checksum
 
-        premise.updateExtras({ enthymeme: true })
+        premise.updateExtras({ appLabel: "marked" })
         engine.flushChecksums()
         expect(engine.snapshot().premises[0].premise.checksum).not.toBe(
             original
         )
 
-        premise.updateExtras({ enthymeme: undefined })
+        premise.updateExtras({ appLabel: undefined })
         engine.flushChecksums()
-        const unmarked = engine.snapshot().premises[0].premise
-        expect(unmarked.checksum).toBe(original)
-        expect("enthymeme" in unmarked).toBe(false)
+        const cleared = engine.snapshot().premises[0].premise
+        expect(cleared.checksum).toBe(original)
+        expect("appLabel" in cleared).toBe(false)
     })
 
     it("drops an undefined-valued key passed straight to setExtras", () => {
@@ -160,7 +168,9 @@ describe("marking content unspoken", () => {
         expect("note" in engine.snapshot().argument).toBe(false)
     })
 
-    it("marks a premise and changes its checksum", () => {
+    it("leaves a premise's checksum alone when it carries the key", () => {
+        // Only expressions carry the mark. A premise holding the key (stored
+        // before that was so) hashes as if it did not.
         const engine = makeEngine()
         const premise = seedSingleVariablePremise(engine)
         const before = engine.snapshot().premises[0].premise.checksum
@@ -168,9 +178,7 @@ describe("marking content unspoken", () => {
         premise.setExtras({ ...premise.getExtras(), enthymeme: true })
         engine.flushChecksums()
 
-        const after = engine.snapshot().premises[0]
-        expect(after.premise.enthymeme).toBe(true)
-        expect(after.premise.checksum).not.toBe(before)
+        expect(engine.snapshot().premises[0].premise.checksum).toBe(before)
     })
 
     it("does not throw when the marked variable is premise-bound", () => {

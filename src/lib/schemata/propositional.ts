@@ -47,8 +47,9 @@ const BasePropositionalExpressionSchema = Type.Object({
 // boolean. Entity checksums include a field only when it is present on the
 // entity, so an unmarked entity omitting the key hashes exactly as it did
 // before this field existed — but `null` and `false` are both *present*, and
-// either would change the checksum of every expression and premise in
-// existence. `false` is the likelier of the two to arrive by accident, from an
+// either would change the checksum of every variable expression in existence.
+// Only variable expressions carry it: a premise has no content of its own, so
+// the mark belongs to its claims' expressions. `false` is the likelier of the two to arrive by accident, from an
 // unchecked form control or an ORM default, so the schema refuses it rather
 // than trusting every writer to know the difference. Unmarking deletes the key.
 const EnthymemeField = Type.Optional(
@@ -212,7 +213,6 @@ const CommonPremiseFields = {
         description:
             "Hash of checksum + descendantChecksum. Equals checksum when descendantChecksum is null.",
     }),
-    enthymeme: EnthymemeField,
 }
 
 export const CoreFreeformPremiseSchema = Type.Object(

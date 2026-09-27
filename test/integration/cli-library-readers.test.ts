@@ -105,3 +105,27 @@ describe("CLI origin library read", () => {
         ])
     })
 })
+
+describe("CLI premise meta read", () => {
+    it("drops a stored enthymeme key and keeps the rest", async () => {
+        const { readPremiseMeta } =
+            await import("../../src/cli/storage/premises.js")
+        const premiseId = "33333333-3333-4333-8333-333333333333"
+        const dir = path.join(
+            stateDir,
+            "arguments",
+            "arg-1",
+            "0",
+            "premises",
+            premiseId
+        )
+        await fs.mkdir(dir, { recursive: true })
+        await fs.writeFile(
+            path.join(dir, "meta.json"),
+            JSON.stringify({ id: premiseId, title: "kept", enthymeme: true })
+        )
+
+        const meta = await readPremiseMeta("arg-1", 0, premiseId)
+        expect(meta).toEqual({ id: premiseId, title: "kept" })
+    })
+})

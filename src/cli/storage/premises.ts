@@ -22,7 +22,11 @@ export async function readPremiseMeta(
     const content = await fs.readFile(filePath, "utf-8").catch(() => {
         errorExit(`Premise "${premiseId}" not found.`)
     })
-    const raw: unknown = JSON.parse(content)
+    const raw = JSON.parse(content) as Record<string, unknown>
+    // Premises could carry an unspoken mark before 5.3.0. A premise has no
+    // content of its own, so a stored mark is dropped rather than refused, and
+    // the next write saves the file without it.
+    delete raw.enthymeme
     try {
         return Value.Parse(CliPremiseMetaSchema, raw)
     } catch {
