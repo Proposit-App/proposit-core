@@ -571,9 +571,9 @@ describe("OriginLibrary — cost of validating on every mutation", () => {
     }
 
     it("adds many anchors to large documents without re-scanning them", () => {
-        // The fastest of three runs, so a one-off pause (garbage collection, a
-        // busy machine) lands in neither side of the ratio.
-        // The sizes alternate so a slowdown lasting several runs falls on both.
+        // The fastest of three runs per size, so a one-off pause (garbage
+        // collection, a busy machine) rarely reaches the ratio, and the sizes
+        // alternate so a slowdown lasting several runs falls on both.
         let small = Infinity
         let large = Infinity
         for (let i = 0; i < 3; i++) {
