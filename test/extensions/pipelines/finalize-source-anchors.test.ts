@@ -535,8 +535,7 @@ describe("finalizeResponseV2 — a mention no claim references is reported, not 
 
 describe("finalizeResponseV2 — a repeated mention id is resolved once", () => {
     // Mention ids should be unique, but nothing enforces it. The first copy
-    // of an id is the one resolved and anchored; later copies are skipped,
-    // and the repeat is reported once.
+    // of an id is the one resolved and anchored; later copies are ignored.
     function withCopiesOfM3(
         ...copies: Partial<TClaimMentionExtractionOutput["mentions"][number]>[]
     ): Record<string, unknown> {
@@ -593,37 +592,6 @@ describe("finalizeResponseV2 — a repeated mention id is resolved once", () => 
         ).toHaveLength(1)
     })
 
-    it("reports a repeated id once, counting every copy", () => {
-        const notes = forM3(
-            finalizeFailures(withCopiesOfM3({}, {})),
-            "SOURCE_ANCHOR_MENTION_REPEATED"
-        )
-        expect(notes).toHaveLength(1)
-        expect(notes[0].context).toEqual({ mentionId: "m3", copies: 3 })
-        expect((notes[0] as unknown as { severity: string }).severity).toBe(
-            "warning"
-        )
-    })
-
-    it("says when a dropped copy named a different passage", () => {
-        const [identical] = forM3(
-            finalizeFailures(withCopiesOfM3({})),
-            "SOURCE_ANCHOR_MENTION_REPEATED"
-        )
-        const [differing] = forM3(
-            finalizeFailures(
-                withCopiesOfM3({
-                    segmentId: "s3",
-                    text: "we should wait",
-                    span: { start: 21, end: 35 },
-                })
-            ),
-            "SOURCE_ANCHOR_MENTION_REPEATED"
-        )
-        expect(identical.message).not.toContain("different")
-        expect(differing.message).toContain("different")
-    })
-
     it("quotes the first copy when a repeated id is also unclaimed", () => {
         const outputs = withCopiesOfM3({
             segmentId: "s3",
@@ -640,14 +608,6 @@ describe("finalizeResponseV2 — a repeated mention id is resolved once", () => 
                 "SOURCE_ANCHOR_MENTION_UNCLAIMED"
             ).map((f) => f.context?.quote)
         ).toEqual(["Escalation costs more than delay"])
-    })
-
-    it("reports no repeat when every mention id is unique", () => {
-        expect(
-            finalizeFailures(buildOutputs()).filter(
-                (f) => f.code === "SOURCE_ANCHOR_MENTION_REPEATED"
-            )
-        ).toEqual([])
     })
 
     it("reports only the missing input when the input has no text", () => {

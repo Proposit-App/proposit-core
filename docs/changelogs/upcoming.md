@@ -16,12 +16,6 @@
   with `context: { mentionId, quote }`, under the same conditions as
   `notAttempted`. `claim-reference-validation` never compared the mention
   output with the claims' `mentionIds`, so this was silent before.
-- `SOURCE_ANCHOR_NOTE_CODES.mentionRepeated`
-  (`SOURCE_ANCHOR_MENTION_REPEATED`): `finalizeResponseV2` adds one warning
-  per `mentionId` that appears more than once in `input.mentions`, with
-  `context: { mentionId, copies }`, under the same conditions as
-  `notAttempted`. The message says when a later copy's text or segment
-  differs from the first's.
 
 ## Changed
 
@@ -46,8 +40,9 @@
 - `finalizeResponseV2` resolved every copy of a repeated `mentionId`, so one
   mention could produce two or more `SOURCE_ANCHOR_UNRESOLVED`, `AMBIGUOUS` or
   `APPROXIMATE` notes, and its anchor came from whichever copy resolved last.
-  Only the first copy is resolved now, so each id gets at most one resolution
-  note and the first copy's anchor.
+  Only the first copy is resolved now, and later copies are ignored, so each id
+  gets at most one resolution note and the first copy's anchor, even when the
+  first copy fails and a later one would have resolved.
 - `PremiseEngine.changeOperator` returned `result: undefined` (typed
   `TExpr | null`) when, in `assistive` behavior, AN-4 absorbed the swapped
   operator into a same-operator grandparent through its formula buffer. It

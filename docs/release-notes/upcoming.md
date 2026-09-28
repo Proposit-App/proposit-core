@@ -28,18 +28,6 @@ resolution is reported too). One mistyped mention id in a claim can raise both
 notes: `SOURCE_ANCHOR_NOT_ATTEMPTED` for the claim and this one for the
 mention it meant.
 
-### A repeated mention id is resolved once
-
-When the mention stage emits the same mention id more than once, finalize now
-resolves only the first copy and reports the repeat once, as
-`SOURCE_ANCHOR_MENTION_REPEATED` (also in `SOURCE_ANCHOR_NOTE_CODES`), with
-`context: { mentionId, copies }`. Before, every copy was resolved: one mention
-could raise several `SOURCE_ANCHOR_UNRESOLVED` (or `AMBIGUOUS` /
-`APPROXIMATE`) notes, which over-counted for a consumer summing warnings, and
-the anchor came from whichever copy happened to resolve last. The note's
-message says when a later copy named a different passage, which is then linked
-to no claim.
-
 ### Other
 
 - `TLlmOutputCheckFailure`, the `{ code, message }` a stage's `checkOutput`
@@ -76,6 +64,16 @@ the child ids are not read. With three or more:
 The CLI's `expressions change-operator` follows the same rules.
 
 ## Fixed
+
+### A repeated mention id is resolved once
+
+When the mention stage emits the same mention id more than once, finalize now
+resolves only the first copy and ignores the rest. Before, every copy was
+resolved: one mention could raise several `SOURCE_ANCHOR_UNRESOLVED` (or
+`AMBIGUOUS` / `APPROXIMATE`) notes, which over-counted for a consumer summing
+warnings, and the anchor came from whichever copy happened to resolve last.
+The first copy wins even when it fails to resolve and a later one would have.
+No new note code is added for the repeat.
 
 - `changeOperator` returns `null` rather than `undefined` when, in `assistive`
   behavior, the swapped operator is folded into a same-operator operator above
