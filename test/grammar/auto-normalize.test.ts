@@ -4,8 +4,8 @@
 // (AN-1..AN-4) as a uniform post-hook after every successful
 // Structural mutation; in `permissive` mode AN does not run and the
 // engine guarantees only Structural integrity. The
-// `runAssistiveNormalization(engine)` call is wired into `setOnMutate`
-// at the 3 PE-callback sites in ArgumentEngine.
+// `runAssistiveNormalization(engine)` call is wired into each premise's
+// mutation follow-up at the 3 PE-callback sites in ArgumentEngine.
 //
 // **Test setup pattern.** The spec's preservation contract is "if
 // the pre-mutation state was Presentable, the post-mutation state is

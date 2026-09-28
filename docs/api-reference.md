@@ -1650,6 +1650,7 @@ _The pre-1.0 `grammarConfig` / `TGrammarOptions` / `TAutoNormalizeConfig` / `res
 Controls whether the auto-normalization (AN) post-hook runs after each successful Structural mutation.
 
 - **`'assistive'`** (default): runs AN-1..AN-4 after every successful mutation. AN preserves Presentable — if the pre-mutation state was Presentable, the post-mutation state is Presentable. (See `docs/Proposit_Grammar.md` §4.)
+  The changeset a mutation returns includes what AN then changed, in any premise: expressions it removed (including ones the call itself had just added, which then appear in no bucket), formula buffers it added, and expressions and premises it moved or whose checksums changed. Applying the changeset to the state before the call gives the state after it.
 - **`'permissive'`**: AN does not run. Mutations execute exactly as described; the engine guarantees Structural integrity only. Lower-tier violations (Evaluable, Derivable, Presentable) are queryable via `validate(tier)` and never throw.
 
 Set at construction:

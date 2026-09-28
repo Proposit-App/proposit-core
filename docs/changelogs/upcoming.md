@@ -13,6 +13,21 @@
 
 ## Changed
 
+- In `assistive` behavior, the changeset a mutation returns now includes
+  what assistive normalization changed after it: expressions it removed
+  (the formula buffer and operator AN-4 absorbs, for example), formula
+  buffers it added, and the expressions and premises it moved or whose
+  checksums changed, in any premise. Before, the changeset was built before
+  normalization ran, so none of that was in it. An expression the call added
+  and normalization removed appears in no bucket. `permissive` behavior is
+  unchanged. Normalization now runs from an internal per-premise follow-up
+  (`PremiseEngine.setMutationFollowUp`, `@internal`) rather than from
+  `onMutate`, so setting `onMutate` on an engine-owned premise no longer
+  turns normalization off.
+- `PremiseEngine.deleteExpressionsUsingVariable`,
+  `ArgumentEngine.removeVariable` and `removePremise`'s bound-variable
+  cascade return everything their inner removals changed, such as the child
+  promoted when an operator collapses, not only what was removed.
 - `PremiseEngine.changeOperator` with three or more children, no child ids,
   and a new operator of `and`, `or` or `xor` now takes the existing in-place
   path instead of throwing "sourceChildId and targetChildId are required for

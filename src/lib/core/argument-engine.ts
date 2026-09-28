@@ -179,13 +179,14 @@ export class ArgumentEngine<
     private engineBehavior: "assistive" | "permissive"
     private generateId: () => string
     private restoringFromSnapshot = false
-    // Re-entrance guard for the AN post-mutation hook. The
-    // `setOnMutate` callbacks (3 sites: createPremise, fromSnapshot,
-    // restoreFromSnapshot) fire `runAssistiveNormalization(this)` after
-    // every successful mutation when `behavior === 'assistive'`. AN
-    // itself mutates premises (removeExpression / reparentExpression /
-    // wrapInFormula), which re-fires `setOnMutate`. Without a guard the
-    // outer mutation would trigger nested AN sweeps. The guard is
+    // Re-entrance guard for the AN post-mutation hook. Each premise's
+    // mutation follow-up (`followUpWithNormalization`, wired at three
+    // sites: createPremise, fromSnapshot, restoreFromSnapshot) runs
+    // `runAssistiveNormalization(this)` after every successful mutation
+    // when `behavior === 'assistive'`. AN itself mutates premises
+    // (removeExpression / reparentExpression / wrapInFormula), which
+    // re-fires the follow-up. Without a guard the outer mutation would
+    // trigger nested AN sweeps. The guard is
     // toggled by `_beginApplyAN()` / `_endApplyAN()` (see below); the
     // chokepoint is `applyANToFixedPoint` in
     // `src/lib/grammar/an-rules.ts`, so both
@@ -678,10 +679,10 @@ export class ArgumentEngine<
      *
      * Used by `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`
      * (the single chokepoint for both `runAssistiveNormalization`
-     * and `normalizeArgument`). The post-mutation hook in
-     * `setOnMutate` calls `runAssistiveNormalization(this)` which
-     * delegates to `applyANToFixedPoint`; AN's own mutations re-fire
-     * `setOnMutate`, which would otherwise recurse. This guard
+     * and `normalizeArgument`). The post-mutation follow-up calls
+     * `runAssistiveNormalization(this)` which delegates to
+     * `applyANToFixedPoint`; AN's own mutations re-fire the follow-up,
+     * which would otherwise recurse. This guard
      * breaks the recursion.
      *
      * @internal
