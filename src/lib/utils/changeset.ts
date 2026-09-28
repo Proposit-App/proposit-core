@@ -13,11 +13,10 @@ import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
  * Merges two changesets into one, deduplicating entities by `id` within each
  * bucket (added/modified/removed) with last-write-wins semantics.
  *
- * Use this when a single logical operation requires multiple engine calls that
- * each produce a changeset. For example, creating a conclusion premise requires
- * both `createPremiseWithId` and `setConclusionPremise`, each returning a
- * changeset — `mergeChangesets` combines them into one changeset suitable for
- * a single persistence call.
+ * Use this for changesets that never change one entity in different ways.
+ * For the changesets of successive calls on one engine, where a later call
+ * can modify or remove what an earlier one added or modified, use
+ * {@link composeChangesets}: this function throws in that case.
  *
  * @param a - The first changeset.
  * @param b - The second changeset. Its entries take precedence when both
@@ -27,14 +26,6 @@ import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
  * @throws {Error} If any entity ID appears in more than one bucket
  *   (added/modified/removed) within the same category after merge. This
  *   indicates a logic error in the caller.
- *
- * @example
- * ```ts
- * const { changes: createChanges } = engine.createPremiseWithId(premiseId, data)
- * const { changes: roleChanges } = engine.setConclusionPremise(premiseId)
- * const combined = mergeChangesets(createChanges, roleChanges)
- * await persistChangeset(db, combined)
- * ```
  */
 export function mergeChangesets<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
@@ -94,6 +85,14 @@ export function mergeChangesets<
  * Unlike {@link mergeChangesets}, which combines independent changesets and
  * rejects an id in two buckets, this is for a sequence, where the same
  * entity legitimately changes more than once.
+ *
+ * @example
+ * ```ts
+ * const { changes: createChanges } = engine.createPremiseWithId(premiseId, data)
+ * const { changes: roleChanges } = engine.setConclusionPremise(premiseId)
+ * const combined = composeChangesets(createChanges, roleChanges)
+ * await persistChangeset(db, combined)
+ * ```
  */
 export function composeChangesets<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,

@@ -15,6 +15,16 @@ by claim-reference validation, so a consumer summing warnings sees it twice;
 the new code is the one that also covers ids naming no produced mention. A consumer that counts every code
 in `SOURCE_ANCHOR_NOTE_CODES` picks it up with no change.
 
+### `composeChangesets` combines the changesets of successive mutations
+
+`composeChangesets(first, then)`, now exported from the package root, gives
+the one changeset describing two mutations made one after the other. Each
+entity lands in a single bucket: a new entity stays added, one modified and
+then removed is removed, and one added and then removed disappears. Use it
+instead of `mergeChangesets` to combine a sequence of mutations:
+`mergeChangesets` throws when one entity lands in two buckets, which a
+sequence can produce.
+
 ### Other
 
 - `TLlmOutputCheckFailure`, the `{ code, message }` a stage's `checkOutput`

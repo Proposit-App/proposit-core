@@ -285,9 +285,22 @@ describe("a changeset names each entity once", () => {
     for (const behavior of ["permissive", "assistive"] as const) {
         const mutations: [
             string,
-            (f: ReturnType<typeof buildFixture>) => TCoreChangeset,
+            (
+                f: ReturnType<typeof buildFixture> & { claims: ClaimLibrary }
+            ) => TCoreChangeset,
         ][] = [
             ["createPremise", (f) => f.eng.createPremise().changes],
+            [
+                "createPremise (derivation)",
+                (f) =>
+                    f.eng.createPremise({
+                        type: "derivation",
+                        derivedClaimId: f.claims.create({
+                            id: "derived",
+                            type: "normal",
+                        }).id,
+                    }).changes,
+            ],
             [
                 "addExpression",
                 (f) =>
@@ -330,7 +343,8 @@ describe("a changeset names each entity once", () => {
         ]
         for (const [name, mutate] of mutations) {
             it(`${name} in ${behavior} behavior repeats no id`, () => {
-                const fixture = buildFixture("and", 2)
+                const claims = new ClaimLibrary()
+                const fixture = { ...buildFixture("and", 2, claims), claims }
                 fixture.eng.setBehavior(behavior)
                 expectNoRepeatedIds(mutate(fixture))
             })

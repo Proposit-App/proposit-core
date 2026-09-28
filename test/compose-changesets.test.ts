@@ -142,6 +142,15 @@ describe("ChangeCollector — records each entity once", () => {
         ).toBeUndefined()
     })
 
+    it("turns an entity removed and then added again into modified", () => {
+        expect(
+            collect((c) => {
+                c.removedExpression(x(1))
+                c.addedExpression(x(2))
+            })
+        ).toEqual({ added: [], modified: [e("x", 2)], removed: [] })
+    })
+
     it("still answers whether an expression was added", () => {
         const c = new ChangeCollector()
         c.addedExpression(x(1))
