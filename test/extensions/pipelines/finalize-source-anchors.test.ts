@@ -444,6 +444,180 @@ describe("finalizeResponseV2 — a claim with no mention is reported, not silent
     })
 })
 
+describe("finalizeResponseV2 — a mention no claim references is reported, not silent", () => {
+    // Every mention the mention stage produced should belong to some
+    // claim's `mentionIds`. One that does not is linked to no claim, whether
+    // or not its quote resolved, and a claim it was meant for may have lost
+    // its anchor without a signal.
+    function withMentionIds(
+        miniId: string,
+        mentionIds: string[]
+    ): Record<string, unknown> {
+        const outputs = buildOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        canon.canonicalClaims.find((c) => c.miniId === miniId)!.mentionIds =
+            mentionIds
+        return outputs
+    }
+    const unclaimed = (
+        failures: ReturnType<typeof finalizeFailures>
+    ): ReturnType<typeof finalizeFailures> =>
+        failures.filter((f) => f.code === "SOURCE_ANCHOR_MENTION_UNCLAIMED")
+
+    it("reports a mention no claim names once, with its quote", () => {
+        const notes = unclaimed(finalizeFailures(withMentionIds("c1", ["m1"])))
+        expect(notes).toHaveLength(1)
+        expect(notes[0].context).toEqual({
+            mentionId: "m2",
+            quote: "The risk is real",
+        })
+        expect((notes[0] as unknown as { severity: string }).severity).toBe(
+            "warning"
+        )
+    })
+
+    it("reports an unclaimed mention whose quote also failed to resolve", () => {
+        // Linking and resolving are separate facts, so both are reported.
+        const outputs = withMentionIds("c1", ["m1"])
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m2")!.text =
+            "a sentence never written"
+
+        const failures = finalizeFailures(outputs)
+        expect(
+            failures
+                .filter((f) => f.context?.mentionId === "m2")
+                .map((f) => f.code)
+                .sort()
+        ).toEqual([
+            "SOURCE_ANCHOR_MENTION_UNCLAIMED",
+            "SOURCE_ANCHOR_UNRESOLVED",
+        ])
+    })
+
+    it("reports a mention id the stage emitted twice only once", () => {
+        const outputs = withMentionIds("c1", ["m1"])
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.push({
+            ...mentions.mentions.find((m) => m.mentionId === "m2")!,
+        })
+
+        expect(
+            unclaimed(finalizeFailures(outputs)).map(
+                (n) => n.context?.mentionId
+            )
+        ).toEqual(["m2"])
+    })
+
+    it("reports nothing when every mention is named by a claim", () => {
+        expect(unclaimed(finalizeFailures(buildOutputs()))).toEqual([])
+    })
+
+    it("reports nothing when the pipeline has no mention stage", () => {
+        const outputs = withMentionIds("c1", ["m1"])
+        delete outputs[STAGE_IDS.claimMentionExtraction]
+        expect(unclaimed(finalizeFailures(outputs))).toEqual([])
+    })
+
+    it("reports only the missing input when the input has no text", () => {
+        const failures = finalizeFailures(withMentionIds("c1", ["m1"]), "")
+        expect(failures.map((f) => f.code)).toEqual([
+            "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
+        ])
+    })
+})
+
+describe("finalizeResponseV2 — a repeated mention id is resolved once", () => {
+    // Mention ids should be unique, but nothing enforces it. The first copy
+    // of an id is the one resolved and anchored; later copies are ignored.
+    function withCopiesOfM3(
+        ...copies: Partial<TClaimMentionExtractionOutput["mentions"][number]>[]
+    ): Record<string, unknown> {
+        const outputs = buildOutputs()
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        const m3 = mentions.mentions.find((m) => m.mentionId === "m3")!
+        for (const copy of copies) mentions.mentions.push({ ...m3, ...copy })
+        return outputs
+    }
+    const forM3 = (
+        failures: ReturnType<typeof finalizeFailures>,
+        code: string
+    ): ReturnType<typeof finalizeFailures> =>
+        failures.filter((f) => f.code === code && f.context?.mentionId === "m3")
+    const c2Quotes = (outputs: Record<string, unknown>): string[] | undefined =>
+        finalize(outputs)
+            .claims.find((c) => c.miniId === "c2")!
+            .sourceAnchors?.map((a) => a.quote)
+
+    it("reports an unresolved repeated mention once, not once per copy", () => {
+        const outputs = withCopiesOfM3({})
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        for (const m of mentions.mentions) {
+            if (m.mentionId === "m3") m.text = "a sentence never written"
+        }
+        expect(
+            forM3(finalizeFailures(outputs), "SOURCE_ANCHOR_UNRESOLVED")
+        ).toHaveLength(1)
+    })
+
+    it("anchors the first copy when a later copy names another passage", () => {
+        const outputs = withCopiesOfM3({
+            segmentId: "s3",
+            text: "we should wait",
+            span: { start: 21, end: 35 },
+        })
+        expect(c2Quotes(outputs)).toEqual(["Escalation costs more than delay"])
+    })
+
+    it("leaves the id unanchored when the first copy fails, even if a later one would resolve", () => {
+        const outputs = withCopiesOfM3({})
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m3")!.text =
+            "a sentence never written"
+        expect(c2Quotes(outputs)).toBeUndefined()
+        expect(
+            forM3(finalizeFailures(outputs), "SOURCE_ANCHOR_UNRESOLVED")
+        ).toHaveLength(1)
+    })
+
+    it("quotes the first copy when a repeated id is also unclaimed", () => {
+        const outputs = withCopiesOfM3({
+            segmentId: "s3",
+            text: "we should wait",
+            span: { start: 21, end: 35 },
+        })
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        canon.canonicalClaims.find((c) => c.miniId === "c2")!.mentionIds = []
+        expect(
+            forM3(
+                finalizeFailures(outputs),
+                "SOURCE_ANCHOR_MENTION_UNCLAIMED"
+            ).map((f) => f.context?.quote)
+        ).toEqual(["Escalation costs more than delay"])
+    })
+
+    it("reports only the missing input when the input has no text", () => {
+        const failures = finalizeFailures(withCopiesOfM3({}), "")
+        expect(failures.map((f) => f.code)).toEqual([
+            "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
+        ])
+    })
+})
+
 describe("finalizeResponseV2 — claim source anchors", () => {
     it("anchors a claim once per mention that resolved to it", () => {
         const c1 = finalize(buildOutputs()).claims.find(

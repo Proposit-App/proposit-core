@@ -58,7 +58,8 @@ pnpm run typecheck   # tsc --noEmit
 pnpm run lint        # prettier --check + eslint
 pnpm run prettify    # prettier --write (auto-fix formatting)
 pnpm run test        # vitest run
-pnpm run build       # generate:parser (peggy) + tsc -p tsconfig.build.json → dist/ + typedoc
+pnpm run build       # generate:parser (peggy) + tsc -p tsconfig.build.json → dist/ + typedoc + API-surface check
+pnpm run api-surface:update  # rewrite docs/api-surface.txt after an intended public-API change
 pnpm run check       # all of the above in sequence
 pnpm cli -- --help   # run the local proposit-core CLI from the local build
 bash scripts/smoke-test.sh  # CLI smoke test (requires build first)

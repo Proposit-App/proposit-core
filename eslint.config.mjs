@@ -166,7 +166,7 @@ export default tseslint.config(
     // .mjs files (e.g. this config file) are not part of the TypeScript project,
     // so type-aware rules cannot be applied to them.
     {
-        files: ["*.mjs"],
+        files: ["**/*.mjs"],
         extends: [tseslint.configs.disableTypeChecked],
     },
     {
