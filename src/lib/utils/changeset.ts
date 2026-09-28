@@ -83,6 +83,89 @@ export function mergeChangesets<
     return result
 }
 
+/**
+ * Combines two changesets made one after the other into the one changeset
+ * that describes both, entity by entity: added then modified stays added
+ * (with the later value), added then removed disappears, modified then
+ * removed becomes removed, removed then added becomes modified, and
+ * otherwise the later entry wins. `roles` and `argument` take the later
+ * value when it is present.
+ *
+ * Unlike {@link mergeChangesets}, which combines independent changesets and
+ * rejects an id in two buckets, this is for a sequence, where the same
+ * entity legitimately changes more than once.
+ */
+export function composeChangesets<
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TPremise extends TCorePremise = TCorePremise,
+    TArg extends TCoreArgument = TCoreArgument,
+>(
+    first: TCoreChangeset<TExpr, TVar, TPremise, TArg>,
+    then: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+    const result: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
+    const expressions = composeEntityChanges(
+        first.expressions,
+        then.expressions
+    )
+    if (expressions) result.expressions = expressions
+    const variables = composeEntityChanges(first.variables, then.variables)
+    if (variables) result.variables = variables
+    const premises = composeEntityChanges(first.premises, then.premises)
+    if (premises) result.premises = premises
+    const roles = then.roles ?? first.roles
+    if (roles !== undefined) result.roles = roles
+    const argument = then.argument ?? first.argument
+    if (argument !== undefined) result.argument = argument
+    return result
+}
+
+function composeEntityChanges<T extends { id: string }>(
+    first: TCoreEntityChanges<T> | undefined,
+    then: TCoreEntityChanges<T> | undefined
+): TCoreEntityChanges<T> | undefined {
+    if (!first && !then) return undefined
+    type TBucket = "added" | "modified" | "removed"
+    const state = new Map<string, { bucket: TBucket; entity: T }>()
+    for (const bucket of ["added", "modified", "removed"] as const) {
+        for (const entity of first?.[bucket] ?? []) {
+            state.set(entity.id, { bucket, entity })
+        }
+    }
+    for (const entity of then?.added ?? []) {
+        const earlier = state.get(entity.id)
+        state.set(entity.id, {
+            bucket: earlier?.bucket === "removed" ? "modified" : "added",
+            entity,
+        })
+    }
+    for (const entity of then?.modified ?? []) {
+        const earlier = state.get(entity.id)
+        state.set(entity.id, {
+            bucket: earlier?.bucket === "added" ? "added" : "modified",
+            entity,
+        })
+    }
+    for (const entity of then?.removed ?? []) {
+        if (state.get(entity.id)?.bucket === "added") {
+            state.delete(entity.id)
+        } else {
+            state.set(entity.id, { bucket: "removed", entity })
+        }
+    }
+    const out: TCoreEntityChanges<T> = { added: [], modified: [], removed: [] }
+    for (const { bucket, entity } of state.values()) out[bucket].push(entity)
+    if (
+        out.added.length === 0 &&
+        out.modified.length === 0 &&
+        out.removed.length === 0
+    ) {
+        return undefined
+    }
+    return out
+}
+
 function mergeEntityChanges<T extends { id: string }>(
     a: TCoreEntityChanges<T> | undefined,
     b: TCoreEntityChanges<T> | undefined,

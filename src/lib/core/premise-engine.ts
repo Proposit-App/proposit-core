@@ -22,6 +22,7 @@ import type {
     TCoreValidationResult,
 } from "../types/evaluation.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
+import { composeChangesets } from "../utils/changeset.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import {
@@ -80,6 +81,17 @@ export type TPremiseEngineSnapshot<
     config?: TLogicEngineOptions
 }
 
+type TMutationFollowUp<
+    TExpr extends TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable,
+    TPremise extends TCorePremise,
+    TArg extends TCoreArgument,
+> = {
+    run(
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> | undefined
+}["run"]
+
 export class PremiseEngine<
     TArg extends TCoreArgument = TCoreArgument,
     TPremise extends TCorePremise = TCorePremise,
@@ -109,6 +121,10 @@ export class PremiseEngine<
     private expressionIndex?: Map<string, string>
     private generateId: () => string
     private onMutate?: () => void
+    // Written as a method signature so TypeScript compares it bivariantly,
+    // like the class's methods: a function-typed field would make
+    // PremiseEngine invariant in its type parameters.
+    private mutationFollowUp?: TMutationFollowUp<TExpr, TVar, TPremise, TArg>
     private circularityCheck?: (
         variableId: string,
         premiseId: string
@@ -154,6 +170,59 @@ export class PremiseEngine<
 
     public setOnMutate(callback: (() => void) | undefined): void {
         this.onMutate = callback
+    }
+
+    /**
+     * Sets what runs after each mutation, given the changeset the mutation
+     * built. If it returns a changeset, the mutation returns that instead.
+     * The owning `ArgumentEngine` uses it to run assistive normalization and
+     * add what that changed.
+     *
+     * @internal
+     */
+    public setMutationFollowUp(
+        callback: TMutationFollowUp<TExpr, TVar, TPremise, TArg> | undefined
+    ): void {
+        this.mutationFollowUp = callback
+    }
+
+    private followUp(
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+        return this.mutationFollowUp?.(changes) ?? changes
+    }
+
+    /**
+     * Replaces this premise's own added and modified entries with their
+     * current values. A changeset composed from several steps can hold an
+     * entry whose checksums a later step changed.
+     */
+    private withCurrentOwnEntries(
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+        this.flushChecksums()
+        const current = (expr: TExpr): TExpr => {
+            const found = this.expressions.getExpression(expr.id)
+            return found ? { ...found } : expr
+        }
+        const out = { ...changes }
+        if (out.expressions) {
+            out.expressions = {
+                added: out.expressions.added.map(current),
+                modified: out.expressions.modified.map(current),
+                removed: out.expressions.removed,
+            }
+        }
+        if (out.premises) {
+            const self = (premise: TPremise): TPremise =>
+                premise.id === this.premise.id ? this.toPremiseData() : premise
+            out.premises = {
+                added: out.premises.added.map(self),
+                modified: out.premises.modified.map(self),
+                removed: out.premises.removed,
+            }
+        }
+        return out
     }
 
     public setCircularityCheck(
@@ -277,40 +346,36 @@ export class PremiseEngine<
                 return { result: [], changes: {} }
             }
 
-            const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-
-            // Suppress onMutate during the loop to avoid redundant notifications
+            // Suppress the notification and the follow-up during the loop;
+            // both run once, for the whole deletion, at the end.
             const savedOnMutate = this.onMutate
+            const savedFollowUp = this.mutationFollowUp
             this.onMutate = undefined
+            this.mutationFollowUp = undefined
             try {
                 // Copy the set since removeExpression mutates expressionsByVariableId
                 const removed: TExpr[] = []
+                let changes: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
                 for (const exprId of [...expressionIds]) {
                     // The expression may already have been removed as part of a
                     // prior subtree deletion or operator collapse in this loop.
                     if (!this.expressions.getExpression(exprId)) continue
 
-                    const { result, changes } = this.removeExpression(
-                        exprId,
-                        true
-                    )
-                    if (result) removed.push(result)
-                    if (changes.expressions) {
-                        for (const e of changes.expressions.removed) {
-                            collector.removedExpression(e)
-                        }
-                    }
+                    const removal = this.removeExpression(exprId, true)
+                    if (removal.result) removed.push(removal.result)
+                    // The whole changeset, not only its removals: removing an
+                    // expression can also collapse an operator and move the
+                    // surviving child.
+                    changes = composeChangesets(changes, removal.changes)
                 }
-
-                // Expressions in the collector already have checksums attached
-                // (from ExpressionManager which stores expressions with checksums).
-                const changes = collector.toChangeset()
+                changes = this.withCurrentOwnEntries(changes)
                 this.syncExpressionIndex(changes)
 
-                // Restore and fire once if something was removed
                 this.onMutate = savedOnMutate
+                this.mutationFollowUp = savedFollowUp
                 if (removed.length > 0) {
                     this.onMutate?.()
+                    changes = this.followUp(changes)
                 }
 
                 return {
@@ -319,6 +384,7 @@ export class PremiseEngine<
                 }
             } catch (e) {
                 this.onMutate = savedOnMutate
+                this.mutationFollowUp = savedFollowUp
                 throw e
             }
         })
@@ -477,15 +543,15 @@ export class PremiseEngine<
                 }
 
                 const changeset = this.flushAndBuildChangeset(collector)
-                if (changeset.expressions !== undefined) {
-                    this.markDirty()
-                    this.onMutate?.()
-                }
-
                 this.syncExpressionIndex(changeset)
+                if (changeset.expressions === undefined) {
+                    return { result: updated, changes: changeset }
+                }
+                this.markDirty()
+                this.onMutate?.()
                 return {
                     result: updated,
-                    changes: changeset,
+                    changes: this.followUp(changeset),
                 }
             } finally {
                 this.expressions.setCollector(null)
@@ -1279,7 +1345,7 @@ export class PremiseEngine<
             this.onMutate?.()
             return {
                 result: this.getExtras(),
-                changes: collector.toChangeset(),
+                changes: this.followUp(collector.toChangeset()),
             }
         })
     }
@@ -1643,7 +1709,7 @@ export class PremiseEngine<
         const changes = this.flushAndBuildChangeset(collector)
         this.syncExpressionIndex(changes)
         this.onMutate?.()
-        return changes
+        return this.followUp(changes)
     }
 
     private flushAndBuildChangeset(
