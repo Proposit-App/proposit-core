@@ -338,8 +338,8 @@ export type TOrderedOperation<
  * An expression updated to point at a parent or a variable that the same
  * changeset inserts is moved to the root in phase 2 and updated in full
  * after the inserts. In phase 2, one late only for its new parent is written
- * whole with the parent cleared, since every other row it names exists, so
- * it leaves its old variable before that can be deleted. One that points at
+ * whole with the parent cleared, since its variable is not a new one, so it
+ * leaves its old variable before that can be deleted. One that points at
  * a new variable can only be detached (`id`, `parentId`, `position`), so the
  * variable and premise deletes (phases 4 and 5) wait until after its full
  * update: the stored row still names its old variable, which may be one of
@@ -363,11 +363,11 @@ export type TOrderedOperation<
  *    modified and removed are skipped (the row is about to be deleted).
  *    Then detach every removed expression (see above), so no stored row
  *    points at an expression about to be deleted. A detach carries only
- *    `id`, `parentId` and `position`.
+ *    `id`, `parentId` and `position`. An update that needs an insert first
+ *    is written early here too (see above).
  * 3. Delete expressions — expression rows hold FKs to variables and premises,
  *    so they must be removed first. Every one is detached by now, so their
  *    order does not matter; children still come before parents.
- *    An update that needs an insert first is detached here instead.
  * 4. Delete variables — safe after expression deletes (no remaining FK
  *    references from expressions). Held until after phase 8 when an update
  *    points at a new variable (see above).
@@ -417,8 +417,8 @@ export function orderChangeset<
     // parents before ON DELETE CASCADE runs in Phase 3.
     //
     // An update that points at a parent or a variable this changeset
-    // inserts cannot run yet. It is detached here instead, so its old parent
-    // can be deleted, and applied in full after the inserts.
+    // inserts cannot run yet. It is moved to the root here instead, so its
+    // old parent can be deleted, and applied in full after the inserts.
     const addedExprIds = new Set(
         (changeset.expressions?.added ?? []).map((e) => e.id)
     )
