@@ -8,16 +8,56 @@ import type {
     TCoreArgumentRoleState,
 } from "../schemata/argument.js"
 import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
+import { POSITION_INITIAL } from "./position.js"
+
+/**
+ * Replaces each added and modified expression and premise with its current
+ * value, as the lookups return it (a copy); entries a lookup does not find,
+ * and every removed entry, are kept as they are. A changeset built over
+ * several steps can hold an entry whose checksums a later step changed.
+ */
+export function withCurrentEntries<
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TPremise extends TCorePremise = TCorePremise,
+    TArg extends TCoreArgument = TCoreArgument,
+>(
+    changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>,
+    currentExpression: (id: string) => TExpr | undefined,
+    currentPremise: (id: string) => TPremise | undefined
+): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+    const out = { ...changes }
+    if (out.expressions) {
+        const current = (expr: TExpr): TExpr => {
+            const found = currentExpression(expr.id)
+            return found ? { ...found } : expr
+        }
+        out.expressions = {
+            added: out.expressions.added.map(current),
+            modified: out.expressions.modified.map(current),
+            removed: out.expressions.removed,
+        }
+    }
+    if (out.premises) {
+        const current = (premise: TPremise): TPremise =>
+            currentPremise(premise.id) ?? premise
+        out.premises = {
+            added: out.premises.added.map(current),
+            modified: out.premises.modified.map(current),
+            removed: out.premises.removed,
+        }
+    }
+    return out
+}
 
 /**
  * Merges two changesets into one, deduplicating entities by `id` within each
  * bucket (added/modified/removed) with last-write-wins semantics.
  *
- * Use this when a single logical operation requires multiple engine calls that
- * each produce a changeset. For example, creating a conclusion premise requires
- * both `createPremiseWithId` and `setConclusionPremise`, each returning a
- * changeset — `mergeChangesets` combines them into one changeset suitable for
- * a single persistence call.
+ * Use this for changesets that never change one entity in different ways.
+ * For the changesets of successive calls on one engine, where a later call
+ * can modify or remove what an earlier one added or modified, use
+ * {@link composeChangesets}: this function throws in that case.
  *
  * @param a - The first changeset.
  * @param b - The second changeset. Its entries take precedence when both
@@ -27,14 +67,6 @@ import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
  * @throws {Error} If any entity ID appears in more than one bucket
  *   (added/modified/removed) within the same category after merge. This
  *   indicates a logic error in the caller.
- *
- * @example
- * ```ts
- * const { changes: createChanges } = engine.createPremiseWithId(premiseId, data)
- * const { changes: roleChanges } = engine.setConclusionPremise(premiseId)
- * const combined = mergeChangesets(createChanges, roleChanges)
- * await persistChangeset(db, combined)
- * ```
  */
 export function mergeChangesets<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
@@ -81,6 +113,109 @@ export function mergeChangesets<
     }
 
     return result
+}
+
+/**
+ * Combines two changesets made one after the other into the one changeset
+ * that describes both, entity by entity: added then modified stays added
+ * (with the later value), added then removed disappears, modified then
+ * removed becomes removed, removed then added becomes modified, and
+ * otherwise the later entry wins. `roles` and `argument` take the later
+ * value when it is present.
+ *
+ * Unlike {@link mergeChangesets}, which combines independent changesets and
+ * rejects an id in two buckets, this is for a sequence, where the same
+ * entity legitimately changes more than once.
+ *
+ * @example
+ * ```ts
+ * const { changes: createChanges } = engine.createPremiseWithId(premiseId, data)
+ * const { changes: roleChanges } = engine.setConclusionPremise(premiseId)
+ * const combined = composeChangesets(createChanges, roleChanges)
+ * await persistChangeset(db, combined)
+ * ```
+ */
+export function composeChangesets<
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TPremise extends TCorePremise = TCorePremise,
+    TArg extends TCoreArgument = TCoreArgument,
+>(
+    first: TCoreChangeset<TExpr, TVar, TPremise, TArg>,
+    then: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+    const result: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
+    const expressions = composeEntityChanges(
+        first.expressions,
+        then.expressions
+    )
+    if (expressions) result.expressions = expressions
+    const variables = composeEntityChanges(first.variables, then.variables)
+    if (variables) result.variables = variables
+    const premises = composeEntityChanges(first.premises, then.premises)
+    if (premises) result.premises = premises
+    const roles = then.roles ?? first.roles
+    if (roles !== undefined) result.roles = roles
+    const argument = then.argument ?? first.argument
+    if (argument !== undefined) result.argument = argument
+    return result
+}
+
+function composeEntityChanges<T extends { id: string }>(
+    first: TCoreEntityChanges<T> | undefined,
+    then: TCoreEntityChanges<T> | undefined
+): TCoreEntityChanges<T> | undefined {
+    if (!first && !then) return undefined
+    const state: TEntityChangeState<T> = new Map()
+    for (const changes of [first, then]) {
+        for (const bucket of ["added", "modified", "removed"] as const) {
+            for (const entity of changes?.[bucket] ?? []) {
+                recordEntityChange(state, bucket, entity)
+            }
+        }
+    }
+    return entityChangesFrom(state)
+}
+
+/** Each entity's single bucket and latest value, by id. */
+export type TEntityChangeState<T extends { id: string }> = Map<
+    string,
+    { bucket: "added" | "modified" | "removed"; entity: T }
+>
+
+/**
+ * Records one change to an entity on top of what `state` already holds for
+ * it, keeping one bucket per entity: added then modified stays added (with
+ * the later value), added then removed disappears, removed then added
+ * becomes modified, and otherwise the later change replaces the earlier.
+ */
+export function recordEntityChange<T extends { id: string }>(
+    state: TEntityChangeState<T>,
+    bucket: "added" | "modified" | "removed",
+    entity: T
+): void {
+    const earlier = state.get(entity.id)?.bucket
+    if (bucket === "removed" && earlier === "added") {
+        state.delete(entity.id)
+        return
+    }
+    const next =
+        bucket === "added" && earlier === "removed"
+            ? "modified"
+            : bucket === "modified" && earlier === "added"
+              ? "added"
+              : bucket
+    state.set(entity.id, { bucket: next, entity })
+}
+
+/** The buckets `state` describes, or undefined when it holds nothing. */
+export function entityChangesFrom<T extends { id: string }>(
+    state: TEntityChangeState<T>
+): TCoreEntityChanges<T> | undefined {
+    if (state.size === 0) return undefined
+    const out: TCoreEntityChanges<T> = { added: [], modified: [], removed: [] }
+    for (const { bucket, entity } of state.values()) out[bucket].push(entity)
+    return out
 }
 
 function mergeEntityChanges<T extends { id: string }>(
@@ -153,6 +288,18 @@ export type TOrderedOperation<
     | { type: "insert"; entity: "variable"; data: TVar }
     | { type: "insert"; entity: "expression"; data: TExpr }
     | { type: "update"; entity: "expression"; data: TExpr }
+    | {
+          type: "update"
+          entity: "expression"
+          /**
+           * A detach: only these fields change, and every other stored
+           * field keeps its value. Write only the fields given.
+           */
+          data: Pick<TExpr, "id"> & {
+              parentId: null
+              position: typeof POSITION_INITIAL
+          }
+      }
     | { type: "update"; entity: "variable"; data: TVar }
     | { type: "update"; entity: "premise"; data: TPremise }
     | { type: "update"; entity: "argument"; data: TArg }
@@ -174,6 +321,28 @@ export type TOrderedOperation<
  * row that depends on it is inserted, and that every dependent row is removed
  * before the row it references is deleted.
  *
+ * It does so without knowing what the store holds. A removed expression's
+ * entry carries its parent at removal time, and a change in the same
+ * changeset may have moved it first, so the stored row can still point at a
+ * different parent. Every removed expression is therefore detached before
+ * any expression is deleted, by an update that carries only its `id`,
+ * `parentId: null` and `position` {@link POSITION_INITIAL}. Two conditions
+ * follow for the store:
+ * - Write only the fields an update carries. A detach is not a whole row;
+ *   the rest of the removed entry may be stale, and can name a variable this
+ *   changeset has not inserted yet.
+ * - Until the deletes run, a premise can briefly have more than one root, so
+ *   a rule allowing one root per premise must be checked at the end of the
+ *   transaction, not per statement.
+ *
+ * Two known exceptions, both updates run before an insert they depend on. A
+ * store checking foreign keys immediately rejects either; run such updates
+ * after the inserts:
+ * - an expression updated to point at a parent that the same changeset
+ *   inserts is updated (phase 2) before that insert (phase 8);
+ * - a variable-type expression updated to point at a variable that the same
+ *   changeset inserts is updated (phase 2) before that insert (phase 7).
+ *
  * Ordering phases:
  * 1. Update premises — ensure premise rows have correct metadata before
  *    dependent deletes run.
@@ -181,8 +350,12 @@ export type TOrderedOperation<
  *    removed set. This detaches reparented children from doomed parents
  *    before ON DELETE CASCADE runs. Expressions that appear in both
  *    modified and removed are skipped (the row is about to be deleted).
+ *    Then detach every removed expression (see above), so no stored row
+ *    points at an expression about to be deleted. A detach carries only
+ *    `id`, `parentId` and `position`.
  * 3. Delete expressions — expression rows hold FKs to variables and premises,
- *    so they must be removed first.
+ *    so they must be removed first. Every one is detached by now, so their
+ *    order does not matter; children still come before parents.
  * 4. Delete variables — safe after expression deletes (no remaining FK
  *    references from expressions).
  * 5. Delete premises — safe after all child rows are removed.
@@ -231,6 +404,20 @@ export function orderChangeset<
         if (!removedExprIds.has(e.id)) {
             ops.push({ type: "update", entity: "expression", data: e })
         }
+    }
+
+    // Still Phase 2: detach every removed expression. Its entry's parent is
+    // the one at removal time, which the stored row may not share, so the
+    // delete order below cannot be computed from it; detached rows need no
+    // order at all. The detach carries only the parent and a root's
+    // position: the rest of the entry may be stale too, and may name a
+    // variable this changeset has not inserted yet.
+    for (const e of changeset.expressions?.removed ?? []) {
+        ops.push({
+            type: "update",
+            entity: "expression",
+            data: { id: e.id, parentId: null, position: POSITION_INITIAL },
+        })
     }
 
     // Phase 3: Delete expressions — reverse-topologically sorted so children

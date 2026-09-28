@@ -779,9 +779,9 @@ export function applyANToFixedPoint<
     //
     // Re-entrance guard: AN's own mutations
     // (`pe.removeExpression` / `pe.reparentExpression` /
-    // `pe.wrapInFormula`) re-fire `setOnMutate` on the engine, which
-    // calls `runAssistiveNormalization(this)` → `applyANToFixedPoint`
-    // again. The guard short-circuits nested entries so the outer
+    // `pe.wrapInFormula`) re-fire the engine's mutation follow-up,
+    // which calls `runAssistiveNormalization(this)` →
+    // `applyANToFixedPoint` again. The guard short-circuits nested entries so the outer
     // sweep runs uninterrupted. `beginApplyAN` returns `false` when
     // AN is already in progress; we no-op in that case.
     if (!engine.beginApplyAN()) return

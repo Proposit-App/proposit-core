@@ -46,7 +46,11 @@ export type {
 } from "./core/evaluation/argument-evaluation.js"
 export * from "./types/diff.js"
 export * from "./types/mutation.js"
-export { mergeChangesets, orderChangeset } from "./utils/changeset.js"
+export {
+    composeChangesets,
+    mergeChangesets,
+    orderChangeset,
+} from "./utils/changeset.js"
 export type { TOrderedOperation } from "./utils/changeset.js"
 export {
     createLookup,

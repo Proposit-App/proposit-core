@@ -37,6 +37,7 @@ import {
     serializeChecksumConfig,
 } from "../consts.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
+import { composeChangesets, withCurrentEntries } from "../utils/changeset.js"
 import type {
     TReactiveSnapshot,
     TReactivePremiseSnapshot,
@@ -192,13 +193,14 @@ export class ArgumentEngine<
     private engineBehavior: "assistive" | "permissive"
     private generateId: () => string
     private restoringFromSnapshot = false
-    // Re-entrance guard for the AN post-mutation hook. The
-    // `setOnMutate` callbacks (3 sites: createPremise, fromSnapshot,
-    // restoreFromSnapshot) fire `runAssistiveNormalization(this)` after
-    // every successful mutation when `behavior === 'assistive'`. AN
-    // itself mutates premises (removeExpression / reparentExpression /
-    // wrapInFormula), which re-fires `setOnMutate`. Without a guard the
-    // outer mutation would trigger nested AN sweeps. The guard is
+    // Re-entrance guard for the AN post-mutation hook. Each premise's
+    // mutation follow-up (`followUpWithNormalization`, wired at three
+    // sites: createPremise, fromSnapshot, restoreFromSnapshot) runs
+    // `runAssistiveNormalization(this)` after every successful mutation
+    // when `behavior === 'assistive'`. AN itself mutates premises
+    // (removeExpression / reparentExpression / wrapInFormula), which
+    // re-fires the follow-up. Without a guard the outer mutation would
+    // trigger nested AN sweeps. The guard is
     // toggled by `_beginApplyAN()` / `_endApplyAN()` (see below); the
     // chokepoint is `applyANToFixedPoint` in
     // `src/lib/grammar/an-rules.ts`, so both
@@ -207,6 +209,11 @@ export class ArgumentEngine<
     // accessor pair is `beginApplyAN()` / `endApplyAN()` below
     // (marked `@internal` — not part of the public API).
     private applyingAN = false
+    // What assistive normalization has changed so far while it runs after a
+    // mutation, composed in order; undefined when it is not running.
+    private normalizationChanges:
+        | TCoreChangeset<TExpr, TVar, TPremise, TArg>
+        | undefined
     private cachedPremisesCollectionChecksum: string | null | undefined
     private cachedVariablesCollectionChecksum: string | null | undefined
     private expressionIndex: Map<string, string>
@@ -323,6 +330,55 @@ export class ArgumentEngine<
         this.markReactiveDirty(changes)
         this.notifySubscribers()
         return changes
+    }
+
+    /**
+     * Runs after every premise mutation, given the changeset it built. In
+     * assistive behavior it runs normalization and returns the mutation's
+     * changeset with what normalization changed composed onto it, so the
+     * mutation reports everything the call changed. Returns undefined, which
+     * leaves the mutation's own changeset in place, when normalization is
+     * off or changed nothing. While normalization is running, the mutations
+     * it makes arrive here too, and are collected rather than normalized
+     * again.
+     */
+    private followUpWithNormalization(
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> | undefined {
+        if (this.restoringFromSnapshot) return undefined
+        if (this.normalizationChanges !== undefined) {
+            this.normalizationChanges = composeChangesets(
+                this.normalizationChanges,
+                changes
+            )
+            return undefined
+        }
+        if (this.engineBehavior !== "assistive") return undefined
+        this.normalizationChanges = {}
+        let normalized: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+        try {
+            runAssistiveNormalization(this)
+            normalized = this.normalizationChanges
+        } finally {
+            this.normalizationChanges = undefined
+        }
+        if (Object.keys(normalized).length === 0) return undefined
+        return this.withCurrentEntries(composeChangesets(changes, normalized))
+    }
+
+    /** Every added and modified entry, at its current value in this engine. */
+    private withCurrentEntries(
+        changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
+    ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+        return withCurrentEntries(
+            changes,
+            (id) => {
+                const pe = this.premises.get(this.expressionIndex.get(id) ?? "")
+                pe?.flushChecksums()
+                return pe?.getExpression(id)
+            },
+            (id) => this.premises.get(id)?.toPremiseData()
+        )
     }
 
     private static readonly skipValidationResult: TInvariantValidationResult = {
@@ -590,10 +646,10 @@ export class ArgumentEngine<
      *
      * Used by `applyANToFixedPoint` in `src/lib/grammar/an-rules.ts`
      * (the single chokepoint for both `runAssistiveNormalization`
-     * and `normalizeArgument`). The post-mutation hook in
-     * `setOnMutate` calls `runAssistiveNormalization(this)` which
-     * delegates to `applyANToFixedPoint`; AN's own mutations re-fire
-     * `setOnMutate`, which would otherwise recurse. This guard
+     * and `normalizeArgument`). The post-mutation follow-up calls
+     * `runAssistiveNormalization(this)` which delegates to
+     * `applyANToFixedPoint`; AN's own mutations re-fire the follow-up,
+     * which would otherwise recurse. This guard
      * breaks the recursion.
      *
      * @internal
@@ -872,17 +928,10 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(id)
                 this.notifySubscribers()
-                // AN post-mutation hook per spec §5. Skipped
-                // during snapshot restoration (PE.fromSnapshot bypasses
-                // mutations anyway, but the guard is defensive).
-                // `runAssistiveNormalization` is a no-op in permissive
-                // mode; re-entrance from AN's own mutations is guarded
-                // inside `applyANToFixedPoint` via the engine's
-                // `_beginApplyAN()` flag.
-                if (!this.restoringFromSnapshot) {
-                    runAssistiveNormalization(this)
-                }
             })
+            pm.setMutationFollowUp((changes) =>
+                this.followUpWithNormalization(changes)
+            )
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             collector.addedPremise(pm.toPremiseData())
             this.markDirty()
@@ -914,6 +963,7 @@ export class ArgumentEngine<
 
             // Derivation init: add naked-Q root expression for the consequent variable.
             // Only runs when not restoring from snapshot.
+            let appended: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
             if (
                 options.type === "derivation" &&
                 options.derivedClaimId &&
@@ -934,32 +984,23 @@ export class ArgumentEngine<
                     )
                     this.markAllPremisesDirty()
                 }
-                // Add the naked-Q root expression via appendExpression.
-                const { changes: exprChanges } = pm.appendExpression(null, {
+                // Add the naked-Q root expression via appendExpression. Its
+                // whole changeset is kept, including what normalization then
+                // changed elsewhere.
+                appended = pm.appendExpression(null, {
                     id: this.generateId(),
                     type: "variable" as const,
                     variableId: consequentVariable.id,
                     premiseId: id,
                     argumentId: this.argument.id,
                     argumentVersion: this.argument.version,
-                } as unknown as import("./expression-manager.js").TExpressionWithoutPosition<TExpr>)
-                // Merge expression changes into the outer collector.
-                if (exprChanges.expressions) {
-                    for (const e of exprChanges.expressions.added) {
-                        collector.addedExpression(e)
-                    }
-                    for (const e of exprChanges.expressions.modified) {
-                        collector.modifiedExpression(e)
-                    }
-                }
-                if (exprChanges.premises) {
-                    for (const p of exprChanges.premises.modified) {
-                        collector.modifiedPremise(p)
-                    }
-                }
+                } as unknown as import("./expression-manager.js").TExpressionWithoutPosition<TExpr>).changes
             }
 
-            const changes = this.finalizeChanges(collector)
+            const changes = composeChangesets(
+                this.finalizeChanges(collector),
+                appended
+            )
             return {
                 result: pm,
                 changes,
@@ -975,8 +1016,10 @@ export class ArgumentEngine<
             if (!pm) return { result: undefined, changes: {} }
             const data = pm.toPremiseData()
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            // Clean up expression index for removed premise's expressions
+            // The premise's expressions go with it: list them as removed and
+            // drop them from the expression index.
             for (const expr of pm.getExpressions()) {
+                collector.removedExpression(expr)
                 this.expressionIndex.delete(expr.id)
             }
             this.premises.delete(premiseId)
@@ -1016,22 +1059,15 @@ export class ArgumentEngine<
                 }
                 collector.setRoles(this.getRoleState())
             }
-            // Cascade: remove variables bound to the deleted premise
-            const boundVars = this.getVariablesBoundToPremise(premiseId)
-            for (const v of boundVars) {
-                const removeResult = this.removeVariableCore(v.id)
-                if (removeResult.changes.variables) {
-                    for (const rv of removeResult.changes.variables.removed) {
-                        collector.removedVariable(rv)
-                    }
-                }
-                if (removeResult.changes.expressions) {
-                    for (const re of removeResult.changes.expressions.removed) {
-                        collector.removedExpression(re)
-                    }
-                }
+            // Cascade: remove variables bound to the deleted premise, keeping
+            // everything each removal changed, not only what it removed.
+            let changes = this.finalizeChanges(collector)
+            for (const v of this.getVariablesBoundToPremise(premiseId)) {
+                changes = composeChangesets(
+                    changes,
+                    this.removeVariableCore(v.id).changes
+                )
             }
-            const changes = this.finalizeChanges(collector)
             return {
                 result: data,
                 changes,
@@ -1372,22 +1408,24 @@ export class ArgumentEngine<
             return { result: undefined, changes: {} }
         }
 
-        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-
-        // Cascade: delete referencing expressions in every premise
+        // Cascade: delete referencing expressions in every premise, keeping
+        // everything each deletion changed, not only what it removed.
+        let cascade: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
         for (const pm of this.listPremises()) {
-            const { changes } = pm.deleteExpressionsUsingVariable(variableId)
-            if (changes.expressions) {
-                for (const e of changes.expressions.removed) {
-                    collector.removedExpression(e)
-                }
-            }
+            cascade = composeChangesets(
+                cascade,
+                pm.deleteExpressionsUsingVariable(variableId).changes
+            )
         }
 
         this.variables.removeVariable(variableId)
+        const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
         collector.removedVariable(variable)
         this.markAllPremisesDirty()
-        const changes = this.finalizeChanges(collector)
+        const changes = composeChangesets(
+            cascade,
+            this.finalizeChanges(collector)
+        )
         return {
             result: variable,
             changes,
@@ -1878,14 +1916,10 @@ export class ArgumentEngine<
                 engine.markDirty()
                 engine.reactiveDirty.premiseIds.add(premiseId)
                 engine.notifySubscribers()
-                // AN post-mutation hook per spec §5. See the
-                // matching comment in `createPremise`'s setOnMutate
-                // callback for the re-entrance / snapshot-restore
-                // rationale.
-                if (!engine.restoringFromSnapshot) {
-                    runAssistiveNormalization(engine)
-                }
             })
+            pe.setMutationFollowUp((changes) =>
+                engine.followUpWithNormalization(changes)
+            )
         }
         // Restore claim-bound variables first, then premise-bound variables
         for (const v of snapshot.variables.variables) {
@@ -2129,14 +2163,10 @@ export class ArgumentEngine<
                 this.markDirty()
                 this.reactiveDirty.premiseIds.add(premiseId)
                 this.notifySubscribers()
-                // AN post-mutation hook per spec §5. See the
-                // matching comment in `createPremise`'s setOnMutate
-                // callback for the re-entrance / snapshot-restore
-                // rationale.
-                if (!this.restoringFromSnapshot) {
-                    runAssistiveNormalization(this)
-                }
             })
+            pe.setMutationFollowUp((changes) =>
+                this.followUpWithNormalization(changes)
+            )
         }
         this.markDirty()
         this.reactiveDirty = {

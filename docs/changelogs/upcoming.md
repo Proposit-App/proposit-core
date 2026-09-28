@@ -2,6 +2,12 @@
 
 ## Added
 
+- `composeChangesets(first, then)`, exported from the package root: combines
+  the changesets of two successive mutations into one, giving each entity a
+  single bucket (a new entity stays added; modified then removed becomes
+  removed; added then removed disappears). Use it rather than
+  `mergeChangesets`, which throws on an id in two buckets, to combine a
+  sequence of mutations.
 - `TLlmOutputCheckFailure` is re-exported from `src/lib/index.ts`, which clears
   the typedoc warning that `checkArgumentStructure` referenced an undocumented
   type.
@@ -19,6 +25,53 @@
 
 ## Changed
 
+- `orderChangeset` now emits an update detaching every removed expression
+  before it deletes any expression. A removed expression's entry carries its
+  parent at removal time, which the stored row may not share when the same
+  changeset moved it first, so deletes ordered by that parent could remove a
+  parent while the stored child still pointed at it. The detach carries only
+  `{ id, parentId: null, position: 0 }`: `TOrderedOperation` gains an
+  expression `update` member with that partial `data`, so code reading an
+  expression update's `data` as a whole row must narrow first, and a store
+  must write only the fields an update carries. Until the deletes run, a
+  premise can have more than one root, so a one-root-per-premise rule must be
+  checked at the end of the transaction. With those, the order suits a store
+  that checks foreign keys immediately and cascades nothing, with two known
+  exceptions, both an update ordered before an insert it depends on: an
+  expression pointed at a parent the same changeset inserts, and a
+  variable-type expression pointed at a variable the same changeset inserts.
+  Run such updates after the inserts.
+- No changeset names an entity more than once. `ChangeCollector` records
+  each entity in one bucket by the same rule as `composeChangesets`, so a
+  new entity no longer also appears under `modified`, and an expression
+  changed twice in one call (permissive `changeOperator` on a nested
+  operator listed its root twice) appears once.
+- `ArgumentEngine.removePremise` lists the removed premise's own expressions
+  under `expressions.removed`. Before, only the premise was listed, and a
+  consumer applying the changeset kept its expressions.
+- In `assistive` behavior, the changeset a mutation returns now includes
+  what assistive normalization changed after it: expressions it removed
+  (the formula buffer and operator AN-4 absorbs, for example), formula
+  buffers it added, and the expressions and premises it moved or whose
+  checksums changed, in any premise. Before, the changeset was built before
+  normalization ran, so none of that was in it. An expression the call added
+  and normalization removed appears in no bucket. In `permissive` behavior,
+  where normalization does not run, this part changes nothing.
+  Normalization now runs from an internal per-premise follow-up
+  (`PremiseEngine.setMutationFollowUp`, `@internal`) rather than from
+  `onMutate`, so setting `onMutate` on an engine-owned premise no longer
+  turns normalization off.
+- `PremiseEngine.deleteExpressionsUsingVariable`,
+  `ArgumentEngine.removeVariable` and `removePremise`'s bound-variable
+  cascade return everything their inner removals changed, such as the child
+  promoted when an operator collapses, not only what was removed. This
+  applies in both behaviors, so these calls return more in `permissive`
+  behavior too. So does a derivation `createPremise`, which now keeps the
+  whole changeset of the root expression it adds.
+- Changesets from successive mutations can now name the same entity more
+  often (one mutation adds an expression, the next one's normalization moves
+  it). `mergeChangesets` throws when an id lands in two buckets; combine such
+  a sequence with `composeChangesets`, or apply the changesets in order.
 - `PremiseEngine.changeOperator` with three or more children, no child ids,
   and a new operator of `and`, `or` or `xor` now takes the existing in-place
   path instead of throwing "sourceChildId and targetChildId are required for

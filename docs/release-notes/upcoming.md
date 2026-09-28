@@ -28,6 +28,16 @@ resolution is reported too). One mistyped mention id in a claim can raise both
 notes: `SOURCE_ANCHOR_NOT_ATTEMPTED` for the claim and this one for the
 mention it meant.
 
+### `composeChangesets` combines the changesets of successive mutations
+
+`composeChangesets(first, then)`, now exported from the package root, gives
+the one changeset describing two mutations made one after the other. Each
+entity lands in a single bucket: a new entity stays added, one modified and
+then removed is removed, and one added and then removed disappears. Use it
+instead of `mergeChangesets` to combine a sequence of mutations:
+`mergeChangesets` throws when one entity lands in two buckets, which a
+sequence can produce.
+
 ### Other
 
 - `TLlmOutputCheckFailure`, the `{ code, message }` a stage's `checkOutput`
@@ -35,6 +45,45 @@ mention it meant.
   as from the pipelines module.
 
 ## Changed
+
+### A mutation's changeset now includes what normalization changed
+
+In `assistive` behavior, the engine tidies the expression tree after each
+mutation: for example, it removes a formula buffer that is no longer needed,
+or folds an operator into a parent with the same operator. Until now the
+changeset a mutation returned was built before that tidying ran, so anything
+it removed, added or moved was missing. The changeset now includes
+normalization's changes, in whichever premise they happen. One that
+expected `changes` to hold only what it asked for will now see more.
+Removing a variable, or a premise with bound variables, likewise reports
+every expression the removal moved, not only those it deleted, and this
+applies in `permissive` behavior too. `removePremise` now lists the removed
+premise's own expressions as removed too, and no changeset names an entity
+more than once. To combine the changesets of several mutations made in a
+row, use the new `composeChangesets`: `mergeChangesets` throws when one
+entity is in two buckets, which a sequence can produce.
+
+### `orderChangeset` detaches removed expressions before deleting them
+
+`orderChangeset` now puts an update that clears the parent of every removed
+expression before the first expression delete. Without it, when one call
+moved an expression and then removed it, the deletes could run in an order a
+store with immediate foreign keys rejects.
+
+That update carries only three fields: `{ id, parentId: null, position: 0 }`.
+A persistence layer that runs the operations as given needs to meet three
+conditions:
+
+- Write only the fields an update carries. Code that reads an expression
+  update's `data` as a whole row needs to narrow it first; TypeScript will
+  point at those places.
+- A premise's detached expressions are briefly roots, so a rule that a
+  premise has only one root must be checked at the end of the transaction. A
+  rule that a root sits at position 0 holds throughout.
+- Two orderings are still unsafe for a store that checks foreign keys on
+  every statement: an expression updated to point at a parent, or at a
+  variable, that the same changeset inserts is updated before that insert.
+  Run those updates after the inserts.
 
 ### `changeOperator` swaps `and`, `or` and `xor` at any number of operands
 

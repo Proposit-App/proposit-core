@@ -19065,12 +19065,18 @@ describe("orderChangeset", () => {
         }
         const ops = orderChangeset(changeset)
 
-        // OR should appear only as a delete, not as an update
+        // OR is detached and then deleted, never updated with the stale
+        // modified entry (operator "and"): the detach carries only the
+        // parent and a root's position.
         const orOps = ops.filter(
             (op) => op.entity === "expression" && op.data.id === "or"
         )
-        expect(orOps).toHaveLength(1)
-        expect(orOps[0].type).toBe("delete")
+        expect(orOps.map((op) => op.type)).toEqual(["update", "delete"])
+        expect(orOps[0].data).toEqual({
+            id: "or",
+            parentId: null,
+            position: 0,
+        })
 
         // V3 should still appear as an update
         const v3Ops = ops.filter(

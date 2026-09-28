@@ -68,7 +68,7 @@ In v1.0 this method's checks have been folded into the four-tier grammar — der
 
 ### `removePremise(premiseId)` → `TCoreMutationResult<TCorePremise>`
 
-Removes a premise and clears its role assignments. Also cascade-deletes any premise-bound variables targeting the removed premise (which in turn cascade-deletes their referencing expressions). Returns the removed premise data.
+Removes a premise and clears its role assignments. Also cascade-deletes any premise-bound variables targeting the removed premise (which in turn cascade-deletes their referencing expressions). Returns the removed premise data. The changeset lists the premise, its own expressions, and everything the cascade removed or changed.
 
 ---
 
@@ -1576,6 +1576,12 @@ Every reduction is answer-preserving: the result matches a single flat walk over
 
 ---
 
+### `composeChangesets(first, then)` → `TCoreChangeset`
+
+Combines two changesets made one after the other — the changesets of two successive mutations — into the one changeset that describes both. Each entity lands in one bucket: added then modified stays added (with the later value), added then removed disappears, modified then removed becomes removed, removed then added becomes modified, and otherwise the later entry wins. `roles` and `argument` take the later value when present. Use it to combine a sequence of mutations for one persistence call. `mergeChangesets` is for changesets that are independent of each other, and throws when an id lands in two buckets, which a sequence can legitimately produce.
+
+---
+
 ### `parseFormula(input)` → `TFormulaAST`
 
 Parses a logical formula string into an AST. Supports standard logical notation with operators `not`/`¬`, `and`/`∧`, `or`/`∨`, `implies`/`→`, `iff`/`↔`, and parentheses for grouping. A word operator must stand as a whole word, so `NotRaining` is one symbol, not `not Raining`.
@@ -1650,6 +1656,7 @@ _The pre-1.0 `grammarConfig` / `TGrammarOptions` / `TAutoNormalizeConfig` / `res
 Controls whether the auto-normalization (AN) post-hook runs after each successful Structural mutation.
 
 - **`'assistive'`** (default): runs AN-1..AN-4 after every successful mutation. AN preserves Presentable — if the pre-mutation state was Presentable, the post-mutation state is Presentable. (See `docs/Proposit_Grammar.md` §4.)
+  The changeset a mutation returns includes what AN then changed, in any premise: expressions it removed (including ones the call itself had just added, which then appear in no bucket), formula buffers it added, and expressions and premises it moved or whose checksums changed.
 - **`'permissive'`**: AN does not run. Mutations execute exactly as described; the engine guarantees Structural integrity only. Lower-tier violations (Evaluable, Derivable, Presentable) are queryable via `validate(tier)` and never throw.
 
 Set at construction:
