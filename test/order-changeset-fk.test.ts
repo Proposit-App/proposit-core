@@ -1,10 +1,13 @@
 // `orderChangeset` must order a changeset so that a store checking foreign
-// keys immediately, with no cascading deletes, accepts every operation, and
-// ends in the engine's state. The store also requires a row with no parent to
-// sit at position 0, a rule a database checks on every statement. The store here starts from the rows as they
-// were before the call, so an expression's stored parent can differ from the
-// parent its removed entry carries: a change in the same call can move an
-// expression before removing it.
+// keys immediately accepts every operation and ends in the engine's state.
+// Each changeset is applied twice: to a store that cascades nothing, and to
+// one whose deletes cascade to the rows pointing at the deleted row (as
+// proposit-app's parent and variable keys do), where a wrongly timed delete
+// silently takes a row with it. Both require a row with no parent to sit at
+// position 0, a rule a database checks on every statement. The stores start
+// from the rows as they were before the call, so an expression's stored
+// parent can differ from the parent its removed entry carries: a change in
+// the same call can move an expression before removing it.
 
 import { describe, expect, it } from "vitest"
 import { ArgumentEngine } from "../src/lib/core/argument-engine.js"
@@ -42,9 +45,33 @@ function storeOf(eng: ArgumentEngine): TStore {
     return store
 }
 
+type TDeletes = "restrict" | "cascade"
+
 /** Applies the ordered operations; returns every foreign-key violation. */
-function applyStrictly(store: TStore, changes: TCoreChangeset): string[] {
+function applyStrictly(
+    store: TStore,
+    changes: TCoreChangeset,
+    deletes: TDeletes = "restrict"
+): string[] {
     const errors: string[] = []
+    // Removes the rows that point at a deleted row, or reports them.
+    const dependents = (
+        test: (e: TRow) => boolean,
+        describe: (e: TRow) => string
+    ) => {
+        for (const e of [...store.expressions.values()]) {
+            if (!test(e)) continue
+            if (deletes === "restrict") errors.push(describe(e))
+            else deleteExpression(e.id)
+        }
+    }
+    const deleteExpression = (id: string) => {
+        store.expressions.delete(id)
+        dependents(
+            (e) => e.parentId === id,
+            (e) => `delete ${id} while ${e.id} points at it`
+        )
+    }
     const checkExpression = (row: TRow) => {
         if (!store.premises.has(row.premiseId as string)) {
             errors.push(`expression ${row.id}: premise missing`)
@@ -73,14 +100,7 @@ function applyStrictly(store: TStore, changes: TCoreChangeset): string[] {
         const row = op.data as TRow
         if (op.entity === "expression") {
             if (op.type === "delete") {
-                for (const other of store.expressions.values()) {
-                    if (other.parentId === row.id) {
-                        errors.push(
-                            `delete ${row.id} while ${other.id} points at it`
-                        )
-                    }
-                }
-                store.expressions.delete(row.id)
+                deleteExpression(row.id)
             } else if (op.type === "update") {
                 // An update writes the fields it carries, as SQL does.
                 const stored = store.expressions.get(row.id)
@@ -97,27 +117,21 @@ function applyStrictly(store: TStore, changes: TCoreChangeset): string[] {
             }
         } else if (op.entity === "variable") {
             if (op.type === "delete") {
-                for (const e of store.expressions.values()) {
-                    if (e.variableId === row.id) {
-                        errors.push(
-                            `delete variable ${row.id} while ${e.id} uses it`
-                        )
-                    }
-                }
                 store.variables.delete(row.id)
+                dependents(
+                    (e) => e.variableId === row.id,
+                    (e) => `delete variable ${row.id} while ${e.id} uses it`
+                )
             } else {
                 store.variables.set(row.id, row)
             }
         } else if (op.entity === "premise") {
             if (op.type === "delete") {
-                for (const e of store.expressions.values()) {
-                    if (e.premiseId === row.id) {
-                        errors.push(
-                            `delete premise ${row.id} while ${e.id} is in it`
-                        )
-                    }
-                }
                 store.premises.delete(row.id)
+                dependents(
+                    (e) => e.premiseId === row.id,
+                    (e) => `delete premise ${row.id} while ${e.id} is in it`
+                )
             } else {
                 store.premises.set(row.id, row)
             }
@@ -133,13 +147,18 @@ function expectAppliesStrictly(
     eng: ArgumentEngine,
     mutate: () => TCoreChangeset
 ): void {
-    const store = storeOf(eng)
+    const stores = { restrict: storeOf(eng), cascade: storeOf(eng) }
     const changes = mutate()
-    expect(applyStrictly(store, changes)).toEqual([])
     const after = storeOf(eng)
-    expect(rows(store.expressions)).toEqual(rows(after.expressions))
-    expect(rows(store.premises)).toEqual(rows(after.premises))
-    expect(rows(store.variables)).toEqual(rows(after.variables))
+    for (const deletes of ["restrict", "cascade"] as const) {
+        const store = stores[deletes]
+        expect(applyStrictly(store, changes, deletes), deletes).toEqual([])
+        expect(rows(store.expressions), deletes).toEqual(
+            rows(after.expressions)
+        )
+        expect(rows(store.premises), deletes).toEqual(rows(after.premises))
+        expect(rows(store.variables), deletes).toEqual(rows(after.variables))
+    }
 }
 
 function premiseBoundVariable(
@@ -310,6 +329,363 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
             () => p2.removeExpression("and", true).changes
         )
     })
+
+    // An existing expression moved under an operator the same call inserts:
+    // its update needs that insert first.
+    for (const behavior of ["assistive", "permissive"] as const) {
+        for (const call of [
+            "wrapExpression",
+            "insertExpression",
+            "toggleNegation",
+        ] as const) {
+            it(`${call} in ${behavior} behavior moves an expression under a new operator`, () => {
+                const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                    behavior,
+                })
+                const [p1, p2] = [
+                    eng.createPremise().result,
+                    eng.createPremise().result,
+                ]
+                const v1 = premiseBoundVariable(eng, p1)
+                const base = {
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: p2.getId(),
+                    parentId: null,
+                }
+                p2.addExpression({
+                    ...base,
+                    id: "x",
+                    type: "variable",
+                    variableId: v1,
+                    position: 0,
+                })
+                const operator = {
+                    ...base,
+                    id: "op",
+                    type: "operator" as const,
+                    operator: "and" as const,
+                }
+                expectAppliesStrictly(eng, () =>
+                    call === "wrapExpression"
+                        ? p2.wrapExpression(
+                              operator,
+                              {
+                                  ...base,
+                                  id: "y",
+                                  type: "variable",
+                                  variableId: v1,
+                              },
+                              "x"
+                          ).changes
+                        : call === "insertExpression"
+                          ? p2.insertExpression(
+                                { ...operator, operator: "not", position: 0 },
+                                "x"
+                            ).changes
+                          : p2.toggleNegation("x").changes
+                )
+            })
+        }
+    }
+
+    // Composed across calls, an expression can be pointed at a variable the
+    // same changeset inserts, and the variable it pointed at before can be
+    // removed by the same changeset.
+    for (const removeOld of [false, true]) {
+        it(`a composed changeset that points an expression at a new variable${removeOld ? ", removing the old one" : ""}`, () => {
+            const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                behavior: "permissive",
+            })
+            const [p1, p2] = [
+                eng.createPremise().result,
+                eng.createPremise().result,
+            ]
+            const v1 = premiseBoundVariable(eng, p1)
+            p2.addExpression({
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: p2.getId(),
+                id: "x",
+                type: "variable",
+                variableId: v1,
+                parentId: null,
+                position: 0,
+            })
+
+            expectAppliesStrictly(eng, () => {
+                const created = eng.createPremise()
+                const vNew = premiseBoundVariable(eng, created.result)
+                let changes = composeChangesets(
+                    created.changes,
+                    p2.updateExpression("x", { variableId: vNew }).changes
+                )
+                if (removeOld) {
+                    changes = composeChangesets(
+                        changes,
+                        eng.removePremise(p1.getId()).changes
+                    )
+                }
+                return changes
+            })
+        })
+    }
+
+    // One update with a new parent and a new variable, while the changeset
+    // removes the variable it pointed at before: a cascading store loses the
+    // row if that variable is deleted before the row is repointed.
+    it("an expression moved under a new operator and onto a new variable, the old variable removed", () => {
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+        })
+        const [p1, p2] = [
+            eng.createPremise().result,
+            eng.createPremise().result,
+        ]
+        const v1 = premiseBoundVariable(eng, p1)
+        const base = {
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: p2.getId(),
+            parentId: null,
+        }
+        p2.addExpression({
+            ...base,
+            id: "x",
+            type: "variable",
+            variableId: v1,
+            position: 0,
+        })
+
+        expectAppliesStrictly(eng, () => {
+            const created = eng.createPremise()
+            const vNew = premiseBoundVariable(eng, created.result)
+            const wrapped = p2.wrapExpression(
+                { ...base, id: "op", type: "operator", operator: "and" },
+                { ...base, id: "y", type: "variable", variableId: vNew },
+                "x"
+            )
+            const pointed = p2.updateExpression("x", { variableId: vNew })
+            const removed = eng.removePremise(p1.getId())
+            return [wrapped, pointed, removed].reduce(
+                (all, next) => composeChangesets(all, next.changes),
+                created.changes
+            )
+        })
+    })
+
+    // With no update that needs an insert first, the order is the one
+    // orderChangeset has always produced.
+    it("keeps the order of a changeset with no update that needs an insert", () => {
+        let n = 0
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+            generateId: () => `g${String(n++)}`,
+        })
+        const [p1, p2] = [
+            eng.createPremise().result,
+            eng.createPremise().result,
+        ]
+        const v1 = premiseBoundVariable(eng, p1)
+        const base = {
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: p2.getId(),
+        }
+        p2.addExpression({
+            ...base,
+            id: "and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        for (const id of ["x", "y", "z"]) {
+            p2.appendExpression("and", {
+                ...base,
+                id,
+                type: "variable",
+                variableId: v1,
+                parentId: "and",
+            })
+        }
+        const ops = orderChangeset(eng.removePremise(p1.getId()).changes)
+
+        expect(
+            ops.map(
+                (o) =>
+                    `${o.type} ${o.entity} ${(o.data as { id?: string }).id ?? ""}`
+            )
+        ).toEqual([
+            "update premise g2",
+            "update expression and",
+            "update expression x",
+            "update expression y",
+            "update expression z",
+            "delete expression z",
+            "delete expression y",
+            "delete expression x",
+            "delete variable g1",
+            "delete premise g0",
+            "update roles ",
+        ])
+    })
+
+    // Chains of mutations combined into one changeset, as a consumer's
+    // before/after diff or composeChangesets produces them.
+    for (const behavior of ["assistive", "permissive"] as const) {
+        it(`random composed changesets in ${behavior} behavior`, () => {
+            for (let seed = 1; seed <= 1000; seed++) {
+                let state = seed
+                const random = () => {
+                    state = (state * 1103515245 + 12345) % 2147483648
+                    return state / 2147483648
+                }
+                const pick = <T>(items: readonly T[]): T =>
+                    items[Math.floor(random() * items.length)]
+                let n = 0
+                const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                    behavior,
+                    generateId: () => `g${String(n++)}`,
+                })
+                for (let i = 0; i < 3; i++) eng.createPremise()
+                const leafOf = (pe: PremiseEngine) => ({
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: pe.getId(),
+                    id: `e${String(n++)}`,
+                    type: "variable" as const,
+                    variableId: pick(
+                        eng
+                            .getVariables()
+                            .filter(
+                                (v) =>
+                                    (v as { boundPremiseId?: string })
+                                        .boundPremiseId !== pe.getId()
+                            )
+                    ).id,
+                    parentId: null,
+                })
+                // A starting tree in each premise.
+                for (const pe of eng.listPremises()) {
+                    try {
+                        pe.addExpression({ ...leafOf(pe), position: 0 })
+                        for (let k = 0; k < 2; k++) {
+                            const target = pick(pe.getExpressions()).id
+                            pe.wrapExpression(
+                                {
+                                    argumentId: ARG.id,
+                                    argumentVersion: ARG.version,
+                                    premiseId: pe.getId(),
+                                    id: `e${String(n++)}`,
+                                    type: "operator",
+                                    operator: pick(["and", "or"] as const),
+                                    parentId: null,
+                                },
+                                leafOf(pe),
+                                target
+                            )
+                        }
+                    } catch {
+                        // A tree the engine refuses is simply smaller.
+                    }
+                }
+                const before = {
+                    restrict: storeOf(eng),
+                    cascade: storeOf(eng),
+                }
+                let changes: TCoreChangeset = {}
+                const steps = 1 + Math.floor(random() * 4)
+                for (let step = 0; step < steps; step++) {
+                    const premises = eng.listPremises()
+                    if (premises.length === 0) break
+                    const pe = pick(premises)
+                    const expressions = pe.getExpressions()
+                    const target =
+                        expressions.length > 0
+                            ? pick(expressions).id
+                            : "missing"
+                    const variables = expressions.filter(
+                        (e) => e.type === "variable"
+                    )
+                    const operator = {
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: pe.getId(),
+                        id: `e${String(n++)}`,
+                        type: "operator" as const,
+                        operator: pick(["and", "or", "not"] as const),
+                        parentId: null,
+                    }
+                    const call = pick([
+                        "createPremise",
+                        "updateExpression",
+                        "wrapExpression",
+                        "insertExpression",
+                        "toggleNegation",
+                        "removePremise",
+                        "removeVariable",
+                        "removeExpression",
+                    ] as const)
+                    try {
+                        const result =
+                            call === "createPremise"
+                                ? eng.createPremise()
+                                : call === "updateExpression"
+                                  ? pe.updateExpression(
+                                        variables.length > 0
+                                            ? pick(variables).id
+                                            : "missing",
+                                        { variableId: leafOf(pe).variableId }
+                                    )
+                                  : call === "wrapExpression"
+                                    ? pe.wrapExpression(
+                                          operator,
+                                          leafOf(pe),
+                                          target
+                                      )
+                                    : call === "insertExpression"
+                                      ? pe.insertExpression(
+                                            { ...operator, position: 0 },
+                                            target
+                                        )
+                                      : call === "toggleNegation"
+                                        ? pe.toggleNegation(target)
+                                        : call === "removePremise"
+                                          ? eng.removePremise(
+                                                pick(premises).getId()
+                                            )
+                                          : call === "removeVariable"
+                                            ? eng.removeVariable(
+                                                  pick(eng.getVariables()).id
+                                              )
+                                            : pe.removeExpression(
+                                                  target,
+                                                  random() < 0.5
+                                              )
+                        changes = composeChangesets(changes, result.changes)
+                    } catch {
+                        // A rejected step changes nothing.
+                    }
+                }
+                const after = storeOf(eng)
+                for (const deletes of ["restrict", "cascade"] as const) {
+                    const store = before[deletes]
+                    const label = `seed ${String(seed)}, ${deletes}`
+                    expect(
+                        applyStrictly(store, changes, deletes),
+                        label
+                    ).toEqual([])
+                    expect(rows(store.expressions), label).toEqual(
+                        rows(after.expressions)
+                    )
+                    expect(rows(store.variables), label).toEqual(
+                        rows(after.variables)
+                    )
+                }
+            }
+        }, 60_000)
+    }
 
     // Random trees over a few shared variables, then a removal that
     // cascades through them. Seeded, so a failure names a reproducible seed.
