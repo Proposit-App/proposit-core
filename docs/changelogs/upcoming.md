@@ -90,6 +90,12 @@
 
 ## Fixed
 
+- `PremiseEngine.updateExpression` accepted a `variableId` bound to the
+  expression's own premise, directly or through other premises, which the add
+  paths reject as a circular binding. A snapshot of that state then failed to
+  load with `InvariantViolationError`. It now throws the same
+  `Circular binding` error as `addExpression`, and leaves the expression
+  unchanged.
 - `finalizeResponseV2` resolved every copy of a repeated `mentionId`, so one
   mention could produce two or more `SOURCE_ANCHOR_UNRESOLVED`, `AMBIGUOUS` or
   `APPROXIMATE` notes, and its anchor came from whichever copy resolved last.
@@ -103,6 +109,12 @@
 
 ## Tests
 
+- `test/checksum-rebuild.test.ts` replays seeded random sequences of engine
+  mutations (150 of 25 steps in each behavior with app fields hashed, and 60
+  under the default config) and, after every step, requires the checksums the
+  live engine reports to equal those a rebuild from its JSON snapshot
+  computes, and the rebuild to succeed. A negative control writes an app field
+  onto a stored expression in place and requires the comparison to catch it.
 - The origin library's anchor-cost test no longer holds 100 `addAnchor` calls
   to a fixed 300 ms, which failed on slower CI runners while the library was
   fine. It now times the same calls over documents 20x apart in size (fastest
