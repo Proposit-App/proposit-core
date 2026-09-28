@@ -17,3 +17,8 @@
   now in the generated site and in `docs/api-surface.txt` (240 lines), so
   `pnpm run docs` fails when one of their members disappears. `./conversation`
   needed no entry point: the root index re-exports all of it.
+- `pnpm run docs` (so `build` and `check`) first runs
+  `scripts/check-exports-documented.mjs`. It fails when a `package.json`
+  `exports` key's source file is not a typedoc entry point, unless the key is
+  listed in the script as covered through the root index (`.` and
+  `./conversation`, each with its reason), and names the key.
