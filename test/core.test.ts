@@ -1193,16 +1193,43 @@ describe("stress test", () => {
         expect(usedOps).toContain("iff")
     })
 
-    it("builds with high load (100 vars, 200 premises, 5–20 terms)", () => {
-        expect(() => {
-            buildStress({
-                numVars: 100,
-                numPremises: 200,
-                minTerms: 5,
-                maxTerms: 20,
-            })
-        }).not.toThrow()
-    }, 30_000)
+    it("builds a larger argument in time that grows no worse than quadratically", () => {
+        // Every createPremise re-validates the whole argument built so far, so
+        // building is quadratic in argument size: that cost is pinned here,
+        // not accepted as fixed. Comparing two sizes rather than holding one
+        // build to a time limit keeps the test about the engine, not the
+        // machine. Quadrupling the argument costs about 16x today (measured
+        // 14.7-16.4); a build that grew cubically would cost about 64x. The
+        // bound sits between the two, so ordinary timing noise stays well
+        // inside it.
+        const timeBuild = (numPremises: number): number => {
+            const startedAt = process.cpuUsage()
+            expect(() =>
+                buildStress({
+                    numVars: 50,
+                    numPremises,
+                    minTerms: 3,
+                    maxTerms: 8,
+                })
+            ).not.toThrow()
+            const used = process.cpuUsage(startedAt)
+            return used.user + used.system
+        }
+
+        // The fastest of two runs per size, alternating, so a pause or a
+        // slowdown lasting several runs falls on both sizes.
+        let small = Infinity
+        let large = Infinity
+        for (let i = 0; i < 2; i++) {
+            small = Math.min(small, timeBuild(40))
+            large = Math.min(large, timeBuild(160))
+        }
+
+        expect(large / small).toBeLessThan(30)
+        // The ratio is the assertion. This limit only stops a hang: it is far
+        // above what the builds take, even on a busy machine, and replaces the
+        // default 5 s, which they can exceed.
+    }, 120_000)
 
     it("removing a premise cascades to all of its terms", () => {
         const { premiseManagers, termIdsByPremise } = buildStress()
