@@ -274,7 +274,8 @@ function resolveSegmentStarts(
  * paraphrasing would otherwise take anchor coverage to zero with no signal.
  * A claim the mention stage produced no mention for was never looked up at
  * all; it is reported too, so "we did not look" is not read as "we found
- * nothing" or as success.
+ * nothing" or as success. So is the reverse: a mention the stage produced
+ * that no claim references, whose anchor is attached to nothing.
  */
 export const SOURCE_ANCHOR_NOTE_CODES = {
     unresolved: "SOURCE_ANCHOR_UNRESOLVED",
@@ -282,6 +283,7 @@ export const SOURCE_ANCHOR_NOTE_CODES = {
     approximate: "SOURCE_ANCHOR_APPROXIMATE",
     inputUnavailable: "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
     notAttempted: "SOURCE_ANCHOR_NOT_ATTEMPTED",
+    mentionUnclaimed: "SOURCE_ANCHOR_MENTION_UNCLAIMED",
 } as const
 
 /** Emit the note for one attempted resolution, if there is one to emit. */
@@ -797,6 +799,28 @@ export function finalizeResponseV2(
         inputAvailable && input.mentions
             ? new Set(input.mentions.mentions.map((m) => m.mentionId))
             : undefined
+    // Canonicalization must map every mention to a claim. A produced mention
+    // no claim names was found in the text and then attached to nothing, so
+    // the claim it belonged to lost its anchor; say so, once per mention.
+    if (producedMentionIds && input.mentions) {
+        const namedMentionIds = new Set(
+            canon.canonicalClaims.flatMap((c) =>
+                readMentionIds(c as unknown as Record<string, unknown>)
+            )
+        )
+        const reported = new Set<string>()
+        for (const mention of input.mentions.mentions) {
+            if (namedMentionIds.has(mention.mentionId)) continue
+            if (reported.has(mention.mentionId)) continue
+            reported.add(mention.mentionId)
+            ctx.addFailure({
+                code: SOURCE_ANCHOR_NOTE_CODES.mentionUnclaimed,
+                message: `Mention ${mention.mentionId} was found in the input but no claim references it, so its source anchor is attached to nothing.`,
+                severity: "warning",
+                context: { mentionId: mention.mentionId, quote: mention.text },
+            })
+        }
+    }
     const conclusionMiniId = conclusion?.conclusionMiniId ?? null
     const roles = buildClaimToRole({
         canonicalClaims: canon.canonicalClaims,
