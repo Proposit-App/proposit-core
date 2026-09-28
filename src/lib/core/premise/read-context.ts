@@ -6,20 +6,20 @@ import type { ExpressionManager } from "../expression-manager.js"
 import type { VariableManager } from "../variable-manager.js"
 
 /**
- * What a `PremiseEngine`'s read-only routines consult. The engine's
- * implementation reads each field back from itself when it is used, so
- * nothing is copied — `PremiseEngine.evaluate` runs inside the
- * satisfiability search once per row — and nothing goes stale mid-call.
+ * What a `PremiseEngine`'s read-only routines consult, built by the engine
+ * for each call. `emptyBoundPremiseCheck` and `readVariableIds` reach the
+ * engine's current callbacks on every call, and return `undefined` when none
+ * is set.
  */
 export type TPremiseReadContext<
     TExpr extends TCorePropositionalExpression,
     TVar extends TCorePropositionalVariable,
 > = {
     premiseId: string
-    argumentId: string
+    argument: { id: string }
     rootExpressionId: string | undefined
     expressions: ExpressionManager<TExpr>
     variables: VariableManager<TVar>
-    emptyBoundPremiseCheck?: (variableId: string) => boolean
-    variableIdsCallback?: () => Set<string>
+    emptyBoundPremiseCheck: (variableId: string) => boolean | undefined
+    readVariableIds: () => Set<string> | undefined
 }

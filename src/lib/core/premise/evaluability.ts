@@ -92,7 +92,7 @@ export function validatePremiseEvaluability<
 
         if (
             expr.type === "variable" &&
-            ctx.emptyBoundPremiseCheck?.(expr.variableId)
+            ctx.emptyBoundPremiseCheck(expr.variableId)
         ) {
             issues.push({
                 code: "EXPR_BOUND_PREMISE_EMPTY",

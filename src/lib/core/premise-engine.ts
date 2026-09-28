@@ -1473,44 +1473,33 @@ export class PremiseEngine<
     }
 
     /**
-     * The state the read-only routines under `premise/` consult. Every field
-     * reads back through to this engine when it is used, as the methods did
-     * before they moved: a callback run mid-call that changes a field or
-     * replaces a callback is seen the same way, and the callbacks still run
-     * with the engine as `this`.
+     * The state the read-only routines under `premise/` consult, as a plain
+     * object built per call — accessor properties on it cost the
+     * satisfiability search, which evaluates once per row, about an eighth of
+     * its time. The callbacks go through wrappers that look the engine's
+     * field up on every call, as the methods did, so one replaced mid-call is
+     * honoured and each runs with the engine as `this`. `argument` is the
+     * engine's own object, never replaced. The premise id, root and managers
+     * are read once per call; nothing a read-only routine calls changes them.
      */
     private asReadContext(): TPremiseReadContext<TExpr, TVar> {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
-        const engine = this
         return {
-            get premiseId() {
-                return engine.premise.id
-            },
-            get argumentId() {
-                return engine.argument.id
-            },
-            get rootExpressionId() {
-                return engine.rootExpressionId
-            },
-            get expressions() {
-                return engine.expressions
-            },
-            get variables() {
-                return engine.variables
-            },
-            get emptyBoundPremiseCheck() {
-                return engine.emptyBoundPremiseCheck
-                    ? (variableId: string) =>
-                          engine.emptyBoundPremiseCheck!(variableId)
-                    : undefined
-            },
-            get variableIdsCallback() {
-                return engine.variableIdsCallback
-                    ? () => engine.variableIdsCallback!()
-                    : undefined
-            },
+            premiseId: this.premise.id,
+            argument: this.argument,
+            rootExpressionId: this.rootExpressionId,
+            expressions: this.expressions,
+            variables: this.variables,
+            emptyBoundPremiseCheck: this.readEmptyBoundPremiseCheck,
+            readVariableIds: this.readVariableIds,
         }
     }
+
+    private readonly readEmptyBoundPremiseCheck = (
+        variableId: string
+    ): boolean | undefined => this.emptyBoundPremiseCheck?.(variableId)
+
+    private readonly readVariableIds = (): Set<string> | undefined =>
+        this.variableIdsCallback?.()
 
     /**
      * Re-reads the single root from ExpressionManager after any operation
