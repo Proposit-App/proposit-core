@@ -8,31 +8,56 @@
 // Usage: node scripts/check-exports-documented.mjs [--package <path>]
 
 import { readFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
 
 // Subpaths whose whole API is documented through `src/lib/index.ts`, with why.
 const COVERED_BY_ROOT = new Map([
     [".", "src/index.ts only re-exports src/lib/index.ts"],
-    ["./conversation", "src/lib/index.ts re-exports all of it"],
+    [
+        "./conversation",
+        'src/lib/index.ts has `export * from "./conversation/index.js"`',
+    ],
 ])
+
+/** The `types` file of an exports target, searching nested conditions. */
+function typesOf(target) {
+    if (typeof target === "string") {
+        return target.endsWith(".d.ts") ? target : undefined
+    }
+    if (target === null || typeof target !== "object") return undefined
+    if (typeof target.types === "string") return target.types
+    for (const nested of Object.values(target)) {
+        const found = typesOf(nested)
+        if (found !== undefined) return found
+    }
+    return undefined
+}
 
 const packageIndex = process.argv.indexOf("--package")
 const packagePath =
-    packageIndex === -1 ? "package.json" : process.argv[packageIndex + 1]
+    packageIndex === -1
+        ? join(ROOT, "package.json")
+        : process.argv[packageIndex + 1]
 const pkg = JSON.parse(readFileSync(packagePath, "utf8"))
 const entryPoints = new Set(
-    JSON.parse(readFileSync("typedoc.json", "utf8")).entryPoints
+    JSON.parse(readFileSync(join(ROOT, "typedoc.json"), "utf8")).entryPoints
 )
 
 const missing = []
 for (const [key, target] of Object.entries(pkg.exports ?? {})) {
     if (COVERED_BY_ROOT.has(key)) continue
-    const types = typeof target === "string" ? target : target.types
-    const source = types
-        ?.replace(/^\.\/dist\//, "src/")
-        .replace(/\.d\.ts$/, ".ts")
-    if (source === undefined || !entryPoints.has(source)) {
-        missing.push(`  ${key} (${source ?? "no types file"})`)
+    const types = typesOf(target)
+    if (types === undefined) {
+        missing.push(`  ${key} (no types file in its exports target)`)
+        continue
     }
+    const source = types
+        .replace(/^\.\/dist\//, "src/")
+        .replace(/\.d\.ts$/, ".ts")
+    if (!entryPoints.has(source)) missing.push(`  ${key} (${source})`)
 }
 
 if (missing.length > 0) {

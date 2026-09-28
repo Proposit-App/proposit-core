@@ -2,12 +2,14 @@
 // point or through the root index, or `pnpm run docs` fails.
 
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-const SCRIPT = "scripts/check-exports-documented.mjs"
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
+const SCRIPT = join(ROOT, "scripts/check-exports-documented.mjs")
 
 function run(packageJson: unknown): { ok: boolean; output: string } {
     const dir = mkdtempSync(join(tmpdir(), "exports-check-"))
@@ -22,10 +24,14 @@ function run(packageJson: unknown): { ok: boolean; output: string } {
     } catch (error) {
         const failure = error as { stdout: string; stderr: string }
         return { ok: false, output: failure.stdout + failure.stderr }
+    } finally {
+        rmSync(dir, { recursive: true, force: true })
     }
 }
 
-const PACKAGE = JSON.parse(readFileSync("package.json", "utf8")) as {
+const PACKAGE = JSON.parse(
+    readFileSync(join(ROOT, "package.json"), "utf8")
+) as {
     exports: Record<string, unknown>
 }
 
@@ -47,5 +53,16 @@ describe("check-exports-documented", () => {
         })
         expect(result.ok).toBe(false)
         expect(result.output).toContain("./extensions/unlisted")
+    })
+
+    it("fails, naming the key, on a target with no types file", () => {
+        for (const target of [null, "./dist/x.js", { import: "./dist/x.js" }]) {
+            const result = run({
+                ...PACKAGE,
+                exports: { ...PACKAGE.exports, "./odd": target },
+            })
+            expect(result.ok, JSON.stringify(target)).toBe(false)
+            expect(result.output).toContain("./odd (no types file")
+        }
     })
 })

@@ -20,6 +20,10 @@ export const DEFAULT_API_KEY = "local-llm-no-key"
 // via `AbortSignal.timeout` with no extra HTTP-stack dependency.
 export const DEFAULT_REQUEST_TIMEOUT_MS = 1_200_000
 
+/**
+ * The `fetch` the provider sends its HTTP requests through. Defaults to the
+ * global `fetch`; pass one to route, record or stub requests.
+ */
 export type TChatCompletionsFetch = (
     url: string,
     init: RequestInit
