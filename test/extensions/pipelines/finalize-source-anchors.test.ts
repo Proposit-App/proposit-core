@@ -445,9 +445,10 @@ describe("finalizeResponseV2 — a claim with no mention is reported, not silent
 })
 
 describe("finalizeResponseV2 — a mention no claim references is reported, not silent", () => {
-    // Canonicalization must map every mention to a claim. A mention no
-    // claim's `mentionIds` names was found in the text and then attached to
-    // nothing, so the claim it belonged to lost its anchor without a signal.
+    // Every mention the mention stage produced should belong to some
+    // claim's `mentionIds`. One that does not is linked to no claim, whether
+    // or not its quote resolved, and a claim it was meant for may have lost
+    // its anchor without a signal.
     function withMentionIds(
         miniId: string,
         mentionIds: string[]
