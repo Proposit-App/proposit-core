@@ -739,6 +739,7 @@ Property extensions/pipelines/base.NO_ARGUMENT_STRUCTURE_FAILURE.message
 Property extensions/pipelines/base.SOURCE_ANCHOR_NOTE_CODES.ambiguous
 Property extensions/pipelines/base.SOURCE_ANCHOR_NOTE_CODES.approximate
 Property extensions/pipelines/base.SOURCE_ANCHOR_NOTE_CODES.inputUnavailable
+Property extensions/pipelines/base.SOURCE_ANCHOR_NOTE_CODES.mentionUnclaimed
 Property extensions/pipelines/base.SOURCE_ANCHOR_NOTE_CODES.notAttempted
 Property extensions/pipelines/base.SOURCE_ANCHOR_NOTE_CODES.unresolved
 Property extensions/pipelines/base.STAGE_IDS.axiomIndicatorDetection
