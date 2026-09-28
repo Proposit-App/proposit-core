@@ -533,6 +533,113 @@ describe("finalizeResponseV2 — a mention no claim references is reported, not 
     })
 })
 
+describe("finalizeResponseV2 — a repeated mention id is resolved once", () => {
+    // Mention ids should be unique, but nothing enforces it. The first copy
+    // of an id is the one resolved and anchored; later copies are skipped,
+    // and the repeat is reported once.
+    function withCopiesOfM3(
+        ...copies: Partial<TClaimMentionExtractionOutput["mentions"][number]>[]
+    ): Record<string, unknown> {
+        const outputs = buildOutputs()
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        const m3 = mentions.mentions.find((m) => m.mentionId === "m3")!
+        for (const copy of copies) mentions.mentions.push({ ...m3, ...copy })
+        return outputs
+    }
+    const forM3 = (
+        failures: ReturnType<typeof finalizeFailures>,
+        code: string
+    ): ReturnType<typeof finalizeFailures> =>
+        failures.filter((f) => f.code === code && f.context?.mentionId === "m3")
+    const c2Quotes = (outputs: Record<string, unknown>): string[] | undefined =>
+        finalize(outputs)
+            .claims.find((c) => c.miniId === "c2")!
+            .sourceAnchors?.map((a) => a.quote)
+
+    it("reports an unresolved repeated mention once, not once per copy", () => {
+        const outputs = withCopiesOfM3({})
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        for (const m of mentions.mentions) {
+            if (m.mentionId === "m3") m.text = "a sentence never written"
+        }
+        expect(
+            forM3(finalizeFailures(outputs), "SOURCE_ANCHOR_UNRESOLVED")
+        ).toHaveLength(1)
+    })
+
+    it("anchors the first copy when a later copy names another passage", () => {
+        const outputs = withCopiesOfM3({
+            segmentId: "s3",
+            text: "we should wait",
+            span: { start: 21, end: 35 },
+        })
+        expect(c2Quotes(outputs)).toEqual(["Escalation costs more than delay"])
+    })
+
+    it("leaves the id unanchored when the first copy fails, even if a later one would resolve", () => {
+        const outputs = withCopiesOfM3({})
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m3")!.text =
+            "a sentence never written"
+        expect(c2Quotes(outputs)).toBeUndefined()
+        expect(
+            forM3(finalizeFailures(outputs), "SOURCE_ANCHOR_UNRESOLVED")
+        ).toHaveLength(1)
+    })
+
+    it("reports a repeated id once, counting every copy", () => {
+        const notes = forM3(
+            finalizeFailures(withCopiesOfM3({}, {})),
+            "SOURCE_ANCHOR_MENTION_REPEATED"
+        )
+        expect(notes).toHaveLength(1)
+        expect(notes[0].context).toEqual({ mentionId: "m3", copies: 3 })
+        expect((notes[0] as unknown as { severity: string }).severity).toBe(
+            "warning"
+        )
+    })
+
+    it("says when a dropped copy named a different passage", () => {
+        const [identical] = forM3(
+            finalizeFailures(withCopiesOfM3({})),
+            "SOURCE_ANCHOR_MENTION_REPEATED"
+        )
+        const [differing] = forM3(
+            finalizeFailures(
+                withCopiesOfM3({
+                    segmentId: "s3",
+                    text: "we should wait",
+                    span: { start: 21, end: 35 },
+                })
+            ),
+            "SOURCE_ANCHOR_MENTION_REPEATED"
+        )
+        expect(identical.message).not.toContain("different")
+        expect(differing.message).toContain("different")
+    })
+
+    it("reports no repeat when every mention id is unique", () => {
+        expect(
+            finalizeFailures(buildOutputs()).filter(
+                (f) => f.code === "SOURCE_ANCHOR_MENTION_REPEATED"
+            )
+        ).toEqual([])
+    })
+
+    it("reports only the missing input when the input has no text", () => {
+        const failures = finalizeFailures(withCopiesOfM3({}), "")
+        expect(failures.map((f) => f.code)).toEqual([
+            "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
+        ])
+    })
+})
+
 describe("finalizeResponseV2 — claim source anchors", () => {
     it("anchors a claim once per mention that resolved to it", () => {
         const c1 = finalize(buildOutputs()).claims.find(
