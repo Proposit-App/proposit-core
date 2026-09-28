@@ -15,6 +15,16 @@ by claim-reference validation, so a consumer summing warnings sees it twice;
 the new code is the one that also covers ids naming no produced mention. A consumer that counts every code
 in `SOURCE_ANCHOR_NOTE_CODES` picks it up with no change.
 
+### A note for a mention no claim references
+
+The reverse case is reported too: `SOURCE_ANCHOR_MENTION_UNCLAIMED` (also in
+`SOURCE_ANCHOR_NOTE_CODES`) for each mention the mention stage produced that no
+claim's `mentionIds` names. Canonicalization is required to map every mention
+to a claim, so such a mention means the passage was found and its anchor was
+then attached to nothing — the claim it belonged to lost its anchor silently.
+A warning, with `context: { mentionId, quote }`, under the same conditions as
+`SOURCE_ANCHOR_NOT_ATTEMPTED`.
+
 ### Other
 
 - `TLlmOutputCheckFailure`, the `{ code, message }` a stage's `checkOutput`
