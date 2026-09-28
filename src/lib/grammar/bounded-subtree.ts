@@ -22,6 +22,7 @@
 // rather than duplicating the bounded-subtree walk in each.
 
 import type { TCorePropositionalExpression } from "../schemata/index.js"
+import { isVariadicOperator } from "../core/expression-manager-checks.js"
 
 /**
  * Returns `true` iff the subtree rooted at `expressionId` contains a
@@ -62,12 +63,7 @@ export function hasBinaryOperatorInBoundedSubtree(
     const stack: TCorePropositionalExpression[] = [root]
     while (stack.length > 0) {
         const cursor = stack.pop()!
-        if (
-            cursor.type === "operator" &&
-            (cursor.operator === "and" ||
-                cursor.operator === "or" ||
-                cursor.operator === "xor")
-        ) {
+        if (cursor.type === "operator" && isVariadicOperator(cursor.operator)) {
             return true
         }
         // Stop at nested formulas — each formula is its own P-3 scope.

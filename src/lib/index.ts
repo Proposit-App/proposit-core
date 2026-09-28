@@ -180,6 +180,7 @@ export type {
     TExecuteStageResult,
     TExecuteFinalizeResult,
     TLaunchStageResult,
+    TLlmOutputCheckFailure,
 } from "./pipelines/index.js"
 export { LlmTokenUsageSchema } from "./llm/index.js"
 export type {

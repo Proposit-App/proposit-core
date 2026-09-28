@@ -232,32 +232,47 @@ export interface TExpressionMutations<
      * Changes the operator type of an existing operator expression.
      *
      * Handles three structural cases automatically:
-     * - **Simple change:** The operator has exactly 2 children and no merge
-     *   condition. Updates the operator type in-place.
-     * - **Merge:** The operator has exactly 2 children and its parent is the
-     *   same type as `newOperator`. Dissolves the current operator and
-     *   reparents its children under the parent.
-     * - **Split:** The operator has >2 children. Extracts `sourceChildId` and
-     *   `targetChildId` into a new sub-operator of type `newOperator`,
-     *   inserting a formula buffer between the parent and the new
-     *   sub-operator (the buffer is part of the bundled composite mutation
-     *   so the resulting tree satisfies P-1 regardless of the engine's
-     *   `behavior` setting).
+     * - **Simple change:** Updates the operator type in place, keeping its
+     *   id, children and their positions. Applies when the operator has
+     *   fewer than 3 children and no merge applies, or when it has more,
+     *   `newOperator` is `and`, `or` or `xor`, and neither child id is given
+     *   — those take any number of operands, so the whole node swaps. In
+     *   `assistive` mode the post-mutation normalization may then absorb the
+     *   node into a same-operator parent, as after any change.
+     * - **Merge:** The operator has fewer than 2 children and its parent (or
+     *   its grandparent, through a formula buffer) is the same type as
+     *   `newOperator`. Dissolves the current operator and reparents its
+     *   children under that operator.
+     * - **Split:** The operator has >2 children and both child ids are
+     *   given. Extracts `sourceChildId` and `targetChildId` into a new
+     *   sub-operator of type `newOperator`, inserting a formula buffer
+     *   between the parent and the new sub-operator (the buffer is part of
+     *   the bundled composite mutation so the resulting tree satisfies P-1
+     *   regardless of the engine's `behavior` setting). `implies` and `iff`
+     *   cannot be split out this way, since they must be roots.
      *
      * @param expressionId  The operator expression to change.
      * @param newOperator   The target operator type.
-     * @param sourceChildId First child to include in a split (required when >2 children).
-     * @param targetChildId Second child to include in a split (required when >2 children).
+     * @param sourceChildId First child to include in a split. Required, with
+     *                      `targetChildId`, to split an operator with >2
+     *                      children; omit both to swap it in place.
+     * @param targetChildId Second child to include in a split.
      * @param extraFields   Optional partial expression fields merged into any
      *                      newly created expressions (formula buffer, new sub-operator).
      *                      Structural fields (id, type, operator, parentId, position,
      *                      premiseId, argumentId, argumentVersion) cannot be overridden.
      * @returns result — For simple change: the updated operator expression.
-     *                   For merge: null (operator was dissolved).
+     *                   For merge, or a simple change that `assistive`
+     *                   normalization then absorbed: null (the operator
+     *                   no longer exists).
      *                   For split: the newly created sub-operator expression.
      *          changes — Full changeset with correct hierarchical checksums.
      * @throws If the expression does not exist, is not an operator, or is "not".
-     * @throws If >2 children and sourceChildId/targetChildId not provided.
+     * @throws If >2 children and only one of sourceChildId/targetChildId is
+     *         given, or neither is and `newOperator` is `implies` or `iff`.
+     *         An empty string counts as given.
+     * @throws If >2 children and `newOperator` is `implies` or `iff`: the
+     *         split-out sub-operator would not be a root.
      * @throws If sourceChildId/targetChildId are not children of expressionId.
      */
     changeOperator(

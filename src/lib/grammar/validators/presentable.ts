@@ -16,6 +16,7 @@ import type {
 } from "../../schemata/index.js"
 import { isPremiseBound } from "../../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "../bounded-subtree.js"
+import { isVariadicOperator } from "../../core/expression-manager-checks.js"
 
 type TChildMap = Map<string, TCorePropositionalExpression[]>
 
@@ -201,18 +202,6 @@ export function validateP5(ctx: TValidatorContext): readonly TViolation[] {
         }
     }
     return violations
-}
-
-/**
- * The variadic connectives — the operators that take 2..n operands and
- * therefore have an arity floor (E-1) rather than a fixed arity, and that
- * absorb a same-operator child through a formula buffer (P-5). `not` is
- * unary and `implies` / `iff` are binary and root-only (S-5).
- */
-function isVariadicOperator(
-    operator: TCoreLogicalOperatorType
-): operator is "and" | "or" | "xor" {
-    return operator === "and" || operator === "or" || operator === "xor"
 }
 
 /**

@@ -18,6 +18,18 @@ const VARIADIC_OPERATORS: string[] = ["and", "or", "xor"]
 const BINARY_OPERATORS: string[] = ["implies", "iff"]
 
 /**
+ * The variadic connectives — the operators that take 2..n operands and
+ * therefore have an arity floor (E-1) rather than a fixed arity, and that
+ * absorb a same-operator child through a formula buffer (P-5). `not` is
+ * unary and `implies` / `iff` are binary and root-only (S-5).
+ */
+export function isVariadicOperator(
+    operator: string
+): operator is "and" | "or" | "xor" {
+    return VARIADIC_OPERATORS.includes(operator)
+}
+
+/**
  * Whether `updateExpression` may change an operator expression from
  * `fromOperator` to `toOperator` — true iff both belong to the same
  * arity class.
@@ -27,8 +39,7 @@ function isPermittedOperatorSwap(
     toOperator: string
 ): boolean {
     return (
-        (VARIADIC_OPERATORS.includes(fromOperator) &&
-            VARIADIC_OPERATORS.includes(toOperator)) ||
+        (isVariadicOperator(fromOperator) && isVariadicOperator(toOperator)) ||
         (BINARY_OPERATORS.includes(fromOperator) &&
             BINARY_OPERATORS.includes(toOperator))
     )

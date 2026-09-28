@@ -53,6 +53,7 @@ import type {
     TCoreClaim,
 } from "../schemata/index.js"
 import { hasBinaryOperatorInBoundedSubtree } from "./bounded-subtree.js"
+import { isVariadicOperator } from "../core/expression-manager-checks.js"
 
 /**
  * Convergence safety cap — typically AN converges in ≤ 3 iterations
@@ -340,13 +341,7 @@ function absorbOneSameOperatorInPremise<
         // Only the variadic connectives absorb (S-5 keeps implies/iff at
         // root; not is unary so absorption doesn't apply).
         if (inner.type !== "operator") continue
-        if (
-            inner.operator !== "and" &&
-            inner.operator !== "or" &&
-            inner.operator !== "xor"
-        ) {
-            continue
-        }
+        if (!isVariadicOperator(inner.operator)) continue
 
         const formulaId = inner.parentId
         if (formulaId === null) continue
