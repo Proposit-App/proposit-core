@@ -1480,7 +1480,7 @@ export class PremiseEngine<
      * field up on every call, as the methods did, so one replaced mid-call is
      * honoured and each runs with the engine as `this`. `argument` is the
      * engine's own object, never replaced. The premise id, root and managers
-     * are read once per call; nothing a read-only routine calls changes them.
+     * are read once per call; nothing this library calls changes them.
      */
     private asReadContext(): TPremiseReadContext<TExpr, TVar> {
         return {
