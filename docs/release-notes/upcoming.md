@@ -114,6 +114,11 @@ The CLI's `expressions change-operator` follows the same rules.
 
 ## Fixed
 
+- `updateExpression` no longer lets a variable expression be pointed at a
+  variable bound to its own premise (directly, or through other premises).
+  Adding such an expression was already refused; changing an existing one to
+  it was not, and the argument then failed to load again. It now throws the
+  same "Circular binding" error adding one does.
 - When the mention stage emits the same mention id more than once, finalize
   now resolves only the first copy and ignores the rest. Before, every copy was
   resolved: one mention could raise several `SOURCE_ANCHOR_UNRESOLVED` (or
