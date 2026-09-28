@@ -245,3 +245,80 @@ describe("a mutation's changeset includes what assistive normalization changed",
         expectReplays(before, changes, eng)
     })
 })
+
+function expectNoRepeatedIds(changes: TCoreChangeset): void {
+    for (const category of ["expressions", "variables", "premises"] as const) {
+        const bucket = changes[category]
+        if (!bucket) continue
+        const ids = [
+            ...bucket.added,
+            ...bucket.modified,
+            ...bucket.removed,
+        ].map((e) => e.id)
+        expect(ids, category).toEqual([...new Set(ids)])
+    }
+}
+
+describe("a changeset names each entity once", () => {
+    it("removePremise lists the premise's own expressions as removed", () => {
+        const { eng, pe } = buildFixture("and", 2)
+        const expressionIds = pe.getExpressions().map((e) => e.id)
+        const before = stateOf(eng)
+
+        const { changes } = eng.removePremise(pe.getId())
+
+        expect((changes.expressions?.removed ?? []).map((e) => e.id)).toEqual(
+            expect.arrayContaining(expressionIds)
+        )
+        expectReplays(before, changes, eng)
+    })
+
+    it("createPremise lists the new premise as added only", () => {
+        const { eng } = buildFixture("and", 2)
+        const { result, changes } = eng.createPremise()
+        expect(changes.premises?.added.map((p) => p.id)).toEqual([
+            result.getId(),
+        ])
+        expect(changes.premises?.modified ?? []).toEqual([])
+    })
+
+    for (const behavior of ["permissive", "assistive"] as const) {
+        const mutations: Record<
+            string,
+            (f: ReturnType<typeof buildFixture>) => TCoreChangeset
+        > = {
+            createPremise: (f) => f.eng.createPremise().changes,
+            addExpression: (f) =>
+                f.pe.addExpression({
+                    id: "ve-new",
+                    argumentId: ARG.id,
+                    argumentVersion: ARG.version,
+                    premiseId: f.pe.getId(),
+                    type: "variable",
+                    variableId: f.variableFor(0),
+                    parentId: "or-outer",
+                    position: 9,
+                }).changes,
+            "changeOperator (inner)": (f) =>
+                f.pe.changeOperator("op-inner", "or").changes,
+            "changeOperator (root)": (f) =>
+                f.pe.changeOperator("or-outer", "and").changes,
+            removeExpression: (f) =>
+                f.pe.removeExpression("ve-2", true).changes,
+            toggleNegation: (f) => f.pe.toggleNegation("ve-1").changes,
+            removeVariable: (f) =>
+                f.eng.removeVariable(f.variableFor(2)).changes,
+            "removePremise (with expressions)": (f) =>
+                f.eng.removePremise(f.pe.getId()).changes,
+            "removePremise (bound, cascading)": (f) =>
+                f.eng.removePremise(f.premises[2].getId()).changes,
+        }
+        for (const [name, mutate] of Object.entries(mutations)) {
+            it(`${name} in ${behavior} behavior repeats no id`, () => {
+                const fixture = buildFixture("and", 2)
+                fixture.eng.setBehavior(behavior)
+                expectNoRepeatedIds(mutate(fixture))
+            })
+        }
+    }
+})
