@@ -275,7 +275,9 @@ function resolveSegmentStarts(
  * A claim the mention stage produced no mention for was never looked up at
  * all; it is reported too, so "we did not look" is not read as "we found
  * nothing" or as success. So is the reverse: a mention the stage produced
- * that no claim references, whose passage is linked to no claim.
+ * that no claim references, whose passage is linked to no claim. A mention
+ * id the stage emitted more than once is resolved from its first copy only,
+ * and the repeat is reported once.
  */
 export const SOURCE_ANCHOR_NOTE_CODES = {
     unresolved: "SOURCE_ANCHOR_UNRESOLVED",
@@ -284,6 +286,7 @@ export const SOURCE_ANCHOR_NOTE_CODES = {
     inputUnavailable: "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
     notAttempted: "SOURCE_ANCHOR_NOT_ATTEMPTED",
     mentionUnclaimed: "SOURCE_ANCHOR_MENTION_UNCLAIMED",
+    mentionRepeated: "SOURCE_ANCHOR_MENTION_REPEATED",
 } as const
 
 /** Emit the note for one attempted resolution, if there is one to emit. */
@@ -362,7 +365,43 @@ function buildAnchorByMentionId(args: {
     const segmentTextById = new Map(
         (args.segments ?? []).map((s) => [s.segmentId, s.text])
     )
+    // Ids should be unique, and nothing enforces it. The first copy of an id
+    // is the one resolved, so each id gets one resolution note and one
+    // anchor; later copies are only counted, for the repeat note below.
+    const firstById = new Map<
+        string,
+        TClaimMentionExtractionOutput["mentions"][number]
+    >()
+    const copiesById = new Map<string, number>()
+    const passageDiffersById = new Set<string>()
     for (const mention of args.mentions.mentions) {
+        const first = firstById.get(mention.mentionId)
+        copiesById.set(
+            mention.mentionId,
+            (copiesById.get(mention.mentionId) ?? 0) + 1
+        )
+        if (first === undefined) {
+            firstById.set(mention.mentionId, mention)
+        } else if (
+            first.text !== mention.text ||
+            first.segmentId !== mention.segmentId
+        ) {
+            passageDiffersById.add(mention.mentionId)
+        }
+    }
+    for (const [mentionId, copies] of copiesById) {
+        if (copies < 2) continue
+        const detail = passageDiffersById.has(mentionId)
+            ? " with different text or segments; only the first copy was resolved, so the other passages are linked to no claim"
+            : "; only the first copy was resolved"
+        args.ctx.addFailure({
+            code: SOURCE_ANCHOR_NOTE_CODES.mentionRepeated,
+            message: `Mention id ${mentionId} was emitted ${String(copies)} times${detail}.`,
+            severity: "warning",
+            context: { mentionId, copies },
+        })
+    }
+    for (const mention of firstById.values()) {
         // Mention spans are relative to the segment's text, so the
         // input-relative hint only exists once the segment's own start is
         // added back on.
