@@ -493,6 +493,16 @@ export class PremiseEngine<
                         `Variable expression "${expressionId}" references non-existent variable "${updates.variableId}".`
                     )
                 }
+                // The circular binding check adding it runs, which a stored
+                // engine also enforces on load.
+                if (
+                    existing.type === "variable" &&
+                    this.circularityCheck?.(updates.variableId, this.premise.id)
+                ) {
+                    throw new Error(
+                        `Circular binding: variable "${updates.variableId}" is bound to this premise (directly or transitively)`
+                    )
+                }
             }
 
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
