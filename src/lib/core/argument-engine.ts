@@ -1058,6 +1058,7 @@ export class ArgumentEngine<
 
             // Derivation init: add naked-Q root expression for the consequent variable.
             // Only runs when not restoring from snapshot.
+            let appended: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
             if (
                 options.type === "derivation" &&
                 options.derivedClaimId &&
@@ -1078,32 +1079,23 @@ export class ArgumentEngine<
                     )
                     this.markAllPremisesDirty()
                 }
-                // Add the naked-Q root expression via appendExpression.
-                const { changes: exprChanges } = pm.appendExpression(null, {
+                // Add the naked-Q root expression via appendExpression. Its
+                // whole changeset is kept, including what normalization then
+                // changed elsewhere.
+                appended = pm.appendExpression(null, {
                     id: this.generateId(),
                     type: "variable" as const,
                     variableId: consequentVariable.id,
                     premiseId: id,
                     argumentId: this.argument.id,
                     argumentVersion: this.argument.version,
-                } as unknown as import("./expression-manager.js").TExpressionWithoutPosition<TExpr>)
-                // Merge expression changes into the outer collector.
-                if (exprChanges.expressions) {
-                    for (const e of exprChanges.expressions.added) {
-                        collector.addedExpression(e)
-                    }
-                    for (const e of exprChanges.expressions.modified) {
-                        collector.modifiedExpression(e)
-                    }
-                }
-                if (exprChanges.premises) {
-                    for (const p of exprChanges.premises.modified) {
-                        collector.modifiedPremise(p)
-                    }
-                }
+                } as unknown as import("./expression-manager.js").TExpressionWithoutPosition<TExpr>).changes
             }
 
-            const changes = this.finalizeChanges(collector)
+            const changes = composeChangesets(
+                this.finalizeChanges(collector),
+                appended
+            )
             return {
                 result: pm,
                 changes,
