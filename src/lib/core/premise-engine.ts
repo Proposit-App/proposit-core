@@ -22,7 +22,7 @@ import type {
     TCoreValidationResult,
 } from "../types/evaluation.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
-import { composeChangesets } from "../utils/changeset.js"
+import { composeChangesets, withCurrentEntries } from "../utils/changeset.js"
 import type { TInvariantValidationResult } from "../types/validation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import {
@@ -192,37 +192,16 @@ export class PremiseEngine<
         return this.mutationFollowUp?.(changes) ?? changes
     }
 
-    /**
-     * Replaces this premise's own added and modified entries with their
-     * current values. A changeset composed from several steps can hold an
-     * entry whose checksums a later step changed.
-     */
+    /** This premise's added and modified entries, at their current values. */
     private withCurrentOwnEntries(
         changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
     ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
         this.flushChecksums()
-        const current = (expr: TExpr): TExpr => {
-            const found = this.expressions.getExpression(expr.id)
-            return found ? { ...found } : expr
-        }
-        const out = { ...changes }
-        if (out.expressions) {
-            out.expressions = {
-                added: out.expressions.added.map(current),
-                modified: out.expressions.modified.map(current),
-                removed: out.expressions.removed,
-            }
-        }
-        if (out.premises) {
-            const self = (premise: TPremise): TPremise =>
-                premise.id === this.premise.id ? this.toPremiseData() : premise
-            out.premises = {
-                added: out.premises.added.map(self),
-                modified: out.premises.modified.map(self),
-                removed: out.premises.removed,
-            }
-        }
-        return out
+        return withCurrentEntries(
+            changes,
+            (id) => this.expressions.getExpression(id),
+            (id) => (id === this.premise.id ? this.toPremiseData() : undefined)
+        )
     }
 
     public setCircularityCheck(
@@ -1719,21 +1698,11 @@ export class PremiseEngine<
         const premiseCombinedBefore = this.cachedCombinedChecksum ?? null
 
         this.expressions.flushExpressionChecksums()
-        const changes = collector.toChangeset()
-        if (changes.expressions) {
-            changes.expressions.added = changes.expressions.added.map(
-                (expr) => {
-                    const current = this.expressions.getExpression(expr.id)
-                    return current ? { ...current } : expr
-                }
-            )
-            changes.expressions.modified = changes.expressions.modified.map(
-                (expr) => {
-                    const current = this.expressions.getExpression(expr.id)
-                    return current ? { ...current } : expr
-                }
-            )
-        }
+        const changes = withCurrentEntries(
+            collector.toChangeset(),
+            (id) => this.expressions.getExpression(id),
+            () => undefined
+        )
 
         // Recompute premise checksum and include if changed
         this.flushChecksums()
