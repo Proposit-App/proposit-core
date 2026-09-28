@@ -76,6 +76,14 @@ import type {
 } from "./expression-manager.js"
 import { ExpressionManager } from "./expression-manager.js"
 import { VariableManager } from "./variable-manager.js"
+import {
+    collectDecidableOperators,
+    collectSubtree,
+    isDescendantOf,
+    renderPremiseExpression,
+    walkPremiseExpression,
+} from "./premise/formula-tree.js"
+import type { TPremiseReadContext } from "./premise/read-context.js"
 import type {
     TExpressionMutations,
     TExpressionQueries,
@@ -535,7 +543,10 @@ export class PremiseEngine<
                     // Snapshot the subtree before deletion so we can clean up
                     // expressionsByVariableId for cascade-deleted descendants — they are
                     // not individually surfaced by ExpressionManager.removeExpression.
-                    const subtree = this.collectSubtree(expressionId)
+                    const subtree = collectSubtree(
+                        this.expressions,
+                        expressionId
+                    )
 
                     this.expressions.removeExpression(expressionId, true)
 
@@ -692,7 +703,7 @@ export class PremiseEngine<
                     `S-4: cannot reparent expression "${expressionId}" under itself.`
                 )
             }
-            if (this.isDescendantOf(newParentId, expressionId)) {
+            if (isDescendantOf(this.expressions, newParentId, expressionId)) {
                 throw new Error(
                     `S-4: cannot reparent expression "${expressionId}" under its descendant "${newParentId}" (would create a cycle).`
                 )
@@ -814,23 +825,6 @@ export class PremiseEngine<
             this.expressions.wrapInFormula(childId, formulaId)
             return this.expressions.getExpression(formulaId)!
         })
-    }
-
-    /**
-     * Returns true iff `candidateId` is a descendant of `ancestorId` in
-     * this premise's expression tree. Used by `reparentExpression` for
-     * the S-4 no-cycles check.
-     */
-    private isDescendantOf(candidateId: string, ancestorId: string): boolean {
-        const stack: string[] = [ancestorId]
-        while (stack.length > 0) {
-            const cursor = stack.pop()!
-            for (const child of this.expressions.getChildExpressions(cursor)) {
-                if (child.id === candidateId) return true
-                stack.push(child.id)
-            }
-        }
-        return false
     }
 
     // Normalization is reached via `engine.normalize(tier?)`, which
@@ -1739,34 +1733,28 @@ export class PremiseEngine<
         if (this.rootExpressionId === undefined) {
             return ""
         }
-        return this.renderExpression(this.rootExpressionId)
+        return renderPremiseExpression(
+            this.asReadContext(),
+            this.rootExpressionId
+        )
     }
 
     public walkFormulaTree<T>(visitor: TFormulaTreeVisitor<T>): T {
         if (this.rootExpressionId === undefined) {
             return visitor.empty()
         }
-        return this.walkExpression(visitor, this.rootExpressionId)
+        return walkPremiseExpression(
+            this.asReadContext(),
+            visitor,
+            this.rootExpressionId
+        )
     }
 
     public getDecidableOperatorExpressions(): TExpr[] {
-        const result: TExpr[] = []
-        const rootId = this.rootExpressionId
-        if (rootId === undefined) return result
-
-        const visit = (exprId: string): void => {
-            const expr = this.expressions.getExpression(exprId)
-            if (!expr) return
-            if (expr.type === "operator" && expr.operator !== "not") {
-                result.push(expr)
-            }
-            for (const child of this.expressions.getChildExpressions(exprId)) {
-                visit(child.id)
-            }
-        }
-
-        visit(rootId)
-        return result
+        return collectDecidableOperators(
+            this.expressions,
+            this.rootExpressionId
+        )
     }
 
     public getReferencedVariableIds(): Set<string> {
@@ -1937,24 +1925,21 @@ export class PremiseEngine<
      * Re-reads the single root from ExpressionManager after any operation
      * that may have caused operator collapse to silently change the root.
      */
+    private asReadContext(): TPremiseReadContext<TExpr, TVar> {
+        return {
+            premiseId: this.premise.id,
+            argumentId: this.argument.id,
+            rootExpressionId: this.rootExpressionId,
+            expressions: this.expressions,
+            variables: this.variables,
+            emptyBoundPremiseCheck: this.emptyBoundPremiseCheck,
+            variableIdsCallback: this.variableIdsCallback,
+        }
+    }
+
     private syncRootExpressionId(): void {
         const roots = this.expressions.getChildExpressions(null)
         this.rootExpressionId = roots[0]?.id
-    }
-
-    private collectSubtree(rootId: string): TExpr[] {
-        const result: TExpr[] = []
-        const stack = [rootId]
-        while (stack.length > 0) {
-            const id = stack.pop()!
-            const expr = this.expressions.getExpression(id)
-            if (!expr) continue
-            result.push(expr)
-            for (const child of this.expressions.getChildExpressions(id)) {
-                stack.push(child.id)
-            }
-        }
-        return result
     }
 
     private assertBelongsToArgument(
@@ -1991,99 +1976,6 @@ export class PremiseEngine<
                     `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
                 )
             }
-        }
-    }
-
-    private renderExpression(expressionId: string): string {
-        const expression = this.expressions.getExpression(expressionId)
-        if (!expression) {
-            throw new Error(`Expression "${expressionId}" was not found.`)
-        }
-
-        if (expression.type === "variable") {
-            const variable = this.variables.getVariable(expression.variableId)
-            if (!variable) {
-                throw new Error(
-                    `Variable "${expression.variableId}" for expression "${expressionId}" was not found.`
-                )
-            }
-            return variable.symbol
-        }
-
-        if (expression.type === "formula") {
-            const children = this.expressions.getChildExpressions(expression.id)
-            if (children.length === 0) {
-                return "(?)"
-            }
-            return `(${this.renderExpression(children[0].id)})`
-        }
-
-        const children = this.expressions.getChildExpressions(expression.id)
-        if (expression.operator === "not") {
-            if (children.length === 0) {
-                return `${this.operatorSymbol(expression.operator)} (?)`
-            }
-            return `${this.operatorSymbol(expression.operator)}(${this.renderExpression(children[0].id)})`
-        }
-
-        if (children.length === 0) {
-            return "(?)"
-        }
-
-        const renderedChildren = children.map((child) =>
-            this.renderExpression(child.id)
-        )
-        return `(${renderedChildren.join(` ${this.operatorSymbol(expression.operator)} `)})`
-    }
-
-    private walkExpression<T>(
-        visitor: TFormulaTreeVisitor<T>,
-        expressionId: string
-    ): T {
-        const expression = this.expressions.getExpression(expressionId)
-        if (!expression) {
-            throw new Error(`Expression "${expressionId}" was not found.`)
-        }
-
-        if (expression.type === "variable") {
-            const variable = this.variables.getVariable(expression.variableId)
-            if (!variable) {
-                throw new Error(
-                    `Variable "${expression.variableId}" for expression "${expressionId}" was not found.`
-                )
-            }
-            return visitor.variable(variable.symbol, expression.variableId)
-        }
-
-        if (expression.type === "formula") {
-            const children = this.expressions.getChildExpressions(expression.id)
-            if (children.length === 0) {
-                return visitor.empty()
-            }
-            return visitor.formula(this.walkExpression(visitor, children[0].id))
-        }
-
-        const children = this.expressions.getChildExpressions(expression.id)
-        const renderedChildren = children.map((child) =>
-            this.walkExpression(visitor, child.id)
-        )
-        return visitor.operator(expression.operator, renderedChildren)
-    }
-
-    private operatorSymbol(operator: TCoreLogicalOperatorType): string {
-        switch (operator) {
-            case "and":
-                return "∧"
-            case "or":
-                return "∨"
-            case "implies":
-                return "→"
-            case "iff":
-                return "↔"
-            case "not":
-                return "¬"
-            case "xor":
-                return "⊻"
         }
     }
 
