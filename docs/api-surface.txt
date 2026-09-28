@@ -87,6 +87,7 @@ Function lib.codePointLength (1)
 Function lib.collectArgumentReferencedClaims (1)
 Function lib.collectArgumentReferencedVariables (1)
 Function lib.completeStage (1)
+Function lib.composeChangesets (1)
 Function lib.computeHash (1)
 Function lib.createChecksumConfig (1)
 Function lib.createConversation (1)
@@ -5171,6 +5172,41 @@ Property lib.collectArgumentReferencedVariables.bySymbol.variableIds
 Property lib.collectArgumentReferencedVariables.variableIds
 Property lib.completeStage.context.input
 Property lib.completeStage.context.upstream
+Property lib.composeChangesets.TArg.checksum
+Property lib.composeChangesets.TArg.combinedChecksum
+Property lib.composeChangesets.TArg.descendantChecksum
+Property lib.composeChangesets.TArg.id
+Property lib.composeChangesets.TArg.version
+Property lib.composeChangesets.TPremise.argumentId
+Property lib.composeChangesets.TPremise.argumentId
+Property lib.composeChangesets.TPremise.argumentVersion
+Property lib.composeChangesets.TPremise.argumentVersion
+Property lib.composeChangesets.TPremise.checksum
+Property lib.composeChangesets.TPremise.checksum
+Property lib.composeChangesets.TPremise.combinedChecksum
+Property lib.composeChangesets.TPremise.combinedChecksum
+Property lib.composeChangesets.TPremise.derivedClaimId
+Property lib.composeChangesets.TPremise.descendantChecksum
+Property lib.composeChangesets.TPremise.descendantChecksum
+Property lib.composeChangesets.TPremise.id
+Property lib.composeChangesets.TPremise.id
+Property lib.composeChangesets.TPremise.type
+Property lib.composeChangesets.TPremise.type
+Property lib.composeChangesets.TVar.argumentId
+Property lib.composeChangesets.TVar.argumentId
+Property lib.composeChangesets.TVar.argumentVersion
+Property lib.composeChangesets.TVar.argumentVersion
+Property lib.composeChangesets.TVar.boundArgumentId
+Property lib.composeChangesets.TVar.boundArgumentVersion
+Property lib.composeChangesets.TVar.boundPremiseId
+Property lib.composeChangesets.TVar.checksum
+Property lib.composeChangesets.TVar.checksum
+Property lib.composeChangesets.TVar.claimId
+Property lib.composeChangesets.TVar.claimVersion
+Property lib.composeChangesets.TVar.id
+Property lib.composeChangesets.TVar.id
+Property lib.composeChangesets.TVar.symbol
+Property lib.composeChangesets.TVar.symbol
 Property lib.defaultCompareArgument._after.checksum
 Property lib.defaultCompareArgument._after.combinedChecksum
 Property lib.defaultCompareArgument._after.descendantChecksum
