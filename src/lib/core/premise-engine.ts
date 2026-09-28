@@ -1,7 +1,5 @@
 import {
     CorePremiseSchema,
-    isExternallyBound,
-    isPremiseBound,
     type TCoreArgument,
     type TCoreLogicalOperatorType,
     type TCorePremise,
@@ -17,29 +15,15 @@ import {
     POSITION_MAX,
     type TCorePositionConfig,
 } from "../utils/position.js"
-import {
-    sortedCopyById,
-    sortedUnique,
-    withoutUndefinedValues,
-} from "../utils/collections.js"
+import { sortedCopyById, withoutUndefinedValues } from "../utils/collections.js"
 import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import type {
     TCoreQuadrivalentValue,
     TCoreResolvedAssignment,
     TCorePremiseEvaluationResult,
-    TCorePremiseInferenceDiagnostic,
     TCoreValidationResult,
 } from "../types/evaluation.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
-import {
-    belnapAnd,
-    belnapIff,
-    belnapImplies,
-    belnapNot,
-    belnapOr,
-    belnapXor,
-} from "./evaluation/belnap.js"
-import { buildDirectionalVacuity } from "./evaluation/validation.js"
 import { Value } from "typebox/value"
 import type {
     TInvariantViolation,
@@ -80,6 +64,7 @@ import {
 } from "./premise/formula-tree.js"
 import type { TPremiseReadContext } from "./premise/read-context.js"
 import { validatePremiseEvaluability } from "./premise/evaluability.js"
+import { evaluatePremise } from "./premise/evaluation.js"
 import type {
     TExpressionMutations,
     TExpressionQueries,
@@ -1369,202 +1354,12 @@ export class PremiseEngine<
             )
         }
 
-        const rootExpressionId = this.rootExpressionId!
-        const referencedVariableIds = sortedUnique(
-            this.expressions
-                .toArray()
-                .filter(
-                    (
-                        expr
-                    ): expr is TExpressionInput<TExpr> & {
-                        type: "variable"
-                        variableId: string
-                    } => expr.type === "variable"
-                )
-                .map((expr) => expr.variableId)
+        return evaluatePremise(
+            this.asReadContext(),
+            assignment,
+            this.isInference(),
+            options
         )
-
-        if (options?.strictUnknownKeys || options?.requireExactCoverage) {
-            const knownVariableIds = new Set(referencedVariableIds)
-            const unknownKeys = Object.keys(assignment.variables).filter(
-                (variableId) => !knownVariableIds.has(variableId)
-            )
-            if (unknownKeys.length > 0) {
-                throw new Error(
-                    `Assignment contains unknown variable IDs for premise "${this.premise.id}": ${unknownKeys.join(", ")}`
-                )
-            }
-        }
-
-        const expressionValues: Record<string, TCoreQuadrivalentValue> = {}
-        const evaluateExpression = (
-            expressionId: string
-        ): TCoreQuadrivalentValue => {
-            const expression = this.expressions.getExpression(expressionId)
-            if (!expression) {
-                throw new Error(`Expression "${expressionId}" was not found.`)
-            }
-
-            if (expression.type === "variable") {
-                let value: TCoreQuadrivalentValue
-                if (options?.resolver) {
-                    const variable = this.variables.getVariable(
-                        expression.variableId
-                    )
-                    if (
-                        variable &&
-                        isPremiseBound(variable) &&
-                        !isExternallyBound(variable, this.argument.id as string)
-                    ) {
-                        value = options.resolver(expression.variableId)
-                    } else {
-                        value =
-                            assignment.variables[expression.variableId] ?? null
-                    }
-                } else {
-                    value = assignment.variables[expression.variableId] ?? null
-                }
-                expressionValues[expression.id] = value
-                return value
-            }
-
-            const children = this.expressions.getChildExpressions(expression.id)
-            let value: TCoreQuadrivalentValue
-
-            if (expression.type === "formula") {
-                value = evaluateExpression(children[0].id)
-                expressionValues[expression.id] = value
-                return value
-            }
-
-            switch (expression.operator) {
-                case "not":
-                    value = belnapNot(evaluateExpression(children[0].id))
-                    break
-                case "and":
-                    value = children.reduce<TCoreQuadrivalentValue>(
-                        (acc, child) =>
-                            belnapAnd(acc, evaluateExpression(child.id)),
-                        true
-                    )
-                    break
-                case "or":
-                    value = children.reduce<TCoreQuadrivalentValue>(
-                        (acc, child) =>
-                            belnapOr(acc, evaluateExpression(child.id)),
-                        false
-                    )
-                    break
-                // Seeded `false` because that is xor's identity, not because
-                // `or` is: parity counts the true operands, so seeding `true`
-                // would report every operand count with the opposite parity.
-                case "xor":
-                    value = children.reduce<TCoreQuadrivalentValue>(
-                        (acc, child) =>
-                            belnapXor(acc, evaluateExpression(child.id)),
-                        false
-                    )
-                    break
-                case "implies": {
-                    const left = children[0]
-                    const right = children[1]
-                    value = belnapImplies(
-                        evaluateExpression(left.id),
-                        evaluateExpression(right.id)
-                    )
-                    break
-                }
-                case "iff": {
-                    const left = children[0]
-                    const right = children[1]
-                    value = belnapIff(
-                        evaluateExpression(left.id),
-                        evaluateExpression(right.id)
-                    )
-                    break
-                }
-            }
-
-            expressionValues[expression.id] = value
-            return value
-        }
-
-        const rootValue = evaluateExpression(rootExpressionId)
-        const variableValues: Record<string, TCoreQuadrivalentValue> = {}
-        for (const variableId of referencedVariableIds) {
-            if (options?.resolver) {
-                const variable = this.variables.getVariable(variableId)
-                if (variable && isPremiseBound(variable)) {
-                    variableValues[variableId] = options.resolver(variableId)
-                    continue
-                }
-            }
-            variableValues[variableId] =
-                assignment.variables[variableId] ?? null
-        }
-
-        let inferenceDiagnostic: TCorePremiseInferenceDiagnostic | undefined
-        if (this.isInference()) {
-            const root = this.expressions.getExpression(rootExpressionId)
-            if (root?.type === "operator") {
-                const children = this.expressions.getChildExpressions(root.id)
-                const left = children[0]
-                const right = children[1]
-                if (left && right) {
-                    const leftValue = expressionValues[left.id]
-                    const rightValue = expressionValues[right.id]
-                    if (root.operator === "implies") {
-                        inferenceDiagnostic = {
-                            kind: "implies",
-                            premiseId: this.premise.id,
-                            rootExpressionId,
-                            leftValue,
-                            rightValue,
-                            rootValue,
-                            antecedentTrue: leftValue,
-                            consequentTrue: rightValue,
-                            isVacuouslyTrue: belnapNot(leftValue),
-                            fired: leftValue,
-                            firedAndHeld: belnapAnd(leftValue, rightValue),
-                        }
-                    } else if (root.operator === "iff") {
-                        const leftToRight = buildDirectionalVacuity(
-                            leftValue,
-                            rightValue
-                        )
-                        const rightToLeft = buildDirectionalVacuity(
-                            rightValue,
-                            leftValue
-                        )
-                        inferenceDiagnostic = {
-                            kind: "iff",
-                            premiseId: this.premise.id,
-                            rootExpressionId,
-                            leftValue,
-                            rightValue,
-                            rootValue,
-                            leftToRight,
-                            rightToLeft,
-                            bothSidesTrue: belnapAnd(leftValue, rightValue),
-                            bothSidesFalse: belnapAnd(
-                                belnapNot(leftValue),
-                                belnapNot(rightValue)
-                            ),
-                        }
-                    }
-                }
-            }
-        }
-
-        return {
-            premiseId: this.premise.id,
-            premiseType: this.isInference() ? "inference" : "constraint",
-            rootExpressionId,
-            rootValue,
-            expressionValues,
-            variableValues,
-            inferenceDiagnostic,
-        }
     }
 
     public toDisplayString(): string {
