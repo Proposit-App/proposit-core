@@ -1,5 +1,17 @@
 Accessor lib.ArgumentEngine.behavior (get)
 Class extensions/basics.BasicsArgumentParser
+Class extensions/chat-completions.NonRetryableLlmError
+Class extensions/chat-completions.QuotaExhaustedLlmError
+Class extensions/chat-completions.RateLimitLlmError
+Class extensions/chat-completions.SchemaValidationLlmError
+Class extensions/chat-completions.TransientLlmError
+Class extensions/openai.NonRetryableLlmError
+Class extensions/openai.QuotaExhaustedLlmError
+Class extensions/openai.RateLimitLlmError
+Class extensions/openai.ResponseNotFoundError
+Class extensions/openai.SchemaValidationLlmError
+Class extensions/openai.ToolLoopExhaustedError
+Class extensions/openai.TransientLlmError
 Class lib.ArgumentEngine
 Class lib.ArgumentLibrary
 Class lib.ArgumentParser
@@ -23,6 +35,18 @@ Class lib.UnknownExpressionError
 Class lib.VariableManager
 Class lib.VersionedLibrary
 Constructor extensions/basics.BasicsArgumentParser.constructor (1)
+Constructor extensions/chat-completions.NonRetryableLlmError.constructor (1)
+Constructor extensions/chat-completions.QuotaExhaustedLlmError.constructor (1)
+Constructor extensions/chat-completions.RateLimitLlmError.constructor (1)
+Constructor extensions/chat-completions.SchemaValidationLlmError.constructor (1)
+Constructor extensions/chat-completions.TransientLlmError.constructor (1)
+Constructor extensions/openai.NonRetryableLlmError.constructor (1)
+Constructor extensions/openai.QuotaExhaustedLlmError.constructor (1)
+Constructor extensions/openai.RateLimitLlmError.constructor (1)
+Constructor extensions/openai.ResponseNotFoundError.constructor (1)
+Constructor extensions/openai.SchemaValidationLlmError.constructor (1)
+Constructor extensions/openai.ToolLoopExhaustedError.constructor (1)
+Constructor extensions/openai.TransientLlmError.constructor (1)
 Constructor lib.ArgumentEngine.constructor (1)
 Constructor lib.ArgumentLibrary.constructor (1)
 Constructor lib.ArgumentParser.constructor (1)
@@ -45,10 +69,23 @@ Constructor lib.SubPipelineFailedError.constructor (1)
 Constructor lib.UnknownExpressionError.constructor (1)
 Constructor lib.VariableManager.constructor (1)
 Constructor lib.VersionedLibrary.constructor (1)
+Function extensions/builder.createDistillTurn (1)
+Function extensions/builder.createReviewTurn (1)
+Function extensions/builder.createSimulateTurn (1)
+Function extensions/chat-completions.classifyFetchError (1)
+Function extensions/chat-completions.classifyHttpError (1)
+Function extensions/chat-completions.createChatCompletionsProvider (1)
+Function extensions/chat-completions.typeboxToJsonSchema (1)
 Function extensions/citations/ieee.formatCitationParts (1)
 Function extensions/citations/ieee.formatDate (1)
 Function extensions/citations/ieee.formatNamesInCitation (1)
 Function extensions/citations/ieee.formatSingleAuthor (1)
+Function extensions/openai.cancelResponse (1)
+Function extensions/openai.createOpenAiResponsesProvider (1)
+Function extensions/openai.reconnectStream (1)
+Function extensions/openai.retrieveResponse (1)
+Function extensions/openai.submitBackgroundResponse (1)
+Function extensions/openai.typeboxToOpenAiSchema (1)
 Function extensions/pipelines/base.assignVariables (1)
 Function extensions/pipelines/base.buildClaimRecordSchema (1)
 Function extensions/pipelines/base.buildResponseSchema (1)
@@ -137,6 +174,11 @@ Function lib.validateArgumentAfterPremiseMutation (1)
 Function lib.validateArgumentEvaluability (1)
 Function lib.validateDerivationStructure (1)
 Function lib.validateGrammar (1)
+Function lib/pipelines/scheduling.computeDagProgress (1)
+Function lib/pipelines/scheduling.depId (1)
+Function lib/pipelines/scheduling.hasRequiredFailureUpstream (1)
+Function lib/pipelines/scheduling.isOptionalDep (1)
+Function lib/pipelines/scheduling.isStageEligible (1)
 Interface extensions/citations/ieee.TCitationFormatResult
 Interface extensions/citations/ieee.TCitationSegment
 Interface extensions/citations/ieee.TSegmentInstructionConditional
@@ -216,6 +258,30 @@ Method extensions/basics.BasicsArgumentParser.mapClaimCitation (1)
 Method extensions/basics.BasicsArgumentParser.mapPremise (1)
 Method extensions/basics.BasicsArgumentParser.mapVariable (1)
 Method extensions/basics.BasicsArgumentParser.validate (1)
+Method extensions/chat-completions.NonRetryableLlmError.captureStackTrace (1)
+Method extensions/chat-completions.NonRetryableLlmError.prepareStackTrace (1)
+Method extensions/chat-completions.QuotaExhaustedLlmError.captureStackTrace (1)
+Method extensions/chat-completions.QuotaExhaustedLlmError.prepareStackTrace (1)
+Method extensions/chat-completions.RateLimitLlmError.captureStackTrace (1)
+Method extensions/chat-completions.RateLimitLlmError.prepareStackTrace (1)
+Method extensions/chat-completions.SchemaValidationLlmError.captureStackTrace (1)
+Method extensions/chat-completions.SchemaValidationLlmError.prepareStackTrace (1)
+Method extensions/chat-completions.TransientLlmError.captureStackTrace (1)
+Method extensions/chat-completions.TransientLlmError.prepareStackTrace (1)
+Method extensions/openai.NonRetryableLlmError.captureStackTrace (1)
+Method extensions/openai.NonRetryableLlmError.prepareStackTrace (1)
+Method extensions/openai.QuotaExhaustedLlmError.captureStackTrace (1)
+Method extensions/openai.QuotaExhaustedLlmError.prepareStackTrace (1)
+Method extensions/openai.RateLimitLlmError.captureStackTrace (1)
+Method extensions/openai.RateLimitLlmError.prepareStackTrace (1)
+Method extensions/openai.ResponseNotFoundError.captureStackTrace (1)
+Method extensions/openai.ResponseNotFoundError.prepareStackTrace (1)
+Method extensions/openai.SchemaValidationLlmError.captureStackTrace (1)
+Method extensions/openai.SchemaValidationLlmError.prepareStackTrace (1)
+Method extensions/openai.ToolLoopExhaustedError.captureStackTrace (1)
+Method extensions/openai.ToolLoopExhaustedError.prepareStackTrace (1)
+Method extensions/openai.TransientLlmError.captureStackTrace (1)
+Method extensions/openai.TransientLlmError.prepareStackTrace (1)
 Method lib.ArgumentEngine.addVariable (1)
 Method lib.ArgumentEngine.bindVariableToArgument (1)
 Method lib.ArgumentEngine.bindVariableToExternalPremise (1)
@@ -633,11 +699,15 @@ Method lib.VersionedLibrary.validate (1)
 Method lib.VersionedLibrary.withValidation (1)
 Method lib.createLookup.get (1)
 Module extensions/basics
+Module extensions/builder
+Module extensions/chat-completions
 Module extensions/citations/ieee
 Module extensions/citations/unparsed
+Module extensions/openai
 Module extensions/pipelines/base
 Module extensions/pipelines/ingestion
 Module lib
+Module lib/pipelines/scheduling
 Property extensions/basics.BasicsArgumentParser.build.argumentId
 Property extensions/basics.BasicsArgumentParser.build.argumentId
 Property extensions/basics.BasicsArgumentParser.build.argumentId
@@ -831,6 +901,59 @@ Property extensions/basics.BasicsPremiseSchema.id
 Property extensions/basics.BasicsPremiseSchema.title
 Property extensions/basics.BasicsPremiseSchema.type
 Property extensions/basics.BasicsPremiseSchema.type
+Property extensions/builder.TDistillOutput.argumentText
+Property extensions/builder.TDistillTurnOptions.model
+Property extensions/builder.TDistillTurnOptions.onClose
+Property extensions/builder.TDistillTurnOptions.reasoningEffort
+Property extensions/chat-completions.NonRetryableLlmError.cause
+Property extensions/chat-completions.NonRetryableLlmError.constructor.args.message
+Property extensions/chat-completions.NonRetryableLlmError.constructor.args.status
+Property extensions/chat-completions.NonRetryableLlmError.message
+Property extensions/chat-completions.NonRetryableLlmError.name
+Property extensions/chat-completions.NonRetryableLlmError.stack
+Property extensions/chat-completions.NonRetryableLlmError.stackTraceLimit
+Property extensions/chat-completions.NonRetryableLlmError.status
+Property extensions/chat-completions.QuotaExhaustedLlmError.cause
+Property extensions/chat-completions.QuotaExhaustedLlmError.constructor.args.message
+Property extensions/chat-completions.QuotaExhaustedLlmError.constructor.args.status
+Property extensions/chat-completions.QuotaExhaustedLlmError.message
+Property extensions/chat-completions.QuotaExhaustedLlmError.name
+Property extensions/chat-completions.QuotaExhaustedLlmError.retryReason
+Property extensions/chat-completions.QuotaExhaustedLlmError.stack
+Property extensions/chat-completions.QuotaExhaustedLlmError.stackTraceLimit
+Property extensions/chat-completions.QuotaExhaustedLlmError.status
+Property extensions/chat-completions.RateLimitLlmError.cause
+Property extensions/chat-completions.RateLimitLlmError.constructor.args.message
+Property extensions/chat-completions.RateLimitLlmError.constructor.args.status
+Property extensions/chat-completions.RateLimitLlmError.message
+Property extensions/chat-completions.RateLimitLlmError.name
+Property extensions/chat-completions.RateLimitLlmError.retryReason
+Property extensions/chat-completions.RateLimitLlmError.stack
+Property extensions/chat-completions.RateLimitLlmError.stackTraceLimit
+Property extensions/chat-completions.RateLimitLlmError.status
+Property extensions/chat-completions.SchemaValidationLlmError.cause
+Property extensions/chat-completions.SchemaValidationLlmError.constructor.args.message
+Property extensions/chat-completions.SchemaValidationLlmError.constructor.args.status
+Property extensions/chat-completions.SchemaValidationLlmError.message
+Property extensions/chat-completions.SchemaValidationLlmError.name
+Property extensions/chat-completions.SchemaValidationLlmError.retryReason
+Property extensions/chat-completions.SchemaValidationLlmError.stack
+Property extensions/chat-completions.SchemaValidationLlmError.stackTraceLimit
+Property extensions/chat-completions.SchemaValidationLlmError.status
+Property extensions/chat-completions.TChatCompletionsProviderConfig.apiKey
+Property extensions/chat-completions.TChatCompletionsProviderConfig.baseUrl
+Property extensions/chat-completions.TChatCompletionsProviderConfig.fetch
+Property extensions/chat-completions.TChatCompletionsProviderConfig.model
+Property extensions/chat-completions.TChatCompletionsProviderConfig.requestTimeoutMs
+Property extensions/chat-completions.TransientLlmError.cause
+Property extensions/chat-completions.TransientLlmError.constructor.args.message
+Property extensions/chat-completions.TransientLlmError.constructor.args.status
+Property extensions/chat-completions.TransientLlmError.message
+Property extensions/chat-completions.TransientLlmError.name
+Property extensions/chat-completions.TransientLlmError.retryReason
+Property extensions/chat-completions.TransientLlmError.stack
+Property extensions/chat-completions.TransientLlmError.stackTraceLimit
+Property extensions/chat-completions.TransientLlmError.status
 Property extensions/citations/ieee.AuthorSchema.familyName
 Property extensions/citations/ieee.AuthorSchema.givenNames
 Property extensions/citations/ieee.AuthorSchema.name
@@ -2891,6 +3014,99 @@ Property extensions/citations/unparsed.UnparsedCitationSchema.citationTypeGuess
 Property extensions/citations/unparsed.UnparsedCitationSchema.text
 Property extensions/citations/unparsed.UnparsedCitationSchema.type
 Property extensions/citations/unparsed.UnparsedCitationSchema.url
+Property extensions/openai.NonRetryableLlmError.cause
+Property extensions/openai.NonRetryableLlmError.constructor.args.message
+Property extensions/openai.NonRetryableLlmError.constructor.args.status
+Property extensions/openai.NonRetryableLlmError.message
+Property extensions/openai.NonRetryableLlmError.name
+Property extensions/openai.NonRetryableLlmError.stack
+Property extensions/openai.NonRetryableLlmError.stackTraceLimit
+Property extensions/openai.NonRetryableLlmError.status
+Property extensions/openai.QuotaExhaustedLlmError.cause
+Property extensions/openai.QuotaExhaustedLlmError.constructor.args.message
+Property extensions/openai.QuotaExhaustedLlmError.constructor.args.status
+Property extensions/openai.QuotaExhaustedLlmError.message
+Property extensions/openai.QuotaExhaustedLlmError.name
+Property extensions/openai.QuotaExhaustedLlmError.retryReason
+Property extensions/openai.QuotaExhaustedLlmError.stack
+Property extensions/openai.QuotaExhaustedLlmError.stackTraceLimit
+Property extensions/openai.QuotaExhaustedLlmError.status
+Property extensions/openai.RateLimitLlmError.cause
+Property extensions/openai.RateLimitLlmError.constructor.args.message
+Property extensions/openai.RateLimitLlmError.constructor.args.status
+Property extensions/openai.RateLimitLlmError.message
+Property extensions/openai.RateLimitLlmError.name
+Property extensions/openai.RateLimitLlmError.retryReason
+Property extensions/openai.RateLimitLlmError.stack
+Property extensions/openai.RateLimitLlmError.stackTraceLimit
+Property extensions/openai.RateLimitLlmError.status
+Property extensions/openai.ResponseNotFoundError.cause
+Property extensions/openai.ResponseNotFoundError.constructor.args.responseId
+Property extensions/openai.ResponseNotFoundError.message
+Property extensions/openai.ResponseNotFoundError.name
+Property extensions/openai.ResponseNotFoundError.responseId
+Property extensions/openai.ResponseNotFoundError.stack
+Property extensions/openai.ResponseNotFoundError.stackTraceLimit
+Property extensions/openai.ResponseNotFoundError.status
+Property extensions/openai.SchemaValidationLlmError.cause
+Property extensions/openai.SchemaValidationLlmError.constructor.args.message
+Property extensions/openai.SchemaValidationLlmError.constructor.args.status
+Property extensions/openai.SchemaValidationLlmError.message
+Property extensions/openai.SchemaValidationLlmError.name
+Property extensions/openai.SchemaValidationLlmError.retryReason
+Property extensions/openai.SchemaValidationLlmError.stack
+Property extensions/openai.SchemaValidationLlmError.stackTraceLimit
+Property extensions/openai.SchemaValidationLlmError.status
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.apiKey
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.backgroundMode
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.backgroundPollIntervalMs
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.backgroundStreamMode
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.baseUrl
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.fetch
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.maxToolCallRounds
+Property extensions/openai.TCreateOpenAiResponsesProviderOptions.stream
+Property extensions/openai.TRetrievedResponse.errorMessage
+Property extensions/openai.TRetrievedResponse.incompleteReason
+Property extensions/openai.TRetrievedResponse.output
+Property extensions/openai.TRetrievedResponse.rawResponseId
+Property extensions/openai.TRetrievedResponse.status
+Property extensions/openai.TRetrievedResponse.tokenUsage
+Property extensions/openai.ToolLoopExhaustedError.cause
+Property extensions/openai.ToolLoopExhaustedError.constructor.args.message
+Property extensions/openai.ToolLoopExhaustedError.constructor.args.rounds
+Property extensions/openai.ToolLoopExhaustedError.message
+Property extensions/openai.ToolLoopExhaustedError.name
+Property extensions/openai.ToolLoopExhaustedError.rounds
+Property extensions/openai.ToolLoopExhaustedError.stack
+Property extensions/openai.ToolLoopExhaustedError.stackTraceLimit
+Property extensions/openai.TransientLlmError.cause
+Property extensions/openai.TransientLlmError.constructor.args.message
+Property extensions/openai.TransientLlmError.constructor.args.status
+Property extensions/openai.TransientLlmError.message
+Property extensions/openai.TransientLlmError.name
+Property extensions/openai.TransientLlmError.retryReason
+Property extensions/openai.TransientLlmError.stack
+Property extensions/openai.TransientLlmError.stackTraceLimit
+Property extensions/openai.TransientLlmError.status
+Property extensions/openai.cancelResponse.options.apiKey
+Property extensions/openai.cancelResponse.options.baseUrl
+Property extensions/openai.cancelResponse.options.fetch
+Property extensions/openai.cancelResponse.options.signal
+Property extensions/openai.reconnectStream.options.apiKey
+Property extensions/openai.reconnectStream.options.baseUrl
+Property extensions/openai.reconnectStream.options.fetch
+Property extensions/openai.reconnectStream.options.signal
+Property extensions/openai.reconnectStream.options.startingAfter
+Property extensions/openai.retrieveResponse.options.apiKey
+Property extensions/openai.retrieveResponse.options.baseUrl
+Property extensions/openai.retrieveResponse.options.fetch
+Property extensions/openai.retrieveResponse.options.signal
+Property extensions/openai.submitBackgroundResponse.options.apiKey
+Property extensions/openai.submitBackgroundResponse.options.baseUrl
+Property extensions/openai.submitBackgroundResponse.options.fetch
+Property extensions/openai.submitBackgroundResponse.options.signal
+Property extensions/openai.submitBackgroundResponse.responseId
+Property extensions/openai.submitBackgroundResponse.status
 Property extensions/pipelines/base.AxiomIndicatorDetectionOutputSchema.axioms
 Property extensions/pipelines/base.AxiomIndicatorDetectionOutputSchema.axioms.axiomId
 Property extensions/pipelines/base.AxiomIndicatorDetectionOutputSchema.axioms.indicator
@@ -5594,9 +5810,22 @@ Property lib.validateGrammar.message
 Property lib.validateGrammar.premiseId
 Property lib.validateGrammar.tier
 Property lib.validateGrammar.variableId
+Property lib/pipelines/scheduling.TDagProgress.runnable
+Property lib/pipelines/scheduling.TDagProgress.skippable
+Property lib/pipelines/scheduling.TStageDescriptor.dependsOn
+Property lib/pipelines/scheduling.TStageDescriptor.id
+Reference lib/pipelines/scheduling.TDepSpec
+Reference lib/pipelines/scheduling.TOptionalDep
+Reference lib/pipelines/scheduling.optional
 TypeAlias extensions/basics.TBasicsArgument
 TypeAlias extensions/basics.TBasicsClaim
 TypeAlias extensions/basics.TBasicsPremise
+TypeAlias extensions/builder.TDistillOutput
+TypeAlias extensions/builder.TDistillTurnOptions
+TypeAlias extensions/chat-completions.TChatCompletionsFetch
+TypeAlias extensions/chat-completions.TChatCompletionsJsonSchema
+TypeAlias extensions/chat-completions.TChatCompletionsProviderConfig
+TypeAlias extensions/chat-completions.TCreateChatCompletionsProviderOptions
 TypeAlias extensions/citations/ieee.TAuthor
 TypeAlias extensions/citations/ieee.TBlogReference
 TypeAlias extensions/citations/ieee.TBookChapterReference
@@ -5674,6 +5903,11 @@ TypeAlias extensions/citations/ieee.TVideoReference
 TypeAlias extensions/citations/ieee.TWebsiteReference
 TypeAlias extensions/citations/unparsed.TUnparsedCitation
 TypeAlias extensions/citations/unparsed.TUnparsedCitationTypeGuess
+TypeAlias extensions/openai.TCreateOpenAiResponsesProviderOptions
+TypeAlias extensions/openai.TOpenAiFetch
+TypeAlias extensions/openai.TOpenAiJsonSchema
+TypeAlias extensions/openai.TResponseStatus
+TypeAlias extensions/openai.TRetrievedResponse
 TypeAlias extensions/pipelines/base.TApproximateAnchorRule
 TypeAlias extensions/pipelines/base.TAssignVariablesInput
 TypeAlias extensions/pipelines/base.TAssignedVariable
@@ -5852,6 +6086,12 @@ TypeAlias lib.TValidatorContext
 TypeAlias lib.TVariableManagerSnapshot
 TypeAlias lib.TVersionedEntity
 TypeAlias lib.TViolation
+TypeAlias lib/pipelines/scheduling.TDagProgress
+TypeAlias lib/pipelines/scheduling.TStageDescriptor
+TypeAlias lib/pipelines/scheduling.TStageOutcomeRecordMap
+TypeLiteral extensions/builder.TDistillTurnOptions.onClose (1)
+TypeLiteral extensions/chat-completions.TChatCompletionsFetch (1)
+TypeLiteral extensions/openai.TOpenAiFetch (1)
 TypeLiteral extensions/pipelines/base.TAssignVariablesInput.generateId (1)
 TypeLiteral extensions/pipelines/base.TCompileFormulasInput.generateId (1)
 TypeLiteral lib.ArgumentEngine.buildVariableIndex.keyFn (1)

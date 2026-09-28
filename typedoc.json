@@ -5,7 +5,11 @@
         "src/extensions/citations/unparsed/index.ts",
         "src/extensions/basics/index.ts",
         "src/extensions/pipelines/base/index.ts",
-        "src/extensions/pipelines/ingestion/index.ts"
+        "src/extensions/pipelines/ingestion/index.ts",
+        "src/extensions/openai/index.ts",
+        "src/extensions/chat-completions/index.ts",
+        "src/extensions/builder/index.ts",
+        "src/lib/pipelines/scheduling.ts"
     ],
     "out": "docs/api",
     "tsconfig": "tsconfig.json",
