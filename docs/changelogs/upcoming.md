@@ -10,6 +10,12 @@
   mention in `input.mentions`, with `context: { claimMiniId }`. Skipped when
   `input.mentions` is absent or the input has no text (the latter is already
   covered by the single `SOURCE_ANCHOR_INPUT_UNAVAILABLE`).
+- `SOURCE_ANCHOR_NOTE_CODES.mentionUnclaimed`
+  (`SOURCE_ANCHOR_MENTION_UNCLAIMED`): `finalizeResponseV2` adds one warning
+  per mention in `input.mentions` that no canonical claim's `mentionIds` names,
+  with `context: { mentionId, quote }`, under the same conditions as
+  `notAttempted`. `claim-reference-validation` never compared the mention
+  output with the claims' `mentionIds`, so this was silent before.
 
 ## Changed
 
@@ -61,3 +67,11 @@
   `this.validateEvaluability()` and `this.isInference()`, and `validate` still
   calls `this.toPremiseData()` first, so overriding any of them keeps its
   effect.
+- `ArgumentEngine`'s remaining read-only routines moved into module functions
+  under `src/lib/core/argument/`: the restore-time checksum checks
+  (`checksum-verification.ts`), the claim/variable reads and default
+  assignment (`claim-variables.ts`, keeping the grounded and axiomatic-only
+  variable sets side by side), the circular-binding check (`circularity.ts`),
+  premise-argument parsing (`premise-args.ts`) and the display rendering
+  (`display.ts`). Public methods keep their signatures and JSDoc on the class
+  and delegate; `argument-engine.ts` is about 390 lines shorter.
