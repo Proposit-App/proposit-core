@@ -57,11 +57,13 @@
 ## Internal
 
 - `pnpm run docs` (and so `build` and `check`) now compares every declaration
-  typedoc documents (including fields of object types written inline, in a
-  union, a generic's type argument or a tuple, and whether an accessor has a
-  getter and a setter), with its kind and overload
-  count, against the checked-in `docs/api-surface.txt`, and fails on any
-  difference.
+  typedoc documents against the checked-in `docs/api-surface.txt`, with its
+  kind, its overload count and whether an accessor has a getter and a setter,
+  and fails on any difference. That includes fields of object types written
+  inline anywhere: in a union, a generic's type argument, a tuple, a
+  conditional or mapped type, a method's parameter or return type, or a type
+  parameter's constraint. Only type parameters' defaults are skipped, since
+  they repeat declarations listed elsewhere.
   `scripts/check-api-surface.mjs` does the comparison over typedoc's JSON
   output, written to the gitignored `.typedoc/`. A stray `@internal` comment
   that hides a public member, which `excludeInternal` otherwise does silently,

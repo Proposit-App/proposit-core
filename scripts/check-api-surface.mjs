@@ -17,39 +17,66 @@ const JSON_PATH = ".typedoc/api.json"
 const LIST_PATH = "docs/api-surface.txt"
 const update = process.argv.includes("--update")
 
+// Keys that hold no declarations, only metadata about them.
+const METADATA_KEYS = new Set([
+    "sources",
+    "comment",
+    "groups",
+    "categories",
+    "symbolIdMap",
+    "files",
+])
+
+function lineFor(reflection, path) {
+    const signatures = reflection.signatures?.length
+    const accessor = [
+        reflection.getSignature ? "get" : undefined,
+        reflection.setSignature ? "set" : undefined,
+    ].filter(Boolean)
+    return (
+        `${ReflectionKind[reflection.kind]} ${path}` +
+        (signatures === undefined ? "" : ` (${signatures})`) +
+        (accessor.length === 0 ? "" : ` (${accessor.join(", ")})`)
+    )
+}
+
 function surfaceLines(project) {
     const lines = []
-    // Fields written inline in a type (an object type inside a union or
-    // intersection, a generic's type argument or a tuple, on a property, or
-    // as a constant's type) are reflections too, reached through the type
-    // rather than through `children`.
-    const walkType = (type, path) => {
-        if (!type) return
-        if (type.declaration) walk(type.declaration, path)
-        for (const member of type.types ?? []) walkType(member, path)
-        for (const argument of type.typeArguments ?? [])
-            walkType(argument, path)
-        for (const element of type.elements ?? []) walkType(element, path)
-        walkType(type.elementType, path)
-    }
-    const walk = (node, path) => {
-        for (const child of node.children ?? []) {
-            const childPath = path ? `${path}.${child.name}` : child.name
-            const signatures = child.signatures?.length
-            const accessor = [
-                child.getSignature ? "get" : undefined,
-                child.setSignature ? "set" : undefined,
-            ].filter(Boolean)
-            lines.push(
-                `${ReflectionKind[child.kind]} ${childPath}` +
-                    (signatures === undefined ? "" : ` (${signatures})`) +
-                    (accessor.length === 0 ? "" : ` (${accessor.join(", ")})`)
-            )
-            walk(child, childPath)
-            walkType(child.type, childPath)
+    // Every key is followed, so a declaration is recorded wherever typedoc
+    // puts it: in `children`, in an object type written inline (a union, a
+    // generic's type argument, a tuple, a conditional or mapped type), or
+    // inside a signature's parameter and return types or a type parameter's
+    // constraint. Type parameters' defaults are skipped: they repeat
+    // declarations recorded elsewhere, expanded at every use.
+    const visit = (value, path) => {
+        if (Array.isArray(value)) {
+            for (const item of value) visit(item, path)
+            return
+        }
+        if (value === null || typeof value !== "object") return
+        let next = path
+        const named =
+            value !== project &&
+            value.name !== undefined &&
+            value.name !== "__type"
+        if (named && value.variant === "declaration") {
+            next = path ? `${path}.${value.name}` : value.name
+            lines.push(lineFor(value, next))
+        } else if (
+            named &&
+            (value.variant === "param" || value.variant === "typeParam")
+        ) {
+            // Named in the path so a field inside one reads as belonging to
+            // it; parameters and type parameters are not listed themselves.
+            next = `${path}.${value.name}`
+        }
+        for (const [key, child] of Object.entries(value)) {
+            if (METADATA_KEYS.has(key)) continue
+            if (key === "default" && value.variant === "typeParam") continue
+            visit(child, next)
         }
     }
-    walk(project, "")
+    visit(project, "")
     return lines.sort()
 }
 
