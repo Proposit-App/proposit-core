@@ -4867,6 +4867,9 @@ Property lib.TOrderedOperation.data
 Property lib.TOrderedOperation.data
 Property lib.TOrderedOperation.data
 Property lib.TOrderedOperation.data
+Property lib.TOrderedOperation.data
+Property lib.TOrderedOperation.data.parentId
+Property lib.TOrderedOperation.data.position
 Property lib.TOrderedOperation.entity
 Property lib.TOrderedOperation.entity
 Property lib.TOrderedOperation.entity
@@ -4878,6 +4881,8 @@ Property lib.TOrderedOperation.entity
 Property lib.TOrderedOperation.entity
 Property lib.TOrderedOperation.entity
 Property lib.TOrderedOperation.entity
+Property lib.TOrderedOperation.entity
+Property lib.TOrderedOperation.type
 Property lib.TOrderedOperation.type
 Property lib.TOrderedOperation.type
 Property lib.TOrderedOperation.type

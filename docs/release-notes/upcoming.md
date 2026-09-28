@@ -63,6 +63,28 @@ more than once. To combine the changesets of several mutations made in a
 row, use the new `composeChangesets`: `mergeChangesets` throws when one
 entity is in two buckets, which a sequence can produce.
 
+### `orderChangeset` detaches removed expressions before deleting them
+
+`orderChangeset` now puts an update that clears the parent of every removed
+expression before the first expression delete. Without it, when one call
+moved an expression and then removed it, the deletes could run in an order a
+store with immediate foreign keys rejects.
+
+That update carries only three fields: `{ id, parentId: null, position: 0 }`.
+A persistence layer that runs the operations as given needs to meet three
+conditions:
+
+- Write only the fields an update carries. Code that reads an expression
+  update's `data` as a whole row needs to narrow it first; TypeScript will
+  point at those places.
+- A premise's detached expressions are briefly roots, so a rule that a
+  premise has only one root must be checked at the end of the transaction. A
+  rule that a root sits at position 0 holds throughout.
+- Two orderings are still unsafe for a store that checks foreign keys on
+  every statement: an expression updated to point at a parent, or at a
+  variable, that the same changeset inserts is updated before that insert.
+  Run those updates after the inserts.
+
 ### `changeOperator` swaps `and`, `or` and `xor` at any number of operands
 
 `PremiseEngine.changeOperator` used to change an operator's type in place only

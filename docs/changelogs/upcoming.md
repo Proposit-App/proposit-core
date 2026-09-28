@@ -25,6 +25,22 @@
 
 ## Changed
 
+- `orderChangeset` now emits an update detaching every removed expression
+  before it deletes any expression. A removed expression's entry carries its
+  parent at removal time, which the stored row may not share when the same
+  changeset moved it first, so deletes ordered by that parent could remove a
+  parent while the stored child still pointed at it. The detach carries only
+  `{ id, parentId: null, position: 0 }`: `TOrderedOperation` gains an
+  expression `update` member with that partial `data`, so code reading an
+  expression update's `data` as a whole row must narrow first, and a store
+  must write only the fields an update carries. Until the deletes run, a
+  premise can have more than one root, so a one-root-per-premise rule must be
+  checked at the end of the transaction. With those, the order suits a store
+  that checks foreign keys immediately and cascades nothing, with two known
+  exceptions, both an update ordered before an insert it depends on: an
+  expression pointed at a parent the same changeset inserts, and a
+  variable-type expression pointed at a variable the same changeset inserts.
+  Run such updates after the inserts.
 - No changeset names an entity more than once. `ChangeCollector` records
   each entity in one bucket by the same rule as `composeChangesets`, so a
   new entity no longer also appears under `modified`, and an expression
