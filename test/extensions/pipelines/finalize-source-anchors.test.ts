@@ -365,6 +365,78 @@ describe("finalizeResponseV2 — anchor resolution is reported, not silent", () 
     })
 })
 
+describe("finalizeResponseV2 — a claim with no mention is reported, not silent", () => {
+    // A claim none of whose mentions the mention stage produced was never
+    // looked up. Without a note of its own it reads like a claim whose quote
+    // failed to resolve, or like one that anchored fine.
+    function withCanonicalMentionIds(
+        miniId: string,
+        mentionIds: string[]
+    ): Record<string, unknown> {
+        const outputs = buildOutputs()
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        canon.canonicalClaims.find((c) => c.miniId === miniId)!.mentionIds =
+            mentionIds
+        return outputs
+    }
+    const notAttempted = (
+        failures: ReturnType<typeof finalizeFailures>
+    ): ReturnType<typeof finalizeFailures> =>
+        failures.filter((f) => f.code === "SOURCE_ANCHOR_NOT_ATTEMPTED")
+
+    it("reports a claim with no mentions once, naming it", () => {
+        const notes = notAttempted(
+            finalizeFailures(withCanonicalMentionIds("c2", []))
+        )
+        expect(notes).toHaveLength(1)
+        expect(notes[0].context).toEqual({ claimMiniId: "c2" })
+        expect((notes[0] as unknown as { severity: string }).severity).toBe(
+            "warning"
+        )
+    })
+
+    it("reports a claim whose mention ids name no mention the stage produced", () => {
+        const notes = notAttempted(
+            finalizeFailures(withCanonicalMentionIds("c3", ["m-unknown"]))
+        )
+        expect(notes.map((n) => n.context?.claimMiniId)).toEqual(["c3"])
+    })
+
+    it("reports nothing when every claim has a mention", () => {
+        expect(notAttempted(finalizeFailures(buildOutputs()))).toEqual([])
+    })
+
+    it("leaves a claim whose mention failed to resolve to the unresolved note", () => {
+        const outputs = buildOutputs()
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m3")!.text =
+            "a sentence never written"
+
+        const failures = finalizeFailures(outputs)
+        expect(notAttempted(failures)).toEqual([])
+        expect(
+            failures.filter((f) => f.code === "SOURCE_ANCHOR_UNRESOLVED")
+        ).toHaveLength(1)
+    })
+
+    it("reports nothing when the pipeline has no mention stage", () => {
+        const outputs = withCanonicalMentionIds("c2", [])
+        delete outputs[STAGE_IDS.claimMentionExtraction]
+        expect(notAttempted(finalizeFailures(outputs))).toEqual([])
+    })
+
+    it("reports only the missing input when the input has no text", () => {
+        const failures = finalizeFailures(withCanonicalMentionIds("c2", []), "")
+        expect(failures.map((f) => f.code)).toEqual([
+            "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
+        ])
+    })
+})
+
 describe("finalizeResponseV2 — claim source anchors", () => {
     it("anchors a claim once per mention that resolved to it", () => {
         const c1 = finalize(buildOutputs()).claims.find(

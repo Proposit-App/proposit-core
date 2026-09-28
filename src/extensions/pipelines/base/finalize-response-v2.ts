@@ -272,12 +272,16 @@ function resolveSegmentStarts(
  * one yields the nearest passage. Every one of them is reported because
  * silence here is indistinguishable from success — a model that starts
  * paraphrasing would otherwise take anchor coverage to zero with no signal.
+ * A claim the mention stage produced no mention for was never looked up at
+ * all; it is reported too, so "we did not look" is not read as "we found
+ * nothing" or as success.
  */
 export const SOURCE_ANCHOR_NOTE_CODES = {
     unresolved: "SOURCE_ANCHOR_UNRESOLVED",
     ambiguous: "SOURCE_ANCHOR_AMBIGUOUS",
     approximate: "SOURCE_ANCHOR_APPROXIMATE",
     inputUnavailable: "SOURCE_ANCHOR_INPUT_UNAVAILABLE",
+    notAttempted: "SOURCE_ANCHOR_NOT_ATTEMPTED",
 } as const
 
 /** Emit the note for one attempted resolution, if there is one to emit. */
@@ -785,6 +789,14 @@ export function finalizeResponseV2(
               mentions: input.mentions,
           })
         : new Map<string, TIngestionSourceAnchor>()
+    // Only a pipeline whose mention stage ran, over an input it could read,
+    // was expected to look each claim up; without either, the missing
+    // anchors are a property of the pipeline or of the input, and the
+    // input case is already reported once above.
+    const producedMentionIds =
+        inputAvailable && input.mentions
+            ? new Set(input.mentions.mentions.map((m) => m.mentionId))
+            : undefined
     const conclusionMiniId = conclusion?.conclusionMiniId ?? null
     const roles = buildClaimToRole({
         canonicalClaims: canon.canonicalClaims,
@@ -801,7 +813,19 @@ export function finalizeResponseV2(
         // rather than an empty array — "we found nothing" and "we did not
         // look" read the same to a consumer, and neither is a claim about
         // the text.
-        const anchors = claimAnchors(readMentionIds(record), anchorByMentionId)
+        const mentionIds = readMentionIds(record)
+        if (
+            producedMentionIds &&
+            !mentionIds.some((id) => producedMentionIds.has(id))
+        ) {
+            ctx.addFailure({
+                code: SOURCE_ANCHOR_NOTE_CODES.notAttempted,
+                message: `The mention stage found no mention of claim ${c.miniId} in the input, so no source anchor was looked for.`,
+                severity: "warning",
+                context: { claimMiniId: c.miniId },
+            })
+        }
+        const anchors = claimAnchors(mentionIds, anchorByMentionId)
         if (anchors.length > 0) {
             stripped.sourceAnchors = anchors
         }
