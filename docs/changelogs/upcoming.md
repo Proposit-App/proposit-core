@@ -10,6 +10,12 @@
   mention in `input.mentions`, with `context: { claimMiniId }`. Skipped when
   `input.mentions` is absent or the input has no text (the latter is already
   covered by the single `SOURCE_ANCHOR_INPUT_UNAVAILABLE`).
+- `SOURCE_ANCHOR_NOTE_CODES.mentionUnclaimed`
+  (`SOURCE_ANCHOR_MENTION_UNCLAIMED`): `finalizeResponseV2` adds one warning
+  per mention in `input.mentions` that no canonical claim's `mentionIds` names,
+  with `context: { mentionId, quote }`, under the same conditions as
+  `notAttempted`. `claim-reference-validation` never compared the mention
+  output with the claims' `mentionIds`, so this was silent before.
 
 ## Changed
 
