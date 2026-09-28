@@ -1088,10 +1088,14 @@ export class PremiseEngine<
 
                         const changes =
                             this.finalizeExpressionMutation(collector)
+                        // Normalization runs inside finalize and may have
+                        // absorbed the node into a same-operator
+                        // grandparent; that reads as a dissolve, like a
+                        // merge.
                         return {
-                            result: this.expressions.getExpression(
-                                expressionId
-                            )!,
+                            result:
+                                this.expressions.getExpression(expressionId) ??
+                                null,
                             changes,
                         }
                     }

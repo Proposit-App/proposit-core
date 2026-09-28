@@ -262,7 +262,9 @@ export interface TExpressionMutations<
      *                      Structural fields (id, type, operator, parentId, position,
      *                      premiseId, argumentId, argumentVersion) cannot be overridden.
      * @returns result — For simple change: the updated operator expression.
-     *                   For merge: null (operator was dissolved).
+     *                   For merge, or a simple change that `assistive`
+     *                   normalization then absorbed: null (the operator
+     *                   no longer exists).
      *                   For split: the newly created sub-operator expression.
      *          changes — Full changeset with correct hierarchical checksums.
      * @throws If the expression does not exist, is not an operator, or is "not".

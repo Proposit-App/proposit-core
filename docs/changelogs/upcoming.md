@@ -23,3 +23,10 @@
 - `TLlmOutputCheckFailure` is re-exported from `src/lib/index.ts`, which clears
   the typedoc warning that `checkArgumentStructure` referenced an undocumented
   type.
+
+## Fixed
+
+- `PremiseEngine.changeOperator` returned `result: undefined` (typed
+  `TExpr | null`) when, in `assistive` behavior, AN-4 absorbed the swapped
+  operator into a same-operator grandparent through its formula buffer. It
+  now returns `null`, as it does for a merge.

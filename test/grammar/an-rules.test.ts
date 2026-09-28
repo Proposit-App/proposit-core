@@ -2246,3 +2246,80 @@ describe("an-rules module surface", () => {
         expect(() => applyANToFixedPoint(eng)).not.toThrow()
     })
 })
+
+describe("changeOperator — a swap that normalization then absorbs", () => {
+    // In assistive behavior AN-4 runs after the swap and may fold the
+    // swapped operator into a same-operator grandparent through its formula
+    // buffer. The node is then gone, which `changeOperator` reports the way
+    // a merge does: a null result, not an expression that no longer exists.
+    for (const operandCount of [2, 3]) {
+        it(`returns null when the swapped operator with ${operandCount} operands is absorbed`, () => {
+            const eng = makePermissiveEngine()
+            const premises = Array.from(
+                { length: operandCount + 2 },
+                () => eng.createPremise().result
+            )
+            const pe = premises[premises.length - 1]
+            const variables = pe.getVariables() as {
+                id: string
+                boundPremiseId?: string
+            }[]
+            const variableFor = (index: number) =>
+                variables.find(
+                    (v) => v.boundPremiseId === premises[index].getId()
+                )!.id
+            const base = {
+                argumentId: ARG.id,
+                argumentVersion: ARG.version,
+                premiseId: pe.getId(),
+            }
+            pe.addExpression({
+                ...base,
+                id: "or-outer",
+                type: "operator",
+                operator: "or",
+                parentId: null,
+                position: 0,
+            })
+            pe.addExpression({
+                ...base,
+                id: "ve-0",
+                type: "variable",
+                variableId: variableFor(0),
+                parentId: "or-outer",
+                position: 0,
+            })
+            pe.addExpression({
+                ...base,
+                id: "formula-buf",
+                type: "formula",
+                parentId: "or-outer",
+                position: 1,
+            })
+            pe.addExpression({
+                ...base,
+                id: "and-inner",
+                type: "operator",
+                operator: "and",
+                parentId: "formula-buf",
+                position: 0,
+            })
+            for (let i = 1; i <= operandCount; i++) {
+                pe.addExpression({
+                    ...base,
+                    id: `ve-${i}`,
+                    type: "variable",
+                    variableId: variableFor(i),
+                    parentId: "and-inner",
+                    position: i,
+                })
+            }
+            eng.setBehavior("assistive")
+
+            const { result } = pe.changeOperator("and-inner", "or")
+
+            expect(pe.getExpression("and-inner")).toBeUndefined()
+            expect(result).toBeNull()
+        })
+    }
+})

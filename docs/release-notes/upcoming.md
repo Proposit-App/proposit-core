@@ -24,3 +24,10 @@ rules.
 - `TLlmOutputCheckFailure`, the `{ code, message }` a stage's `checkOutput`
   returns to refuse an output, is now exported from the package root as well
   as from the pipelines module.
+
+## Fixed
+
+- `changeOperator` returns `null` rather than `undefined` when, in `assistive`
+  behavior, the swapped operator is folded into a same-operator operator above
+  it by normalization (`or(a, (and(b, c)))` with the inner `and` changed to
+  `or`). `null` already meant "the operator no longer exists" for a merge.
