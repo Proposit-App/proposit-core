@@ -65,16 +65,13 @@ The CLI's `expressions change-operator` follows the same rules.
 
 ## Fixed
 
-### A repeated mention id is resolved once
-
-When the mention stage emits the same mention id more than once, finalize now
-resolves only the first copy and ignores the rest. Before, every copy was
-resolved: one mention could raise several `SOURCE_ANCHOR_UNRESOLVED` (or
-`AMBIGUOUS` / `APPROXIMATE`) notes, which over-counted for a consumer summing
-warnings, and the anchor came from whichever copy happened to resolve last.
-The first copy wins even when it fails to resolve and a later one would have.
-No new note code is added for the repeat.
-
+- When the mention stage emits the same mention id more than once, finalize
+  now resolves only the first copy and ignores the rest. Before, every copy was
+  resolved: one mention could raise several `SOURCE_ANCHOR_UNRESOLVED` (or
+  `AMBIGUOUS` / `APPROXIMATE`) notes, which over-counted for a consumer summing
+  warnings, and the anchor came from whichever copy happened to resolve last.
+  The first copy wins even when it fails to resolve and a later one would
+  have. No new note code is added for the repeat.
 - `changeOperator` returns `null` rather than `undefined` when, in `assistive`
   behavior, the swapped operator is folded into a same-operator operator above
   it by normalization (`or(a, (and(b, c)))` with the inner `and` changed to
