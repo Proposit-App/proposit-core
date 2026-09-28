@@ -1193,16 +1193,41 @@ describe("stress test", () => {
         expect(usedOps).toContain("iff")
     })
 
-    it("builds with high load (100 vars, 200 premises, 5–20 terms)", () => {
-        expect(() => {
-            buildStress({
-                numVars: 100,
-                numPremises: 200,
-                minTerms: 5,
-                maxTerms: 20,
-            })
-        }).not.toThrow()
-    }, 30_000)
+    it("builds a larger argument in time that grows no worse than quadratically", () => {
+        // Every createPremise re-validates the whole argument built so far, so
+        // building is quadratic in argument size: that cost is pinned here,
+        // not accepted as fixed. Comparing two sizes rather than holding one
+        // build to a time limit keeps the test about the engine, not the
+        // machine. Doubling the argument costs about 3x today; a build that
+        // grew cubically would cost about twice that.
+        const timeBuild = (numPremises: number): number => {
+            const startedAt = process.cpuUsage()
+            expect(() =>
+                buildStress({
+                    numVars: 50,
+                    numPremises,
+                    minTerms: 3,
+                    maxTerms: 8,
+                })
+            ).not.toThrow()
+            const used = process.cpuUsage(startedAt)
+            return used.user + used.system
+        }
+
+        // The fastest of two runs per size, alternating, so a pause or a
+        // slowdown lasting several runs falls on both sizes.
+        let small = Infinity
+        let large = Infinity
+        for (let i = 0; i < 2; i++) {
+            small = Math.min(small, timeBuild(60))
+            large = Math.min(large, timeBuild(120))
+        }
+
+        expect(large / small).toBeLessThan(5)
+        // The builds take several seconds, longer than the default 5 s limit,
+        // and how long they take is not what this test asserts: the ratio is.
+        // A timeout of 0 turns vitest's per-test limit off.
+    }, 0)
 
     it("removing a premise cascades to all of its terms", () => {
         const { premiseManagers, termIdsByPremise } = buildStress()

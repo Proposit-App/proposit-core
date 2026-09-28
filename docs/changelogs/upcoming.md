@@ -47,6 +47,14 @@
 - The pipeline overlap test drops its "stages started within 50 ms" check; the
   remaining assertions (each stage started before the other ended) already
   prove the overlap and do not depend on machine speed.
+- The high-load build test in `test/core.test.ts` no longer holds a
+  200-premise build to 30 s, which failed on slow runners. It now builds 60
+  and 120 premises (fastest of two runs each, CPU time) and requires the
+  larger build to cost under 5x the smaller. Building is quadratic today,
+  because every `createPremise` re-validates the whole argument: about 3x per
+  doubling locally, and the test failed with an extra validation pass per
+  premise added to make it cubic. The test pins that cost; it does not fix
+  it.
 
 ## Internal
 
