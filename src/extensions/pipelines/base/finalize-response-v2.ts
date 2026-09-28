@@ -275,7 +275,9 @@ function resolveSegmentStarts(
  * A claim the mention stage produced no mention for was never looked up at
  * all; it is reported too, so "we did not look" is not read as "we found
  * nothing" or as success. So is the reverse: a mention the stage produced
- * that no claim references, whose passage is linked to no claim.
+ * that no claim references, whose passage is linked to no claim. A mention
+ * id the stage emitted more than once is resolved from its first copy only,
+ * so it gets at most one resolution note; later copies are ignored.
  */
 export const SOURCE_ANCHOR_NOTE_CODES = {
     unresolved: "SOURCE_ANCHOR_UNRESOLVED",
@@ -362,7 +364,19 @@ function buildAnchorByMentionId(args: {
     const segmentTextById = new Map(
         (args.segments ?? []).map((s) => [s.segmentId, s.text])
     )
+    // Ids should be unique, and nothing enforces it. Only the first copy of
+    // an id is resolved, so each id gets at most one resolution note and one
+    // anchor; later copies are ignored.
+    const firstById = new Map<
+        string,
+        TClaimMentionExtractionOutput["mentions"][number]
+    >()
     for (const mention of args.mentions.mentions) {
+        if (!firstById.has(mention.mentionId)) {
+            firstById.set(mention.mentionId, mention)
+        }
+    }
+    for (const mention of firstById.values()) {
         // Mention spans are relative to the segment's text, so the
         // input-relative hint only exists once the segment's own start is
         // added back on.

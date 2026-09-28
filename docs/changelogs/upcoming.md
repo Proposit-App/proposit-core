@@ -37,6 +37,12 @@
 
 ## Fixed
 
+- `finalizeResponseV2` resolved every copy of a repeated `mentionId`, so one
+  mention could produce two or more `SOURCE_ANCHOR_UNRESOLVED`, `AMBIGUOUS` or
+  `APPROXIMATE` notes, and its anchor came from whichever copy resolved last.
+  Only the first copy is resolved now, and later copies are ignored, so each id
+  gets at most one resolution note and the first copy's anchor, even when the
+  first copy fails and a later one would have resolved.
 - `PremiseEngine.changeOperator` returned `result: undefined` (typed
   `TExpr | null`) when, in `assistive` behavior, AN-4 absorbed the swapped
   operator into a same-operator grandparent through its formula buffer. It
