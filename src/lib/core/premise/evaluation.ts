@@ -88,7 +88,7 @@ export function evaluatePremise<
                 if (
                     variable &&
                     isPremiseBound(variable) &&
-                    !isExternallyBound(variable, ctx.argumentId)
+                    !isExternallyBound(variable, ctx.argument.id)
                 ) {
                     value = options.resolver(expression.variableId)
                 } else {

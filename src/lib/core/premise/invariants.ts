@@ -76,8 +76,8 @@ export function validatePremiseInvariants<
 
     // 4. Variable references: every variable-type expression must
     //    reference a variableId that exists in the argument's variable set
-    if (ctx.variableIdsCallback) {
-        const variableIds = ctx.variableIdsCallback()
+    const variableIds = ctx.readVariableIds()
+    if (variableIds) {
         for (const expr of ctx.expressions.toArray()) {
             if (expr.type === "variable") {
                 const varExpr =
