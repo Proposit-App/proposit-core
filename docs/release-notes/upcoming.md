@@ -15,6 +15,19 @@ by claim-reference validation, so a consumer summing warnings sees it twice;
 the new code is the one that also covers ids naming no produced mention. A consumer that counts every code
 in `SOURCE_ANCHOR_NOTE_CODES` picks it up with no change.
 
+### A note for a mention no claim references
+
+The reverse case is reported too: `SOURCE_ANCHOR_MENTION_UNCLAIMED` (also in
+`SOURCE_ANCHOR_NOTE_CODES`) for each mention the mention stage produced that no
+claim's `mentionIds` names. Every such mention should belong to some claim, so
+one that does not is a passage linked to no claim — and a claim it was meant
+for may have lost its anchor silently. A warning, with
+`context: { mentionId, quote }`, under the same conditions as
+`SOURCE_ANCHOR_NOT_ATTEMPTED`, and whether or not the quote resolved (a failed
+resolution is reported too). One mistyped mention id in a claim can raise both
+notes: `SOURCE_ANCHOR_NOT_ATTEMPTED` for the claim and this one for the
+mention it meant.
+
 ### Other
 
 - `TLlmOutputCheckFailure`, the `{ code, message }` a stage's `checkOutput`
@@ -67,6 +80,13 @@ The CLI's `expressions change-operator` follows the same rules.
 
 ## Fixed
 
+- When the mention stage emits the same mention id more than once, finalize
+  now resolves only the first copy and ignores the rest. Before, every copy was
+  resolved: one mention could raise several `SOURCE_ANCHOR_UNRESOLVED` (or
+  `AMBIGUOUS` / `APPROXIMATE`) notes, which over-counted for a consumer summing
+  warnings, and the anchor came from whichever copy happened to resolve last.
+  The first copy wins even when it fails to resolve and a later one would
+  have. No new note code is added for the repeat.
 - `changeOperator` returns `null` rather than `undefined` when, in `assistive`
   behavior, the swapped operator is folded into a same-operator operator above
   it by normalization (`or(a, (and(b, c)))` with the inner `and` changed to
