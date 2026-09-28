@@ -301,6 +301,7 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
                 id,
                 type: "variable",
                 variableId: v1,
+                parentId: "and",
             })
         }
 
