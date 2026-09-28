@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest"
 import { ArgumentEngine } from "../../src/lib/core/argument-engine.js"
 import { EMPTY_CLAIM_LOOKUP } from "../../src/lib/utils/lookup.js"
+import { ClaimLibrary } from "../../src/lib/index.js"
 import type { TCoreChangeset } from "../../src/lib/types/mutation.js"
 import { makeArgument } from "./fixtures.js"
 
@@ -76,8 +77,12 @@ function expectReplays(
  * is bound to one of the other premises. Built in permissive behavior, then
  * switched to assistive, so the tree is already in normal form.
  */
-function buildFixture(innerOperator: "and" | "or", operandCount: number) {
-    const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+function buildFixture(
+    innerOperator: "and" | "or",
+    operandCount: number,
+    claims: ConstructorParameters<typeof ArgumentEngine>[1] = EMPTY_CLAIM_LOOKUP
+) {
+    const eng = new ArgumentEngine(ARG, claims, {
         behavior: "permissive",
     })
     const premises = Array.from(
@@ -217,6 +222,26 @@ describe("a mutation's changeset includes what assistive normalization changed",
             ...(changes.expressions?.removed ?? []),
         ].map((e) => e.id)
         expect(ids).not.toContain("empty-formula")
+        expectReplays(before, changes, eng)
+    })
+
+    it("createPremise for a derivation, when normalization then tidies another premise", () => {
+        // The fixture's premise is left un-normalized (an `or` inside a
+        // formula under an `or`), so the derivation premise's own mutation
+        // is what sets normalization off.
+        const claims = new ClaimLibrary()
+        const derived = claims.create({ id: "d", type: "normal" })
+        const { eng } = buildFixture("or", 2, claims)
+        const before = stateOf(eng)
+
+        const { changes } = eng.createPremise({
+            type: "derivation",
+            derivedClaimId: derived.id,
+        })
+
+        expect(
+            (changes.expressions?.removed ?? []).map((e) => e.id).sort()
+        ).toEqual(["formula-buf", "op-inner"])
         expectReplays(before, changes, eng)
     })
 })
