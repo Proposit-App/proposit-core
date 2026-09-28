@@ -987,8 +987,8 @@ export class PremiseEngine<
                 // with no children named for a split the type changes in
                 // place, keeping the children where they are.
                 const swapInPlace =
-                    !sourceChildId &&
-                    !targetChildId &&
+                    sourceChildId === undefined &&
+                    targetChildId === undefined &&
                     isVariadicOperator(newOperator)
                 if (childCount <= 2 || swapInPlace) {
                     // Check for merge condition: parent is same type as newOperator.

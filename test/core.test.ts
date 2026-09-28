@@ -15529,6 +15529,17 @@ describe("changeOperator", () => {
         expect(() => pm.changeOperator("op-and", "or", "expr-p")).toThrow(
             /sourceChildId and targetChildId are required/
         )
+        // Empty ids are ids that were given, not omitted — as a CLI option
+        // passed an empty value arrives.
+        expect(() => pm.changeOperator("op-and", "or", "", "")).toThrow(
+            /sourceChildId and targetChildId are required/
+        )
+        // Nor can a binary operator be split out: the sub-operator would not
+        // be a root, and implies and iff must be.
+        expect(() =>
+            pm.changeOperator("op-and", "implies", "expr-p", "expr-q")
+        ).toThrow(/must be a root expression/)
+        expect(pm.toDisplayString()).toBe("(P ∧ Q ∧ R)")
     })
 
     it("split rejects sourceChildId/targetChildId that are not children", () => {
