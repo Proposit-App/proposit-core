@@ -469,7 +469,9 @@ export interface TPremiseLifecycle<
     snapshot(): TPremiseEngineSnapshot<TPremise, TExpr>
     /**
      * Sets a callback invoked after every mutation, or `undefined` to
-     * clear.
+     * clear. It is for notification only: on a premise owned by an
+     * `ArgumentEngine`, replacing it does not stop assistive
+     * normalization, which runs separately.
      *
      * @param callback - The mutation callback, or `undefined` to remove.
      */

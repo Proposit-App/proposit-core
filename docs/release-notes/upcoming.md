@@ -29,13 +29,14 @@ In `assistive` behavior, the engine tidies the expression tree after each
 mutation: for example, it removes a formula buffer that is no longer needed,
 or folds an operator into a parent with the same operator. Until now the
 changeset a mutation returned was built before that tidying ran, so anything
-it removed, added or moved was missing. The changeset now describes
-everything the call changed: applying it to the state before the call gives
-the state after it. A consumer that persists from `changes` no longer needs
-a before/after comparison to catch what normalization did. One that expected
-`changes` to hold only what it asked for will now see more. Removing a
-variable, or a premise with bound variables, likewise reports every
-expression the removal moved, not only those it deleted.
+it removed, added or moved was missing. The changeset now includes
+normalization's changes, in whichever premise they happen. One that
+expected `changes` to hold only what it asked for will now see more.
+Removing a variable, or a premise with bound variables, likewise reports
+every expression the removal moved, not only those it deleted, and this
+applies in `permissive` behavior too. One gap remains, unchanged by this
+release: `removePremise` lists the removed premise but not its own
+expressions.
 
 ### `changeOperator` swaps `and`, `or` and `xor` at any number of operands
 

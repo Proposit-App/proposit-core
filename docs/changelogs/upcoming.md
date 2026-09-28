@@ -19,15 +19,23 @@
   buffers it added, and the expressions and premises it moved or whose
   checksums changed, in any premise. Before, the changeset was built before
   normalization ran, so none of that was in it. An expression the call added
-  and normalization removed appears in no bucket. `permissive` behavior is
-  unchanged. Normalization now runs from an internal per-premise follow-up
+  and normalization removed appears in no bucket. In `permissive` behavior,
+  where normalization does not run, this part changes nothing.
+  Normalization now runs from an internal per-premise follow-up
   (`PremiseEngine.setMutationFollowUp`, `@internal`) rather than from
   `onMutate`, so setting `onMutate` on an engine-owned premise no longer
   turns normalization off.
 - `PremiseEngine.deleteExpressionsUsingVariable`,
   `ArgumentEngine.removeVariable` and `removePremise`'s bound-variable
   cascade return everything their inner removals changed, such as the child
-  promoted when an operator collapses, not only what was removed.
+  promoted when an operator collapses, not only what was removed. This
+  applies in both behaviors, so these calls return more in `permissive`
+  behavior too. So does a derivation `createPremise`, which now keeps the
+  whole changeset of the root expression it adds.
+- Changesets from successive mutations can now name the same entity more
+  often (one mutation adds an expression, the next one's normalization moves
+  it). `mergeChangesets` throws when an id lands in two buckets, so combining
+  such a sequence needs care; applying the changesets in order is safe.
 - `PremiseEngine.changeOperator` with three or more children, no child ids,
   and a new operator of `and`, `or` or `xor` now takes the existing in-place
   path instead of throwing "sourceChildId and targetChildId are required for
