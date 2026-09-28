@@ -27,41 +27,75 @@ const METADATA_KEYS = new Set([
     "files",
 ])
 
-function lineFor(reflection, path) {
+function lineFor(reflection, kind, path) {
     const signatures = reflection.signatures?.length
+    const indexSignatures = reflection.indexSignatures?.length
     const accessor = [
         reflection.getSignature ? "get" : undefined,
         reflection.setSignature ? "set" : undefined,
     ].filter(Boolean)
     return (
-        `${ReflectionKind[reflection.kind]} ${path}` +
+        `${kind} ${path}` +
         (signatures === undefined ? "" : ` (${signatures})`) +
+        (indexSignatures === undefined ? "" : ` [index ${indexSignatures}]`) +
         (accessor.length === 0 ? "" : ` (${accessor.join(", ")})`)
+    )
+}
+
+function positionsOf(reflection) {
+    return (reflection.sources ?? []).map(
+        (source) => `${source.fileName}:${source.line}:${source.character}`
     )
 }
 
 function surfaceLines(project) {
     const lines = []
+    const recordedPositions = new Set()
+    const fromDefaults = []
     // Every key is followed, so a declaration is recorded wherever typedoc
     // puts it: in `children`, in an object type written inline (a union, a
     // generic's type argument, a tuple, a conditional or mapped type), or
     // inside a signature's parameter and return types or a type parameter's
-    // constraint. Type parameters' defaults are skipped: they repeat
-    // declarations recorded elsewhere, expanded at every use.
-    const visit = (value, path) => {
+    // constraint. A type parameter's default mostly repeats declarations
+    // written elsewhere, expanded at every use, so what is found under one is
+    // listed only when its source position is recorded nowhere else.
+    const record = (line, reflection, inDefault) => {
+        if (inDefault) {
+            fromDefaults.push({ line, positions: positionsOf(reflection) })
+            return
+        }
+        lines.push(line)
+        for (const position of positionsOf(reflection)) {
+            recordedPositions.add(position)
+        }
+    }
+    const visit = (value, path, inDefault) => {
         if (Array.isArray(value)) {
-            for (const item of value) visit(item, path)
+            for (const item of value) visit(item, path, inDefault)
             return
         }
         if (value === null || typeof value !== "object") return
         let next = path
-        const named =
-            value !== project &&
-            value.name !== undefined &&
-            value.name !== "__type"
-        if (named && value.variant === "declaration") {
+        const named = value !== project && value.name !== undefined
+        if (
+            named &&
+            value.name !== "__type" &&
+            (value.variant === "declaration" || value.variant === "reference")
+        ) {
             next = path ? `${path}.${value.name}` : value.name
-            lines.push(lineFor(value, next))
+            record(
+                lineFor(value, ReflectionKind[value.kind], next),
+                value,
+                inDefault
+            )
+        } else if (
+            value.name === "__type" &&
+            (value.signatures !== undefined ||
+                value.indexSignatures !== undefined)
+        ) {
+            // An anonymous object type with call, construct or index
+            // signatures: its owner's line does not count them.
+            record(lineFor(value, "TypeLiteral", path), value, inDefault)
         } else if (
             named &&
             (value.variant === "param" || value.variant === "typeParam")
@@ -72,11 +106,18 @@ function surfaceLines(project) {
         }
         for (const [key, child] of Object.entries(value)) {
             if (METADATA_KEYS.has(key)) continue
-            if (key === "default" && value.variant === "typeParam") continue
-            visit(child, next)
+            const intoDefault =
+                inDefault ||
+                (key === "default" && value.variant === "typeParam")
+            visit(child, next, intoDefault)
         }
     }
-    visit(project, "")
+    visit(project, "", false)
+    for (const { line, positions } of fromDefaults) {
+        if (!positions.some((position) => recordedPositions.has(position))) {
+            lines.push(line)
+        }
+    }
     return lines.sort()
 }
 
