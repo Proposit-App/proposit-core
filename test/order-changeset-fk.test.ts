@@ -474,6 +474,76 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
         })
     })
 
+    // Late only because of its new parent, while the changeset removes the
+    // variable the row named before and moves it onto one that exists: the
+    // old variable's delete must not reach the row first.
+    it("an expression moved under a new operator and off a removed variable onto an existing one", () => {
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+        })
+        const [p1, p2, p3] = [
+            eng.createPremise().result,
+            eng.createPremise().result,
+            eng.createPremise().result,
+        ]
+        const v1 = premiseBoundVariable(eng, p1)
+        const v3 = premiseBoundVariable(eng, p3)
+        const base = {
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: p2.getId(),
+            parentId: null,
+        }
+        p2.addExpression({
+            ...base,
+            id: "x",
+            type: "variable",
+            variableId: v1,
+            position: 0,
+        })
+
+        expectAppliesStrictly(eng, () =>
+            [
+                p2.wrapExpression(
+                    { ...base, id: "op", type: "operator", operator: "and" },
+                    { ...base, id: "y", type: "variable", variableId: v3 },
+                    "x"
+                ),
+                p2.updateExpression("x", { variableId: v3 }),
+                eng.removePremise(p1.getId()),
+            ].reduce<TCoreChangeset>(
+                (all, next) => composeChangesets(all, next.changes),
+                {}
+            )
+        )
+    })
+
+    // Removing one premise and creating another needs no late update, so
+    // the deletes still come before the inserts: holding them back would let
+    // a reused symbol meet the one it replaces.
+    it("deletes before inserts when a premise is replaced", () => {
+        let n = 0
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+            generateId: () => `g${String(n++)}`,
+        })
+        const [p1] = [eng.createPremise().result, eng.createPremise().result]
+        const changes = composeChangesets(
+            eng.removePremise(p1.getId()).changes,
+            eng.createPremise().changes
+        )
+        const kinds = orderChangeset(changes).map(
+            (o) => `${o.type} ${o.entity}`
+        )
+
+        expect(kinds.indexOf("delete variable")).toBeLessThan(
+            kinds.indexOf("insert premise")
+        )
+        expect(kinds.indexOf("delete premise")).toBeLessThan(
+            kinds.indexOf("insert premise")
+        )
+    })
+
     // With no update that needs an insert first, the order is the one
     // orderChangeset has always produced.
     it("keeps the order of a changeset with no update that needs an insert", () => {

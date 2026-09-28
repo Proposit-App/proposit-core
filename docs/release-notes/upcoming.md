@@ -25,11 +25,13 @@ existed. A store that checks foreign keys on every statement rejects it.
 kind on their own. Changesets combined with `composeChangesets` can produce
 the second.
 
-Now such an update is split in two. First it gets the same detaching update
-a removed expression gets (`{ id, parentId: null, position: 0 }`), before
-the deletes. Then the full update runs right after the inserts. When one of
-these points at a new variable, the variable and premise deletes also wait
-until after it. Changesets without such an update are ordered exactly as
+Now such an update is split in two. First, before the deletes, it moves the
+expression to the root (`parentId: null, position: 0`). If the update needs
+only a new parent, this first write carries the rest of the new row too. If
+it points at a new variable, it carries nothing else, like the update a
+removed expression gets. Then the full update runs right after the inserts.
+When one of these points at a new variable, the variable and premise deletes
+also wait until after it. Changesets without such an update are ordered exactly as
 before.
 
 If your persistence layer holds back updates that point at a newly inserted
@@ -38,7 +40,13 @@ workaround. `orderChangeset` does it now. Keeping it can reorder an update
 past a variable delete that was held back for it. With a cascading variable
 key, that loses the row.
 
-One case is still unsafe for a store that checks per statement that
-variable symbols are unique: a changeset that removes a variable and
-inserts another with the same symbol, while also moving an expression onto
-a new variable.
+Two cases are still unsafe, both only when a changeset moves an expression
+onto a new variable, so that the deletes wait. They involve a unique rule
+checked per statement:
+
+- a variable is inserted with the symbol of one being removed;
+- a premise is inserted as the conclusion while the removed conclusion
+  premise still exists.
+
+Making such rules deferred, so they are checked at the end of the
+transaction, removes both.
