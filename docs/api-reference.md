@@ -68,7 +68,7 @@ In v1.0 this method's checks have been folded into the four-tier grammar — der
 
 ### `removePremise(premiseId)` → `TCoreMutationResult<TCorePremise>`
 
-Removes a premise and clears its role assignments. Also cascade-deletes any premise-bound variables targeting the removed premise (which in turn cascade-deletes their referencing expressions). Returns the removed premise data.
+Removes a premise and clears its role assignments. Also cascade-deletes any premise-bound variables targeting the removed premise (which in turn cascade-deletes their referencing expressions). Returns the removed premise data. The changeset lists the premise, its own expressions, and everything the cascade removed or changed.
 
 ---
 

@@ -54,8 +54,8 @@
   whole changeset of the root expression it adds.
 - Changesets from successive mutations can now name the same entity more
   often (one mutation adds an expression, the next one's normalization moves
-  it). `mergeChangesets` throws when an id lands in two buckets, so combining
-  such a sequence needs care; applying the changesets in order is safe.
+  it). `mergeChangesets` throws when an id lands in two buckets; combine such
+  a sequence with `composeChangesets`, or apply the changesets in order.
 - `PremiseEngine.changeOperator` with three or more children, no child ids,
   and a new operator of `and`, `or` or `xor` now takes the existing in-place
   path instead of throwing "sourceChildId and targetChildId are required for
