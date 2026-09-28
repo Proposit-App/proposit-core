@@ -123,6 +123,8 @@ export interface TExpressionMutations<
      * @returns The updated expression and changeset.
      * @throws If the expression does not exist in this premise.
      * @throws If `variableId` references a non-existent variable.
+     * @throws If `variableId` names a variable bound to this premise,
+     *   directly or through other premises (a circular binding).
      */
     updateExpression(
         expressionId: string,
