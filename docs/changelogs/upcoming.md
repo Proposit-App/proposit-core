@@ -1,5 +1,15 @@
 # Upcoming
 
+## Added
+
+- `TChatCompletionsFetch` is exported from
+  `@proposit/proposit-core/extensions/chat-completions`. It is the type of
+  `TChatCompletionsProviderConfig.fetch`, which was public without it.
+- `TStageOutcomeRecordMap` (`Readonly<Record<string, TStageOutcomeRecord>>`)
+  is exported from `@proposit/proposit-core/pipelines/scheduling`. It is the
+  `records` parameter of `isStageEligible`, `hasRequiredFailureUpstream` and
+  `computeDagProgress`. It was a private alias named `TRecordMap`.
+
 ## Changed
 
 - `orderChangeset` no longer emits an expression update before the insert
@@ -27,3 +37,16 @@
   update, a random test over changesets combined with `composeChangesets`
   (1,000 seeds per behavior, in both stores), and a pin that a changeset
   with no dependent update keeps its order.
+
+## Internal
+
+- `typedoc.json` lists the `extensions/openai`, `extensions/chat-completions`,
+  `builder` and `pipelines/scheduling` subpaths as entry points. Their API is
+  now in the generated site and in `docs/api-surface.txt` (240 lines), so
+  `pnpm run docs` fails when one of their members disappears. `./conversation`
+  needed no entry point: the root index re-exports all of it.
+- `pnpm run docs` (so `build` and `check`) first runs
+  `scripts/check-exports-documented.mjs`. It fails when a `package.json`
+  `exports` key's source file is not a typedoc entry point, unless the key is
+  listed in the script as covered through the root index (`.` and
+  `./conversation`, each with its reason), and names the key.
