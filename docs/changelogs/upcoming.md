@@ -25,6 +25,15 @@
 
 ## Changed
 
+- `orderChangeset` now emits an update detaching every removed expression
+  (`parentId: null`) before it deletes any expression. A removed expression's
+  entry carries its parent at removal time, which the stored row may not
+  share when the same changeset moved it first, so deletes ordered by that
+  parent could remove a parent while the stored child still pointed at it.
+  With the detach, the order suits a store that checks foreign keys
+  immediately and cascades nothing. Until the deletes run, a premise can have
+  more than one root, so a one-root-per-premise rule must be checked at the
+  end of the transaction.
 - No changeset names an entity more than once. `ChangeCollector` records
   each entity in one bucket by the same rule as `composeChangesets`, so a
   new entity no longer also appears under `modified`, and an expression

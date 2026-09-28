@@ -308,6 +308,15 @@ export type TOrderedOperation<
  * row that depends on it is inserted, and that every dependent row is removed
  * before the row it references is deleted.
  *
+ * It does so without knowing what the store holds. A removed expression's
+ * entry carries its parent at removal time, and a change in the same
+ * changeset may have moved it first, so the stored row can still point at a
+ * different parent. Every removed expression is therefore detached (updated
+ * with no parent) before any expression is deleted. Until the deletes run, a
+ * premise can briefly have more than one root: a store that enforces one
+ * root per premise must check that at the end of the transaction, not per
+ * statement.
+ *
  * Ordering phases:
  * 1. Update premises — ensure premise rows have correct metadata before
  *    dependent deletes run.
@@ -315,8 +324,11 @@ export type TOrderedOperation<
  *    removed set. This detaches reparented children from doomed parents
  *    before ON DELETE CASCADE runs. Expressions that appear in both
  *    modified and removed are skipped (the row is about to be deleted).
+ *    Then detach every removed expression (see above), so no stored row
+ *    points at an expression about to be deleted.
  * 3. Delete expressions — expression rows hold FKs to variables and premises,
- *    so they must be removed first.
+ *    so they must be removed first. Every one is detached by now, so their
+ *    order does not matter; children still come before parents.
  * 4. Delete variables — safe after expression deletes (no remaining FK
  *    references from expressions).
  * 5. Delete premises — safe after all child rows are removed.
@@ -365,6 +377,18 @@ export function orderChangeset<
         if (!removedExprIds.has(e.id)) {
             ops.push({ type: "update", entity: "expression", data: e })
         }
+    }
+
+    // Still Phase 2: detach every removed expression. Its entry's parent is
+    // the one at removal time, which the stored row may not share, so the
+    // delete order below cannot be computed from it; detached rows need no
+    // order at all.
+    for (const e of changeset.expressions?.removed ?? []) {
+        ops.push({
+            type: "update",
+            entity: "expression",
+            data: { ...e, parentId: null },
+        })
     }
 
     // Phase 3: Delete expressions — reverse-topologically sorted so children

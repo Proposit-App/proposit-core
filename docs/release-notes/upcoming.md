@@ -63,6 +63,16 @@ more than once. To combine the changesets of several mutations made in a
 row, use the new `composeChangesets`: `mergeChangesets` throws when one
 entity is in two buckets, which a sequence can produce.
 
+### `orderChangeset` detaches removed expressions before deleting them
+
+`orderChangeset` now puts an update that clears the parent of every removed
+expression before the first expression delete. Without it, when one call
+moved an expression and then removed it, the deletes could run in an order a
+store with immediate foreign keys rejects. A persistence layer that runs the
+operations as given needs no change, with one condition: a rule that a
+premise has only one root must be checked at the end of the transaction,
+because the detached expressions are briefly roots.
+
 ### `changeOperator` swaps `and`, `or` and `xor` at any number of operands
 
 `PremiseEngine.changeOperator` used to change an operator's type in place only
