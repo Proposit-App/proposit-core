@@ -266,10 +266,8 @@ describe("executePipeline — concurrency", () => {
         const aEnd = records.find((r) => r.stage === "a" && r.phase === "end")
         const bEnd = records.find((r) => r.stage === "b" && r.phase === "end")
         expect(aStart && bStart && aEnd && bEnd).toBeTruthy()
-        const startGap = Math.abs((aStart?.at ?? 0) - (bStart?.at ?? 0))
-        expect(startGap).toBeLessThan(50)
-        // overlap: each runs for ~50ms and they started within 50ms,
-        // so both should have started before either ended.
+        // overlap: each stage started before the other ended. Run one after
+        // the other, the second would start only once the first had ended.
         expect(aStart?.at ?? 0).toBeLessThan(
             bEnd?.at ?? Number.NEGATIVE_INFINITY
         )

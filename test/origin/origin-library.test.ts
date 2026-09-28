@@ -523,14 +523,16 @@ describe("OriginLibrary — documents whose text contains adjacent invisibles", 
 describe("OriginLibrary — cost of validating on every mutation", () => {
     // Documents are immutable and `addDocument` computes their text and digest
     // itself, so re-normalizing and re-digesting every body on every unrelated
-    // mutation is pure waste. The server slice adds one anchor per extracted
+    // mutation is pure waste. The server adds one anchor per extracted
     // claim inside a request handler, so the cost has to be flat in document
     // size, not linear in it.
     //
-    // The bound is deliberately loose — this asserts the algorithm, not the
-    // machine. Before the fix this took over a second.
-    it("adds many anchors to large documents without re-scanning them", () => {
-        const body = "lorem ipsum dolor sit amet ".repeat(3_800)
+    // So the test compares the same work at two document sizes 20x apart
+    // rather than holding it to a fixed time, which would measure the machine.
+    // Re-scanning every body makes the larger run over ten times slower; with
+    // the bodies skipped once verified the two take about the same time.
+    function timeHundredAnchors(bodyRepeats: number): number {
+        const body = "lorem ipsum dolor sit amet ".repeat(bodyRepeats)
         const origins = new OriginLibrary()
         for (let i = 0; i < 5; i++) {
             origins.addDocument({ id: `doc-${i}`, text: body })
@@ -544,25 +546,42 @@ describe("OriginLibrary — cost of validating on every mutation", () => {
         })
         const stored = origins.getDocument("doc-0")!.text
         const quote = sliceByCodePoints(stored, 0, 11)
-
-        const startedAt = performance.now()
-        for (let i = 0; i < 100; i++) {
+        const addAnchor = (id: string) =>
             origins.addAnchor({
-                id: `anchor-${i}`,
+                id,
                 argumentId: "arg-1",
                 argumentVersion: 0,
                 documentId: "doc-0",
                 targetType: "expression",
-                targetId: `expr-${i}`,
+                targetId: `expr-${id}`,
                 exact: quote,
                 startCodePoint: 0,
                 endCodePoint: 11,
             })
-        }
+
+        // The first anchor builds the document's code-point index, a one-time
+        // cost that does scale with size; keep it out of the timed section.
+        addAnchor("warm-up")
+        const startedAt = performance.now()
+        for (let i = 0; i < 100; i++) addAnchor(`anchor-${i}`)
         const elapsed = performance.now() - startedAt
 
-        expect(origins.getAllAnchors()).toHaveLength(100)
-        expect(elapsed).toBeLessThan(300)
+        expect(origins.getAllAnchors()).toHaveLength(101)
+        return elapsed
+    }
+
+    it("adds many anchors to large documents without re-scanning them", () => {
+        // The fastest of three runs per size, so a one-off pause (garbage
+        // collection, a busy machine) rarely reaches the ratio, and the sizes
+        // alternate so a slowdown lasting several runs falls on both.
+        let small = Infinity
+        let large = Infinity
+        for (let i = 0; i < 3; i++) {
+            small = Math.min(small, timeHundredAnchors(190))
+            large = Math.min(large, timeHundredAnchors(3_800))
+        }
+
+        expect(large / small).toBeLessThan(3)
     })
 
     it("still catches a tampered document body after the first validation", () => {
