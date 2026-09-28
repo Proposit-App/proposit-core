@@ -1,3 +1,7 @@
+/**
+ * Normalizes the two call forms `createPremise` / `createPremiseWithId` accept
+ * — a typed options bag, or the older `(extras, symbol)` pair — into one bag.
+ */
 export function parsePremiseArgs(
     arg1:
         | Record<string, unknown>

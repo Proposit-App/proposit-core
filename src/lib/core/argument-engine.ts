@@ -2516,8 +2516,9 @@ export class ArgumentEngine<
         options?: TCoreArgumentEvaluationOptions
     ): TCoreArgumentEvaluationResult {
         const callerVariables = assignment.variables ?? {}
+        const claimVariables = this.asClaimVariableContext()
         const effectiveVariables = applyAxiomaticForcedAssignments(
-            this.asClaimVariableContext(),
+            claimVariables,
             callerVariables
         )
         const effectiveAssignment: TCoreExpressionAssignment = {
@@ -2530,7 +2531,7 @@ export class ArgumentEngine<
         // `checkValidity` does — a caller's own set adds to the axioms, it
         // never replaces them.
         const forcedTrueVariableIds = new Set<string>(
-            getAxiomaticBoundVariableIds(this.asClaimVariableContext())
+            getAxiomaticBoundVariableIds(claimVariables)
         )
         for (const id of options?.forcedTrueVariableIds ?? []) {
             forcedTrueVariableIds.add(id)
@@ -2541,7 +2542,7 @@ export class ArgumentEngine<
         // above because that one also decides what counts as the reader's own
         // assertion, and a reader may disagree with a source.
         const satisfiabilityForcedTrueVariableIds = new Set<string>(
-            getGroundedBoundVariableIds(this.asClaimVariableContext())
+            getGroundedBoundVariableIds(claimVariables)
         )
         for (const id of forcedTrueVariableIds) {
             satisfiabilityForcedTrueVariableIds.add(id)
