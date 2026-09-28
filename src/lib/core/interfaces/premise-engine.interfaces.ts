@@ -232,22 +232,29 @@ export interface TExpressionMutations<
      * Changes the operator type of an existing operator expression.
      *
      * Handles three structural cases automatically:
-     * - **Simple change:** The operator has exactly 2 children and no merge
-     *   condition. Updates the operator type in-place.
-     * - **Merge:** The operator has exactly 2 children and its parent is the
-     *   same type as `newOperator`. Dissolves the current operator and
-     *   reparents its children under the parent.
-     * - **Split:** The operator has >2 children. Extracts `sourceChildId` and
-     *   `targetChildId` into a new sub-operator of type `newOperator`,
-     *   inserting a formula buffer between the parent and the new
-     *   sub-operator (the buffer is part of the bundled composite mutation
-     *   so the resulting tree satisfies P-1 regardless of the engine's
-     *   `behavior` setting).
+     * - **Simple change:** Updates the operator type in place, keeping its
+     *   id, children and their positions. Applies when the operator has
+     *   2 children, or when it has more and `newOperator` is `and`, `or` or
+     *   `xor` and no child ids are given — those take any number of
+     *   operands, so the whole node swaps.
+     * - **Merge:** The operator has fewer than 2 children and its parent (or
+     *   its grandparent, through a formula buffer) is the same type as
+     *   `newOperator`. Dissolves the current operator and reparents its
+     *   children under that operator.
+     * - **Split:** The operator has >2 children and either both child ids are
+     *   given or `newOperator` is `implies` or `iff`. Extracts
+     *   `sourceChildId` and `targetChildId` into a new sub-operator of type
+     *   `newOperator`, inserting a formula buffer between the parent and the
+     *   new sub-operator (the buffer is part of the bundled composite
+     *   mutation so the resulting tree satisfies P-1 regardless of the
+     *   engine's `behavior` setting).
      *
      * @param expressionId  The operator expression to change.
      * @param newOperator   The target operator type.
-     * @param sourceChildId First child to include in a split (required when >2 children).
-     * @param targetChildId Second child to include in a split (required when >2 children).
+     * @param sourceChildId First child to include in a split. Required, with
+     *                      `targetChildId`, to split an operator with >2
+     *                      children; omit both to swap it in place.
+     * @param targetChildId Second child to include in a split.
      * @param extraFields   Optional partial expression fields merged into any
      *                      newly created expressions (formula buffer, new sub-operator).
      *                      Structural fields (id, type, operator, parentId, position,
@@ -257,7 +264,9 @@ export interface TExpressionMutations<
      *                   For split: the newly created sub-operator expression.
      *          changes — Full changeset with correct hierarchical checksums.
      * @throws If the expression does not exist, is not an operator, or is "not".
-     * @throws If >2 children and sourceChildId/targetChildId not provided.
+     * @throws If >2 children and not both of sourceChildId/targetChildId are
+     *         provided, unless neither is and `newOperator` is `and`, `or` or
+     *         `xor` (a swap in place).
      * @throws If sourceChildId/targetChildId are not children of expressionId.
      */
     changeOperator(
