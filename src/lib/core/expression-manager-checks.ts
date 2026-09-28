@@ -17,8 +17,15 @@ import type {
 const VARIADIC_OPERATORS: string[] = ["and", "or", "xor"]
 const BINARY_OPERATORS: string[] = ["implies", "iff"]
 
-/** Whether `operator` takes any number of operands (`and`, `or`, `xor`). */
-export function isVariadicOperator(operator: string): boolean {
+/**
+ * The variadic connectives — the operators that take 2..n operands and
+ * therefore have an arity floor (E-1) rather than a fixed arity, and that
+ * absorb a same-operator child through a formula buffer (P-5). `not` is
+ * unary and `implies` / `iff` are binary and root-only (S-5).
+ */
+export function isVariadicOperator(
+    operator: string
+): operator is "and" | "or" | "xor" {
     return VARIADIC_OPERATORS.includes(operator)
 }
 
