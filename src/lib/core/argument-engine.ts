@@ -112,6 +112,8 @@ import {
     type TClaimVariableContext,
 } from "./argument/claim-variables.js"
 import { type TCycleContext, wouldCreateCycle } from "./argument/circularity.js"
+import { renderArgumentDisplay } from "./argument/display.js"
+import { parsePremiseArgs } from "./argument/premise-args.js"
 
 /** Default ID generator using the Web Crypto API (Node.js 20+, all modern browsers). */
 export const defaultGenerateId = (): string => globalThis.crypto.randomUUID()
@@ -682,75 +684,15 @@ export class ArgumentEngine<
     }
 
     public toDisplayString(): string {
-        const lines: string[] = []
-        const arg = this.getArgument()
-        lines.push(`Argument: ${arg.id} (v${arg.version})`)
-        lines.push("")
-
-        const supportingIds = new Set(
-            this.listSupportingPremises().map((pe) => pe.getId())
+        return renderArgumentDisplay(
+            this.getArgument(),
+            this.listSupportingPremises(),
+            () => this.listPremises(),
+            this.conclusionPremiseId
         )
-
-        for (const pe of this.listPremises()) {
-            let role: string
-            if (pe.getId() === this.conclusionPremiseId) {
-                role = "Conclusion"
-            } else if (supportingIds.has(pe.getId())) {
-                role = "Supporting"
-            } else {
-                role = "Constraint"
-            }
-            const display = pe.toDisplayString() || "(empty)"
-            lines.push(`[${role}] ${display}`)
-        }
-
-        return lines.join("\n")
     }
 
     /** @internal Normalized options bag used internally by createPremise/createPremiseWithId. */
-    private static parsePremiseArgsInternal(
-        arg1:
-            | Record<string, unknown>
-            | {
-                  type?: "freeform" | "derivation"
-                  derivedClaimId?: string
-                  extras?: Record<string, unknown>
-                  symbol?: string
-              }
-            | undefined,
-        arg2: string | undefined
-    ): {
-        type: "freeform" | "derivation"
-        derivedClaimId?: string
-        extras?: Record<string, unknown>
-        symbol?: string
-    } {
-        const isTypedBag =
-            arg1 !== null &&
-            arg1 !== undefined &&
-            (typeof (arg1 as Record<string, unknown>).type === "string" ||
-                typeof (arg1 as Record<string, unknown>).derivedClaimId ===
-                    "string")
-        if (isTypedBag) {
-            const bag = arg1 as {
-                type?: "freeform" | "derivation"
-                derivedClaimId?: string
-                extras?: Record<string, unknown>
-                symbol?: string
-            }
-            return {
-                type: bag.type ?? "freeform",
-                derivedClaimId: bag.derivedClaimId,
-                extras: bag.extras,
-                symbol: bag.symbol,
-            }
-        }
-        return {
-            type: "freeform",
-            extras: arg1 as Record<string, unknown> | undefined,
-            symbol: arg2,
-        }
-    }
 
     public createPremise(): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
@@ -859,7 +801,7 @@ export class ArgumentEngine<
         TPremise,
         TArg
     > {
-        const options = ArgumentEngine.parsePremiseArgsInternal(arg2, arg3)
+        const options = parsePremiseArgs(arg2, arg3)
         return this.withValidation(() => {
             if (this.premises.has(id)) {
                 throw new Error(`Premise "${id}" already exists.`)
