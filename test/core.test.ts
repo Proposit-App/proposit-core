@@ -15392,6 +15392,41 @@ describe("changeOperator", () => {
         expect(modifiedOr.descendantChecksum).toBe(flushedOr.descendantChecksum)
     })
 
+    it("simple change at any arity: and, or and xor swap in place with four children", () => {
+        const pm = premiseWithVars()
+        pm.addExpression(makeOpExpr("op-and", "and"))
+        const childIds = ["expr-p", "expr-q", "expr-r", "expr-p2"]
+        const variableIds = [VAR_P.id, VAR_Q.id, VAR_R.id, VAR_P.id]
+        childIds.forEach((id, position) =>
+            pm.addExpression(
+                makeVarExpr(id, variableIds[position], {
+                    parentId: "op-and",
+                    position,
+                })
+            )
+        )
+        const childSlots = () =>
+            pm
+                .getChildExpressions("op-and")
+                .map((child) => [child.id, child.position])
+
+        const before = childSlots()
+        for (const [operator, display] of [
+            ["xor", "(P ⊻ Q ⊻ R ⊻ P)"],
+            ["or", "(P ∨ Q ∨ R ∨ P)"],
+            ["and", "(P ∧ Q ∧ R ∧ P)"],
+        ] as const) {
+            const { result } = pm.changeOperator("op-and", operator)
+
+            expect(result?.id).toBe("op-and")
+            expect(result?.type === "operator" && result.operator).toBe(
+                operator
+            )
+            expect(childSlots()).toEqual(before)
+            expect(pm.toDisplayString()).toBe(display)
+        }
+    })
+
     // --- Merge (no longer triggers for 2-child operators) ---
 
     // No changeOperator absorb tests live here ("absorbs:
@@ -15463,7 +15498,7 @@ describe("changeOperator", () => {
         expect(andChildren).toHaveLength(2)
     })
 
-    it("split requires sourceChildId and targetChildId for >2 children", () => {
+    it("split still needs both child ids when the operator cannot be swapped in place", () => {
         const pm = premiseWithVars()
         pm.addExpression(makeOpExpr("op-and", "and"))
         pm.addExpression(
@@ -15485,7 +15520,15 @@ describe("changeOperator", () => {
             })
         )
 
-        expect(() => pm.changeOperator("op-and", "or")).toThrow()
+        // A binary operator cannot hold three operands, so only a split is
+        // legal, and a split needs both children named.
+        expect(() => pm.changeOperator("op-and", "implies")).toThrow(
+            /sourceChildId and targetChildId are required/
+        )
+        // One id names half a split; it is not read as a request to swap.
+        expect(() => pm.changeOperator("op-and", "or", "expr-p")).toThrow(
+            /sourceChildId and targetChildId are required/
+        )
     })
 
     it("split rejects sourceChildId/targetChildId that are not children", () => {

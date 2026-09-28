@@ -17,6 +17,11 @@ import type {
 const VARIADIC_OPERATORS: string[] = ["and", "or", "xor"]
 const BINARY_OPERATORS: string[] = ["implies", "iff"]
 
+/** Whether `operator` takes any number of operands (`and`, `or`, `xor`). */
+export function isVariadicOperator(operator: string): boolean {
+    return VARIADIC_OPERATORS.includes(operator)
+}
+
 /**
  * Whether `updateExpression` may change an operator expression from
  * `fromOperator` to `toOperator` — true iff both belong to the same
@@ -27,8 +32,7 @@ function isPermittedOperatorSwap(
     toOperator: string
 ): boolean {
     return (
-        (VARIADIC_OPERATORS.includes(fromOperator) &&
-            VARIADIC_OPERATORS.includes(toOperator)) ||
+        (isVariadicOperator(fromOperator) && isVariadicOperator(toOperator)) ||
         (BINARY_OPERATORS.includes(fromOperator) &&
             BINARY_OPERATORS.includes(toOperator))
     )
