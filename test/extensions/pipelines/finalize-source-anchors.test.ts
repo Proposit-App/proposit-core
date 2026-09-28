@@ -624,6 +624,24 @@ describe("finalizeResponseV2 — a repeated mention id is resolved once", () => 
         expect(differing.message).toContain("different")
     })
 
+    it("quotes the first copy when a repeated id is also unclaimed", () => {
+        const outputs = withCopiesOfM3({
+            segmentId: "s3",
+            text: "we should wait",
+            span: { start: 21, end: 35 },
+        })
+        const canon = outputs[
+            STAGE_IDS.claimCanonicalization
+        ] as TClaimCanonicalizationOutput
+        canon.canonicalClaims.find((c) => c.miniId === "c2")!.mentionIds = []
+        expect(
+            forM3(
+                finalizeFailures(outputs),
+                "SOURCE_ANCHOR_MENTION_UNCLAIMED"
+            ).map((f) => f.context?.quote)
+        ).toEqual(["Escalation costs more than delay"])
+    })
+
     it("reports no repeat when every mention id is unique", () => {
         expect(
             finalizeFailures(buildOutputs()).filter(
