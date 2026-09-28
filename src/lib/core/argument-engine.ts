@@ -37,7 +37,7 @@ import {
     serializeChecksumConfig,
 } from "../consts.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
-import { composeChangesets } from "../utils/changeset.js"
+import { composeChangesets, withCurrentEntries } from "../utils/changeset.js"
 import type {
     TReactiveSnapshot,
     TReactivePremiseSnapshot,
@@ -366,40 +366,19 @@ export class ArgumentEngine<
         return this.withCurrentEntries(composeChangesets(changes, normalized))
     }
 
-    /**
-     * Replaces every added and modified expression and premise with its
-     * current value. A changeset composed from several steps can hold an
-     * entry whose checksums a later step changed.
-     */
+    /** Every added and modified entry, at its current value in this engine. */
     private withCurrentEntries(
         changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>
     ): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
-        const out = { ...changes }
-        if (out.expressions) {
-            const current = (expr: TExpr): TExpr => {
-                const pe = this.premises.get(
-                    this.expressionIndex.get(expr.id) ?? ""
-                )
+        return withCurrentEntries(
+            changes,
+            (id) => {
+                const pe = this.premises.get(this.expressionIndex.get(id) ?? "")
                 pe?.flushChecksums()
-                const found = pe?.getExpression(expr.id)
-                return found ? { ...found } : expr
-            }
-            out.expressions = {
-                added: out.expressions.added.map(current),
-                modified: out.expressions.modified.map(current),
-                removed: out.expressions.removed,
-            }
-        }
-        if (out.premises) {
-            const current = (premise: TPremise): TPremise =>
-                this.premises.get(premise.id)?.toPremiseData() ?? premise
-            out.premises = {
-                added: out.premises.added.map(current),
-                modified: out.premises.modified.map(current),
-                removed: out.premises.removed,
-            }
-        }
-        return out
+                return pe?.getExpression(id)
+            },
+            (id) => this.premises.get(id)?.toPremiseData()
+        )
     }
 
     private static readonly skipValidationResult: TInvariantValidationResult = {

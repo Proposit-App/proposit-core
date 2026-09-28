@@ -10,6 +10,46 @@ import type {
 import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
 
 /**
+ * Replaces each added and modified expression and premise with its current
+ * value, as the lookups return it (a copy); entries a lookup does not find,
+ * and every removed entry, are kept as they are. A changeset built over
+ * several steps can hold an entry whose checksums a later step changed.
+ */
+export function withCurrentEntries<
+    TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
+    TVar extends TCorePropositionalVariable = TCorePropositionalVariable,
+    TPremise extends TCorePremise = TCorePremise,
+    TArg extends TCoreArgument = TCoreArgument,
+>(
+    changes: TCoreChangeset<TExpr, TVar, TPremise, TArg>,
+    currentExpression: (id: string) => TExpr | undefined,
+    currentPremise: (id: string) => TPremise | undefined
+): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
+    const out = { ...changes }
+    if (out.expressions) {
+        const current = (expr: TExpr): TExpr => {
+            const found = currentExpression(expr.id)
+            return found ? { ...found } : expr
+        }
+        out.expressions = {
+            added: out.expressions.added.map(current),
+            modified: out.expressions.modified.map(current),
+            removed: out.expressions.removed,
+        }
+    }
+    if (out.premises) {
+        const current = (premise: TPremise): TPremise =>
+            currentPremise(premise.id) ?? premise
+        out.premises = {
+            added: out.premises.added.map(current),
+            modified: out.premises.modified.map(current),
+            removed: out.premises.removed,
+        }
+    }
+    return out
+}
+
+/**
  * Merges two changesets into one, deduplicating entities by `id` within each
  * bucket (added/modified/removed) with last-write-wins semantics.
  *
