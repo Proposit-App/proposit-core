@@ -12,6 +12,7 @@
 import type { TViolation } from "../types.js"
 import type { TValidatorContext } from "./context.js"
 import { isClaimBound, isPremiseBound } from "../../schemata/propositional.js"
+import { isVariadicOperator } from "../../core/expression-manager-checks.js"
 
 /**
  * Build a Map<parentId, child-count> view of the expression tree.
@@ -38,13 +39,7 @@ export function validateE1(ctx: TValidatorContext): readonly TViolation[] {
     const counts = childCounts(ctx.expressions)
     for (const e of ctx.expressions) {
         if (e.type !== "operator") continue
-        if (
-            e.operator !== "and" &&
-            e.operator !== "or" &&
-            e.operator !== "xor"
-        ) {
-            continue
-        }
+        if (!isVariadicOperator(e.operator)) continue
         const count = counts.get(e.id) ?? 0
         if (count < 2) {
             violations.push({

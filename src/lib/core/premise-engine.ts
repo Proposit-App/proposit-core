@@ -1,13 +1,9 @@
 import {
-    CorePremiseSchema,
-    isExternallyBound,
-    isPremiseBound,
     type TCoreArgument,
     type TCoreLogicalOperatorType,
     type TCorePremise,
     type TCorePropositionalExpression,
     type TCorePropositionalVariable,
-    type TCorePropositionalVariableExpression,
     type TOptionalChecksum,
 } from "../schemata/index.js"
 import { DefaultMap } from "../utils/default-map.js"
@@ -17,44 +13,16 @@ import {
     POSITION_MAX,
     type TCorePositionConfig,
 } from "../utils/position.js"
-import {
-    sortedCopyById,
-    sortedUnique,
-    withoutUndefinedValues,
-} from "../utils/collections.js"
+import { sortedCopyById, withoutUndefinedValues } from "../utils/collections.js"
 import { HierarchicalChecksumCache } from "./checksum-cache.js"
 import type {
     TCoreQuadrivalentValue,
     TCoreResolvedAssignment,
     TCorePremiseEvaluationResult,
-    TCorePremiseInferenceDiagnostic,
-    TCoreValidationIssue,
     TCoreValidationResult,
 } from "../types/evaluation.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
-import {
-    belnapAnd,
-    belnapIff,
-    belnapImplies,
-    belnapNot,
-    belnapOr,
-    belnapXor,
-} from "./evaluation/belnap.js"
-import {
-    buildDirectionalVacuity,
-    makeErrorIssue,
-    makeValidationResult,
-} from "./evaluation/validation.js"
-import { Value } from "typebox/value"
-import type {
-    TInvariantViolation,
-    TInvariantValidationResult,
-} from "../types/validation.js"
-import {
-    PREMISE_SCHEMA_INVALID,
-    PREMISE_ROOT_EXPRESSION_INVALID,
-    PREMISE_VARIABLE_REF_NOT_FOUND,
-} from "../types/validation.js"
+import type { TInvariantValidationResult } from "../types/validation.js"
 import type { TCoreChecksumConfig } from "../types/checksum.js"
 import {
     defaultGenerateId,
@@ -75,7 +43,19 @@ import type {
     TExpressionUpdate,
 } from "./expression-manager.js"
 import { ExpressionManager } from "./expression-manager.js"
+import { isVariadicOperator } from "./expression-manager-checks.js"
 import { VariableManager } from "./variable-manager.js"
+import {
+    collectDecidableOperators,
+    collectSubtree,
+    isDescendantOf,
+    renderPremiseExpression,
+    walkPremiseExpression,
+} from "./premise/formula-tree.js"
+import type { TPremiseReadContext } from "./premise/read-context.js"
+import { validatePremiseEvaluability } from "./premise/evaluability.js"
+import { evaluatePremise } from "./premise/evaluation.js"
+import { validatePremiseInvariants } from "./premise/invariants.js"
 import type {
     TExpressionMutations,
     TExpressionQueries,
@@ -535,7 +515,10 @@ export class PremiseEngine<
                     // Snapshot the subtree before deletion so we can clean up
                     // expressionsByVariableId for cascade-deleted descendants — they are
                     // not individually surfaced by ExpressionManager.removeExpression.
-                    const subtree = this.collectSubtree(expressionId)
+                    const subtree = collectSubtree(
+                        this.expressions,
+                        expressionId
+                    )
 
                     this.expressions.removeExpression(expressionId, true)
 
@@ -692,7 +675,7 @@ export class PremiseEngine<
                     `S-4: cannot reparent expression "${expressionId}" under itself.`
                 )
             }
-            if (this.isDescendantOf(newParentId, expressionId)) {
+            if (isDescendantOf(this.expressions, newParentId, expressionId)) {
                 throw new Error(
                     `S-4: cannot reparent expression "${expressionId}" under its descendant "${newParentId}" (would create a cycle).`
                 )
@@ -814,23 +797,6 @@ export class PremiseEngine<
             this.expressions.wrapInFormula(childId, formulaId)
             return this.expressions.getExpression(formulaId)!
         })
-    }
-
-    /**
-     * Returns true iff `candidateId` is a descendant of `ancestorId` in
-     * this premise's expression tree. Used by `reparentExpression` for
-     * the S-4 no-cycles check.
-     */
-    private isDescendantOf(candidateId: string, ancestorId: string): boolean {
-        const stack: string[] = [ancestorId]
-        while (stack.length > 0) {
-            const cursor = stack.pop()!
-            for (const child of this.expressions.getChildExpressions(cursor)) {
-                if (child.id === candidateId) return true
-                stack.push(child.id)
-            }
-        }
-        return false
     }
 
     // Normalization is reached via `engine.normalize(tier?)`, which
@@ -982,11 +948,18 @@ export class PremiseEngine<
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             this.expressions.setCollector(collector)
             try {
-                if (childCount <= 2) {
+                // Any number of operands suits every variadic operator, so
+                // with no children named for a split the type changes in
+                // place, keeping the children where they are.
+                const swapInPlace =
+                    sourceChildId === undefined &&
+                    targetChildId === undefined &&
+                    isVariadicOperator(newOperator)
+                if (childCount <= 2 || swapInPlace) {
                     // Check for merge condition: parent is same type as newOperator.
                     // Only merge when childCount < 2 (degenerate operator). With
-                    // exactly 2 children the operator is well-formed — just change
-                    // the type in place.
+                    // 2 or more children the operator is well-formed — just
+                    // change the type in place.
                     const parent = target.parentId
                         ? this.expressions.getExpression(target.parentId)
                         : undefined
@@ -1080,15 +1053,19 @@ export class PremiseEngine<
 
                         const changes =
                             this.finalizeExpressionMutation(collector)
+                        // Normalization runs inside finalize and may have
+                        // absorbed the node into a same-operator
+                        // grandparent; that reads as a dissolve, like a
+                        // merge.
                         return {
-                            result: this.expressions.getExpression(
-                                expressionId
-                            )!,
+                            result:
+                                this.expressions.getExpression(expressionId) ??
+                                null,
                             changes,
                         }
                     }
                 } else {
-                    // --- SPLIT (>2 children) ---
+                    // --- SPLIT (>2 children, not swapped in place) ---
                     if (!sourceChildId || !targetChildId) {
                         throw new Error(
                             `Operator "${expressionId}" has ${childCount} children — sourceChildId and targetChildId are required for split.`
@@ -1359,165 +1336,7 @@ export class PremiseEngine<
     }
 
     public validateEvaluability(): TCoreValidationResult {
-        const issues: TCoreValidationIssue[] = []
-        const roots = this.expressions.getChildExpressions(null)
-
-        if (this.expressions.toArray().length === 0) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_EMPTY",
-                    message: `Premise "${this.premise.id}" has no expressions to evaluate.`,
-                    premiseId: this.premise.id,
-                })
-            )
-            return makeValidationResult(issues)
-        }
-
-        if (roots.length === 0) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISSING",
-                    message: `Premise "${this.premise.id}" has expressions but no root expression.`,
-                    premiseId: this.premise.id,
-                })
-            )
-        }
-
-        if (this.rootExpressionId === undefined) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISSING",
-                    message: `Premise "${this.premise.id}" does not have rootExpressionId set.`,
-                    premiseId: this.premise.id,
-                })
-            )
-        } else if (!this.expressions.getExpression(this.rootExpressionId)) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISMATCH",
-                    message: `Premise "${this.premise.id}" rootExpressionId "${this.rootExpressionId}" does not exist.`,
-                    premiseId: this.premise.id,
-                    expressionId: this.rootExpressionId,
-                })
-            )
-        } else if (roots[0] && roots[0].id !== this.rootExpressionId) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISMATCH",
-                    message: `Premise "${this.premise.id}" rootExpressionId "${this.rootExpressionId}" does not match actual root "${roots[0].id}".`,
-                    premiseId: this.premise.id,
-                    expressionId: this.rootExpressionId,
-                })
-            )
-        }
-
-        for (const expr of this.expressions.toArray()) {
-            if (
-                expr.type === "variable" &&
-                !this.variables.hasVariable(expr.variableId)
-            ) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_VARIABLE_UNDECLARED",
-                        message: `Expression "${expr.id}" references undeclared variable "${expr.variableId}".`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                        variableId: expr.variableId,
-                    })
-                )
-            }
-
-            if (
-                expr.type === "variable" &&
-                this.emptyBoundPremiseCheck?.(expr.variableId)
-            ) {
-                issues.push({
-                    code: "EXPR_BOUND_PREMISE_EMPTY",
-                    severity: "warning",
-                    message: `Variable "${expr.variableId}" is bound to a premise with no expression tree`,
-                    expressionId: expr.id,
-                })
-            }
-
-            if (expr.type !== "operator" && expr.type !== "formula") {
-                continue
-            }
-
-            const children = this.expressions.getChildExpressions(expr.id)
-
-            if (expr.type === "formula") {
-                if (children.length !== 1) {
-                    issues.push(
-                        makeErrorIssue({
-                            code: "EXPR_CHILD_COUNT_INVALID",
-                            message: `Formula expression "${expr.id}" must have exactly 1 child; found ${children.length}.`,
-                            premiseId: this.premise.id,
-                            expressionId: expr.id,
-                        })
-                    )
-                }
-                continue
-            }
-
-            if (expr.operator === "not" && children.length !== 1) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_CHILD_COUNT_INVALID",
-                        message: `Operator "${expr.id}" (not) must have exactly 1 child; found ${children.length}.`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                    })
-                )
-            }
-
-            if (
-                (expr.operator === "implies" || expr.operator === "iff") &&
-                children.length !== 2
-            ) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_CHILD_COUNT_INVALID",
-                        message: `Operator "${expr.id}" (${expr.operator}) must have exactly 2 children; found ${children.length}.`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                    })
-                )
-            }
-
-            if (
-                (expr.operator === "and" ||
-                    expr.operator === "or" ||
-                    expr.operator === "xor") &&
-                children.length < 2
-            ) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_CHILD_COUNT_INVALID",
-                        message: `Operator "${expr.id}" (${expr.operator}) must have at least 2 children; found ${children.length}.`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                    })
-                )
-            }
-
-            if (expr.operator === "implies" || expr.operator === "iff") {
-                const childPositions = new Set(
-                    children.map((child) => child.position)
-                )
-                if (children.length !== 2 || childPositions.size !== 2) {
-                    issues.push(
-                        makeErrorIssue({
-                            code: "EXPR_BINARY_POSITIONS_INVALID",
-                            message: `Operator "${expr.id}" (${expr.operator}) must have exactly 2 children with distinct positions.`,
-                            premiseId: this.premise.id,
-                            expressionId: expr.id,
-                        })
-                    )
-                }
-            }
-        }
-
-        return makeValidationResult(issues)
+        return validatePremiseEvaluability(this.asReadContext())
     }
 
     public evaluate(
@@ -1537,236 +1356,40 @@ export class PremiseEngine<
             )
         }
 
-        const rootExpressionId = this.rootExpressionId!
-        const referencedVariableIds = sortedUnique(
-            this.expressions
-                .toArray()
-                .filter(
-                    (
-                        expr
-                    ): expr is TExpressionInput<TExpr> & {
-                        type: "variable"
-                        variableId: string
-                    } => expr.type === "variable"
-                )
-                .map((expr) => expr.variableId)
+        return evaluatePremise(
+            this.asReadContext(),
+            assignment,
+            () => this.isInference(),
+            options
         )
-
-        if (options?.strictUnknownKeys || options?.requireExactCoverage) {
-            const knownVariableIds = new Set(referencedVariableIds)
-            const unknownKeys = Object.keys(assignment.variables).filter(
-                (variableId) => !knownVariableIds.has(variableId)
-            )
-            if (unknownKeys.length > 0) {
-                throw new Error(
-                    `Assignment contains unknown variable IDs for premise "${this.premise.id}": ${unknownKeys.join(", ")}`
-                )
-            }
-        }
-
-        const expressionValues: Record<string, TCoreQuadrivalentValue> = {}
-        const evaluateExpression = (
-            expressionId: string
-        ): TCoreQuadrivalentValue => {
-            const expression = this.expressions.getExpression(expressionId)
-            if (!expression) {
-                throw new Error(`Expression "${expressionId}" was not found.`)
-            }
-
-            if (expression.type === "variable") {
-                let value: TCoreQuadrivalentValue
-                if (options?.resolver) {
-                    const variable = this.variables.getVariable(
-                        expression.variableId
-                    )
-                    if (
-                        variable &&
-                        isPremiseBound(variable) &&
-                        !isExternallyBound(variable, this.argument.id as string)
-                    ) {
-                        value = options.resolver(expression.variableId)
-                    } else {
-                        value =
-                            assignment.variables[expression.variableId] ?? null
-                    }
-                } else {
-                    value = assignment.variables[expression.variableId] ?? null
-                }
-                expressionValues[expression.id] = value
-                return value
-            }
-
-            const children = this.expressions.getChildExpressions(expression.id)
-            let value: TCoreQuadrivalentValue
-
-            if (expression.type === "formula") {
-                value = evaluateExpression(children[0].id)
-                expressionValues[expression.id] = value
-                return value
-            }
-
-            switch (expression.operator) {
-                case "not":
-                    value = belnapNot(evaluateExpression(children[0].id))
-                    break
-                case "and":
-                    value = children.reduce<TCoreQuadrivalentValue>(
-                        (acc, child) =>
-                            belnapAnd(acc, evaluateExpression(child.id)),
-                        true
-                    )
-                    break
-                case "or":
-                    value = children.reduce<TCoreQuadrivalentValue>(
-                        (acc, child) =>
-                            belnapOr(acc, evaluateExpression(child.id)),
-                        false
-                    )
-                    break
-                // Seeded `false` because that is xor's identity, not because
-                // `or` is: parity counts the true operands, so seeding `true`
-                // would report every operand count with the opposite parity.
-                case "xor":
-                    value = children.reduce<TCoreQuadrivalentValue>(
-                        (acc, child) =>
-                            belnapXor(acc, evaluateExpression(child.id)),
-                        false
-                    )
-                    break
-                case "implies": {
-                    const left = children[0]
-                    const right = children[1]
-                    value = belnapImplies(
-                        evaluateExpression(left.id),
-                        evaluateExpression(right.id)
-                    )
-                    break
-                }
-                case "iff": {
-                    const left = children[0]
-                    const right = children[1]
-                    value = belnapIff(
-                        evaluateExpression(left.id),
-                        evaluateExpression(right.id)
-                    )
-                    break
-                }
-            }
-
-            expressionValues[expression.id] = value
-            return value
-        }
-
-        const rootValue = evaluateExpression(rootExpressionId)
-        const variableValues: Record<string, TCoreQuadrivalentValue> = {}
-        for (const variableId of referencedVariableIds) {
-            if (options?.resolver) {
-                const variable = this.variables.getVariable(variableId)
-                if (variable && isPremiseBound(variable)) {
-                    variableValues[variableId] = options.resolver(variableId)
-                    continue
-                }
-            }
-            variableValues[variableId] =
-                assignment.variables[variableId] ?? null
-        }
-
-        let inferenceDiagnostic: TCorePremiseInferenceDiagnostic | undefined
-        if (this.isInference()) {
-            const root = this.expressions.getExpression(rootExpressionId)
-            if (root?.type === "operator") {
-                const children = this.expressions.getChildExpressions(root.id)
-                const left = children[0]
-                const right = children[1]
-                if (left && right) {
-                    const leftValue = expressionValues[left.id]
-                    const rightValue = expressionValues[right.id]
-                    if (root.operator === "implies") {
-                        inferenceDiagnostic = {
-                            kind: "implies",
-                            premiseId: this.premise.id,
-                            rootExpressionId,
-                            leftValue,
-                            rightValue,
-                            rootValue,
-                            antecedentTrue: leftValue,
-                            consequentTrue: rightValue,
-                            isVacuouslyTrue: belnapNot(leftValue),
-                            fired: leftValue,
-                            firedAndHeld: belnapAnd(leftValue, rightValue),
-                        }
-                    } else if (root.operator === "iff") {
-                        const leftToRight = buildDirectionalVacuity(
-                            leftValue,
-                            rightValue
-                        )
-                        const rightToLeft = buildDirectionalVacuity(
-                            rightValue,
-                            leftValue
-                        )
-                        inferenceDiagnostic = {
-                            kind: "iff",
-                            premiseId: this.premise.id,
-                            rootExpressionId,
-                            leftValue,
-                            rightValue,
-                            rootValue,
-                            leftToRight,
-                            rightToLeft,
-                            bothSidesTrue: belnapAnd(leftValue, rightValue),
-                            bothSidesFalse: belnapAnd(
-                                belnapNot(leftValue),
-                                belnapNot(rightValue)
-                            ),
-                        }
-                    }
-                }
-            }
-        }
-
-        return {
-            premiseId: this.premise.id,
-            premiseType: this.isInference() ? "inference" : "constraint",
-            rootExpressionId,
-            rootValue,
-            expressionValues,
-            variableValues,
-            inferenceDiagnostic,
-        }
     }
 
     public toDisplayString(): string {
         if (this.rootExpressionId === undefined) {
             return ""
         }
-        return this.renderExpression(this.rootExpressionId)
+        return renderPremiseExpression(
+            this.asReadContext(),
+            this.rootExpressionId
+        )
     }
 
     public walkFormulaTree<T>(visitor: TFormulaTreeVisitor<T>): T {
         if (this.rootExpressionId === undefined) {
             return visitor.empty()
         }
-        return this.walkExpression(visitor, this.rootExpressionId)
+        return walkPremiseExpression(
+            this.asReadContext(),
+            visitor,
+            this.rootExpressionId
+        )
     }
 
     public getDecidableOperatorExpressions(): TExpr[] {
-        const result: TExpr[] = []
-        const rootId = this.rootExpressionId
-        if (rootId === undefined) return result
-
-        const visit = (exprId: string): void => {
-            const expr = this.expressions.getExpression(exprId)
-            if (!expr) return
-            if (expr.type === "operator" && expr.operator !== "not") {
-                result.push(expr)
-            }
-            for (const child of this.expressions.getChildExpressions(exprId)) {
-                visit(child.id)
-            }
-        }
-
-        visit(rootId)
-        return result
+        return collectDecidableOperators(
+            this.expressions,
+            this.rootExpressionId
+        )
     }
 
     public getReferencedVariableIds(): Set<string> {
@@ -1825,81 +1448,9 @@ export class PremiseEngine<
     }
 
     public validate(): TInvariantValidationResult {
-        const violations: TInvariantViolation[] = []
-        const premiseId = this.premise.id
-
-        // 1. Schema check (use toPremiseData() to include computed checksums)
+        // Flushes checksums before the expression checks read them.
         const premiseData = this.toPremiseData()
-        if (
-            !Value.Check(
-                CorePremiseSchema,
-                premiseData as unknown as TCorePremise
-            )
-        ) {
-            violations.push({
-                code: PREMISE_SCHEMA_INVALID,
-                message: `Premise "${premiseId}" does not conform to CorePremiseSchema.`,
-                entityType: "premise",
-                entityId: premiseId,
-                premiseId,
-            })
-        }
-
-        // 2. Delegate to expression-level validation, attaching premiseId
-        const exprResult = this.expressions.validate()
-        for (const v of exprResult.violations) {
-            violations.push({ ...v, premiseId })
-        }
-
-        // 3. Root expression consistency
-        if (this.rootExpressionId !== undefined) {
-            const rootExpr = this.expressions.getExpression(
-                this.rootExpressionId
-            )
-            if (!rootExpr) {
-                violations.push({
-                    code: PREMISE_ROOT_EXPRESSION_INVALID,
-                    message: `Premise "${premiseId}" rootExpressionId "${this.rootExpressionId}" does not exist in expression store.`,
-                    entityType: "premise",
-                    entityId: premiseId,
-                    premiseId,
-                })
-            } else if (rootExpr.parentId !== null) {
-                violations.push({
-                    code: PREMISE_ROOT_EXPRESSION_INVALID,
-                    message: `Premise "${premiseId}" rootExpressionId "${this.rootExpressionId}" has non-null parentId "${rootExpr.parentId}".`,
-                    entityType: "premise",
-                    entityId: premiseId,
-                    premiseId,
-                })
-            }
-        }
-
-        // 4. Variable references: every variable-type expression must
-        //    reference a variableId that exists in the argument's variable set
-        if (this.variableIdsCallback) {
-            const variableIds = this.variableIdsCallback()
-            for (const expr of this.expressions.toArray()) {
-                if (expr.type === "variable") {
-                    const varExpr =
-                        expr as unknown as TCorePropositionalVariableExpression
-                    if (!variableIds.has(varExpr.variableId)) {
-                        violations.push({
-                            code: PREMISE_VARIABLE_REF_NOT_FOUND,
-                            message: `Expression "${expr.id}" in premise "${premiseId}" references non-existent variable "${varExpr.variableId}".`,
-                            entityType: "expression",
-                            entityId: expr.id,
-                            premiseId,
-                        })
-                    }
-                }
-            }
-        }
-
-        return {
-            ok: violations.length === 0,
-            violations,
-        }
+        return validatePremiseInvariants(this.asReadContext(), premiseData)
     }
 
     // -------------------------------------------------------------------------
@@ -1934,27 +1485,41 @@ export class PremiseEngine<
     }
 
     /**
+     * The state the read-only routines under `premise/` consult, as a plain
+     * object built per call — accessor properties on it cost the
+     * satisfiability search, which evaluates once per row, about an eighth of
+     * its time. The callbacks go through wrappers that look the engine's
+     * field up on every call, as the methods did, so one replaced mid-call is
+     * honoured and each runs with the engine as `this`. `argument` is the
+     * engine's own object, never replaced. The premise id, root and managers
+     * are read once per call; nothing this library calls changes them.
+     */
+    private asReadContext(): TPremiseReadContext<TExpr, TVar> {
+        return {
+            premiseId: this.premise.id,
+            argument: this.argument,
+            rootExpressionId: this.rootExpressionId,
+            expressions: this.expressions,
+            variables: this.variables,
+            emptyBoundPremiseCheck: this.readEmptyBoundPremiseCheck,
+            readVariableIds: this.readVariableIds,
+        }
+    }
+
+    private readonly readEmptyBoundPremiseCheck = (
+        variableId: string
+    ): boolean | undefined => this.emptyBoundPremiseCheck?.(variableId)
+
+    private readonly readVariableIds = (): Set<string> | undefined =>
+        this.variableIdsCallback?.()
+
+    /**
      * Re-reads the single root from ExpressionManager after any operation
      * that may have caused operator collapse to silently change the root.
      */
     private syncRootExpressionId(): void {
         const roots = this.expressions.getChildExpressions(null)
         this.rootExpressionId = roots[0]?.id
-    }
-
-    private collectSubtree(rootId: string): TExpr[] {
-        const result: TExpr[] = []
-        const stack = [rootId]
-        while (stack.length > 0) {
-            const id = stack.pop()!
-            const expr = this.expressions.getExpression(id)
-            if (!expr) continue
-            result.push(expr)
-            for (const child of this.expressions.getChildExpressions(id)) {
-                stack.push(child.id)
-            }
-        }
-        return result
     }
 
     private assertBelongsToArgument(
@@ -1991,99 +1556,6 @@ export class PremiseEngine<
                     `Circular binding: variable "${expression.variableId}" is bound to this premise (directly or transitively)`
                 )
             }
-        }
-    }
-
-    private renderExpression(expressionId: string): string {
-        const expression = this.expressions.getExpression(expressionId)
-        if (!expression) {
-            throw new Error(`Expression "${expressionId}" was not found.`)
-        }
-
-        if (expression.type === "variable") {
-            const variable = this.variables.getVariable(expression.variableId)
-            if (!variable) {
-                throw new Error(
-                    `Variable "${expression.variableId}" for expression "${expressionId}" was not found.`
-                )
-            }
-            return variable.symbol
-        }
-
-        if (expression.type === "formula") {
-            const children = this.expressions.getChildExpressions(expression.id)
-            if (children.length === 0) {
-                return "(?)"
-            }
-            return `(${this.renderExpression(children[0].id)})`
-        }
-
-        const children = this.expressions.getChildExpressions(expression.id)
-        if (expression.operator === "not") {
-            if (children.length === 0) {
-                return `${this.operatorSymbol(expression.operator)} (?)`
-            }
-            return `${this.operatorSymbol(expression.operator)}(${this.renderExpression(children[0].id)})`
-        }
-
-        if (children.length === 0) {
-            return "(?)"
-        }
-
-        const renderedChildren = children.map((child) =>
-            this.renderExpression(child.id)
-        )
-        return `(${renderedChildren.join(` ${this.operatorSymbol(expression.operator)} `)})`
-    }
-
-    private walkExpression<T>(
-        visitor: TFormulaTreeVisitor<T>,
-        expressionId: string
-    ): T {
-        const expression = this.expressions.getExpression(expressionId)
-        if (!expression) {
-            throw new Error(`Expression "${expressionId}" was not found.`)
-        }
-
-        if (expression.type === "variable") {
-            const variable = this.variables.getVariable(expression.variableId)
-            if (!variable) {
-                throw new Error(
-                    `Variable "${expression.variableId}" for expression "${expressionId}" was not found.`
-                )
-            }
-            return visitor.variable(variable.symbol, expression.variableId)
-        }
-
-        if (expression.type === "formula") {
-            const children = this.expressions.getChildExpressions(expression.id)
-            if (children.length === 0) {
-                return visitor.empty()
-            }
-            return visitor.formula(this.walkExpression(visitor, children[0].id))
-        }
-
-        const children = this.expressions.getChildExpressions(expression.id)
-        const renderedChildren = children.map((child) =>
-            this.walkExpression(visitor, child.id)
-        )
-        return visitor.operator(expression.operator, renderedChildren)
-    }
-
-    private operatorSymbol(operator: TCoreLogicalOperatorType): string {
-        switch (operator) {
-            case "and":
-                return "∧"
-            case "or":
-                return "∨"
-            case "implies":
-                return "→"
-            case "iff":
-                return "↔"
-            case "not":
-                return "¬"
-            case "xor":
-                return "⊻"
         }
     }
 

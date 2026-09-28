@@ -8,10 +8,10 @@
 // over the corpus, and it names each expected note so a new one has to
 // be looked at rather than absorbed into a total.
 //
-// Both entries are model-behavior findings, not defects in the anchor
-// code: each is a relation whose evidence quote the model did not copy
-// verbatim from the input, so it resolves to no anchor by design. If
-// this test fails, the question is what changed about the recordings.
+// A note here is a finding about the recorded model output (a quote not
+// copied verbatim, a claim no mention was produced for), not a defect in
+// the anchor code. If this test fails, the question is what changed about
+// the recordings.
 
 import fs from "node:fs"
 import path from "node:path"
@@ -35,12 +35,13 @@ const FIXTURE_NAMES = [
  * Every note the corpus is expected to emit, as
  * `<fixture>/<pipeline> <code> <subject>`.
  *
- * Currently none: in the present recordings every relation's evidence
- * quote is copied verbatim from the input, so every one of them
- * locates. Earlier recordings carried two — a quote elided with an
- * ellipsis, and a synthesised summary sentence rather than a quote —
- * and both were model-behavior findings rather than defects in the
- * anchor code. An empty list still pins the corpus: a note reappearing
+ * Currently none: in the present recordings every mention quote is
+ * copied verbatim from the input, so every one of them locates, and
+ * every claim has a mention the mention stage produced. Earlier
+ * recordings carried two notes on relation evidence quotes, which are no
+ * longer resolved — a quote elided with an ellipsis, and a synthesised
+ * summary sentence rather than a quote — both model-behavior findings
+ * rather than defects in the anchor code. An empty list still pins the corpus: a note reappearing
  * has to be looked at rather than absorbed into a total.
  */
 const EXPECTED_NOTES = [] as const
@@ -76,8 +77,8 @@ async function collectNotes(): Promise<string[]> {
                 if (!failure.code.startsWith("SOURCE_ANCHOR")) continue
                 const context = failure.context ?? {}
                 const subject =
-                    (context.relationId as string | undefined) ??
                     (context.mentionId as string | undefined) ??
+                    (context.claimMiniId as string | undefined) ??
                     "-"
                 notes.push(`${name}/${pipeline} ${failure.code} ${subject}`)
             }
