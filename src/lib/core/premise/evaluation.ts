@@ -27,8 +27,8 @@ import type { TPremiseReadContext } from "./read-context.js"
  * Evaluates a premise under an assignment, recording a value for every
  * expression and, for an inference, the directional diagnostics. The caller
  * has already confirmed the premise is evaluable, so the root exists.
- * `isInference` is the premise's own answer, passed in so an engine that
- * overrides `isInference()` still decides it.
+ * `isInference` asks the engine, at the two points the method always asked
+ * it, so an engine that overrides `isInference()` still decides it.
  */
 export function evaluatePremise<
     TExpr extends TCorePropositionalExpression,
@@ -36,7 +36,7 @@ export function evaluatePremise<
 >(
     ctx: TPremiseReadContext<TExpr, TVar>,
     assignment: TCoreResolvedAssignment,
-    isInference: boolean,
+    isInference: () => boolean,
     options?: {
         strictUnknownKeys?: boolean
         requireExactCoverage?: boolean
@@ -175,7 +175,7 @@ export function evaluatePremise<
     }
 
     let inferenceDiagnostic: TCorePremiseInferenceDiagnostic | undefined
-    if (isInference) {
+    if (isInference()) {
         const root = ctx.expressions.getExpression(rootExpressionId)
         if (root?.type === "operator") {
             const children = ctx.expressions.getChildExpressions(root.id)
@@ -229,7 +229,7 @@ export function evaluatePremise<
 
     return {
         premiseId: ctx.premiseId,
-        premiseType: isInference ? "inference" : "constraint",
+        premiseType: isInference() ? "inference" : "constraint",
         rootExpressionId,
         rootValue,
         expressionValues,

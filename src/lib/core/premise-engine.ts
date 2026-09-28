@@ -1347,7 +1347,7 @@ export class PremiseEngine<
         return evaluatePremise(
             this.asReadContext(),
             assignment,
-            this.isInference(),
+            () => this.isInference(),
             options
         )
     }
@@ -1473,21 +1473,49 @@ export class PremiseEngine<
     }
 
     /**
-     * Re-reads the single root from ExpressionManager after any operation
-     * that may have caused operator collapse to silently change the root.
+     * The state the read-only routines under `premise/` consult. Every field
+     * reads back through to this engine when it is used, as the methods did
+     * before they moved: a callback run mid-call that changes a field or
+     * replaces a callback is seen the same way, and the callbacks still run
+     * with the engine as `this`.
      */
     private asReadContext(): TPremiseReadContext<TExpr, TVar> {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const engine = this
         return {
-            premiseId: this.premise.id,
-            argumentId: this.argument.id,
-            rootExpressionId: this.rootExpressionId,
-            expressions: this.expressions,
-            variables: this.variables,
-            emptyBoundPremiseCheck: this.emptyBoundPremiseCheck,
-            variableIdsCallback: this.variableIdsCallback,
+            get premiseId() {
+                return engine.premise.id
+            },
+            get argumentId() {
+                return engine.argument.id
+            },
+            get rootExpressionId() {
+                return engine.rootExpressionId
+            },
+            get expressions() {
+                return engine.expressions
+            },
+            get variables() {
+                return engine.variables
+            },
+            get emptyBoundPremiseCheck() {
+                return engine.emptyBoundPremiseCheck
+                    ? (variableId: string) =>
+                          engine.emptyBoundPremiseCheck!(variableId)
+                    : undefined
+            },
+            get variableIdsCallback() {
+                return engine.variableIdsCallback
+                    ? () => engine.variableIdsCallback!()
+                    : undefined
+            },
         }
     }
 
+    /**
+     * Re-reads the single root from ExpressionManager after any operation
+     * that may have caused operator collapse to silently change the root.
+     */
     private syncRootExpressionId(): void {
         const roots = this.expressions.getChildExpressions(null)
         this.rootExpressionId = roots[0]?.id

@@ -6,11 +6,10 @@ import type { ExpressionManager } from "../expression-manager.js"
 import type { VariableManager } from "../variable-manager.js"
 
 /**
- * What a `PremiseEngine`'s read-only routines consult, by reference: the
- * managers are the engine's own, not copies. `PremiseEngine.evaluate` runs
- * inside the satisfiability search once per row, so a context that copied
- * the expressions would cost that search a copy per row. Built fresh per
- * call, so it never holds a stale root.
+ * What a `PremiseEngine`'s read-only routines consult. The engine's
+ * implementation reads each field back from itself when it is used, so
+ * nothing is copied — `PremiseEngine.evaluate` runs inside the
+ * satisfiability search once per row — and nothing goes stale mid-call.
  */
 export type TPremiseReadContext<
     TExpr extends TCorePropositionalExpression,
