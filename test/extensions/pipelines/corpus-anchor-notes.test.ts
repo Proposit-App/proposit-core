@@ -35,12 +35,13 @@ const FIXTURE_NAMES = [
  * Every note the corpus is expected to emit, as
  * `<fixture>/<pipeline> <code> <subject>`.
  *
- * Currently none: in the present recordings every relation's evidence
- * quote is copied verbatim from the input, so every one of them
- * locates. Earlier recordings carried two — a quote elided with an
- * ellipsis, and a synthesised summary sentence rather than a quote —
- * and both were model-behavior findings rather than defects in the
- * anchor code. An empty list still pins the corpus: a note reappearing
+ * Currently none: in the present recordings every mention quote is
+ * copied verbatim from the input, so every one of them locates, and
+ * every claim has a mention the mention stage produced. Earlier
+ * recordings carried two notes on relation evidence quotes, which are no
+ * longer resolved — a quote elided with an ellipsis, and a synthesised
+ * summary sentence rather than a quote — both model-behavior findings
+ * rather than defects in the anchor code. An empty list still pins the corpus: a note reappearing
  * has to be looked at rather than absorbed into a total.
  */
 const EXPECTED_NOTES = [] as const
