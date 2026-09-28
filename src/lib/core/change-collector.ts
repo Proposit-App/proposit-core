@@ -7,19 +7,12 @@ import type {
     TCorePropositionalExpression,
     TCorePropositionalVariable,
 } from "../schemata/propositional.js"
-import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
-
-function emptyEntityChanges<T>(): TCoreEntityChanges<T> {
-    return { added: [], modified: [], removed: [] }
-}
-
-function isEntityChangesEmpty<T>(ec: TCoreEntityChanges<T>): boolean {
-    return (
-        ec.added.length === 0 &&
-        ec.modified.length === 0 &&
-        ec.removed.length === 0
-    )
-}
+import type { TCoreChangeset } from "../types/mutation.js"
+import {
+    entityChangesFrom,
+    recordEntityChange,
+    type TEntityChangeState,
+} from "../utils/changeset.js"
 
 export class ChangeCollector<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
@@ -27,44 +20,46 @@ export class ChangeCollector<
     TPremise extends TCorePremise = TCorePremise,
     TArg extends TCoreArgument = TCoreArgument,
 > {
-    private expressions: TCoreEntityChanges<TExpr> = emptyEntityChanges()
-    private variables: TCoreEntityChanges<TVar> = emptyEntityChanges()
-    private premises: TCoreEntityChanges<TPremise> = emptyEntityChanges()
+    // One entry per entity, so a changeset never names an id twice: see
+    // `recordEntityChange` for how successive changes to one entity combine.
+    private expressions: TEntityChangeState<TExpr> = new Map()
+    private variables: TEntityChangeState<TVar> = new Map()
+    private premises: TEntityChangeState<TPremise> = new Map()
     private roles: TCoreArgumentRoleState | undefined = undefined
     private argument: TArg | undefined = undefined
 
     addedExpression(expr: TExpr): void {
-        this.expressions.added.push(expr)
+        recordEntityChange(this.expressions, "added", expr)
     }
     modifiedExpression(expr: TExpr): void {
-        this.expressions.modified.push(expr)
+        recordEntityChange(this.expressions, "modified", expr)
     }
     removedExpression(expr: TExpr): void {
-        this.expressions.removed.push(expr)
+        recordEntityChange(this.expressions, "removed", expr)
     }
 
     isExpressionAdded(id: string): boolean {
-        return this.expressions.added.some((e) => e.id === id)
+        return this.expressions.get(id)?.bucket === "added"
     }
 
     addedVariable(variable: TVar): void {
-        this.variables.added.push(variable)
+        recordEntityChange(this.variables, "added", variable)
     }
     modifiedVariable(variable: TVar): void {
-        this.variables.modified.push(variable)
+        recordEntityChange(this.variables, "modified", variable)
     }
     removedVariable(variable: TVar): void {
-        this.variables.removed.push(variable)
+        recordEntityChange(this.variables, "removed", variable)
     }
 
     addedPremise(premise: TPremise): void {
-        this.premises.added.push(premise)
+        recordEntityChange(this.premises, "added", premise)
     }
     modifiedPremise(premise: TPremise): void {
-        this.premises.modified.push(premise)
+        recordEntityChange(this.premises, "modified", premise)
     }
     removedPremise(premise: TPremise): void {
-        this.premises.removed.push(premise)
+        recordEntityChange(this.premises, "removed", premise)
     }
 
     setRoles(roles: TCoreArgumentRoleState): void {
@@ -77,10 +72,12 @@ export class ChangeCollector<
 
     toChangeset(): TCoreChangeset<TExpr, TVar, TPremise, TArg> {
         const cs: TCoreChangeset<TExpr, TVar, TPremise, TArg> = {}
-        if (!isEntityChangesEmpty(this.expressions))
-            cs.expressions = this.expressions
-        if (!isEntityChangesEmpty(this.variables)) cs.variables = this.variables
-        if (!isEntityChangesEmpty(this.premises)) cs.premises = this.premises
+        const expressions = entityChangesFrom(this.expressions)
+        if (expressions) cs.expressions = expressions
+        const variables = entityChangesFrom(this.variables)
+        if (variables) cs.variables = variables
+        const premises = entityChangesFrom(this.premises)
+        if (premises) cs.premises = premises
         if (this.roles !== undefined) cs.roles = this.roles
         if (this.argument !== undefined) cs.argument = this.argument
         return cs

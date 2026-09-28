@@ -2,6 +2,12 @@
 
 ## Added
 
+- `composeChangesets(first, then)`, exported from the package root: combines
+  the changesets of two successive mutations into one, giving each entity a
+  single bucket (a new entity stays added; modified then removed becomes
+  removed; added then removed disappears). Use it rather than
+  `mergeChangesets`, which throws on an id in two buckets, to combine a
+  sequence of mutations.
 - `TLlmOutputCheckFailure` is re-exported from `src/lib/index.ts`, which clears
   the typedoc warning that `checkArgumentStructure` referenced an undocumented
   type.
@@ -19,6 +25,14 @@
 
 ## Changed
 
+- No changeset names an entity more than once. `ChangeCollector` records
+  each entity in one bucket by the same rule as `composeChangesets`, so a
+  new entity no longer also appears under `modified`, and an expression
+  changed twice in one call (permissive `changeOperator` on a nested
+  operator listed its root twice) appears once.
+- `ArgumentEngine.removePremise` lists the removed premise's own expressions
+  under `expressions.removed`. Before, only the premise was listed, and a
+  consumer applying the changeset kept its expressions.
 - In `assistive` behavior, the changeset a mutation returns now includes
   what assistive normalization changed after it: expressions it removed
   (the formula buffer and operator AN-4 absorbs, for example), formula

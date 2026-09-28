@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { composeChangesets } from "../src/lib/utils/changeset.js"
+import { ChangeCollector } from "../src/lib/core/change-collector.js"
 import type { TCoreChangeset } from "../src/lib/types/mutation.js"
 
 // Entities only need an id and something that changes; the expression
@@ -94,5 +95,67 @@ describe("composeChangesets — one change after another", () => {
         const composed = composeChangesets(first, second)
         expect(composed.roles).toEqual({ conclusionPremiseId: "p2" })
         expect(composed.argument).toEqual({ id: "a", version: 1 })
+    })
+})
+
+describe("ChangeCollector — records each entity once", () => {
+    const collect = (record: (c: ChangeCollector) => void) => {
+        const c = new ChangeCollector()
+        record(c)
+        return c.toChangeset().expressions as unknown
+    }
+    const x = (v: number) => e("x", v) as never
+
+    it("keeps an entity added and then modified as added, with the later value", () => {
+        expect(
+            collect((c) => {
+                c.addedExpression(x(1))
+                c.modifiedExpression(x(2))
+            })
+        ).toEqual({ added: [e("x", 2)], modified: [], removed: [] })
+    })
+
+    it("records an entity modified twice once, with the later value", () => {
+        expect(
+            collect((c) => {
+                c.modifiedExpression(x(1))
+                c.modifiedExpression(x(2))
+            })
+        ).toEqual({ added: [], modified: [e("x", 2)], removed: [] })
+    })
+
+    it("turns an entity modified and then removed into removed", () => {
+        expect(
+            collect((c) => {
+                c.modifiedExpression(x(1))
+                c.removedExpression(x(1))
+            })
+        ).toEqual({ added: [], modified: [], removed: [e("x", 1)] })
+    })
+
+    it("drops an entity added and then removed", () => {
+        expect(
+            collect((c) => {
+                c.addedExpression(x(1))
+                c.removedExpression(x(1))
+            })
+        ).toBeUndefined()
+    })
+
+    it("turns an entity removed and then added again into modified", () => {
+        expect(
+            collect((c) => {
+                c.removedExpression(x(1))
+                c.addedExpression(x(2))
+            })
+        ).toEqual({ added: [], modified: [e("x", 2)], removed: [] })
+    })
+
+    it("still answers whether an expression was added", () => {
+        const c = new ChangeCollector()
+        c.addedExpression(x(1))
+        c.modifiedExpression(x(2))
+        expect(c.isExpressionAdded("x")).toBe(true)
+        expect(c.isExpressionAdded("y")).toBe(false)
     })
 })

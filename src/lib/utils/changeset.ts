@@ -13,11 +13,10 @@ import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
  * Merges two changesets into one, deduplicating entities by `id` within each
  * bucket (added/modified/removed) with last-write-wins semantics.
  *
- * Use this when a single logical operation requires multiple engine calls that
- * each produce a changeset. For example, creating a conclusion premise requires
- * both `createPremiseWithId` and `setConclusionPremise`, each returning a
- * changeset — `mergeChangesets` combines them into one changeset suitable for
- * a single persistence call.
+ * Use this for changesets that never change one entity in different ways.
+ * For the changesets of successive calls on one engine, where a later call
+ * can modify or remove what an earlier one added or modified, use
+ * {@link composeChangesets}: this function throws in that case.
  *
  * @param a - The first changeset.
  * @param b - The second changeset. Its entries take precedence when both
@@ -27,14 +26,6 @@ import type { TCoreEntityChanges, TCoreChangeset } from "../types/mutation.js"
  * @throws {Error} If any entity ID appears in more than one bucket
  *   (added/modified/removed) within the same category after merge. This
  *   indicates a logic error in the caller.
- *
- * @example
- * ```ts
- * const { changes: createChanges } = engine.createPremiseWithId(premiseId, data)
- * const { changes: roleChanges } = engine.setConclusionPremise(premiseId)
- * const combined = mergeChangesets(createChanges, roleChanges)
- * await persistChangeset(db, combined)
- * ```
  */
 export function mergeChangesets<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
@@ -94,6 +85,14 @@ export function mergeChangesets<
  * Unlike {@link mergeChangesets}, which combines independent changesets and
  * rejects an id in two buckets, this is for a sequence, where the same
  * entity legitimately changes more than once.
+ *
+ * @example
+ * ```ts
+ * const { changes: createChanges } = engine.createPremiseWithId(premiseId, data)
+ * const { changes: roleChanges } = engine.setConclusionPremise(premiseId)
+ * const combined = composeChangesets(createChanges, roleChanges)
+ * await persistChangeset(db, combined)
+ * ```
  */
 export function composeChangesets<
     TExpr extends TCorePropositionalExpression = TCorePropositionalExpression,
@@ -126,43 +125,55 @@ function composeEntityChanges<T extends { id: string }>(
     then: TCoreEntityChanges<T> | undefined
 ): TCoreEntityChanges<T> | undefined {
     if (!first && !then) return undefined
-    type TBucket = "added" | "modified" | "removed"
-    const state = new Map<string, { bucket: TBucket; entity: T }>()
-    for (const bucket of ["added", "modified", "removed"] as const) {
-        for (const entity of first?.[bucket] ?? []) {
-            state.set(entity.id, { bucket, entity })
+    const state: TEntityChangeState<T> = new Map()
+    for (const changes of [first, then]) {
+        for (const bucket of ["added", "modified", "removed"] as const) {
+            for (const entity of changes?.[bucket] ?? []) {
+                recordEntityChange(state, bucket, entity)
+            }
         }
     }
-    for (const entity of then?.added ?? []) {
-        const earlier = state.get(entity.id)
-        state.set(entity.id, {
-            bucket: earlier?.bucket === "removed" ? "modified" : "added",
-            entity,
-        })
+    return entityChangesFrom(state)
+}
+
+/** Each entity's single bucket and latest value, by id. */
+export type TEntityChangeState<T extends { id: string }> = Map<
+    string,
+    { bucket: "added" | "modified" | "removed"; entity: T }
+>
+
+/**
+ * Records one change to an entity on top of what `state` already holds for
+ * it, keeping one bucket per entity: added then modified stays added (with
+ * the later value), added then removed disappears, removed then added
+ * becomes modified, and otherwise the later change replaces the earlier.
+ */
+export function recordEntityChange<T extends { id: string }>(
+    state: TEntityChangeState<T>,
+    bucket: "added" | "modified" | "removed",
+    entity: T
+): void {
+    const earlier = state.get(entity.id)?.bucket
+    if (bucket === "removed" && earlier === "added") {
+        state.delete(entity.id)
+        return
     }
-    for (const entity of then?.modified ?? []) {
-        const earlier = state.get(entity.id)
-        state.set(entity.id, {
-            bucket: earlier?.bucket === "added" ? "added" : "modified",
-            entity,
-        })
-    }
-    for (const entity of then?.removed ?? []) {
-        if (state.get(entity.id)?.bucket === "added") {
-            state.delete(entity.id)
-        } else {
-            state.set(entity.id, { bucket: "removed", entity })
-        }
-    }
+    const next =
+        bucket === "added" && earlier === "removed"
+            ? "modified"
+            : bucket === "modified" && earlier === "added"
+              ? "added"
+              : bucket
+    state.set(entity.id, { bucket: next, entity })
+}
+
+/** The buckets `state` describes, or undefined when it holds nothing. */
+export function entityChangesFrom<T extends { id: string }>(
+    state: TEntityChangeState<T>
+): TCoreEntityChanges<T> | undefined {
+    if (state.size === 0) return undefined
     const out: TCoreEntityChanges<T> = { added: [], modified: [], removed: [] }
     for (const { bucket, entity } of state.values()) out[bucket].push(entity)
-    if (
-        out.added.length === 0 &&
-        out.modified.length === 0 &&
-        out.removed.length === 0
-    ) {
-        return undefined
-    }
     return out
 }
 
