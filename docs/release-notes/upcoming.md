@@ -12,10 +12,12 @@ when it had two operands. With three or more it always split: it required
 Now, with neither child id given, a change between `and`, `or` and `xor`
 updates the operator in place at any number of operands — same id, same
 children, same order. Naming both child ids still splits them out into a
-sub-operator, exactly as before. A change to `implies` or `iff` on an operator
-with three or more operands still needs both ids (those operators take exactly
-two operands), as does a call naming only one. The CLI's
-`expressions change-operator` follows the same rules.
+sub-operator, exactly as before. A call naming only one child id still throws,
+and so does a change to `implies` or `iff` on an operator with three or more
+operands: they take exactly two operands and must be roots, so neither a swap
+nor a split can produce one there. An empty string passed as a child id counts
+as an id given. The CLI's `expressions change-operator` follows the same
+rules.
 
 ## Added
 

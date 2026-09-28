@@ -15520,8 +15520,8 @@ describe("changeOperator", () => {
             })
         )
 
-        // A binary operator cannot hold three operands, so only a split is
-        // legal, and a split needs both children named.
+        // A binary operator cannot hold three operands, so it is never a swap
+        // in place; with no children named there is not even a split to try.
         expect(() => pm.changeOperator("op-and", "implies")).toThrow(
             /sourceChildId and targetChildId are required/
         )

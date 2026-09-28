@@ -7,10 +7,14 @@
   path instead of throwing "sourceChildId and targetChildId are required for
   split". The condition uses a new `isVariadicOperator` helper in
   `expression-manager-checks.ts`, which `isPermittedOperatorSwap` now uses
-  too. Splits, and the throw for a binary new operator or a single child id,
-  are unchanged.
+  too. The ids are tested with `=== undefined`, so an empty string (a CLI
+  option given an empty value) still reaches the split path and its "required"
+  error. Splits, and the throw for a binary new operator or a single child
+  id, are unchanged.
 - The `changeOperator` JSDoc now says a merge needs fewer than two children
-  (it said "exactly 2", which the code never did) and when a split applies.
+  (it said "exactly 2", which the code never did), when a split applies, and
+  that `implies` and `iff` can never be split out (the sub-operator would not
+  be a root).
 - `scripts/smoke-test.sh` section 5f swaps the four-child root to `xor` and
   back again, instead of swapping while it had two children.
 
