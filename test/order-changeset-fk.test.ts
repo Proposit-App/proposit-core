@@ -1,6 +1,7 @@
 // `orderChangeset` must order a changeset so that a store checking foreign
 // keys immediately, with no cascading deletes, accepts every operation, and
-// ends in the engine's state. The store here starts from the rows as they
+// ends in the engine's state. The store also requires a row with no parent to
+// sit at position 0, a rule a database checks on every statement. The store here starts from the rows as they
 // were before the call, so an expression's stored parent can differ from the
 // parent its removed entry carries: a change in the same call can move an
 // expression before removing it.
@@ -8,7 +9,10 @@
 import { describe, expect, it } from "vitest"
 import { ArgumentEngine } from "../src/lib/core/argument-engine.js"
 import { EMPTY_CLAIM_LOOKUP } from "../src/lib/utils/lookup.js"
-import { orderChangeset } from "../src/lib/utils/changeset.js"
+import {
+    composeChangesets,
+    orderChangeset,
+} from "../src/lib/utils/changeset.js"
 import type { TCoreChangeset } from "../src/lib/types/mutation.js"
 import type { PremiseEngine } from "../src/lib/core/premise-engine.js"
 import { makeArgument } from "./grammar/fixtures.js"
@@ -59,6 +63,11 @@ function applyStrictly(store: TStore, changes: TCoreChangeset): string[] {
         ) {
             errors.push(`expression ${row.id}: variable missing`)
         }
+        if (row.parentId === null && row.position !== 0) {
+            errors.push(
+                `expression ${row.id}: root at position ${String(row.position)}`
+            )
+        }
     }
     for (const op of orderChangeset(changes)) {
         const row = op.data as TRow
@@ -72,6 +81,16 @@ function applyStrictly(store: TStore, changes: TCoreChangeset): string[] {
                     }
                 }
                 store.expressions.delete(row.id)
+            } else if (op.type === "update") {
+                // An update writes the fields it carries, as SQL does.
+                const stored = store.expressions.get(row.id)
+                if (!stored) {
+                    errors.push(`update ${row.id}, which is not stored`)
+                    continue
+                }
+                const merged = { ...stored, ...row }
+                checkExpression(merged)
+                store.expressions.set(row.id, merged)
             } else {
                 checkExpression(row)
                 store.expressions.set(row.id, row)
@@ -207,6 +226,89 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
             )
         })
     }
+
+    // Composed across calls, a removed entry can name a variable that the
+    // same changeset inserts: here `x` is pointed at a new premise's variable
+    // and then removed.
+    it("a composed changeset that points an expression at a new variable, then removes it", () => {
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+        })
+        const [p1, p2] = [
+            eng.createPremise().result,
+            eng.createPremise().result,
+        ]
+        const v1 = premiseBoundVariable(eng, p1)
+        const base = {
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: p2.getId(),
+            type: "variable" as const,
+            variableId: v1,
+            parentId: "and",
+        }
+        p2.addExpression({
+            ...base,
+            id: "and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        p2.addExpression({ ...base, id: "x", position: 0 })
+        p2.addExpression({ ...base, id: "y", position: 1 })
+        p2.addExpression({ ...base, id: "z", position: 2 })
+
+        expectAppliesStrictly(eng, () => {
+            const created = eng.createPremise()
+            const vNew = premiseBoundVariable(eng, created.result)
+            const pointed = p2.updateExpression("x", { variableId: vNew })
+            const removed = p2.removeExpression("x", true)
+            return composeChangesets(
+                composeChangesets(created.changes, pointed.changes),
+                removed.changes
+            )
+        })
+    })
+
+    // Removing an operator detaches its children, and a child that was not
+    // first becomes a root at a non-zero position unless the detach resets it.
+    it("removeExpression of an operator whose second child goes with it", () => {
+        const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+            behavior: "permissive",
+        })
+        const [p1, p2] = [
+            eng.createPremise().result,
+            eng.createPremise().result,
+        ]
+        const v1 = premiseBoundVariable(eng, p1)
+        const base = {
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            premiseId: p2.getId(),
+        }
+        p2.addExpression({
+            ...base,
+            id: "and",
+            type: "operator",
+            operator: "and",
+            parentId: null,
+            position: 0,
+        })
+        for (const id of ["x", "y"]) {
+            p2.appendExpression("and", {
+                ...base,
+                id,
+                type: "variable",
+                variableId: v1,
+            })
+        }
+
+        expectAppliesStrictly(
+            eng,
+            () => p2.removeExpression("and", true).changes
+        )
+    })
 
     // Random trees over a few shared variables, then a removal that
     // cascades through them. Seeded, so a failure names a reproducible seed.
