@@ -766,7 +766,7 @@ export function finalizeResponseV2(
     const inputText = readInputText(ctx.input)
     // Nothing resolves against an empty input, so resolution is skipped
     // wholesale rather than run to produce one "quote not found" note per
-    // mention and relation. N notes blaming the model for a fault in the
+    // mention. N notes blaming the model for a fault in the
     // caller's input shape is worse than no notes; one note naming the
     // real cause is better than either. It also keeps every extracted
     // quote out of `failures`.
