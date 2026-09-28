@@ -6,6 +6,7 @@ import type {
     TCoreValidationIssue,
     TCoreValidationResult,
 } from "../../types/evaluation.js"
+import { isVariadicOperator } from "../expression-manager-checks.js"
 import {
     makeErrorIssue,
     makeValidationResult,
@@ -147,12 +148,7 @@ export function validatePremiseEvaluability<
             )
         }
 
-        if (
-            (expr.operator === "and" ||
-                expr.operator === "or" ||
-                expr.operator === "xor") &&
-            children.length < 2
-        ) {
+        if (isVariadicOperator(expr.operator) && children.length < 2) {
             issues.push(
                 makeErrorIssue({
                     code: "EXPR_CHILD_COUNT_INVALID",
