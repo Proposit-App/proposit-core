@@ -111,6 +111,7 @@ import {
     getVariableIdsForClaim,
     type TClaimVariableContext,
 } from "./argument/claim-variables.js"
+import { type TCycleContext, wouldCreateCycle } from "./argument/circularity.js"
 
 /** Default ID generator using the Web Crypto API (Node.js 20+, all modern browsers). */
 export const defaultGenerateId = (): string => globalThis.crypto.randomUUID()
@@ -246,50 +247,30 @@ export class ArgumentEngine<
         premiseId: string
     ) => boolean {
         return (variableId: string, targetPremiseId: string): boolean => {
-            return this.wouldCreateCycle(variableId, targetPremiseId, new Set())
+            return wouldCreateCycle(
+                this.asCycleContext(),
+                variableId,
+                targetPremiseId,
+                new Set()
+            )
         }
     }
 
-    private wouldCreateCycle(
-        variableId: string,
-        targetPremiseId: string,
-        visited: Set<string>
-    ): boolean {
-        const variable = this.variables.getVariable(variableId)
-        if (!variable) return false
-
-        if (!isPremiseBound(variable)) return false
-
-        const bound = variable as unknown as TPremiseBoundVariable
-        if (bound.boundPremiseId === targetPremiseId) return true
-
-        if (visited.size >= this.premises.size) {
-            throw new Error(
-                `Circularity check depth limit exceeded (visited ${visited.size} premises).`
-            )
+    /**
+     * The state the circularity check under `argument/` reads, each field
+     * read back from this engine when used.
+     */
+    private asCycleContext(): TCycleContext<TArg, TPremise, TExpr, TVar> {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const engine = this
+        return {
+            get variables() {
+                return engine.variables
+            },
+            get premises() {
+                return engine.premises
+            },
         }
-
-        if (visited.has(bound.boundPremiseId)) return false
-        visited.add(bound.boundPremiseId)
-
-        const boundPremise = this.premises.get(bound.boundPremiseId)
-        if (!boundPremise) return false
-
-        for (const expr of boundPremise.getExpressions()) {
-            if (expr.type === "variable") {
-                if (
-                    this.wouldCreateCycle(
-                        expr.variableId,
-                        targetPremiseId,
-                        visited
-                    )
-                ) {
-                    return true
-                }
-            }
-        }
-
-        return false
     }
 
     private wireCircularityCheck(
@@ -2546,7 +2527,12 @@ export class ArgumentEngine<
             },
             validateVariables: () => this.variables.validate(),
             wouldCreateCycle: (variableId, premiseId, visited) =>
-                this.wouldCreateCycle(variableId, premiseId, visited),
+                wouldCreateCycle(
+                    this.asCycleContext(),
+                    variableId,
+                    premiseId,
+                    visited
+                ),
         }
     }
 
