@@ -54,10 +54,9 @@
   because every `createPremise` re-validates the whole argument: 14.7-16.4x
   for 4x the premises, measured in the test. With an extra validation pass
   per premise added to make the build cubic, it measured 50.9x and failed.
-  The test pins that cost; it does not fix it. It sets no time limit (a
-  timeout of 0), and neither does the anchor-cost ratio test now, which
-  could pass vitest's default 5 s on a very busy machine while its ratio
-  held.
+  The test pins that cost; it does not fix it. Its time limit is 120 s, there
+  only to stop a hang, and so is the anchor-cost ratio test's, which could
+  pass vitest's default 5 s on a very busy machine while its ratio held.
 
 ## Internal
 

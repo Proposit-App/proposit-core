@@ -1226,10 +1226,10 @@ describe("stress test", () => {
         }
 
         expect(large / small).toBeLessThan(30)
-        // The builds take several seconds, longer than the default 5 s limit,
-        // and how long they take is not what this test asserts: the ratio is.
-        // A timeout of 0 turns vitest's per-test limit off.
-    }, 0)
+        // The ratio is the assertion. This limit only stops a hang: it is far
+        // above what the builds take, even on a busy machine, and replaces the
+        // default 5 s, which they can exceed.
+    }, 120_000)
 
     it("removing a premise cascades to all of its terms", () => {
         const { premiseManagers, termIdsByPremise } = buildStress()
