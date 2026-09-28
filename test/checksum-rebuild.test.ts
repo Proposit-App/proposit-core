@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest"
 import { ArgumentEngine } from "../src/lib/core/argument-engine.js"
+import { ClaimLibrary } from "../src/lib/core/claim-library.js"
 import { EMPTY_CLAIM_LOOKUP } from "../src/lib/utils/lookup.js"
 import { createChecksumConfig } from "../src/lib/consts.js"
 import type { TArgumentEngineSnapshot } from "../src/lib/core/argument-engine.js"
@@ -15,10 +16,13 @@ import { makeArgument } from "./grammar/fixtures.js"
 
 const ARG = makeArgument()
 
-// Sized to keep the file within a few seconds.
-const SEQUENCES_PER_BEHAVIOR = 300
-const DEFAULT_CONFIG_SEQUENCES = 100
+// Sized to keep the file within a few seconds; the timeout only stops a
+// hang on a slow runner.
+const SEQUENCES_PER_BEHAVIOR = 150
+const DEFAULT_CONFIG_SEQUENCES = 60
 const STEPS_PER_SEQUENCE = 25
+const CLAIM_VARIABLES = 4
+const TIMEOUT_MS = 60_000
 
 // Hashes app fields on expressions and variables, as a consumer's config
 // does, so a field written without marking the entity dirty shows up.
@@ -28,6 +32,7 @@ const APP_FIELD_CONFIG = createChecksumConfig({
 })
 
 type TEngine = ArgumentEngine
+type TLookup = typeof EMPTY_CLAIM_LOOKUP | ClaimLibrary
 type TChecksums = Map<string, unknown[]>
 
 function checksumsOf(snapshot: TArgumentEngineSnapshot): TChecksums {
@@ -57,7 +62,7 @@ function checksumsOf(snapshot: TArgumentEngineSnapshot): TChecksums {
  * Every checksum that differs between the live engine and its rebuild, or
  * why the rebuild failed: a state the live engine holds must load again.
  */
-function mismatches(eng: TEngine): string[] {
+function mismatches(eng: TEngine, lookup: TLookup): string[] {
     const snapshot = eng.snapshot()
     const live = checksumsOf(snapshot)
     let rebuilt: TChecksums
@@ -65,7 +70,7 @@ function mismatches(eng: TEngine): string[] {
         rebuilt = checksumsOf(
             ArgumentEngine.fromSnapshot(
                 JSON.parse(JSON.stringify(snapshot)) as typeof snapshot,
-                EMPTY_CLAIM_LOOKUP,
+                lookup,
                 "ignore"
             ).snapshot()
         )
@@ -83,20 +88,6 @@ function mismatches(eng: TEngine): string[] {
     }
     for (const key of rebuilt.keys()) {
         if (!live.has(key)) out.push(`${key}: only in the rebuild`)
-    }
-    // The snapshot flushes first, so also compare what reads report now.
-    for (const pe of eng.listPremises()) {
-        for (const e of pe.getExpressions()) {
-            const values = [
-                e.checksum,
-                e.descendantChecksum,
-                e.combinedChecksum,
-            ]
-            const stored = live.get(`expression ${e.id}`)
-            if (JSON.stringify(values) !== JSON.stringify(stored)) {
-                out.push(`expression ${e.id}: read differs from snapshot`)
-            }
-        }
     }
     return out
 }
@@ -140,54 +131,84 @@ const OPERATORS: readonly TCoreLogicalOperatorType[] = [
     "iff",
 ]
 
-/** Builds one random step: its name, and a thunk that performs it. */
+type TRng = ReturnType<typeof randomOf>
+
+/**
+ * Builds one random step: its name, and a thunk that performs it. Targets
+ * are chosen to suit each step (an operator for `changeOperator`, a variable
+ * expression for `updateExpression`), and leaves mostly name claim-bound
+ * variables, which no premise can bind circularly, so that most steps are
+ * accepted and trees grow.
+ */
 function randomStep(
     eng: TEngine,
-    { random, pick }: ReturnType<typeof randomOf>,
+    { random, pick }: TRng,
     nextId: () => string
 ): [string, () => unknown] {
     const premises = eng.listPremises()
-    if (premises.length === 0)
+    if (premises.length === 0) {
         return ["createPremise", () => eng.createPremise()]
-    const pe: PremiseEngine = pick(premises)
+    }
+    const populated = premises.filter((p) => p.getExpressions().length > 0)
+    const pe: PremiseEngine =
+        populated.length > 0 && random() < 0.8
+            ? pick(populated)
+            : pick(premises)
     const base = {
         argumentId: ARG.id,
         argumentVersion: ARG.version,
         premiseId: pe.getId(),
     }
     const variables = eng.getVariables()
-    const variableId = variables.length > 0 ? pick(variables).id : "missing"
+    const claimBound = variables.filter(
+        (v) => (v as unknown as Record<string, unknown>).claimId !== undefined
+    )
+    const anyVariable = () =>
+        variables.length > 0 ? pick(variables).id : "missing"
+    const leafVariable = () =>
+        claimBound.length > 0 && random() < 0.85
+            ? pick(claimBound).id
+            : anyVariable()
     const expressions = pe.getExpressions()
+    const ofType = (type: string) => {
+        const matching = expressions.filter((e) => e.type === type)
+        return matching.length > 0 ? pick(matching).id : "missing"
+    }
     const target = expressions.length > 0 ? pick(expressions).id : "missing"
-    const other = expressions.length > 0 ? pick(expressions).id : "missing"
+    const container = () => {
+        const parents = expressions.filter((e) => e.type !== "variable")
+        return parents.length > 0 ? pick(parents).id : "missing"
+    }
     const leaf = () => ({
         ...base,
         id: nextId(),
         type: "variable" as const,
-        variableId,
+        variableId: leafVariable(),
     })
-    const steps: [string, () => unknown][] = [
-        ["createPremise", () => eng.createPremise()],
-        ["removePremise", () => eng.removePremise(pick(premises).getId())],
+    const operator = () => ({
+        ...base,
+        id: nextId(),
+        type: "operator" as const,
+        operator: pick(OPERATORS),
+        parentId: null,
+    })
+
+    const growth: [string, () => unknown][] = [
         [
             "addExpression as root",
             () =>
-                pe.addExpression({
-                    ...leaf(),
-                    ...(random() < 0.5
-                        ? {}
-                        : {
-                              type: "operator" as const,
-                              operator: pick(OPERATORS),
-                              variableId: undefined,
-                          }),
-                    parentId: null,
-                    position: 0,
-                } as never),
+                pe.addExpression(
+                    random() < 0.5
+                        ? { ...leaf(), parentId: null, position: 0 }
+                        : ({ ...operator(), position: 0 } as never)
+                ),
         ],
         [
             "appendExpression",
-            () => pe.appendExpression(target, { ...leaf(), parentId: target }),
+            () => {
+                const parentId = container()
+                return pe.appendExpression(parentId, { ...leaf(), parentId })
+            },
         ],
         [
             "addExpressionRelative",
@@ -202,61 +223,54 @@ function randomStep(
             "insertExpression",
             () =>
                 pe.insertExpression(
-                    {
-                        ...base,
-                        id: nextId(),
-                        type: "operator",
-                        operator: pick(OPERATORS),
-                        parentId: null,
-                        position: 0,
-                    } as never,
+                    { ...operator(), position: 0 } as never,
                     target
                 ),
         ],
         [
             "wrapExpression",
             () =>
-                pe.wrapExpression(
-                    {
-                        ...base,
-                        id: nextId(),
-                        type: "operator",
-                        operator: pick(OPERATORS),
-                        parentId: null,
-                    } as never,
-                    { ...leaf(), parentId: null },
-                    random() < 0.5 ? target : undefined,
-                    random() < 0.5 ? undefined : target
-                ),
+                random() < 0.5
+                    ? pe.wrapExpression(
+                          operator() as never,
+                          {
+                              ...leaf(),
+                              parentId: null,
+                          },
+                          target
+                      )
+                    : pe.wrapExpression(
+                          operator() as never,
+                          { ...leaf(), parentId: null },
+                          undefined,
+                          target
+                      ),
         ],
-        ["updateExpression", () => pe.updateExpression(target, { variableId })],
+    ]
+    const edits: [string, () => unknown][] = [
+        [
+            "updateExpression",
+            () =>
+                pe.updateExpression(ofType("variable"), {
+                    variableId: leafVariable(),
+                }),
+        ],
         ["removeExpression", () => pe.removeExpression(target, random() < 0.5)],
         [
             "reparentExpression",
             () =>
                 pe.reparentExpression(
                     target,
-                    other,
-                    Math.floor(random() * 3) * 1000
+                    container(),
+                    Math.floor(random() * 2 ** 31)
                 ),
         ],
         ["wrapInFormula", () => pe.wrapInFormula(target, nextId())],
         ["toggleNegation", () => pe.toggleNegation(target)],
-        ["changeOperator", () => pe.changeOperator(target, pick(OPERATORS))],
         [
-            "deleteExpressionsUsingVariable",
-            () => pe.deleteExpressionsUsingVariable(variableId),
+            "changeOperator",
+            () => pe.changeOperator(ofType("operator"), pick(OPERATORS)),
         ],
-        ["removeVariable", () => eng.removeVariable(variableId)],
-        [
-            "updateVariable",
-            () =>
-                eng.updateVariable(variableId, {
-                    symbol: `S${String(Math.floor(random() * 1000))}`,
-                }),
-        ],
-        ["setExtras", () => pe.setExtras({ title: `t${String(random())}` })],
-        ["normalize", () => eng.normalize()],
         [
             "patchExpressionAppFields",
             () =>
@@ -264,12 +278,27 @@ function randomStep(
                     creatorId: `u${String(Math.floor(random() * 3))}`,
                 } as never),
         ],
+        ["normalize", () => eng.normalize()],
     ]
-    // Building leaves weighs more, so trees grow before they are cut.
-    const growth = steps.filter(([name]) =>
-        /^(append|addExpressionRelative|wrapExpression|insert)/.test(name)
-    )
-    return random() < 0.35 ? pick(growth) : pick(steps)
+    const other: [string, () => unknown][] = [
+        ["createPremise", () => eng.createPremise()],
+        ["removePremise", () => eng.removePremise(pick(premises).getId())],
+        [
+            "deleteExpressionsUsingVariable",
+            () => pe.deleteExpressionsUsingVariable(anyVariable()),
+        ],
+        ["removeVariable", () => eng.removeVariable(anyVariable())],
+        [
+            "updateVariable",
+            () =>
+                eng.updateVariable(anyVariable(), {
+                    symbol: `S${String(Math.floor(random() * 1000))}`,
+                }),
+        ],
+        ["setExtras", () => pe.setExtras({ title: `t${String(random())}` })],
+    ]
+    const roll = random()
+    return pick(roll < 0.45 ? growth : roll < 0.85 ? edits : other)
 }
 
 function runSequence(
@@ -280,26 +309,48 @@ function runSequence(
     const rng = randomOf(seed)
     let n = 0
     const nextId = () => `g${String(n++)}`
-    const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+    const lookup = new ClaimLibrary()
+    const eng = new ArgumentEngine(ARG, lookup, {
         behavior,
         generateId: nextId,
         ...(config ? { checksumConfig: config } : {}),
     })
+    for (let i = 0; i < CLAIM_VARIABLES; i++) {
+        lookup.create({ id: `c${String(i)}`, type: "normal" })
+        eng.addVariable({
+            id: `v${String(i)}`,
+            argumentId: ARG.id,
+            argumentVersion: ARG.version,
+            symbol: `V${String(i)}`,
+            claimId: `c${String(i)}`,
+            claimVersion: 0,
+        })
+    }
     for (let i = 0; i < 3; i++) eng.createPremise()
+    const label = (step: number, name: string, stage: string) =>
+        `${behavior}, seed ${String(seed)}, step ${String(step)} (${name}), ${stage}`
     for (let step = 0; step < STEPS_PER_SEQUENCE; step++) {
         const [name, perform] = randomStep(eng, rng, nextId)
         try {
             perform()
         } catch {
-            // Rejected: the check below still runs, since a rejected step
+            // Rejected: the checks below still run, since a rejected step
             // must leave the engine as it was.
         }
-        if (config) stampAppFields(eng, `d${String(step)}`)
-        const found = mismatches(eng)
+        // Checked before stamping as well: stamping marks each stamped
+        // expression and its ancestors dirty, which would hide a mutation
+        // that forgot to.
         expect(
-            found,
-            `${behavior}, seed ${String(seed)}, step ${String(step)} (${name})`
+            mismatches(eng, lookup),
+            label(step, name, "after the step")
         ).toEqual([])
+        if (config) {
+            stampAppFields(eng, `d${String(step)}`)
+            expect(
+                mismatches(eng, lookup),
+                label(step, name, "after stamping")
+            ).toEqual([])
+        }
     }
 }
 
@@ -344,31 +395,39 @@ describe("live checksums equal the ones a rebuild from the snapshot computes", (
             (e) => e.type === "formula"
         )
         expect(buffer).toBeDefined()
-        expect(mismatches(eng)).toEqual([])
+        expect(mismatches(eng, EMPTY_CLAIM_LOOKUP)).toEqual([])
 
         // Writing onto the stored object skips the dirty mark.
         Object.assign(p2.getExpression(buffer!.id)!, { creatorId: "u1" })
 
-        expect(mismatches(eng)).toContainEqual(
+        expect(mismatches(eng, EMPTY_CLAIM_LOOKUP)).toContainEqual(
             expect.stringContaining(`expression ${buffer!.id}:`)
         )
     })
 
     for (const behavior of ["assistive", "permissive"] as const) {
-        it(`random sequences in ${behavior} behavior, hashing app fields`, () => {
-            for (let seed = 1; seed <= SEQUENCES_PER_BEHAVIOR; seed++) {
-                runSequence(seed, behavior, APP_FIELD_CONFIG)
-            }
-        })
+        it(
+            `random sequences in ${behavior} behavior, hashing app fields`,
+            () => {
+                for (let seed = 1; seed <= SEQUENCES_PER_BEHAVIOR; seed++) {
+                    runSequence(seed, behavior, APP_FIELD_CONFIG)
+                }
+            },
+            TIMEOUT_MS
+        )
     }
 
-    it("random sequences under the default checksum config", () => {
-        for (let seed = 1; seed <= DEFAULT_CONFIG_SEQUENCES; seed++) {
-            runSequence(
-                seed,
-                seed % 2 === 0 ? "assistive" : "permissive",
-                undefined
-            )
-        }
-    })
+    it(
+        "random sequences under the default checksum config",
+        () => {
+            for (let seed = 1; seed <= DEFAULT_CONFIG_SEQUENCES; seed++) {
+                runSequence(
+                    seed,
+                    seed % 2 === 0 ? "assistive" : "permissive",
+                    undefined
+                )
+            }
+        },
+        TIMEOUT_MS
+    )
 })

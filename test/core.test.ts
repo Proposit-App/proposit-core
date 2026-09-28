@@ -11312,6 +11312,21 @@ describe("Premise-variable associations — transitive circularity", () => {
                 variableId: "vQ",
             })
         ).toThrow(/circular/i)
+
+        // The same cycle reached by repointing an existing expression.
+        p2.appendExpression(null, {
+            id: "e2",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p2",
+            parentId: null,
+            type: "variable",
+            variableId: "vA",
+        })
+        expect(() => p2.updateExpression("e2", { variableId: "vQ" })).toThrow(
+            /circular/i
+        )
+        expect(p2.getExpression("e2")!).toMatchObject({ variableId: "vA" })
     })
 })
 

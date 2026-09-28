@@ -110,7 +110,7 @@
 ## Tests
 
 - `test/checksum-rebuild.test.ts` replays seeded random sequences of engine
-  mutations (300 of 25 steps in each behavior with app fields hashed, and 100
+  mutations (150 of 25 steps in each behavior with app fields hashed, and 60
   under the default config) and, after every step, requires the checksums the
   live engine reports to equal those a rebuild from its JSON snapshot
   computes, and the rebuild to succeed. A negative control writes an app field
