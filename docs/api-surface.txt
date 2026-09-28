@@ -1,0 +1,1694 @@
+Accessor lib.ArgumentEngine.behavior
+Class extensions/basics.BasicsArgumentParser
+Class lib.ArgumentEngine
+Class lib.ArgumentLibrary
+Class lib.ArgumentParser
+Class lib.ClaimAxiomLibrary
+Class lib.ClaimCitationLibrary
+Class lib.ClaimLibrary
+Class lib.ConversationClosedError
+Class lib.ForkLibrary
+Class lib.ForkNamespace
+Class lib.InvalidArgumentStructureError
+Class lib.InvariantViolationError
+Class lib.LlmStageRetryExhaustedError
+Class lib.NotOperatorNotDecidableError
+Class lib.OriginLibrary
+Class lib.PipelineConfigurationError
+Class lib.PremiseEngine
+Class lib.PropositCore
+Class lib.StageAbortedError
+Class lib.SubPipelineFailedError
+Class lib.UnknownExpressionError
+Class lib.VariableManager
+Class lib.VersionedLibrary
+Constructor extensions/basics.BasicsArgumentParser.constructor (1)
+Constructor lib.ArgumentEngine.constructor (1)
+Constructor lib.ArgumentLibrary.constructor (1)
+Constructor lib.ArgumentParser.constructor (1)
+Constructor lib.ClaimAxiomLibrary.constructor (1)
+Constructor lib.ClaimCitationLibrary.constructor (1)
+Constructor lib.ClaimLibrary.constructor (1)
+Constructor lib.ConversationClosedError.constructor (1)
+Constructor lib.ForkLibrary.constructor (1)
+Constructor lib.ForkNamespace.constructor (1)
+Constructor lib.InvalidArgumentStructureError.constructor (1)
+Constructor lib.InvariantViolationError.constructor (1)
+Constructor lib.LlmStageRetryExhaustedError.constructor (1)
+Constructor lib.NotOperatorNotDecidableError.constructor (1)
+Constructor lib.OriginLibrary.constructor (1)
+Constructor lib.PipelineConfigurationError.constructor (1)
+Constructor lib.PremiseEngine.constructor (1)
+Constructor lib.PropositCore.constructor (1)
+Constructor lib.StageAbortedError.constructor (1)
+Constructor lib.SubPipelineFailedError.constructor (1)
+Constructor lib.UnknownExpressionError.constructor (1)
+Constructor lib.VariableManager.constructor (1)
+Constructor lib.VersionedLibrary.constructor (1)
+Function extensions/citations/ieee.formatCitationParts (1)
+Function extensions/citations/ieee.formatDate (1)
+Function extensions/citations/ieee.formatNamesInCitation (1)
+Function extensions/citations/ieee.formatSingleAuthor (1)
+Function extensions/pipelines/base.assignVariables (1)
+Function extensions/pipelines/base.buildClaimRecordSchema (1)
+Function extensions/pipelines/base.buildResponseSchema (1)
+Function extensions/pipelines/base.checkArgumentStructure (1)
+Function extensions/pipelines/base.compileFormulas (1)
+Function extensions/pipelines/base.createAxiomIndicatorDetectionStage (1)
+Function extensions/pipelines/base.createCitationSourceDetectionStage (1)
+Function extensions/pipelines/base.createClaimCanonicalizationStage (1)
+Function extensions/pipelines/base.createClaimMentionExtractionStage (1)
+Function extensions/pipelines/base.createClaimTypeClassificationStage (1)
+Function extensions/pipelines/base.createConclusionSelectionStage (1)
+Function extensions/pipelines/base.createRelationExtractionStage (1)
+Function extensions/pipelines/base.createSegmentationStage (1)
+Function extensions/pipelines/base.deriveRoles (1)
+Function extensions/pipelines/base.finalizeResponseV2 (1)
+Function extensions/pipelines/base.isValidVariableSymbol (1)
+Function extensions/pipelines/base.locateSourceAnchor (1)
+Function extensions/pipelines/base.resolveLlmStageOptions (1)
+Function extensions/pipelines/base.selectFallbackConclusion (1)
+Function extensions/pipelines/base.validateClaimReferences (1)
+Function extensions/pipelines/base.validateFormulas (1)
+Function extensions/pipelines/ingestion.createScholarPipeline (1)
+Function extensions/pipelines/ingestion.createScribePipeline (1)
+Function extensions/pipelines/ingestion.getCanonicalStageIds (1)
+Function lib.Nullable (1)
+Function lib.analyzePremiseRelationships (1)
+Function lib.buildCodePointIndex (1)
+Function lib.buildParsingPrompt (1)
+Function lib.buildParsingResponseSchema (1)
+Function lib.buildPremiseProfile (1)
+Function lib.canonicalSerialize (1)
+Function lib.canonicalizeOperatorAssignments (1)
+Function lib.checkArgumentValidity (1)
+Function lib.closeUnderAcceptedOperators (1)
+Function lib.codePointLength (1)
+Function lib.collectArgumentReferencedClaims (1)
+Function lib.collectArgumentReferencedVariables (1)
+Function lib.completeStage (1)
+Function lib.computeHash (1)
+Function lib.createChecksumConfig (1)
+Function lib.createConversation (1)
+Function lib.createLookup (1)
+Function lib.dateType (1)
+Function lib.defaultCompareArgument (1)
+Function lib.defaultCompareExpression (1)
+Function lib.defaultComparePremise (1)
+Function lib.defaultCompareVariable (1)
+Function lib.defaultGenerateId (1)
+Function lib.deterministicStage (1)
+Function lib.diffArguments (1)
+Function lib.emptyClaimConnectionLookup (1)
+Function lib.entityChecksum (1)
+Function lib.evaluateArgument (1)
+Function lib.executeFinalize (1)
+Function lib.executePipeline (1)
+Function lib.executeStage (1)
+Function lib.executeTurn (1)
+Function lib.forkArgumentEngine (1)
+Function lib.getParsingResponseSchema (1)
+Function lib.isClaimBound (1)
+Function lib.isContested (1)
+Function lib.isExternallyBound (1)
+Function lib.isLlmStage (1)
+Function lib.isNakedQDerivationPremise (1)
+Function lib.isNakedQTree (1)
+Function lib.isPremiseBound (1)
+Function lib.isPremiseSetSatisfiable (1)
+Function lib.launchStage (1)
+Function lib.llmStage (1)
+Function lib.mergeChangesets (1)
+Function lib.midpoint (1)
+Function lib.normalizeChecksumConfig (1)
+Function lib.normalizeOriginText (1)
+Function lib.optional (1)
+Function lib.orderChangeset (1)
+Function lib.parseFormula (1)
+Function lib.propagateOperatorConstraints (1)
+Function lib.serializeChecksumConfig (1)
+Function lib.sha256Hex (1)
+Function lib.sliceByCodePoints (1)
+Function lib.sliceByCodePointsIndexed (1)
+Function lib.subPipelineStage (1)
+Function lib.validateArgument (1)
+Function lib.validateArgumentAfterPremiseMutation (1)
+Function lib.validateArgumentEvaluability (1)
+Function lib.validateDerivationStructure (1)
+Function lib.validateGrammar (1)
+Interface extensions/citations/ieee.TCitationFormatResult
+Interface extensions/citations/ieee.TCitationSegment
+Interface extensions/citations/ieee.TSegmentInstructionConditional
+Interface extensions/citations/ieee.TSegmentInstructionSegment
+Interface extensions/citations/ieee.TSegmentInstructionSeparator
+Interface extensions/citations/ieee.TSegmentSource
+Interface lib.TArgumentEvaluation
+Interface lib.TArgumentEvaluationContext
+Interface lib.TArgumentExpressionQueries
+Interface lib.TArgumentIdentity
+Interface lib.TArgumentLifecycle
+Interface lib.TArgumentRoleState
+Interface lib.TArgumentValidationContext
+Interface lib.TCanonicalizeOperatorAssignmentsInput
+Interface lib.TClaimConnectionLibraryManagement
+Interface lib.TClaimConnectionLookup
+Interface lib.TClaimLibraryManagement
+Interface lib.TClaimLookup
+Interface lib.TCollectArgumentReferencedClaimsResult
+Interface lib.TCoreArgumentDiff
+Interface lib.TCoreArgumentEvaluationOptions
+Interface lib.TCoreArgumentEvaluationResult
+Interface lib.TCoreChangeset
+Interface lib.TCoreChecksumConfig
+Interface lib.TCoreCounterexample
+Interface lib.TCoreDerivationStep
+Interface lib.TCoreDiffOptions
+Interface lib.TCoreDirectionalVacuity
+Interface lib.TCoreEntityChanges
+Interface lib.TCoreEntityFieldDiff
+Interface lib.TCoreEntitySetDiff
+Interface lib.TCoreExpressionAssignment
+Interface lib.TCoreFieldChange
+Interface lib.TCoreMutationResult
+Interface lib.TCorePremiseDiff
+Interface lib.TCorePremiseEvaluationResult
+Interface lib.TCorePremiseProfile
+Interface lib.TCorePremiseRelationResult
+Interface lib.TCorePremiseRelationshipAnalysis
+Interface lib.TCorePremiseSetDiff
+Interface lib.TCorePropagationOptions
+Interface lib.TCoreResolvedAssignment
+Interface lib.TCoreRoleDiff
+Interface lib.TCoreValidationIssue
+Interface lib.TCoreValidationResult
+Interface lib.TCoreValidityCheckOptions
+Interface lib.TCoreValidityCheckResult
+Interface lib.TCoreValueAttribution
+Interface lib.TCoreVariableAppearance
+Interface lib.TCoreVariableProvenance
+Interface lib.TCoreVariableRelationship
+Interface lib.TDisplayable
+Interface lib.TEvaluablePremise
+Interface lib.TExpressionMutations
+Interface lib.TExpressionQueries
+Interface lib.TForkArgumentOptions
+Interface lib.TForkRemapTable
+Interface lib.TFormulaTreeVisitor
+Interface lib.TFormulaTreeWalking
+Interface lib.THierarchicalChecksummable
+Interface lib.TOriginLibraryManagement
+Interface lib.TOriginLookup
+Interface lib.TPremiseClassification
+Interface lib.TPremiseCrud
+Interface lib.TPremiseEvaluation
+Interface lib.TPremiseIdentity
+Interface lib.TPremiseLifecycle
+Interface lib.TPremiseSetSatisfiabilityInput
+Interface lib.TValidatablePremise
+Interface lib.TVariableManagement
+Interface lib.TVariableReferences
+Method extensions/basics.BasicsArgumentParser.build (1)
+Method extensions/basics.BasicsArgumentParser.mapArgument (1)
+Method extensions/basics.BasicsArgumentParser.mapClaim (1)
+Method extensions/basics.BasicsArgumentParser.mapClaimAxiom (1)
+Method extensions/basics.BasicsArgumentParser.mapClaimCitation (1)
+Method extensions/basics.BasicsArgumentParser.mapPremise (1)
+Method extensions/basics.BasicsArgumentParser.mapVariable (1)
+Method extensions/basics.BasicsArgumentParser.validate (1)
+Method lib.ArgumentEngine.addVariable (1)
+Method lib.ArgumentEngine.bindVariableToArgument (1)
+Method lib.ArgumentEngine.bindVariableToExternalPremise (1)
+Method lib.ArgumentEngine.bindVariableToPremise (1)
+Method lib.ArgumentEngine.buildReactiveSnapshot (1)
+Method lib.ArgumentEngine.buildVariableIndex (1)
+Method lib.ArgumentEngine.canBind (1)
+Method lib.ArgumentEngine.canFork (1)
+Method lib.ArgumentEngine.checkValidity (1)
+Method lib.ArgumentEngine.checksum (1)
+Method lib.ArgumentEngine.clearConclusionPremise (1)
+Method lib.ArgumentEngine.collectReferencedVariables (1)
+Method lib.ArgumentEngine.combinedChecksum (1)
+Method lib.ArgumentEngine.createPremise (4)
+Method lib.ArgumentEngine.createPremiseWithId (2)
+Method lib.ArgumentEngine.deriveDefaultAssignment (1)
+Method lib.ArgumentEngine.descendantChecksum (1)
+Method lib.ArgumentEngine.dropAxiomsFromMixedAntecedent (1)
+Method lib.ArgumentEngine.ensureClaimBoundVariable (1)
+Method lib.ArgumentEngine.evaluate (1)
+Method lib.ArgumentEngine.evaluateWithDefaults (1)
+Method lib.ArgumentEngine.findPremiseByExpressionId (1)
+Method lib.ArgumentEngine.flushChecksums (1)
+Method lib.ArgumentEngine.fromData (1)
+Method lib.ArgumentEngine.fromSnapshot (1)
+Method lib.ArgumentEngine.getAllExpressions (1)
+Method lib.ArgumentEngine.getArgument (1)
+Method lib.ArgumentEngine.getClaim (1)
+Method lib.ArgumentEngine.getClaimIdForVariable (1)
+Method lib.ArgumentEngine.getCollectionChecksum (1)
+Method lib.ArgumentEngine.getConclusionPremise (1)
+Method lib.ArgumentEngine.getExpression (1)
+Method lib.ArgumentEngine.getExpressionPremiseId (1)
+Method lib.ArgumentEngine.getExpressionsByVariableId (1)
+Method lib.ArgumentEngine.getExtras (1)
+Method lib.ArgumentEngine.getPremise (1)
+Method lib.ArgumentEngine.getRoleState (1)
+Method lib.ArgumentEngine.getSnapshot (1)
+Method lib.ArgumentEngine.getVariable (1)
+Method lib.ArgumentEngine.getVariableBySymbol (1)
+Method lib.ArgumentEngine.getVariableIdForClaim (1)
+Method lib.ArgumentEngine.getVariableIdsForClaim (1)
+Method lib.ArgumentEngine.getVariables (1)
+Method lib.ArgumentEngine.getVariablesBoundToPremise (1)
+Method lib.ArgumentEngine.hasExpression (1)
+Method lib.ArgumentEngine.hasPremise (1)
+Method lib.ArgumentEngine.hasVariable (1)
+Method lib.ArgumentEngine.listPremiseIds (1)
+Method lib.ArgumentEngine.listPremises (1)
+Method lib.ArgumentEngine.listRootExpressions (1)
+Method lib.ArgumentEngine.listSupportingPremises (1)
+Method lib.ArgumentEngine.normalize (1)
+Method lib.ArgumentEngine.notifySubscribers (1)
+Method lib.ArgumentEngine.patchExpressionAppFields (1)
+Method lib.ArgumentEngine.populateFromAxioms (1)
+Method lib.ArgumentEngine.populateFromCitations (1)
+Method lib.ArgumentEngine.removeDuplicateDerivationPremises (1)
+Method lib.ArgumentEngine.removeOrphanOperators (1)
+Method lib.ArgumentEngine.removePremise (1)
+Method lib.ArgumentEngine.removeUnresolvableVariables (1)
+Method lib.ArgumentEngine.removeVariable (1)
+Method lib.ArgumentEngine.rollback (1)
+Method lib.ArgumentEngine.setBehavior (1)
+Method lib.ArgumentEngine.setConclusionPremise (1)
+Method lib.ArgumentEngine.setExtras (1)
+Method lib.ArgumentEngine.snapshot (1)
+Method lib.ArgumentEngine.subscribe (1)
+Method lib.ArgumentEngine.toDisplayString (1)
+Method lib.ArgumentEngine.updateExtras (1)
+Method lib.ArgumentEngine.updateVariable (1)
+Method lib.ArgumentEngine.validate (1)
+Method lib.ArgumentEngine.validateDerivationStructures (1)
+Method lib.ArgumentEngine.validateEvaluability (1)
+Method lib.ArgumentEngine.validateInvariants (1)
+Method lib.ArgumentEngine.withValidation (1)
+Method lib.ArgumentLibrary.create (1)
+Method lib.ArgumentLibrary.fromSnapshot (1)
+Method lib.ArgumentLibrary.get (1)
+Method lib.ArgumentLibrary.getAll (1)
+Method lib.ArgumentLibrary.register (1)
+Method lib.ArgumentLibrary.remove (1)
+Method lib.ArgumentLibrary.snapshot (1)
+Method lib.ArgumentLibrary.validate (1)
+Method lib.ArgumentParser.build (1)
+Method lib.ArgumentParser.mapArgument (1)
+Method lib.ArgumentParser.mapClaim (1)
+Method lib.ArgumentParser.mapClaimAxiom (1)
+Method lib.ArgumentParser.mapClaimCitation (1)
+Method lib.ArgumentParser.mapPremise (1)
+Method lib.ArgumentParser.mapVariable (1)
+Method lib.ArgumentParser.validate (1)
+Method lib.ClaimAxiomLibrary.add (1)
+Method lib.ClaimAxiomLibrary.filter (1)
+Method lib.ClaimAxiomLibrary.fromSnapshot (1)
+Method lib.ClaimAxiomLibrary.get (1)
+Method lib.ClaimAxiomLibrary.getAll (1)
+Method lib.ClaimAxiomLibrary.getConnectionsForClaim (1)
+Method lib.ClaimAxiomLibrary.remove (1)
+Method lib.ClaimAxiomLibrary.snapshot (1)
+Method lib.ClaimAxiomLibrary.validate (1)
+Method lib.ClaimCitationLibrary.add (1)
+Method lib.ClaimCitationLibrary.filter (1)
+Method lib.ClaimCitationLibrary.fromSnapshot (1)
+Method lib.ClaimCitationLibrary.get (1)
+Method lib.ClaimCitationLibrary.getAll (1)
+Method lib.ClaimCitationLibrary.getConnectionsForClaim (1)
+Method lib.ClaimCitationLibrary.remove (1)
+Method lib.ClaimCitationLibrary.snapshot (1)
+Method lib.ClaimCitationLibrary.validate (1)
+Method lib.ClaimLibrary.create (1)
+Method lib.ClaimLibrary.freeze (1)
+Method lib.ClaimLibrary.fromSnapshot (1)
+Method lib.ClaimLibrary.get (1)
+Method lib.ClaimLibrary.getAll (1)
+Method lib.ClaimLibrary.getCurrent (1)
+Method lib.ClaimLibrary.getVersions (1)
+Method lib.ClaimLibrary.restoreFromEntities (1)
+Method lib.ClaimLibrary.snapshot (1)
+Method lib.ClaimLibrary.update (1)
+Method lib.ClaimLibrary.validate (1)
+Method lib.ClaimLibrary.withValidation (1)
+Method lib.ConversationClosedError.captureStackTrace (1)
+Method lib.ConversationClosedError.prepareStackTrace (1)
+Method lib.ForkLibrary.fromSnapshot (1)
+Method lib.ForkLibrary.snapshot (1)
+Method lib.ForkLibrary.validate (1)
+Method lib.ForkNamespace.create (1)
+Method lib.ForkNamespace.fromSnapshot (1)
+Method lib.ForkNamespace.get (1)
+Method lib.ForkNamespace.getAll (1)
+Method lib.ForkNamespace.getByForkId (1)
+Method lib.ForkNamespace.remove (1)
+Method lib.ForkNamespace.snapshot (1)
+Method lib.ForkNamespace.validate (1)
+Method lib.InvalidArgumentStructureError.captureStackTrace (1)
+Method lib.InvalidArgumentStructureError.prepareStackTrace (1)
+Method lib.InvariantViolationError.captureStackTrace (1)
+Method lib.InvariantViolationError.prepareStackTrace (1)
+Method lib.LlmStageRetryExhaustedError.captureStackTrace (1)
+Method lib.LlmStageRetryExhaustedError.prepareStackTrace (1)
+Method lib.NotOperatorNotDecidableError.captureStackTrace (1)
+Method lib.NotOperatorNotDecidableError.prepareStackTrace (1)
+Method lib.OriginLibrary.addAnchor (1)
+Method lib.OriginLibrary.addDocument (1)
+Method lib.OriginLibrary.addLink (1)
+Method lib.OriginLibrary.fromSnapshot (1)
+Method lib.OriginLibrary.getAllAnchors (1)
+Method lib.OriginLibrary.getAllDocuments (1)
+Method lib.OriginLibrary.getAllLinks (1)
+Method lib.OriginLibrary.getAnchor (1)
+Method lib.OriginLibrary.getAnchorsForArgument (1)
+Method lib.OriginLibrary.getAnchorsForTarget (1)
+Method lib.OriginLibrary.getDocument (1)
+Method lib.OriginLibrary.getLink (1)
+Method lib.OriginLibrary.getLinksForArgument (1)
+Method lib.OriginLibrary.removeAnchor (1)
+Method lib.OriginLibrary.removeDocument (1)
+Method lib.OriginLibrary.removeLink (1)
+Method lib.OriginLibrary.snapshot (1)
+Method lib.OriginLibrary.validate (1)
+Method lib.PipelineConfigurationError.captureStackTrace (1)
+Method lib.PipelineConfigurationError.prepareStackTrace (1)
+Method lib.PremiseEngine.addExpression (1)
+Method lib.PremiseEngine.addExpressionRelative (1)
+Method lib.PremiseEngine.appendExpression (1)
+Method lib.PremiseEngine.changeOperator (1)
+Method lib.PremiseEngine.checksum (1)
+Method lib.PremiseEngine.combinedChecksum (1)
+Method lib.PremiseEngine.deleteExpressionsUsingVariable (1)
+Method lib.PremiseEngine.descendantChecksum (1)
+Method lib.PremiseEngine.evaluate (1)
+Method lib.PremiseEngine.flushChecksums (1)
+Method lib.PremiseEngine.fromSnapshot (1)
+Method lib.PremiseEngine.getChildExpressions (1)
+Method lib.PremiseEngine.getCollectionChecksum (1)
+Method lib.PremiseEngine.getDecidableOperatorExpressions (1)
+Method lib.PremiseEngine.getExpression (1)
+Method lib.PremiseEngine.getExpressions (1)
+Method lib.PremiseEngine.getExtras (1)
+Method lib.PremiseEngine.getId (1)
+Method lib.PremiseEngine.getPremiseType (1)
+Method lib.PremiseEngine.getReferencedVariableIds (1)
+Method lib.PremiseEngine.getRootExpression (1)
+Method lib.PremiseEngine.getRootExpressionId (1)
+Method lib.PremiseEngine.getVariables (1)
+Method lib.PremiseEngine.insertExpression (1)
+Method lib.PremiseEngine.isConstraint (1)
+Method lib.PremiseEngine.isInference (1)
+Method lib.PremiseEngine.loadExpressions (1)
+Method lib.PremiseEngine.markDirty (1)
+Method lib.PremiseEngine.removeExpression (1)
+Method lib.PremiseEngine.reparentExpression (1)
+Method lib.PremiseEngine.setArgumentValidateCallback (1)
+Method lib.PremiseEngine.setCircularityCheck (1)
+Method lib.PremiseEngine.setEmptyBoundPremiseCheck (1)
+Method lib.PremiseEngine.setExtras (1)
+Method lib.PremiseEngine.setOnMutate (1)
+Method lib.PremiseEngine.setVariableIdsCallback (1)
+Method lib.PremiseEngine.snapshot (1)
+Method lib.PremiseEngine.toDisplayString (1)
+Method lib.PremiseEngine.toPremiseData (1)
+Method lib.PremiseEngine.toggleNegation (1)
+Method lib.PremiseEngine.updateExpression (1)
+Method lib.PremiseEngine.updateExtras (1)
+Method lib.PremiseEngine.validate (1)
+Method lib.PremiseEngine.validateEvaluability (1)
+Method lib.PremiseEngine.walkFormulaTree (1)
+Method lib.PremiseEngine.withValidation (1)
+Method lib.PremiseEngine.wrapExpression (1)
+Method lib.PremiseEngine.wrapInFormula (1)
+Method lib.PropositCore.diffArguments (1)
+Method lib.PropositCore.forkArgument (1)
+Method lib.PropositCore.fromSnapshot (1)
+Method lib.PropositCore.snapshot (1)
+Method lib.PropositCore.validate (1)
+Method lib.StageAbortedError.captureStackTrace (1)
+Method lib.StageAbortedError.prepareStackTrace (1)
+Method lib.SubPipelineFailedError.captureStackTrace (1)
+Method lib.SubPipelineFailedError.prepareStackTrace (1)
+Method lib.TArgumentEvaluation.checkValidity (1)
+Method lib.TArgumentEvaluation.deriveDefaultAssignment (1)
+Method lib.TArgumentEvaluation.evaluate (1)
+Method lib.TArgumentEvaluation.evaluateWithDefaults (1)
+Method lib.TArgumentEvaluation.getClaimIdForVariable (1)
+Method lib.TArgumentEvaluation.getVariableIdForClaim (1)
+Method lib.TArgumentEvaluation.getVariableIdsForClaim (1)
+Method lib.TArgumentEvaluation.validateDerivationStructures (1)
+Method lib.TArgumentEvaluation.validateEvaluability (1)
+Method lib.TArgumentEvaluationContext.getConclusionPremise (1)
+Method lib.TArgumentEvaluationContext.getPremise (1)
+Method lib.TArgumentEvaluationContext.getVariable (1)
+Method lib.TArgumentEvaluationContext.listPremises (1)
+Method lib.TArgumentEvaluationContext.listSupportingPremises (1)
+Method lib.TArgumentEvaluationContext.validateEvaluability (1)
+Method lib.TArgumentExpressionQueries.collectReferencedVariables (1)
+Method lib.TArgumentExpressionQueries.getAllExpressions (1)
+Method lib.TArgumentExpressionQueries.getExpression (1)
+Method lib.TArgumentExpressionQueries.getExpressionPremiseId (1)
+Method lib.TArgumentExpressionQueries.getExpressionsByVariableId (1)
+Method lib.TArgumentExpressionQueries.hasExpression (1)
+Method lib.TArgumentExpressionQueries.listRootExpressions (1)
+Method lib.TArgumentExpressionQueries.patchExpressionAppFields (1)
+Method lib.TArgumentIdentity.getArgument (1)
+Method lib.TArgumentIdentity.getExtras (1)
+Method lib.TArgumentIdentity.setExtras (1)
+Method lib.TArgumentIdentity.updateExtras (1)
+Method lib.TArgumentLifecycle.getSnapshot (1)
+Method lib.TArgumentLifecycle.normalize (1)
+Method lib.TArgumentLifecycle.rollback (1)
+Method lib.TArgumentLifecycle.snapshot (1)
+Method lib.TArgumentLifecycle.subscribe (1)
+Method lib.TArgumentLifecycle.validate (1)
+Method lib.TArgumentLifecycle.validateInvariants (1)
+Method lib.TArgumentRoleState.clearConclusionPremise (1)
+Method lib.TArgumentRoleState.getConclusionPremise (1)
+Method lib.TArgumentRoleState.getRoleState (1)
+Method lib.TArgumentRoleState.listSupportingPremises (1)
+Method lib.TArgumentRoleState.setConclusionPremise (1)
+Method lib.TArgumentValidationContext.flushAndGetChecksumDeltas (1)
+Method lib.TArgumentValidationContext.getArgument (1)
+Method lib.TArgumentValidationContext.getVariables (1)
+Method lib.TArgumentValidationContext.hasPremise (1)
+Method lib.TArgumentValidationContext.listPremises (1)
+Method lib.TArgumentValidationContext.lookupClaim (1)
+Method lib.TArgumentValidationContext.validateVariables (1)
+Method lib.TArgumentValidationContext.wouldCreateCycle (1)
+Method lib.TClaimConnectionLibraryManagement.add (1)
+Method lib.TClaimConnectionLibraryManagement.filter (1)
+Method lib.TClaimConnectionLibraryManagement.get (1)
+Method lib.TClaimConnectionLibraryManagement.getAll (1)
+Method lib.TClaimConnectionLibraryManagement.getConnectionsForClaim (1)
+Method lib.TClaimConnectionLibraryManagement.remove (1)
+Method lib.TClaimConnectionLibraryManagement.snapshot (1)
+Method lib.TClaimConnectionLibraryManagement.validate (1)
+Method lib.TClaimConnectionLookup.get (1)
+Method lib.TClaimConnectionLookup.getConnectionsForClaim (1)
+Method lib.TClaimLibraryManagement.create (1)
+Method lib.TClaimLibraryManagement.freeze (1)
+Method lib.TClaimLibraryManagement.get (1)
+Method lib.TClaimLibraryManagement.getAll (1)
+Method lib.TClaimLibraryManagement.getCurrent (1)
+Method lib.TClaimLibraryManagement.getVersions (1)
+Method lib.TClaimLibraryManagement.snapshot (1)
+Method lib.TClaimLibraryManagement.update (1)
+Method lib.TClaimLibraryManagement.validate (1)
+Method lib.TClaimLookup.get (1)
+Method lib.TClaimLookup.getCurrent (1)
+Method lib.TConversation.close (1)
+Method lib.TConversation.turn (1)
+Method lib.TDisplayable.toDisplayString (1)
+Method lib.TEvaluablePremise.evaluate (1)
+Method lib.TEvaluablePremise.getChildExpressions (1)
+Method lib.TEvaluablePremise.getDecidableOperatorExpressions (1)
+Method lib.TEvaluablePremise.getExpressions (1)
+Method lib.TEvaluablePremise.getId (1)
+Method lib.TEvaluablePremise.getPremiseType (1)
+Method lib.TEvaluablePremise.getVariables (1)
+Method lib.TExpressionMutations.addExpression (1)
+Method lib.TExpressionMutations.addExpressionRelative (1)
+Method lib.TExpressionMutations.appendExpression (1)
+Method lib.TExpressionMutations.changeOperator (1)
+Method lib.TExpressionMutations.insertExpression (1)
+Method lib.TExpressionMutations.removeExpression (1)
+Method lib.TExpressionMutations.toggleNegation (1)
+Method lib.TExpressionMutations.updateExpression (1)
+Method lib.TExpressionMutations.wrapExpression (1)
+Method lib.TExpressionQueries.getChildExpressions (1)
+Method lib.TExpressionQueries.getDecidableOperatorExpressions (1)
+Method lib.TExpressionQueries.getExpression (1)
+Method lib.TExpressionQueries.getExpressions (1)
+Method lib.TExpressionQueries.getRootExpression (1)
+Method lib.TExpressionQueries.getRootExpressionId (1)
+Method lib.TFormulaTreeVisitor.empty (1)
+Method lib.TFormulaTreeVisitor.formula (1)
+Method lib.TFormulaTreeVisitor.operator (1)
+Method lib.TFormulaTreeVisitor.variable (1)
+Method lib.TFormulaTreeWalking.walkFormulaTree (1)
+Method lib.THierarchicalChecksummable.checksum (1)
+Method lib.THierarchicalChecksummable.combinedChecksum (1)
+Method lib.THierarchicalChecksummable.descendantChecksum (1)
+Method lib.THierarchicalChecksummable.flushChecksums (1)
+Method lib.THierarchicalChecksummable.getCollectionChecksum (1)
+Method lib.TLlmProvider.respond (1)
+Method lib.TOriginLibraryManagement.addAnchor (1)
+Method lib.TOriginLibraryManagement.addDocument (1)
+Method lib.TOriginLibraryManagement.addLink (1)
+Method lib.TOriginLibraryManagement.getAllAnchors (1)
+Method lib.TOriginLibraryManagement.getAllDocuments (1)
+Method lib.TOriginLibraryManagement.getAllLinks (1)
+Method lib.TOriginLibraryManagement.getAnchor (1)
+Method lib.TOriginLibraryManagement.getAnchorsForArgument (1)
+Method lib.TOriginLibraryManagement.getAnchorsForTarget (1)
+Method lib.TOriginLibraryManagement.getDocument (1)
+Method lib.TOriginLibraryManagement.getLink (1)
+Method lib.TOriginLibraryManagement.getLinksForArgument (1)
+Method lib.TOriginLibraryManagement.removeAnchor (1)
+Method lib.TOriginLibraryManagement.removeDocument (1)
+Method lib.TOriginLibraryManagement.removeLink (1)
+Method lib.TOriginLibraryManagement.snapshot (1)
+Method lib.TOriginLibraryManagement.validate (1)
+Method lib.TOriginLookup.getAnchor (1)
+Method lib.TOriginLookup.getAnchorsForArgument (1)
+Method lib.TOriginLookup.getAnchorsForTarget (1)
+Method lib.TOriginLookup.getDocument (1)
+Method lib.TOriginLookup.getLink (1)
+Method lib.TOriginLookup.getLinksForArgument (1)
+Method lib.TPremiseClassification.isConstraint (1)
+Method lib.TPremiseClassification.isInference (1)
+Method lib.TPremiseCrud.createPremise (4)
+Method lib.TPremiseCrud.createPremiseWithId (2)
+Method lib.TPremiseCrud.findPremiseByExpressionId (1)
+Method lib.TPremiseCrud.getPremise (1)
+Method lib.TPremiseCrud.hasPremise (1)
+Method lib.TPremiseCrud.listPremiseIds (1)
+Method lib.TPremiseCrud.listPremises (1)
+Method lib.TPremiseCrud.removePremise (1)
+Method lib.TPremiseEvaluation.evaluate (1)
+Method lib.TPremiseEvaluation.validateEvaluability (1)
+Method lib.TPremiseIdentity.getExtras (1)
+Method lib.TPremiseIdentity.getId (1)
+Method lib.TPremiseIdentity.setExtras (1)
+Method lib.TPremiseIdentity.toPremiseData (1)
+Method lib.TPremiseIdentity.updateExtras (1)
+Method lib.TPremiseLifecycle.markDirty (1)
+Method lib.TPremiseLifecycle.setArgumentValidateCallback (1)
+Method lib.TPremiseLifecycle.setCircularityCheck (1)
+Method lib.TPremiseLifecycle.setEmptyBoundPremiseCheck (1)
+Method lib.TPremiseLifecycle.setOnMutate (1)
+Method lib.TPremiseLifecycle.setVariableIdsCallback (1)
+Method lib.TPremiseLifecycle.snapshot (1)
+Method lib.TPremiseLifecycle.validate (1)
+Method lib.TStageContext.get (1)
+Method lib.TStageContext.stageStatus (1)
+Method lib.TValidatablePremise.getExpressions (1)
+Method lib.TValidatablePremise.getId (1)
+Method lib.TValidatablePremise.getVariables (1)
+Method lib.TValidatablePremise.validate (1)
+Method lib.TValidatablePremise.validateEvaluability (1)
+Method lib.TVariableManagement.addVariable (1)
+Method lib.TVariableManagement.bindVariableToPremise (1)
+Method lib.TVariableManagement.buildVariableIndex (1)
+Method lib.TVariableManagement.ensureClaimBoundVariable (1)
+Method lib.TVariableManagement.getVariable (1)
+Method lib.TVariableManagement.getVariableBySymbol (1)
+Method lib.TVariableManagement.getVariables (1)
+Method lib.TVariableManagement.getVariablesBoundToPremise (1)
+Method lib.TVariableManagement.hasVariable (1)
+Method lib.TVariableManagement.removeVariable (1)
+Method lib.TVariableManagement.updateVariable (1)
+Method lib.TVariableReferences.deleteExpressionsUsingVariable (1)
+Method lib.TVariableReferences.getReferencedVariableIds (1)
+Method lib.TVariableReferences.getVariables (1)
+Method lib.UnknownExpressionError.captureStackTrace (1)
+Method lib.UnknownExpressionError.prepareStackTrace (1)
+Method lib.VariableManager.addVariable (1)
+Method lib.VariableManager.fromSnapshot (1)
+Method lib.VariableManager.getVariable (1)
+Method lib.VariableManager.getVariableBySymbol (1)
+Method lib.VariableManager.hasVariable (1)
+Method lib.VariableManager.removeVariable (1)
+Method lib.VariableManager.renameVariable (1)
+Method lib.VariableManager.snapshot (1)
+Method lib.VariableManager.toArray (1)
+Method lib.VariableManager.updateVariable (1)
+Method lib.VariableManager.validate (1)
+Method lib.VersionedLibrary.create (1)
+Method lib.VersionedLibrary.freeze (1)
+Method lib.VersionedLibrary.get (1)
+Method lib.VersionedLibrary.getAll (1)
+Method lib.VersionedLibrary.getCurrent (1)
+Method lib.VersionedLibrary.getVersions (1)
+Method lib.VersionedLibrary.restoreFromEntities (1)
+Method lib.VersionedLibrary.update (1)
+Method lib.VersionedLibrary.validate (1)
+Method lib.VersionedLibrary.withValidation (1)
+Module extensions/basics
+Module extensions/citations/ieee
+Module extensions/citations/unparsed
+Module extensions/pipelines/base
+Module extensions/pipelines/ingestion
+Module lib
+Property extensions/basics.BasicsArgumentParser.responseSchema
+Property extensions/citations/ieee.TCitationFormatResult.segments
+Property extensions/citations/ieee.TCitationFormatResult.type
+Property extensions/citations/ieee.TCitationSegment.role
+Property extensions/citations/ieee.TCitationSegment.style
+Property extensions/citations/ieee.TCitationSegment.text
+Property extensions/citations/ieee.TSegmentInstructionConditional.checkLength
+Property extensions/citations/ieee.TSegmentInstructionConditional.else
+Property extensions/citations/ieee.TSegmentInstructionConditional.field
+Property extensions/citations/ieee.TSegmentInstructionConditional.then
+Property extensions/citations/ieee.TSegmentInstructionConditional.type
+Property extensions/citations/ieee.TSegmentInstructionSegment.role
+Property extensions/citations/ieee.TSegmentInstructionSegment.source
+Property extensions/citations/ieee.TSegmentInstructionSegment.style
+Property extensions/citations/ieee.TSegmentInstructionSegment.type
+Property extensions/citations/ieee.TSegmentInstructionSeparator.text
+Property extensions/citations/ieee.TSegmentInstructionSeparator.type
+Property extensions/citations/ieee.TSegmentSource.field
+Property extensions/citations/ieee.TSegmentSource.kind
+Property extensions/citations/ieee.TSegmentSource.text
+Property extensions/pipelines/base.TAssignVariablesInput.canonicalClaims
+Property extensions/pipelines/base.TAssignVariablesInput.generateId
+Property extensions/pipelines/base.TCompileFormulasInput.addFailure
+Property extensions/pipelines/base.TCompileFormulasInput.conclusion
+Property extensions/pipelines/base.TCompileFormulasInput.freeformRelations
+Property extensions/pipelines/base.TCompileFormulasInput.generateId
+Property extensions/pipelines/base.TCompileFormulasInput.variables
+Property extensions/pipelines/base.TDeriveRolesInput.claims
+Property extensions/pipelines/base.TFinalizeResponseV2Input.ctx
+Property extensions/pipelines/base.TFinalizeResponseV2Input.extension
+Property extensions/pipelines/base.TFinalizeResponseV2Input.mentions
+Property extensions/pipelines/base.TFinalizeResponseV2Input.segmentation
+Property extensions/pipelines/base.TFreeformRelation.antecedents
+Property extensions/pipelines/base.TFreeformRelation.consequent
+Property extensions/pipelines/base.TFreeformRelation.relationId
+Property extensions/pipelines/base.TIngestionExtension.argumentSchema
+Property extensions/pipelines/base.TIngestionExtension.claimSchema
+Property extensions/pipelines/base.TIngestionExtension.premiseSchema
+Property extensions/pipelines/base.TIngestionExtension.responseSchema
+Property extensions/pipelines/base.TIngestionExtension.variableSchema
+Property extensions/pipelines/base.TIngestionInput.text
+Property extensions/pipelines/base.TIngestionLlmOptions.defaults
+Property extensions/pipelines/base.TIngestionLlmOptions.overrides
+Property extensions/pipelines/base.TIngestionSourceAnchor.endUtf16
+Property extensions/pipelines/base.TIngestionSourceAnchor.prefix
+Property extensions/pipelines/base.TIngestionSourceAnchor.quote
+Property extensions/pipelines/base.TIngestionSourceAnchor.startUtf16
+Property extensions/pipelines/base.TIngestionSourceAnchor.suffix
+Property extensions/pipelines/base.TLlmStageOptionsOverride.maxOutputTokens
+Property extensions/pipelines/base.TLlmStageOptionsOverride.model
+Property extensions/pipelines/base.TLlmStageOptionsOverride.reasoningEffort
+Property extensions/pipelines/base.TLlmStageOptionsOverride.retry
+Property extensions/pipelines/base.TSourceAnchorMatch.anchor
+Property extensions/pipelines/base.TSourceAnchorMatch.approximate
+Property extensions/pipelines/base.TSourceAnchorMatch.occurrences
+Property extensions/pipelines/base.TValidateFormulasInput.compilation
+Property extensions/pipelines/base.TValidateFormulasInput.variables
+Property extensions/pipelines/ingestion.TCreateScholarPipelineOptions.llm
+Property extensions/pipelines/ingestion.TCreateScribePipelineOptions.llm
+Property lib.ArgumentEngine.cachedCombinedChecksum
+Property lib.ArgumentEngine.cachedDescendantChecksum
+Property lib.ArgumentEngine.cachedMetaChecksum
+Property lib.ArgumentEngine.checksumDirty
+Property lib.ArgumentParser.responseSchema
+Property lib.ClaimLibrary.checksumConfig
+Property lib.ClaimLibrary.checksumFieldsKey
+Property lib.ClaimLibrary.entities
+Property lib.ClaimLibrary.entityLabel
+Property lib.ClaimLibrary.entityType
+Property lib.ClaimLibrary.frozenSuccessorCode
+Property lib.ClaimLibrary.schema
+Property lib.ClaimLibrary.schemaInvalidCode
+Property lib.ConversationClosedError.cause
+Property lib.ConversationClosedError.message
+Property lib.ConversationClosedError.name
+Property lib.ConversationClosedError.stack
+Property lib.ConversationClosedError.stackTraceLimit
+Property lib.ForkLibrary.arguments
+Property lib.ForkLibrary.claims
+Property lib.ForkLibrary.expressions
+Property lib.ForkLibrary.premises
+Property lib.ForkLibrary.variables
+Property lib.InvalidArgumentStructureError.cause
+Property lib.InvalidArgumentStructureError.message
+Property lib.InvalidArgumentStructureError.name
+Property lib.InvalidArgumentStructureError.stack
+Property lib.InvalidArgumentStructureError.stackTraceLimit
+Property lib.InvariantViolationError.cause
+Property lib.InvariantViolationError.message
+Property lib.InvariantViolationError.name
+Property lib.InvariantViolationError.stack
+Property lib.InvariantViolationError.stackTraceLimit
+Property lib.InvariantViolationError.violations
+Property lib.LlmStageRetryExhaustedError.attempts
+Property lib.LlmStageRetryExhaustedError.cause
+Property lib.LlmStageRetryExhaustedError.code
+Property lib.LlmStageRetryExhaustedError.failureContext
+Property lib.LlmStageRetryExhaustedError.message
+Property lib.LlmStageRetryExhaustedError.name
+Property lib.LlmStageRetryExhaustedError.reason
+Property lib.LlmStageRetryExhaustedError.stack
+Property lib.LlmStageRetryExhaustedError.stackTraceLimit
+Property lib.LlmStageRetryExhaustedError.stageId
+Property lib.NotOperatorNotDecidableError.cause
+Property lib.NotOperatorNotDecidableError.expressionId
+Property lib.NotOperatorNotDecidableError.message
+Property lib.NotOperatorNotDecidableError.name
+Property lib.NotOperatorNotDecidableError.reason
+Property lib.NotOperatorNotDecidableError.stack
+Property lib.NotOperatorNotDecidableError.stackTraceLimit
+Property lib.PipelineConfigurationError.cause
+Property lib.PipelineConfigurationError.code
+Property lib.PipelineConfigurationError.depId
+Property lib.PipelineConfigurationError.message
+Property lib.PipelineConfigurationError.name
+Property lib.PipelineConfigurationError.stack
+Property lib.PipelineConfigurationError.stackTraceLimit
+Property lib.PipelineConfigurationError.stageId
+Property lib.PremiseEngine.cachedCombinedChecksum
+Property lib.PremiseEngine.cachedDescendantChecksum
+Property lib.PremiseEngine.cachedMetaChecksum
+Property lib.PremiseEngine.checksumDirty
+Property lib.PremiseEngine.expressions
+Property lib.PremiseEngine.premise
+Property lib.PremiseEngine.rootExpressionId
+Property lib.PremiseEngine.variables
+Property lib.PropositCore.arguments
+Property lib.PropositCore.axioms
+Property lib.PropositCore.citations
+Property lib.PropositCore.claims
+Property lib.PropositCore.forks
+Property lib.PropositCore.generateId
+Property lib.PropositCore.origins
+Property lib.StageAbortedError.cause
+Property lib.StageAbortedError.message
+Property lib.StageAbortedError.name
+Property lib.StageAbortedError.stack
+Property lib.StageAbortedError.stackTraceLimit
+Property lib.StageAbortedError.stageId
+Property lib.SubPipelineFailedError.cause
+Property lib.SubPipelineFailedError.code
+Property lib.SubPipelineFailedError.failureContext
+Property lib.SubPipelineFailedError.message
+Property lib.SubPipelineFailedError.name
+Property lib.SubPipelineFailedError.stack
+Property lib.SubPipelineFailedError.stackTraceLimit
+Property lib.SubPipelineFailedError.stageId
+Property lib.TArgumentEngineSnapshot.argument
+Property lib.TArgumentEngineSnapshot.conclusionPremiseId
+Property lib.TArgumentEngineSnapshot.config
+Property lib.TArgumentEngineSnapshot.premises
+Property lib.TArgumentEngineSnapshot.variables
+Property lib.TArgumentEvaluationContext.argumentId
+Property lib.TArgumentEvaluationContext.conclusionPremiseId
+Property lib.TArgumentLibraryLibraries.claimLibrary
+Property lib.TArgumentLibrarySnapshot.arguments
+Property lib.TArgumentParserResult.claimAxiomLibrary
+Property lib.TArgumentParserResult.claimCitationLibrary
+Property lib.TArgumentParserResult.claimLibrary
+Property lib.TArgumentParserResult.engine
+Property lib.TArgumentParserResult.warnings
+Property lib.TArgumentValidationContext.argumentId
+Property lib.TArgumentValidationContext.argumentVersion
+Property lib.TArgumentValidationContext.conclusionPremiseId
+Property lib.TCanonicalizeOperatorAssignmentsInput.expressionOverrides
+Property lib.TCanonicalizeOperatorAssignmentsInput.premiseScope
+Property lib.TClaimConnectionLibrarySnapshot.connections
+Property lib.TClaimLibrarySnapshot.claims
+Property lib.TCodePointIndex.offsets
+Property lib.TCodePointIndex.text
+Property lib.TCollectArgumentReferencedClaimsResult.byId
+Property lib.TCollectArgumentReferencedClaimsResult.claimIds
+Property lib.TConversation.closed
+Property lib.TConversation.lastResponseId
+Property lib.TConversation.tokenUsage
+Property lib.TCoreArgumentDiff.argument
+Property lib.TCoreArgumentDiff.premises
+Property lib.TCoreArgumentDiff.roles
+Property lib.TCoreArgumentDiff.variables
+Property lib.TCoreArgumentEvaluationOptions.forcedTrueVariableIds
+Property lib.TCoreArgumentEvaluationOptions.includeDiagnostics
+Property lib.TCoreArgumentEvaluationOptions.includeExpressionValues
+Property lib.TCoreArgumentEvaluationOptions.premiseSetSatisfiable
+Property lib.TCoreArgumentEvaluationOptions.satisfiabilityForcedTrueVariableIds
+Property lib.TCoreArgumentEvaluationOptions.strictUnknownAssignmentKeys
+Property lib.TCoreArgumentEvaluationOptions.validateFirst
+Property lib.TCoreArgumentEvaluationResult.assignment
+Property lib.TCoreArgumentEvaluationResult.claimAttribution
+Property lib.TCoreArgumentEvaluationResult.conclusion
+Property lib.TCoreArgumentEvaluationResult.conclusionAttribution
+Property lib.TCoreArgumentEvaluationResult.conclusionTrue
+Property lib.TCoreArgumentEvaluationResult.constraintPremises
+Property lib.TCoreArgumentEvaluationResult.contestedVariableIds
+Property lib.TCoreArgumentEvaluationResult.isAdmissibleAssignment
+Property lib.TCoreArgumentEvaluationResult.ok
+Property lib.TCoreArgumentEvaluationResult.premiseSetSatisfiable
+Property lib.TCoreArgumentEvaluationResult.premisesHoldConclusionFalse
+Property lib.TCoreArgumentEvaluationResult.propagatedVariableValues
+Property lib.TCoreArgumentEvaluationResult.referencedVariableIds
+Property lib.TCoreArgumentEvaluationResult.struckPremiseIds
+Property lib.TCoreArgumentEvaluationResult.supportingPremises
+Property lib.TCoreArgumentEvaluationResult.survivingSupportingPremiseCount
+Property lib.TCoreArgumentEvaluationResult.survivingSupportingPremisesTrue
+Property lib.TCoreArgumentEvaluationResult.validation
+Property lib.TCoreArgumentEvaluationResult.variableProvenance
+Property lib.TCoreChangeset.argument
+Property lib.TCoreChangeset.expressions
+Property lib.TCoreChangeset.premises
+Property lib.TCoreChangeset.roles
+Property lib.TCoreChangeset.variables
+Property lib.TCoreChecksumConfig.argumentFields
+Property lib.TCoreChecksumConfig.claimAxiomFields
+Property lib.TCoreChecksumConfig.claimCitationFields
+Property lib.TCoreChecksumConfig.claimFields
+Property lib.TCoreChecksumConfig.expressionFields
+Property lib.TCoreChecksumConfig.originAnchorFields
+Property lib.TCoreChecksumConfig.originDocumentFields
+Property lib.TCoreChecksumConfig.originLinkFields
+Property lib.TCoreChecksumConfig.premiseFields
+Property lib.TCoreChecksumConfig.roleFields
+Property lib.TCoreChecksumConfig.variableFields
+Property lib.TCoreCounterexample.assignment
+Property lib.TCoreCounterexample.result
+Property lib.TCoreDerivationStep.expressionId
+Property lib.TCoreDerivationStep.fromVariableIds
+Property lib.TCoreDerivationStep.premiseId
+Property lib.TCoreDiffOptions.compareArgument
+Property lib.TCoreDiffOptions.compareExpression
+Property lib.TCoreDiffOptions.comparePremise
+Property lib.TCoreDiffOptions.compareVariable
+Property lib.TCoreDiffOptions.expressionMatcher
+Property lib.TCoreDiffOptions.premiseMatcher
+Property lib.TCoreDiffOptions.variableMatcher
+Property lib.TCoreDirectionalVacuity.antecedentTrue
+Property lib.TCoreDirectionalVacuity.consequentTrue
+Property lib.TCoreDirectionalVacuity.fired
+Property lib.TCoreDirectionalVacuity.implicationValue
+Property lib.TCoreDirectionalVacuity.isVacuouslyTrue
+Property lib.TCoreEntityChanges.added
+Property lib.TCoreEntityChanges.modified
+Property lib.TCoreEntityChanges.removed
+Property lib.TCoreEntityFieldDiff.after
+Property lib.TCoreEntityFieldDiff.before
+Property lib.TCoreEntityFieldDiff.changes
+Property lib.TCoreEntityFieldDiff.state
+Property lib.TCoreEntitySetDiff.added
+Property lib.TCoreEntitySetDiff.modified
+Property lib.TCoreEntitySetDiff.removed
+Property lib.TCoreExpressionAssignment.operatorAssignments
+Property lib.TCoreExpressionAssignment.variables
+Property lib.TCoreFieldChange.after
+Property lib.TCoreFieldChange.before
+Property lib.TCoreFieldChange.field
+Property lib.TCoreMutationResult.changes
+Property lib.TCoreMutationResult.result
+Property lib.TCorePositionConfig.initial
+Property lib.TCorePositionConfig.max
+Property lib.TCorePositionConfig.min
+Property lib.TCorePremiseDiff.after
+Property lib.TCorePremiseDiff.before
+Property lib.TCorePremiseDiff.changes
+Property lib.TCorePremiseDiff.expressions
+Property lib.TCorePremiseDiff.state
+Property lib.TCorePremiseEvaluationResult.expressionValues
+Property lib.TCorePremiseEvaluationResult.inferenceDiagnostic
+Property lib.TCorePremiseEvaluationResult.premiseId
+Property lib.TCorePremiseEvaluationResult.premiseType
+Property lib.TCorePremiseEvaluationResult.rootExpressionId
+Property lib.TCorePremiseEvaluationResult.rootValue
+Property lib.TCorePremiseEvaluationResult.variableValues
+Property lib.TCorePremiseProfile.appearances
+Property lib.TCorePremiseProfile.isInference
+Property lib.TCorePremiseProfile.premiseId
+Property lib.TCorePremiseRelationResult.premiseId
+Property lib.TCorePremiseRelationResult.relationship
+Property lib.TCorePremiseRelationResult.transitive
+Property lib.TCorePremiseRelationResult.variableDetails
+Property lib.TCorePremiseRelationshipAnalysis.focusedPremiseId
+Property lib.TCorePremiseRelationshipAnalysis.premises
+Property lib.TCorePremiseSetDiff.added
+Property lib.TCorePremiseSetDiff.modified
+Property lib.TCorePremiseSetDiff.removed
+Property lib.TCorePropagationOptions.excludedPremiseIds
+Property lib.TCorePropagationOptions.withheldVariableIds
+Property lib.TCoreResolvedAssignment.operatorAssignments
+Property lib.TCoreResolvedAssignment.variables
+Property lib.TCoreRoleDiff.conclusion
+Property lib.TCoreValidationIssue.code
+Property lib.TCoreValidationIssue.expressionId
+Property lib.TCoreValidationIssue.message
+Property lib.TCoreValidationIssue.premiseId
+Property lib.TCoreValidationIssue.severity
+Property lib.TCoreValidationIssue.variableId
+Property lib.TCoreValidationResult.issues
+Property lib.TCoreValidationResult.ok
+Property lib.TCoreValidityCheckOptions.excludedVariableIds
+Property lib.TCoreValidityCheckOptions.forcedTrueVariableIds
+Property lib.TCoreValidityCheckOptions.includeCounterexampleEvaluations
+Property lib.TCoreValidityCheckOptions.maxAssignmentsChecked
+Property lib.TCoreValidityCheckOptions.maxVariables
+Property lib.TCoreValidityCheckOptions.mode
+Property lib.TCoreValidityCheckOptions.validateFirst
+Property lib.TCoreValidityCheckResult.checkedVariableIds
+Property lib.TCoreValidityCheckResult.counterexamples
+Property lib.TCoreValidityCheckResult.isValid
+Property lib.TCoreValidityCheckResult.numAdmissibleAssignments
+Property lib.TCoreValidityCheckResult.numAssignmentsChecked
+Property lib.TCoreValidityCheckResult.ok
+Property lib.TCoreValidityCheckResult.truncated
+Property lib.TCoreValidityCheckResult.validation
+Property lib.TCoreValueAttribution.assertedByReader
+Property lib.TCoreValueAttribution.reachedWithoutAssertion
+Property lib.TCoreVariableAppearance.polarity
+Property lib.TCoreVariableAppearance.side
+Property lib.TCoreVariableAppearance.variableId
+Property lib.TCoreVariableProvenance.contestedBy
+Property lib.TCoreVariableProvenance.derivedBy
+Property lib.TCoreVariableProvenance.origin
+Property lib.TCoreVariableProvenance.value
+Property lib.TCoreVariableRelationship.relationship
+Property lib.TCoreVariableRelationship.variableId
+Property lib.TExecuteFinalizeResult.failures
+Property lib.TExecuteFinalizeResult.output
+Property lib.TExecutePipelineDeps.concurrencyLimit
+Property lib.TExecutePipelineDeps.generateId
+Property lib.TExecutePipelineDeps.llm
+Property lib.TExecutePipelineDeps.onEvent
+Property lib.TExecutePipelineDeps.signal
+Property lib.TExecuteStageDeps.generateId
+Property lib.TExecuteStageDeps.llm
+Property lib.TExecuteStageDeps.onEvent
+Property lib.TExecuteStageDeps.signal
+Property lib.TExecuteStageDeps.submitBackgroundResponse
+Property lib.TExecuteStageResult.failures
+Property lib.TExecuteStageResult.outcome
+Property lib.TExecuteStageResult.output
+Property lib.TExecuteStageResult.retryReason
+Property lib.TExecuteStageResult.tokenUsage
+Property lib.TExecuteTurnDeps.llm
+Property lib.TExecuteTurnDeps.onComplete
+Property lib.TExecuteTurnDeps.onEvent
+Property lib.TExecuteTurnDeps.signal
+Property lib.TExpressionManagerSnapshot.config
+Property lib.TExpressionManagerSnapshot.expressions
+Property lib.TExpressionUpdate.operator
+Property lib.TExpressionUpdate.position
+Property lib.TExpressionUpdate.variableId
+Property lib.TForkArgumentOptions.behavior
+Property lib.TForkArgumentOptions.checksumConfig
+Property lib.TForkArgumentOptions.generateId
+Property lib.TForkArgumentOptions.positionConfig
+Property lib.TForkLibrarySnapshot.arguments
+Property lib.TForkLibrarySnapshot.claims
+Property lib.TForkLibrarySnapshot.expressions
+Property lib.TForkLibrarySnapshot.premises
+Property lib.TForkLibrarySnapshot.variables
+Property lib.TForkRemapTable.argumentId
+Property lib.TForkRemapTable.expressions
+Property lib.TForkRemapTable.premises
+Property lib.TForkRemapTable.variables
+Property lib.TInvariantValidationResult.ok
+Property lib.TInvariantValidationResult.violations
+Property lib.TInvariantViolation.code
+Property lib.TInvariantViolation.entityId
+Property lib.TInvariantViolation.entityType
+Property lib.TInvariantViolation.message
+Property lib.TInvariantViolation.premiseId
+Property lib.TLaunchStageResult.responseId
+Property lib.TLaunchStageResult.status
+Property lib.TLlmOutputCheckFailure.code
+Property lib.TLlmOutputCheckFailure.message
+Property lib.TLlmRequest._typeMarker
+Property lib.TLlmRequest.maxOutputTokens
+Property lib.TLlmRequest.model
+Property lib.TLlmRequest.onResponseCreated
+Property lib.TLlmRequest.outputSchema
+Property lib.TLlmRequest.previousResponseId
+Property lib.TLlmRequest.reasoningEffort
+Property lib.TLlmRequest.signal
+Property lib.TLlmRequest.systemPrompt
+Property lib.TLlmRequest.tools
+Property lib.TLlmRequest.userMessage
+Property lib.TLlmResponse.output
+Property lib.TLlmResponse.rawResponseId
+Property lib.TLlmResponse.tokenUsage
+Property lib.TLogicEngineOptions.behavior
+Property lib.TLogicEngineOptions.checksumConfig
+Property lib.TLogicEngineOptions.generateId
+Property lib.TLogicEngineOptions.positionConfig
+Property lib.TOptionalDep.__optional
+Property lib.TOptionalDep.id
+Property lib.TOriginLibrarySnapshot.anchors
+Property lib.TOriginLibrarySnapshot.documents
+Property lib.TOriginLibrarySnapshot.links
+Property lib.TParserBuildOptions.generateId
+Property lib.TParserBuildOptions.strict
+Property lib.TParserWarning.code
+Property lib.TParserWarning.context
+Property lib.TParserWarning.message
+Property lib.TParsingSchemaOptions.claimSchema
+Property lib.TParsingSchemaOptions.parsedArgumentSchema
+Property lib.TParsingSchemaOptions.premiseSchema
+Property lib.TParsingSchemaOptions.responseSchema
+Property lib.TParsingSchemaOptions.variableSchema
+Property lib.TPipeline._inputTypeMarker
+Property lib.TPipeline.finalize
+Property lib.TPipeline.id
+Property lib.TPipeline.inputSchema
+Property lib.TPipeline.outputSchema
+Property lib.TPipeline.stages
+Property lib.TPipeline.version
+Property lib.TPipelineFinalize.dependsOn
+Property lib.TPipelineFinalize.run
+Property lib.TPipelineResult.failures
+Property lib.TPipelineResult.output
+Property lib.TPipelineResult.stageOutcomes
+Property lib.TPipelineResult.tokenUsage
+Property lib.TPopulateResult.kind
+Property lib.TPopulateResult.resolved
+Property lib.TPopulateResult.state
+Property lib.TPremiseEngineSnapshot.config
+Property lib.TPremiseEngineSnapshot.expressions
+Property lib.TPremiseEngineSnapshot.premise
+Property lib.TPremiseEngineSnapshot.rootExpressionId
+Property lib.TPremiseSetSatisfiabilityInput.forcedTrueVariableIds
+Property lib.TPremiseSetSatisfiabilityInput.freeVariableIds
+Property lib.TPremiseSetSatisfiabilityInput.premises
+Property lib.TPromptOptions.customInstructions
+Property lib.TPropositCoreConfig.behavior
+Property lib.TPropositCoreConfig.checksumConfig
+Property lib.TPropositCoreConfig.generateId
+Property lib.TPropositCoreConfig.positionConfig
+Property lib.TPropositCoreSnapshot.arguments
+Property lib.TPropositCoreSnapshot.axioms
+Property lib.TPropositCoreSnapshot.citations
+Property lib.TPropositCoreSnapshot.claims
+Property lib.TPropositCoreSnapshot.forks
+Property lib.TPropositCoreSnapshot.origins
+Property lib.TReactivePremiseSnapshot.expressions
+Property lib.TReactivePremiseSnapshot.premise
+Property lib.TReactivePremiseSnapshot.rootExpressionId
+Property lib.TReactiveSnapshot.argument
+Property lib.TReactiveSnapshot.premises
+Property lib.TReactiveSnapshot.roles
+Property lib.TReactiveSnapshot.variables
+Property lib.TRetrievedResponse.errorMessage
+Property lib.TRetrievedResponse.incompleteReason
+Property lib.TRetrievedResponse.output
+Property lib.TRetrievedResponse.rawResponseId
+Property lib.TRetrievedResponse.status
+Property lib.TRetrievedResponse.tokenUsage
+Property lib.TRetryPolicy.backoffMs
+Property lib.TRetryPolicy.maxAppendedErrorBytes
+Property lib.TRetryPolicy.maxAttempts
+Property lib.TRetryPolicy.retryOn
+Property lib.TStage.dependsOn
+Property lib.TStage.id
+Property lib.TStage.outputSchema
+Property lib.TStage.run
+Property lib.TStageContext.addFailure
+Property lib.TStageContext.emit
+Property lib.TStageContext.generateId
+Property lib.TStageContext.input
+Property lib.TStageContext.llm
+Property lib.TStageContext.signal
+Property lib.TStageOutcomeRecord.outcome
+Property lib.TStageOutcomeRecord.output
+Property lib.TTurnInput.previousResponseId
+Property lib.TTurnInput.userMessage
+Property lib.TTurnResult.failures
+Property lib.TTurnResult.output
+Property lib.TTurnResult.responseId
+Property lib.TTurnResult.tokenUsage
+Property lib.TValidatorContext.argument
+Property lib.TValidatorContext.claims
+Property lib.TValidatorContext.expressions
+Property lib.TValidatorContext.premises
+Property lib.TValidatorContext.roleState
+Property lib.TValidatorContext.variables
+Property lib.TVariableManagerSnapshot.config
+Property lib.TVariableManagerSnapshot.variables
+Property lib.TVersionedEntity.checksum
+Property lib.TVersionedEntity.frozen
+Property lib.TVersionedEntity.id
+Property lib.TVersionedEntity.version
+Property lib.UnknownExpressionError.cause
+Property lib.UnknownExpressionError.expressionId
+Property lib.UnknownExpressionError.message
+Property lib.UnknownExpressionError.name
+Property lib.UnknownExpressionError.stack
+Property lib.UnknownExpressionError.stackTraceLimit
+Property lib.VersionedLibrary.checksumConfig
+Property lib.VersionedLibrary.checksumFieldsKey
+Property lib.VersionedLibrary.entities
+Property lib.VersionedLibrary.entityLabel
+Property lib.VersionedLibrary.entityType
+Property lib.VersionedLibrary.frozenSuccessorCode
+Property lib.VersionedLibrary.schema
+Property lib.VersionedLibrary.schemaInvalidCode
+TypeAlias extensions/basics.TBasicsArgument
+TypeAlias extensions/basics.TBasicsClaim
+TypeAlias extensions/basics.TBasicsPremise
+TypeAlias extensions/citations/ieee.TAuthor
+TypeAlias extensions/citations/ieee.TBlogReference
+TypeAlias extensions/citations/ieee.TBookChapterReference
+TypeAlias extensions/citations/ieee.TBookReference
+TypeAlias extensions/citations/ieee.TConferencePaperReference
+TypeAlias extensions/citations/ieee.TConferenceProceedingsReference
+TypeAlias extensions/citations/ieee.TCourseReference
+TypeAlias extensions/citations/ieee.TCourtCaseReference
+TypeAlias extensions/citations/ieee.TDatasetReference
+TypeAlias extensions/citations/ieee.TDatasheetReference
+TypeAlias extensions/citations/ieee.TDictionaryReference
+TypeAlias extensions/citations/ieee.TEmailReference
+TypeAlias extensions/citations/ieee.TEncyclopediaReference
+TypeAlias extensions/citations/ieee.TGovernmentPublicationReference
+TypeAlias extensions/citations/ieee.THandbookReference
+TypeAlias extensions/citations/ieee.TIEEECitationClaim
+TypeAlias extensions/citations/ieee.TIEEEOriginDocument
+TypeAlias extensions/citations/ieee.TIEEEReference
+TypeAlias extensions/citations/ieee.TInterviewReference
+TypeAlias extensions/citations/ieee.TJournalArticleReference
+TypeAlias extensions/citations/ieee.TLawReference
+TypeAlias extensions/citations/ieee.TMagazineArticleReference
+TypeAlias extensions/citations/ieee.TNamedAuthor
+TypeAlias extensions/citations/ieee.TNewspaperArticleReference
+TypeAlias extensions/citations/ieee.TOnlineDocumentReference
+TypeAlias extensions/citations/ieee.TPatentReference
+TypeAlias extensions/citations/ieee.TPersonalAuthor
+TypeAlias extensions/citations/ieee.TPersonalCommunicationReference
+TypeAlias extensions/citations/ieee.TPodcastReference
+TypeAlias extensions/citations/ieee.TPreprintReference
+TypeAlias extensions/citations/ieee.TPresentationReference
+TypeAlias extensions/citations/ieee.TProductManualReference
+TypeAlias extensions/citations/ieee.TReferenceType
+TypeAlias extensions/citations/ieee.TRelaxedBlogReference
+TypeAlias extensions/citations/ieee.TRelaxedBookChapterReference
+TypeAlias extensions/citations/ieee.TRelaxedBookReference
+TypeAlias extensions/citations/ieee.TRelaxedConferencePaperReference
+TypeAlias extensions/citations/ieee.TRelaxedConferenceProceedingsReference
+TypeAlias extensions/citations/ieee.TRelaxedCourseReference
+TypeAlias extensions/citations/ieee.TRelaxedCourtCaseReference
+TypeAlias extensions/citations/ieee.TRelaxedDatasetReference
+TypeAlias extensions/citations/ieee.TRelaxedDatasheetReference
+TypeAlias extensions/citations/ieee.TRelaxedDictionaryReference
+TypeAlias extensions/citations/ieee.TRelaxedEmailReference
+TypeAlias extensions/citations/ieee.TRelaxedEncyclopediaReference
+TypeAlias extensions/citations/ieee.TRelaxedGovernmentPublicationReference
+TypeAlias extensions/citations/ieee.TRelaxedHandbookReference
+TypeAlias extensions/citations/ieee.TRelaxedIEEEReference
+TypeAlias extensions/citations/ieee.TRelaxedInterviewReference
+TypeAlias extensions/citations/ieee.TRelaxedJournalArticleReference
+TypeAlias extensions/citations/ieee.TRelaxedLawReference
+TypeAlias extensions/citations/ieee.TRelaxedMagazineArticleReference
+TypeAlias extensions/citations/ieee.TRelaxedNewspaperArticleReference
+TypeAlias extensions/citations/ieee.TRelaxedOnlineDocumentReference
+TypeAlias extensions/citations/ieee.TRelaxedPatentReference
+TypeAlias extensions/citations/ieee.TRelaxedPersonalCommunicationReference
+TypeAlias extensions/citations/ieee.TRelaxedPodcastReference
+TypeAlias extensions/citations/ieee.TRelaxedPreprintReference
+TypeAlias extensions/citations/ieee.TRelaxedPresentationReference
+TypeAlias extensions/citations/ieee.TRelaxedProductManualReference
+TypeAlias extensions/citations/ieee.TRelaxedSocialMediaReference
+TypeAlias extensions/citations/ieee.TRelaxedSoftwareReference
+TypeAlias extensions/citations/ieee.TRelaxedStandardReference
+TypeAlias extensions/citations/ieee.TRelaxedTechnicalReportReference
+TypeAlias extensions/citations/ieee.TRelaxedThesisReference
+TypeAlias extensions/citations/ieee.TRelaxedVideoReference
+TypeAlias extensions/citations/ieee.TRelaxedWebsiteReference
+TypeAlias extensions/citations/ieee.TSegmentInstruction
+TypeAlias extensions/citations/ieee.TSocialMediaReference
+TypeAlias extensions/citations/ieee.TSoftwareReference
+TypeAlias extensions/citations/ieee.TStandardReference
+TypeAlias extensions/citations/ieee.TTechnicalReportReference
+TypeAlias extensions/citations/ieee.TThesisReference
+TypeAlias extensions/citations/ieee.TVideoReference
+TypeAlias extensions/citations/ieee.TWebsiteReference
+TypeAlias extensions/citations/unparsed.TUnparsedCitation
+TypeAlias extensions/citations/unparsed.TUnparsedCitationTypeGuess
+TypeAlias extensions/pipelines/base.TApproximateAnchorRule
+TypeAlias extensions/pipelines/base.TAssignVariablesInput
+TypeAlias extensions/pipelines/base.TAssignedVariable
+TypeAlias extensions/pipelines/base.TAxiomIndicator
+TypeAlias extensions/pipelines/base.TAxiomIndicatorDetectionOutput
+TypeAlias extensions/pipelines/base.TBaseCanonicalClaim
+TypeAlias extensions/pipelines/base.TCanonicalClaim
+TypeAlias extensions/pipelines/base.TCitationSource
+TypeAlias extensions/pipelines/base.TCitationSourceDetectionOutput
+TypeAlias extensions/pipelines/base.TClaimCanonicalizationOutput
+TypeAlias extensions/pipelines/base.TClaimMention
+TypeAlias extensions/pipelines/base.TClaimMentionExtractionOutput
+TypeAlias extensions/pipelines/base.TClaimRole
+TypeAlias extensions/pipelines/base.TClaimTypeClassificationEntry
+TypeAlias extensions/pipelines/base.TClaimTypeClassificationOutput
+TypeAlias extensions/pipelines/base.TCompileFormulasInput
+TypeAlias extensions/pipelines/base.TCompiledPremise
+TypeAlias extensions/pipelines/base.TConclusionSelectionLlmOutput
+TypeAlias extensions/pipelines/base.TConclusionSelectionOutput
+TypeAlias extensions/pipelines/base.TDeriveRolesInput
+TypeAlias extensions/pipelines/base.TFinalizeResponseV2Input
+TypeAlias extensions/pipelines/base.TFormulaCompilationOutput
+TypeAlias extensions/pipelines/base.TFormulaPremiseRoleHint
+TypeAlias extensions/pipelines/base.TFreeformRelation
+TypeAlias extensions/pipelines/base.TInferenceRelation
+TypeAlias extensions/pipelines/base.TIngestionExtension
+TypeAlias extensions/pipelines/base.TIngestionInput
+TypeAlias extensions/pipelines/base.TIngestionLlmOptions
+TypeAlias extensions/pipelines/base.TIngestionSourceAnchor
+TypeAlias extensions/pipelines/base.TLlmStageOptionsOverride
+TypeAlias extensions/pipelines/base.TMentionToClaimEntry
+TypeAlias extensions/pipelines/base.TRelationExtractionOutput
+TypeAlias extensions/pipelines/base.TSegment
+TypeAlias extensions/pipelines/base.TSegmentationOutput
+TypeAlias extensions/pipelines/base.TSourceAnchorMatch
+TypeAlias extensions/pipelines/base.TSpan
+TypeAlias extensions/pipelines/base.TValidateFormulasInput
+TypeAlias extensions/pipelines/base.TValidationStageOutput
+TypeAlias extensions/pipelines/base.TVariableAssignmentOutput
+TypeAlias extensions/pipelines/ingestion.TCreateScholarPipelineOptions
+TypeAlias extensions/pipelines/ingestion.TCreateScribePipelineOptions
+TypeAlias lib.TArgumentEngineSnapshot
+TypeAlias lib.TArgumentLibraryLibraries
+TypeAlias lib.TArgumentLibrarySnapshot
+TypeAlias lib.TArgumentParserResult
+TypeAlias lib.TClaimBoundVariable
+TypeAlias lib.TClaimConnectionLibrarySnapshot
+TypeAlias lib.TClaimCreateInput
+TypeAlias lib.TClaimLibrarySnapshot
+TypeAlias lib.TCodePointIndex
+TypeAlias lib.TConversation
+TypeAlias lib.TCoreAnalysisFile
+TypeAlias lib.TCoreArgument
+TypeAlias lib.TCoreArgumentForkRecord
+TypeAlias lib.TCoreArgumentRoleState
+TypeAlias lib.TCoreClaim
+TypeAlias lib.TCoreClaimAxiomaticType
+TypeAlias lib.TCoreClaimCitationType
+TypeAlias lib.TCoreClaimConnection
+TypeAlias lib.TCoreClaimForkRecord
+TypeAlias lib.TCoreClaimNormalType
+TypeAlias lib.TCoreClaimType
+TypeAlias lib.TCoreContestedValue
+TypeAlias lib.TCoreDerivationPremise
+TypeAlias lib.TCoreDiffState
+TypeAlias lib.TCoreEntityForkRecord
+TypeAlias lib.TCoreExpressionForkRecord
+TypeAlias lib.TCoreFieldComparator
+TypeAlias lib.TCoreFormulaExpression
+TypeAlias lib.TCoreFreeformPremise
+TypeAlias lib.TCoreLogicalOperatorType
+TypeAlias lib.TCoreOperatorAssignment
+TypeAlias lib.TCoreOperatorExpression
+TypeAlias lib.TCoreOriginAnchor
+TypeAlias lib.TCoreOriginDocument
+TypeAlias lib.TCoreOriginLink
+TypeAlias lib.TCorePositionConfig
+TypeAlias lib.TCorePremise
+TypeAlias lib.TCorePremiseForkRecord
+TypeAlias lib.TCorePremiseInferenceDiagnostic
+TypeAlias lib.TCorePremiseRelationshipType
+TypeAlias lib.TCorePremiseSide
+TypeAlias lib.TCorePropositionalExpression
+TypeAlias lib.TCorePropositionalExpressionCombined
+TypeAlias lib.TCorePropositionalExpressionTypes
+TypeAlias lib.TCorePropositionalVariable
+TypeAlias lib.TCorePropositionalVariableExpression
+TypeAlias lib.TCoreQuadrivalentValue
+TypeAlias lib.TCoreResolvedVariableValues
+TypeAlias lib.TCoreTrivalentValue
+TypeAlias lib.TCoreValidationCode
+TypeAlias lib.TCoreValidationSeverity
+TypeAlias lib.TCoreValueOrigin
+TypeAlias lib.TCoreVariableAssignment
+TypeAlias lib.TCoreVariableForkRecord
+TypeAlias lib.TCoreVariablePolarity
+TypeAlias lib.TDateType
+TypeAlias lib.TDepSpec
+TypeAlias lib.TExecuteFinalizeResult
+TypeAlias lib.TExecutePipelineDeps
+TypeAlias lib.TExecuteStageDeps
+TypeAlias lib.TExecuteStageResult
+TypeAlias lib.TExecuteTurnDeps
+TypeAlias lib.TExpressionInput
+TypeAlias lib.TExpressionManagerSnapshot
+TypeAlias lib.TExpressionUpdate
+TypeAlias lib.TExpressionWithoutPosition
+TypeAlias lib.TForkLibrarySnapshot
+TypeAlias lib.TFormulaAST
+TypeAlias lib.TGrammarRuleCode
+TypeAlias lib.TGrammarTier
+TypeAlias lib.TInvariantValidationResult
+TypeAlias lib.TInvariantViolation
+TypeAlias lib.TInvariantViolationEntityType
+TypeAlias lib.TJsonArray
+TypeAlias lib.TJsonObject
+TypeAlias lib.TJsonPrimitive
+TypeAlias lib.TJsonValue
+TypeAlias lib.TLaunchStageResult
+TypeAlias lib.TLlmModel
+TypeAlias lib.TLlmOutputCheckFailure
+TypeAlias lib.TLlmProvider
+TypeAlias lib.TLlmRequest
+TypeAlias lib.TLlmResponse
+TypeAlias lib.TLlmTokenUsage
+TypeAlias lib.TLogicEngineOptions
+TypeAlias lib.TMultiTurnInput
+TypeAlias lib.TMultiTurnOutput
+TypeAlias lib.TNotOperatorNotDecidableReason
+TypeAlias lib.TOptionalChecksum
+TypeAlias lib.TOptionalDep
+TypeAlias lib.TOptionalHierarchicalChecksum
+TypeAlias lib.TOrderedOperation
+TypeAlias lib.TOriginAnchorTargetType
+TypeAlias lib.TOriginLibrarySnapshot
+TypeAlias lib.TOriginSegment
+TypeAlias lib.TOriginStance
+TypeAlias lib.TParsedArgument
+TypeAlias lib.TParsedArgumentResponse
+TypeAlias lib.TParsedClaim
+TypeAlias lib.TParsedPremise
+TypeAlias lib.TParsedVariable
+TypeAlias lib.TParserBuildOptions
+TypeAlias lib.TParserWarning
+TypeAlias lib.TParserWarningCode
+TypeAlias lib.TParsingSchemaOptions
+TypeAlias lib.TPipeline
+TypeAlias lib.TPipelineEvent
+TypeAlias lib.TPipelineFinalize
+TypeAlias lib.TPipelineResult
+TypeAlias lib.TPopulateResult
+TypeAlias lib.TPremiseBoundVariable
+TypeAlias lib.TPremiseEngineSnapshot
+TypeAlias lib.TProcessingFailure
+TypeAlias lib.TPromptOptions
+TypeAlias lib.TPropositCoreConfig
+TypeAlias lib.TPropositCoreOptions
+TypeAlias lib.TPropositCoreSnapshot
+TypeAlias lib.TReactivePremiseSnapshot
+TypeAlias lib.TReactiveSnapshot
+TypeAlias lib.TReasoningEffort
+TypeAlias lib.TResponseId
+TypeAlias lib.TResponseStatus
+TypeAlias lib.TRetrievedResponse
+TypeAlias lib.TRetryPolicy
+TypeAlias lib.TRetryReason
+TypeAlias lib.TStage
+TypeAlias lib.TStageContext
+TypeAlias lib.TStageOutcomeRecord
+TypeAlias lib.TStageStatus
+TypeAlias lib.TToolSpec
+TypeAlias lib.TTurnInput
+TypeAlias lib.TTurnResult
+TypeAlias lib.TUUID
+TypeAlias lib.TValidatorContext
+TypeAlias lib.TVariableManagerSnapshot
+TypeAlias lib.TVersionedEntity
+TypeAlias lib.TViolation
+Variable extensions/basics.BasicsArgumentSchema
+Variable extensions/basics.BasicsClaimSchema
+Variable extensions/basics.BasicsParsingSchema
+Variable extensions/basics.BasicsPremiseSchema
+Variable extensions/citations/ieee.AuthorSchema
+Variable extensions/citations/ieee.BLOG_TEMPLATE
+Variable extensions/citations/ieee.BOOK_CHAPTER_TEMPLATE
+Variable extensions/citations/ieee.BOOK_TEMPLATE
+Variable extensions/citations/ieee.BlogReferenceSchema
+Variable extensions/citations/ieee.BookChapterReferenceSchema
+Variable extensions/citations/ieee.BookReferenceSchema
+Variable extensions/citations/ieee.CONFERENCE_PAPER_TEMPLATE
+Variable extensions/citations/ieee.CONFERENCE_PROCEEDINGS_TEMPLATE
+Variable extensions/citations/ieee.COURSE_TEMPLATE
+Variable extensions/citations/ieee.COURT_CASE_TEMPLATE
+Variable extensions/citations/ieee.ConferencePaperReferenceSchema
+Variable extensions/citations/ieee.ConferenceProceedingsReferenceSchema
+Variable extensions/citations/ieee.CourseReferenceSchema
+Variable extensions/citations/ieee.CourtCaseReferenceSchema
+Variable extensions/citations/ieee.DATASET_TEMPLATE
+Variable extensions/citations/ieee.DATASHEET_TEMPLATE
+Variable extensions/citations/ieee.DICTIONARY_TEMPLATE
+Variable extensions/citations/ieee.DatasetReferenceSchema
+Variable extensions/citations/ieee.DatasheetReferenceSchema
+Variable extensions/citations/ieee.DictionaryReferenceSchema
+Variable extensions/citations/ieee.EMAIL_TEMPLATE
+Variable extensions/citations/ieee.ENCYCLOPEDIA_TEMPLATE
+Variable extensions/citations/ieee.EmailReferenceSchema
+Variable extensions/citations/ieee.EncyclopediaReferenceSchema
+Variable extensions/citations/ieee.GOVERNMENT_PUBLICATION_TEMPLATE
+Variable extensions/citations/ieee.GovernmentPublicationReferenceSchema
+Variable extensions/citations/ieee.HANDBOOK_TEMPLATE
+Variable extensions/citations/ieee.HandbookReferenceSchema
+Variable extensions/citations/ieee.IEEECitationClaimSchema
+Variable extensions/citations/ieee.IEEEOriginDocumentSchema
+Variable extensions/citations/ieee.IEEEReferenceSchema
+Variable extensions/citations/ieee.IEEEReferenceSchemaMap
+Variable extensions/citations/ieee.IEEEReferenceSchemaMapRelaxed
+Variable extensions/citations/ieee.IEEEReferenceSchemaRelaxed
+Variable extensions/citations/ieee.IEEE_MONTHS
+Variable extensions/citations/ieee.IEEE_REFERENCE_TYPES
+Variable extensions/citations/ieee.INTERVIEW_TEMPLATE
+Variable extensions/citations/ieee.InterviewReferenceSchema
+Variable extensions/citations/ieee.JOURNAL_ARTICLE_TEMPLATE
+Variable extensions/citations/ieee.JournalArticleReferenceSchema
+Variable extensions/citations/ieee.LAW_TEMPLATE
+Variable extensions/citations/ieee.LawReferenceSchema
+Variable extensions/citations/ieee.MAGAZINE_ARTICLE_TEMPLATE
+Variable extensions/citations/ieee.MagazineArticleReferenceSchema
+Variable extensions/citations/ieee.NEWSPAPER_ARTICLE_TEMPLATE
+Variable extensions/citations/ieee.NamedAuthorSchema
+Variable extensions/citations/ieee.NewspaperArticleReferenceSchema
+Variable extensions/citations/ieee.ONLINE_DOCUMENT_TEMPLATE
+Variable extensions/citations/ieee.OnlineDocumentReferenceSchema
+Variable extensions/citations/ieee.PATENT_TEMPLATE
+Variable extensions/citations/ieee.PERSONAL_COMMUNICATION_TEMPLATE
+Variable extensions/citations/ieee.PODCAST_TEMPLATE
+Variable extensions/citations/ieee.PREPRINT_TEMPLATE
+Variable extensions/citations/ieee.PRESENTATION_TEMPLATE
+Variable extensions/citations/ieee.PRODUCT_MANUAL_TEMPLATE
+Variable extensions/citations/ieee.PatentReferenceSchema
+Variable extensions/citations/ieee.PersonalAuthorSchema
+Variable extensions/citations/ieee.PersonalCommunicationReferenceSchema
+Variable extensions/citations/ieee.PodcastReferenceSchema
+Variable extensions/citations/ieee.PreprintReferenceSchema
+Variable extensions/citations/ieee.PresentationReferenceSchema
+Variable extensions/citations/ieee.ProductManualReferenceSchema
+Variable extensions/citations/ieee.ReferenceTypeSchema
+Variable extensions/citations/ieee.RelaxedBlogReferenceSchema
+Variable extensions/citations/ieee.RelaxedBookChapterReferenceSchema
+Variable extensions/citations/ieee.RelaxedBookReferenceSchema
+Variable extensions/citations/ieee.RelaxedConferencePaperReferenceSchema
+Variable extensions/citations/ieee.RelaxedConferenceProceedingsReferenceSchema
+Variable extensions/citations/ieee.RelaxedCourseReferenceSchema
+Variable extensions/citations/ieee.RelaxedCourtCaseReferenceSchema
+Variable extensions/citations/ieee.RelaxedDatasetReferenceSchema
+Variable extensions/citations/ieee.RelaxedDatasheetReferenceSchema
+Variable extensions/citations/ieee.RelaxedDictionaryReferenceSchema
+Variable extensions/citations/ieee.RelaxedEmailReferenceSchema
+Variable extensions/citations/ieee.RelaxedEncyclopediaReferenceSchema
+Variable extensions/citations/ieee.RelaxedGovernmentPublicationReferenceSchema
+Variable extensions/citations/ieee.RelaxedHandbookReferenceSchema
+Variable extensions/citations/ieee.RelaxedInterviewReferenceSchema
+Variable extensions/citations/ieee.RelaxedJournalArticleReferenceSchema
+Variable extensions/citations/ieee.RelaxedLawReferenceSchema
+Variable extensions/citations/ieee.RelaxedMagazineArticleReferenceSchema
+Variable extensions/citations/ieee.RelaxedNewspaperArticleReferenceSchema
+Variable extensions/citations/ieee.RelaxedOnlineDocumentReferenceSchema
+Variable extensions/citations/ieee.RelaxedPatentReferenceSchema
+Variable extensions/citations/ieee.RelaxedPersonalCommunicationReferenceSchema
+Variable extensions/citations/ieee.RelaxedPodcastReferenceSchema
+Variable extensions/citations/ieee.RelaxedPreprintReferenceSchema
+Variable extensions/citations/ieee.RelaxedPresentationReferenceSchema
+Variable extensions/citations/ieee.RelaxedProductManualReferenceSchema
+Variable extensions/citations/ieee.RelaxedSocialMediaReferenceSchema
+Variable extensions/citations/ieee.RelaxedSoftwareReferenceSchema
+Variable extensions/citations/ieee.RelaxedStandardReferenceSchema
+Variable extensions/citations/ieee.RelaxedTechnicalReportReferenceSchema
+Variable extensions/citations/ieee.RelaxedThesisReferenceSchema
+Variable extensions/citations/ieee.RelaxedVideoReferenceSchema
+Variable extensions/citations/ieee.RelaxedWebsiteReferenceSchema
+Variable extensions/citations/ieee.SOCIAL_MEDIA_TEMPLATE
+Variable extensions/citations/ieee.SOFTWARE_TEMPLATE
+Variable extensions/citations/ieee.STANDARD_TEMPLATE
+Variable extensions/citations/ieee.SocialMediaReferenceSchema
+Variable extensions/citations/ieee.SoftwareReferenceSchema
+Variable extensions/citations/ieee.StandardReferenceSchema
+Variable extensions/citations/ieee.TECHNICAL_REPORT_TEMPLATE
+Variable extensions/citations/ieee.THESIS_TEMPLATE
+Variable extensions/citations/ieee.TechnicalReportReferenceSchema
+Variable extensions/citations/ieee.ThesisReferenceSchema
+Variable extensions/citations/ieee.VIDEO_TEMPLATE
+Variable extensions/citations/ieee.VideoReferenceSchema
+Variable extensions/citations/ieee.WEBSITE_TEMPLATE
+Variable extensions/citations/ieee.WebsiteReferenceSchema
+Variable extensions/citations/unparsed.UnparsedCitationSchema
+Variable extensions/citations/unparsed.UnparsedCitationTypeGuessSchema
+Variable extensions/pipelines/base.AXIOM_INDICATOR_DETECTION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.AxiomIndicatorDetectionOutputSchema
+Variable extensions/pipelines/base.BaseCanonicalClaimSchema
+Variable extensions/pipelines/base.CITATION_SOURCE_DETECTION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.CLAIM_CANONICALIZATION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.CLAIM_MENTION_EXTRACTION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.CLAIM_REFERENCE_FAILURE_CODES
+Variable extensions/pipelines/base.CLAIM_TYPE_CLASSIFICATION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.CONCLUSION_SELECTION_NO_CONCLUSION_FAILURE_CODE
+Variable extensions/pipelines/base.CONCLUSION_SELECTION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.CitationSourceDetectionOutputSchema
+Variable extensions/pipelines/base.ClaimCanonicalizationOutputSchema
+Variable extensions/pipelines/base.ClaimMentionExtractionOutputSchema
+Variable extensions/pipelines/base.ClaimTypeClassificationEntrySchema
+Variable extensions/pipelines/base.ClaimTypeClassificationOutputSchema
+Variable extensions/pipelines/base.ConclusionSelectionLlmOutputSchema
+Variable extensions/pipelines/base.ConclusionSelectionOutputSchema
+Variable extensions/pipelines/base.FINALIZE_V2_FAILURE_TEXTS
+Variable extensions/pipelines/base.FORMULA_COMPILATION_FAILURE_CODES
+Variable extensions/pipelines/base.FORMULA_VALIDATION_FAILURE_CODES
+Variable extensions/pipelines/base.FormulaCompilationOutputSchema
+Variable extensions/pipelines/base.FormulaPremiseRoleHintSchema
+Variable extensions/pipelines/base.MentionToClaimEntrySchema
+Variable extensions/pipelines/base.NO_ARGUMENT_STRUCTURE_FAILURE
+Variable extensions/pipelines/base.RELATION_EXTRACTION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.RelationExtractionOutputSchema
+Variable extensions/pipelines/base.SEGMENTATION_MAX_OUTPUT_TOKENS
+Variable extensions/pipelines/base.SEGMENTATION_STAGE_DEFAULTS
+Variable extensions/pipelines/base.SOURCE_ANCHOR_CONTEXT_CHARS
+Variable extensions/pipelines/base.SOURCE_ANCHOR_NOTE_CODES
+Variable extensions/pipelines/base.STAGE_IDS
+Variable extensions/pipelines/base.SegmentationOutputSchema
+Variable extensions/pipelines/base.SpanSchema
+Variable extensions/pipelines/base.ValidationStageOutputSchema
+Variable extensions/pipelines/base.VariableAssignmentOutputSchema
+Variable extensions/pipelines/base.axiomIndicatorDetectionStage
+Variable extensions/pipelines/base.basicsExtension
+Variable extensions/pipelines/base.citationSourceDetectionStage
+Variable extensions/pipelines/base.claimMentionExtractionStage
+Variable extensions/pipelines/base.claimReferenceValidationStage
+Variable extensions/pipelines/base.claimTypeClassificationStage
+Variable extensions/pipelines/base.conclusionSelectionStage
+Variable extensions/pipelines/base.formulaCompilationStage
+Variable extensions/pipelines/base.formulaValidationStage
+Variable extensions/pipelines/base.relationExtractionStage
+Variable extensions/pipelines/base.segmentationStage
+Variable extensions/pipelines/base.variableAssignmentStage
+Variable extensions/pipelines/ingestion.INGESTION_SCHOLAR_STAGE_IDS
+Variable extensions/pipelines/ingestion.INGESTION_SCRIBE_STAGE_IDS
+Variable lib.ARG_CHECKSUM_MISMATCH
+Variable lib.ARG_CIRCULARITY_DETECTED
+Variable lib.ARG_CLAIM_REF_NOT_FOUND
+Variable lib.ARG_CONCLUSION_NOT_FOUND
+Variable lib.ARG_OWNERSHIP_MISMATCH
+Variable lib.ARG_PREMISE_REF_NOT_FOUND
+Variable lib.ARG_SCHEMA_INVALID
+Variable lib.AXIOM_CLAIM_NOT_NORMAL_TYPE
+Variable lib.AXIOM_CLAIM_REF_NOT_FOUND
+Variable lib.AXIOM_DUPLICATE_ID
+Variable lib.AXIOM_NOT_FOUND
+Variable lib.AXIOM_SCHEMA_INVALID
+Variable lib.AXIOM_SUPPORTING_NOT_AXIOMATIC_TYPE
+Variable lib.AXIOM_SUPPORTING_REF_NOT_FOUND
+Variable lib.AXIOM_VARIABLE_ASSIGNMENT_FORBIDDEN
+Variable lib.CITATION_CLAIM_REF_NOT_FOUND
+Variable lib.CITATION_CYCLE_DETECTED
+Variable lib.CITATION_DUPLICATE_ID
+Variable lib.CITATION_NOT_FOUND
+Variable lib.CITATION_SCHEMA_INVALID
+Variable lib.CITATION_SUPPORTING_NOT_CITATION_TYPE
+Variable lib.CITATION_SUPPORTING_REF_NOT_FOUND
+Variable lib.CLAIM_FROZEN_NO_SUCCESSOR
+Variable lib.CLAIM_NOT_FOUND
+Variable lib.CLAIM_SCHEMA_INVALID
+Variable lib.CLAIM_TYPE_IMMUTABLE
+Variable lib.CONTESTED
+Variable lib.CREATE_DERIVATION_CLAIM_NOT_FOUND
+Variable lib.CREATE_DERIVATION_REQUIRES_DERIVED_CLAIM_ID
+Variable lib.CoreAnalysisFileSchema
+Variable lib.CoreArgumentForkRecordSchema
+Variable lib.CoreArgumentRoleStateSchema
+Variable lib.CoreArgumentSchema
+Variable lib.CoreClaimAxiomaticTypeSchema
+Variable lib.CoreClaimBoundVariableSchema
+Variable lib.CoreClaimCitationTypeSchema
+Variable lib.CoreClaimConnectionSchema
+Variable lib.CoreClaimForkRecordSchema
+Variable lib.CoreClaimNormalTypeSchema
+Variable lib.CoreClaimSchema
+Variable lib.CoreClaimTypeSchema
+Variable lib.CoreDerivationPremiseSchema
+Variable lib.CoreEntityForkRecordSchema
+Variable lib.CoreExpressionForkRecordSchema
+Variable lib.CoreFormulaExpressionSchema
+Variable lib.CoreFreeformPremiseSchema
+Variable lib.CoreLogicalOperatorType
+Variable lib.CoreOperatorExpressionSchema
+Variable lib.CoreOriginAnchorSchema
+Variable lib.CoreOriginDocumentSchema
+Variable lib.CoreOriginLinkSchema
+Variable lib.CorePremiseBoundVariableSchema
+Variable lib.CorePremiseForkRecordSchema
+Variable lib.CorePremiseSchema
+Variable lib.CorePropositionalExpressionSchema
+Variable lib.CorePropositionalExpressionTypes
+Variable lib.CorePropositionalVariableExpressionSchema
+Variable lib.CorePropositionalVariableSchema
+Variable lib.CoreVariableForkRecordSchema
+Variable lib.DEFAULT_CHECKSUM_CONFIG
+Variable lib.DEFAULT_POSITION_CONFIG
+Variable lib.DEFAULT_RETRY_POLICY
+Variable lib.DERIVATION_STRUCTURE_INVALID
+Variable lib.EMPTY_CLAIM_LOOKUP
+Variable lib.EXPR_CHECKSUM_MISMATCH
+Variable lib.EXPR_CHILD_LIMIT_EXCEEDED
+Variable lib.EXPR_DUPLICATE_ID
+Variable lib.EXPR_PARENT_NOT_CONTAINER
+Variable lib.EXPR_PARENT_NOT_FOUND
+Variable lib.EXPR_POSITION_DUPLICATE
+Variable lib.EXPR_ROOT_ONLY_VIOLATED
+Variable lib.EXPR_SCHEMA_INVALID
+Variable lib.EXPR_SELF_REFERENTIAL_PARENT
+Variable lib.EncodableDate
+Variable lib.FORK_RECORD_SCHEMA_INVALID
+Variable lib.GrammarRuleCodeSchema
+Variable lib.GrammarTierSchema
+Variable lib.JsonArraySchema
+Variable lib.JsonObjectSchema
+Variable lib.JsonPrimitiveSchema
+Variable lib.JsonValueSchema
+Variable lib.LEGACY_CLAIM_CITATION_SHAPE
+Variable lib.LEGACY_CLAIM_MISSING_TYPE
+Variable lib.LEGACY_MISSING_AXIOM_SLOT
+Variable lib.LEGACY_PREMISE_MISSING_TYPE
+Variable lib.LLM_NON_RETRYABLE_ERROR
+Variable lib.LLM_QUOTA_EXHAUSTED
+Variable lib.LLM_RATE_LIMITED
+Variable lib.LLM_TRANSIENT_ERROR
+Variable lib.LLM_UNKNOWN_ERROR
+Variable lib.LlmTokenUsageSchema
+Variable lib.ORIGIN_ANCHOR_DUPLICATE_ID
+Variable lib.ORIGIN_ANCHOR_LINK_NOT_FOUND
+Variable lib.ORIGIN_ANCHOR_NOT_FOUND
+Variable lib.ORIGIN_ANCHOR_QUOTE_MISMATCH
+Variable lib.ORIGIN_ANCHOR_SCHEMA_INVALID
+Variable lib.ORIGIN_ANCHOR_SPAN_OUT_OF_RANGE
+Variable lib.ORIGIN_DOCUMENT_DIGEST_MISMATCH
+Variable lib.ORIGIN_DOCUMENT_DUPLICATE_ID
+Variable lib.ORIGIN_DOCUMENT_IN_USE
+Variable lib.ORIGIN_DOCUMENT_NOT_FOUND
+Variable lib.ORIGIN_DOCUMENT_REF_NOT_FOUND
+Variable lib.ORIGIN_DOCUMENT_SCHEMA_INVALID
+Variable lib.ORIGIN_DOCUMENT_TEXT_NOT_NORMALIZED
+Variable lib.ORIGIN_LINK_DUPLICATE_ID
+Variable lib.ORIGIN_LINK_NOT_FOUND
+Variable lib.ORIGIN_LINK_SCHEMA_INVALID
+Variable lib.OUTPUT_SCHEMA_INVALID
+Variable lib.OriginAnchorTargetTypeSchema
+Variable lib.OriginSegmentSchema
+Variable lib.OriginStanceSchema
+Variable lib.POSITION_INITIAL
+Variable lib.POSITION_MAX
+Variable lib.POSITION_MIN
+Variable lib.PREMISE_CHECKSUM_MISMATCH
+Variable lib.PREMISE_ROOT_EXPRESSION_INVALID
+Variable lib.PREMISE_SCHEMA_INVALID
+Variable lib.PREMISE_VARIABLE_REF_NOT_FOUND
+Variable lib.ParsedArgumentResponseSchema
+Variable lib.ParsedArgumentSchema
+Variable lib.ParsedClaimRoleType
+Variable lib.ParsedClaimSchema
+Variable lib.ParsedClaimTypeType
+Variable lib.ParsedPremiseSchema
+Variable lib.ParsedVariableSchema
+Variable lib.ProcessingFailureSchema
+Variable lib.SATISFIABILITY_VARIABLE_CEILING
+Variable lib.UUID
+Variable lib.VAR_CHECKSUM_MISMATCH
+Variable lib.VAR_DUPLICATE_ID
+Variable lib.VAR_DUPLICATE_SYMBOL
+Variable lib.VAR_SCHEMA_INVALID
+Variable lib.ViolationSchema
