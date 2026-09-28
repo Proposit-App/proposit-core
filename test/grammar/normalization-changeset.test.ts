@@ -283,37 +283,52 @@ describe("a changeset names each entity once", () => {
     })
 
     for (const behavior of ["permissive", "assistive"] as const) {
-        const mutations: Record<
+        const mutations: [
             string,
-            (f: ReturnType<typeof buildFixture>) => TCoreChangeset
-        > = {
-            createPremise: (f) => f.eng.createPremise().changes,
-            addExpression: (f) =>
-                f.pe.addExpression({
-                    id: "ve-new",
-                    argumentId: ARG.id,
-                    argumentVersion: ARG.version,
-                    premiseId: f.pe.getId(),
-                    type: "variable",
-                    variableId: f.variableFor(0),
-                    parentId: "or-outer",
-                    position: 9,
-                }).changes,
-            "changeOperator (inner)": (f) =>
-                f.pe.changeOperator("op-inner", "or").changes,
-            "changeOperator (root)": (f) =>
-                f.pe.changeOperator("or-outer", "and").changes,
-            removeExpression: (f) =>
-                f.pe.removeExpression("ve-2", true).changes,
-            toggleNegation: (f) => f.pe.toggleNegation("ve-1").changes,
-            removeVariable: (f) =>
-                f.eng.removeVariable(f.variableFor(2)).changes,
-            "removePremise (with expressions)": (f) =>
-                f.eng.removePremise(f.pe.getId()).changes,
-            "removePremise (bound, cascading)": (f) =>
-                f.eng.removePremise(f.premises[2].getId()).changes,
-        }
-        for (const [name, mutate] of Object.entries(mutations)) {
+            (f: ReturnType<typeof buildFixture>) => TCoreChangeset,
+        ][] = [
+            ["createPremise", (f) => f.eng.createPremise().changes],
+            [
+                "addExpression",
+                (f) =>
+                    f.pe.addExpression({
+                        id: "ve-new",
+                        argumentId: ARG.id,
+                        argumentVersion: ARG.version,
+                        premiseId: f.pe.getId(),
+                        type: "variable",
+                        variableId: f.variableFor(0),
+                        parentId: "or-outer",
+                        position: 9,
+                    }).changes,
+            ],
+            [
+                "changeOperator (inner)",
+                (f) => f.pe.changeOperator("op-inner", "or").changes,
+            ],
+            [
+                "changeOperator (root)",
+                (f) => f.pe.changeOperator("or-outer", "and").changes,
+            ],
+            [
+                "removeExpression",
+                (f) => f.pe.removeExpression("ve-2", true).changes,
+            ],
+            ["toggleNegation", (f) => f.pe.toggleNegation("ve-1").changes],
+            [
+                "removeVariable",
+                (f) => f.eng.removeVariable(f.variableFor(2)).changes,
+            ],
+            [
+                "removePremise (with expressions)",
+                (f) => f.eng.removePremise(f.pe.getId()).changes,
+            ],
+            [
+                "removePremise (bound, cascading)",
+                (f) => f.eng.removePremise(f.premises[2].getId()).changes,
+            ],
+        ]
+        for (const [name, mutate] of mutations) {
             it(`${name} in ${behavior} behavior repeats no id`, () => {
                 const fixture = buildFixture("and", 2)
                 fixture.eng.setBehavior(behavior)
