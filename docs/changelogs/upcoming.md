@@ -59,8 +59,8 @@
 - `pnpm run docs` (and so `build` and `check`) now compares every declaration
   typedoc documents (including fields of object types written inline, and
   whether an accessor has a getter and a setter), with its kind and overload
-  count, against the checked-in
-  `docs/api-surface.txt`, and fails on any difference.
+  count, against the checked-in `docs/api-surface.txt`, and fails on any
+  difference.
   `scripts/check-api-surface.mjs` does the comparison over typedoc's JSON
   output, written to the gitignored `.typedoc/`. A stray `@internal` comment
   that hides a public member, which `excludeInternal` otherwise does silently,
