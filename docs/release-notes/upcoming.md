@@ -11,8 +11,14 @@ four-operand `and` could not become `xor` as a whole.
 
 Now, with neither child id given, a change between `and`, `or` and `xor`
 updates the operator in place at any number of operands — same id, same
-children, same order. Nothing changes for an operator with two operands or
-fewer, where the child ids are not read. With three or more:
+children, same order. That holds unless one of three existing behaviours
+applies first: asking for the operator it already has returns it unchanged,
+before any rule below; an operator with fewer than two operands whose parent
+(or grandparent, through a formula) already has the requested type is merged
+into it instead; and in `assistive` behavior normalization may then fold the
+changed operator into a same-type operator above it, in which case `result` is
+`null`. Nothing else changes for an operator with two operands or fewer, where
+the child ids are not read. With three or more:
 
 - naming both child ids still splits them out into a sub-operator, exactly as
   before;
