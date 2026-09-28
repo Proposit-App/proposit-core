@@ -317,6 +317,11 @@ export type TOrderedOperation<
  * root per premise must check that at the end of the transaction, not per
  * statement.
  *
+ * One known exception: an expression updated to point at a parent that the
+ * same changeset inserts is updated (phase 2) before that insert (phase 8),
+ * which a store checking foreign keys immediately rejects. Run such updates
+ * after the inserts.
+ *
  * Ordering phases:
  * 1. Update premises — ensure premise rows have correct metadata before
  *    dependent deletes run.
