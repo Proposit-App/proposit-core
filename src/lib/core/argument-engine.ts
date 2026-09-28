@@ -686,8 +686,6 @@ export class ArgumentEngine<
         )
     }
 
-    /** @internal Normalized options bag used internally by createPremise/createPremiseWithId. */
-
     public createPremise(): TCoreMutationResult<
         PremiseEngine<TArg, TPremise, TExpr, TVar>,
         TExpr,
