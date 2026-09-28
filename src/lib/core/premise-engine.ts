@@ -28,7 +28,6 @@ import type {
     TCoreResolvedAssignment,
     TCorePremiseEvaluationResult,
     TCorePremiseInferenceDiagnostic,
-    TCoreValidationIssue,
     TCoreValidationResult,
 } from "../types/evaluation.js"
 import type { TCoreMutationResult, TCoreChangeset } from "../types/mutation.js"
@@ -40,11 +39,7 @@ import {
     belnapOr,
     belnapXor,
 } from "./evaluation/belnap.js"
-import {
-    buildDirectionalVacuity,
-    makeErrorIssue,
-    makeValidationResult,
-} from "./evaluation/validation.js"
+import { buildDirectionalVacuity } from "./evaluation/validation.js"
 import { Value } from "typebox/value"
 import type {
     TInvariantViolation,
@@ -84,6 +79,7 @@ import {
     walkPremiseExpression,
 } from "./premise/formula-tree.js"
 import type { TPremiseReadContext } from "./premise/read-context.js"
+import { validatePremiseEvaluability } from "./premise/evaluability.js"
 import type {
     TExpressionMutations,
     TExpressionQueries,
@@ -1353,165 +1349,7 @@ export class PremiseEngine<
     }
 
     public validateEvaluability(): TCoreValidationResult {
-        const issues: TCoreValidationIssue[] = []
-        const roots = this.expressions.getChildExpressions(null)
-
-        if (this.expressions.toArray().length === 0) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_EMPTY",
-                    message: `Premise "${this.premise.id}" has no expressions to evaluate.`,
-                    premiseId: this.premise.id,
-                })
-            )
-            return makeValidationResult(issues)
-        }
-
-        if (roots.length === 0) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISSING",
-                    message: `Premise "${this.premise.id}" has expressions but no root expression.`,
-                    premiseId: this.premise.id,
-                })
-            )
-        }
-
-        if (this.rootExpressionId === undefined) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISSING",
-                    message: `Premise "${this.premise.id}" does not have rootExpressionId set.`,
-                    premiseId: this.premise.id,
-                })
-            )
-        } else if (!this.expressions.getExpression(this.rootExpressionId)) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISMATCH",
-                    message: `Premise "${this.premise.id}" rootExpressionId "${this.rootExpressionId}" does not exist.`,
-                    premiseId: this.premise.id,
-                    expressionId: this.rootExpressionId,
-                })
-            )
-        } else if (roots[0] && roots[0].id !== this.rootExpressionId) {
-            issues.push(
-                makeErrorIssue({
-                    code: "PREMISE_ROOT_MISMATCH",
-                    message: `Premise "${this.premise.id}" rootExpressionId "${this.rootExpressionId}" does not match actual root "${roots[0].id}".`,
-                    premiseId: this.premise.id,
-                    expressionId: this.rootExpressionId,
-                })
-            )
-        }
-
-        for (const expr of this.expressions.toArray()) {
-            if (
-                expr.type === "variable" &&
-                !this.variables.hasVariable(expr.variableId)
-            ) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_VARIABLE_UNDECLARED",
-                        message: `Expression "${expr.id}" references undeclared variable "${expr.variableId}".`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                        variableId: expr.variableId,
-                    })
-                )
-            }
-
-            if (
-                expr.type === "variable" &&
-                this.emptyBoundPremiseCheck?.(expr.variableId)
-            ) {
-                issues.push({
-                    code: "EXPR_BOUND_PREMISE_EMPTY",
-                    severity: "warning",
-                    message: `Variable "${expr.variableId}" is bound to a premise with no expression tree`,
-                    expressionId: expr.id,
-                })
-            }
-
-            if (expr.type !== "operator" && expr.type !== "formula") {
-                continue
-            }
-
-            const children = this.expressions.getChildExpressions(expr.id)
-
-            if (expr.type === "formula") {
-                if (children.length !== 1) {
-                    issues.push(
-                        makeErrorIssue({
-                            code: "EXPR_CHILD_COUNT_INVALID",
-                            message: `Formula expression "${expr.id}" must have exactly 1 child; found ${children.length}.`,
-                            premiseId: this.premise.id,
-                            expressionId: expr.id,
-                        })
-                    )
-                }
-                continue
-            }
-
-            if (expr.operator === "not" && children.length !== 1) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_CHILD_COUNT_INVALID",
-                        message: `Operator "${expr.id}" (not) must have exactly 1 child; found ${children.length}.`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                    })
-                )
-            }
-
-            if (
-                (expr.operator === "implies" || expr.operator === "iff") &&
-                children.length !== 2
-            ) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_CHILD_COUNT_INVALID",
-                        message: `Operator "${expr.id}" (${expr.operator}) must have exactly 2 children; found ${children.length}.`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                    })
-                )
-            }
-
-            if (
-                (expr.operator === "and" ||
-                    expr.operator === "or" ||
-                    expr.operator === "xor") &&
-                children.length < 2
-            ) {
-                issues.push(
-                    makeErrorIssue({
-                        code: "EXPR_CHILD_COUNT_INVALID",
-                        message: `Operator "${expr.id}" (${expr.operator}) must have at least 2 children; found ${children.length}.`,
-                        premiseId: this.premise.id,
-                        expressionId: expr.id,
-                    })
-                )
-            }
-
-            if (expr.operator === "implies" || expr.operator === "iff") {
-                const childPositions = new Set(
-                    children.map((child) => child.position)
-                )
-                if (children.length !== 2 || childPositions.size !== 2) {
-                    issues.push(
-                        makeErrorIssue({
-                            code: "EXPR_BINARY_POSITIONS_INVALID",
-                            message: `Operator "${expr.id}" (${expr.operator}) must have exactly 2 children with distinct positions.`,
-                            premiseId: this.premise.id,
-                            expressionId: expr.id,
-                        })
-                    )
-                }
-            }
-        }
-
-        return makeValidationResult(issues)
+        return validatePremiseEvaluability(this.asReadContext())
     }
 
     public evaluate(
