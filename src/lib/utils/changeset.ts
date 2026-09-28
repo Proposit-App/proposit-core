@@ -336,17 +336,23 @@ export type TOrderedOperation<
  *   transaction, not per statement.
  *
  * An expression updated to point at a parent or a variable that the same
- * changeset inserts is detached in phase 2, like a removed one, and updated
- * in full after the inserts. When such an update points at a new variable,
- * the variable and premise deletes (phases 4 and 5) wait until after it too:
- * the stored row still names its old variable, which may be one of them,
- * and a store whose variable key cascades would otherwise delete the row.
- * A changeset with no such update keeps the order below exactly.
+ * changeset inserts is moved to the root in phase 2 and updated in full
+ * after the inserts. In phase 2, one late only for its new parent is written
+ * whole with the parent cleared, since every other row it names exists, so
+ * it leaves its old variable before that can be deleted. One that points at
+ * a new variable can only be detached (`id`, `parentId`, `position`), so the
+ * variable and premise deletes (phases 4 and 5) wait until after its full
+ * update: the stored row still names its old variable, which may be one of
+ * them, and a store whose variable key cascades would otherwise delete the
+ * row. A changeset with no such update keeps the order below exactly.
  *
- * One known exception, when those deletes wait: a changeset that removes a
- * variable and inserts another with the same symbol inserts the new one
- * first. A store that keeps symbols unique per argument, and checks that per
- * statement, rejects it.
+ * Known exceptions, only when those deletes wait, for a store that checks
+ * the rule per statement. The inserts then run while the removed rows still
+ * exist, so:
+ * - a variable inserted with the symbol of one being removed breaks a rule
+ *   that symbols are unique per argument;
+ * - a premise inserted as the conclusion while the removed conclusion
+ *   premise still exists breaks a rule of one conclusion per argument.
  *
  * Ordering phases:
  * 1. Update premises — ensure premise rows have correct metadata before
@@ -429,10 +435,15 @@ export function orderChangeset<
             pointsAtNewVariable(e)
         ) {
             late.push(e)
+            // An update pointing at a new variable can only detach now. One
+            // late for its parent alone names rows that exist, so it moves
+            // off its old variable here too, before that can be deleted.
             ops.push({
                 type: "update",
                 entity: "expression",
-                data: { id: e.id, parentId: null, position: POSITION_INITIAL },
+                data: pointsAtNewVariable(e)
+                    ? { id: e.id, parentId: null, position: POSITION_INITIAL }
+                    : { ...e, parentId: null, position: POSITION_INITIAL },
             })
         } else {
             ops.push({ type: "update", entity: "expression", data: e })
