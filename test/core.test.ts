@@ -11207,6 +11207,24 @@ describe("Premise-variable associations — circularity prevention", () => {
         ).not.toThrow()
     })
 
+    it("rejects repointing a variable expression at the premise's own bound variable", () => {
+        const engine = makeEngineWithBinding()
+        const p1 = engine.getPremise("p1")!
+        p1.appendExpression(null, {
+            id: "e1",
+            argumentId: "a1",
+            argumentVersion: 0,
+            premiseId: "p1",
+            parentId: null,
+            type: "variable",
+            variableId: "vA",
+        })
+        expect(() => p1.updateExpression("e1", { variableId: "vQ" })).toThrow(
+            /circular/i
+        )
+        expect(p1.getExpression("e1")!).toMatchObject({ variableId: "vA" })
+    })
+
     it("allows adding a claim-bound variable expression to any premise", () => {
         const engine = makeEngineWithBinding()
         const p1 = engine.getPremise("p1")!
