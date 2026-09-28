@@ -126,43 +126,55 @@ function composeEntityChanges<T extends { id: string }>(
     then: TCoreEntityChanges<T> | undefined
 ): TCoreEntityChanges<T> | undefined {
     if (!first && !then) return undefined
-    type TBucket = "added" | "modified" | "removed"
-    const state = new Map<string, { bucket: TBucket; entity: T }>()
-    for (const bucket of ["added", "modified", "removed"] as const) {
-        for (const entity of first?.[bucket] ?? []) {
-            state.set(entity.id, { bucket, entity })
+    const state: TEntityChangeState<T> = new Map()
+    for (const changes of [first, then]) {
+        for (const bucket of ["added", "modified", "removed"] as const) {
+            for (const entity of changes?.[bucket] ?? []) {
+                recordEntityChange(state, bucket, entity)
+            }
         }
     }
-    for (const entity of then?.added ?? []) {
-        const earlier = state.get(entity.id)
-        state.set(entity.id, {
-            bucket: earlier?.bucket === "removed" ? "modified" : "added",
-            entity,
-        })
+    return entityChangesFrom(state)
+}
+
+/** Each entity's single bucket and latest value, by id. */
+export type TEntityChangeState<T extends { id: string }> = Map<
+    string,
+    { bucket: "added" | "modified" | "removed"; entity: T }
+>
+
+/**
+ * Records one change to an entity on top of what `state` already holds for
+ * it, keeping one bucket per entity: added then modified stays added (with
+ * the later value), added then removed disappears, removed then added
+ * becomes modified, and otherwise the later change replaces the earlier.
+ */
+export function recordEntityChange<T extends { id: string }>(
+    state: TEntityChangeState<T>,
+    bucket: "added" | "modified" | "removed",
+    entity: T
+): void {
+    const earlier = state.get(entity.id)?.bucket
+    if (bucket === "removed" && earlier === "added") {
+        state.delete(entity.id)
+        return
     }
-    for (const entity of then?.modified ?? []) {
-        const earlier = state.get(entity.id)
-        state.set(entity.id, {
-            bucket: earlier?.bucket === "added" ? "added" : "modified",
-            entity,
-        })
-    }
-    for (const entity of then?.removed ?? []) {
-        if (state.get(entity.id)?.bucket === "added") {
-            state.delete(entity.id)
-        } else {
-            state.set(entity.id, { bucket: "removed", entity })
-        }
-    }
+    const next =
+        bucket === "added" && earlier === "removed"
+            ? "modified"
+            : bucket === "modified" && earlier === "added"
+              ? "added"
+              : bucket
+    state.set(entity.id, { bucket: next, entity })
+}
+
+/** The buckets `state` describes, or undefined when it holds nothing. */
+export function entityChangesFrom<T extends { id: string }>(
+    state: TEntityChangeState<T>
+): TCoreEntityChanges<T> | undefined {
+    if (state.size === 0) return undefined
     const out: TCoreEntityChanges<T> = { added: [], modified: [], removed: [] }
     for (const { bucket, entity } of state.values()) out[bucket].push(entity)
-    if (
-        out.added.length === 0 &&
-        out.modified.length === 0 &&
-        out.removed.length === 0
-    ) {
-        return undefined
-    }
     return out
 }
 

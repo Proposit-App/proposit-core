@@ -1111,8 +1111,10 @@ export class ArgumentEngine<
             if (!pm) return { result: undefined, changes: {} }
             const data = pm.toPremiseData()
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
-            // Clean up expression index for removed premise's expressions
+            // The premise's expressions go with it: list them as removed and
+            // drop them from the expression index.
             for (const expr of pm.getExpressions()) {
+                collector.removedExpression(expr)
                 this.expressionIndex.delete(expr.id)
             }
             this.premises.delete(premiseId)
