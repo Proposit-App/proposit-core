@@ -48,13 +48,16 @@
   remaining assertions (each stage started before the other ended) already
   prove the overlap and do not depend on machine speed.
 - The high-load build test in `test/core.test.ts` no longer holds a
-  200-premise build to 30 s, which failed on slow runners. It now builds 60
-  and 120 premises (fastest of two runs each, CPU time) and requires the
-  larger build to cost under 5x the smaller. Building is quadratic today,
-  because every `createPremise` re-validates the whole argument: about 3x per
-  doubling locally, and the test failed with an extra validation pass per
-  premise added to make it cubic. The test pins that cost; it does not fix
-  it.
+  200-premise build to 30 s, which failed on slow runners. It now builds 40
+  and 160 premises (fastest of two runs each, CPU time) and requires the
+  larger build to cost under 30x the smaller. Building is quadratic today,
+  because every `createPremise` re-validates the whole argument: 14.7-16.4x
+  for 4x the premises, measured in the test. With an extra validation pass
+  per premise added to make the build cubic, it measured 50.9x and failed.
+  The test pins that cost; it does not fix it. It sets no time limit (a
+  timeout of 0), and neither does the anchor-cost ratio test now, which
+  could pass vitest's default 5 s on a very busy machine while its ratio
+  held.
 
 ## Internal
 

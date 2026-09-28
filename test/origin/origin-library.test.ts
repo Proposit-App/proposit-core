@@ -582,7 +582,11 @@ describe("OriginLibrary — cost of validating on every mutation", () => {
         }
 
         expect(large / small).toBeLessThan(3)
-    })
+        // Building the documents takes most of this test's time, and on a
+        // busy machine it can pass the default 5 s limit while the ratio
+        // holds. The ratio is the assertion, so a timeout of 0 turns vitest's
+        // per-test limit off.
+    }, 0)
 
     it("still catches a tampered document body after the first validation", () => {
         // Skipping the re-check must be keyed to the exact text that was

@@ -1198,8 +1198,10 @@ describe("stress test", () => {
         // building is quadratic in argument size: that cost is pinned here,
         // not accepted as fixed. Comparing two sizes rather than holding one
         // build to a time limit keeps the test about the engine, not the
-        // machine. Doubling the argument costs about 3x today; a build that
-        // grew cubically would cost about twice that.
+        // machine. Quadrupling the argument costs about 16x today (measured
+        // 14.7-16.4); a build that grew cubically would cost about 64x. The
+        // bound sits between the two, so ordinary timing noise stays well
+        // inside it.
         const timeBuild = (numPremises: number): number => {
             const startedAt = process.cpuUsage()
             expect(() =>
@@ -1219,11 +1221,11 @@ describe("stress test", () => {
         let small = Infinity
         let large = Infinity
         for (let i = 0; i < 2; i++) {
-            small = Math.min(small, timeBuild(60))
-            large = Math.min(large, timeBuild(120))
+            small = Math.min(small, timeBuild(40))
+            large = Math.min(large, timeBuild(160))
         }
 
-        expect(large / small).toBeLessThan(5)
+        expect(large / small).toBeLessThan(30)
         // The builds take several seconds, longer than the default 5 s limit,
         // and how long they take is not what this test asserts: the ratio is.
         // A timeout of 0 turns vitest's per-test limit off.
