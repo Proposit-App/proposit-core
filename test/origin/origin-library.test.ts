@@ -523,7 +523,7 @@ describe("OriginLibrary — documents whose text contains adjacent invisibles", 
 describe("OriginLibrary — cost of validating on every mutation", () => {
     // Documents are immutable and `addDocument` computes their text and digest
     // itself, so re-normalizing and re-digesting every body on every unrelated
-    // mutation is pure waste. The server slice adds one anchor per extracted
+    // mutation is pure waste. The server adds one anchor per extracted
     // claim inside a request handler, so the cost has to be flat in document
     // size, not linear in it.
     //
@@ -573,10 +573,13 @@ describe("OriginLibrary — cost of validating on every mutation", () => {
     it("adds many anchors to large documents without re-scanning them", () => {
         // The fastest of three runs, so a one-off pause (garbage collection, a
         // busy machine) lands in neither side of the ratio.
-        const fastest = (bodyRepeats: number) =>
-            Math.min(...[0, 1, 2].map(() => timeHundredAnchors(bodyRepeats)))
-        const small = fastest(190)
-        const large = fastest(3_800)
+        // The sizes alternate so a slowdown lasting several runs falls on both.
+        let small = Infinity
+        let large = Infinity
+        for (let i = 0; i < 3; i++) {
+            small = Math.min(small, timeHundredAnchors(190))
+            large = Math.min(large, timeHundredAnchors(3_800))
+        }
 
         expect(large / small).toBeLessThan(3)
     })
