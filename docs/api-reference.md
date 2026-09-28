@@ -1576,6 +1576,12 @@ Every reduction is answer-preserving: the result matches a single flat walk over
 
 ---
 
+### `composeChangesets(first, then)` → `TCoreChangeset`
+
+Combines two changesets made one after the other — the changesets of two successive mutations — into the one changeset that describes both. Each entity lands in one bucket: added then modified stays added (with the later value), added then removed disappears, modified then removed becomes removed, removed then added becomes modified, and otherwise the later entry wins. `roles` and `argument` take the later value when present. Use it to combine a sequence of mutations for one persistence call. `mergeChangesets` is for changesets that are independent of each other, and throws when an id lands in two buckets, which a sequence can legitimately produce.
+
+---
+
 ### `parseFormula(input)` → `TFormulaAST`
 
 Parses a logical formula string into an AST. Supports standard logical notation with operators `not`/`¬`, `and`/`∧`, `or`/`∨`, `implies`/`→`, `iff`/`↔`, and parentheses for grouping. A word operator must stand as a whole word, so `NotRaining` is one symbol, not `not Raining`.

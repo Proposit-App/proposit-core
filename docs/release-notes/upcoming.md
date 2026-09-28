@@ -34,9 +34,11 @@ normalization's changes, in whichever premise they happen. One that
 expected `changes` to hold only what it asked for will now see more.
 Removing a variable, or a premise with bound variables, likewise reports
 every expression the removal moved, not only those it deleted, and this
-applies in `permissive` behavior too. One gap remains, unchanged by this
-release: `removePremise` lists the removed premise but not its own
-expressions.
+applies in `permissive` behavior too. `removePremise` now lists the removed
+premise's own expressions as removed too, and no changeset names an entity
+more than once. To combine the changesets of several mutations made in a
+row, use the new `composeChangesets`: `mergeChangesets` throws when one
+entity is in two buckets, which a sequence can produce.
 
 ### `changeOperator` swaps `and`, `or` and `xor` at any number of operands
 
