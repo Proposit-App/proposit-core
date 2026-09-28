@@ -57,8 +57,9 @@
 ## Internal
 
 - `pnpm run docs` (and so `build` and `check`) now compares every declaration
-  typedoc documents (including fields of object types written inline, and
-  whether an accessor has a getter and a setter), with its kind and overload
+  typedoc documents (including fields of object types written inline, in a
+  union, a generic's type argument or a tuple, and whether an accessor has a
+  getter and a setter), with its kind and overload
   count, against the checked-in `docs/api-surface.txt`, and fails on any
   difference.
   `scripts/check-api-surface.mjs` does the comparison over typedoc's JSON

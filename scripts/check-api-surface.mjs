@@ -20,12 +20,16 @@ const update = process.argv.includes("--update")
 function surfaceLines(project) {
     const lines = []
     // Fields written inline in a type (an object type inside a union or
-    // intersection, on a property, or as a constant's type) are reflections
-    // too, reached through the type rather than through `children`.
+    // intersection, a generic's type argument or a tuple, on a property, or
+    // as a constant's type) are reflections too, reached through the type
+    // rather than through `children`.
     const walkType = (type, path) => {
         if (!type) return
         if (type.declaration) walk(type.declaration, path)
         for (const member of type.types ?? []) walkType(member, path)
+        for (const argument of type.typeArguments ?? [])
+            walkType(argument, path)
+        for (const element of type.elements ?? []) walkType(element, path)
         walkType(type.elementType, path)
     }
     const walk = (node, path) => {
