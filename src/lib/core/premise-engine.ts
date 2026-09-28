@@ -75,6 +75,7 @@ import type {
     TExpressionUpdate,
 } from "./expression-manager.js"
 import { ExpressionManager } from "./expression-manager.js"
+import { isVariadicOperator } from "./expression-manager-checks.js"
 import { VariableManager } from "./variable-manager.js"
 import type {
     TExpressionMutations,
@@ -982,11 +983,18 @@ export class PremiseEngine<
             const collector = new ChangeCollector<TExpr, TVar, TPremise, TArg>()
             this.expressions.setCollector(collector)
             try {
-                if (childCount <= 2) {
+                // Any number of operands suits every variadic operator, so
+                // with no children named for a split the type changes in
+                // place, keeping the children where they are.
+                const swapInPlace =
+                    sourceChildId === undefined &&
+                    targetChildId === undefined &&
+                    isVariadicOperator(newOperator)
+                if (childCount <= 2 || swapInPlace) {
                     // Check for merge condition: parent is same type as newOperator.
                     // Only merge when childCount < 2 (degenerate operator). With
-                    // exactly 2 children the operator is well-formed — just change
-                    // the type in place.
+                    // 2 or more children the operator is well-formed — just
+                    // change the type in place.
                     const parent = target.parentId
                         ? this.expressions.getExpression(target.parentId)
                         : undefined
@@ -1080,15 +1088,19 @@ export class PremiseEngine<
 
                         const changes =
                             this.finalizeExpressionMutation(collector)
+                        // Normalization runs inside finalize and may have
+                        // absorbed the node into a same-operator
+                        // grandparent; that reads as a dissolve, like a
+                        // merge.
                         return {
-                            result: this.expressions.getExpression(
-                                expressionId
-                            )!,
+                            result:
+                                this.expressions.getExpression(expressionId) ??
+                                null,
                             changes,
                         }
                     }
                 } else {
-                    // --- SPLIT (>2 children) ---
+                    // --- SPLIT (>2 children, not swapped in place) ---
                     if (!sourceChildId || !targetChildId) {
                         throw new Error(
                             `Operator "${expressionId}" has ${childCount} children — sourceChildId and targetChildId are required for split.`

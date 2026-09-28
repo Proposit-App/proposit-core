@@ -518,8 +518,14 @@ export function registerExpressionCommands(
     exprs
         .command("change-operator <premise_id> <expression_id> <new_operator>")
         .description("Change the operator type of an operator expression")
-        .option("--source-child-id <id>", "Source child ID for split behavior")
-        .option("--target-child-id <id>", "Target child ID for split behavior")
+        .option(
+            "--source-child-id <id>",
+            "With --target-child-id, split these two children of an operator with more than two into a new sub-operator; omit both to change and, or or xor in place"
+        )
+        .option(
+            "--target-child-id <id>",
+            "Second child to split out (see --source-child-id)"
+        )
         .action(
             async (
                 premiseId: string,
