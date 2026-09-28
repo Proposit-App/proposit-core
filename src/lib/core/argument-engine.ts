@@ -259,19 +259,13 @@ export class ArgumentEngine<
     }
 
     /**
-     * The state the circularity check under `argument/` reads, each field
-     * read back from this engine when used.
+     * The state the circularity check under `argument/` reads, built per call
+     * and read once per call, as `asClaimVariableContext` is.
      */
     private asCycleContext(): TCycleContext<TArg, TPremise, TExpr, TVar> {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
-        const engine = this
         return {
-            get variables() {
-                return engine.variables
-            },
-            get premises() {
-                return engine.premises
-            },
+            variables: this.variables,
+            premises: this.premises,
         }
     }
 
@@ -2593,20 +2587,16 @@ export class ArgumentEngine<
     }
 
     /**
-     * The state the claim/variable functions under `argument/` read. Each
-     * field reads back through to this engine when used, so a rollback that
-     * replaces the variable manager is seen as it was before they moved.
+     * The state the claim/variable functions under `argument/` read, as a
+     * plain object built per call (accessor properties on such a context
+     * slowed evaluation measurably in the premise engine). The fields are read
+     * once per call; only a rollback replaces the variable manager, and
+     * nothing this library calls rolls back during a read.
      */
     private asClaimVariableContext(): TClaimVariableContext<TVar, TClaim> {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
-        const engine = this
         return {
-            get variables() {
-                return engine.variables
-            },
-            get claimLibrary() {
-                return engine.claimLibrary
-            },
+            variables: this.variables,
+            claimLibrary: this.claimLibrary,
         }
     }
 

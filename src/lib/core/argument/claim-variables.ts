@@ -22,10 +22,8 @@ import type { VariableManager } from "../variable-manager.js"
 // the comments on the functions below say which caller needs which.
 
 /**
- * What these functions read from an `ArgumentEngine`. The engine's
- * implementation reads each field back from itself when it is used, so a
- * rollback that replaces the variable manager is seen exactly as it was
- * before these moved out of the class.
+ * What these functions read from an `ArgumentEngine`, built by the engine
+ * for each call.
  */
 export type TClaimVariableContext<
     TVar extends TCorePropositionalVariable,

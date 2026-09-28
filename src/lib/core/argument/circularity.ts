@@ -10,9 +10,8 @@ import type { PremiseEngine } from "../premise-engine.js"
 import type { VariableManager } from "../variable-manager.js"
 
 /**
- * What the circularity check reads from an `ArgumentEngine`. The engine's
- * implementation reads each field back from itself when used, as the method
- * did before it moved.
+ * What the circularity check reads from an `ArgumentEngine`, built by the
+ * engine for each call.
  */
 export type TCycleContext<
     TArg extends TCoreArgument,
