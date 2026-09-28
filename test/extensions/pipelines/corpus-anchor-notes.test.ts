@@ -8,10 +8,10 @@
 // over the corpus, and it names each expected note so a new one has to
 // be looked at rather than absorbed into a total.
 //
-// Both entries are model-behavior findings, not defects in the anchor
-// code: each is a relation whose evidence quote the model did not copy
-// verbatim from the input, so it resolves to no anchor by design. If
-// this test fails, the question is what changed about the recordings.
+// A note here is a finding about the recorded model output (a quote not
+// copied verbatim, a claim no mention was produced for), not a defect in
+// the anchor code. If this test fails, the question is what changed about
+// the recordings.
 
 import fs from "node:fs"
 import path from "node:path"
@@ -76,8 +76,8 @@ async function collectNotes(): Promise<string[]> {
                 if (!failure.code.startsWith("SOURCE_ANCHOR")) continue
                 const context = failure.context ?? {}
                 const subject =
-                    (context.relationId as string | undefined) ??
                     (context.mentionId as string | undefined) ??
+                    (context.claimMiniId as string | undefined) ??
                     "-"
                 notes.push(`${name}/${pipeline} ${failure.code} ${subject}`)
             }

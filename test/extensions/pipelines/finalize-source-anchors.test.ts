@@ -404,6 +404,13 @@ describe("finalizeResponseV2 — a claim with no mention is reported, not silent
         expect(notes.map((n) => n.context?.claimMiniId)).toEqual(["c3"])
     })
 
+    it("reports nothing for a claim with one produced mention among unknown ids", () => {
+        const notes = notAttempted(
+            finalizeFailures(withCanonicalMentionIds("c3", ["m-unknown", "m4"]))
+        )
+        expect(notes).toEqual([])
+    })
+
     it("reports nothing when every claim has a mention", () => {
         expect(notAttempted(finalizeFailures(buildOutputs()))).toEqual([])
     })

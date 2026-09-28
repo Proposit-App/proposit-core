@@ -820,7 +820,7 @@ export function finalizeResponseV2(
         ) {
             ctx.addFailure({
                 code: SOURCE_ANCHOR_NOTE_CODES.notAttempted,
-                message: `The mention stage found no mention of claim ${c.miniId} in the input, so no source anchor was looked for.`,
+                message: `None of claim ${c.miniId}'s mentions is one the mention stage produced, so no source anchor was looked for.`,
                 severity: "warning",
                 context: { claimMiniId: c.miniId },
             })
