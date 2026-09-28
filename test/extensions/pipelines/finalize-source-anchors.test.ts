@@ -477,6 +477,43 @@ describe("finalizeResponseV2 — a mention no claim references is reported, not 
         )
     })
 
+    it("reports an unclaimed mention whose quote also failed to resolve", () => {
+        // Linking and resolving are separate facts, so both are reported.
+        const outputs = withMentionIds("c1", ["m1"])
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.find((m) => m.mentionId === "m2")!.text =
+            "a sentence never written"
+
+        const failures = finalizeFailures(outputs)
+        expect(
+            failures
+                .filter((f) => f.context?.mentionId === "m2")
+                .map((f) => f.code)
+                .sort()
+        ).toEqual([
+            "SOURCE_ANCHOR_MENTION_UNCLAIMED",
+            "SOURCE_ANCHOR_UNRESOLVED",
+        ])
+    })
+
+    it("reports a mention id the stage emitted twice only once", () => {
+        const outputs = withMentionIds("c1", ["m1"])
+        const mentions = outputs[
+            STAGE_IDS.claimMentionExtraction
+        ] as TClaimMentionExtractionOutput
+        mentions.mentions.push({
+            ...mentions.mentions.find((m) => m.mentionId === "m2")!,
+        })
+
+        expect(
+            unclaimed(finalizeFailures(outputs)).map(
+                (n) => n.context?.mentionId
+            )
+        ).toEqual(["m2"])
+    })
+
     it("reports nothing when every mention is named by a claim", () => {
         expect(unclaimed(finalizeFailures(buildOutputs()))).toEqual([])
     })
