@@ -1,5 +1,16 @@
 # Upcoming
 
+## Added
+
+- `TLlmOutputCheckFailure` is re-exported from `src/lib/index.ts`, which clears
+  the typedoc warning that `checkArgumentStructure` referenced an undocumented
+  type.
+- `SOURCE_ANCHOR_NOTE_CODES.notAttempted` (`SOURCE_ANCHOR_NOT_ATTEMPTED`):
+  `finalizeResponseV2` adds one warning per claim whose `mentionIds` name no
+  mention in `input.mentions`, with `context: { claimMiniId }`. Skipped when
+  `input.mentions` is absent or the input has no text (the latter is already
+  covered by the single `SOURCE_ANCHOR_INPUT_UNAVAILABLE`).
+
 ## Changed
 
 - `PremiseEngine.changeOperator` with three or more children, no child ids,
@@ -37,14 +48,15 @@
   remaining assertions (each stage started before the other ended) already
   prove the overlap and do not depend on machine speed.
 
-## - `TLlmOutputCheckFailure` is re-exported from `src/lib/index.ts`, which clears
+## Internal
 
-the typedoc warning that `checkArgumentStructure` referenced an undocumented
-type.
-
-## - `SOURCE_ANCHOR_NOTE_CODES.notAttempted` (`SOURCE_ANCHOR_NOT_ATTEMPTED`):
-
-`finalizeResponseV2` adds one warning per claim whose `mentionIds` name no
-mention in `input.mentions`, with `context: { claimMiniId }`. Skipped when
-`input.mentions` is absent or the input has no text (the latter is already
-covered by the single `SOURCE_ANCHOR_INPUT_UNAVAILABLE`).
+- `PremiseEngine`'s read-only routines moved out of the class into module
+  functions under `src/lib/core/premise/`, over a `TPremiseReadContext` that
+  holds the engine's own managers by reference: the formula-tree walks
+  (`formula-tree.ts`), the evaluability check (`evaluability.ts`), evaluation
+  (`evaluation.ts`) and the invariant sweep (`invariants.ts`). The class keeps
+  one-line delegating methods, so its public surface is unchanged;
+  `premise-engine.ts` goes from 2,245 to 1,716 lines. `evaluate` still calls
+  `this.validateEvaluability()` and `this.isInference()`, and `validate` still
+  calls `this.toPremiseData()` first, so overriding any of them keeps its
+  effect.
