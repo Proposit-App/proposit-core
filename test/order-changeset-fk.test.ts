@@ -936,43 +936,81 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
                         "removePremise",
                         "removeVariable",
                         "removeExpression",
+                        "rebindVariable",
+                        "renameVariable",
+                        "moveToNewPremise",
                     ] as const)
+                    const premiseBound = eng
+                        .getVariables()
+                        .filter((v) => "boundPremiseId" in v)
                     try {
+                        if (call === "moveToNewPremise") {
+                            // Remove a leaf and add one with the same id to
+                            // a new premise: composed, one update naming it.
+                            const leaf = pick(variables)
+                            const removed = pe.removeExpression(leaf.id, false)
+                            const created = eng.createPremise()
+                            const added = created.result.addExpression({
+                                ...leaf,
+                                premiseId: created.result.getId(),
+                                parentId: null,
+                                position: 0,
+                            })
+                            changes = [removed, created, added].reduce(
+                                (all, next) =>
+                                    composeChangesets(all, next.changes),
+                                changes
+                            )
+                            continue
+                        }
                         const result =
-                            call === "createPremise"
-                                ? eng.createPremise()
-                                : call === "updateExpression"
-                                  ? pe.updateExpression(
-                                        variables.length > 0
-                                            ? pick(variables).id
-                                            : "missing",
-                                        { variableId: leafOf(pe).variableId }
+                            call === "rebindVariable"
+                                ? eng.updateVariable(pick(premiseBound).id, {
+                                      boundPremiseId: pick(premises).getId(),
+                                  })
+                                : call === "renameVariable"
+                                  ? eng.updateVariable(
+                                        pick(eng.getVariables()).id,
+                                        { symbol: `S${String(n++)}` }
                                     )
-                                  : call === "wrapExpression"
-                                    ? pe.wrapExpression(
-                                          operator,
-                                          leafOf(pe),
-                                          target
-                                      )
-                                    : call === "insertExpression"
-                                      ? pe.insertExpression(
-                                            { ...operator, position: 0 },
-                                            target
+                                  : call === "createPremise"
+                                    ? eng.createPremise()
+                                    : call === "updateExpression"
+                                      ? pe.updateExpression(
+                                            variables.length > 0
+                                                ? pick(variables).id
+                                                : "missing",
+                                            {
+                                                variableId:
+                                                    leafOf(pe).variableId,
+                                            }
                                         )
-                                      : call === "toggleNegation"
-                                        ? pe.toggleNegation(target)
-                                        : call === "removePremise"
-                                          ? eng.removePremise(
-                                                pick(premises).getId()
+                                      : call === "wrapExpression"
+                                        ? pe.wrapExpression(
+                                              operator,
+                                              leafOf(pe),
+                                              target
+                                          )
+                                        : call === "insertExpression"
+                                          ? pe.insertExpression(
+                                                { ...operator, position: 0 },
+                                                target
                                             )
-                                          : call === "removeVariable"
-                                            ? eng.removeVariable(
-                                                  pick(eng.getVariables()).id
-                                              )
-                                            : pe.removeExpression(
-                                                  target,
-                                                  random() < 0.5
-                                              )
+                                          : call === "toggleNegation"
+                                            ? pe.toggleNegation(target)
+                                            : call === "removePremise"
+                                              ? eng.removePremise(
+                                                    pick(premises).getId()
+                                                )
+                                              : call === "removeVariable"
+                                                ? eng.removeVariable(
+                                                      pick(eng.getVariables())
+                                                          .id
+                                                  )
+                                                : pe.removeExpression(
+                                                      target,
+                                                      random() < 0.5
+                                                  )
                         changes = composeChangesets(changes, result.changes)
                     } catch {
                         // A rejected step changes nothing.
@@ -991,6 +1029,9 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
                     )
                     expect(rows(store.variables), label).toEqual(
                         rows(after.variables)
+                    )
+                    expect(rows(store.premises), label).toEqual(
+                        rows(after.premises)
                     )
                 }
             }
