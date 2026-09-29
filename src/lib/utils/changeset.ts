@@ -353,14 +353,16 @@ export type TOrderedOperation<
  * and a rename can take a symbol a removed variable frees. One bound to a
  * premise the same changeset inserts runs after that insert instead, and
  * the premise deletes wait for it. A changeset with no variable update and
- * no expression update that needs an insert first keeps the order below
- * exactly.
+ * no expression update that needs an insert first keeps its previous order
+ * exactly: the phase list below with every step for those two left out.
  *
  * Known exceptions, only when deletes wait, for a store that checks the rule
  * per statement. The inserts then run while the removed rows still exist, so:
  * - a variable inserted with the symbol of one being removed breaks a rule
- *   that symbols are unique per argument (only when the variable deletes
- *   wait, for an expression update);
+ *   that symbols are unique per argument, and so does one inserted with the
+ *   symbol a variable is being renamed off (both only when the variable
+ *   deletes wait, for an expression update: the renames then run after the
+ *   inserts);
  * - a premise inserted as the conclusion while the removed conclusion
  *   premise still exists breaks a rule of one conclusion per argument.
  *

@@ -49,7 +49,11 @@
       an insert first is ordered exactly as before.
     - One side effect: a variable renamed off a symbol that an inserted
       variable takes is now accepted by a store with a per-statement unique
-      symbol rule, because the update runs before the insert.
+      symbol rule, because the update runs before the insert, unless the
+      deletes are held. Held, all variable updates run after the inserts, so
+      that case joins the exceptions above.
+    - An expression moved into a new premise holds the deletes, like one
+      pointing at a new variable, so both exceptions above apply to it.
 
 ## Tests
 

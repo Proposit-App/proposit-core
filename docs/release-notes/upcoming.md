@@ -31,14 +31,13 @@ only a new parent, this first write carries the rest of the new row too. If
 it points at a new variable, it carries nothing else, like the update a
 removed expression gets. Then the full update runs right after the inserts.
 When one of these points at a new variable, the variable and premise deletes
-also wait until after it. Changesets without such an update are ordered exactly as
-before.
+also wait until after it.
 
 If your persistence layer holds back updates that point at a newly inserted
 parent until after its inserts, as proposit-app's server does, remove that
 workaround. `orderChangeset` does it now. Keeping it can reorder an update
-past a variable delete that was held back for it. With a cascading variable
-key, that loses the row.
+past a variable or premise delete that was held back for it. With a
+cascading key, that loses the row.
 
 ### `orderChangeset` orders premise changes around the premises they name
 
@@ -55,9 +54,10 @@ Two more orders are fixed.
   combined changeset can remove an expression and add one with the same id
   to a new premise. That update now runs after the premise is inserted.
 
-Every changeset with a variable update is now ordered differently.
-Changesets with no variable update, and no expression update that needs an
-insert first, are ordered exactly as before.
+Variable updates now run earlier than they did, so a changeset with a
+variable update and anything else to delete or insert is ordered
+differently. Changesets with no variable update, and no expression update
+that needs an insert first, are ordered exactly as before.
 
 ### What is still unsafe
 
@@ -67,9 +67,12 @@ while deletes wait:
 - **A variable inserted with the symbol of one being removed.** This happens
   only when a changeset moves an expression onto a new variable or into a
   new premise.
+- **A variable inserted with the symbol another variable is being renamed
+  off.** This happens in the same cases, because the renames then run after
+  the inserts.
 - **A premise inserted as the conclusion while the removed conclusion
   premise still exists.** This happens in the same cases, and also when a
   variable is rebound onto a new premise.
 
 Making such rules deferred, so they are checked at the end of the
-transaction, removes both.
+transaction, removes all three.
