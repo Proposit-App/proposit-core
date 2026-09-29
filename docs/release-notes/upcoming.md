@@ -7,7 +7,8 @@
 The generated API reference now covers four subpaths it left out:
 `extensions/openai`, `extensions/chat-completions`, `builder` and
 `pipelines/scheduling`. Two types their signatures already used are now
-exported where you can name them:
+exported under a name. Both describe shapes that were already public, so
+nothing new is added to what you can pass or receive:
 
 - `TChatCompletionsFetch`, the type of the chat-completions provider's
   `fetch` option;
