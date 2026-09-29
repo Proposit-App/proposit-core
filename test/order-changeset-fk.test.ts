@@ -654,7 +654,9 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
                         argumentVersion: ARG.version,
                         premiseId: pNew.getId(),
                     }
-                    const steps = [p2.removeExpression("x", true)]
+                    const steps: { changes: TCoreChangeset }[] = [
+                        p2.removeExpression("x", true),
+                    ]
                     if (shape === "under a new operator") {
                         steps.push(
                             pNew.addExpression({
@@ -769,6 +771,75 @@ describe("orderChangeset suits a store with immediate foreign keys", () => {
             "update roles ",
         ])
     })
+
+    // A premise replaced, with and without its variable rebound. With no
+    // variable update the order is the one orderChangeset has always
+    // produced. A variable update runs between the variable and premise
+    // deletes. One bound to the new premise follows that premise's insert,
+    // and the premise delete waits for it, so for that moment the argument
+    // holds both premises: a store allowing one conclusion per argument,
+    // checked per statement, rejects a conclusion swap made in the same
+    // changeset.
+    for (const rebind of ["none", "existing", "new"] as const) {
+        it(`orders a replaced premise with ${rebind === "none" ? "no variable rebound" : `its variable rebound onto the ${rebind} premise`}`, () => {
+            let n = 0
+            const eng = new ArgumentEngine(ARG, EMPTY_CLAIM_LOOKUP, {
+                behavior: "permissive",
+                generateId: () => `g${String(n++)}`,
+            })
+            const [p1, p2] = [
+                eng.createPremise().result,
+                eng.createPremise().result,
+            ]
+            const created = eng.createPremise()
+            const target = rebind === "new" ? created.result : p2
+            const steps = [
+                ...(rebind === "none"
+                    ? []
+                    : [
+                          eng.updateVariable("g1", {
+                              boundPremiseId: target.getId(),
+                          }),
+                      ]),
+                eng.removePremise(p1.getId()),
+            ]
+            const changes = steps.reduce(
+                (all, next) => composeChangesets(all, next.changes),
+                created.changes
+            )
+
+            expect(
+                orderChangeset(changes).map(
+                    (o) =>
+                        `${o.type} ${o.entity} ${(o.data as { id?: string }).id ?? ""}`
+                )
+            ).toEqual(
+                {
+                    none: [
+                        "delete variable g1",
+                        "delete premise g0",
+                        "insert premise g4",
+                        "insert variable g5",
+                        "update roles ",
+                    ],
+                    existing: [
+                        "update variable g1",
+                        "delete premise g0",
+                        "insert premise g4",
+                        "insert variable g5",
+                        "update roles ",
+                    ],
+                    new: [
+                        "insert premise g4",
+                        "update variable g1",
+                        "delete premise g0",
+                        "insert variable g5",
+                        "update roles ",
+                    ],
+                }[rebind]
+            )
+        })
+    }
 
     // Chains of mutations combined into one changeset, as a consumer's
     // before/after diff or composeChangesets produces them.
