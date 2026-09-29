@@ -25,10 +25,11 @@
   before the inserts. The stored row still names its old variable, and
   where the variable key cascades (proposit-app's does), deleting it first
   silently deleted the row. The two exceptions the 5.4.0 docs listed are
-  gone. Two remain, only when the deletes are held, both a per-statement
-  unique rule meeting a row not yet deleted: an inserted variable reusing a
-  removed one's symbol, and an inserted conclusion premise while the removed
-  conclusion premise still exists.
+  gone. Three remain, only when the deletes are held, each a per-statement
+  unique rule meeting a row not yet deleted or renamed: an inserted variable
+  reusing a removed one's symbol, an inserted variable taking the symbol a
+  variable is being renamed off (see below), and an inserted conclusion
+  premise while the removed conclusion premise still exists.
 - `orderChangeset` orders a change of premise around the premise rows it
   names.
     - An expression update whose `premiseId` is a premise the changeset
@@ -41,8 +42,9 @@
       the premise delete ran while the stored variable still named it, and
       where the bound-premise key cascades (proposit-app's does) that deleted
       the variable and every expression naming it.
-    - A variable bound to a premise the changeset inserts is updated right
-      after the premise inserts, and the premise deletes wait for it. The
+    - A variable bound to a premise the changeset inserts is updated after
+      the premise inserts (after the expression inserts, if the deletes are
+      held), and the premise deletes wait for it. The
       one-conclusion exception above applies then too. The symbol exception
       does not, because the variable deletes still run first.
     - A changeset with no variable update and no expression update that needs
@@ -53,7 +55,7 @@
       deletes are held. Held, all variable updates run after the inserts, so
       that case joins the exceptions above.
     - An expression moved into a new premise holds the deletes, like one
-      pointing at a new variable, so both exceptions above apply to it.
+      pointing at a new variable, so all three exceptions above apply to it.
 
 ## Tests
 

@@ -48,14 +48,14 @@ Two more orders are fixed.
   stored variable still named it. Where that key cascades, as proposit-app's
   does, the variable and every expression using it were silently deleted.
   Variable updates now run before the premise deletes. One rebound onto a
-  premise the changeset creates runs right after that premise is inserted,
-  and the premise deletes wait for it.
+  premise the changeset creates runs after that premise is inserted, and
+  the premise deletes wait for it.
 - **An expression moved into a premise the same changeset creates.** A
   combined changeset can remove an expression and add one with the same id
   to a new premise. That update now runs after the premise is inserted.
 
 Variable updates now run earlier than they did, so a changeset with a
-variable update and anything else to delete or insert is ordered
+variable update together with any premise delete or any insert is ordered
 differently. Changesets with no variable update, and no expression update
 that needs an insert first, are ordered exactly as before.
 
