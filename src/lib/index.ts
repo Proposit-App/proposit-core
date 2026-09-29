@@ -217,19 +217,7 @@ export { collectArgumentReferencedClaims } from "./core/review-helpers.js"
 export type { TCollectArgumentReferencedClaimsResult } from "./core/review-helpers.js"
 export { canonicalizeOperatorAssignments } from "./core/review-helpers.js"
 export type { TCanonicalizeOperatorAssignmentsInput } from "./core/review-helpers.js"
-// Conversation primitive — multi-turn LLM exchange support.
-// Subpath: @proposit/proposit-core/conversation
-export {
-    executeTurn,
-    createConversation,
-    ConversationClosedError,
-} from "./conversation/index.js"
-export type {
-    TTurnInput,
-    TTurnResult,
-    TExecuteTurnDeps,
-    TConversation,
-    TMultiTurnInput,
-    TMultiTurnOutput,
-    TResponseId,
-} from "./conversation/index.js"
+// Conversation primitive — multi-turn LLM exchange support. Everything the
+// `@proposit/proposit-core/conversation` subpath exports is re-exported here,
+// which is how that subpath reaches the API docs.
+export * from "./conversation/index.js"

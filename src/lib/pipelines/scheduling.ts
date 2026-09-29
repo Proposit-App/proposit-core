@@ -29,7 +29,10 @@ export type TStageDescriptor = {
     dependsOn: readonly TDepSpec[]
 }
 
-type TRecordMap = Readonly<Record<string, TStageOutcomeRecord>>
+/** Terminal outcomes recorded so far, keyed by stage id. */
+export type TStageOutcomeRecordMap = Readonly<
+    Record<string, TStageOutcomeRecord>
+>
 
 /**
  * A stage is eligible to run once every required dep is `completed` and every
@@ -37,7 +40,7 @@ type TRecordMap = Readonly<Record<string, TStageOutcomeRecord>>
  */
 export function isStageEligible(
     stage: TStageDescriptor,
-    records: TRecordMap
+    records: TStageOutcomeRecordMap
 ): boolean {
     for (const dep of stage.dependsOn) {
         const id = depId(dep)
@@ -60,7 +63,7 @@ export function isStageEligible(
  */
 export function hasRequiredFailureUpstream(
     stage: TStageDescriptor,
-    records: TRecordMap
+    records: TStageOutcomeRecordMap
 ): boolean {
     for (const dep of stage.dependsOn) {
         if (isOptionalDep(dep)) continue
@@ -92,7 +95,7 @@ export type TDagProgress<TStage extends TStageDescriptor> = {
  */
 export function computeDagProgress<TStage extends TStageDescriptor>(
     stages: readonly TStage[],
-    records: TRecordMap
+    records: TStageOutcomeRecordMap
 ): TDagProgress<TStage> {
     const runnable: TStage[] = []
     const skippable: TStage[] = []

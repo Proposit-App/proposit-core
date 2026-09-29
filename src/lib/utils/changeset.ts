@@ -335,13 +335,24 @@ export type TOrderedOperation<
  *   a rule allowing one root per premise must be checked at the end of the
  *   transaction, not per statement.
  *
- * Two known exceptions, both updates run before an insert they depend on. A
- * store checking foreign keys immediately rejects either; run such updates
- * after the inserts:
- * - an expression updated to point at a parent that the same changeset
- *   inserts is updated (phase 2) before that insert (phase 8);
- * - a variable-type expression updated to point at a variable that the same
- *   changeset inserts is updated (phase 2) before that insert (phase 7).
+ * An expression updated to point at a parent or a variable that the same
+ * changeset inserts is moved to the root in phase 2 and updated in full
+ * after the inserts. In phase 2, one late only for its new parent is written
+ * whole with the parent cleared, since its variable is not a new one, so it
+ * leaves its old variable before that can be deleted. One that points at
+ * a new variable can only be detached (`id`, `parentId`, `position`), so the
+ * variable and premise deletes (phases 4 and 5) wait until after its full
+ * update: the stored row still names its old variable, which may be one of
+ * them, and a store whose variable key cascades would otherwise delete the
+ * row. A changeset with no such update keeps the order below exactly.
+ *
+ * Known exceptions, only when those deletes wait, for a store that checks
+ * the rule per statement. The inserts then run while the removed rows still
+ * exist, so:
+ * - a variable inserted with the symbol of one being removed breaks a rule
+ *   that symbols are unique per argument;
+ * - a premise inserted as the conclusion while the removed conclusion
+ *   premise still exists breaks a rule of one conclusion per argument.
  *
  * Ordering phases:
  * 1. Update premises — ensure premise rows have correct metadata before
@@ -352,21 +363,25 @@ export type TOrderedOperation<
  *    modified and removed are skipped (the row is about to be deleted).
  *    Then detach every removed expression (see above), so no stored row
  *    points at an expression about to be deleted. A detach carries only
- *    `id`, `parentId` and `position`.
+ *    `id`, `parentId` and `position`. An update that needs an insert first
+ *    is written early here too (see above).
  * 3. Delete expressions — expression rows hold FKs to variables and premises,
  *    so they must be removed first. Every one is detached by now, so their
  *    order does not matter; children still come before parents.
  * 4. Delete variables — safe after expression deletes (no remaining FK
- *    references from expressions).
- * 5. Delete premises — safe after all child rows are removed.
+ *    references from expressions). Held until after phase 8 when an update
+ *    points at a new variable (see above).
+ * 5. Delete premises — safe after all child rows are removed. Held with
+ *    phase 4.
  * 6. Insert premises — new premises must exist before their expressions and
  *    variables can be inserted.
  * 7. Insert variables — new variables must exist before variable-type
  *    expressions can reference them.
  * 8. Insert expressions — topologically sorted so parent expressions are
- *    inserted before their children (satisfies the parentId self-FK).
+ *    inserted before their children (satisfies the parentId self-FK). Then
+ *    the updates held back in phase 2, then phases 4 and 5 if held.
  * 9. Update variables — grouped after inserts for clarity.
- * 10. (No-op — expression updates are now emitted in Phase 2.)
+ * 10. (No-op — expression updates are emitted in phase 2 or after phase 8.)
  * 11. Update argument metadata — if present.
  * 12. Update role state — if present.
  *
@@ -400,8 +415,37 @@ export function orderChangeset<
     // Phase 2: Reparent expressions — update expressions whose IDs are NOT
     // in the removed set. This detaches reparented children from doomed
     // parents before ON DELETE CASCADE runs in Phase 3.
+    //
+    // An update that points at a parent or a variable this changeset
+    // inserts cannot run yet. It is moved to the root here instead, so its
+    // old parent can be deleted, and applied in full after the inserts.
+    const addedExprIds = new Set(
+        (changeset.expressions?.added ?? []).map((e) => e.id)
+    )
+    const addedVarIds = new Set(
+        (changeset.variables?.added ?? []).map((v) => v.id)
+    )
+    const pointsAtNewVariable = (e: TExpr) =>
+        e.type === "variable" && addedVarIds.has(e.variableId)
+    const late: TExpr[] = []
     for (const e of changeset.expressions?.modified ?? []) {
-        if (!removedExprIds.has(e.id)) {
+        if (removedExprIds.has(e.id)) continue
+        if (
+            (e.parentId !== null && addedExprIds.has(e.parentId)) ||
+            pointsAtNewVariable(e)
+        ) {
+            late.push(e)
+            // An update pointing at a new variable can only detach now. One
+            // late for its parent alone names rows that exist, so it moves
+            // off its old variable here too, before that can be deleted.
+            ops.push({
+                type: "update",
+                entity: "expression",
+                data: pointsAtNewVariable(e)
+                    ? { id: e.id, parentId: null, position: POSITION_INITIAL }
+                    : { ...e, parentId: null, position: POSITION_INITIAL },
+            })
+        } else {
             ops.push({ type: "update", entity: "expression", data: e })
         }
     }
@@ -428,17 +472,22 @@ export function orderChangeset<
         ops.push({ type: "delete", entity: "expression", data: e })
     }
 
-    // Phase 4: Delete variables — safe after expression deletes (no
-    // remaining FK references from expressions).
-    for (const v of changeset.variables?.removed ?? []) {
-        ops.push({ type: "delete", entity: "variable", data: v })
+    // Phases 4 and 5: Delete variables, then premises — safe after
+    // expression deletes (no remaining FK references from expressions), and
+    // premises after their bound variables. When a late update moves an
+    // expression onto a new variable, the stored row still points at its old
+    // one, which may be among these; the entry does not say which, so all of
+    // them wait until the late updates have run.
+    const deleteVariablesAndPremises = () => {
+        for (const v of changeset.variables?.removed ?? []) {
+            ops.push({ type: "delete", entity: "variable", data: v })
+        }
+        for (const p of changeset.premises?.removed ?? []) {
+            ops.push({ type: "delete", entity: "premise", data: p })
+        }
     }
-
-    // Phase 5: Delete premises — safe after all child rows (expressions,
-    // variables) are removed.
-    for (const p of changeset.premises?.removed ?? []) {
-        ops.push({ type: "delete", entity: "premise", data: p })
-    }
+    const holdDeletes = late.some(pointsAtNewVariable)
+    if (!holdDeletes) deleteVariablesAndPremises()
 
     // Phase 6: Insert premises — new premises must exist before their
     // expressions and variables can be inserted.
@@ -462,13 +511,20 @@ export function orderChangeset<
         ops.push({ type: "insert", entity: "expression", data: e })
     }
 
+    // Phase 8, late: the updates Phase 2 held back, now that what they point
+    // at exists. Then the deletes held back for them, if any.
+    for (const e of late) {
+        ops.push({ type: "update", entity: "expression", data: e })
+    }
+    if (holdDeletes) deleteVariablesAndPremises()
+
     // Phase 9: Update variables — grouped after inserts for clarity.
     for (const v of changeset.variables?.modified ?? []) {
         ops.push({ type: "update", entity: "variable", data: v })
     }
 
-    // Phase 10: Update expressions — no-op. All non-removed modified
-    // expressions were already emitted in Phase 2 (reparent). This phase is
+    // Phase 10: Update expressions — no-op. Every non-removed modified
+    // expression was emitted in Phase 2 or after Phase 8. This phase is
     // retained as a logical placeholder to keep the phase numbering stable.
 
     // Phase 11: Update argument metadata — if present.

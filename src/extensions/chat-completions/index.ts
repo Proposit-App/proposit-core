@@ -15,7 +15,10 @@
 
 export { createChatCompletionsProvider } from "./provider.js"
 export type { TCreateChatCompletionsProviderOptions } from "./provider.js"
-export type { TChatCompletionsProviderConfig } from "./types.js"
+export type {
+    TChatCompletionsFetch,
+    TChatCompletionsProviderConfig,
+} from "./types.js"
 export { typeboxToJsonSchema } from "./structured-output.js"
 export type { TChatCompletionsJsonSchema } from "./structured-output.js"
 export {
