@@ -577,8 +577,9 @@ export function orderChangeset<
         deletePremises()
     }
 
-    // Phase 9: Update variables — no-op. Every modified variable was emitted
-    // with the deletes above. Retained to keep the phase numbering stable.
+    // Phase 9: Update variables — no-op. Every modified variable not also
+    // removed was emitted with the deletes above. Retained to keep the phase
+    // numbering stable.
 
     // Phase 10: Update expressions — no-op. Every non-removed modified
     // expression was emitted in Phase 2 or after Phase 8. This phase is
